@@ -455,10 +455,12 @@ describe('runLibraryBuildPipeline', () => {
     expect(aux.pouDocs).toEqual({ MyFb: 'A docstring', MyType: 'A type description' })
   })
 
-  // The archive must carry what the AUTHOR wrote, so the native sources are
-  // read off disk rather than taken from the project data — by this point
-  // `preprocessPous` has already replaced those bodies with generated bridge
-  // ST, and shipping that would freeze this editor's bridge ABI.
+  // The archive must carry what the AUTHOR wrote. `nativePous` is supplied by
+  // the adapter from the RAW project data, because by the time the pipeline
+  // runs `preprocessPous` has lowered every native body to bridge ST AND
+  // rewritten its language tag — so the POU list here says `st` for all of
+  // them. Seeding `language: 'cpp'` in these args would test a state that
+  // cannot occur.
   it('reads authored C/C++ and Python POU files off disk and passes them verbatim', async () => {
     const harness = makePort()
     const { emit } = captureEvents()
@@ -470,17 +472,25 @@ describe('runLibraryBuildPipeline', () => {
 
     const projectData = {
       ...projectDataEmpty(),
+      // Lowered, exactly as the pipeline really receives them.
       pous: [
-        // Bodies here are already lowered — proof the values below came from
-        // disk and not from the project data.
-        { type: 'function-block', data: { name: 'MyCppFb', body: { language: 'cpp' } } },
-        { type: 'function-block', data: { name: 'MyPyFb', body: { language: 'python' } } },
+        { type: 'function-block', data: { name: 'MyCppFb', body: { language: 'st' } } },
+        { type: 'function-block', data: { name: 'MyPyFb', body: { language: 'st' } } },
         { type: 'function-block', data: { name: 'PlainSt', body: { language: 'st' } } },
       ],
     } as unknown as PLCProjectData
 
     await runLibraryBuildPipeline(
-      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      {
+        projectPath: '/project',
+        projectData,
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+        nativePous: [
+          { name: 'MyCppFb', language: 'cpp', relPath: 'pous/function-blocks/MyCppFb.cpp' },
+          { name: 'MyPyFb', language: 'python', relPath: 'pous/function-blocks/MyPyFb.py' },
+        ],
+      },
       harness.port,
       emit,
     )
@@ -493,10 +503,10 @@ describe('runLibraryBuildPipeline', () => {
   })
 
   // A hand-authored project may put a native file under `pous/functions/`.
-  // The read has to follow the POU type, or the build dies on a path we guessed
-  // wrong instead of letting strucpp explain that a native block cannot be a
-  // FUNCTION.
-  it('reads a native POU from the directory its type implies', async () => {
+  // `collectNativePous` derives the path from the POU type so the build hands
+  // strucpp the file and lets it explain that a native block cannot be a
+  // FUNCTION, rather than dying on a path guessed wrong.
+  it('reads a native POU from the path the adapter resolved', async () => {
     const harness = makePort()
     const { emit } = captureEvents()
 
@@ -505,17 +515,51 @@ describe('runLibraryBuildPipeline', () => {
 
     const projectData = {
       ...projectDataEmpty(),
-      pous: [{ type: 'function', data: { name: 'CPP_ADD', body: { language: 'cpp' } } }],
+      pous: [{ type: 'function', data: { name: 'CPP_ADD', body: { language: 'st' } } }],
     } as unknown as PLCProjectData
 
     await runLibraryBuildPipeline(
-      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      {
+        projectPath: '/project',
+        projectData,
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+        nativePous: [{ name: 'CPP_ADD', language: 'cpp', relPath: 'pous/functions/CPP_ADD.cpp' }],
+      },
       harness.port,
       emit,
     )
 
     const [, , , aux] = mockLibraryBuild.mock.calls[0]
     expect(aux.nativeSources).toEqual([{ fileName: 'CPP_ADD.cpp', source: FN }])
+  })
+
+  // Regression: the pipeline used to infer the native list from
+  // `projectData.pous[].body.language`, which is always `st` by this point.
+  // It therefore found none, shipped the bridge ST in the archive instead of
+  // the authored source, and produced the frozen-ABI artifact this design
+  // exists to avoid.
+  it('passes no native sources when the adapter supplied none, whatever the POU list says', async () => {
+    const harness = makePort()
+    const { emit } = captureEvents()
+    harness.files.set(
+      'pous/function-blocks/Ghost.cpp',
+      'FUNCTION_BLOCK Ghost\nVAR_INPUT a : BOOL; END_VAR\nEND_FUNCTION_BLOCK\n',
+    )
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    expect(aux.nativeSources).toEqual([])
   })
 
   it('fails naming the path when reading a native source throws', async () => {
@@ -525,13 +569,14 @@ describe('runLibraryBuildPipeline', () => {
     // `library.json` and never reach the native read.
     harness.throwOnRead.set('pous/function-blocks/Boom.cpp', new Error('EIO'))
 
-    const projectData = {
-      ...projectDataEmpty(),
-      pous: [{ type: 'function-block', data: { name: 'Boom', body: { language: 'cpp' } } }],
-    } as unknown as PLCProjectData
-
     const result = await runLibraryBuildPipeline(
-      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+        nativePous: [{ name: 'Boom', language: 'cpp', relPath: 'pous/function-blocks/Boom.cpp' }],
+      },
       harness.port,
       emit,
     )
@@ -546,13 +591,14 @@ describe('runLibraryBuildPipeline', () => {
     const harness = makePort()
     const { emit } = captureEvents()
 
-    const projectData = {
-      ...projectDataEmpty(),
-      pous: [{ type: 'function-block', data: { name: 'Gone', body: { language: 'cpp' } } }],
-    } as unknown as PLCProjectData
-
     const result = await runLibraryBuildPipeline(
-      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+        nativePous: [{ name: 'Gone', language: 'cpp', relPath: 'pous/function-blocks/Gone.cpp' }],
+      },
       harness.port,
       emit,
     )

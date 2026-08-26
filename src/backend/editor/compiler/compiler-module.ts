@@ -25,6 +25,7 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
+import type { NativePouRef } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -3329,15 +3330,21 @@ class CompilerModule {
   ): Promise<void> {
     _mainProcessPort.start()
 
-    // The IPC args contract is preserved verbatim from the pre-
-    // refactor signature so the renderer-side adapter is unchanged:
+    // IPC args:
     //   [projectPath, projectData (build-pass), verifyProjectData,
-    //    cleanBuild?]
-    const [projectPath, projectData, verifyProjectData, cleanBuild = false] = args as [
+    //    cleanBuild?, nativePous?]
+    //
+    // `nativePous` is appended rather than derived here: it has to be read
+    // off the RAW project data, and by the time anything arrives over this
+    // channel `preprocessPous` has already lowered every native body to
+    // bridge ST and rewritten its language tag. An older renderer omits it,
+    // which degrades to "this project has no native POUs".
+    const [projectPath, projectData, verifyProjectData, cleanBuild = false, nativePous = []] = args as [
       string,
       PLCProjectData,
       PLCProjectData,
       boolean | undefined,
+      NativePouRef[] | undefined,
     ]
 
     // Bridge the orchestrator's structured port API onto the desktop
@@ -3358,6 +3365,7 @@ class CompilerModule {
         projectData,
         verifyProjectData,
         cleanBuild,
+        nativePous,
       },
       libraryPort,
       (event) => _mainProcessPort.postMessage({ logLevel: event.level, message: event.message }),

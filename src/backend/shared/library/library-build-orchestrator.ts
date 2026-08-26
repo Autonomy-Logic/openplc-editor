@@ -45,6 +45,7 @@ import {
   type LibraryNativeSource,
   prepareXmlForLibraryBuild,
 } from './build-pipeline'
+import type { NativePouRef } from './native-pou-list'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -68,6 +69,13 @@ export interface LibraryBuildArgs {
   verifyProjectData: PLCProjectData
   /** Skip the MD5 verification cache and force a fresh verify run. */
   cleanBuild: boolean
+  /** Native (C/C++, Python) POUs, collected from the project data BEFORE
+   *  `preprocessPous` ran — see `collectNativePous`. The pipeline cannot
+   *  derive this itself: by the time it sees `projectData`, every native body
+   *  has been lowered to bridge ST and the language tag rewritten with it, so
+   *  nothing identifies a native POU any more. Omitted or empty means the
+   *  project has none. */
+  nativePous?: NativePouRef[]
 }
 
 // Standard project-relative paths the orchestrator owns.  Centralised
@@ -85,18 +93,6 @@ export interface LibraryBuildArgs {
 const VERIFY_CACHE_REL_PATH = 'build/.verify-cache-library.json'
 const LIBRARY_MANIFEST_REL_PATH = 'library.json'
 const STLIB_OUT_DIR = 'build'
-/** Directory the editor persists each POU kind under. Native blocks are read
- *  back from here so the archive ships the author's bytes, not the lowered
- *  bridge ST that `preprocessPous` leaves on the project data. Keyed by POU
- *  type because a hand-authored project may put a C/C++ file under
- *  `pous/functions/` — strucpp rejects a native FUNCTION with a message that
- *  says why, and it can only do that if we hand it the file rather than
- *  failing here on a path we guessed wrong. */
-const POU_REL_DIR: Record<string, string> = {
-  program: 'pous/programs',
-  function: 'pous/functions',
-  'function-block': 'pous/function-blocks',
-}
 
 /**
  * Run the full library-build pipeline.  Pure with respect to its
@@ -113,7 +109,7 @@ export async function runLibraryBuildPipeline(
   port: LibraryBuildPort,
   emit: (event: LibraryBuildEvent) => void,
 ): Promise<CompileLibraryResult> {
-  const { projectPath, projectData, verifyProjectData, cleanBuild } = args
+  const { projectPath, projectData, verifyProjectData, cleanBuild, nativePous = [] } = args
 
   emit({ message: 'Starting library build...', level: 'info' })
 
@@ -300,22 +296,18 @@ export async function runLibraryBuildPipeline(
   // producing an archive whose manifest promises a block with no source.
   // -------------------------------------------------------------------------
   const nativeSources: LibraryNativeSource[] = []
-  for (const pou of projectData.pous) {
-    const language = pou.data.body?.language
-    if (language !== 'cpp' && language !== 'python') continue
-    const fileName = `${pou.data.name}.${language === 'cpp' ? 'cpp' : 'py'}`
-    const dir = POU_REL_DIR[pou.type] ?? POU_REL_DIR['function-block']
-    const relPath = `${dir}/${fileName}`
+  for (const ref of nativePous) {
+    const fileName = ref.relPath.split('/').pop() ?? ref.name
     let source: string | null
     try {
-      source = await port.readBuildFile(projectPath, relPath)
+      source = await port.readBuildFile(projectPath, ref.relPath)
     } catch (error) {
-      return fail(emit, `Could not read "${relPath}": ${formatError(error)}`, { libraryName: manifest.name })
+      return fail(emit, `Could not read "${ref.relPath}": ${formatError(error)}`, { libraryName: manifest.name })
     }
     if (source === null || source.trim() === '') {
       return fail(
         emit,
-        `Could not read the source for "${pou.data.name}" at ${relPath}. ` +
+        `Could not read the source for "${ref.name}" at ${ref.relPath}. ` +
           'C/C++ and Python blocks ship their source verbatim, so the file must be present.',
         { libraryName: manifest.name },
       )

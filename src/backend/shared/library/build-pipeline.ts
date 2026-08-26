@@ -369,20 +369,12 @@ export function libraryBuildFromTranspiledSt(
   //     anyway — they ship POUs + types for consumer projects to
   //     instantiate.
   //   - Every per-POU file whose source POU was originally a C/C++ or
-  //     Python function block.  Those bodies are generated bridge stubs
-  //     against the current `c_blocks.h` / `iec_python.h` ABI; shipping
-  //     them would freeze this editor's bridge into the archive.  The
-  //     verbatim author source is handed to strucpp instead, which stores
-  //     it and lets the consumer re-derive the bridge at its own build
-  //     time.  See `inject-library-blocks.ts`.
+  //     Python function block.  See `LibraryNativeSource`.
   //
   // Keep `_types.st` and `_globals.st`: they may carry user-defined
   // types and library-internal globals the POUs reference.
-  // Drop the per-POU file for every native block. `preprocessPous` replaced
-  // those POU bodies with generated bridge ST against the current
-  // `c_blocks.h` / `iec_python.h` ABI; shipping that would freeze this
-  // editor's bridge into the archive. The verbatim author source goes to
-  // strucpp instead, below.
+  // Drop the per-POU file for every native block; the authored source goes
+  // to strucpp instead, below. See `LibraryNativeSource`.
   const nativeStFilenames = new Set((aux?.nativeSources ?? []).map((n) => `${n.fileName.replace(/\.[^.]+$/, '')}.st`))
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {

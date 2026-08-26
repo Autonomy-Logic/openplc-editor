@@ -15,6 +15,7 @@ import {
   findLibrariesMissingNativeSources,
   injectLibraryBlocks,
 } from '../../../backend/shared/library/inject-library-blocks'
+import { collectNativePous } from '../../../backend/shared/library/native-pou-list'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type {
   CompileLibraryArgs,
@@ -255,6 +256,12 @@ export function createEditorCompilerAdapter(): CompilerPort {
       // The renderer-side `onProgress` log channel only sees the
       // build pass's preprocess output to avoid duplicate "Found
       // Python POU…" lines.
+      // Taken BEFORE preprocessing: that step lowers every native body to
+      // bridge ST and rewrites the language tag with it, leaving nothing to
+      // identify a native POU by.  Sent over IPC because the main process
+      // only ever sees the already-lowered data.
+      const nativePous = collectNativePous(args.projectData)
+
       const buildResult = preprocessPous(args.projectData, false, (level, message) => {
         onProgress({ stage: 'st', message, level })
       })
@@ -288,7 +295,13 @@ export function createEditorCompilerAdapter(): CompilerPort {
         //     `'close'` event — that's the sole "build done"
         //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
-          [args.projectPath, ipcDataForBuild as never, ipcDataForVerify as never, args.cleanBuild ?? false],
+          [
+            args.projectPath,
+            ipcDataForBuild as never,
+            ipcDataForVerify as never,
+            args.cleanBuild ?? false,
+            nativePous as never,
+          ],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult

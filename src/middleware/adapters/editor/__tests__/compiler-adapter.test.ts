@@ -636,12 +636,16 @@ describe('createEditorCompilerAdapter', () => {
       const result = await promise
 
       // Args: [projectPath, ipcDataForBuild, ipcDataForVerify, cleanBuild]
+      // 5th arg: the native-POU inventory, taken from the RAW project data
+      // before `preprocessPous` lowered every native body to bridge ST and
+      // rewrote its language tag. The main process cannot derive it.
       expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
         [
           '/lib/project',
           expect.objectContaining({ pous: expect.any(Array) }),
           expect.objectContaining({ pous: expect.any(Array) }),
           false,
+          expect.any(Array),
         ],
         expect.any(Function),
       )
@@ -740,9 +744,38 @@ describe('createEditorCompilerAdapter', () => {
       await promise
 
       expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
-        ['/lib/project', expect.any(Object), expect.any(Object), true],
+        ['/lib/project', expect.any(Object), expect.any(Object), true, expect.any(Array)],
         expect.any(Function),
       )
+    })
+
+    it('sends the native-POU inventory taken before preprocessing', async () => {
+      // Regression: the pipeline used to infer this from the POU list it
+      // received, which is always `st` by then — so it found none and the
+      // archive shipped the generated bridge instead of the authored source.
+      const withNative = {
+        ...mockProjectData,
+        pous: [
+          ...mockProjectData.pous,
+          {
+            name: 'CPP_SCALE',
+            pouType: 'function-block' as const,
+            body: { language: 'cpp' as const, value: 'void setup() {}\nvoid loop() {}' },
+            interface: { variables: [] },
+            documentation: '',
+          },
+        ],
+      }
+
+      const promise = adapter.compileLibrary!({ projectData: withNative, projectPath: '/lib/project' }, () => {})
+      await flushMicrotasks()
+      libraryCallback!({ closePort: true })
+      await promise
+
+      const args = (window.bridge.runCompileLibrary as jest.Mock).mock.calls[0][0] as unknown[]
+      expect(args[4]).toEqual([
+        { name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' },
+      ])
     })
 
     it('defaults non-error log levels to info when logLevel is missing', async () => {
