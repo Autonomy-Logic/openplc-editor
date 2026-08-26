@@ -286,6 +286,64 @@ describe('preprocessPous — C++', () => {
 // ---------------------------------------------------------------------------
 // Mixed scenarios
 // ---------------------------------------------------------------------------
+describe('preprocessPous — Python target support', () => {
+  it('rejects Python POUs when the target cannot run them', () => {
+    const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass')])
+    const logs: Array<[string, string]> = []
+    const result = preprocessPous(project, false, (level, message) => logs.push([level, message]), {
+      supported: false,
+      targetLabel: 'Arduino Mega',
+    })
+
+    expect(result.validationFailed).toBe(true)
+    expect(result.validationError).toContain('Python function blocks are not supported on Arduino Mega')
+    expect(result.validationError).toContain('"PyBlock"')
+    expect(logs.some(([level]) => level === 'error')).toBe(true)
+  })
+
+  it('names every offending POU in the rejection', () => {
+    const project = makeProjectData([
+      makePythonPou('First', 'def block_loop():\n    pass'),
+      makePythonPou('Second', 'def block_loop():\n    pass'),
+    ])
+    const result = preprocessPous(project, false, () => {}, { supported: false, targetLabel: 'Arduino Uno' })
+
+    expect(result.validationError).toContain('"First", "Second"')
+  })
+
+  it('leaves the project untouched when it rejects', () => {
+    const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass')])
+    const result = preprocessPous(project, false, () => {}, { supported: false, targetLabel: 'Arduino Mega' })
+
+    // No ST lowering, no injected runtime variables — the POU is as authored.
+    expect(result.projectData.pous[0].body.language).toBe('python')
+  })
+
+  it('does not reject a project with no Python POUs', () => {
+    const project = makeProjectData([makeStPou('Main', 'x := 1;')])
+    const result = preprocessPous(project, false, () => {}, { supported: false, targetLabel: 'Arduino Mega' })
+
+    expect(result.validationFailed).toBe(false)
+    expect(result.validationError).toBeUndefined()
+  })
+
+  it('processes Python normally when the target supports it', () => {
+    const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass')])
+    const result = preprocessPous(project, false, () => {}, { supported: true, targetLabel: 'OpenPLC Runtime v4' })
+
+    expect(result.validationFailed).toBe(false)
+    expect(result.projectData.pous[0].body.language).toBe('st')
+  })
+
+  it('processes Python normally when no support hint is given (library builds)', () => {
+    const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass')])
+    const result = preprocessPous(project, false, () => {})
+
+    expect(result.validationFailed).toBe(false)
+    expect(result.projectData.pous[0].body.language).toBe('st')
+  })
+})
+
 describe('preprocessPous — mixed', () => {
   it('handles a project with ST, Python, and C++ POUs', () => {
     const project = makeProjectData([
