@@ -290,13 +290,13 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.queryByRole('button', { name: 'Stop waiting' })).toBeNull()
     })
 
-    it('explains that OpenPLC will write the licence by itself', () => {
+    it('explains that OpenPLC keeps checking and writes the licence when the purchase clears', () => {
       setup(UNLICENSED, { awaitingPurchase: true })
       expand()
       // The subject is deliberately product-neutral ("OpenPLC", not "the
       // editor"): the same bytes render in the desktop editor and the web IDE.
-      expect(screen.getByText(/OpenPLC checks periodically/)).toBeTruthy()
-      expect(screen.getByText(/write the licence to this device by itself/)).toBeTruthy()
+      expect(screen.getByText(/OpenPLC keeps checking/)).toBeTruthy()
+      expect(screen.getByText(/writes the licence to this device as soon as the purchase clears/)).toBeTruthy()
     })
   })
 })
