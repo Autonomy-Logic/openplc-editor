@@ -1,4 +1,4 @@
-import { cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
+import { cBlockExternalVariables, cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
 import { generateStructMember } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
@@ -55,6 +55,14 @@ const generateCBlocksHeader = (cppPous: CppPouData[], userTypeNames: Iterable<st
     headerContent += `typedef struct {\n`
 
     cBlockInterfaceVariables(pou.variables).forEach((variable) => {
+      headerContent += generateStructMember(variable, typeNames)
+    })
+
+    // A `VAR_EXTERNAL` field looks like any other: the pointer is to the
+    // global's value, so the block reads and writes it exactly as it does a
+    // local. What differs is that the ST glue takes that pointer under the
+    // global's lock — see `cBlockExternalVariables`.
+    cBlockExternalVariables(pou.variables).forEach((variable) => {
       headerContent += generateStructMember(variable, typeNames)
     })
 

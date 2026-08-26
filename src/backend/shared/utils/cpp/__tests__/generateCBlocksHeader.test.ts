@@ -174,13 +174,31 @@ describe('generateCBlocksHeader', () => {
     expect(generateCBlocksHeader([{ name: 'test', variables }])).not.toContain('HASBEENINITIALIZED')
   })
 
-  it('leaves out a VAR_EXTERNAL, which is not a plain member', () => {
-    // A `VAR_EXTERNAL` is a `GlobalVar<V>*` carrying the global's mutex, not a
-    // value member. Emitting a plain pointer to it would compile and silently
-    // drop the lock, so it is handled separately rather than folded in here.
+  it('gives a VAR_EXTERNAL an ordinary field, pointing at the global’s value', () => {
+    // From inside the block a global should read and write like any other
+    // variable, which is what it already does in ST. The difference is not in
+    // the field's type but in where the pointer comes from: the ST glue takes
+    // it under the global's own lock (see generateSTCode).
     const variables: PLCVariable[] = [makeScalarVar('inVar', 'input', 'INT'), byClass('gCounter', 'external', 'DINT')]
 
-    expect(generateCBlocksHeader([{ name: 'test', variables }])).not.toContain('GCOUNTER')
+    const result = generateCBlocksHeader([{ name: 'test', variables }])
+
+    expect(result).toContain('strucpp::IEC_DINT *GCOUNTER;')
+  })
+
+  it('places externals after the declared classes, in name order', () => {
+    // Name order is what makes the lock nesting identical in every block, so
+    // two blocks can never take the same pair of globals in opposite orders.
+    const variables: PLCVariable[] = [
+      byClass('gZulu', 'external', 'INT'),
+      makeScalarVar('inVar', 'input', 'INT'),
+      byClass('gAlpha', 'external', 'INT'),
+    ]
+
+    const result = generateCBlocksHeader([{ name: 'test', variables }])
+    const order = ['INVAR', 'GALPHA', 'GZULU'].map((n) => result.indexOf(`*${n};`))
+
+    expect(order).toEqual([...order].sort((a, b) => a - b))
   })
 
   it('generates declarations for multiple pous', () => {

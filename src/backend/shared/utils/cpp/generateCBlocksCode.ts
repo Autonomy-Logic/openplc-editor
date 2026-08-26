@@ -1,4 +1,4 @@
-import { cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
+import { cBlockExternalVariables, cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
 import { isArrayVariable } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
@@ -159,7 +159,7 @@ const processUserCode = (pou: CppPouData): string => {
   const setupFunctionName = `${pou.name.toLowerCase()}_setup`
   const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-  const interfaceVariables = cBlockInterfaceVariables(pou.variables)
+  const interfaceVariables = [...cBlockInterfaceVariables(pou.variables), ...cBlockExternalVariables(pou.variables)]
 
   // The struct and the two entry-point declarations come from c_blocks.h, which
   // the baseline includes. Only the name-binding macros and the user's own body

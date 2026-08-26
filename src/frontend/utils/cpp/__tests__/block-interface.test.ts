@@ -1,6 +1,6 @@
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 import { CPP_RUNTIME_INTERNAL_VARIABLE } from '../addCppLocalVariables'
-import { cBlockInterfaceVariables, INTERFACE_CLASSES } from '../block-interface'
+import { cBlockExternalVariables, cBlockInterfaceVariables, INTERFACE_CLASSES } from '../block-interface'
 
 const variable = (name: string, cls?: VariableClass): PLCVariable => ({
   name,
@@ -41,9 +41,9 @@ describe('cBlockInterfaceVariables', () => {
     expect(names(result)).toEqual(['i1', 'i2', 'o1', 'o2', 't1', 't2'])
   })
 
-  it('leaves out a VAR_EXTERNAL, which is a GlobalVar pointer rather than a member', () => {
-    // Emitting a plain pointer to one would compile and silently drop the
-    // global's mutex, so externals are handled separately.
+  it('leaves out a VAR_EXTERNAL, which is collected separately', () => {
+    // An external reaches the same struct, but its pointer has to be taken
+    // under the global's lock, so the glue collects it on its own.
     expect(names(cBlockInterfaceVariables([variable('i', 'input'), variable('g', 'external')]))).toEqual(['i'])
   })
 
@@ -72,6 +72,45 @@ describe('cBlockInterfaceVariables', () => {
     cBlockInterfaceVariables(input)
 
     expect(names(input)).toEqual(['t', 'i'])
+  })
+
+  describe('cBlockExternalVariables', () => {
+    it('collects only the externals', () => {
+      const result = cBlockExternalVariables([
+        variable('i', 'input'),
+        variable('g', 'external'),
+        variable('l', 'local'),
+      ])
+
+      expect(names(result)).toEqual(['g'])
+    })
+
+    it('orders them by name, so the lock nesting is the same in every block', () => {
+      const result = cBlockExternalVariables([
+        variable('gZulu', 'external'),
+        variable('gAlpha', 'external'),
+        variable('gmike', 'external'),
+      ])
+
+      expect(names(result)).toEqual(['gAlpha', 'gmike', 'gZulu'])
+    })
+
+    it('orders case-insensitively, since the emitted names are uppercased', () => {
+      const result = cBlockExternalVariables([variable('gb', 'external'), variable('gA', 'external')])
+
+      expect(names(result)).toEqual(['gA', 'gb'])
+    })
+
+    it('does not reorder the caller’s array', () => {
+      const input = [variable('gZulu', 'external'), variable('gAlpha', 'external')]
+      cBlockExternalVariables(input)
+
+      expect(names(input)).toEqual(['gZulu', 'gAlpha'])
+    })
+
+    it('returns nothing when the block declares no externals', () => {
+      expect(cBlockExternalVariables([variable('i', 'input')])).toEqual([])
+    })
   })
 
   it('exposes the class order it applies', () => {

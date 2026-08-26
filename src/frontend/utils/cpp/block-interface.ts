@@ -16,12 +16,11 @@ import { CPP_RUNTIME_INTERNAL_VARIABLE } from './addCppLocalVariables'
  * injected. That is the whole point of the parity work — a native block should
  * see its own Variables Table the way an ST block does, not a curated subset.
  *
- * `external` is deliberately absent. A `VAR_EXTERNAL` is not a plain member on
- * the strucpp side but a `GlobalVar<V>*` carrying the global's mutex, so it
- * needs a pointer of a different shape and an accessor that holds the lock —
- * handled separately rather than folded in here, where it would silently lose
- * the lock. `global` is absent for the same reason it is absent from a POU: it
- * is a configuration-level declaration, not a POU variable.
+ * `external` is absent here and handled by `cBlockExternalVariables` below: it
+ * reaches the same struct, but the pointer that fills the field has to be taken
+ * under the global's lock, so the two are collected separately. `global` is
+ * absent for the reason it is absent from a POU at all: it is a
+ * configuration-level declaration, not a POU variable.
  */
 const INTERFACE_CLASSES: readonly VariableClass[] = ['input', 'output', 'inOut', 'local', 'temp']
 
@@ -62,4 +61,33 @@ const cBlockInterfaceVariables = (variables: readonly PLCVariable[]): PLCVariabl
     .map(({ variable }) => variable)
 }
 
-export { cBlockInterfaceVariables, INTERFACE_CLASSES }
+/**
+ * The block's `VAR_EXTERNAL` declarations, in a fixed order.
+ *
+ * These end up in the same struct and are used by the same name as everything
+ * else — from inside the block, a global should read and write like any other
+ * variable, which is what it already does in ST. What differs is how the
+ * pointer is obtained.
+ *
+ * strucpp holds a global as a `GlobalVar<V>`: the value together with that
+ * global's own mutex, reached through `with_lock`, which runs a callable with a
+ * `V*` while holding the lock. The ST glue therefore wraps the block's entry
+ * points in one such callable per external and takes each pointer inside. The
+ * lambda's parameter is deduced, so nothing here has to name `V` — the
+ * compiler's own layout stays the only statement of it, arrays and structures
+ * included.
+ *
+ * The lock is held across the whole call rather than per access, which is
+ * stronger than what an ST body gets and is the right default for a block that
+ * may read a global, compute, and write it back. Ordering the externals by name
+ * makes the nesting order the same in every block, so two blocks holding two
+ * globals can never take them in opposite orders; an ST body never holds more
+ * than one lock at a time and so can never close a cycle either.
+ */
+const cBlockExternalVariables = (variables: readonly PLCVariable[]): PLCVariable[] =>
+  variables
+    .filter((variable) => variable.class === 'external')
+    .slice()
+    .sort((a, b) => a.name.toUpperCase().localeCompare(b.name.toUpperCase()))
+
+export { cBlockExternalVariables, cBlockInterfaceVariables, INTERFACE_CLASSES }
