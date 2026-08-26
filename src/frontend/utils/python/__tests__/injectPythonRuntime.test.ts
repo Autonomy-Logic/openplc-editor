@@ -1,4 +1,4 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { injectPythonRuntime } from '../injectPythonRuntime'
 
 const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
@@ -42,6 +42,189 @@ const makeWStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => (
   location: '',
   documentation: '',
   debug: false,
+})
+
+const userTyped = (name: string, cls: 'input' | 'output', typeName: string): PLCVariable => ({
+  name,
+  class: cls,
+  type: { definition: 'user-data-type', value: typeName },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
+const MOTOR: PLCDataType = {
+  name: 'Motor',
+  derivation: 'structure',
+  variable: [
+    { name: 'speed', type: { definition: 'base-type', value: 'int' } },
+    { name: 'label', type: { definition: 'base-type', value: 'string' } },
+  ],
+}
+
+const MODE: PLCDataType = {
+  name: 'Mode',
+  derivation: 'enumerated',
+  values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
+}
+
+describe('structures and enumerations', () => {
+  const run = (variables: PLCVariable[], dataTypes: PLCDataType[]) =>
+    injectPythonRuntime({
+      fmtIn: '=',
+      fmtOut: '=',
+      inputVariables: variables.filter((v) => v.class === 'input'),
+      outputVariables: variables.filter((v) => v.class === 'output'),
+      originalCode: '',
+      pouName: 'test',
+      dataTypes,
+    })
+
+  it('declares a structure as a slotted class, so the user writes m.speed', () => {
+    // The wire format is flat, but the block should read like ST. `__slots__`
+    // also makes an assignment to a name the structure lacks raise, rather than
+    // silently creating an attribute the PLC will never read back.
+    const result = run([userTyped('m', 'input', 'Motor')], [MOTOR])
+
+    expect(result).toContain('class Motor:')
+    expect(result).toContain("__slots__ = ('speed', 'label')")
+    expect(result).toContain('def __init__(self, speed=None, label=None):')
+  })
+
+  it('gives a one-member structure a trailing comma, so __slots__ is a tuple', () => {
+    // `('speed')` is the string, not a one-element tuple, and Python would then
+    // treat every character as a slot name.
+    const single: PLCDataType = {
+      name: 'One',
+      derivation: 'structure',
+      variable: [{ name: 'speed', type: { definition: 'base-type', value: 'int' } }],
+    }
+    const result = run([userTyped('o', 'input', 'One')], [single])
+
+    expect(result).toContain("__slots__ = ('speed',)")
+  })
+
+  it('declares an enumeration as an IntEnum, so mode == Mode.RUNNING reads naturally', () => {
+    const result = run([userTyped('md', 'input', 'Mode')], [MODE])
+
+    expect(result).toContain('from enum import IntEnum')
+    expect(result).toContain('class Mode(IntEnum):')
+    expect(result).toContain('    STOPPED = 0')
+    expect(result).toContain('    RUNNING = 1')
+  })
+
+  it('declares a nested structure before the one that constructs it', () => {
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [{ name: 'drive', type: { definition: 'user-data-type', value: 'Motor' } }],
+    }
+    const result = run([userTyped('r', 'input', 'Rig')], [rig, MOTOR])
+
+    expect(result.indexOf('class Motor:')).toBeLessThan(result.indexOf('class Rig:'))
+  })
+
+  it('declares each type once even when several variables use it', () => {
+    const result = run([userTyped('a', 'input', 'Motor'), userTyped('b', 'input', 'Motor')], [MOTOR])
+
+    expect(result.match(/class Motor:/g)).toHaveLength(1)
+  })
+
+  it('says so plainly when a block uses no composite type', () => {
+    const result = run([makeScalarVar('x', 'input', 'INT')], [MOTOR])
+
+    expect(result).toContain('# This block uses no structures or enumerations')
+    expect(result).not.toContain('class Motor:')
+  })
+
+  it('rebuilds a structure from its consecutive leaves', () => {
+    const result = run([userTyped('m', 'input', 'Motor')], [MOTOR])
+
+    expect(result).toContain('_m_speed = _vals[_idx]')
+    expect(result).toContain('m = Motor(speed=_m_speed, label=_m_label)')
+  })
+
+  it('rebuilds a nested structure innermost first', () => {
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [{ name: 'drive', type: { definition: 'user-data-type', value: 'Motor' } }],
+    }
+    const result = run([userTyped('r', 'input', 'Rig')], [rig, MOTOR])
+
+    expect(result).toContain('r = Rig(drive=Motor(speed=_r_drive_speed, label=_r_drive_label))')
+  })
+
+  it('wraps a structure member that is an enumeration', () => {
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [{ name: 'state', type: { definition: 'user-data-type', value: 'Mode' } }],
+    }
+    const result = run([userTyped('r', 'input', 'Rig')], [rig, MODE])
+
+    expect(result).toContain('r = Rig(state=Mode(_r_state))')
+  })
+
+  it('wraps a top-level enumeration in its IntEnum after decoding', () => {
+    const result = run([userTyped('md', 'input', 'Mode')], [MODE])
+
+    expect(result).toContain('md = Mode(md)')
+  })
+
+  it('packs a structure member by member, through the attribute path', () => {
+    const result = run([userTyped('m', 'output', 'Motor')], [MOTOR])
+
+    expect(result).toContain('_out.append(m.speed)')
+    expect(result).toContain("_body = m.label.encode('utf-8')[:126]")
+  })
+
+  it('packs an enumeration as its integer, explicitly', () => {
+    const result = run([userTyped('md', 'output', 'Mode')], [MODE])
+
+    expect(result).toContain('_out.append(int(md))')
+  })
+
+  it('ignores a named ARRAY type when declaring classes', () => {
+    // It cannot cross, and the build is refused upstream; there is no class to
+    // declare for it either way.
+    const named: PLCDataType = {
+      name: 'Bank',
+      derivation: 'array',
+      baseType: { definition: 'base-type', value: 'INT' },
+      dimensions: [{ dimension: '0..3' }],
+    }
+    const result = run([userTyped('b', 'input', 'Bank')], [named])
+
+    expect(result).toContain('# This block uses no structures or enumerations')
+  })
+
+  it('ignores a type the project does not declare', () => {
+    const result = run([userTyped('t', 'input', 'TON')], [MOTOR])
+
+    expect(result).toContain('# This block uses no structures or enumerations')
+  })
+
+  it('declares a structure reached through an array element type', () => {
+    const bank: PLCVariable = {
+      name: 'bank',
+      class: 'input',
+      type: {
+        definition: 'array',
+        value: 'ARRAY [0..1] OF Motor',
+        data: {
+          baseType: { definition: 'user-data-type', value: 'Motor' },
+          dimensions: [{ dimension: '0..1' }],
+        },
+      },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+    const result = run([bank], [MOTOR])
+
+    expect(result).toContain('class Motor:')
+  })
 })
 
 describe('WSTRING crosses as UTF-16, counted in code units', () => {

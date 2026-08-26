@@ -1,0 +1,270 @@
+import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
+import { describeShmLayout, describeShmLeaves } from '../shm-leaves'
+
+const scalar = (name: string, value: string): PLCVariable => ({
+  name,
+  class: 'input',
+  type: { definition: 'base-type', value },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
+const userTyped = (name: string, value: string): PLCVariable => ({
+  name,
+  class: 'input',
+  type: { definition: 'user-data-type', value },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
+const arrayOf = (name: string, baseType: string, dimension = '0..3'): PLCVariable => ({
+  name,
+  class: 'input',
+  type: {
+    definition: 'array',
+    value: `ARRAY [${dimension}] OF ${baseType}`,
+    data: { baseType: { definition: 'base-type', value: baseType }, dimensions: [{ dimension }] },
+  },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
+const MOTOR: PLCDataType = {
+  name: 'Motor',
+  derivation: 'structure',
+  variable: [
+    { name: 'speed', type: { definition: 'base-type', value: 'int' } },
+    { name: 'label', type: { definition: 'base-type', value: 'string' } },
+  ],
+}
+
+const MODE: PLCDataType = {
+  name: 'Mode',
+  derivation: 'enumerated',
+  values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
+}
+
+const leavesOf = (result: ReturnType<typeof describeShmLeaves>) => ('leaves' in result ? result.leaves : [])
+const refusalOf = (result: ReturnType<typeof describeShmLeaves>) => ('refusal' in result ? result.refusal : null)
+
+describe('describeShmLeaves', () => {
+  it('describes a scalar as one leaf reaching the member directly', () => {
+    const [leaf] = leavesOf(describeShmLeaves(scalar('x', 'INT')))
+
+    expect(leaf.field).toBe('x')
+    expect(leaf.path).toEqual(['x'])
+    expect(leaf.access).toBe('X')
+    expect(leaf.count).toBe(1)
+  })
+
+  it('describes an array as one leaf with its element count and lower bound', () => {
+    const [leaf] = leavesOf(describeShmLeaves(arrayOf('data', 'INT', '2..5')))
+
+    expect(leaf.count).toBe(4)
+    expect(leaf.startIndex).toBe(2)
+  })
+
+  it('flattens a structure into one leaf per member, in declaration order', () => {
+    const leaves = leavesOf(describeShmLeaves(userTyped('m', 'Motor'), [MOTOR]))
+
+    expect(leaves.map((l) => l.field)).toEqual(['m_speed', 'm_label'])
+    expect(leaves.map((l) => l.path)).toEqual([
+      ['m', 'speed'],
+      ['m', 'label'],
+    ])
+    expect(leaves.map((l) => l.access)).toEqual(['M.SPEED', 'M.LABEL'])
+  })
+
+  it('flattens rather than nesting, so neither side computes padding', () => {
+    // `#pragma pack` applies to the struct being defined, never to a member type
+    // already laid out — the trap that made WSTRING 254 bytes against Python's
+    // 253. Every leaf sits at the top level of one packed struct.
+    const leaves = leavesOf(describeShmLeaves(userTyped('m', 'Motor'), [MOTOR]))
+
+    expect(leaves.every((l) => !l.field.includes('.'))).toBe(true)
+  })
+
+  it('flattens a nested structure through both levels', () => {
+    const outer: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [{ name: 'drive', type: { definition: 'user-data-type', value: 'Motor' } }],
+    }
+    const leaves = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [outer, MOTOR]))
+
+    expect(leaves.map((l) => l.field)).toEqual(['r_drive_speed', 'r_drive_label'])
+    expect(leaves.map((l) => l.access)).toEqual(['R.DRIVE.SPEED', 'R.DRIVE.LABEL'])
+  })
+
+  it('describes an enumeration as its stored integer, naming the type for Python', () => {
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('md', 'Mode'), [MODE]))
+
+    expect(leaf.descriptor.cType).toBe('int16_t')
+    expect(leaf.enumTypeName).toBe('Mode')
+    // The access stays assignable; the emitter casts through the wrapper, since
+    // an IEC_ENUM_Var yields an IEC_ENUM_Value that converts to the scoped enum
+    // but not to an integer.
+    expect(leaf.access).toBe('MD')
+  })
+
+  it('mangles a member named after its own type, as the compiler does', () => {
+    // GCC rejects a member that changes the meaning of its type name inside the
+    // class, so STruC++ emits a trailing underscore. CODESYS allows
+    // `RunningLights : RunningLights` and real projects use it.
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [{ name: 'mode', type: { definition: 'user-data-type', value: 'Mode' } }],
+    }
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig, MODE]))
+
+    expect(leaf.access).toBe('R.MODE_')
+  })
+
+  it('does not mangle a member whose name merely matches an elementary type', () => {
+    // `Time : TIME` is an ordinary declaration the compiler emits unmangled;
+    // mangling it would name a `TIME_` member that does not exist.
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [{ name: 'time', type: { definition: 'base-type', value: 'TIME' } }],
+    }
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+
+    expect(leaf.access).toBe('R.TIME')
+  })
+
+  it('describes an array nested inside a structure', () => {
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [
+        {
+          name: 'trims',
+          type: {
+            definition: 'array',
+            value: 'ARRAY [1..3] OF INT',
+            data: { baseType: { definition: 'base-type', value: 'INT' }, dimensions: [{ dimension: '1..3' }] },
+          },
+        },
+      ],
+    }
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+
+    expect(leaf.count).toBe(3)
+    expect(leaf.startIndex).toBe(1)
+    expect(leaf.access).toBe('R.TRIMS')
+  })
+
+  it('reads an array member’s bounds even when its dimension text is malformed', () => {
+    // A dimension that cannot be parsed yields no lower bound rather than a
+    // guessed one; the element type still describes the field.
+    const rig: PLCDataType = {
+      name: 'Rig',
+      derivation: 'structure',
+      variable: [
+        {
+          name: 'trims',
+          type: {
+            definition: 'array',
+            value: 'ARRAY [?] OF INT',
+            data: { baseType: { definition: 'base-type', value: 'INT' }, dimensions: [{ dimension: 'nonsense' }] },
+          },
+        },
+      ],
+    }
+    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+
+    expect(leaf.startIndex).toBe(0)
+  })
+
+  it('refuses an array declaration carrying no dimension data rather than guessing', () => {
+    // Without `data` there is no element type and no count. Describing it as
+    // one scalar would put a single field where the C side may write many.
+    const bare: PLCVariable = {
+      name: 'data',
+      class: 'input',
+      type: { definition: 'array', value: 'ARRAY [0..3] OF INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    expect(refusalOf(describeShmLeaves(bare))?.reason).toContain('not a type Python can exchange')
+  })
+
+  describe('refusals', () => {
+    it('refuses a function block instance, naming why', () => {
+      const refusal = refusalOf(describeShmLeaves(userTyped('t', 'TON'), [MOTOR]))
+
+      expect(refusal?.reason).toContain('function block instance')
+      expect(refusal?.reason).toContain('its own process')
+    })
+
+    it('refuses an array of structures', () => {
+      const bank = arrayOf('bank', 'Motor')
+      bank.type.data!.baseType = { definition: 'user-data-type', value: 'Motor' }
+
+      expect(refusalOf(describeShmLeaves(bank, [MOTOR]))?.reason).toContain('array of structures')
+    })
+
+    it('refuses a named ARRAY type', () => {
+      const named: PLCDataType = {
+        name: 'Bank',
+        derivation: 'array',
+        baseType: { definition: 'base-type', value: 'INT' },
+        dimensions: [{ dimension: '0..3' }],
+      }
+
+      expect(refusalOf(describeShmLeaves(userTyped('b', 'Bank'), [named]))?.reason).toContain('named ARRAY type')
+    })
+
+    it('refuses an unsupported elementary type', () => {
+      expect(refusalOf(describeShmLeaves(scalar('x', 'float32')))?.reason).toContain('not a type Python can exchange')
+    })
+
+    it('names the member that cannot cross, not the variable containing it', () => {
+      const rig: PLCDataType = {
+        name: 'Rig',
+        derivation: 'structure',
+        variable: [{ name: 'timer', type: { definition: 'user-data-type', value: 'TON' } }],
+      }
+      const refusal = refusalOf(describeShmLeaves(userTyped('r', 'Rig'), [rig]))
+
+      expect(refusal?.path).toEqual(['r', 'timer'])
+    })
+
+    it('refuses a structure that contains itself rather than recursing forever', () => {
+      const loop: PLCDataType = {
+        name: 'Loop',
+        derivation: 'structure',
+        variable: [{ name: 'inner', type: { definition: 'user-data-type', value: 'Loop' } }],
+      }
+
+      expect(refusalOf(describeShmLeaves(userTyped('l', 'Loop'), [loop]))?.reason).toContain('refers to itself')
+    })
+  })
+})
+
+describe('describeShmLayout', () => {
+  it('concatenates every variable’s leaves in order', () => {
+    const result = describeShmLayout([scalar('a', 'INT'), userTyped('m', 'Motor')], [MOTOR])
+
+    expect(leavesOf(result).map((l) => l.field)).toEqual(['a', 'm_speed', 'm_label'])
+  })
+
+  it('reports the first refusal rather than a partial layout', () => {
+    // A partial layout is the corruption this design exists to prevent: a
+    // missing field shifts every later field's offset.
+    const result = describeShmLayout([scalar('a', 'INT'), userTyped('t', 'TON')], [MOTOR])
+
+    expect('refusal' in result).toBe(true)
+  })
+
+  it('is empty for no variables', () => {
+    expect(leavesOf(describeShmLayout([]))).toEqual([])
+  })
+})

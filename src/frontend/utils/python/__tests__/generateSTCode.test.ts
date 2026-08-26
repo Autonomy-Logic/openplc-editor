@@ -1,4 +1,4 @@
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSTCode } from '../generateSTCode'
 
 const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
@@ -319,6 +319,81 @@ describe('generateSTCode (python)', () => {
     expect(result).toContain('const char *script_name = "controller.py";')
     expect(result).toContain('const char script_template[] =')
     expect(result).toContain('python_block_loader')
+  })
+
+  describe('structures and enumerations', () => {
+    const MOTOR: PLCDataType = {
+      name: 'Motor',
+      derivation: 'structure',
+      variable: [
+        { name: 'speed', type: { definition: 'base-type', value: 'int' } },
+        { name: 'label', type: { definition: 'base-type', value: 'string' } },
+      ],
+    }
+    const MODE: PLCDataType = {
+      name: 'Mode',
+      derivation: 'enumerated',
+      values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
+    }
+    const userTyped = (name: string, cls: PLCVariable['class'], typeName: string): PLCVariable => ({
+      name,
+      class: cls,
+      type: { definition: 'user-data-type', value: typeName },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+    const run = (variables: PLCVariable[], dataTypes: PLCDataType[]) =>
+      generateSTCode({ pouName: 'test', allVariables: variables, processedPythonCode: '', dataTypes })
+
+    it('flattens a structure into one field per member', () => {
+      const result = run([userTyped('m', 'input', 'Motor')], [MOTOR])
+
+      expect(result).toContain('int16_t m_speed;')
+      expect(result).toContain('shm_iec_string_t m_label;')
+    })
+
+    it('copies each member individually, by its name on the strucpp side', () => {
+      const result = run([userTyped('m', 'input', 'Motor')], [MOTOR])
+
+      expect(result).toContain('data_in.m_speed = M.SPEED;')
+      expect(result).toContain('auto __s = M.LABEL.get();')
+    })
+
+    it('reads an enumeration through both wrappers before casting to its integer', () => {
+      // `IEC_ENUM_Var::get()` yields an `IEC_ENUM_Value`, which converts to the
+      // scoped enum but not to an integer.
+      const result = run([userTyped('md', 'input', 'Mode')], [MODE])
+
+      expect(result).toContain('data_in.md = static_cast<int16_t>(MD.get().get());')
+    })
+
+    it('writes an enumeration back through set(), not operator=', () => {
+      // `operator=` would copy-assign a whole temporary wrapper and take its
+      // forced state along; `set()` leaves forcing where it was.
+      const result = run([userTyped('md', 'output', 'Mode')], [MODE])
+
+      expect(result).toContain('MD.set(static_cast<MODE>(data_out.md));')
+    })
+
+    it('writes a structure member back individually', () => {
+      const result = run([userTyped('m', 'output', 'Motor')], [MOTOR])
+
+      expect(result).toContain('M.SPEED = data_out.m_speed;')
+    })
+
+    it('seeds a structure output from what the PLC holds', () => {
+      const result = run([userTyped('m', 'output', 'Motor')], [MOTOR])
+
+      expect(result).toContain('seed_out.m_speed = M.SPEED;')
+    })
+
+    it('copies a structure member of an external under the global’s lock', () => {
+      const result = run([userTyped('g', 'external', 'Motor')], [MOTOR])
+
+      expect(result).toContain('G->with_lock([&](auto* __g) {')
+      expect(result).toContain('data_in.g_speed = __r.SPEED;')
+    })
   })
 
   describe('variable classes', () => {
