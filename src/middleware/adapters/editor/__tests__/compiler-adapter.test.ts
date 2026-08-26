@@ -987,7 +987,9 @@ describe('compileForDebug with invalid C++ POU', () => {
     )
 
     expect(result.success).toBe(false)
-    expect(result.error).toBe('POU validation failed.')
+    // The debug path now surfaces the specific reason instead of a bare
+    // "POU validation failed." — the same text the build path already showed.
+    expect(result.error).toBe('POU validation failed. Check C/C++ code for missing setup()/loop() functions.')
     // The bridge should NOT have been called because validation failed early
     expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
     void debugCallback // suppress unused warning

@@ -12,6 +12,7 @@
  */
 
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
+import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type {
   CompileLibraryArgs,
   CompileProgramArgs,
@@ -213,17 +214,31 @@ export function createEditorCompilerAdapter(): CompilerPort {
       const archives = (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[]
       const dataWithLibCpp = injectLibraryCppBlocks(args.projectData, archives)
 
-      // Preprocess for debug compilation too
-      const { projectData: processedData, validationFailed } = preprocessPous(
+      // Preprocess for debug compilation too. Same target gate as the build
+      // path — a Python block is no more loadable on an Arduino board when the
+      // build is for debugging.
+      const debugBoards = await window.bridge.getAvailableBoards()
+      const debugBoardInfo = debugBoards.get(args.boardTarget)
+      const {
+        projectData: processedData,
+        validationFailed,
+        validationError,
+      } = preprocessPous(
         dataWithLibCpp,
         false,
         (level, message) => {
           onProgress({ stage: 'st', message, level })
         },
+        debugBoardInfo
+          ? {
+              supported: resolveTargetCapabilities(debugBoardInfo).pythonFunctionBlocks,
+              targetLabel: args.boardTarget,
+            }
+          : undefined,
       )
 
       if (validationFailed) {
-        return { success: false, error: 'POU validation failed.' }
+        return { success: false, error: validationError ?? 'POU validation failed.' }
       }
 
       const ipcData = toIpcProjectData(processedData)

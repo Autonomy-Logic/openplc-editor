@@ -22,6 +22,35 @@ type LogFn = (level: 'info' | 'error', message: string) => void
 type PreprocessResult = {
   projectData: ProjectDataWithCpp
   validationFailed: boolean
+  /**
+   * Human-facing reason for `validationFailed`, when one is known.
+   *
+   * Callers used to hard-code the C/C++ setup()/loop() message, which was the
+   * only way validation could fail. Python-on-an-unsupported-target is a second
+   * way, and reporting it as a C/C++ problem would send the user looking in the
+   * wrong file. Absent → the caller's default message still applies.
+   */
+  validationError?: string
+}
+
+/**
+ * Whether the selected target can host Python function blocks, and what to call
+ * it when it cannot.
+ *
+ * Mirrors `TargetCapabilities.pythonFunctionBlocks`, which already states the
+ * contract: Runtime v3 / v4 run them natively, the Simulator compiles them as
+ * no-op stubs, and arduino-cli targets reject them at build time. The rejection
+ * half was never implemented — a Python block on an Arduino target took the
+ * full Linux pipeline and died inside avr-g++ with `'python_block_loader' was
+ * not declared in this scope`, which tells the user nothing.
+ *
+ * Optional so the library build paths, which have no board in hand, keep their
+ * existing behaviour.
+ */
+type PythonTargetSupport = {
+  supported: boolean
+  /** Board name as the user selected it, for the error message. */
+  targetLabel: string
 }
 
 const extractPythonData = (pous: PLCPou[]) => {
@@ -40,11 +69,36 @@ const extractPythonData = (pous: PLCPou[]) => {
     }))
 }
 
-function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: LogFn): PreprocessResult {
+function preprocessPous(
+  projectData: PLCProjectData,
+  isSimulator: boolean,
+  log: LogFn,
+  pythonSupport?: PythonTargetSupport,
+): PreprocessResult {
   let processedProjectData: PLCProjectData = projectData
 
   // --- Python processing ---
   const hasPythonCode = projectData.pous.some((pou: PLCPou) => pou.body.language === 'python')
+
+  if (hasPythonCode && pythonSupport && !pythonSupport.supported) {
+    // Reject before any Python processing runs. Generating the shared-memory
+    // stub for a target that cannot load it only moves the failure into the
+    // board's C++ toolchain, where the message is about `python_block_loader`
+    // rather than about Python blocks being unsupported here.
+    const names = projectData.pous
+      .filter((pou: PLCPou) => pou.body.language === 'python')
+      .map((pou: PLCPou) => `"${pou.name}"`)
+      .join(', ')
+    const message =
+      `Python function blocks are not supported on ${pythonSupport.targetLabel} — ` +
+      `they require the OpenPLC Linux runtime. Remove or change ${names}, or select a Runtime target.`
+    log('error', message)
+    return {
+      projectData: processedProjectData as ProjectDataWithCpp,
+      validationFailed: true,
+      validationError: message,
+    }
+  }
 
   if (hasPythonCode) {
     const pythonPous = projectData.pous.filter((pou: PLCPou) => pou.body.language === 'python')
@@ -134,7 +188,11 @@ function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: 
     }
 
     if (validationFailed) {
-      return { projectData: processedProjectData as ProjectDataWithCpp, validationFailed: true }
+      return {
+        projectData: processedProjectData as ProjectDataWithCpp,
+        validationFailed: true,
+        validationError: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+      }
     }
 
     processedProjectData = addCppLocalVariables(processedProjectData)
@@ -186,4 +244,4 @@ function preprocessPous(projectData: PLCProjectData, isSimulator: boolean, log: 
   return { projectData: processedProjectData as ProjectDataWithCpp, validationFailed: false }
 }
 
-export { preprocessPous, type ProjectDataWithCpp }
+export { preprocessPous, type ProjectDataWithCpp, type PythonTargetSupport }
