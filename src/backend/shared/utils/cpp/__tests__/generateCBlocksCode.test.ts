@@ -166,6 +166,72 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('// comment about setup')
   })
 
+  describe('project type aliases', () => {
+    const code = 'void setup() { }\nvoid loop() { }'
+    const userVar = (name: string, typeName: string): PLCVariable => ({
+      name,
+      class: 'input',
+      type: { definition: 'user-data-type', value: typeName },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+
+    it('aliases every type the project declares, not only the ones a pin names', () => {
+      // A type reachable only through a structure member still has to be in
+      // scope: given `o : Outer` with a `State` member, the block writes
+      // `o.STATE_ = STATE::BUSY`, and walking pin types alone left STATE
+      // undeclared — which failed the build on hardware.
+      const result = generateCBlocksCode(
+        [{ name: 'B', code, variables: [userVar('o', 'Outer')] }],
+        ['Outer', 'Inner', 'State'],
+      )
+
+      expect(result).toContain('using OUTER = strucpp::OUTER;')
+      expect(result).toContain('using INNER = strucpp::INNER;')
+      expect(result).toContain('using STATE = strucpp::STATE;')
+    })
+
+    it('aliases a type named by a pin even when the project does not declare it', () => {
+      // A function block is a POU, not a data type, so it never appears among
+      // the project's dataTypes — but a block holding an instance may want to
+      // name the class.
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [userVar('h', 'Helper')] }], [])
+
+      expect(result).toContain('using HELPER = strucpp::HELPER;')
+    })
+
+    it('emits each alias once when a type is both declared and named by a pin', () => {
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [userVar('m', 'Motor')] }], ['Motor'])
+
+      expect(result.match(/using MOTOR = strucpp::MOTOR;/g)).toHaveLength(1)
+    })
+
+    it('aliases the element type of an array of a user type', () => {
+      const bank: PLCVariable = {
+        name: 'bank',
+        class: 'input',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [0..3] OF Motor',
+          data: { baseType: { definition: 'user-data-type', value: 'Motor' }, dimensions: [{ dimension: '0..3' }] },
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      }
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [bank] }], [])
+
+      expect(result).toContain('using MOTOR = strucpp::MOTOR;')
+    })
+
+    it('emits no alias block when the project has no user types at all', () => {
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [makeScalarVar('x', 'input', 'INT')] }], [])
+
+      expect(result).not.toContain('using ')
+    })
+  })
+
   it('binds every class the user can declare, and nothing the toolchain injected', () => {
     const byClass = (name: string, cls: PLCVariable['class'], type: string): PLCVariable => ({
       name,

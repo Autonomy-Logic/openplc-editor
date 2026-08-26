@@ -110,7 +110,7 @@ export function buildCBlocksFromPous(
   }))
   return {
     header: generateCBlocksHeader(headers, userTypeNames),
-    code: generateCBlocksCode(originalCppPous),
+    code: generateCBlocksCode(originalCppPous, userTypeNames),
   }
 }
 

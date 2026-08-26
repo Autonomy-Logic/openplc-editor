@@ -28,6 +28,23 @@ import { PYTHON_RUNTIME_INTERNAL_VARIABLES } from './addPythonLocalVariables'
  *   - `external` travels both ways for the same reason as `local`; the stub
  *     reads and writes it through the global's own lock.
  *
+ * One consequence of marshalling an `external` is worth stating plainly, because
+ * it differs from every other language a block can be written in. Each access is
+ * atomic — the stub takes the global's lock to read and again to write — but the
+ * read-modify-write as a whole is not, because the "modify" happens in another
+ * process a cycle later. So `g := g + 1` in a Python block loses updates that
+ * another task makes in between, where the same line in ST or C++ completes
+ * inside one scan under one lock.
+ *
+ * Measured on hardware: a Python block and a C++ block each adding 2 to the same
+ * global reached about 70% of the total both had added. With a single writer —
+ * the ordinary case — the count is exact.
+ *
+ * The alternative is holding the lock from the Python read to the Python write,
+ * which would stall every other task touching that global for a whole Python
+ * cycle. Lost updates under contention is the better trade, but it is a real
+ * difference and belongs in the user documentation.
+ *
  * `temp` is absent deliberately: see `PYTHON_UNSUPPORTED_CLASSES`. `global` is
  * absent for the reason it is absent from a POU at all — it is a
  * configuration-level declaration, not a POU variable. So are the toolchain's

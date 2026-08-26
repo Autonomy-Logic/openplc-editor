@@ -1292,7 +1292,10 @@ class CompilerModule {
     // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
     // strucpp-free and is compiled by arduino-cli in the core's native
     // standard.
-    const codeContent = generateCBlocksCode(cppPous)
+    // Every data type the project declares is aliased into the block's scope,
+    // including ones reachable only through a structure member.
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const codeContent = generateCBlocksCode(cppPous, userTypeNames)
     const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {

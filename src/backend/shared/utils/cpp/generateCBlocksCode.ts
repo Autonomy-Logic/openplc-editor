@@ -138,9 +138,16 @@ const generateUndef = (variable: PLCVariable): string => {
  * is the structure itself and `strucpp::MODE` the enumeration, which is what a
  * user casts to. The `IEC_`-prefixed aliases stay reserved for pin types in the
  * generated struct.
+ *
+ * Every type the project declares is aliased, not only the ones a pin names
+ * directly. A type reachable through a structure member needs to be in scope
+ * too: given `o : Outer` where `Outer` has a `State` member, the block writes
+ * `o.STATE_ = STATE::BUSY`, and walking only pin types left `STATE` undeclared.
+ * Types named by a pin are added as well, which is what covers a function block
+ * instance — an FB is a POU, so it is not among the project's data types.
  */
-const generateUserTypeAliases = (cppPous: CppPouData[]): string => {
-  const referenced = new Set<string>()
+const generateUserTypeAliases = (cppPous: CppPouData[], userTypeNames: Iterable<string>): string => {
+  const referenced = new Set<string>(Array.from(userTypeNames, (name) => name.toUpperCase()))
   for (const pou of cppPous) {
     for (const variable of pou.variables) {
       if (variable.type.definition === 'user-data-type') {
@@ -203,11 +210,11 @@ const processUserCode = (pou: CppPouData): string => {
  * Returns an empty string when there are no C++ POUs so the caller can
  * skip writing the file.
  */
-const generateCBlocksCode = (cppPous: CppPouData[]): string => {
+const generateCBlocksCode = (cppPous: CppPouData[], userTypeNames: Iterable<string> = []): string => {
   if (cppPous.length === 0) return ''
 
   let codeContent = C_BLOCKS_BASELINE
-  codeContent += generateUserTypeAliases(cppPous)
+  codeContent += generateUserTypeAliases(cppPous, userTypeNames)
 
   cppPous.forEach((pou) => {
     codeContent += processUserCode(pou)
