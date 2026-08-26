@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { IEC_BASE_TYPES } from '../../iec-types-registry'
 import {
+  describeShmBaseType,
   describeShmField,
   describeVariableType,
   SHM_SCALAR_TYPES,
@@ -149,5 +151,55 @@ describe('describeVariableType', () => {
 
   it('names a user-defined type', () => {
     expect(describeVariableType(userType('v', 'Motor'))).toBe('MOTOR')
+  })
+})
+
+describe('SHM_SCALAR_TYPES is derived from the compiler, not restated', () => {
+  // The governing rule on DOPE-584: the compiler is the single source of truth,
+  // and nothing downstream hard-codes a type fact. This table used to restate
+  // the size and C type of all 19 elementary types beside
+  // `strucpp/libs/iec-types.json`, and the two had already drifted — the aliases
+  // below were the observable symptom.
+
+  it('covers every user-declarable elementary type in the registry', () => {
+    const missing = IEC_BASE_TYPES.filter((type) => {
+      if (type.name.startsWith('__')) return false
+      return describeShmBaseType(type.name) === null
+    }).map((type) => type.name)
+
+    expect(missing).toEqual([])
+  })
+
+  it('takes each width from the registry rather than a local literal', () => {
+    for (const type of IEC_BASE_TYPES) {
+      if (type.name.startsWith('__')) continue
+      // STRING / WSTRING report byteSize 0 in the registry — their width is a
+      // length prefix plus a body, described by SHM_STRING / SHM_WSTRING.
+      if (type.byteSize === 0) continue
+      expect(describeShmBaseType(type.name)?.size).toBe(type.byteSize)
+    }
+  })
+
+  it('resolves TIME_OF_DAY exactly like TOD', () => {
+    // Reachable through PLCopen XML import and library FB manifests, both of
+    // which carry the alias spelling. The hand-written table had only `tod`, so
+    // a variable declared as TIME_OF_DAY made the whole block refuse.
+    expect(describeShmBaseType('TIME_OF_DAY')).toEqual(describeShmBaseType('TOD'))
+  })
+
+  it('resolves DATE_AND_TIME exactly like DT', () => {
+    expect(describeShmBaseType('DATE_AND_TIME')).toEqual(describeShmBaseType('DT'))
+  })
+
+  it('accepts any case and surrounding whitespace, as the registry does', () => {
+    // Legacy project files carry whitespace-padded and mixed-case type names;
+    // `lookupBaseType` trims and folds case, and routing through it means this
+    // file no longer re-implements that rule (badly).
+    expect(describeShmBaseType('  dInT  ')).toEqual(describeShmBaseType('DINT'))
+  })
+
+  it('still refuses a name that is not an elementary type', () => {
+    expect(describeShmBaseType('Motor')).toBeNull()
+    expect(describeShmBaseType('')).toBeNull()
   })
 })

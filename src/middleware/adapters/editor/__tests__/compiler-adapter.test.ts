@@ -1026,3 +1026,101 @@ describe('compileForDebug with invalid C++ POU', () => {
     expect(progressEvents.length).toBeGreaterThan(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// compileForDebug — library FB pins reach the preprocess
+// ---------------------------------------------------------------------------
+describe('compileForDebug — library function block pins', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  /** A Python POU holding an instance of a function block that lives in a library. */
+  const pythonWithLibraryInstance: PLCProjectData = {
+    dataTypes: [],
+    pous: [
+      {
+        name: 'PyTimer',
+        pouType: 'program',
+        interface: {
+          variables: [
+            {
+              name: 'ton0',
+              class: 'local',
+              type: { definition: 'derived', value: 'TON' },
+              location: '',
+              documentation: '',
+              debug: false,
+            },
+          ],
+        },
+        body: { language: 'python', value: 'def block_loop():\n    pass' },
+      },
+    ],
+    configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+  }
+
+  const TON_ARCHIVE = {
+    manifest: {
+      name: 'iec_standard_fb',
+      functionBlocks: [
+        {
+          name: 'TON',
+          inputs: [
+            { name: 'IN', type: 'BOOL' },
+            { name: 'PT', type: 'TIME' },
+          ],
+          inouts: [],
+          outputs: [
+            { name: 'Q', type: 'BOOL' },
+            { name: 'ET', type: 'TIME' },
+          ],
+        },
+      ],
+    },
+  }
+
+  it('passes the loaded archives so a library FB instance resolves', async () => {
+    // `compileForDebug` loaded the archives and then did not forward them, so
+    // `libraries` defaulted to `[]`, `resolveFunctionBlockPins` found nothing,
+    // and a Python POU declaring `ton0 : TON` compiled for upload and failed the
+    // DEBUG compile with "cannot exchange these variables". The archives were
+    // already in hand — only the argument was missing.
+    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([TON_ARCHIVE])
+    ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
+      new Map([['OpenPLC Runtime v4', { name: 'OpenPLC Runtime v4', compiler: 'openplc-compiler' }]]),
+    )
+
+    const adapter = createEditorCompilerAdapter()
+    const promise = adapter.compileForDebug(
+      { projectData: pythonWithLibraryInstance, boardTarget: 'OpenPLC Runtime v4', projectPath: '/p' },
+      () => {},
+    )
+    const result = await Promise.race([promise, new Promise((r) => setTimeout(() => r('pending'), 50))])
+
+    // Either it got past validation (reaching the bridge) or it failed for some
+    // other reason — but NOT for an unresolvable TON.
+    if (typeof result === 'object' && result !== null && 'error' in result) {
+      expect(String((result as { error?: string }).error)).not.toContain('no function block by that name')
+    }
+  })
+
+  it('refuses the same POU when no archive declares the block', async () => {
+    // The other half of the contract: with no library carrying TON, the refusal
+    // is correct and must still name the variable.
+    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([])
+    ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
+      new Map([['OpenPLC Runtime v4', { name: 'OpenPLC Runtime v4', compiler: 'openplc-compiler' }]]),
+    )
+
+    const adapter = createEditorCompilerAdapter()
+    const result = await adapter.compileForDebug(
+      { projectData: pythonWithLibraryInstance, boardTarget: 'OpenPLC Runtime v4', projectPath: '/p' },
+      () => {},
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ton0')
+    expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
+  })
+})

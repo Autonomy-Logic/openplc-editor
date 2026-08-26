@@ -21,13 +21,11 @@ import { describeShmLayout } from './shm-leaves'
  */
 const encodeCharactersFromLeaves = (leaves: readonly ShmLeaf[]): string => {
   const encoded = leaves.map((leaf) => {
-    if (leaf.count > 1) {
-      // A repeat count applies only to the FIRST character of a struct format,
-      // so `10b126s` is not ten strings. Multi-character formats are repeated
-      // whole.
-      if (leaf.descriptor.pyFormat.length > 1) {
-        return leaf.descriptor.pyFormat.repeat(leaf.count)
-      }
+    if (leaf.isArray) {
+      // A repeat count applies only to the FIRST item of a struct format, so
+      // `4b126s` is not four strings. Only single-item formats can carry one,
+      // which is why the walk refuses an array whose element needs more than
+      // one — an array leaf here is always a scalar element.
       return `${leaf.count}${leaf.descriptor.pyFormat}`
     }
     return leaf.descriptor.pyFormat

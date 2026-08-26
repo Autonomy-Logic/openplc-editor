@@ -46,7 +46,18 @@ export interface ShmLeaf {
   access: string
   /** How the field is laid out and decoded. */
   descriptor: ShmFieldDescriptor
-  /** Elements when the leaf is an array of scalars; 1 otherwise. */
+  /**
+   * Whether this leaf is an array, stated rather than inferred.
+   *
+   * Every emitter used to test `count > 1`, which silently mis-handled the two
+   * shapes where an array's element count is not greater than one:
+   * `ARRAY [0..0] OF INT` (count 1) took the scalar path and bound a plain int
+   * where the user declared a one-element array. Array-ness is a property of
+   * the declaration, not of how many elements it happens to have, so it is
+   * carried here and `count` is only ever a length.
+   */
+  isArray: boolean
+  /** Elements when the leaf is an array; 1 otherwise. */
   count: number
   /** Lowest IEC index, for an array leaf; 0 otherwise. */
   startIndex: number
@@ -182,11 +193,15 @@ const walk = (
       // array variable is: the count and lower bound travel separately, so the
       // element is what has to be describable.
       const element = elementTypeOf(member)
+      const memberShape = arrayShapeOf(member)
+      if ('reason' in memberShape) {
+        return { refusal: { path: [...path, member.name], reason: memberShape.reason } }
+      }
       const result = walk(
         member.name,
         element.value,
         element.definition,
-        arrayInfoFor(member),
+        memberShape.info,
         [...path, member.name],
         `${field}_${member.name}`,
         `${access}.${mangledMemberName(member.name, member.type.value, userTypeNames)}`,
@@ -200,8 +215,17 @@ const walk = (
   }
 
   if (dataType?.derivation === 'enumerated') {
-    // An enumeration is stored as its base integer, which is what crosses. The
-    // Python side gets an IntEnum, so `mode == Mode.RUNNING` reads naturally
+    // An array of enumerations is refused rather than described. Both sides
+    // would have to combine the array shape with the enum cast, and neither
+    // does: the C stub's array copy assigns the raw slot without the scoped-enum
+    // cast, and the Python decoder binds a list of plain ints while the seed
+    // emits `Mode([0, 0, 0])`, which raises at module level before `block_init`
+    // ever runs.
+    if (arrayInfo) {
+      return { refusal: { path, reason: 'an array of enumerations cannot cross into Python yet' } }
+    }
+    // A scalar enumeration is stored as its base integer, which is what crosses.
+    // The Python side gets an IntEnum, so `mode == Mode.RUNNING` reads naturally
     // while the wire format stays a plain int.
     return {
       leaves: [
@@ -210,8 +234,9 @@ const walk = (
           path,
           access,
           descriptor: ENUM_BASE_DESCRIPTOR,
-          count: arrayInfo?.count ?? 1,
-          startIndex: arrayInfo?.startIndex ?? 0,
+          isArray: false,
+          count: 1,
+          startIndex: 0,
           enumTypeName: dataType.name,
         },
       ],
@@ -262,11 +287,15 @@ const walk = (
       // Python an attribute named differently from the slot it was built with.
       const pinName = pin.name.toUpperCase()
       const element = elementTypeOf({ name: pin.name, type: pin.type })
+      const pinShape = arrayShapeOf({ name: pin.name, type: pin.type })
+      if ('reason' in pinShape) {
+        return { refusal: { path: [...path, pinName], reason: pinShape.reason } }
+      }
       const result = walk(
         pinName,
         element.value,
         element.definition,
-        arrayInfoFor({ name: pin.name, type: pin.type }),
+        pinShape.info,
         [...path, pinName],
         `${field}_${pinName}`,
         // A pin is a member of the instance's class, upper-cased, and mangled by
@@ -299,6 +328,21 @@ const walk = (
     }
   }
 
+  // An array of STRING or WSTRING is refused rather than described. A string is
+  // not one field but two — a length prefix and a body — so its `struct` format
+  // is multi-character, and a repeat count in that format applies only to the
+  // first item: `4b126s` is not four strings. Repeating the whole format instead
+  // emits two slots per element while the decoder consumes one, so an
+  // `ARRAY [0..3] OF STRING` shifted every variable declared after it.
+  if ((descriptor.kind === 'string' || descriptor.kind === 'wstring') && arrayInfo) {
+    return {
+      refusal: {
+        path,
+        reason: `an array of ${descriptor.kind === 'wstring' ? 'WSTRING' : 'STRING'} cannot cross into Python yet`,
+      },
+    }
+  }
+
   return {
     leaves: [
       {
@@ -306,6 +350,7 @@ const walk = (
         path,
         access,
         descriptor,
+        isArray: arrayInfo !== null,
         count: arrayInfo?.count ?? 1,
         startIndex: arrayInfo?.startIndex ?? 0,
       },
@@ -328,12 +373,42 @@ const elementTypeOf = (declaration: PLCVariable | PLCStructureVariable): PLCVari
   return declaration.type
 }
 
-/** Element count and lower bound when a declaration is an array. */
-const arrayInfoFor = (
-  declaration: PLCVariable | PLCStructureVariable,
-): { count: number; startIndex: number } | null => {
-  if (declaration.type.definition !== 'array' || !declaration.type.data) return null
+/** Element count and lower bound of an array declaration. */
+interface ArrayInfo {
+  count: number
+  startIndex: number
+}
+
+/**
+ * Array shape of a declaration — `null` when it is not an array — or the reason
+ * the shape cannot cross.
+ *
+ * Two shapes are refused here rather than described:
+ *
+ *   - **Rank two or higher.** The generated exchange indexes with a single
+ *     subscript (`A[start + i]`), but strucpp passes a multi-dimensional array
+ *     as `Array2D` / `Array3D`, which is indexed `(i, j)` — `generateCBlocksCode`
+ *     branches on `multiDimensionalContainerType` for exactly that reason. The
+ *     flat element count would also be paired with only dimension 0's lower
+ *     bound, so `ARRAY [1..2, 1..3] OF INT` would read elements 1..6 of a
+ *     6-element field. Python blocks carry one-dimensional arrays only; a
+ *     higher rank is refused with its own message rather than mis-indexed.
+ *   - **Dimensions that do not parse.** `getArrayTotalElements` returns 0 for a
+ *     malformed range, which used to fall through to the scalar path and emit a
+ *     single field against an array member.
+ */
+type ArrayShape = { info: ArrayInfo | null } | { reason: string }
+
+const arrayShapeOf = (declaration: PLCVariable | PLCStructureVariable): ArrayShape => {
+  if (declaration.type.definition !== 'array' || !declaration.type.data) return { info: null }
   const dimensions = declaration.type.data.dimensions
+  if (dimensions.length > 1) {
+    return {
+      reason:
+        `a ${dimensions.length}-dimensional array cannot cross into Python — Python blocks support ` +
+        'one-dimensional arrays only. Flatten it, or split it into separate one-dimensional variables',
+    }
+  }
   const first = dimensions[0] ? parseDimensionRange(dimensions[0].dimension) : null
   const asVariable: PLCVariable = {
     name: declaration.name,
@@ -341,7 +416,11 @@ const arrayInfoFor = (
     location: '',
     documentation: '',
   }
-  return { count: getArrayTotalElements(asVariable), startIndex: first ? first.lower : 0 }
+  const count = getArrayTotalElements(asVariable)
+  if (!first || count < 1) {
+    return { reason: 'its array bounds cannot be read, so the size of the field it needs is unknown' }
+  }
+  return { info: { count, startIndex: first.lower } }
 }
 
 /**
@@ -364,12 +443,16 @@ export const describeShmLeaves = (variable: PLCVariable, context: ShmWalkContext
   }
 
   const element = elementTypeOf(variable)
+  const shape = arrayShapeOf(variable)
+  if ('reason' in shape) {
+    return { refusal: { path: [variable.name], reason: shape.reason } }
+  }
 
   return walk(
     variable.name,
     element.value,
     element.definition,
-    arrayInfoFor(variable),
+    shape.info,
     [variable.name],
     variable.name,
     variable.name.toUpperCase(),

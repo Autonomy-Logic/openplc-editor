@@ -1,6 +1,7 @@
 import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
+import { DEBUG_STRING_CAP } from './variable-sizes'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',
@@ -221,7 +222,7 @@ export const parseIecStringToVariables = (
     // `Expected Semicolon, found [` pointing at a line the user never wrote.
     //
     // Refusing here says what is true today. The transport carries a fixed
-    // 126-character budget, so a declared length would not be honoured even if
+    // DEBUG_STRING_CAP-character budget, so a declared length would not be honoured even if
     // it parsed; when the compiler grows the declaration, this guard is the one
     // place that has to change.
     const lengthQualifiedString = /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType)
@@ -229,7 +230,7 @@ export const parseIecStringToVariables = (
       const keyword = lengthQualifiedString[1].toUpperCase()
       throw new Error(
         `Syntax error on line ${lineNumber}: "${line}". A declared length is not supported on ${keyword} — ` +
-          `use plain ${keyword}, which carries up to 126 characters.`,
+          `use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`,
       )
     }
 

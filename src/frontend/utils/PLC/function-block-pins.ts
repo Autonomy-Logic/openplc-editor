@@ -14,6 +14,7 @@
  */
 
 import type { PLCPou, PLCVariable, PLCVariableType } from '../../../middleware/shared/ports/types'
+import { isBaseTypeName } from '../iec-types-registry'
 
 /**
  * The shape a library declares a function block in.
@@ -54,34 +55,16 @@ const isFunctionBlockType = (type: string): boolean => type.toLowerCase().replac
  * walkers either resolve or refuse with a reason. Guessing a width for a generic
  * pin is the one thing that must not happen.
  */
-const ELEMENTARY = new Set([
-  'BOOL',
-  'SINT',
-  'INT',
-  'DINT',
-  'LINT',
-  'USINT',
-  'UINT',
-  'UDINT',
-  'ULINT',
-  'BYTE',
-  'WORD',
-  'DWORD',
-  'LWORD',
-  'REAL',
-  'LREAL',
-  'TIME',
-  'DATE',
-  'TOD',
-  'DT',
-  'TIME_OF_DAY',
-  'DATE_AND_TIME',
-  'STRING',
-  'WSTRING',
-])
+// No local list of elementary names: `isBaseTypeName` reads
+// `strucpp/libs/iec-types.json`, so canonical spellings, aliases
+// (`TIME_OF_DAY`, `DATE_AND_TIME`), case and padding are all handled in one
+// place. The hand-written Set this replaces was a second copy of the compiler's
+// type list, which is exactly the drift the governing rule exists to prevent —
+// and a generic (`ANY_NUM`) is still not in the registry, so it still becomes a
+// `user-data-type` for the walkers to refuse rather than a guessed width.
 
 const libraryPinType = (typeName: string): PLCVariableType =>
-  ELEMENTARY.has(typeName.toUpperCase())
+  isBaseTypeName(typeName)
     ? { definition: 'base-type', value: typeName }
     : { definition: 'user-data-type', value: typeName }
 

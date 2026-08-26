@@ -239,10 +239,10 @@ const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string
 
 /** Decode one leaf out of `_vals` into `local`. */
 const decodeLeaf = (leaf: ShmLeaf, local: string, indent: string): string => {
-  const { descriptor, count } = leaf
+  const { descriptor, count, isArray } = leaf
   let code = ''
 
-  if (count > 1) {
+  if (isArray) {
     code += `${indent}${local} = list(_vals[_idx:_idx+${count}])\n`
     code += `${indent}_idx += ${count}\n`
     return code
@@ -332,9 +332,9 @@ const generateOutputSeedCode = (variables: PLCVariable[], context: ShmWalkContex
 /** Encode one leaf, reading through the Python attribute path it came from. */
 const encodeLeaf = (leaf: ShmLeaf): string => {
   const expr = leaf.path.join('.')
-  const { descriptor, count } = leaf
+  const { descriptor, isArray } = leaf
 
-  if (count > 1) return `    _out.extend(${expr})\n`
+  if (isArray) return `    _out.extend(${expr})\n`
 
   if (descriptor.kind === 'string') {
     let code = `    _body = ${expr}.encode('utf-8')[:${SHM_STRING_CHARS}]\n`

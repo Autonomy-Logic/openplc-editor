@@ -436,3 +436,84 @@ describe('preprocessPous — mixed', () => {
     expect(main.interface!.variables.some((v) => v.name === 'X_Axis' && v.class === 'external')).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Python interface refusals (DOPE-584 AC 3 and AC 9)
+// ---------------------------------------------------------------------------
+describe('preprocessPous — Python interface refusals', () => {
+  // These two refusals had no test at all, which left AC 9 asserted only by the
+  // implementation. Both stop the build on purpose: a variable the two sides of
+  // the SHM boundary cannot describe identically does not merely go missing —
+  // `struct.unpack` reads every later field from the wrong offset, so the damage
+  // lands on an unrelated variable.
+
+  it('refuses `temp` on a Python POU and explains why (AC 9)', () => {
+    const project = makeProjectData([
+      makePythonPou('PyBlock', 'def block_loop():\n    pass', [
+        makeVariable('a', 'input'),
+        makeVariable('scratch', 'temp'),
+      ]),
+    ])
+    const logs: Array<[string, string]> = []
+    const result = preprocessPous(project, false, (level, message) => logs.push([level, message]))
+
+    expect(result.validationFailed).toBe(true)
+    expect(result.validationError).toContain('scratch')
+    expect(logs.some(([level]) => level === 'error')).toBe(true)
+  })
+
+  it('refuses a type the SHM boundary cannot describe, naming the variable', () => {
+    const project = makeProjectData([
+      makePythonPou('PyBlock', 'def block_loop():\n    pass', [
+        makeVariable('a', 'input'),
+        makeVariable('mystery', 'input', 'NotAType'),
+      ]),
+    ])
+    const result = preprocessPous(project, false, () => {})
+
+    expect(result.validationFailed).toBe(true)
+    expect(result.validationError).toContain('mystery')
+  })
+
+  it('refuses a multi-dimensional array on a Python POU (one dimension only)', () => {
+    const grid: PLCVariable = {
+      name: 'grid',
+      class: 'input',
+      type: {
+        definition: 'array',
+        value: 'ARRAY [0..1,0..2] OF INT',
+        data: {
+          baseType: { definition: 'base-type', value: 'INT' },
+          dimensions: [{ dimension: '0..1' }, { dimension: '0..2' }],
+        },
+      },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+    const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass', [grid])])
+    const result = preprocessPous(project, false, () => {})
+
+    expect(result.validationFailed).toBe(true)
+    expect(result.validationError).toContain('one-dimensional arrays only')
+  })
+
+  it('accepts a one-dimensional array, so the rank refusal is not over-broad', () => {
+    const row: PLCVariable = {
+      name: 'row',
+      class: 'input',
+      type: {
+        definition: 'array',
+        value: 'ARRAY [0..3] OF INT',
+        data: { baseType: { definition: 'base-type', value: 'INT' }, dimensions: [{ dimension: '0..3' }] },
+      },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+    const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass', [row])])
+    const result = preprocessPous(project, false, () => {})
+
+    expect(result.validationFailed).toBe(false)
+  })
+})

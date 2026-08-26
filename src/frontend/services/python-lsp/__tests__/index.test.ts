@@ -61,7 +61,7 @@ function installMockSharedService(): { service: MockLanguageService; sendNotific
   return { service, sendNotification }
 }
 
-function makeBoolVar(name: string, varClass: 'input' | 'output' | 'local' = 'input'): PLCVariable {
+function makeBoolVar(name: string, varClass: PLCVariable['class'] = 'input'): PLCVariable {
   return {
     id: name,
     name,

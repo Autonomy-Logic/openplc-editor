@@ -33,7 +33,9 @@
  */
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { IEC_BASE_TYPES, type IECWireFormat, lookupBaseType } from '../iec-types-registry'
 import { getArrayBaseTypeValue, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { DEBUG_STRING_CAP } from '../variable-sizes'
 
 /**
  * How one interface field crosses the boundary.
@@ -69,47 +71,77 @@ export interface ShmFieldDescriptor {
  * read by every emitter, rather than written as a literal in four places as it
  * was before.
  */
-export const SHM_STRING_CHARS = 126
+export const SHM_STRING_CHARS = DEBUG_STRING_CAP
 
 /** Signed 8-bit length prefix, matching the `__strlen_t` the C stub emits. */
 const LEN_PREFIX_BYTES = 1
 
 /**
- * Scalar base types, keyed by the lowercase IEC type name.
+ * The one fact this file owns: how a wire format is spelled on each side of the
+ * boundary.
  *
- * The C types are the raw underlying representations rather than the strucpp
- * `IEC_*` aliases: those alias `IECVar<T>` wrappers, which are not trivially
- * copyable, so memcpy'ing them into a packed struct is undefined behaviour that
- * gcc rightly rejects.  The C stub bridges between the wrapper and these raw
- * fields at the boundary.
+ * Everything else about an elementary type — that it exists, what it is called,
+ * what it is aliased to, how wide it is — comes from strucpp's
+ * `libs/iec-types.json` through {@link IEC_BASE_TYPES}. This table maps only
+ * `wireFormat` to the raw C spelling and the Python `struct` code, which is
+ * genuinely local knowledge: the registry's `cppType` is the strucpp `IEC_*`
+ * wrapper (`INT_t` aliases `IECVar<int16_t>`), and a wrapper is not trivially
+ * copyable, so it cannot be a member of a packed struct that gets memcpy'd.
+ * The C stub bridges the wrapper to these raw fields at the boundary.
+ *
+ * `null` marks a format that needs a layout rather than a single field —
+ * STRING and WSTRING, whose length prefix plus body is described by
+ * {@link SHM_STRING} / {@link SHM_WSTRING} below.
+ *
+ * Exhaustive over `IECWireFormat` by type, so a new wire format in a future
+ * strucpp release fails to compile here instead of silently dropping a type.
  */
-export const SHM_SCALAR_TYPES: Readonly<Record<string, ShmFieldDescriptor>> = {
-  bool: { cType: 'uint8_t', pyFormat: 'B', size: 1, kind: 'scalar' },
-  sint: { cType: 'int8_t', pyFormat: 'b', size: 1, kind: 'scalar' },
-  int: { cType: 'int16_t', pyFormat: 'h', size: 2, kind: 'scalar' },
-  dint: { cType: 'int32_t', pyFormat: 'i', size: 4, kind: 'scalar' },
-  lint: { cType: 'int64_t', pyFormat: 'q', size: 8, kind: 'scalar' },
-  usint: { cType: 'uint8_t', pyFormat: 'B', size: 1, kind: 'scalar' },
-  uint: { cType: 'uint16_t', pyFormat: 'H', size: 2, kind: 'scalar' },
-  udint: { cType: 'uint32_t', pyFormat: 'I', size: 4, kind: 'scalar' },
-  ulint: { cType: 'uint64_t', pyFormat: 'Q', size: 8, kind: 'scalar' },
-  byte: { cType: 'uint8_t', pyFormat: 'B', size: 1, kind: 'scalar' },
-  word: { cType: 'uint16_t', pyFormat: 'H', size: 2, kind: 'scalar' },
-  dword: { cType: 'uint32_t', pyFormat: 'I', size: 4, kind: 'scalar' },
-  lword: { cType: 'uint64_t', pyFormat: 'Q', size: 8, kind: 'scalar' },
-  real: { cType: 'float', pyFormat: 'f', size: 4, kind: 'scalar' },
-  lreal: { cType: 'double', pyFormat: 'd', size: 8, kind: 'scalar' },
-
+const WIRE_FORMAT_FIELDS: Readonly<Record<IECWireFormat, Pick<ShmFieldDescriptor, 'cType' | 'pyFormat'> | null>> = {
+  bool: { cType: 'uint8_t', pyFormat: 'B' },
+  int8: { cType: 'int8_t', pyFormat: 'b' },
+  uint8: { cType: 'uint8_t', pyFormat: 'B' },
+  int16: { cType: 'int16_t', pyFormat: 'h' },
+  uint16: { cType: 'uint16_t', pyFormat: 'H' },
+  int32: { cType: 'int32_t', pyFormat: 'i' },
+  uint32: { cType: 'uint32_t', pyFormat: 'I' },
+  int64: { cType: 'int64_t', pyFormat: 'q' },
+  uint64: { cType: 'uint64_t', pyFormat: 'Q' },
+  float32: { cType: 'float', pyFormat: 'f' },
+  float64: { cType: 'double', pyFormat: 'd' },
   // Duration and calendar types are 64-bit counts on the strucpp side — TIME is
-  // nanoseconds (`T#1s` lowers to `1000000000LL`).  Python receives the raw
-  // integer, which is what the compiler stores; presenting it as a `timedelta`
-  // would be a second representation of the same fact and is deliberately not
-  // done here.
-  time: { cType: 'int64_t', pyFormat: 'q', size: 8, kind: 'scalar' },
-  date: { cType: 'int64_t', pyFormat: 'q', size: 8, kind: 'scalar' },
-  tod: { cType: 'int64_t', pyFormat: 'q', size: 8, kind: 'scalar' },
-  dt: { cType: 'int64_t', pyFormat: 'q', size: 8, kind: 'scalar' },
+  // nanoseconds (`T#1s` lowers to `1000000000LL`), DATE is days. Python receives
+  // the raw integer, which is what the compiler stores; presenting it as a
+  // `timedelta` would be a second representation of the same fact and is
+  // deliberately not done here.
+  'duration-ns-i64': { cType: 'int64_t', pyFormat: 'q' },
+  'datetime-ns-i64': { cType: 'int64_t', pyFormat: 'q' },
+  'date-ns-i64': { cType: 'int64_t', pyFormat: 'q' },
+  'tod-ns-i64': { cType: 'int64_t', pyFormat: 'q' },
+  'len8-utf8': null,
+  'len8-utf16le': null,
 }
+
+/**
+ * Scalar base types, keyed by the lowercase IEC type name AND by every alias
+ * the registry declares, so `TIME_OF_DAY` resolves exactly like `TOD`.
+ *
+ * Derived, not written: the byte width is the registry's `byteSize`, so a size
+ * cannot drift from what the compiler emits. Names beginning with `__` are
+ * strucpp internals (`__XWORD`) and are not user-declarable, so they are
+ * skipped.
+ */
+export const SHM_SCALAR_TYPES: Readonly<Record<string, ShmFieldDescriptor>> = (() => {
+  const table: Record<string, ShmFieldDescriptor> = {}
+  for (const type of IEC_BASE_TYPES) {
+    if (type.name.startsWith('__')) continue
+    const field = WIRE_FORMAT_FIELDS[type.wireFormat]
+    if (!field) continue
+    const descriptor: ShmFieldDescriptor = { ...field, size: type.byteSize, kind: 'scalar' }
+    table[type.name.toLowerCase()] = descriptor
+    for (const alias of type.aliases) table[alias.toLowerCase()] = descriptor
+  }
+  return table
+})()
 
 /**
  * STRING — one length byte plus a 126-byte UTF-8 body.  127 bytes packed,
@@ -139,14 +171,39 @@ export const SHM_WSTRING: ShmFieldDescriptor = {
   kind: 'wstring',
 }
 
-/** Lowercased base-type name of a variable, or `null` when it has none. */
+/**
+ * As-declared base-type name of a variable, or `null` when it has none.
+ *
+ * Returned verbatim rather than lower-cased: {@link describeShmBaseType}
+ * normalises through the registry, which trims and folds case and resolves
+ * aliases in one place. Lower-casing here as well would be a second, weaker
+ * copy of that rule — it was one, and it is what made a variable spelled
+ * `TIME_OF_DAY` refuse while `TOD` was accepted.
+ */
 function baseTypeName(variable: PLCVariable): string | null {
   if (isArrayVariable(variable)) {
-    const inner = getArrayBaseTypeValue(variable)
-    return inner ? inner.toLowerCase() : null
+    return getArrayBaseTypeValue(variable) ?? null
   }
   if (variable.type.definition !== 'base-type') return null
-  return variable.type.value.toLowerCase()
+  return variable.type.value
+}
+
+/**
+ * Descriptor for an elementary type named in any spelling the registry accepts
+ * — canonical or alias, any case, whitespace-padded — or `null` when the name
+ * is not an elementary type at all.
+ *
+ * Normalising through `lookupBaseType` is what keeps this in step with the rest
+ * of the editor: the variables-table dropdown offers canonical names, but
+ * PLCopen XML import and library FB manifests both carry aliases, and legacy
+ * project files carry padding.
+ */
+export function describeShmBaseType(typeName: string): ShmFieldDescriptor | null {
+  const metadata = lookupBaseType(typeName)
+  if (!metadata) return null
+  if (metadata.wireFormat === 'len8-utf8') return SHM_STRING
+  if (metadata.wireFormat === 'len8-utf16le') return SHM_WSTRING
+  return SHM_SCALAR_TYPES[metadata.name.toLowerCase()] ?? null
 }
 
 /**
@@ -155,16 +212,12 @@ function baseTypeName(variable: PLCVariable): string | null {
  *
  * `null` is a refusal, not a silent skip: callers surface it to the user.  That
  * is the whole point — a type the emitters cannot agree on must stop the build
- * rather than quietly shift every field after it.  Structures, enumerations and
- * function block instances land in later phases and will return descriptors
- * then.
+ * rather than quietly shift every field after it.
  */
 export function describeShmField(variable: PLCVariable): ShmFieldDescriptor | null {
   const name = baseTypeName(variable)
   if (!name) return null
-  if (name === 'string') return SHM_STRING
-  if (name === 'wstring') return SHM_WSTRING
-  return SHM_SCALAR_TYPES[name] ?? null
+  return describeShmBaseType(name)
 }
 
 /**

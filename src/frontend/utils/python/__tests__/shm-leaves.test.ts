@@ -33,6 +33,28 @@ const arrayOf = (name: string, baseType: string, dimension = '0..3'): PLCVariabl
   debug: false,
 })
 
+/** An array of arbitrary rank, for the one-dimension-only rule. */
+const arrayOfRank = (
+  name: string,
+  baseType: string,
+  dimensions: string[],
+  baseDefinition: 'base-type' | 'user-data-type' = 'base-type',
+): PLCVariable => ({
+  name,
+  class: 'input',
+  type: {
+    definition: 'array',
+    value: `ARRAY [${dimensions.join(',')}] OF ${baseType}`,
+    data: {
+      baseType: { definition: baseDefinition, value: baseType },
+      dimensions: dimensions.map((dimension) => ({ dimension })),
+    },
+  },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
 const MOTOR: PLCDataType = {
   name: 'Motor',
   derivation: 'structure',
@@ -185,9 +207,12 @@ describe('describeShmLeaves', () => {
     expect(leaf.access).toBe('R.TRIMS')
   })
 
-  it('reads an array member’s bounds even when its dimension text is malformed', () => {
-    // A dimension that cannot be parsed yields no lower bound rather than a
-    // guessed one; the element type still describes the field.
+  it('refuses an array member whose dimension text is malformed', () => {
+    // An unparsable range makes `getArrayTotalElements` return 0. That used to
+    // fall through to the scalar path — one field against an array member — and
+    // the old test asserted only `startIndex`, so it executed the bug without
+    // pinning it. The size of the field is unknown, so the only safe answer is
+    // to refuse.
     const rig: PLCDataType = {
       name: 'Rig',
       derivation: 'structure',
@@ -202,9 +227,9 @@ describe('describeShmLeaves', () => {
         },
       ],
     }
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
-
-    expect(leaf.startIndex).toBe(0)
+    expect(refusalOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))?.reason).toContain(
+      'array bounds cannot be read',
+    )
   })
 
   it('refuses an array declaration carrying no dimension data rather than guessing', () => {
@@ -311,6 +336,63 @@ describe('describeShmLeaves', () => {
       const leaves = leavesOf(describeShmLeaves(acc, { dataTypes: [], pous: [withLocal], direction: 'in' }))
 
       expect(leaves.map((l) => l.field)).toEqual(['acc_STEP', 'acc_TOTAL'])
+    })
+
+    it('accepts a library pin spelled with a registry alias (TIME_OF_DAY)', () => {
+      // The path the alias gap was actually reachable through: a `.stlib`
+      // manifest carries bare IEC type names, and TOD's alias is a legal
+      // spelling there. The hand-written table had only `tod`, so this refused
+      // the whole block; the registry knows both.
+      const aliasLib = {
+        functionBlocks: [
+          {
+            name: 'CLOCK',
+            inputs: [{ name: 'AT', type: 'TIME_OF_DAY' }],
+            inouts: [],
+            outputs: [{ name: 'STAMP', type: 'DATE_AND_TIME' }],
+          },
+        ],
+      }
+      const instance: PLCVariable = { ...ton('c'), type: { definition: 'derived', value: 'CLOCK' } }
+      const leaves = leavesOf(describeShmLeaves(instance, { dataTypes: [], libraries: [aliasLib], direction: 'in' }))
+
+      expect(leaves.map((l) => l.field)).toEqual(['c_AT', 'c_STAMP'])
+      // Both are 64-bit counts, taken from the registry's byteSize.
+      expect(leaves.every((l) => l.descriptor.size === 8)).toBe(true)
+    })
+
+    it('refuses an instance whose pin is a multi-dimensional array', () => {
+      // The rank rule applies to a block's pins too, not only to the variables
+      // the Python POU declares itself — an instance's pins cross the same
+      // boundary and are emitted by the same exchange.
+      const gridBlock = {
+        name: 'Grid',
+        pouType: 'function-block' as const,
+        interface: {
+          variables: [
+            {
+              name: 'cells',
+              class: 'input' as const,
+              type: {
+                definition: 'array' as const,
+                value: 'ARRAY [0..1,0..1] OF INT',
+                data: {
+                  baseType: { definition: 'base-type' as const, value: 'INT' },
+                  dimensions: [{ dimension: '0..1' }, { dimension: '0..1' }],
+                },
+              },
+              location: '',
+              documentation: '',
+            },
+          ],
+        },
+        body: { language: 'st' as const, value: '' },
+      }
+      const instance: PLCVariable = { ...ton('g'), type: { definition: 'derived', value: 'Grid' } }
+      const refusal = refusalOf(describeShmLeaves(instance, { dataTypes: [], pous: [gridBlock], direction: 'in' }))
+
+      expect(refusal?.reason).toContain('2-dimensional array cannot cross into Python')
+      expect(refusal?.path).toEqual(['g', 'CELLS'])
     })
 
     it('omits a library block’s pins that are not declared', () => {
@@ -492,5 +574,63 @@ describe('describeShmLayout', () => {
 
   it('is empty for no variables', () => {
     expect(leavesOf(describeShmLayout([], inbound()))).toEqual([])
+  })
+})
+
+describe('describeShmLeaves — array shapes the exchange cannot express', () => {
+  // Each of these used to be accepted and then mis-emitted. A refusal is the
+  // contract (AC 3): marshal correctly, or say why not. Silence was the one
+  // outcome ruled out, because a leaf the format string mis-sizes shifts every
+  // field after it and the corruption surfaces on an unrelated variable.
+
+  it('refuses a two-dimensional array, naming the rank and the way out', () => {
+    const refusal = refusalOf(describeShmLeaves(arrayOfRank('grid', 'INT', ['0..1', '0..2']), inbound()))
+    expect(refusal?.reason).toContain('2-dimensional array cannot cross into Python')
+    expect(refusal?.reason).toContain('one-dimensional arrays only')
+  })
+
+  it('refuses a three-dimensional array', () => {
+    const refusal = refusalOf(describeShmLeaves(arrayOfRank('cube', 'INT', ['0..1', '0..1', '0..1']), inbound()))
+    expect(refusal?.reason).toContain('3-dimensional array cannot cross into Python')
+  })
+
+  it('accepts a one-dimensional array, so the rank check is not over-broad', () => {
+    const [leaf] = leavesOf(describeShmLeaves(arrayOfRank('row', 'INT', ['0..3']), inbound()))
+    expect(leaf.isArray).toBe(true)
+    expect(leaf.count).toBe(4)
+  })
+
+  it('refuses an array of STRING', () => {
+    expect(refusalOf(describeShmLeaves(arrayOf('names', 'STRING'), inbound()))?.reason).toContain(
+      'an array of STRING cannot cross into Python yet',
+    )
+  })
+
+  it('refuses an array of WSTRING', () => {
+    expect(refusalOf(describeShmLeaves(arrayOf('names', 'WSTRING'), inbound()))?.reason).toContain(
+      'an array of WSTRING cannot cross into Python yet',
+    )
+  })
+
+  it('refuses an array of an enumeration', () => {
+    const modes = arrayOfRank('modes', 'Mode', ['0..2'], 'user-data-type')
+    const refusal = refusalOf(describeShmLeaves(modes, inbound([MODE])))
+    expect(refusal?.reason).toContain('an array of enumerations cannot cross into Python yet')
+  })
+
+  it('treats a single-element array as an array, not a scalar', () => {
+    // `ARRAY [0..0] OF INT` has count 1. Every emitter used to branch on
+    // `count > 1`, so this bound a plain int where the user declared an array —
+    // a scalar struct field against an array member on the C side.
+    const [leaf] = leavesOf(describeShmLeaves(arrayOf('one', 'INT', '0..0'), inbound()))
+    expect(leaf.isArray).toBe(true)
+    expect(leaf.count).toBe(1)
+    expect(leaf.startIndex).toBe(0)
+  })
+
+  it('carries isArray false for a genuine scalar', () => {
+    const [leaf] = leavesOf(describeShmLeaves(scalar('x', 'INT'), inbound()))
+    expect(leaf.isArray).toBe(false)
+    expect(leaf.count).toBe(1)
   })
 })

@@ -25,7 +25,7 @@ type STCodeGenerationParams = {
  */
 const generateStructField = (leaf: ShmLeaf): string => {
   const fieldType = leaf.descriptor.cType
-  if (leaf.count > 1) {
+  if (leaf.isArray) {
     return `        ${fieldType} ${leaf.field}[${leaf.count}];\n`
   }
   return `        ${fieldType} ${leaf.field};\n`
@@ -61,10 +61,10 @@ const generateCStructs = (inbound: ShmLeaf[], outbound: ShmLeaf[]): string =>
  * a forced variable is dropped on the IEC side, as it should be.
  */
 const generateLeafCopy = (leaf: ShmLeaf, struct: string, toShm: boolean): string => {
-  const { field, access, descriptor, count, startIndex } = leaf
+  const { field, access, descriptor, count, startIndex, isArray } = leaf
   const shm = `${struct}.${field}`
 
-  if (count > 1) {
+  if (isArray) {
     // Iterate IEC indices so a forced element crosses like any other.
     return toShm
       ? `        for (int __i = 0; __i < ${count}; __i++) ${shm}[__i] = ${access}[${startIndex} + __i].get();\n`
@@ -88,9 +88,25 @@ const generateLeafCopy = (leaf: ShmLeaf, struct: string, toShm: boolean): string
     }
     // Reconstruct from the right unit width: a WSTRING body is char16_t, and
     // reading it as `char*` would hand IECWString half a string.
+    //
+    // GUARDED, because the transport is narrower than the declared type. A
+    // strucpp `IECStringVar` / `IECWStringVar` holds 254 characters, while the
+    // SHM body carries STR_MAX_LEN (the cap the debug protocol frames at). An
+    // IEC string longer than that reaches Python already truncated, so writing
+    // Python's copy back would shorten the IEC variable permanently — with no
+    // user code having touched it. Now that `local`, `inOut` and `external`
+    // round-trip, that turned a read into a destructive write.
+    //
+    // The current length is what says whether anything was lost: at or under the
+    // cap, Python holds the whole value and the write-back is faithful; over it,
+    // Python holds a prefix and the IEC value is left alone. A string that fits
+    // — the ordinary case — round-trips exactly as before.
     const wrapper = wide ? 'IECWString' : 'IECString'
     const pointer = wide ? 'const char16_t*' : 'const char*'
-    return `        ${access} = strucpp::${wrapper}<254>(reinterpret_cast<${pointer}>(${shm}.body), ${shm}.len);\n`
+    let code = `        { auto __cur = ${access}.get();\n`
+    code += `          if (__cur.length() <= STR_MAX_LEN)\n`
+    code += `            ${access} = strucpp::${wrapper}<254>(reinterpret_cast<${pointer}>(${shm}.body), ${shm}.len); }\n`
+    return code
   }
 
   if (leaf.enumTypeName) {

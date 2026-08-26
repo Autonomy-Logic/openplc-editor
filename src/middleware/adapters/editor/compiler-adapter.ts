@@ -235,6 +235,13 @@ export function createEditorCompilerAdapter(): CompilerPort {
               targetLabel: args.boardTarget,
             }
           : undefined,
+        // The same FB pin source the build and library paths pass. Without it
+        // `libraries` defaults to `[]`, `describeShmLeaves` cannot resolve a
+        // library block, and a Python POU declaring e.g. `ton0 : TON` compiled
+        // for upload and then failed the debug compile with "cannot exchange
+        // these variables" — the one path where the archives were already
+        // loaded and simply not forwarded.
+        archives.map((archive) => ({ functionBlocks: archive.manifest.functionBlocks })),
       )
 
       if (validationFailed) {
@@ -330,7 +337,14 @@ export function createEditorCompilerAdapter(): CompilerPort {
       if (buildResult.validationFailed) {
         return {
           success: false,
-          error: 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+          // `preprocessPous` returns `validationError` so the caller stops
+          // guessing at the cause. This path can now fail for a Python reason —
+          // the shm refusals are not gated on target support — and reporting
+          // every one of those as "check C/C++ code for setup()/loop()" sent
+          // the user to the wrong file.
+          error:
+            buildResult.validationError ??
+            'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
         }
       }
       const verifyResult = preprocessPous(
@@ -343,6 +357,19 @@ export function createEditorCompilerAdapter(): CompilerPort {
         undefined,
         fbSources,
       )
+      // Checked rather than ignored, matching the build pass above. Both passes
+      // get the same project and the same FB pin sources, so they agree today —
+      // but handing an un-lowered project to the verify compile would fail it on
+      // `python_block_loader` instead of reporting the refusal, and that is not
+      // a difference worth leaving to luck.
+      if (verifyResult.validationFailed) {
+        return {
+          success: false,
+          error:
+            verifyResult.validationError ??
+            'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+        }
+      }
       const ipcDataForBuild = toIpcProjectData(buildResult.projectData)
       const ipcDataForVerify = toIpcProjectData(verifyResult.projectData)
 

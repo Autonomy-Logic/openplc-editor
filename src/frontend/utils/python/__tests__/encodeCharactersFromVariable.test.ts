@@ -128,9 +128,15 @@ describe('encodeCharactersFromVariable', () => {
     expect(encodeCharactersFromVariable(vars, ctx)).toBe('=5h')
   })
 
-  it('encodes array of strings by repeating the full encoding string', () => {
+  it('emits nothing for an array of STRING, which the walk refuses', () => {
+    // This used to assert `'=b126sb126sb126s'` — the whole multi-item format
+    // repeated per element, which is 6 slots where the decoder consumed 3, so
+    // every variable declared after it read from the wrong offset. A repeat
+    // count applies only to the first item of a struct format, so an array of
+    // strings cannot be expressed as one leaf at all; the walk now refuses it
+    // and the caller reports that instead of emitting a misaligned format.
     const vars = [makeArrayVar('arr', 'STRING', '0..2')]
-    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=b126sb126sb126s')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=')
   })
 
   it('skips array with unknown base type and warns', () => {

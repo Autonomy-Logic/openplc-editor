@@ -1,7 +1,7 @@
 import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSTCode } from '../generateSTCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: PLCVariable['class'], baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -10,7 +10,7 @@ const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string):
   debug: false,
 })
 
-const makeStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
+const makeStringVar = (name: string, cls: PLCVariable['class']): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: 'string' },
@@ -19,7 +19,7 @@ const makeStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
   debug: false,
 })
 
-const makeWStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => ({
+const makeWStringVar = (name: string, cls: PLCVariable['class']): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: 'wstring' },
@@ -28,7 +28,7 @@ const makeWStringVar = (name: string, cls: 'input' | 'output'): PLCVariable => (
   debug: false,
 })
 
-const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, dimension: string): PLCVariable => ({
+const makeArrayVar = (name: string, cls: PLCVariable['class'], baseType: string, dimension: string): PLCVariable => ({
   name,
   class: cls,
   type: {
@@ -286,6 +286,38 @@ describe('generateSTCode (python)', () => {
     expect(result).toContain(
       'MSG = strucpp::IECString<254>(reinterpret_cast<const char*>(data_out.msg.body), data_out.msg.len);',
     )
+  })
+
+  it('guards the STRING write-back so a value wider than the transport is not truncated', () => {
+    // The transport carries STR_MAX_LEN characters; an `IECStringVar` holds 254.
+    // An IEC string longer than the transport reaches Python already truncated,
+    // so writing Python's copy back would shorten the IEC variable permanently
+    // — with no user code having touched it. Reachable only since `local`,
+    // `inOut` and `external` began to round-trip.
+    // Every class that writes back gets the guard: an `external` reaches its
+    // global through the lock guard (`__r`) rather than by name, so the check is
+    // asserted on all four rather than on one spelling.
+    for (const cls of ['output', 'inOut', 'local', 'external'] as const) {
+      const result = generateSTCode({
+        pouName: 'test',
+        allVariables: [makeStringVar('msg', cls)],
+        processedPythonCode: '',
+      })
+      expect(result).toContain('if (__cur.length() <= STR_MAX_LEN)')
+      expect(result).toMatch(/auto __cur = (MSG|__r)\.get\(\);/)
+    }
+  })
+
+  it('guards the WSTRING write-back the same way', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [makeWStringVar('wmsg', 'output')],
+      processedPythonCode: '',
+    })
+
+    expect(result).toContain('auto __cur = WMSG.get();')
+    expect(result).toContain('if (__cur.length() <= STR_MAX_LEN)')
+    expect(result).toContain('strucpp::IECWString<254>(reinterpret_cast<const char16_t*>(data_out.wmsg.body)')
   })
 
   it('reads / writes the runtime SHM-pointer locals through their IECVars', () => {
