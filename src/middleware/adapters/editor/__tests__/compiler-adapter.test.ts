@@ -773,9 +773,7 @@ describe('createEditorCompilerAdapter', () => {
       await promise
 
       const args = (window.bridge.runCompileLibrary as jest.Mock).mock.calls[0][0] as unknown[]
-      expect(args[4]).toEqual([
-        { name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' },
-      ])
+      expect(args[4]).toEqual([{ name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' }])
     })
 
     it('defaults non-error log levels to info when logLevel is missing', async () => {
