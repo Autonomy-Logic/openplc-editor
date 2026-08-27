@@ -142,7 +142,7 @@ describe('stlibToSystemLibrary — native (C/C++, Python) blocks', () => {
       sources,
     }) as unknown as StlibArchiveDTO
 
-  it('surfaces a C++ block under the prefixed name, with its authored source as the body', () => {
+  it('surfaces a C++ block under its own name, with its authored source as the body', () => {
     const lib = stlibToSystemLibrary(
       nativeArchive(
         [{ name: 'Servo', implementation: 'cpp', documentation: 'A servo motor block' }],
@@ -152,9 +152,11 @@ describe('stlibToSystemLibrary — native (C/C++, Python) blocks', () => {
 
     expect(lib.pous).toHaveLength(1)
     const block = lib.pous[0]
-    // The prefix matters: the compile-time graft produces a POU with exactly
-    // this name, so the picker must show what the user has to type.
-    expect(block.name).toBe('mylib__Servo')
+    // One name across the whole system: the graft synthesizes a POU under
+    // exactly this name and `resolveFunctionBlockPins` looks it up by it, so
+    // a block inserted from the tree resolves its pins. No library prefix —
+    // that namespace was private to the graft and broke both.
+    expect(block.name).toBe('Servo')
     expect(block.type).toBe('function-block')
     expect(block.language).toBe('cpp')
     expect(block.body).toBe('void setup(){}void loop(){}')
@@ -169,7 +171,7 @@ describe('stlibToSystemLibrary — native (C/C++, Python) blocks', () => {
         [{ fileName: 'Scale.py', source: 'def block_loop():\n    pass' }],
       ),
     )
-    expect(lib.pous[0].name).toBe('mylib__Scale')
+    expect(lib.pous[0].name).toBe('Scale')
     expect(lib.pous[0].language).toBe('python')
     expect(lib.pous[0].body).toBe('def block_loop():\n    pass')
   })

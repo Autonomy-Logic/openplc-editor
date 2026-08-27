@@ -29,16 +29,21 @@
  * Were the lowered ST stored instead, every previously published library would
  * break on the next bridge change until rebuilt.
  *
- * ## Renaming
+ * ## Naming
  *
- * Each block's name is prefixed with the library's manifest name
- * (`<library>__<block>`) so two libraries can both ship a `Foo`, and so a
- * consumer's own POU may also be called `Foo`.  The library-tree picker
- * surfaces the prefixed name, so the user authors their ST against it directly
- * and no source rewriting is needed.
+ * The synthesized POU takes the block's own name, unprefixed — the same name
+ * the library tree offers and the same name `resolveFunctionBlockPins` looks
+ * up.  There is exactly one name for a library block across the whole system;
+ * an earlier `<library>__<block>` qualification here was a namespace nothing
+ * else spoke, which left the graphical editors unable to resolve the block
+ * they had just inserted.
  *
- * Symbol-level renames inside the synthesized POU (the `<NAME>_VARS` struct,
- * the `<name>_setup` / `<name>_loop` functions) follow automatically, because
+ * A block whose name collides with one of the project's own POUs is skipped,
+ * matching the precedence the variables parser and the pin resolver already
+ * apply: the project's definition wins.
+ *
+ * Symbol-level names inside the synthesized POU (the `<NAME>_VARS` struct, the
+ * `<name>_setup` / `<name>_loop` functions) follow automatically, because
  * `generateCppSTCode`, `generateCBlocksHeader` and `generateCBlocksCode` all
  * derive their names from `pou.name`.
  */
@@ -46,14 +51,6 @@
 import { parseHybridPouFromString } from '../../../frontend/utils/PLC/pou-text-parser'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { PLCPou, PLCProjectData } from '../../../middleware/shared/ports/types'
-
-/** Separator between the library name and the block name. */
-const LIBRARY_BLOCK_SEPARATOR = '__'
-
-/** Build the project-visible POU name for a library block. */
-export function libraryBlockPouName(libraryName: string, blockName: string): string {
-  return `${libraryName}${LIBRARY_BLOCK_SEPARATOR}${blockName}`
-}
 
 /** One native block an archive ships, resolved to its authored source. */
 type ResolvedNativeBlock = {
@@ -130,8 +127,13 @@ export function injectLibraryBlocks(projectData: PLCProjectData, archives: Stlib
   const { blocks } = resolveNativeBlocks(projectData, archives)
   if (blocks.length === 0) return projectData
 
+  // The project's own POUs win a name clash, so a library block that collides
+  // with one is left out rather than shadowing it.
+  const takenNames = new Set(projectData.pous.map((pou) => pou.name.toUpperCase()))
+
   const synthesized: PLCPou[] = []
   for (const block of blocks) {
+    if (takenNames.has(block.blockName.toUpperCase())) continue
     let parsed: PLCPou
     try {
       parsed = parseHybridPouFromString(block.source, block.language, 'function-block')
@@ -141,9 +143,10 @@ export function injectLibraryBlocks(projectData: PLCProjectData, archives: Stlib
       // undefined type, which names the block the user actually referenced.
       continue
     }
+    takenNames.add(block.blockName.toUpperCase())
     synthesized.push({
       ...parsed,
-      name: libraryBlockPouName(block.libraryName, block.blockName),
+      name: block.blockName,
       pouType: 'function-block',
     })
   }

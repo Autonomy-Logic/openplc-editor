@@ -542,6 +542,12 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   }
 }
 
-export { getScopedQueryApi, type ScopedCompletionItem, type ScopedQueryApi } from './scoped-query'
+export {
+  getScopedQueryApi,
+  isValueCompletionKind,
+  type ScopedCompletionItem,
+  type ScopedQueryApi,
+  splitExpression,
+} from './scoped-query'
 export type { StLspService, StLspStartOptions } from './types'
 export { parsePouUri, POU_URI_SCHEME, pouUri, stubUri } from './types'

@@ -582,7 +582,7 @@ describe('createEditorCompilerAdapter', () => {
 
     it("grafts an enabled library's C++ block into the project before preprocessing", async () => {
       // The project enables `motor_lib`, which ships a C++ FB called `Driver`.
-      // The adapter must graft a `motor_lib__Driver` POU in before building the
+      // The adapter must graft a `Driver` POU in before building the
       // IPC payload, so the program build's c_blocks.h / code.cpp generation
       // picks the C++ source up — exactly as it would for a user-authored block.
       const projectWithLib: PLCProjectData = {
@@ -592,10 +592,10 @@ describe('createEditorCompilerAdapter', () => {
       ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([nativeArchive('motor_lib', 'Driver', 'cpp')])
 
       const ipcProjectData = await compileWith(projectWithLib)
-      expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('motor_lib__Driver')
+      expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('Driver')
       // `preprocessPous` lowered the grafted body and stamped the sidecar,
       // which is what proves it went through the user-POU path.
-      expect(ipcProjectData.originalCppPous?.map((p) => p.name)).toContain('motor_lib__Driver')
+      expect(ipcProjectData.originalCppPous?.map((p) => p.name)).toContain('Driver')
     })
 
     it("grafts an enabled library's Python block too", async () => {
@@ -609,7 +609,7 @@ describe('createEditorCompilerAdapter', () => {
       // refused before the graft can be observed — correctly, and that refusal
       // has its own tests. This one is about the graft.
       const ipcProjectData = await compileWith(projectWithLib, 'OpenPLC Runtime v4')
-      expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('py_lib__Scale')
+      expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('Scale')
     })
 
     it("skips native blocks from libraries that are not on the project's enabled list", async () => {
@@ -625,8 +625,8 @@ describe('createEditorCompilerAdapter', () => {
 
       const ipcProjectData = await compileWith(projectWithLib)
       const pouNames = ipcProjectData.pous.map((p) => p.data.name)
-      expect(pouNames).toContain('enabled_lib__OK')
-      expect(pouNames).not.toContain('other_lib__Leak')
+      expect(pouNames).toContain('OK')
+      expect(pouNames).not.toContain('Leak')
     })
   })
 

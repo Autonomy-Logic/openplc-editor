@@ -16,6 +16,9 @@ jobs:
   lint:
     uses: ./.github/workflows/ci-lint.yml
 
+  unit-tests:
+    uses: ./.github/workflows/ci-unit-tests.yml
+
   format:
     needs: [architecture, build-check, lint]
     uses: ./.github/workflows/ci-format.yml
