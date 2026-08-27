@@ -34,12 +34,20 @@ const plc: PlcControl = {
  * 1500 ms settle window costs no real time and the test cannot flake on a slow
  * machine.
  */
-function makeCore() {
+/**
+ * `getVariablesList` is injectable so a test can make the read FAIL without
+ * reaching into the core's private `options.channel` through a cast. The
+ * default is the always-TRUE read described above.
+ */
+type ReadOverride = () => Promise<{ success: false; error: string }>
+
+function makeCore(readOverride?: ReadOverride) {
   let reads = 0
   const channel = {
     connect: () => Promise.resolve(),
     disconnect: () => undefined,
     getVariablesList: (indexes: number[]) => {
+      if (readOverride) return readOverride()
       reads += 1
       return Promise.resolve({
         success: true as const,
@@ -108,16 +116,16 @@ describe('force read-back', () => {
 
     const read = await core.handle({ id: 2, kind: 'read', names: ['main:flag'] })
     if (!read.ok) throw new Error('expected the read to succeed')
-    const values = (read.data as { kind: 'read'; values: Array<{ forced?: boolean }> }).values
-    expect(values[0]?.forced).not.toBe(true)
+    // A guard, not an assertion: if the response shape ever changes, this fails
+    // instead of silently reading `undefined` off the wrong branch and passing.
+    if (read.data?.kind !== 'read') throw new Error(`expected a read payload, got ${String(read.data?.kind)}`)
+    expect(read.data.values[0]?.forced).not.toBe(true)
   })
 
   it('still reports a read failure as a connection problem, not a target error', async () => {
     // The two failures are different: one means the channel died, the other
     // means the device answered and ignored us.
-    const core = makeCore()
-    ;(core as unknown as { options: { channel: { getVariablesList: () => unknown } } }).options.channel.getVariablesList =
-      () => Promise.resolve({ success: false, error: 'link down' })
+    const core = makeCore(() => Promise.resolve({ success: false as const, error: 'link down' }))
 
     const response = await core.handle({ id: 1, kind: 'force', name: 'main:flag', value: 'TRUE' })
 

@@ -201,6 +201,41 @@ describe('runCompilePipeline — simulator path', () => {
     expect(callArgs.argv).toEqual(['compile', '-b', 'arduino:avr:mega'])
   })
 
+  it('forwards a positive retainBlobSize into defines.h', async () => {
+    // The pipeline branch that carries the size was only ever exercised with
+    // `null`. `generate-defines` was covered directly, so the define itself was
+    // tested — but nothing proved the pipeline actually hands the number over,
+    // and a program that retains something needs it or the firmware's
+    // static_assert has nothing to check against.
+    mockedStrucpp.mockReturnValue({
+      success: true,
+      files: [{ name: 'debug-map.json', content: '{}' }],
+      errors: [],
+      warnings: [],
+      md5Hash: 'a'.repeat(32),
+      splitterFallbackMessage: null,
+      debugMapSummary: 'Debug map: 3 leaves in 1 arrays; retain blob 148 bytes',
+      retainBlobSize: 148,
+    })
+
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({}), port, emit)
+
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+  })
+
+  it('omits the define when nothing is retained', async () => {
+    // Boards that never touch retain must see byte-identical defines.h, or
+    // every one of them rebuilds for no reason.
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({}), port, emit)
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
+  })
+
   // Regression: the board's `boardManagerUrl` (VPP `target.boardManagerUrl`)
   // was resolved onto boardEntry but never forwarded to installArduinoCore,
   // so vendor cores outside arduino-cli's built-in index could not be
