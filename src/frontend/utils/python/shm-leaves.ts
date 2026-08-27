@@ -29,7 +29,6 @@ import type {
   PLCVariable,
   PLCVariableType,
 } from '../../../middleware/shared/ports/types'
-import { getArrayTotalElements } from '../PLC/array-codegen-helpers'
 import { parseDimensionRange } from '../PLC/dimension-range'
 import type { LibraryFunctionBlockSource } from '../PLC/function-block-pins'
 import { resolveFunctionBlockPins } from '../PLC/function-block-pins'
