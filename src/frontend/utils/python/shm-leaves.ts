@@ -40,27 +40,54 @@ import { describeShmField, SHM_SCALAR_TYPES } from './shm-type-map'
 export interface ShmLeaf {
   /** Field name in `shm_data_in_t` / `shm_data_out_t`, unique within the struct. */
   field: string
-  /** Attribute path on the Python side, e.g. `['m', 'speed']`. */
-  path: string[]
-  /** Expression reaching the value on the strucpp side, e.g. `M.SPEED`. */
+  /**
+   * Python access path. A string is an attribute, a number is an index — so
+   * `['m', 'trims', 0]` is `m.trims[0]`.
+   *
+   * Indices are carried as numbers rather than baked into a string because the
+   * Python side has to rebuild the container: a run of leaves differing only in
+   * their trailing index is one list.
+   */
+  path: ReadonlyArray<string | number>
+  /** Expression reaching this exact scalar on the strucpp side, e.g. `M.TRIMS[0]`. */
   access: string
+  /**
+   * Class name of each container along `path`, or `null` where the node is a
+   * list (its length is derivable from the indices present) or the leaf itself.
+   * Same length as `path`.
+   *
+   * This is what lets the Python side rebuild a composite FROM THE LEAVES rather
+   * than by walking the project's types a second time. The second walk is what
+   * broke before: it enumerated a function block's pins flatly while the leaf
+   * walk had descended into a structure pin, so the constructor named a
+   * temporary the decode never produced.
+   */
+  objectPath: ReadonlyArray<string | null>
   /** How the field is laid out and decoded. */
   descriptor: ShmFieldDescriptor
   /**
-   * Whether this leaf is an array, stated rather than inferred.
+   * The same leaf as the compiler names it, relative to the POU instance —
+   * `MOTORS[0].SPEED`, `GRID2[1][0]`.
    *
-   * Every emitter used to test `count > 1`, which silently mis-handled the two
-   * shapes where an array's element count is not greater than one:
-   * `ARRAY [0..0] OF INT` (count 1) took the scalar path and bound a plain int
-   * where the user declared a one-element array. Array-ness is a property of
-   * the declaration, not of how many elements it happens to have, so it is
-   * carried here and `count` is only ever a length.
+   * This is the string that makes the layout checkable: `debug-map.json`
+   * enumerates every leaf of the program with a path in exactly this form, so a
+   * build-time comparison can prove our layout agrees with what the compiler
+   * actually emitted, rather than hoping two independent walks match.
    */
-  isArray: boolean
-  /** Elements when the leaf is an array; 1 otherwise. */
-  count: number
-  /** Lowest IEC index, for an array leaf; 0 otherwise. */
-  startIndex: number
+  mapPath: string
+  /**
+   * Whether this leaf is an element of an array OF that same type.
+   *
+   * It changes how an enumeration is reached, and only an enumeration.
+   * `IEC_ARRAY_1D<MODE, …>::operator[]` yields a RAW scoped `MODE` — the
+   * container holds values, not wrappers — while a standalone enumeration
+   * variable is an `IEC_ENUM_Var`. So `MODES[0].get().get()` does not compile
+   * where `MD.get().get()` does. An enumeration reached as a structure member
+   * inside an array (`BANK[0].MODE`) is still a wrapper, because the structure
+   * holds wrappers; hence "element of an array of that type", not merely
+   * "somewhere under an array".
+   */
+  arrayElement?: boolean
   /**
    * The enumeration this leaf came from, when it is one.
    *
@@ -76,7 +103,7 @@ export interface ShmLeaf {
 
 /** Why a variable cannot cross, phrased for the user. */
 export interface ShmRefusal {
-  path: string[]
+  path: ReadonlyArray<string | number>
   reason: string
 }
 
@@ -147,6 +174,13 @@ export const pinCrossesInDirection = (
   return true
 }
 
+/**
+ * Python class name for a function block type — upper-cased, the single rule,
+ * matching `injectPythonRuntime`'s `pythonClassName`. Declared here too because
+ * the leaf has to name the class the constructor will use.
+ */
+export const pythonClassNameFor = (typeName: string): string => typeName.toUpperCase()
+
 /** Index the project's data types by upper-cased name. */
 const indexDataTypes = (dataTypes: readonly PLCDataType[]): Map<string, PLCDataType> =>
   new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
@@ -163,14 +197,84 @@ interface WalkEnv {
   direction: 'in' | 'out'
 }
 
+/**
+ * Walk one declaration, expanding an array into one recursion per element.
+ *
+ * The element type is what gets described; the indices only extend the four
+ * names that identify a leaf — the Python path, the struct field, the strucpp
+ * access expression and the compiler's own path. Nothing about the element's
+ * type has to know it lives in an array, which is the whole point.
+ */
+const walkDeclaration = (
+  declaration: { name: string; type: PLCVariableType },
+  path: ReadonlyArray<string | number>,
+  field: string,
+  access: string,
+  mapPath: string,
+  objectPath: ReadonlyArray<string | null>,
+  env: WalkEnv,
+  depth: number,
+): ShmWalkResult => {
+  const shape = arrayShapeOf(declaration)
+  if ('reason' in shape) return { refusal: { path, reason: shape.reason } }
+
+  const element = elementTypeOf(declaration)
+  if (shape.dims === null) {
+    return walk(
+      declaration.name,
+      element.value,
+      element.definition,
+      path,
+      field,
+      access,
+      mapPath,
+      objectPath,
+      false,
+      env,
+      depth,
+    )
+  }
+
+  const leaves: ShmLeaf[] = []
+  for (const indices of elementIndices(shape.dims)) {
+    const result = walk(
+      declaration.name,
+      element.value,
+      element.definition,
+      [...path, ...indices],
+      `${field}_${indices.join('_')}`,
+      `${access}${subscriptFor(indices)}`,
+      `${mapPath}${mapSubscriptFor(indices)}`,
+      // A list node carries no class name; its length comes from the indices.
+      [...objectPath, ...indices.map(() => null)],
+      // Directly an element of this array — see `ShmLeaf.arrayElement`.
+      true,
+      env,
+      depth,
+    )
+    if ('refusal' in result) return result
+    leaves.push(...result.leaves)
+  }
+  return { leaves }
+}
+
+/**
+ * Describe ONE element — never an array. An array is expanded by
+ * `walkDeclaration` into one call per element, which is what lets a
+ * multi-dimensional array, an array of strings, an array of structures and an
+ * array of enumerations all fall out of the ordinary scalar path instead of each
+ * needing a special case that the previous count-based model could not express.
+ */
 const walk = (
   name: string,
   typeValue: string,
   typeDefinition: PLCVariableType['definition'],
-  arrayInfo: { count: number; startIndex: number } | null,
-  path: string[],
+  path: ReadonlyArray<string | number>,
   field: string,
   access: string,
+  mapPath: string,
+  objectPath: ReadonlyArray<string | null>,
+  arrayElement: boolean,
   env: WalkEnv,
   depth: number,
 ): ShmWalkResult => {
@@ -184,27 +288,16 @@ const walk = (
   const dataType = typeDefinition === 'user-data-type' ? types.get(typeValue.toUpperCase()) : undefined
 
   if (dataType?.derivation === 'structure') {
-    if (arrayInfo) {
-      return { refusal: { path, reason: 'an array of structures cannot cross into Python yet' } }
-    }
     const leaves: ShmLeaf[] = []
     for (const member of dataType.variable) {
-      // An array member is walked by its element type, exactly as a top-level
-      // array variable is: the count and lower bound travel separately, so the
-      // element is what has to be describable.
-      const element = elementTypeOf(member)
-      const memberShape = arrayShapeOf(member)
-      if ('reason' in memberShape) {
-        return { refusal: { path: [...path, member.name], reason: memberShape.reason } }
-      }
-      const result = walk(
-        member.name,
-        element.value,
-        element.definition,
-        memberShape.info,
+      const result = walkDeclaration(
+        member,
         [...path, member.name],
         `${field}_${member.name}`,
         `${access}.${mangledMemberName(member.name, member.type.value, userTypeNames)}`,
+        `${mapPath}.${member.name.toUpperCase()}`,
+        // This node is an instance of the structure; the member is one level in.
+        [...objectPath.slice(0, -1), dataType.name, null],
         env,
         depth + 1,
       )
@@ -215,29 +308,21 @@ const walk = (
   }
 
   if (dataType?.derivation === 'enumerated') {
-    // An array of enumerations is refused rather than described. Both sides
-    // would have to combine the array shape with the enum cast, and neither
-    // does: the C stub's array copy assigns the raw slot without the scoped-enum
-    // cast, and the Python decoder binds a list of plain ints while the seed
-    // emits `Mode([0, 0, 0])`, which raises at module level before `block_init`
-    // ever runs.
-    if (arrayInfo) {
-      return { refusal: { path, reason: 'an array of enumerations cannot cross into Python yet' } }
-    }
-    // A scalar enumeration is stored as its base integer, which is what crosses.
-    // The Python side gets an IntEnum, so `mode == Mode.RUNNING` reads naturally
-    // while the wire format stays a plain int.
+    // An enumeration is stored as its base integer, which is what crosses. The
+    // Python side gets an IntEnum, so `mode == Mode.RUNNING` reads naturally
+    // while the wire format stays a plain int. An ARRAY of enumerations needs no
+    // special case: each element arrives here on its own.
     return {
       leaves: [
         {
           field,
           path,
           access,
+          mapPath,
+          objectPath,
           descriptor: ENUM_BASE_DESCRIPTOR,
-          isArray: false,
-          count: 1,
-          startIndex: 0,
           enumTypeName: dataType.name,
+          ...(arrayElement ? { arrayElement: true } : {}),
         },
       ],
     }
@@ -262,10 +347,6 @@ const walk = (
   // FB-internal `local` state never crosses. It is the instance's own business,
   // and letting Python write it would corrupt the block from the outside.
   if (typeDefinition === 'derived' || typeDefinition === 'user-data-type') {
-    if (arrayInfo) {
-      return { refusal: { path, reason: 'an array of function block instances cannot cross into Python yet' } }
-    }
-
     const pins = resolveFunctionBlockPins(typeValue, env.pous, env.libraries)
     if (!pins) {
       return {
@@ -286,21 +367,16 @@ const walk = (
       // (`ton0.IN`), and a user-declared lowercase pin would otherwise give
       // Python an attribute named differently from the slot it was built with.
       const pinName = pin.name.toUpperCase()
-      const element = elementTypeOf({ name: pin.name, type: pin.type })
-      const pinShape = arrayShapeOf({ name: pin.name, type: pin.type })
-      if ('reason' in pinShape) {
-        return { refusal: { path: [...path, pinName], reason: pinShape.reason } }
-      }
-      const result = walk(
-        pinName,
-        element.value,
-        element.definition,
-        pinShape.info,
+      const result = walkDeclaration(
+        { name: pinName, type: pin.type },
         [...path, pinName],
         `${field}_${pinName}`,
         // A pin is a member of the instance's class, upper-cased, and mangled by
         // the same rule as any other member.
         `${access}.${mangledMemberName(pin.name, pin.type.value, userTypeNames)}`,
+        `${mapPath}.${pinName}`,
+        // This node is the instance; its class is named by the block type.
+        [...objectPath.slice(0, -1), pythonClassNameFor(typeValue), null],
         env,
         depth + 1,
       )
@@ -328,33 +404,8 @@ const walk = (
     }
   }
 
-  // An array of STRING or WSTRING is refused rather than described. A string is
-  // not one field but two — a length prefix and a body — so its `struct` format
-  // is multi-character, and a repeat count in that format applies only to the
-  // first item: `4b126s` is not four strings. Repeating the whole format instead
-  // emits two slots per element while the decoder consumes one, so an
-  // `ARRAY [0..3] OF STRING` shifted every variable declared after it.
-  if ((descriptor.kind === 'string' || descriptor.kind === 'wstring') && arrayInfo) {
-    return {
-      refusal: {
-        path,
-        reason: `an array of ${descriptor.kind === 'wstring' ? 'WSTRING' : 'STRING'} cannot cross into Python yet`,
-      },
-    }
-  }
-
   return {
-    leaves: [
-      {
-        field,
-        path,
-        access,
-        descriptor,
-        isArray: arrayInfo !== null,
-        count: arrayInfo?.count ?? 1,
-        startIndex: arrayInfo?.startIndex ?? 0,
-      },
-    ],
+    leaves: [{ field, path, access, mapPath, objectPath, descriptor }],
   }
 }
 
@@ -373,55 +424,83 @@ const elementTypeOf = (declaration: PLCVariable | PLCStructureVariable): PLCVari
   return declaration.type
 }
 
-/** Element count and lower bound of an array declaration. */
-interface ArrayInfo {
-  count: number
-  startIndex: number
+/** Bounds of one array dimension, as the user declared them. */
+interface Dimension {
+  lower: number
+  upper: number
 }
 
 /**
- * Array shape of a declaration — `null` when it is not an array — or the reason
- * the shape cannot cross.
+ * Array dimensions of a declaration — `null` when it is not an array — or the
+ * reason its shape cannot be read.
  *
- * Two shapes are refused here rather than described:
+ * Rank is NOT limited here. The compiler enumerates every element of an array
+ * of any supported rank as its own leaf (`GRID2[1][0]`, `CUBE3[0][1][0]`), so
+ * describing an array is a matter of following that enumeration rather than of
+ * inventing a repeat count — which is what the count-based model this replaces
+ * could not do for a multi-dimensional array, an array of strings, an array of
+ * structures or an array of enumerations.
  *
- *   - **Rank two or higher.** The generated exchange indexes with a single
- *     subscript (`A[start + i]`), but strucpp passes a multi-dimensional array
- *     as `Array2D` / `Array3D`, which is indexed `(i, j)` — `generateCBlocksCode`
- *     branches on `multiDimensionalContainerType` for exactly that reason. The
- *     flat element count would also be paired with only dimension 0's lower
- *     bound, so `ARRAY [1..2, 1..3] OF INT` would read elements 1..6 of a
- *     6-element field. Python blocks carry one-dimensional arrays only; a
- *     higher rank is refused with its own message rather than mis-indexed.
- *   - **Dimensions that do not parse.** `getArrayTotalElements` returns 0 for a
- *     malformed range, which used to fall through to the scalar path and emit a
- *     single field against an array member.
+ * `strucpp` passes rank 1 as `IEC_ARRAY_1D` (indexed `[i]`) and rank 2 / 3 as
+ * `Array2D` / `Array3D` (indexed `(i, j)`), and caps container generation at
+ * rank 3 — so that is the ceiling, and it is stated here rather than assumed.
  */
-type ArrayShape = { info: ArrayInfo | null } | { reason: string }
+type ArrayShape = { dims: Dimension[] | null } | { reason: string }
+
+const MAX_RANK = 3
 
 const arrayShapeOf = (declaration: PLCVariable | PLCStructureVariable): ArrayShape => {
-  if (declaration.type.definition !== 'array' || !declaration.type.data) return { info: null }
-  const dimensions = declaration.type.data.dimensions
-  if (dimensions.length > 1) {
+  if (declaration.type.definition !== 'array' || !declaration.type.data) return { dims: null }
+  const declared = declaration.type.data.dimensions
+  if (declared.length > MAX_RANK) {
     return {
       reason:
-        `a ${dimensions.length}-dimensional array cannot cross into Python — Python blocks support ` +
-        'one-dimensional arrays only. Flatten it, or split it into separate one-dimensional variables',
+        `a ${declared.length}-dimensional array cannot cross into Python — the compiler generates ` +
+        `array containers up to ${MAX_RANK} dimensions`,
     }
   }
-  const first = dimensions[0] ? parseDimensionRange(dimensions[0].dimension) : null
-  const asVariable: PLCVariable = {
-    name: declaration.name,
-    type: declaration.type,
-    location: '',
-    documentation: '',
+  const dims: Dimension[] = []
+  for (const dimension of declared) {
+    const range = parseDimensionRange(dimension.dimension)
+    if (!range || range.upper < range.lower) {
+      return { reason: 'its array bounds cannot be read, so the fields it needs cannot be enumerated' }
+    }
+    dims.push({ lower: range.lower, upper: range.upper })
   }
-  const count = getArrayTotalElements(asVariable)
-  if (!first || count < 1) {
-    return { reason: 'its array bounds cannot be read, so the size of the field it needs is unknown' }
+  /* istanbul ignore next -- defensive: `definition: 'array'` always carries at least one dimension */
+  if (dims.length === 0) {
+    return { reason: 'its array bounds cannot be read, so the fields it needs cannot be enumerated' }
   }
-  return { info: { count, startIndex: first.lower } }
+  return { dims }
 }
+
+/**
+ * Every index tuple of an array, in ROW-MAJOR order — the order the compiler
+ * enumerates them in, and the order the packed struct therefore has to use.
+ * `[1..2, 0..1]` yields `[1,0] [1,1] [2,0] [2,1]`.
+ */
+const elementIndices = (dims: readonly Dimension[]): number[][] => {
+  let tuples: number[][] = [[]]
+  for (const dim of dims) {
+    const next: number[][] = []
+    for (const prefix of tuples) {
+      for (let i = dim.lower; i <= dim.upper; i++) next.push([...prefix, i])
+    }
+    tuples = next
+  }
+  return tuples
+}
+
+/**
+ * How strucpp subscripts an element: rank 1 is `[i]` on an `IEC_ARRAY_1D`, rank
+ * 2 and 3 are `(i, j)` through `Array2D` / `Array3D::operator()`, whose backing
+ * storage is private so there is no flat accessor to use instead.
+ */
+const subscriptFor = (indices: readonly number[]): string =>
+  indices.length === 1 ? `[${indices[0]}]` : `(${indices.join(', ')})`
+
+/** How the compiler spells the same subscript in a debug-map path. */
+const mapSubscriptFor = (indices: readonly number[]): string => indices.map((i) => `[${i}]`).join('')
 
 /**
  * The scalar fields one interface variable contributes, in order — or the reason
@@ -442,20 +521,16 @@ export const describeShmLeaves = (variable: PLCVariable, context: ShmWalkContext
     direction: context.direction,
   }
 
-  const element = elementTypeOf(variable)
-  const shape = arrayShapeOf(variable)
-  if ('reason' in shape) {
-    return { refusal: { path: [variable.name], reason: shape.reason } }
-  }
-
-  return walk(
-    variable.name,
-    element.value,
-    element.definition,
-    shape.info,
+  // The variable's own name is its `mapPath` root: the compiler names a POU
+  // instance's leaves `INSTANCE0.<POU>.<NAME>…`, and the prefix is the caller's
+  // to add when it checks a layout against `debug-map.json`.
+  return walkDeclaration(
+    variable,
     [variable.name],
     variable.name,
     variable.name.toUpperCase(),
+    variable.name.toUpperCase(),
+    [null],
     env,
     0,
   )

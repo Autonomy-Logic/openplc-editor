@@ -133,25 +133,68 @@ describe('generateSTCode (python)', () => {
     expect(result).toContain('RESULT = data_out.result;')
   })
 
-  it('iterates IEC indices for array inputs (handles non-zero lower bounds)', () => {
+  it('copies each array element at its declared IEC index', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [makeArrayVar('data', 'input', 'INT', '5..9')],
       processedPythonCode: '',
     })
 
-    // 5 elements, IEC indices 5..9. Reads through .get() per element.
-    expect(result).toContain('for (int __i = 0; __i < 5; __i++) data_in.data[__i] = DATA[5 + __i].get();')
+    // 5 elements, IEC indices 5..9: one statement per element at its declared
+    // index, with no loop and no `startIndex + i` arithmetic to get wrong. An
+    // element goes through the same implicit `IECVar` conversion a scalar does,
+    // because it IS a scalar now as far as the emitter is concerned.
+    expect(result).toContain('data_in.data_5 = DATA[5];')
+    expect(result).toContain('data_in.data_9 = DATA[9];')
   })
 
-  it('writes back array outputs via IECVar element-wise (force-respect)', () => {
+  it('reaches an enumeration ARRAY element without the wrapper accessors', () => {
+    // `IEC_ARRAY_1D<MODE, …>::operator[]` yields a RAW scoped enum — the
+    // container holds values, not wrappers — so `.get().get()` / `.set()` do not
+    // compile on an element. A standalone enumeration variable is an
+    // `IEC_ENUM_Var` and still needs them. Found by an on-device build.
+    const MODE: PLCDataType = {
+      name: 'Mode',
+      derivation: 'enumerated',
+      values: [{ description: 'STOPPED' }, { description: 'RUNNING' }],
+    }
+    const modes: PLCVariable = {
+      name: 'modes',
+      class: 'inOut',
+      type: {
+        definition: 'array',
+        value: 'ARRAY [0..1] OF Mode',
+        data: {
+          baseType: { definition: 'user-data-type', value: 'Mode' },
+          dimensions: [{ dimension: '0..1' }],
+        },
+      },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [modes],
+      processedPythonCode: '',
+      dataTypes: [MODE],
+    })
+
+    expect(result).toContain('data_in.modes_0 = static_cast<int16_t>(MODES[0]);')
+    expect(result).toContain('MODES[0] = static_cast<MODE>(data_out.modes_0);')
+    expect(result).not.toContain('MODES[0].get().get()')
+    expect(result).not.toContain('MODES[0].set(')
+  })
+
+  it('writes back each array element through its IECVar (force-respect)', () => {
     const result = generateSTCode({
       pouName: 'test',
       allVariables: [makeArrayVar('out', 'output', 'REAL', '0..2')],
       processedPythonCode: '',
     })
 
-    expect(result).toContain('for (int __i = 0; __i < 3; __i++) OUT[0 + __i] = data_out.out[__i];')
+    expect(result).toContain('OUT[0] = data_out.out_0;')
+    expect(result).toContain('OUT[2] = data_out.out_2;')
   })
 
   it('reads STRING inputs into the SHM struct via IECStringVar.get()', () => {

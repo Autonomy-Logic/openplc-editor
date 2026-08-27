@@ -24,11 +24,9 @@ type STCodeGenerationParams = {
  * total so a direct caller cannot produce a half-formed struct.
  */
 const generateStructField = (leaf: ShmLeaf): string => {
-  const fieldType = leaf.descriptor.cType
-  if (leaf.isArray) {
-    return `        ${fieldType} ${leaf.field}[${leaf.count}];\n`
-  }
-  return `        ${fieldType} ${leaf.field};\n`
+  // One field per leaf. An array is many leaves, so it is many fields — the
+  // same shape the compiler's own leaf enumeration has.
+  return `        ${leaf.descriptor.cType} ${leaf.field};\n`
 }
 
 const generateOneStruct = (leaves: ShmLeaf[], typeName: string): string => {
@@ -61,15 +59,12 @@ const generateCStructs = (inbound: ShmLeaf[], outbound: ShmLeaf[]): string =>
  * a forced variable is dropped on the IEC side, as it should be.
  */
 const generateLeafCopy = (leaf: ShmLeaf, struct: string, toShm: boolean): string => {
-  const { field, access, descriptor, count, startIndex, isArray } = leaf
+  const { field, access, descriptor } = leaf
   const shm = `${struct}.${field}`
 
-  if (isArray) {
-    // Iterate IEC indices so a forced element crosses like any other.
-    return toShm
-      ? `        for (int __i = 0; __i < ${count}; __i++) ${shm}[__i] = ${access}[${startIndex} + __i].get();\n`
-      : `        for (int __i = 0; __i < ${count}; __i++) ${access}[${startIndex} + __i] = ${shm}[__i];\n`
-  }
+  // No array branch: `access` already names one element, subscripted the way
+  // strucpp expects — `A[3]` for rank 1, `G(1, 0)` for rank 2 and 3, whose
+  // backing storage is private so there is no flat accessor to loop over.
 
   if (descriptor.kind === 'string' || descriptor.kind === 'wstring') {
     const wide = descriptor.kind === 'wstring'
@@ -115,6 +110,15 @@ const generateLeafCopy = (leaf: ShmLeaf, struct: string, toShm: boolean): string
     // The write goes through `set()` rather than `operator=`, which would
     // copy-assign a whole temporary wrapper and take the forced state with it.
     const enumType = leaf.enumTypeName.toUpperCase()
+    // An element of an array OF this enumeration is a RAW scoped enum, because
+    // the container holds values rather than wrappers — so it converts and
+    // assigns directly, where a wrapper needs `.get().get()` and `.set()`.
+    // Found by an on-device build: `MODES[0].get().get()` does not compile.
+    if (leaf.arrayElement) {
+      return toShm
+        ? `        ${shm} = static_cast<${descriptor.cType}>(${access});\n`
+        : `        ${access} = static_cast<${enumType}>(${shm});\n`
+    }
     return toShm
       ? `        ${shm} = static_cast<${descriptor.cType}>(${access}.get().get());\n`
       : `        ${access}.set(static_cast<${enumType}>(${shm}));\n`

@@ -208,110 +208,86 @@ const generateVariableUnpack = (variable: PLCVariable, context: ShmWalkContext, 
   /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
   if ('refusal' in walked) return ''
 
+  // Every leaf decodes into its own temporary, then the containers are rebuilt
+  // and filled. Uniform: a plain scalar is the one-leaf, one-assignment case of
+  // the same rule, with no separate path to get wrong.
   let code = ''
-  const locals: string[] = []
   for (const leaf of walked.leaves) {
-    // Each leaf decodes into a temporary named for its path, then the temporaries
-    // are assembled. A flat variable's path is just its own name, so the
-    // temporary *is* the variable and no assembly is needed.
-    const local = leaf.path.length === 1 ? variable.name : `_${leaf.field}`
-    locals.push(local)
-    code += decodeLeaf(leaf, local, indent)
+    code += decodeLeaf(leaf, `_${leaf.field}`, indent)
   }
-
-  if (walked.leaves.length === 1 && walked.leaves[0].path.length === 1) {
-    const only = walked.leaves[0]
-    return only.enumTypeName ? `${code}${indent}${variable.name} = ${only.enumTypeName}(${variable.name})\n` : code
-  }
-
-  code += `${indent}${variable.name} = ${buildValue(variable, context, [variable.name])}\n`
+  code += assembleFromLeaves(walked.leaves, indent)
   return code
 }
 
 /**
- * Construct expression for a composite: a structure, or a function block
- * instance built from the pins that crossed.
+ * Python expression for a leaf's own path, e.g. `m.trims[0]`.
  *
- * The two look the same from here — a named type whose members were decoded into
- * temporaries — so one builder covers both, and the only difference is where the
- * member list comes from.
+ * A numeric segment is an index, a string segment an attribute — the same
+ * distinction `ShmLeaf.path` carries.
  */
-const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string[]): string => {
-  const dataTypes = context.dataTypes ?? []
-  const byName = new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
-  const base = variable.type.definition === 'array' ? variable.type.data?.baseType : variable.type
+const pathExpr = (path: ReadonlyArray<string | number>): string =>
+  path.reduce<string>((acc, seg, i) => {
+    if (i === 0) return String(seg)
+    return typeof seg === 'number' ? `${acc}[${seg}]` : `${acc}.${seg}`
+  }, '')
 
-  /**
-   * The expression for whatever sits at `fieldPath`, given its declared type.
-   *
-   * ONE rule, used for a structure's members and for a function block's pins
-   * alike, because the walk treats them alike: it descends into a composite and
-   * emits a temporary per LEAF, never one for the composite itself. A structure
-   * member got that recursion; a pin did not, and emitted a flat
-   * `PIN=_instance_PIN` — a name the decode never assigns. An FB whose pin is a
-   * structure therefore raised `NameError` at module scope, before
-   * `block_init()`. Keeping one rule is what stops the two drifting again.
-   */
-  const valueFor = (typeValue: string, typeDefinition: string, fieldPath: string[]): string => {
-    if (typeDefinition === 'user-data-type' || typeDefinition === 'derived') {
-      const declared = byName.get(typeValue.toUpperCase())
-      // An enumeration crosses as its integer and is wrapped back into the
-      // class. `declared.name`, not the reference's spelling: the class is
-      // emitted under the type's own declared name, so echoing a mixed-case
-      // reference would name a class that does not exist.
-      if (declared?.derivation === 'enumerated') return `${declared.name}(_${fieldPath.join('_')})`
-      // A structure, or a function block instance (no data type by that name).
-      if (!declared || declared.derivation === 'structure') return buildFor(typeValue, fieldPath)
+/**
+ * Statements that rebuild a variable's containers, then fill every leaf.
+ *
+ * Driven ENTIRELY by the leaves. The previous assembler walked the project's
+ * types a second time to enumerate members, and the two walks disagreed the
+ * moment one descended somewhere the other did not — a structure pin on a
+ * function block produced `DRIVE(CFG=_drv_CFG)` against a decode that had only
+ * ever produced `_drv_CFG_speed`. There is one walk now, and this reads its
+ * output.
+ *
+ * Containers are created before they are filled, deepest last, so
+ * `m = Motor(); m.trims = [None] * 3; m.trims[0] = …` is always in order. A list
+ * is sized from the indices actually present, which is exact because the walk
+ * enumerates every element.
+ */
+const assembleFromLeaves = (leaves: readonly ShmLeaf[], indent: string): string => {
+  // Every container node that has to exist, keyed by its path prefix. A `null`
+  // class means a list; the number is its length.
+  const objects = new Map<string, { expr: string; className: string; depth: number }>()
+  const lists = new Map<string, { expr: string; length: number; depth: number }>()
+
+  for (const leaf of leaves) {
+    for (let i = 0; i < leaf.path.length - 1; i++) {
+      const prefix = leaf.path.slice(0, i + 1)
+      const key = prefix.map(String).join('\u0000')
+      const nextSegment = leaf.path[i + 1]
+      if (typeof nextSegment === 'number') {
+        const existing = lists.get(key)
+        const length = Math.max(existing?.length ?? 0, nextSegment + 1)
+        lists.set(key, { expr: pathExpr(prefix), length, depth: i })
+        continue
+      }
+      const className = leaf.objectPath[i]
+      /* istanbul ignore next -- defensive: a node with an attribute below it is always an object */
+      if (className) objects.set(key, { expr: pathExpr(prefix), className, depth: i })
     }
-    return `_${fieldPath.join('_')}`
   }
 
-  const buildFor = (typeName: string, fieldPath: string[]): string => {
-    const dataType = byName.get(typeName.toUpperCase())
+  // Shallowest first, so a parent exists before a child is assigned into it.
+  const creations = [
+    ...[...objects.values()].map((o) => ({ depth: o.depth, code: `${o.expr} = ${o.className}()` })),
+    ...[...lists.values()].map((l) => ({ depth: l.depth, code: `${l.expr} = [None] * ${l.length}` })),
+  ].sort((a, b) => a.depth - b.depth)
 
-    if (dataType?.derivation === 'structure') {
-      const args = dataType.variable.map(
-        (member) =>
-          `${member.name}=${valueFor(member.type.value, member.type.definition, [...fieldPath, member.name])}`,
-      )
-      return `${dataType.name}(${args.join(', ')})`
-    }
-
-    // Not a data type, so a function block instance. Its pins are the members,
-    // and only the ones that crossed appear — which for the inbound direction is
-    // inputs, in-outs and outputs.
-    const pins = resolveFunctionBlockPins(typeName, context.pous ?? [], context.libraries ?? [])
-    /* istanbul ignore next -- defensive: an unresolvable instance is refused upstream */
-    if (!pins) return `_${fieldPath.join('_')}`
-    // Must match the walk exactly, or the constructor names a temporary the
-    // decode never produced — hence one shared predicate.
-    const crossing = pins.filter((pin) => pinCrossesInDirection(pin.class, context.direction))
-    const args = crossing.map((pin) => {
-      // Upper-cased on both sides of the `=`: the keyword names the class slot,
-      // and the temporary names the field the walk produced. They are the same
-      // name by construction — see the pin naming note in `shm-leaves`.
-      const upper = pin.name.toUpperCase()
-      return `${upper}=${valueFor(pin.type.value, pin.type.definition, [...fieldPath, upper])}`
-    })
-    return `${pythonClassName(typeName)}(${args.join(', ')})`
+  let code = ''
+  for (const creation of creations) code += `${indent}${creation.code}\n`
+  for (const leaf of leaves) {
+    const value = leaf.enumTypeName ? `${leaf.enumTypeName}(_${leaf.field})` : `_${leaf.field}`
+    code += `${indent}${pathExpr(leaf.path)} = ${value}\n`
   }
-
-  /* istanbul ignore next -- defensive: callers only assemble composites */
-  return base && (base.definition === 'user-data-type' || base.definition === 'derived')
-    ? buildFor(base.value, path)
-    : `_${path.join('_')}`
+  return code
 }
 
 /** Decode one leaf out of `_vals` into `local`. */
 const decodeLeaf = (leaf: ShmLeaf, local: string, indent: string): string => {
-  const { descriptor, count, isArray } = leaf
+  const { descriptor } = leaf
   let code = ''
-
-  if (isArray) {
-    code += `${indent}${local} = list(_vals[_idx:_idx+${count}])\n`
-    code += `${indent}_idx += ${count}\n`
-    return code
-  }
 
   if (descriptor.kind === 'string' || descriptor.kind === 'wstring') {
     code += `${indent}${local}_len = _vals[_idx]\n`
@@ -396,10 +372,8 @@ const generateOutputSeedCode = (variables: PLCVariable[], context: ShmWalkContex
 
 /** Encode one leaf, reading through the Python attribute path it came from. */
 const encodeLeaf = (leaf: ShmLeaf): string => {
-  const expr = leaf.path.join('.')
-  const { descriptor, isArray } = leaf
-
-  if (isArray) return `    _out.extend(${expr})\n`
+  const expr = pathExpr(leaf.path)
+  const { descriptor } = leaf
 
   if (descriptor.kind === 'string') {
     let code = `    _body = ${expr}.encode('utf-8')[:${SHM_STRING_CHARS}]\n`

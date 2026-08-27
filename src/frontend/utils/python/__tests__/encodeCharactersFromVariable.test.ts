@@ -123,20 +123,21 @@ describe('encodeCharactersFromVariable', () => {
     expect(encodeCharactersFromVariable(vars, ctx)).toBe('=')
   })
 
-  it('encodes array variables with repeated format chars', () => {
+  it('encodes an array as one format item per element, with no repeat count', () => {
+    // `5h` and `hhhhh` pack identically, but a repeat count only ever applied to
+    // a single-item format — which is why an array of STRING could not be
+    // expressed at all. One item per element is uniform and needs no exception.
     const vars = [makeArrayVar('arr', 'INT', '0..4')]
-    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=5h')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=hhhhh')
   })
 
-  it('emits nothing for an array of STRING, which the walk refuses', () => {
-    // This used to assert `'=b126sb126sb126s'` — the whole multi-item format
-    // repeated per element, which is 6 slots where the decoder consumed 3, so
-    // every variable declared after it read from the wrong offset. A repeat
-    // count applies only to the first item of a struct format, so an array of
-    // strings cannot be expressed as one leaf at all; the walk now refuses it
-    // and the caller reports that instead of emitting a misaligned format.
+  it('encodes an array of STRING as one length-and-body pair per element', () => {
+    // The shape that broke the old model twice over: it emitted the whole
+    // multi-item format per element (6 slots) while the decoder consumed one
+    // slot per element (3), shifting every later variable. Per-element leaves
+    // make the two agree by construction.
     const vars = [makeArrayVar('arr', 'STRING', '0..2')]
-    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=b126sb126sb126s')
   })
 
   it('skips array with unknown base type and warns', () => {
@@ -147,6 +148,6 @@ describe('encodeCharactersFromVariable', () => {
 
   it('encodes mixed scalar and array variables', () => {
     const vars = [makeScalarVar('a', 'INT'), makeArrayVar('b', 'REAL', '0..2'), makeScalarVar('c', 'BOOL')]
-    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=h3fB')
+    expect(encodeCharactersFromVariable(vars, ctx)).toBe('=hfffB')
   })
 })

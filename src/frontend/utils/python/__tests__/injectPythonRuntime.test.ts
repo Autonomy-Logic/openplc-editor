@@ -126,7 +126,13 @@ describe('function block instances', () => {
   it('rebuilds the instance from every pin on the way in', () => {
     const result = run([instance('ton0')])
 
-    expect(result).toContain('ton0 = TON(IN=_ton0_IN, PT=_ton0_PT, Q=_ton0_Q, ET=_ton0_ET)')
+    // Created then filled per leaf, rather than built by a keyword constructor
+    // from a second walk of the project's types — the walk that used to disagree
+    // with the decode.
+    expect(result).toContain('ton0 = TON()')
+    for (const pin of ['IN', 'PT', 'Q', 'ET']) {
+      expect(result).toContain(`ton0.${pin} = _ton0_${pin}`)
+    }
   })
 
   it('rebuilds it from only the drivable pins when seeding outputs', () => {
@@ -135,7 +141,10 @@ describe('function block instances', () => {
     const result = run([instance('ton0')])
     const seed = result.slice(result.indexOf('# Seed outputs'), result.indexOf('# Initialize block'))
 
-    expect(seed).toContain('ton0 = TON(IN=_ton0_IN, PT=_ton0_PT)')
+    expect(seed).toContain('ton0 = TON()')
+    expect(seed).toContain('ton0.IN = _ton0_IN')
+    expect(seed).toContain('ton0.PT = _ton0_PT')
+    expect(seed).not.toContain('ton0.Q =')
     expect(seed).not.toContain('_ton0_Q')
   })
 
@@ -166,7 +175,8 @@ describe('function block instances', () => {
     })
 
     expect(result).toContain("__slots__ = ('STEP',)")
-    expect(result).toContain('acc = ACC(STEP=_acc_STEP)')
+    expect(result).toContain('acc = ACC()')
+    expect(result).toContain('acc.STEP = _acc_STEP')
     expect(result).toContain('_out.append(acc.STEP)')
   })
 })
@@ -245,7 +255,9 @@ describe('structures and enumerations', () => {
     const result = run([userTyped('m', 'input', 'Motor')], [MOTOR])
 
     expect(result).toContain('_m_speed = _vals[_idx]')
-    expect(result).toContain('m = Motor(speed=_m_speed, label=_m_label)')
+    expect(result).toContain('m = Motor()')
+    expect(result).toContain('m.speed = _m_speed')
+    expect(result).toContain('m.label = _m_label')
   })
 
   it('rebuilds a nested structure innermost first', () => {
@@ -256,7 +268,10 @@ describe('structures and enumerations', () => {
     }
     const result = run([userTyped('r', 'input', 'Rig')], [rig, MOTOR])
 
-    expect(result).toContain('r = Rig(drive=Motor(speed=_r_drive_speed, label=_r_drive_label))')
+    // Outermost created first, so a parent always exists before a child is
+    // assigned into it.
+    expect(result.indexOf('r = Rig()')).toBeLessThan(result.indexOf('r.drive = Motor()'))
+    expect(result).toContain('r.drive.speed = _r_drive_speed')
   })
 
   it('wraps a structure member that is an enumeration', () => {
@@ -267,13 +282,14 @@ describe('structures and enumerations', () => {
     }
     const result = run([userTyped('r', 'input', 'Rig')], [rig, MODE])
 
-    expect(result).toContain('r = Rig(state=Mode(_r_state))')
+    expect(result).toContain('r = Rig()')
+    expect(result).toContain('r.state = Mode(_r_state)')
   })
 
   it('wraps a top-level enumeration in its IntEnum after decoding', () => {
     const result = run([userTyped('md', 'input', 'Mode')], [MODE])
 
-    expect(result).toContain('md = Mode(md)')
+    expect(result).toContain('md = Mode(_md)')
   })
 
   it('packs a structure member by member, through the attribute path', () => {
@@ -353,13 +369,13 @@ describe('WSTRING crosses as UTF-16, counted in code units', () => {
   it('decodes an inbound WSTRING as utf-16-le over twice the length', () => {
     const result = run([makeWStringVar('label', 'input')])
 
-    expect(result).toContain("label = label_body[:label_len * 2].decode('utf-16-le', errors='ignore')")
+    expect(result).toContain("_label = _label_body[:_label_len * 2].decode('utf-16-le', errors='ignore')")
   })
 
   it('decodes an inbound STRING as utf-8 over the length itself', () => {
     const result = run([makeStringVar('label', 'input')])
 
-    expect(result).toContain("label = label_body[:label_len].decode('utf-8', errors='ignore')")
+    expect(result).toContain("_label = _label_body[:_label_len].decode('utf-8', errors='ignore')")
   })
 
   it('encodes an outbound WSTRING to the doubled byte budget', () => {
@@ -465,8 +481,15 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('data = list(_vals[_idx:_idx+5])')
-    expect(result).toContain('_idx += 5')
+    // One slot per element, and the list is rebuilt at the DECLARED IEC indices
+    // — this fixture is `0..4`, so `data[0]`..`data[4]`. The old model handed
+    // Python a 0-based list whatever the lower bound was, while the C side used
+    // `startIndex + i`, so a 1-based array disagreed by one on every element.
+    expect(result).toContain('data = [None] * 5')
+    expect(result).toContain('data[0] = _data_0')
+    expect(result).toContain('data[4] = _data_4')
+    // Five separate advances, one per element, rather than one jump of five.
+    expect((result.match(/_idx \+= 1/g) ?? []).length).toBeGreaterThanOrEqual(5)
   })
 
   it('generates output pack code for array variables', () => {
@@ -481,7 +504,8 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('_out.extend(temps)')
+    expect(result).toContain('_out.append(temps[0])')
+    expect(result).toContain('_out.append(temps[2])')
   })
 
   it('generates input unpack code for string variables', () => {
@@ -498,7 +522,7 @@ describe('injectPythonRuntime', () => {
 
     expect(result).toContain('msg_len = _vals[_idx]')
     expect(result).toContain('msg_body = _vals[_idx]')
-    expect(result).toContain("msg = msg_body[:msg_len].decode('utf-8', errors='ignore')")
+    expect(result).toContain("_msg = _msg_body[:_msg_len].decode('utf-8', errors='ignore')")
   })
 
   it('generates output pack code for string variables', () => {
@@ -552,7 +576,9 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('arr = list(_vals[_idx:_idx+3])')
+    expect(result).toContain('arr = [None] * 3')
+    expect(result).toContain('arr[0] = _arr_0')
+    expect(result).toContain('arr[2] = _arr_2')
     expect(result).not.toContain('arr = [0] * 3')
   })
 
@@ -577,7 +603,7 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain("msg = msg_body[:msg_len].decode('utf-8', errors='ignore')")
+    expect(result).toContain("_msg = _msg_body[:_msg_len].decode('utf-8', errors='ignore')")
     expect(result).not.toContain('msg = ""')
   })
 
@@ -724,7 +750,9 @@ describe('a function block pin that is itself composite', () => {
     })
 
   it('builds a structure pin from the member temporaries the decode produced', () => {
-    expect(run()).toContain('CFG=Motor(speed=_drv_CFG_speed, label=_drv_CFG_label)')
+    expect(run()).toContain('drv.CFG = Motor()')
+    expect(run()).toContain('drv.CFG.speed = _drv_CFG_speed')
+    expect(run()).toContain('drv.CFG.label = _drv_CFG_label')
   })
 
   it('never names a temporary for the composite itself', () => {
@@ -733,7 +761,7 @@ describe('a function block pin that is itself composite', () => {
   })
 
   it('wraps an enumeration pin back into its class', () => {
-    expect(run()).toContain('STATE=Mode(_drv_STATE)')
+    expect(run()).toContain('drv.STATE = Mode(_drv_STATE)')
   })
 
   it('declares the classes reached only through a pin', () => {

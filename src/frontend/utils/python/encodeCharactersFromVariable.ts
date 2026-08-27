@@ -20,16 +20,12 @@ import { describeShmLayout } from './shm-leaves'
  *   no alignment, matching the `#pragma pack(push, 1)` struct on the C side.
  */
 const encodeCharactersFromLeaves = (leaves: readonly ShmLeaf[]): string => {
-  const encoded = leaves.map((leaf) => {
-    if (leaf.isArray) {
-      // A repeat count applies only to the FIRST item of a struct format, so
-      // `4b126s` is not four strings. Only single-item formats can carry one,
-      // which is why the walk refuses an array whose element needs more than
-      // one — an array leaf here is always a scalar element.
-      return `${leaf.count}${leaf.descriptor.pyFormat}`
-    }
-    return leaf.descriptor.pyFormat
-  })
+  // One format item per leaf, and no repeat counts. A repeat count applies only
+  // to the FIRST item of a struct format, so `4b126s` was never four strings —
+  // which is why an array of STRING used to emit two slots per element while the
+  // decoder consumed one. Every leaf is a single element now, so the arity
+  // question does not arise.
+  const encoded = leaves.map((leaf) => leaf.descriptor.pyFormat)
 
   return '=' + encoded.join('')
 }
