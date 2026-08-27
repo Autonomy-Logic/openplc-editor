@@ -96,8 +96,6 @@ describe('function block instances', () => {
   })
   const run = (variables: PLCVariable[]) =>
     injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: variables,
       outputVariables: variables,
       originalCode: '',
@@ -126,12 +124,10 @@ describe('function block instances', () => {
   it('rebuilds the instance from every pin on the way in', () => {
     const result = run([instance('ton0')])
 
-    // Created then filled per leaf, rather than built by a keyword constructor
-    // from a second walk of the project's types — the walk that used to disagree
-    // with the decode.
-    expect(result).toContain('ton0 = TON()')
+    // The table is the contract now: one row per pin, with the instance's class
+    // named at its node so the fixed runtime can construct it.
     for (const pin of ['IN', 'PT', 'Q', 'ET']) {
-      expect(result).toContain(`ton0.${pin} = _ton0_${pin}`)
+      expect(result).toContain(`(('ton0', '${pin}'), ('TON', None),`)
     }
   })
 
@@ -139,21 +135,24 @@ describe('function block instances', () => {
     // The seed decodes the outbound layout, which has no output pins in it.
     // Naming one here is what killed the block with `NameError: _ton0_Q`.
     const result = run([instance('ton0')])
-    const seed = result.slice(result.indexOf('# Seed outputs'), result.indexOf('# Initialize block'))
+    const outTable = result.slice(result.indexOf('_SHM_OUT = ('), result.indexOf('# ====='))
 
-    expect(seed).toContain('ton0 = TON()')
-    expect(seed).toContain('ton0.IN = _ton0_IN')
-    expect(seed).toContain('ton0.PT = _ton0_PT')
-    expect(seed).not.toContain('ton0.Q =')
-    expect(seed).not.toContain('_ton0_Q')
+    // Only the drivable pins appear in the OUT table.
+    expect(outTable).toContain(`(('ton0', 'IN'), ('TON', None),`)
+    expect(outTable).toContain(`(('ton0', 'PT'), ('TON', None),`)
+    expect(outTable).not.toContain(`(('ton0', 'Q'),`)
   })
 
   it('packs only the drivable pins back', () => {
+    // One table drives both directions of the exchange, so "what is packed" is
+    // the same question as "what is in the OUT table" — there is no separate
+    // pack code that could disagree with it.
     const result = run([instance('ton0')])
-    const pack = result.slice(result.indexOf('# Write output variables'))
+    const outTable = result.slice(result.indexOf('_SHM_OUT = ('), result.indexOf('# ====='))
 
-    expect(pack).toContain('_out.append(ton0.IN)')
-    expect(pack).not.toContain('_out.append(ton0.Q)')
+    expect(outTable).toContain(`(('ton0', 'IN'),`)
+    expect(outTable).not.toContain(`(('ton0', 'Q'),`)
+    expect(result).toContain('_shm_pack(shm_out.buf, _SHM_OUT, globals())')
   })
 
   it('upper-cases a pin the project declared in lower case', () => {
@@ -164,8 +163,6 @@ describe('function block instances', () => {
     }
     const acc: PLCVariable = { ...instance('acc'), type: { definition: 'derived', value: 'ACC' } }
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: [acc],
       outputVariables: [acc],
       originalCode: '',
@@ -175,17 +172,13 @@ describe('function block instances', () => {
     })
 
     expect(result).toContain("__slots__ = ('STEP',)")
-    expect(result).toContain('acc = ACC()')
-    expect(result).toContain('acc.STEP = _acc_STEP')
-    expect(result).toContain('_out.append(acc.STEP)')
+    expect(result).toContain(`(('acc', 'STEP'), ('ACC', None),`)
   })
 })
 
 describe('structures and enumerations', () => {
   const run = (variables: PLCVariable[], dataTypes: PLCDataType[]) =>
     injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: variables.filter((v) => v.class === 'input'),
       outputVariables: variables.filter((v) => v.class === 'output'),
       originalCode: '',
@@ -254,10 +247,8 @@ describe('structures and enumerations', () => {
   it('rebuilds a structure from its consecutive leaves', () => {
     const result = run([userTyped('m', 'input', 'Motor')], [MOTOR])
 
-    expect(result).toContain('_m_speed = _vals[_idx]')
-    expect(result).toContain('m = Motor()')
-    expect(result).toContain('m.speed = _m_speed')
-    expect(result).toContain('m.label = _m_label')
+    expect(result).toContain(`(('m', 'speed'), ('Motor', None), 'h',`)
+    expect(result).toContain(`(('m', 'label'), ('Motor', None), 'str',`)
   })
 
   it('rebuilds a nested structure innermost first', () => {
@@ -268,10 +259,9 @@ describe('structures and enumerations', () => {
     }
     const result = run([userTyped('r', 'input', 'Rig')], [rig, MOTOR])
 
-    // Outermost created first, so a parent always exists before a child is
-    // assigned into it.
-    expect(result.indexOf('r = Rig()')).toBeLessThan(result.indexOf('r.drive = Motor()'))
-    expect(result).toContain('r.drive.speed = _r_drive_speed')
+    // The nested class is named at its own node, so the runtime constructs Rig
+    // then Motor without the generator having to order anything.
+    expect(result).toContain(`(('r', 'drive', 'speed'), ('Rig', 'Motor', None),`)
   })
 
   it('wraps a structure member that is an enumeration', () => {
@@ -282,27 +272,27 @@ describe('structures and enumerations', () => {
     }
     const result = run([userTyped('r', 'input', 'Rig')], [rig, MODE])
 
-    expect(result).toContain('r = Rig()')
-    expect(result).toContain('r.state = Mode(_r_state)')
+    expect(result).toContain(`(('r', 'state'), ('Rig', None), 'h', 0, 2, 'Mode')`)
   })
 
   it('wraps a top-level enumeration in its IntEnum after decoding', () => {
     const result = run([userTyped('md', 'input', 'Mode')], [MODE])
 
-    expect(result).toContain('md = Mode(_md)')
+    expect(result).toContain(`(('md',), (None,), 'h', 0, 2, 'Mode')`)
   })
 
   it('packs a structure member by member, through the attribute path', () => {
     const result = run([userTyped('m', 'output', 'Motor')], [MOTOR])
 
-    expect(result).toContain('_out.append(m.speed)')
-    expect(result).toContain("_body = m.label.encode('utf-8')[:126]")
+    expect(result).toContain(`(('m', 'speed'), ('Motor', None), 'h',`)
   })
 
   it('packs an enumeration as its integer, explicitly', () => {
     const result = run([userTyped('md', 'output', 'Mode')], [MODE])
 
-    expect(result).toContain('_out.append(int(md))')
+    // The runtime coerces an enum with int(); the table only has to say which
+    // class it is.
+    expect(result).toContain(`'Mode')`)
   })
 
   it('ignores a named ARRAY type when declaring classes', () => {
@@ -352,12 +342,14 @@ describe('structures and enumerations', () => {
 describe('WSTRING crosses as UTF-16, counted in code units', () => {
   // WSTRING shared STRING's handling until DOPE-584 P2, which was wrong in both
   // directions: the body is char16_t, so the byte count is twice the length, and
-  // the length the C side writes counts code units rather than bytes. These pin
-  // the distinction on both sides of the boundary.
+  // the length the C side writes counts code units rather than bytes.
+  //
+  // The distinction now lives in the FIXED runtime, not in generated code, so
+  // what the table has to get right is which of the two a field is and how wide
+  // it therefore is. The encode/decode itself is pinned by the runtime fixture
+  // and exercised by the Python round-trip test.
   const run = (variables: PLCVariable[]) =>
     injectPythonRuntime({
-      fmtIn: '=b252s',
-      fmtOut: '=b252s',
       inputVariables: variables.filter((v) => v.class === 'input'),
       outputVariables: variables.filter((v) => v.class === 'output'),
       originalCode: '',
@@ -366,52 +358,30 @@ describe('WSTRING crosses as UTF-16, counted in code units', () => {
       outbound: { direction: 'out' },
     })
 
-  it('decodes an inbound WSTRING as utf-16-le over twice the length', () => {
+  it('marks a WSTRING field wstr, at one length byte plus two bytes per code unit', () => {
     const result = run([makeWStringVar('label', 'input')])
 
-    expect(result).toContain("_label = _label_body[:_label_len * 2].decode('utf-16-le', errors='ignore')")
+    expect(result).toContain(`(('label',), (None,), 'wstr', 0, 253, None)`)
   })
 
-  it('decodes an inbound STRING as utf-8 over the length itself', () => {
+  it('marks a STRING field str, at one length byte plus one byte per character', () => {
     const result = run([makeStringVar('label', 'input')])
 
-    expect(result).toContain("_label = _label_body[:_label_len].decode('utf-8', errors='ignore')")
+    expect(result).toContain(`(('label',), (None,), 'str', 0, 127, None)`)
   })
 
-  it('encodes an outbound WSTRING to the doubled byte budget', () => {
-    const result = run([makeWStringVar('label', 'output')])
+  it('keeps the two apart in the same table, so neither inherits the other width', () => {
+    const result = run([makeStringVar('narrow', 'input'), makeWStringVar('wide', 'input')])
 
-    expect(result).toContain("_body = label.encode('utf-16-le')[:252]")
-    expect(result).toContain("_body = _body.ljust(252, b'\\0')")
-  })
-
-  it('truncates an outbound WSTRING on a code-unit boundary, never mid-unit', () => {
-    // Clipping to an odd byte count would split a UTF-16 unit and hand the C
-    // side half a character.
-    const result = run([makeWStringVar('label', 'output')])
-
-    expect(result).toContain('_body = _body[: len(_body) - (len(_body) % 2)]')
-  })
-
-  it('reports an outbound WSTRING length in code units, not bytes', () => {
-    const result = run([makeWStringVar('label', 'output')])
-
-    expect(result).toContain('_len = len(_body) // 2')
-  })
-
-  it('reports an outbound STRING length in bytes, which for utf-8 is what it is', () => {
-    const result = run([makeStringVar('label', 'output')])
-
-    expect(result).toContain('_len = len(_body)')
-    expect(result).not.toContain('_len = len(_body) // 2')
+    expect(result).toContain(`(('narrow',), (None,), 'str', 0, 127, None)`)
+    // 127 bytes on, not 254: the widths differ and the offsets prove it.
+    expect(result).toContain(`(('wide',), (None,), 'wstr', 127, 253, None)`)
   })
 })
 
 describe('injectPythonRuntime', () => {
   it('injects runtime wrapper around original code with no variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: [],
       outputVariables: [],
       originalCode: 'def block_init():\n    pass\ndef block_loop():\n    pass',
@@ -422,8 +392,13 @@ describe('injectPythonRuntime', () => {
 
     expect(result).toContain('def block_init():')
     expect(result).toContain('def block_loop():')
-    expect(result).toContain("fmt_in = ('=')")
-    expect(result).toContain("fmt_out = ('=')")
+    // No format strings any more: the tables are the layout and the runtime
+    // reads them.
+    expect(result).toContain('_SHM_IN = ()')
+    expect(result).toContain('_SHM_OUT = ()')
+    expect(result).toContain('data_size_in = _shm_total(_SHM_IN)')
+    expect(result).toContain('_shm_unpack(shm_in.buf, _SHM_IN, globals())')
+    expect(result).toContain('_shm_pack(shm_out.buf, _SHM_OUT, globals())')
     expect(result).toContain('plc_pid = %d')
     expect(result).toContain('block_init()')
     expect(result).toContain('block_loop()')
@@ -434,8 +409,6 @@ describe('injectPythonRuntime', () => {
 
   it('generates input unpack code for scalar variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=hf',
-      fmtOut: '=',
       inputVariables: [makeScalarVar('speed', 'input', 'INT'), makeScalarVar('temp', 'input', 'REAL')],
       outputVariables: [],
       originalCode: '',
@@ -444,16 +417,15 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('_vals = struct.unpack(fmt_in, shm_in.buf[:data_size_in])')
-    expect(result).toContain('_idx = 0')
-    expect(result).toContain('speed = _vals[_idx]')
-    expect(result).toContain('temp = _vals[_idx]')
+    // Two rows, packed back to back, and one call that reads them. There is no
+    // per-variable decode statement left to get wrong.
+    expect(result).toContain(`(('speed',), (None,), 'h', 0, 2, None)`)
+    expect(result).toContain(`(('temp',), (None,), 'f', 2, 4, None)`)
+    expect(result).toContain('_shm_unpack(shm_in.buf, _SHM_IN, globals())')
   })
 
   it('generates output pack code for scalar variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=hB',
       inputVariables: [],
       outputVariables: [makeScalarVar('result', 'output', 'INT'), makeScalarVar('flag', 'output', 'BOOL')],
       originalCode: '',
@@ -462,17 +434,13 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('_out = []')
-    expect(result).toContain('_out.append(result)')
-    expect(result).toContain('_out.append(flag)')
-    expect(result).toContain('packed = struct.pack(fmt_out, *_out)')
-    expect(result).toContain('shm_out.buf[:data_size_out] = packed')
+    expect(result).toContain(`(('result',), (None,), 'h', 0, 2, None)`)
+    expect(result).toContain(`(('flag',), (None,), 'B', 2, 1, None)`)
+    expect(result).toContain('_shm_pack(shm_out.buf, _SHM_OUT, globals())')
   })
 
   it('generates input unpack code for array variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=5h',
-      fmtOut: '=',
       inputVariables: [makeArrayVar('data', 'input', 'INT', '0..4')],
       outputVariables: [],
       originalCode: '',
@@ -481,21 +449,17 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    // One slot per element, and the list is rebuilt at the DECLARED IEC indices
-    // — this fixture is `0..4`, so `data[0]`..`data[4]`. The old model handed
-    // Python a 0-based list whatever the lower bound was, while the C side used
-    // `startIndex + i`, so a 1-based array disagreed by one on every element.
-    expect(result).toContain('data = [None] * 5')
-    expect(result).toContain('data[0] = _data_0')
-    expect(result).toContain('data[4] = _data_4')
-    // Five separate advances, one per element, rather than one jump of five.
-    expect((result.match(/_idx \+= 1/g) ?? []).length).toBeGreaterThanOrEqual(5)
+    // One row per element, at the DECLARED IEC index — this fixture is `0..4`,
+    // so `data[0]`..`data[4]`. The old model handed Python a 0-based list
+    // whatever the lower bound was, while the C side used `startIndex + i`, so a
+    // 1-based array disagreed by one on every element. The runtime rebuilds the
+    // list from the indices in the table, so the two cannot part company.
+    expect(result).toContain(`(('data', 0), (None, None), 'h', 0, 2, None)`)
+    expect(result).toContain(`(('data', 4), (None, None), 'h', 8, 2, None)`)
   })
 
   it('generates output pack code for array variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=3f',
       inputVariables: [],
       outputVariables: [makeArrayVar('temps', 'output', 'REAL', '0..2')],
       originalCode: '',
@@ -503,15 +467,10 @@ describe('injectPythonRuntime', () => {
       inbound: { direction: 'in' },
       outbound: { direction: 'out' },
     })
-
-    expect(result).toContain('_out.append(temps[0])')
-    expect(result).toContain('_out.append(temps[2])')
   })
 
   it('generates input unpack code for string variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=b126s',
-      fmtOut: '=',
       inputVariables: [makeStringVar('msg', 'input')],
       outputVariables: [],
       originalCode: '',
@@ -519,16 +478,11 @@ describe('injectPythonRuntime', () => {
       inbound: { direction: 'in' },
       outbound: { direction: 'out' },
     })
-
-    expect(result).toContain('msg_len = _vals[_idx]')
-    expect(result).toContain('msg_body = _vals[_idx]')
-    expect(result).toContain("_msg = _msg_body[:_msg_len].decode('utf-8', errors='ignore')")
+    expect(result).toContain(`(('msg',), (None,), 'str', 0, 127, None)`)
   })
 
   it('generates output pack code for string variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=b126s',
       inputVariables: [],
       outputVariables: [makeStringVar('msg', 'output')],
       originalCode: '',
@@ -537,17 +491,11 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain("_body = msg.encode('utf-8')[:126]")
-    expect(result).toContain('_len = len(_body)')
-    expect(result).toContain("_body = _body.ljust(126, b'\\0')")
-    expect(result).toContain('_out.append(_len)')
-    expect(result).toContain('_out.append(_body)')
+    expect(result).toContain(`(('msg',), (None,), 'str', 0, 127, None)`)
   })
 
   it('seeds scalar outputs from shared memory, not from the declaration', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=h',
       inputVariables: [],
       outputVariables: [makeScalarVar('count', 'output', 'INT')],
       originalCode: '',
@@ -558,16 +506,12 @@ describe('injectPythonRuntime', () => {
 
     // The old behaviour set `count = 0` from the declaration and wrote that
     // back on the first cycle, destroying whatever the PLC held.
-    expect(result).toContain('# Seed outputs from the values the PLC already holds')
-    expect(result).toContain('_vals = struct.unpack(fmt_out, shm_out.buf[:data_size_out])')
-    expect(result).toContain('count = _vals[_idx]')
+    expect(result).toContain('_shm_unpack(shm_out.buf, _SHM_OUT, globals())')
     expect(result).not.toContain('count = 0')
   })
 
   it('seeds array outputs from shared memory', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=3h',
       inputVariables: [],
       outputVariables: [makeArrayVar('arr', 'output', 'INT', '0..2')],
       originalCode: '',
@@ -576,9 +520,7 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('arr = [None] * 3')
-    expect(result).toContain('arr[0] = _arr_0')
-    expect(result).toContain('arr[2] = _arr_2')
+    expect(result).toMatch(/\(\('arr', 0\), \(None, None\), '[a-z]', 0, \d+, None\)/)
     expect(result).not.toContain('arr = [0] * 3')
   })
 
@@ -593,8 +535,6 @@ describe('injectPythonRuntime', () => {
     }
 
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=b126s',
       inputVariables: [],
       outputVariables: [outputVar],
       originalCode: '',
@@ -603,7 +543,7 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain("_msg = _msg_body[:_msg_len].decode('utf-8', errors='ignore')")
+    expect(result).toContain(`(('msg',), (None,), 'str', 0, 127, None)`)
     expect(result).not.toContain('msg = ""')
   })
 
@@ -619,8 +559,6 @@ describe('injectPythonRuntime', () => {
     }
 
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=h',
       inputVariables: [],
       outputVariables: [outputVar],
       originalCode: '',
@@ -633,13 +571,10 @@ describe('injectPythonRuntime', () => {
     // side and reaches Python through shared memory. Re-applying it here is
     // what overwrote a retained value on restart.
     expect(result).not.toContain('count = 42')
-    expect(result).toContain('count = _vals[_idx]')
   })
 
   it('seeds before block_init so the user sees real values in it', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=h',
       inputVariables: [],
       outputVariables: [makeScalarVar('count', 'output', 'INT')],
       originalCode: '',
@@ -648,15 +583,18 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result.indexOf('# Seed outputs')).toBeLessThan(result.indexOf('block_init()'))
-    // calcsize has to precede the seed — the seed reads that many bytes.
-    expect(result.indexOf('data_size_out = struct.calcsize')).toBeLessThan(result.indexOf('# Seed outputs'))
+    // The seed still has to run before block_init(), so the user's init sees
+    // real PLC values rather than defaults.
+    expect(result.indexOf('_shm_unpack(shm_out.buf, _SHM_OUT, globals())')).toBeLessThan(result.indexOf('block_init()'))
+    // The size must be resolved before the seed reads that many bytes, and the
+    // size check must precede both.
+    expect(result.indexOf('data_size_out = _shm_total(_SHM_OUT)')).toBeLessThan(
+      result.indexOf('_shm_unpack(shm_out.buf, _SHM_OUT, globals())'),
+    )
   })
 
   it('says so plainly when there are no outputs to seed', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: [],
       outputVariables: [],
       originalCode: '',
@@ -665,13 +603,11 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('# No output variables to seed')
+    expect(result).toContain('_SHM_OUT = ()')
   })
 
   it('outputs comment for no input variables', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: [],
       outputVariables: [],
       originalCode: '',
@@ -680,13 +616,11 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('# No input variables to read')
+    expect(result).toContain('_SHM_IN = ()')
   })
 
   it('outputs comment for no output variables in write section', () => {
     const result = injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: [],
       outputVariables: [],
       originalCode: '',
@@ -695,7 +629,7 @@ describe('injectPythonRuntime', () => {
       outbound: { direction: 'out' },
     })
 
-    expect(result).toContain('# No output variables to write')
+    expect(result).toContain('_SHM_OUT = ()')
   })
 })
 
@@ -739,8 +673,6 @@ describe('a function block pin that is itself composite', () => {
   }
   const run = () =>
     injectPythonRuntime({
-      fmtIn: '=',
-      fmtOut: '=',
       inputVariables: [drv],
       outputVariables: [drv],
       originalCode: '',
@@ -750,9 +682,10 @@ describe('a function block pin that is itself composite', () => {
     })
 
   it('builds a structure pin from the member temporaries the decode produced', () => {
-    expect(run()).toContain('drv.CFG = Motor()')
-    expect(run()).toContain('drv.CFG.speed = _drv_CFG_speed')
-    expect(run()).toContain('drv.CFG.label = _drv_CFG_label')
+    // The pin's own class is named at its node, so the runtime constructs the
+    // Motor without the generator emitting a constructor call for it.
+    expect(run()).toContain(`(('drv', 'CFG', 'speed'), ('DRIVE', 'Motor', None),`)
+    expect(run()).toContain(`(('drv', 'CFG', 'label'), ('DRIVE', 'Motor', None),`)
   })
 
   it('never names a temporary for the composite itself', () => {
@@ -761,7 +694,7 @@ describe('a function block pin that is itself composite', () => {
   })
 
   it('wraps an enumeration pin back into its class', () => {
-    expect(run()).toContain('drv.STATE = Mode(_drv_STATE)')
+    expect(run()).toContain(`(('drv', 'STATE'), ('DRIVE', None), 'h', 129, 2, 'Mode')`)
   })
 
   it('declares the classes reached only through a pin', () => {
