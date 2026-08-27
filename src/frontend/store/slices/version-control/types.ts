@@ -65,6 +65,16 @@ export type VersionControlState = {
      * show a diff for changes made before the current session.
      */
     headContent: Record<string, string> | null
+    /**
+     * The commit whose full-file view is open, or `null` for none.
+     *
+     * Only the desktop uses this. On the web, "View all files" opens `/history` in a new
+     * tab so the workspace stays where it was, and the route holds the same two values in
+     * its search params. The desktop has no router and only one window worth using, so its
+     * navigation adapter puts them here instead and the workspace screen lays the view
+     * over itself. Same screen either way — see `CommitHistoryView`.
+     */
+    historyView: { commitHash: string; file?: string } | null
   }
 }
 
@@ -73,6 +83,10 @@ export type SavedFileRecord = { path: string; content: string }
 export type VersionControlActions = {
   setActivePanel: (panel: SidePanel) => void
   setSelectedCommitHash: (hash: string | null) => void
+  /** Open the full-file view for a commit. Desktop only — see `historyView`. */
+  openHistoryView: (view: { commitHash: string; file?: string }) => void
+  /** Close it, returning to the workspace underneath. */
+  closeHistoryView: () => void
   /** Set (or clear, with `null`) the lazily-fetched HEAD snapshot used as the
    *  "original" side of source-control diffs. */
   setHeadContent: (content: Record<string, string> | null) => void

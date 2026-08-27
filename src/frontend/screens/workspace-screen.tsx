@@ -15,6 +15,7 @@ import {
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
+import { CommitHistoryView } from '../components/_features/[workspace]/commit-history'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
@@ -131,13 +132,14 @@ const WorkspaceScreen = () => {
   )
 
   // Version control state
-  const { activePanel, pendingChangesCount } = useOpenPLCStore(
+  const { activePanel, pendingChangesCount, historyView } = useOpenPLCStore(
     useShallow((s) => ({
       activePanel: s.versionControl.activePanel,
       pendingChangesCount: s.versionControl.pendingChangesCount,
+      historyView: s.versionControl.historyView,
     })),
   )
-  const { setActivePanel } = useOpenPLCStore(useCallback((s) => s.versionControlActions, []))
+  const { setActivePanel, closeHistoryView } = useOpenPLCStore(useCallback((s) => s.versionControlActions, []))
   const sharedWorkspaceActions = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
 
   const isDebuggerVisible = useIsDebuggerVisible()
@@ -303,23 +305,39 @@ const WorkspaceScreen = () => {
   )
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
+  /**
+   * Re-read the open project from its source.
+   *
+   * Both a branch switch and a commit restore rewrite the working tree on the server,
+   * which leaves everything in memory stale. `whenStale` is the caller's own wording for
+   * the half-done case — the operation succeeded and the reload did not, and telling
+   * someone their branch switch failed when it did not is its own bug.
+   */
+  const reloadOpenProject = useCallback(
+    async (whenStale: string): Promise<boolean> => {
+      if (!projectPath) return false
+      const result = await project.openProjectByPath(projectPath)
+
+      if (result.success && result.data) {
+        sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        return true
+      }
+
+      toast({ title: 'Failed to reload project', description: whenStale, variant: 'fail' })
+      return false
+    },
+    [projectPath, project, sharedWorkspaceActions],
+  )
+
   const handleBranchSwitch = useCallback(
     async (branchName: string) => {
       if (!projectPath) return
       try {
-        const result = await project.openProjectByPath(projectPath)
-        if (result.success && result.data) {
-          sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        if (await reloadOpenProject('The branch was switched but the project could not be reloaded.')) {
           toast({
             title: 'Branch switched',
             description: `Now on branch: ${branchName}`,
             variant: 'default',
-          })
-        } else {
-          toast({
-            title: 'Failed to reload project',
-            description: 'The branch was switched but the project could not be reloaded.',
-            variant: 'fail',
           })
         }
       } catch (error) {
@@ -331,7 +349,7 @@ const WorkspaceScreen = () => {
         })
       }
     },
-    [projectPath, project, sharedWorkspaceActions],
+    [projectPath, reloadOpenProject],
   )
 
   type PanelMethods = {
@@ -916,6 +934,29 @@ const WorkspaceScreen = () => {
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
       )}
 
+      {/* The commit's full-file view, laid over the workspace.
+       *
+       * Set only by a platform whose navigation adapter has nowhere else to put it — the
+       * desktop, which has no router. The web's adapter navigates to `/history` in a new
+       * tab instead, leaving this null and this branch dead there, so the two products
+       * render the same screen from the same component without the web losing its tab.
+       *
+       * `inset-0` over the whole workspace rather than a modal: it is a screen, not a
+       * dialog, and the graphical diff of a ladder program needs the room. */}
+      {hasVersionControl && projectPath && historyView && (
+        <div className='absolute inset-0 z-50'>
+          <CommitHistoryView
+            projectId={projectPath}
+            commitHash={historyView.commitHash}
+            initialFile={historyView.file}
+            onBack={closeHistoryView}
+            onRestored={() => {
+              closeHistoryView()
+              void reloadOpenProject('The project was restored but could not be reloaded.')
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }

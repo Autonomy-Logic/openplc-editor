@@ -13,6 +13,7 @@ const initialState: VersionControlSlice['versionControl'] = {
   changedPaths: [],
   pendingChangesCount: 0,
   headContent: null,
+  historyView: null,
 }
 
 function dedupeByPath(entries: InitialPendingEntry[]): InitialPendingEntry[] {
@@ -48,6 +49,20 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
       setState(
         produce<VersionControlSlice>((draft) => {
           draft.versionControl.selectedCommitHash = hash
+        }),
+      ),
+
+    openHistoryView: (view: { commitHash: string; file?: string }) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.historyView = { ...view }
+        }),
+      ),
+
+    closeHistoryView: () =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.historyView = null
         }),
       ),
 
