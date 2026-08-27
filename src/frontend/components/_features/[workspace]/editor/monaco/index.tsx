@@ -8,10 +8,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
+import { getCppMemberCompletions, projectTypeNamePredicate } from '../../../../../services/cpp-scope'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
-import { pouUri } from '../../../../../services/st-lsp'
+import { pouUri, splitExpression } from '../../../../../services/st-lsp'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
+import { memberChainBefore } from '../../../../../utils/cpp/member-chain'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
@@ -739,13 +741,67 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     const completionDisposable = monaco.languages.registerCompletionItemProvider('cpp', {
-      provideCompletionItems: (model, position) => {
+      // `.` re-triggers the provider: without it Monaco only asks while a word
+      // is being typed, so `motor.` alone would never open the member list.
+      triggerCharacters: ['.'],
+      provideCompletionItems: async (model, position) => {
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
           startColumn: word.startColumn,
           endColumn: word.endColumn,
+        }
+
+        // Member access is answered on its own: after a `.` the only valid
+        // completions are that expression's members, so offering the standard
+        // library, snippets and every in-scope name alongside them would bury
+        // the answer under a hundred irrelevant entries.
+        const lineBeforeCursor = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        })
+        const { anchor } = splitExpression(memberChainBefore(lineBeforeCursor))
+        if (anchor !== '') {
+          // Read the store at query time rather than closing over `pous` /
+          // `dataTypes` / `libraries`. Those are destructured from an
+          // unselected `useOpenPLCStore()`, and `updatePou` runs on every
+          // keystroke with no debounce, so immer hands back a fresh `pous`
+          // array per character. Naming them as deps below would dispose and
+          // re-register this provider — and the signature-help provider with
+          // it — on every keystroke, including the `.` that opens the member
+          // list while the query is still in flight. The predicate is rebuilt
+          // per query by design, so reading here is the same answer for free.
+          const {
+            project: {
+              data: { pous: currentPous, dataTypes: currentDataTypes },
+            },
+            libraries: currentLibraries,
+          } = openPLCStoreBase.getState()
+          const members = await getCppMemberCompletions(
+            name,
+            anchor,
+            projectTypeNamePredicate(currentPous, currentDataTypes, currentLibraries),
+          )
+          if (members.length > 0) {
+            return {
+              suggestions: members.map((member) => ({
+                label: member.label,
+                insertText: member.label,
+                kind: monaco.languages.CompletionItemKind.Field,
+                // The IEC name is worth showing: it is what the variables
+                // table and every other language call this member, and it is
+                // not always recoverable from the C++ spelling.
+                detail: member.type ? `${member.type} — ${member.iecName}` : member.iecName,
+                range,
+              })),
+            }
+          }
+          // No members resolved (LSP not ready, or not a composite type):
+          // fall through rather than assert an empty list, which would look
+          // like "this expression has nothing" instead of "ask again later".
         }
 
         const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
@@ -777,7 +833,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language, deviceBoard, pouVariables])
+  }, [language, deviceBoard, pouVariables, name])
 
   // -----------------------------------------------------------------------
   // AI inline completion provider (gated by hasAIAssistant)

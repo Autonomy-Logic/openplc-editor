@@ -2,11 +2,31 @@ name: CI - Unit Tests
 
 on:
   workflow_dispatch:
+  # Callable from `ci.yml` so every pull request reports a test result. Until
+  # this was wired up, the only trigger was `workflow_dispatch`, which meant a
+  # green PR said "compiles and is in sync" and said nothing at all about the
+  # tests — the figures in a PR description were nobody's to check.
+  workflow_call:
 
 jobs:
   unit-tests:
     name: Unit Tests + Coverage
     runs-on: ubuntu-latest
+    # This check is EXPECTED TO BE RED for now, and that is the point: two
+    # suites already fail to load on `development` —
+    # `frontend/store/__tests__/device-types.test.ts` and
+    # `frontend/hooks/__tests__/use-device-connect.test.ts` — and
+    # `jest --collectCoverage` also enforces coverage thresholds. No individual
+    # test fails: 7366 pass. Before this workflow was reachable from `ci.yml`, a
+    # green pull request meant "compiles and is in sync" and said nothing about
+    # the tests, so nobody had to look.
+    #
+    # It does not block: `unit-tests / Unit Tests + Coverage` is deliberately
+    # NOT in `development`'s required-status-checks list. Add it there — which
+    # is the real switch, not anything in this file — once those two suites
+    # load. (`continue-on-error` is not the tool for this: on a job inside a
+    # reusable workflow it still surfaces the check as failed, while implying to
+    # a reader that it would not.)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
