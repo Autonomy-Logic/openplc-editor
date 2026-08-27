@@ -469,6 +469,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'ethercatDevice'
     | 'softMotionDrive'
     | 'libraryManifest'
+    | 'buildSettings'
     | 'userManagement'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
@@ -510,6 +511,9 @@ const LeafSources = {
   // render the same glyph — the manifest is the user's entry point
   // into a library project, so it earns a dedicated mark.
   libraryManifest: { LeafIcon: LibraryManifestIcon },
+  // Build Settings shares the device-configuration gear: both are the
+  // settings screen for how the project is built.
+  buildSettings: { LeafIcon: ConfigIcon },
   userManagement: { LeafIcon: UsersIcon },
 }
 const ProjectTreeLeaf = ({
@@ -864,7 +868,10 @@ const ProjectTreeLeaf = ({
         </span>
       )}
 
-      {leafLang === 'devPin' || leafLang === 'devConfig' || leafLang === 'userManagement' ? null : (
+      {leafLang === 'devPin' ||
+      leafLang === 'devConfig' ||
+      leafLang === 'buildSettings' ||
+      leafLang === 'userManagement' ? null : (
         <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
             disabled={isDebuggerVisible}

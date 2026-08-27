@@ -11,6 +11,7 @@ import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
+import { openPackageManagerTab } from '../../../../../../services/open-package-manager-tab'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
@@ -286,21 +287,7 @@ const Board = memo(function () {
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
       if (board === '__install_additional_boards__') {
-        const { tabsActions, editorActions } = useOpenPLCStore.getState()
-        const tab = {
-          name: 'Package Manager',
-          path: '/package-manager',
-          elementType: { type: 'package-manager' as const },
-        }
-        tabsActions.updateTabs(tab)
-        const existing = editorActions.getEditorFromEditors(tab.name)
-        if (!existing) {
-          const model = { type: 'plc-package-manager' as const, meta: { name: 'Package Manager' } }
-          editorActions.addModel(model)
-          editorActions.setEditor(model)
-        } else {
-          editorActions.setEditor(existing)
-        }
+        openPackageManagerTab()
         return
       }
 

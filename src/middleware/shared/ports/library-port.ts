@@ -106,6 +106,16 @@ export interface StlibArchiveDTO {
    *  is the deliverable and an archive without it is unbuildable.
    *  Located via a function block's `sourceFile`. */
   sources?: Array<{ fileName: string; source: string; category?: string }>
+  /** Files the library ships for its blocks to compile against —
+   *  headers they `#include`, `.cpp` units they need linked.  The
+   *  consumer's program build materialises them into its own build
+   *  tree, so a library and its sources cannot drift apart.  `path`
+   *  is reproduced verbatim from the library's `resources/` tree.
+   *  Absent on libraries that ship none. */
+  resources?: Array<{
+    path: string
+    content: string
+  }>
 }
 
 export interface LibraryPort {

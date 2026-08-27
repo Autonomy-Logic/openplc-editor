@@ -22,7 +22,7 @@
  *      (see path-constants comment).
  *   3. Resolve project-enabled library archives + fail on missing
  *      names (one place — feeds BOTH verification and strucpp).
- *   4. Verification compile against the OpenPLC Simulator target
+ *   4. Verification compile against the manifest's verify target
  *      via `LibraryBuildPort.verifyCompile`.  MD5 cache hit short-
  *      circuits.  Cache record persisted under `build/`.
  *   5. Gather `pouDocs` from the project data, and read the authored
@@ -39,10 +39,12 @@
 import type { LibraryBuildPort } from '../../../middleware/shared/ports/library-build-port'
 import type { CompileLibraryResult } from '../../../middleware/shared/ports/types'
 import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
+import { isSafeRelativePath } from '../utils/path-safety'
 import {
   composeVerificationProject,
   libraryBuildFromTranspiledSt,
   type LibraryNativeSource,
+  type LibraryResource,
   prepareXmlForLibraryBuild,
 } from './build-pipeline'
 import type { NativePouRef } from './native-pou-list'
@@ -91,8 +93,45 @@ export interface LibraryBuildArgs {
 // the user-visible `.stlib` artifact and the verification cache are
 // written to the project tree.
 const VERIFY_CACHE_REL_PATH = 'build/.verify-cache-library.json'
+
+/** Where a library project keeps the files it ships alongside its blocks. */
+const RESOURCES_REL_PATH = 'resources'
+
 const LIBRARY_MANIFEST_REL_PATH = 'library.json'
 const STLIB_OUT_DIR = 'build'
+
+/**
+ * Read the library folders under `resources/`, paths intact — the consumer
+ * reproduces the layout and resolves each folder as a library.
+ *
+ * Reports and skips a file that is not inside a folder (it belongs to no
+ * library) or is not valid UTF-8 (the archive is JSON).
+ */
+async function readResources(
+  port: LibraryBuildPort,
+  projectPath: string,
+  emit: (event: LibraryBuildEvent) => void,
+): Promise<LibraryResource[]> {
+  const paths = await port.listProjectFiles(projectPath, RESOURCES_REL_PATH)
+  const resources: LibraryResource[] = []
+  for (const relPath of paths) {
+    if (!relPath.includes('/') || !isSafeRelativePath(relPath)) {
+      emit({
+        message: `Skipping resource "${relPath}": it is not inside a library folder.`,
+        level: 'warning',
+      })
+      continue
+    }
+    const content = await port.readBuildFile(projectPath, `${RESOURCES_REL_PATH}/${relPath}`)
+    if (content === null) continue
+    if (content.includes('\uFFFD')) {
+      emit({ message: `Skipping resource "${relPath}": not a text file.`, level: 'warning' })
+      continue
+    }
+    resources.push({ path: relPath, content })
+  }
+  return resources
+}
 
 /**
  * Run the full library-build pipeline.  Pure with respect to its
@@ -192,23 +231,78 @@ export async function runLibraryBuildPipeline(
   }
 
   // -------------------------------------------------------------------------
+  // Stage 4b: read the authored C/C++ and Python POU files off the project
+  //
+  // Read from disk, NOT from the preprocessed project data: by this point
+  // `preprocessPous` has replaced every native body with generated bridge ST,
+  // and the archive must carry what the author wrote.  Strucpp stores these
+  // verbatim and the consumer re-derives the bridge at its own build time —
+  // that is what keeps a published library working when the bridge changes.
+  //
+  // A file that cannot be read fails the build naming the block, rather than
+  // producing an archive whose manifest promises a block with no source.
+  //
+  // Read before verification because the cache key hashes these bodies: a
+  // native body never reaches `program.st` — the emitted ST is a bridge stub
+  // built from the pins — so hashing that alone replays a stale result after
+  // an author edits a block.
+  // -------------------------------------------------------------------------
+  const nativeSources: LibraryNativeSource[] = []
+  for (const ref of nativePous) {
+    const fileName = ref.relPath.split('/').pop() ?? ref.name
+    let source: string | null
+    try {
+      source = await port.readBuildFile(projectPath, ref.relPath)
+    } catch (error) {
+      return fail(emit, `Could not read "${ref.relPath}": ${formatError(error)}`, { libraryName: manifest.name })
+    }
+    if (source === null || source.trim() === '') {
+      return fail(
+        emit,
+        `Could not read the source for "${ref.name}" at ${ref.relPath}. ` +
+          'C/C++ and Python blocks ship their source verbatim, so the file must be present.',
+        { libraryName: manifest.name },
+      )
+    }
+    nativeSources.push({ fileName, source })
+  }
+
+  // -------------------------------------------------------------------------
   // Stage 5: verification compile
   //
-  // Hash program.st and consult the cache; cache hit short-circuits
-  // the slow avr-gcc compile.  cleanBuild forces a fresh run.
+  // Hash the verified sources and consult the cache; cache hit
+  // short-circuits the slow compile.  cleanBuild forces a fresh run.
   // Verification failures are advisory: they surface as warnings on
   // `verification.success` with the build still producing a `.stlib`.
+  //
+  // The key covers the C/C++ block bodies and the resources as well as
+  // `program.st`.  A block's body never reaches `program.st` — the emitted ST
+  // is a stub built from its pins — so hashing that alone replays a stale
+  // result after a body or a resource changes.
   //
   // The MD5 routes through the platform port instead of `node:crypto`
   // so the shared module ships without a host-runtime dependency.
   // Editor's port wires it to Node's hash; web's port wires it to
   // spark-md5 — both produce byte-identical output.
+  //
+  // `build.verify: "off"` in the manifest skips the whole stage, cache
+  // included: a library whose C++ targets no toolchain the editor can drive
+  // would otherwise carry a permanent failure that reports nothing.
   // -------------------------------------------------------------------------
-  const programStMd5 = await port.computeMd5(programSt)
+  const resources = await readResources(port, projectPath, emit)
+  const verifyTarget = manifest.verifyTarget
+  const nativeSource = nativeSources.map((n) => `${n.fileName}\n${n.source}`).join('\n')
+  const resourceSource = resources.map((r) => `${r.path}\n${r.content}`).join('\n')
+  // The target is part of the key: the same sources verified against a
+  // different toolchain are a different question.
+  const targetSource = `${verifyTarget.mode}\n${verifyTarget.core ?? ''}`
+  const verifyInputsMd5 = await port.computeMd5(`${programSt}\n${nativeSource}\n${resourceSource}\n${targetSource}`)
   let verification: CompileLibraryResult['verification']
   let usedCache = false
-  if (!cleanBuild) {
-    const cached = await readVerificationCache(port, projectPath, programStMd5)
+  if (verifyTarget.mode === 'off') {
+    emit({ message: 'Verification is off in Build Settings — skipping.', level: 'info' })
+  } else if (!cleanBuild) {
+    const cached = await readVerificationCache(port, projectPath, verifyInputsMd5)
     if (cached) {
       verification = cached
       usedCache = true
@@ -218,16 +312,19 @@ export async function runLibraryBuildPipeline(
       })
     }
   }
-  if (!verification) {
+  if (!verification && verifyTarget.mode !== 'off') {
     const verifyProject = composeVerificationProject({
       meta: { name: manifest.name, type: 'plc-library' },
       data: verifyProjectData,
     })
-    emit({ message: 'Verifying with OpenPLC Simulator (avr-gcc)...', level: 'info' })
+    emit({ message: 'Verifying library compile...', level: 'info' })
     try {
       verification = await port.verifyCompile({
         projectPath,
-        verifyProjectData: verifyProject.data,
+        // A library project does not list itself, so its resources have to be
+        // handed over explicitly for its own blocks to resolve their includes.
+        verifyProjectData: { ...verifyProject.data, ownLibraryResources: resources } as PLCProjectData,
+        target: verifyTarget,
         emit: (message, logLevel) => {
           // Demote inner errors to warnings on the way out.  `.stlib`
           // is still produced, so an error-level `[verify]` line in
@@ -253,7 +350,7 @@ export async function runLibraryBuildPipeline(
       await port.writeBuildFile(
         projectPath,
         VERIFY_CACHE_REL_PATH,
-        JSON.stringify({ md5: programStMd5, ...verification }, null, 2),
+        JSON.stringify({ md5: verifyInputsMd5, ...verification }, null, 2),
       )
     } catch (cacheErr) {
       emit({ message: `Could not write verification cache: ${formatError(cacheErr)}`, level: 'warning' })
@@ -284,38 +381,6 @@ export async function runLibraryBuildPipeline(
     }
   }
   // -------------------------------------------------------------------------
-  // Stage 6b: read the authored C/C++ and Python POU files off the project
-  //
-  // Read from disk, NOT from the preprocessed project data: by this point
-  // `preprocessPous` has replaced every native body with generated bridge ST,
-  // and the archive must carry what the author wrote.  Strucpp stores these
-  // verbatim and the consumer re-derives the bridge at its own build time —
-  // that is what keeps a published library working when the bridge changes.
-  //
-  // A file that cannot be read fails the build naming the block, rather than
-  // producing an archive whose manifest promises a block with no source.
-  // -------------------------------------------------------------------------
-  const nativeSources: LibraryNativeSource[] = []
-  for (const ref of nativePous) {
-    const fileName = ref.relPath.split('/').pop() ?? ref.name
-    let source: string | null
-    try {
-      source = await port.readBuildFile(projectPath, ref.relPath)
-    } catch (error) {
-      return fail(emit, `Could not read "${ref.relPath}": ${formatError(error)}`, { libraryName: manifest.name })
-    }
-    if (source === null || source.trim() === '') {
-      return fail(
-        emit,
-        `Could not read the source for "${ref.name}" at ${ref.relPath}. ` +
-          'C/C++ and Python blocks ship their source verbatim, so the file must be present.',
-        { libraryName: manifest.name },
-      )
-    }
-    nativeSources.push({ fileName, source })
-  }
-
-  // -------------------------------------------------------------------------
   // Stage 7: strucpp compileStlib
   // -------------------------------------------------------------------------
   emit({ message: 'Compiling library archive...', level: 'info' })
@@ -324,6 +389,7 @@ export async function runLibraryBuildPipeline(
     dependencyArchives: depArchives,
     dependencyRefs: enabledLibraryRefs,
     nativeSources,
+    resources,
   })
   if (!stage7.success) {
     for (const err of stage7.errors) {
@@ -363,14 +429,14 @@ export async function runLibraryBuildPipeline(
 /**
  * Read + validate the verification cache.  Returns the cached
  * `{ success, message }` only when the persisted MD5 matches the
- * current `programSt`.  Malformed cache files and missing files are
+ * sources being verified.  Malformed cache files and missing files are
  * indistinguishable from a fresh build — both return null so the
  * caller falls through to a real verification run.
  */
 async function readVerificationCache(
   port: LibraryBuildPort,
   projectPath: string,
-  programStMd5: string,
+  verifyInputsMd5: string,
 ): Promise<{ success: boolean; message?: string } | null> {
   let raw: string | null
   try {
@@ -381,7 +447,7 @@ async function readVerificationCache(
   if (raw === null) return null
   try {
     const parsed = JSON.parse(raw) as { md5?: string; success?: boolean; message?: string }
-    if (parsed?.md5 === programStMd5 && typeof parsed.success === 'boolean') {
+    if (parsed?.md5 === verifyInputsMd5 && typeof parsed.success === 'boolean') {
       return { success: parsed.success, message: parsed.message }
     }
   } catch {

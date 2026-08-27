@@ -156,6 +156,20 @@ const Breadcrumbs = () => {
     )
   }
 
+  // Build Settings — sits beside the manifest, and is stored in it.
+  if (editor.type === 'plc-build-settings') {
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={ConfigIcon} text='Build Settings' isLast />
+        </li>
+      </ol>
+    )
+  }
+
   // EtherCAT slave device breadcrumbs
   if (editor.type === 'plc-ethercat-device') {
     return (

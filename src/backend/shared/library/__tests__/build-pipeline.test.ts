@@ -197,6 +197,70 @@ describe('parseLibraryManifest', () => {
 })
 
 // ---------------------------------------------------------------------------
+// parseLibraryManifest — the `build` block (Build Settings)
+// ---------------------------------------------------------------------------
+
+describe('parseLibraryManifest — build block', () => {
+  const withBuild = (build: unknown) =>
+    parseLibraryManifest(JSON.stringify({ name: 'x', version: '1.0', namespace: 'x', build }))
+
+  it('defaults to an Arduino target with no core when the block is absent', () => {
+    const res = parseLibraryManifest(VALID_MANIFEST_JSON)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.manifest.verifyTarget).toEqual({ mode: 'arduino' })
+  })
+
+  it('reads the mode and the core', () => {
+    const res = withBuild({ verify: 'arduino', core: 'esp32:esp32' })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.manifest.verifyTarget).toEqual({ mode: 'arduino', core: 'esp32:esp32' })
+  })
+
+  it('keeps a core recorded alongside a non-Arduino mode', () => {
+    // The dialog remembers the core while another mode is selected, so
+    // switching back does not lose the choice.
+    const res = withBuild({ verify: 'runtime', core: 'esp32:esp32' })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.manifest.verifyTarget).toEqual({ mode: 'runtime', core: 'esp32:esp32' })
+  })
+
+  it('accepts every mode the dialog offers', () => {
+    for (const mode of ['arduino', 'runtime', 'off']) {
+      const res = withBuild({ verify: mode })
+      expect(res.ok).toBe(true)
+      if (!res.ok) return
+      expect(res.manifest.verifyTarget.mode).toBe(mode)
+    }
+  })
+
+  it('rejects an unknown mode rather than falling back to the default', () => {
+    // A typo that silently verified against a different toolchain would
+    // report on something the author did not ask about.
+    const res = withBuild({ verify: 'arduno' })
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.errors[0]).toMatch(/manifest\.build\.verify must be one of/)
+  })
+
+  it('rejects a non-object build block', () => {
+    const res = withBuild('arduino')
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.errors[0]).toMatch(/manifest\.build must be a JSON object/)
+  })
+
+  it('rejects an empty core', () => {
+    const res = withBuild({ core: '' })
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.errors[0]).toMatch(/manifest\.build\.core must be a non-empty string/)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // stubProgramFor
 // ---------------------------------------------------------------------------
 
@@ -355,6 +419,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     name: 'demo_lib',
     version: '1.0.0',
     namespace: 'demo_lib',
+    verifyTarget: { mode: 'arduino' } as const,
     extra: {} as Record<string, unknown>,
   }
 
@@ -528,6 +593,7 @@ describe('libraryBuildFromTranspiledSt', () => {
         name: 'demo_lib',
         version: '1.0.0',
         namespace: 'demo_lib',
+        verifyTarget: { mode: 'arduino' },
         extra: { description: 'a demo lib', displayName: 'Demo Library' },
       },
       {
@@ -636,6 +702,99 @@ describe('libraryBuildFromTranspiledSt', () => {
     // no longer hand-builds an archive to work around a refusal here.
     const passed = compileStlib.mock.calls[0][0] as Array<{ fileName: string }>
     expect(passed.map((p) => p.fileName)).toEqual(['CppBlk.cpp'])
+  })
+
+  it('stamps resources onto the archive, and omits the field when there are none', () => {
+    const withRes: { manifest: { name: string }; dependencies: unknown[]; resources?: unknown[] } = {
+      manifest: { name: 'demo_lib' },
+      dependencies: [],
+    }
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({
+        compileStlib: jest
+          .fn()
+          .mockReturnValue({ success: true, archive: withRes }) as unknown as StrucppRuntime['compileStlib'],
+      }),
+    )
+
+    const programSt =
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
+    const pous = [
+      { name: 'Tank', kind: 'FUNCTION_BLOCK' as const },
+      { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' as const },
+    ]
+
+    libraryBuildFromTranspiledSt(programSt, pous, manifest, {
+      resources: [
+        { path: 'DemoApi.h', content: '#pragma once\n' },
+        { path: 'transport/Serial.h', content: '// serial\n' },
+      ],
+    })
+    expect(withRes.resources).toEqual([
+      { path: 'DemoApi.h', content: '#pragma once\n' },
+      { path: 'transport/Serial.h', content: '// serial\n' },
+    ])
+
+    // Absent, not empty — an archive written here still loads in an editor
+    // that knows nothing about resources.
+    const noRes: { manifest: { name: string }; dependencies: unknown[]; resources?: unknown[] } = {
+      manifest: { name: 'demo_lib' },
+      dependencies: [],
+    }
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({
+        compileStlib: jest
+          .fn()
+          .mockReturnValue({ success: true, archive: noRes }) as unknown as StrucppRuntime['compileStlib'],
+      }),
+    )
+    libraryBuildFromTranspiledSt(programSt, pous, manifest)
+    expect('resources' in noRes).toBe(false)
+  })
+
+  it('refuses a C/C++ library whose name is not a valid C identifier', () => {
+    // The name is emitted verbatim as `<name>__<BLOCK>`, so a hyphen reaches
+    // the compiler as a subtraction.
+    const compileStlib = jest.fn()
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const res = libraryBuildFromTranspiledSt(
+      'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
+      [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' }],
+      { ...manifest, name: 'demo-lib', namespace: 'demo_lib' },
+      {
+        nativeSources: [{ fileName: 'CppOnly.cpp', source: 'FUNCTION_BLOCK CppOnly\nEND_FUNCTION_BLOCK\n' }],
+      },
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.errors[0]?.message).toMatch(/valid C identifier/)
+    expect(compileStlib).not.toHaveBeenCalled()
+  })
+
+  it('leaves a non-identifier name alone when the library ships no native blocks', () => {
+    // Such a name never reaches C, and rejecting it would refuse libraries
+    // that build today.
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { manifest: {}, dependencies: [] } })
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
+    )
+
+    const res = libraryBuildFromTranspiledSt(
+      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
+        'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
+      [
+        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+      ],
+      { ...manifest, name: 'demo-lib', namespace: 'demo_lib' },
+    )
+
+    expect(res.success).toBe(true)
+    expect(compileStlib).toHaveBeenCalled()
   })
 
   it('still refuses a library with neither ST nor native content', () => {

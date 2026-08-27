@@ -59,6 +59,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manager': <LibraryIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
+  'build-settings': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'user-management': <UsersIcon className='h-4 w-4 flex-shrink-0' />,
   'diff-viewer': <GitCompare className='h-4 w-4 flex-shrink-0 text-[#0464FB]' />,
 }
@@ -92,6 +93,7 @@ const Tab = (props: ITabProps) => {
     | 'ethercat-device'
     | 'library-manager'
     | 'library-manifest'
+    | 'build-settings'
     | 'user-management'
     | 'diff-viewer' = 'il'
 
@@ -131,6 +133,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'library-manifest') {
     languageOrDerivation = 'library-manifest'
+  }
+  if (fileDerivation?.type === 'build-settings') {
+    languageOrDerivation = 'build-settings'
   }
   if (fileDerivation?.type === 'user-management') {
     languageOrDerivation = 'user-management'

@@ -179,6 +179,9 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
   )
 }
 
+/** Scrolling list body. Rows carry `shrink-0`: a flex column shrinks its
+ *  children by default, so a long list collapses each row below its own
+ *  height instead of scrolling. */
 function ListBody({ children }: { children: React.ReactNode }) {
   return <div className='flex min-h-0 flex-1 flex-col overflow-y-auto'>{children}</div>
 }
@@ -203,7 +206,7 @@ function LibraryRow({
   actionTitle?: string
 }) {
   return (
-    <div className='group flex items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
+    <div className='group flex shrink-0 items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
         <span className='truncate font-caption text-cp-sm font-medium text-neutral-950 dark:text-white'>
           {lib.displayName ?? lib.name}

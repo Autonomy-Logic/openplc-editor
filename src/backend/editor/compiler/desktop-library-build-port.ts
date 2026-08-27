@@ -31,7 +31,7 @@ import {
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { TranspileToStArgs, TranspileToStResult } from '@root/middleware/shared/ports/compiler-platform-port'
-import type { LibraryBuildPort } from '@root/middleware/shared/ports/library-build-port'
+import type { LibraryBuildPort, LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
 
 /**
  * Subset of the desktop CompilerModule that the port leans on.
@@ -49,15 +49,15 @@ export interface DesktopLibraryBuildPortDeps {
   loadEnabledArchives(enabledNames: string[]): { archives: unknown[]; missing: string[] }
 
   /**
-   * Run a verification compile against the OpenPLC Simulator board.
-   * Wraps `CompilerModule.runVerificationCompile` so the port stays
-   * decoupled from the compiler module's full surface.  Failures
-   * here are advisory — caller surfaces them as warnings, never as
-   * a fatal build error.
+   * Run a verification compile against `target`.  Wraps
+   * `CompilerModule.runVerificationCompile` so the port stays decoupled
+   * from the compiler module's full surface.  Failures here are advisory —
+   * caller surfaces them as warnings, never as a fatal build error.
    */
   runVerificationCompile(args: {
     projectPath: string
     verifyProjectData: unknown
+    target: LibraryVerifyTarget
     emit: (message: string, level?: 'info' | 'warning' | 'error') => void
   }): Promise<{ success: boolean; message?: string }>
 }
@@ -115,6 +115,32 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       await fs.writeFile(fullPath, content, 'utf-8')
     },
 
+    async listProjectFiles(projectPath: string, relPath: string): Promise<string[]> {
+      const root = resolveProjectRelativePath(projectPath, relPath)
+      const walk = async (dir: string, prefix: string): Promise<string[]> => {
+        let entries
+        try {
+          entries = await fs.readdir(dir, { withFileTypes: true })
+        } catch (error) {
+          if (isFsNotFound(error)) return []
+          throw error
+        }
+        const found: string[] = []
+        for (const entry of entries) {
+          const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+          // Symlinks are not followed: a link out of the tree would put
+          // arbitrary files into a published archive.
+          if (entry.isDirectory()) {
+            found.push(...(await walk(path.join(dir, entry.name), rel)))
+          } else if (entry.isFile()) {
+            found.push(rel)
+          }
+        }
+        return found
+      }
+      return (await walk(root, '')).sort()
+    },
+
     async deleteBuildSubtree(projectPath: string, relPath: string): Promise<void> {
       const fullPath = resolveProjectRelativePath(projectPath, relPath)
       // `force: true` makes the call a no-op when the subtree is
@@ -130,10 +156,11 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs.map((r) => r.name)))
     },
 
-    async verifyCompile({ projectPath, verifyProjectData, emit }) {
+    async verifyCompile({ projectPath, verifyProjectData, target, emit }) {
       return deps.runVerificationCompile({
         projectPath,
         verifyProjectData,
+        target,
         // `runVerificationCompile` forwards every line off
         // `compileProgram`'s message port; pass them straight
         // through to the orchestrator's emit.

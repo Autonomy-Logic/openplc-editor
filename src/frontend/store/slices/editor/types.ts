@@ -220,6 +220,14 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** Build Settings for a Library Project — the verify target and
+         *  the `resources/` folders.  Library projects only. */
+        type: 'plc-build-settings'
+        meta: {
+          name: string
+        }
+      }
+    | {
         type: 'plc-ethercat-device'
         meta: {
           name: string

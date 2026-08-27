@@ -350,6 +350,18 @@ export function createEditorProjectAdapter(): ProjectPort {
       })
     },
 
+    async listLibraryResources() {
+      return window.bridge.libraryResourcesList()
+    },
+
+    async addLibraryResource() {
+      return window.bridge.libraryResourcesAdd()
+    },
+
+    async removeLibraryResource(folderName: string) {
+      return window.bridge.libraryResourcesRemove(folderName)
+    },
+
     async pickPlcopenImportFile(): Promise<{ success: boolean; content?: string; error?: string }> {
       const response = await window.bridge.pickPlcopenImportFile()
       if (!response.success) {

@@ -13,10 +13,71 @@ import { buildCBlocksFromPous, composeFirmwareBundle } from '../steps/compose-fi
 
 const baseInput = {
   strucppFiles: {},
+  libraryResources: [] as Array<{ name: string; files: Array<{ path: string; content: string }> }>,
   cBlocks: { header: '// Empty file\n', code: null as string | null },
   definesH: '#define PROGRAM_MD5 ""\n',
   firmwareSkeleton: {},
 }
+
+describe('composeFirmwareBundle — library resources', () => {
+  const demo_lib = {
+    name: 'DemoProtocol',
+    files: [
+      { path: 'library.properties', content: 'name=DemoProtocol\narchitectures=esp32\n' },
+      { path: 'src/DemoApi.h', content: '#pragma once\n' },
+      { path: 'src/transport/DemoSerial.cpp', content: '// serial\n' },
+    ],
+  }
+
+  it('writes each library folder exactly as it stands', () => {
+    const out = composeFirmwareBundle({ ...baseInput, libraryResources: [demo_lib] })
+    expect(out['libraries/DemoProtocol/library.properties']).toBe('name=DemoProtocol\narchitectures=esp32\n')
+    expect(out['libraries/DemoProtocol/src/DemoApi.h']).toBe('#pragma once\n')
+    expect(out['libraries/DemoProtocol/src/transport/DemoSerial.cpp']).toBe('// serial\n')
+  })
+
+  it("leaves a library's own library.properties alone", () => {
+    // It may carry `depends`, `precompiled` or a narrower `architectures`.
+    const out = composeFirmwareBundle({ ...baseInput, libraryResources: [demo_lib] })
+    expect(out['libraries/DemoProtocol/library.properties']).toContain('architectures=esp32')
+  })
+
+  it('supplies one only when the folder has none', () => {
+    // Without it arduino-cli reads the folder as 1.0 legacy and ignores
+    // everything below its root — verified against arduino-cli.
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      libraryResources: [{ name: 'BareLib', files: [{ path: 'src/A.h', content: '' }] }],
+    })
+    const props = out['libraries/BareLib/library.properties']
+    expect(props).toContain('name=BareLib')
+    expect(props).toContain('architectures=*')
+  })
+
+  it('keeps several libraries apart', () => {
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      libraryResources: [
+        { name: 'DemoProtocol', files: [{ path: 'src/utils.h', content: '// protocol\n' }] },
+        { name: 'DemoSupport', files: [{ path: 'src/utils.h', content: '// openplc\n' }] },
+      ],
+    })
+    expect(out['libraries/DemoProtocol/src/utils.h']).toBe('// protocol\n')
+    expect(out['libraries/DemoSupport/src/utils.h']).toBe('// openplc\n')
+  })
+
+  it('lands beside the sketch, never over a skeleton or generated file', () => {
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      firmwareSkeleton: { 'src/arduino.cpp': '// real HAL\n' },
+      libraryResources: [{ name: 'DemoProtocol', files: [{ path: 'src/arduino.cpp', content: '// hijacked\n' }] }],
+      cBlocks: { header: '// real c_blocks\n', code: null },
+      definesH: '// real defines\n',
+    })
+    expect(out['src/arduino.cpp']).toBe('// real HAL\n')
+    expect(out['src/c_blocks.h']).toBe('// real c_blocks\n')
+  })
+})
 
 describe('composeFirmwareBundle — skeleton passthrough', () => {
   it('passes every skeleton entry through verbatim when no other inputs are present', () => {
@@ -126,6 +187,7 @@ describe('composeFirmwareBundle — c_blocks_code.cpp overwrite semantics', () =
 describe('composeFirmwareBundle — full layout snapshot', () => {
   it('produces the canonical simulator file map for a project with C/C++ POUs', () => {
     const out = composeFirmwareBundle({
+      libraryResources: [],
       firmwareSkeleton: {
         'examples/Baremetal/Baremetal.ino': 'BAREMETAL_INO',
         'examples/Baremetal/c_blocks_code.cpp': 'STATIC_BASELINE',
@@ -160,6 +222,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
 
   it('produces the canonical simulator file map for a project with NO C/C++ POUs', () => {
     const out = composeFirmwareBundle({
+      libraryResources: [],
       firmwareSkeleton: {
         'examples/Baremetal/Baremetal.ino': 'BAREMETAL_INO',
         'examples/Baremetal/c_blocks_code.cpp': 'STATIC_BASELINE_KEPT',
@@ -203,6 +266,7 @@ describe('composeFirmwareBundle — OpenPLCUserLib.h stub', () => {
   //     with `fatal error: OpenPLCUserLib.h: No such file or directory`.
   it('always emits the stub under src/OpenPLCUserLib.h', () => {
     const out = composeFirmwareBundle({
+      libraryResources: [],
       firmwareSkeleton: {},
       strucppFiles: {},
       cBlocks: { header: '', code: null },

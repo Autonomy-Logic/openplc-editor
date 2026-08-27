@@ -8,16 +8,20 @@ import { getLanguageFromExtension } from './pou-file-extensions'
  * @returns Object with documentation and remaining content
  */
 const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
-  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
-  if (docMatch) {
-    return {
-      documentation: docMatch[1].trim(),
-      remainingContent: content.slice(docMatch[0].length),
-    }
+  // A comment is legal wherever whitespace is, so a header may be written as
+  // several consecutive blocks.  Taking only the first leaves the rest in
+  // front of the declaration, which the declaration regex then fails to match.
+  const blocks: string[] = []
+  let remainingContent = content
+  for (;;) {
+    const docMatch = remainingContent.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
+    if (!docMatch) break
+    blocks.push(docMatch[1].trim())
+    remainingContent = remainingContent.slice(docMatch[0].length)
   }
   return {
-    documentation: '',
-    remainingContent: content,
+    documentation: blocks.join('\n\n'),
+    remainingContent,
   }
 }
 
@@ -35,24 +39,33 @@ const formatParseError = (message: string, lineNumber?: number): string => {
   return `Parse error: ${message}`
 }
 
+/** A `VAR` section opening, with or without its qualifier. */
+const VAR_SECTION_START = /^\s*VAR(_INPUT|_OUTPUT|_IN_OUT|_TEMP|_EXTERNAL|_GLOBAL|_ACCESS)?\b/i
+
 /**
- * Helper function to find the last END_VAR in the content
- * @param content - The content to search
- * @param startIndex - The index to start searching from
- * @returns The index after the last END_VAR, or -1 if not found
+ * End of a POU's declaration region — the index just past the `END_VAR` that
+ * closes the last consecutive `VAR` section, or -1 when none opens.
+ *
+ * Consumes `VAR` sections one at a time and stops at the first thing that is
+ * not one, rather than taking the last `END_VAR` anywhere in the file. The
+ * difference matters because the body that follows can contain the keyword:
+ * a graphical POU's body is JSON, and a block node in it may carry a native
+ * function block's source, `END_VAR` and all. Scanning to the end lands the
+ * split inside that JSON string, and the file the editor wrote a moment ago
+ * no longer parses.
  */
 export const findLastEndVarIndex = (content: string, startIndex: number): number => {
-  let lastEndVarIndex = -1
-  let searchIndex = startIndex
+  let cursor = startIndex
+  let declarationEnd = -1
 
-  let endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
-  while (endVarMatch && endVarMatch.index !== undefined) {
-    lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
-    searchIndex = lastEndVarIndex
-    endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+  while (VAR_SECTION_START.test(content.slice(cursor))) {
+    const endVarMatch = content.slice(cursor).match(/\bEND_VAR\b/i)
+    if (!endVarMatch || endVarMatch.index === undefined) break
+    cursor += endVarMatch.index + endVarMatch[0].length
+    declarationEnd = cursor
   }
 
-  return lastEndVarIndex
+  return declarationEnd
 }
 
 /**

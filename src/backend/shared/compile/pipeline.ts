@@ -46,6 +46,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
+import { isSafeRelativePath } from '../utils/path-safety'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
@@ -332,6 +333,63 @@ function bailError(
  * shape — `success`, `errors`, `binary`, `md5`, `uploaded` — that
  * adapters surface to their `CompilerPort` callers.
  */
+/**
+ * The libraries the enabled `.stlib` archives carry in `resources/`, grouped by
+ * folder.  Each folder is an ordinary library — `library.properties` beside a
+ * `src/` directory — and is materialised as one.
+ *
+ * Filtered by the project's enabled libraries: the resolved archive set also
+ * holds the bundled ones.  A file not inside a folder is skipped.  On a
+ * same-named folder from two archives the later wins, and archive order is
+ * fixed.
+ */
+function collectLibraryResources(
+  projectData: PLCProjectData,
+  libraryArchives: unknown[],
+): Array<{ name: string; files: Array<{ path: string; content: string }> }> {
+  const enabled = new Set((projectData.libraries ?? []).map((ref) => ref.name))
+
+  const byLibrary = new Map<string, Map<string, string>>()
+  const addResource = (resource: { path: string; content: string }): void => {
+    // These paths come off an installed archive and become files under the
+    // build directory, so they are checked before they are used as one.
+    if (!isSafeRelativePath(resource.path)) return
+    // The first segment names the library folder the file belongs to.
+    const separator = resource.path.indexOf('/')
+    if (separator <= 0) return
+    const name = resource.path.slice(0, separator)
+    let files = byLibrary.get(name)
+    if (!files) {
+      files = new Map<string, string>()
+      byLibrary.set(name, files)
+    }
+    files.set(resource.path.slice(separator + 1), resource.content)
+  }
+
+  for (const archive of (enabled.size === 0 ? [] : libraryArchives) as Array<{
+    manifest?: { name?: string }
+    resources?: Array<{ path: string; content: string }>
+  }>) {
+    const archiveName = archive?.manifest?.name
+    if (typeof archiveName !== 'string' || !enabled.has(archiveName)) continue
+    for (const resource of archive.resources ?? []) {
+      addResource(resource)
+    }
+  }
+
+  // A library project does not list itself, so its own resources arrive here
+  // directly when it verifies.
+  const own = (projectData as { ownLibraryResources?: Array<{ path: string; content: string }> }).ownLibraryResources
+  for (const resource of own ?? []) {
+    addResource(resource)
+  }
+
+  return [...byLibrary].map(([name, files]) => ({
+    name,
+    files: [...files].map(([path, content]) => ({ path, content })),
+  }))
+}
+
 export async function runCompilePipeline(
   args: RunCompilePipelineArgs,
   port: CompilerPlatformPort,
@@ -406,6 +464,7 @@ async function runCompilePipelineInner(
     originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
   }
   const originalCppPous = processedData.originalCppPous ?? []
+  const libraryResources = collectLibraryResources(projectData, libraryArchives)
 
   // ---------------------------------------------------------------------
   // Step 0b: Reject blank FBD variable blocks before XML generation.
@@ -547,6 +606,7 @@ async function runCompilePipelineInner(
       programSt,
       md5,
       strucppFiles: strucppFilesMap,
+      libraryResources,
       cBlocks: { header: cBlocks.header, code: cBlocks.code },
       strucppRuntimeHeaders,
       confs: {
@@ -821,6 +881,7 @@ async function runCompilePipelineInner(
   const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
+    libraryResources,
     cBlocks,
     definesH,
     vppConfigH,
@@ -833,6 +894,8 @@ async function runCompilePipelineInner(
   const arduinoArgs = buildArduinoCliCompileArgs(boardEntry, {
     sketchPath: 'examples/Baremetal/Baremetal.ino',
     libraryPath: 'src',
+    // Relative to the compilation root, matching `libraryPath` / `sketchPath`.
+    resourceLibraryPaths: libraryResources.map((library) => `libraries/${library.name}`),
     avrLibStdCppInclude,
     parallel: arduinoCliParallel,
     // Prebuilt arduino-hal: link the precompiled vendor library alongside the

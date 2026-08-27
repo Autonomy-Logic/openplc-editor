@@ -66,3 +66,19 @@ export function validatePathId(id: string, fieldName: string): void {
   const error = checkPathId(id, fieldName)
   if (error !== null) throw new Error(error)
 }
+
+/**
+ * True when `value` is safe to materialise under a build directory: relative,
+ * with no `..` segment, no drive letter and no control characters.
+ *
+ * Library resources carry their own paths through the `.stlib`, so an archive
+ * is untrusted input by the time a consuming project unpacks it.
+ */
+export function isSafeRelativePath(value: string): boolean {
+  if (value.length === 0) return false
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f]/.test(value)) return false
+  if (value.startsWith('/') || value.startsWith('\\')) return false
+  if (/^[a-zA-Z]:/.test(value)) return false
+  return value.split(/[\\/]/).every((segment) => segment !== '' && segment !== '..')
+}

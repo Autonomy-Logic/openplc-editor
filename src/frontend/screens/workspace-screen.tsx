@@ -16,6 +16,7 @@ import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
+import { BuildSettingsEditor } from '../components/_features/[workspace]/editor/build-settings'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
@@ -57,6 +58,7 @@ import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monit
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
+import { openPackageManagerTab } from '../services/open-package-manager-tab'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
 import { buildGlobalCompositeKey, GLOBAL_CONFIG_NAME } from '../utils/debug-variable-finder'
@@ -410,23 +412,7 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     if (!packagesPort) return
 
-    const unsubOpen = packagesPort.onOpenManager(() => {
-      const { tabsActions, editorActions } = useOpenPLCStore.getState()
-      const tab = {
-        name: 'Package Manager',
-        path: '/package-manager',
-        elementType: { type: 'package-manager' as const },
-      }
-      tabsActions.updateTabs(tab)
-      const existing = editorActions.getEditorFromEditors(tab.name)
-      if (!existing) {
-        const model = { type: 'plc-package-manager' as const, meta: { name: 'Package Manager' } }
-        editorActions.addModel(model)
-        editorActions.setEditor(model)
-      } else {
-        editorActions.setEditor(existing)
-      }
-    })
+    const unsubOpen = packagesPort.onOpenManager(() => openPackageManagerTab())
 
     const unsubBoards = packagesPort.onBoardsUpdated(() => {
       void device.getAvailableBoards().then((boardsMap) => {
@@ -589,6 +575,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
+                        {editor['type'] === 'plc-build-settings' && <BuildSettingsEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
                         {/* EtherCAT device editors — multi-instance (one tab

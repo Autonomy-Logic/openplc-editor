@@ -1,3 +1,4 @@
+export * from './library-resources-service'
 export * from './logger-service'
 export * from './pou-service'
 export * from './project-service'

@@ -700,6 +700,23 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('simulator:stopped', listener)
   },
 
+  // ===================== LIBRARY RESOURCES METHODS =====================
+  // A library project's `resources/` folders. The main process derives every
+  // path from the open project, so none is passed from here.
+  libraryResourcesList: (): Promise<{
+    success: boolean
+    folders?: Array<{ name: string; files: string[] }>
+    error?: string
+  }> => ipcRenderer.invoke('library-resources:list'),
+  libraryResourcesAdd: (): Promise<{
+    success: boolean
+    canceled?: boolean
+    folder?: { name: string; files: string[] }
+    error?: string
+  }> => ipcRenderer.invoke('library-resources:add'),
+  libraryResourcesRemove: (folderName: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('library-resources:remove', folderName),
+
   // ===================== FILE WATCHER METHODS =====================
   fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('file:watch-start', filePath),

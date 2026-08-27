@@ -31,8 +31,8 @@
 import type { TranspileToStArgs, TranspileToStResult } from './compiler-platform-port'
 
 /**
- * Outcome of an attempted verification compile against the OpenPLC
- * Simulator board.  Verification is advisory: a `success: false`
+ * Outcome of an attempted verification compile.  Verification is
+ * advisory: a `success: false`
  * surfaces as a warning on the build result, never as a fatal error
  * (the `.stlib` still ships).  See `runLibraryBuildPipeline` for the
  * cache + skip-on-md5-match flow that wraps this.
@@ -61,6 +61,26 @@ export interface LibraryArchiveLookupArgs {
   projectLibraryRefs: ReadonlyArray<{ name: string; version: string }>
 }
 
+/**
+ * Which toolchain a library is verified with.  Authored in `library.json`'s
+ * `build` block through the Build Settings dialog; the orchestrator reads it
+ * and hands it to the port, which owns the catalogue lookup that turns a core
+ * into something its platform can compile.
+ */
+export interface LibraryVerifyTarget {
+  /**
+   * `arduino` compiles the library's C++ with the Arduino toolchain for
+   * `core` — the only mode that checks the C++.  `runtime` transpiles and
+   * composes a Runtime v4 bundle, which checks the ST and the bundle but not
+   * the C++, because a runtime compiles its own upload.  `off` skips
+   * verification.
+   */
+  mode: 'arduino' | 'runtime' | 'off'
+  /** Arduino core to compile against (`esp32:esp32`).  Absent leaves the
+   *  choice to the port. */
+  core?: string
+}
+
 export interface VerifyCompileArgs {
   /** Project root path on the host platform.  Same value the build
    *  orchestrator received; the port impl knows how to interpret it. */
@@ -79,6 +99,9 @@ export interface VerifyCompileArgs {
    * before threading into the IPC envelope).
    */
   verifyProjectData: unknown
+  /** Toolchain to verify against, resolved from the manifest by the
+   *  orchestrator.  The port maps it onto its own board catalogue. */
+  target: LibraryVerifyTarget
   /** Caller log callback.  Every line the inner compile emits is
    *  forwarded here; the orchestrator prefixes them with `[verify]`
    *  before forwarding to its own caller. */
@@ -130,6 +153,13 @@ export interface LibraryBuildPort {
   writeBuildFile(projectPath: string, relPath: string, content: string): Promise<void>
 
   /**
+   * List every file under a project-relative directory, recursively.  Paths
+   * are relative to `relPath`, `/`-separated and sorted, so the result is
+   * identical across platforms.  Returns `[]` when the directory is absent.
+   */
+  listProjectFiles(projectPath: string, relPath: string): Promise<string[]>
+
+  /**
    * Recursively remove a project-relative subtree.  No-op when the
    * subtree doesn't exist.  Implementations MUST scope deletion to
    * the named subtree — wiping anything outside it is a contract
@@ -153,13 +183,15 @@ export interface LibraryBuildPort {
   loadLibraryArchives(args: LibraryArchiveLookupArgs): Promise<LibraryArchiveLookup>
 
   /**
-   * Run a verification compile of `verifyProjectData` against the
-   * OpenPLC Simulator board.  Both platform impls internally drive
-   * the shared `runCompilePipeline` — the only thing they own is the
-   * platform-specific arg assembly (board entry, hals data, firmware
-   * skeleton) and the transport.  Failures are advisory: the
-   * orchestrator surfaces them as a warning on the build result,
-   * never as a fatal error.
+   * Run a verification compile of `verifyProjectData` against `target`.
+   * Both platform impls internally drive the shared `runCompilePipeline` —
+   * the only thing they own is the platform-specific arg assembly (board
+   * entry, hals data, firmware skeleton) and the transport.  Failures are
+   * advisory: the orchestrator surfaces them as a warning on the build
+   * result, never as a fatal error.
+   *
+   * Never called with `target.mode === 'off'` — the orchestrator skips
+   * verification entirely in that case.
    */
   verifyCompile(args: VerifyCompileArgs): Promise<LibraryVerificationResult>
 }

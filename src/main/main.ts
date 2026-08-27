@@ -174,6 +174,18 @@ const createMainWindow = async () => {
   // Load the Url or index.html file;
   void mainWindow.loadURL(resolveHtmlPath('index.html'))
 
+  // `npm run dev` starts Electron and webpack-dev-server in parallel. On a
+  // slower machine Electron wins the race, gets ERR_CONNECTION_REFUSED, and
+  // never retries — the splash closes onto a blank window. Retry until the
+  // dev server answers. ERR_ABORTED (-3) is a superseded navigation, not a
+  // failure, and retrying it would fight the navigation that replaced it.
+  if (isDebug) {
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode) => {
+      if (errorCode === -3) return
+      setTimeout(() => void mainWindow?.loadURL(resolveHtmlPath('index.html')), 500)
+    })
+  }
+
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())
