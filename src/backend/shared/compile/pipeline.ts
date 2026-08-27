@@ -600,7 +600,8 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
-    const cBlocks = buildCBlocksFromPous(originalCppPous as never)
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
     const bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
@@ -855,6 +856,10 @@ async function runCompilePipelineInner(
     stProgramFileContent: programSt,
     buildMD5Hash: md5,
     boardRuntime,
+    // Inverted polarity on purpose: this makes the build ask for
+    // `ArduinoUniqueID` only on a board whose package declares
+    // `isLicensable`, and emit `OPENPLC_NO_UNIQUE_ID` for everyone else.
+    isLicensable: targetCapabilities.isLicensable,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
   })
 
@@ -872,7 +877,8 @@ async function runCompilePipelineInner(
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
   emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
-  const cBlocks = buildCBlocksFromPous(originalCppPous as never)
+  const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+  const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
     libraryResources,

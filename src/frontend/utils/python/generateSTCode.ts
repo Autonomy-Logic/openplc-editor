@@ -1,199 +1,289 @@
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import {
-  getArrayStartIndex,
-  getArrayTotalElements,
-  getVariableIECType,
-  isArrayVariable,
-} from '../PLC/array-codegen-helpers'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { LibraryFunctionBlockSource } from '../PLC/function-block-pins'
+import { pythonInboundVariables, pythonOutboundVariables } from './block-interface'
+import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
+import { describeShmLayout, describeShmLeaves, pythonFunctionBlockInstances } from './shm-leaves'
+import { SHM_STRING_CHARS } from './shm-type-map'
 
 type STCodeGenerationParams = {
   pouName: string
   allVariables: PLCVariable[]
   processedPythonCode: string
+  /** The project's data types, so a structure or enumeration can be walked. */
+  dataTypes?: readonly PLCDataType[]
+  /** Project POUs, for resolving a function block instance's pins. */
+  pous?: readonly PLCPou[]
+  /** Bundled libraries, for resolving a standard block such as TON. */
+  libraries?: readonly LibraryFunctionBlockSource[]
 }
 
 /**
- * Detect a STRING / WSTRING base-type variable. Strings flow through the
- * SHM struct as `{ len; body[STR_MAX_LEN]; }` (mirroring the historical
- * MatIEC-era layout the Python runtime side already speaks). The C-side
- * stub copies in/out of strucpp's IECStringVar at the boundary.
+ * Which of the three SHM shapes a field takes, from the one table both sides
+ * read (`shm-type-map.ts`). `null` never reaches here in a real compile —
+ * `preprocessPous` refuses an unsupported type first — but the emitters stay
+ * total so a direct caller cannot produce a half-formed struct.
  */
-const isStringVariable = (variable: PLCVariable): boolean => {
-  if (variable.type.definition !== 'base-type') return false
-  const v = variable.type.value.toLowerCase()
-  return v === 'string' || v === 'wstring'
-}
-
-/** A STRING field inside the SHM struct uses the local raw layout — see
- *  the typedef emitted in the stub preamble. */
-const isStringStructField = (variable: PLCVariable): boolean => isStringVariable(variable)
-
-/**
- * Raw C type used for an SHM struct field. SHM is a packed binary
- * protocol the Python runtime decodes via `struct.unpack`, so each
- * field has to be a trivially-copyable C primitive. The strucpp
- * IEC_T aliases resolve to IECVar<T> (wrappers with a non-trivial
- * copy assignment), so memcpy'ing into them is UB and gcc rightly
- * fires `-Wclass-memaccess`. Map to the raw underlying type instead;
- * the C-side stub bridges between IECVar (force-aware reads/writes
- * on the IEC side) and these raw fields at the boundary.
- */
-const RAW_TYPE_BY_BASETYPE: Record<string, string> = {
-  bool: 'uint8_t',
-  sint: 'int8_t',
-  int: 'int16_t',
-  dint: 'int32_t',
-  lint: 'int64_t',
-  usint: 'uint8_t',
-  uint: 'uint16_t',
-  udint: 'uint32_t',
-  ulint: 'uint64_t',
-  byte: 'uint8_t',
-  word: 'uint16_t',
-  dword: 'uint32_t',
-  lword: 'uint64_t',
-  real: 'float',
-  lreal: 'double',
-  time: 'int64_t',
-  date: 'int64_t',
-  tod: 'int64_t',
-  dt: 'int64_t',
-}
-
-const shmFieldType = (variable: PLCVariable): string => {
-  if (isStringStructField(variable)) return 'shm_iec_string_t'
-
-  if (variable.type.definition === 'array' && variable.type.data) {
-    const elemType = variable.type.data.baseType.value.toLowerCase()
-    if (elemType === 'string') return 'shm_iec_string_t'
-    return RAW_TYPE_BY_BASETYPE[elemType] ?? 'uint8_t'
+const generateStructField = (leaf: ShmLeaf): string => {
+  const fieldType = leaf.descriptor.cType
+  if (leaf.isArray) {
+    return `        ${fieldType} ${leaf.field}[${leaf.count}];\n`
   }
-
-  if (variable.type.definition === 'base-type') {
-    return RAW_TYPE_BY_BASETYPE[variable.type.value.toLowerCase()] ?? 'uint8_t'
-  }
-
-  // Defensive fallback — non-base, non-array variables shouldn't appear
-  // in a Python POU's interface; emit a single byte to keep the struct
-  // layout deterministic.
-  return 'uint8_t'
+  return `        ${fieldType} ${leaf.field};\n`
 }
 
-const generateStructField = (variable: PLCVariable): string => {
-  const fieldType = shmFieldType(variable)
-  const name = variable.name
-  if (isArrayVariable(variable)) {
-    const totalElements = getArrayTotalElements(variable)
-    return `        ${fieldType} ${name}[${totalElements}];\n`
-  }
-  return `        ${fieldType} ${name};\n`
-}
-
-const generateCStructs = (inputVars: PLCVariable[], outputVars: PLCVariable[]): string => {
-  let structs = ''
-
-  // Input struct
-  structs += '    #pragma pack(push, 1)\n'
+const generateOneStruct = (leaves: ShmLeaf[], typeName: string): string => {
+  let structs = '    #pragma pack(push, 1)\n'
   structs += '    typedef struct {\n'
-  if (inputVars.length > 0) {
-    inputVars.forEach((variable) => {
-      structs += generateStructField(variable)
+  if (leaves.length > 0) {
+    leaves.forEach((leaf) => {
+      structs += generateStructField(leaf)
     })
   } else {
+    // An empty struct is not portable C, and its size would differ between the
+    // two sides. One byte nobody reads keeps the layouts agreeing.
     structs += '        uint8_t _padding;\n'
   }
-  structs += '    } shm_data_in_t;\n'
-  structs += '    #pragma pack(pop)\n\n'
-
-  // Output struct
-  structs += '    #pragma pack(push, 1)\n'
-  structs += '    typedef struct {\n'
-  if (outputVars.length > 0) {
-    outputVars.forEach((variable) => {
-      structs += generateStructField(variable)
-    })
-  } else {
-    structs += '        uint8_t _padding;\n'
-  }
-  structs += '    } shm_data_out_t;\n'
+  structs += `    } ${typeName};\n`
   structs += '    #pragma pack(pop)\n'
-
   return structs
 }
 
-const generateInputCopyCode = (inputVars: PLCVariable[]): string => {
-  if (inputVars.length === 0) return ''
+const generateCStructs = (inbound: ShmLeaf[], outbound: ShmLeaf[]): string =>
+  `${generateOneStruct(inbound, 'shm_data_in_t')}\n${generateOneStruct(outbound, 'shm_data_out_t')}`
 
-  let code = '        shm_data_in_t data_in;\n'
+/**
+ * Copy one leaf between the strucpp side and a packed transport field.
+ *
+ * `toShm` picks the direction. Reads go through `.get()` (explicitly for arrays
+ * and strings, implicitly through `IECVar`'s conversion for scalars) so a forced
+ * value appears to Python exactly as it appears to the IEC program. Writes go
+ * through `IECVar::operator=`, which is a no-op while forced — a Python write to
+ * a forced variable is dropped on the IEC side, as it should be.
+ */
+const generateLeafCopy = (leaf: ShmLeaf, struct: string, toShm: boolean): string => {
+  const { field, access, descriptor, count, startIndex, isArray } = leaf
+  const shm = `${struct}.${field}`
 
-  inputVars.forEach((variable) => {
-    const upperName = variable.name.toUpperCase()
-    const fieldName = variable.name
+  if (isArray) {
+    // Iterate IEC indices so a forced element crosses like any other.
+    return toShm
+      ? `        for (int __i = 0; __i < ${count}; __i++) ${shm}[__i] = ${access}[${startIndex} + __i].get();\n`
+      : `        for (int __i = 0; __i < ${count}; __i++) ${access}[${startIndex} + __i] = ${shm}[__i];\n`
+  }
 
-    if (isArrayVariable(variable)) {
-      // Iterate IEC indices and pull each element through `.get()` so
-      // forced array elements appear in shared memory the same way they
-      // appear to the IEC program logic.
-      const totalElements = getArrayTotalElements(variable)
-      const startIdx = getArrayStartIndex(variable)
-      code += `        for (int __i = 0; __i < ${totalElements}; __i++) data_in.${fieldName}[__i] = ${upperName}[${startIdx} + __i].get();\n`
-    } else if (isStringStructField(variable)) {
-      // IECStringVar::get() returns IECString<N> by value — bind once
-      // to a local so c_str() / length() refer to the same temporary.
-      code += `        { auto __s = ${upperName}.get();\n`
-      code += `          data_in.${fieldName}.len = (__strlen_t)__s.length();\n`
-      code += `          std::memcpy(data_in.${fieldName}.body, __s.c_str(), STR_MAX_LEN); }\n`
-    } else {
-      // Scalar — IECVar's implicit conversion to T routes through .get()
-      // so a forced input is observed correctly.
-      code += `        data_in.${fieldName} = ${upperName};\n`
+  if (descriptor.kind === 'string' || descriptor.kind === 'wstring') {
+    const wide = descriptor.kind === 'wstring'
+    const unit = wide ? ' * sizeof(uint16_t)' : ''
+    if (toShm) {
+      // `get()` returns the string by value — bind it once so `c_str()` and
+      // `length()` refer to the same temporary. Copy only the characters that
+      // exist and zero the rest, so the body is deterministic rather than
+      // carrying whatever the wrapper's tail held.
+      let code = `        { auto __s = ${access}.get();\n`
+      code += `          __strlen_t __n = (__strlen_t)(__s.length() < STR_MAX_LEN ? __s.length() : STR_MAX_LEN);\n`
+      code += `          ${shm}.len = __n;\n`
+      code += `          std::memset(${shm}.body, 0, STR_MAX_LEN${unit});\n`
+      code += `          std::memcpy(${shm}.body, __s.c_str(), (size_t)__n${unit}); }\n`
+      return code
     }
-  })
+    // Reconstruct from the right unit width: a WSTRING body is char16_t, and
+    // reading it as `char*` would hand IECWString half a string.
+    //
+    // GUARDED, because the transport is narrower than the declared type. A
+    // strucpp `IECStringVar` / `IECWStringVar` holds 254 characters, while the
+    // SHM body carries STR_MAX_LEN (the cap the debug protocol frames at). An
+    // IEC string longer than that reaches Python already truncated, so writing
+    // Python's copy back would shorten the IEC variable permanently — with no
+    // user code having touched it. Now that `local`, `inOut` and `external`
+    // round-trip, that turned a read into a destructive write.
+    //
+    // The current length is what says whether anything was lost: at or under the
+    // cap, Python holds the whole value and the write-back is faithful; over it,
+    // Python holds a prefix and the IEC value is left alone. A string that fits
+    // — the ordinary case — round-trips exactly as before.
+    const wrapper = wide ? 'IECWString' : 'IECString'
+    const pointer = wide ? 'const char16_t*' : 'const char*'
+    let code = `        { auto __cur = ${access}.get();\n`
+    code += `          if (__cur.length() <= STR_MAX_LEN)\n`
+    code += `            ${access} = strucpp::${wrapper}<254>(reinterpret_cast<${pointer}>(${shm}.body), ${shm}.len); }\n`
+    return code
+  }
 
-  code += '        memcpy(shm_in_ptr, &data_in, sizeof(data_in));\n\n'
+  if (leaf.enumTypeName) {
+    // An `IEC_ENUM_Var` yields an `IEC_ENUM_Value`, which converts to the scoped
+    // enum but not to an integer, so the read goes through both and then casts.
+    // The write goes through `set()` rather than `operator=`, which would
+    // copy-assign a whole temporary wrapper and take the forced state with it.
+    const enumType = leaf.enumTypeName.toUpperCase()
+    return toShm
+      ? `        ${shm} = static_cast<${descriptor.cType}>(${access}.get().get());\n`
+      : `        ${access}.set(static_cast<${enumType}>(${shm}));\n`
+  }
 
+  // A plain scalar: `IECVar` converts to its value implicitly on the way out and
+  // assigns through `set()` on the way back.
+  if (toShm) return `        ${shm} = ${access};\n`
+  return `        ${access} = ${shm};\n`
+}
+
+/**
+ * Wrap a leaf's copy in its global's lock when the leaf belongs to a
+ * VAR_EXTERNAL.
+ *
+ * A `VAR_EXTERNAL` is a `GlobalVar<V>*` — the value together with that global's
+ * mutex. Naming it in a copy statement would compile, convert the pointer, and
+ * read the wrong memory holding no lock at all.
+ *
+ * Each external is wrapped on its own rather than nested: this stub only copies
+ * values, it runs no user code, so one lock at a time is enough and there is no
+ * ordering to reason about. The lambda parameter is deduced, so nothing here
+ * names `V`. The dereference is bound to a reference on its own line rather
+ * than written inline as `(*p)`: this C++ sits inside an `{external}` block
+ * that the ST front end still scans, where `(*` opens a block comment.
+ */
+const withExternalLock = (variable: PLCVariable, body: string): string => {
+  if (variable.class !== 'external') return body
+  const upperName = variable.name.toUpperCase()
+  return `        ${upperName}->with_lock([&](auto* __g) {\n        auto& __r = *__g;\n${body}        });\n`
+}
+
+/**
+ * Rewrite a leaf's access so it reaches through the locked reference instead of
+ * the class member, for a leaf belonging to a VAR_EXTERNAL.
+ */
+const throughLock = (variable: PLCVariable, leaf: ShmLeaf): ShmLeaf => {
+  if (variable.class !== 'external') return leaf
+  const upperName = variable.name.toUpperCase()
+  return { ...leaf, access: `__r${leaf.access.slice(upperName.length)}` }
+}
+
+/** Emit one direction's copies, grouping each external's leaves under its lock. */
+const generateCopies = (variables: PLCVariable[], context: ShmWalkContext, struct: string, toShm: boolean): string => {
+  let code = ''
+  for (const variable of variables) {
+    const result = describeShmLeaves(variable, context)
+    /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
+    if ('refusal' in result) continue
+    const body = result.leaves.map((leaf) => generateLeafCopy(throughLock(variable, leaf), struct, toShm)).join('')
+    code += withExternalLock(variable, body)
+  }
   return code
 }
 
-const generateOutputCopyCode = (outputVars: PLCVariable[]): string => {
-  if (outputVars.length === 0) return ''
+const generateInputCopyCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
+  if (variables.length === 0) return ''
+  let code = '        shm_data_in_t data_in;\n'
+  code += generateCopies(variables, context, 'data_in', true)
+  code += '        memcpy(shm_in_ptr, &data_in, sizeof(data_in));\n\n'
+  return code
+}
 
+/**
+ * Publish the IEC-side output values into shared memory once, at startup.
+ *
+ * Without this the Python block seeds its output globals from the declaration
+ * and writes them back after its very first `block_loop()`, before the user's
+ * code has assigned anything — so whatever the IEC variable held is destroyed.
+ * Today that discards a declared initial value; once a Python block can carry
+ * RETAIN it destroys the retained value on every restart, which is the exact
+ * opposite of what retain is for.
+ *
+ * Shared memory is created zeroed, so there is nothing for Python to seed from
+ * unless the C side puts it there.
+ */
+const generateOutputSeedCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
+  if (variables.length === 0) return ''
+  let code = '        shm_data_out_t seed_out;\n'
+  code += '        std::memset(&seed_out, 0, sizeof(seed_out));\n'
+  code += generateCopies(variables, context, 'seed_out', true)
+  code += '        memcpy(shm_out_ptr, &seed_out, sizeof(seed_out));\n'
+  return code
+}
+
+const generateOutputCopyCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
+  if (variables.length === 0) return ''
   let code = '        shm_data_out_t data_out;\n'
   code += '        memcpy(&data_out, shm_out_ptr, sizeof(data_out));\n'
-
-  outputVars.forEach((variable) => {
-    const upperName = variable.name.toUpperCase()
-    const fieldName = variable.name
-
-    if (isArrayVariable(variable)) {
-      const totalElements = getArrayTotalElements(variable)
-      const startIdx = getArrayStartIndex(variable)
-      // Element-wise assignment; IECVar::operator=(T) routes through
-      // .set(), which is a no-op when forced — Python user writes to a
-      // forced array element are silently dropped on the IEC side.
-      code += `        for (int __i = 0; __i < ${totalElements}; __i++) ${upperName}[${startIdx} + __i] = data_out.${fieldName}[__i];\n`
-    } else if (isStringStructField(variable)) {
-      const iecType = getVariableIECType(variable)
-      const innerType = iecType === 'IEC_WSTRING' ? 'strucpp::IECWString<254>' : 'strucpp::IECString<254>'
-      code += `        ${upperName} = ${innerType}(reinterpret_cast<const char*>(data_out.${fieldName}.body), data_out.${fieldName}.len);\n`
-    } else {
-      // Scalar — IECVar::operator=(T) → set(), force-respect.
-      code += `        ${upperName} = data_out.${fieldName};\n`
-    }
-  })
-
+  code += generateCopies(variables, context, 'data_out', false)
   return code
 }
 
+/**
+ * One ST call per function block instance the block declares.
+ *
+ * This is what makes an instance usable from Python at all. Python cannot call
+ * it — it runs in another process — but the wrapper does, in the PLC process
+ * where the instance lives, once per scan. The call sits between applying
+ * Python's writes to the input pins and publishing the pins back, so within a
+ * scan the sequence is: take what Python wrote, run the instance, report what it
+ * produced.
+ *
+ * Written as ST rather than inside an `{external}` block so the call goes through
+ * the same path a hand-written `ton0();` would, including the EN gate the
+ * compiler puts at every call site.
+ */
+const generateInstanceCalls = (instances: PLCVariable[]): string =>
+  instances.map((instance) => `${instance.name}();`).join('\n')
+
 const generateSTCode = (params: STCodeGenerationParams): string => {
-  const { pouName, allVariables, processedPythonCode } = params
+  const { pouName, allVariables, processedPythonCode, dataTypes = [], pous = [], libraries = [] } = params
 
-  const inputVariables = allVariables.filter((v) => v.class === 'input')
-  const outputVariables = allVariables.filter((v) => v.class === 'output')
+  const inputVariables = pythonInboundVariables(allVariables)
+  const outputVariables = pythonOutboundVariables(allVariables)
+  const instances = pythonFunctionBlockInstances(allVariables, dataTypes)
 
-  const cStructs = generateCStructs(inputVariables, outputVariables)
-  const inputCopyCode = generateInputCopyCode(inputVariables)
-  const outputCopyCode = generateOutputCopyCode(outputVariables)
+  // Direction decides which of a function block instance's pins cross: Python
+  // drives the inputs and reads the outputs. Everything else is symmetric.
+  const inbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'in' }
+  const outbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'out' }
+
+  // The struct layout and the copy statements are generated from the same leaf
+  // walk, so a structure cannot be laid out one way and copied another.
+  const inboundLeaves = describeShmLayout(inputVariables, inbound)
+  const outboundLeaves = describeShmLayout(outputVariables, outbound)
+  /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
+  const cStructs = generateCStructs(
+    'leaves' in inboundLeaves ? inboundLeaves.leaves : [],
+    'leaves' in outboundLeaves ? outboundLeaves.leaves : [],
+  )
+  const inputCopyCode = generateInputCopyCode(inputVariables, inbound)
+  const outputCopyCode = generateOutputCopyCode(outputVariables, outbound)
+  const outputSeedCode = generateOutputSeedCode(outputVariables, outbound)
+  const instanceCalls = generateInstanceCalls(instances)
+
+  // The pointer guards, repeated in each `{external}` block that needs them:
+  // ST scoping puts every block in the same function, but re-deriving them keeps
+  // each block readable on its own and costs nothing.
+  const mapSegments = (
+    which: 'in' | 'out',
+  ) => `        void *shm_${which}_ptr = (void *)(uint64_t)SHM_${which.toUpperCase()}_PTR;
+        if (shm_${which}_ptr == NULL)
+        {
+            printf("shm_${which}_ptr is NULL!\\n");
+            return;
+        }
+`
+
+  // With no function block instance the exchange is one block, exactly as it was
+  // before instances existed: publish the PLC's values, then take Python's back.
+  //
+  // With instances there is an order to respect. Python's writes have to reach
+  // the input pins before the instance runs, and the pins it produces have to be
+  // published after — otherwise a user setting `ton0.IN` would see `ton0.Q`
+  // answer a scan late for no reason. So the exchange splits around the calls:
+  // take what Python wrote, run the instances, publish what they produced.
+  const exchangeCode =
+    instances.length === 0
+      ? `    {external
+${mapSegments('in')}${mapSegments('out')}
+${inputCopyCode}${outputCopyCode}    }`
+      : `    {external
+${mapSegments('out')}
+${outputCopyCode}    }
+${instanceCalls}
+    {external
+${mapSegments('in')}
+${inputCopyCode}    }`
 
   const escapedPythonCode = processedPythonCode
     .replace(/\\/g, '\\\\')
@@ -218,12 +308,24 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
   const stCode = `(* Type definitions *)
 {external
     #define STR_LEN_TYPE int8_t
-    #define STR_MAX_LEN 126
+    #define STR_MAX_LEN ${SHM_STRING_CHARS}
     typedef STR_LEN_TYPE __strlen_t;
+    // These MUST be packed in their own right, not merely used inside a packed
+    // struct: #pragma pack applies to the struct being defined, never to a
+    // member type that was already laid out. shm_iec_string_t survived without
+    // it only because uint8_t needs no alignment; the wstring uint16_t body
+    // forces a padding byte after the length field, making it 254 bytes where
+    // Python packs 253 - a one-byte shift that corrupts every later field.
+    #pragma pack(push, 1)
     typedef struct {
         __strlen_t len;
         uint8_t body[STR_MAX_LEN];
     } shm_iec_string_t;
+    typedef struct {
+        __strlen_t len;
+        uint16_t body[STR_MAX_LEN];
+    } shm_iec_wstring_t;
+    #pragma pack(pop)
 
 ${cStructs}
 }
@@ -248,25 +350,15 @@ if first_run = false then
 
         SHM_IN_PTR = (uint64_t)shm_in_ptr;
         SHM_OUT_PTR = (uint64_t)shm_out_ptr;
-    }
+
+        // Publish the current IEC output values so the Python side can seed
+        // from them instead of from its declarations. Shared memory is created
+        // zeroed; without this the block's first write-back would overwrite the
+        // IEC value (a retained one included) with a default.
+${outputSeedCode}    }
     first_run := true;
 else
-    {external
-        void *shm_in_ptr = (void *)(uint64_t)SHM_IN_PTR;
-        void *shm_out_ptr = (void *)(uint64_t)SHM_OUT_PTR;
-
-        if (shm_in_ptr == NULL)
-        {
-            printf("shm_in_ptr is NULL!\\n");
-            return;
-        }
-        if (shm_out_ptr == NULL)
-        {
-            printf("shm_out_ptr is NULL!\\n");
-            return;
-        }
-
-${inputCopyCode}${outputCopyCode}    }
+${exchangeCode}
 end_if;`
 
   return stCode

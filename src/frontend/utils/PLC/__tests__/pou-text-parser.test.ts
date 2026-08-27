@@ -22,12 +22,34 @@ describe('findLastEndVarIndex', () => {
     expect(findLastEndVarIndex(content, 0)).toBe(-1)
   })
 
-  it('starts searching from the given start index', () => {
-    const content = 'END_VAR first END_VAR second'
-    // Search starting from after the first END_VAR
-    const startAfterFirst = 'END_VAR'.length
-    const idx = findLastEndVarIndex(content, startAfterFirst)
-    expect(idx).toBe(content.lastIndexOf('END_VAR') + 'END_VAR'.length)
+  it('starts at the given index, ignoring anything before it', () => {
+    const content = 'PROGRAM p VAR a : INT; END_VAR VAR b : BOOL; END_VAR body'
+    const secondSection = content.indexOf('VAR b')
+    expect(findLastEndVarIndex(content, secondSection)).toBe(content.lastIndexOf('END_VAR') + 'END_VAR'.length)
+  })
+
+  it('stops at the end of the declaration, not at an END_VAR in the body', () => {
+    // A graphical POU's body is JSON, and a block node in it can carry a
+    // native function block's source — `END_VAR` and all. Scanning to the last
+    // one in the file splits inside that JSON string, and a file the editor
+    // wrote a moment earlier stops parsing.
+    const content = [
+      'VAR',
+      '  FB0 : lib__BLOCK;',
+      'END_VAR',
+      '',
+      '{"rungs":[{"body":"FUNCTION_BLOCK B\\n VAR_INPUT\\n  X : INT;\\n END_VAR\\nvoid loop(){}\\nEND_FUNCTION_BLOCK"}]}',
+    ].join('\n')
+
+    const idx = findLastEndVarIndex(content, content.indexOf('VAR'))
+    // The declaration's own END_VAR — the one before the JSON starts.
+    expect(idx).toBe(content.indexOf('END_VAR') + 'END_VAR'.length)
+    expect(content.slice(idx).trim().startsWith('{')).toBe(true)
+  })
+
+  it('consumes every consecutive VAR section', () => {
+    const content = 'VAR_INPUT a : INT; END_VAR\nVAR_OUTPUT b : BOOL; END_VAR\nbody'
+    expect(findLastEndVarIndex(content, 0)).toBe(content.lastIndexOf('END_VAR') + 'END_VAR'.length)
   })
 
   it('is case-insensitive', () => {

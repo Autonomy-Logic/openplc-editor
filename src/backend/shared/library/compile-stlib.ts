@@ -29,9 +29,6 @@ export interface CompileStlibOptions {
   noSource?: boolean
   /** Mark as a built-in runtime library (strucpp's bundled libs). */
   builtin?: boolean
-  /** Compile a library that declares no ST symbols — one whose content
-   *  is entirely C/C++ blocks the consumer compiles itself. */
-  allowEmptySources?: boolean
   globalConstants?: Record<string, number>
 }
 

@@ -14,6 +14,7 @@ import {
   needsMigration,
 } from '@root/backend/shared/utils/migrate-project-to-name-type-system'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
+import { findLastEndVarIndex } from '@root/frontend/utils/PLC/pou-text-parser'
 import {
   detectLanguageFromExtension,
   parseGraphicalPouFromString,
@@ -161,25 +162,6 @@ function detectPouTypeFromPath(filePath: string): string {
     return 'function'
   }
   throw new Error(`Cannot determine POU type from path: ${filePath}`)
-}
-
-/**
- * Helper function to find the last END_VAR in the content
- * @param content - The content to search
- * @param startIndex - The index to start searching from
- * @returns The index after the last END_VAR, or -1 if not found
- */
-function findLastEndVarIndex(content: string, startIndex: number): number {
-  let lastEndVarIndex = -1
-  const regex = /\bEND_VAR\b/gi
-  regex.lastIndex = startIndex
-
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(content)) !== null) {
-    lastEndVarIndex = match.index + match[0].length
-  }
-
-  return lastEndVarIndex
 }
 
 /**

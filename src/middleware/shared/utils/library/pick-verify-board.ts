@@ -13,6 +13,18 @@
  * naming a board the build does not use.
  */
 
+/**
+ * The board a verification falls back on, and its core.
+ *
+ * The simulator is bundled, so it is the one board always installed — which
+ * is what makes it the fallback when a target names no core, or names one
+ * with nothing installed for it. Named here rather than at each use so the
+ * compiler and the screen that reports its choice cannot drift apart if
+ * `hals.json` ever renames it.
+ */
+export const SIMULATOR_BOARD = 'OpenPLC Simulator'
+export const SIMULATOR_CORE = 'arduino:avr'
+
 /** The slice of a board catalogue entry the choice depends on. */
 export interface VerifyBoardCandidate {
   name: string

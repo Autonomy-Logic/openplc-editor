@@ -62,26 +62,69 @@ describe('injectPythonCode', () => {
     expect(result).toHaveLength(0)
   })
 
-  it('separates variables by class for format encoding', () => {
+  it('separates variables by direction for format encoding', () => {
     const variables: PLCVariable[] = [
       makeScalarVar('a', 'input', 'INT'),
       makeScalarVar('b', 'input', 'REAL'),
       makeScalarVar('c', 'output', 'BOOL'),
-      {
-        name: 'local',
-        class: 'local',
-        type: { definition: 'base-type', value: 'INT' },
-        location: '',
-        documentation: '',
-        debug: false,
-      },
     ]
 
     const result = injectPythonCode([{ name: 'test', code: 'pass', type: 'function-block', variables }])
 
-    // Input format: =hf (INT + REAL)
+    // Inbound: =hf (INT + REAL). Outbound: =B (BOOL).
     expect(result[0]).toContain("fmt_in = ('=hf')")
-    // Output format: =B (BOOL)
     expect(result[0]).toContain("fmt_out = ('=B')")
+  })
+
+  it('puts a round-tripping class into both formats', () => {
+    // A VAR, a VAR_IN_OUT and a VAR_EXTERNAL all travel out and back, so each
+    // appears in both structs. The PLC keeps owning the value; a block that
+    // never assigns one sends back what it received.
+    const byClass = (name: string, cls: PLCVariable['class']): PLCVariable => ({
+      name,
+      class: cls,
+      type: { definition: 'base-type', value: 'INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+    const variables: PLCVariable[] = [
+      makeScalarVar('a', 'input', 'INT'),
+      makeScalarVar('c', 'output', 'BOOL'),
+      byClass('io', 'inOut'),
+      byClass('keep', 'local'),
+      byClass('g', 'external'),
+    ]
+
+    const result = injectPythonCode([{ name: 'test', code: 'pass', type: 'function-block', variables }])
+
+    // Inbound: input then inOut, local, external — all INT (h).
+    expect(result[0]).toContain("fmt_in = ('=hhhh')")
+    // Outbound: output (B) then the same three.
+    expect(result[0]).toContain("fmt_out = ('=Bhhh')")
+  })
+
+  it('leaves the toolchain’s own injected locals out of both formats', () => {
+    // `first_run` and the two segment addresses are declared `local`. Sweeping
+    // them in would hand the block its own segment pointers to overwrite.
+    const internal = (name: string, type: string): PLCVariable => ({
+      name,
+      class: 'local',
+      type: { definition: 'base-type', value: type },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+    const variables: PLCVariable[] = [
+      makeScalarVar('a', 'input', 'INT'),
+      internal('first_run', 'BOOL'),
+      internal('shm_in_ptr', 'ULINT'),
+      internal('shm_out_ptr', 'ULINT'),
+    ]
+
+    const result = injectPythonCode([{ name: 'test', code: 'pass', type: 'function-block', variables }])
+
+    expect(result[0]).toContain("fmt_in = ('=h')")
+    expect(result[0]).toContain("fmt_out = ('=')")
   })
 })

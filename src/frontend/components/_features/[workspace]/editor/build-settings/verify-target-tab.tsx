@@ -12,15 +12,14 @@ import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
 import { useCapabilities } from '@root/middleware/shared/providers'
-import { pickVerifyBoard } from '@root/middleware/shared/utils/library/pick-verify-board'
+import {
+  pickVerifyBoard,
+  SIMULATOR_BOARD,
+  SIMULATOR_CORE,
+} from '@root/middleware/shared/utils/library/pick-verify-board'
 import { useMemo, useState } from 'react'
 
 import { MagnifierIcon } from '../../../../../assets/icons/interface/Magnifier'
-
-/** Board the build falls back on when an Arduino target names no core, or
- *  names one with no board installed. Bundled, so it is always there. */
-const SIMULATOR_BOARD = 'OpenPLC Simulator'
-const SIMULATOR_CORE = 'arduino:avr'
 
 type VerifyTargetTabProps = {
   target: LibraryVerifyTarget

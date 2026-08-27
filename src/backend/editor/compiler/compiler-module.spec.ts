@@ -1,6 +1,6 @@
 import { cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 import { CompilerModule } from './compiler-module'
 import type { ToolchainProperties } from './types'
@@ -434,6 +434,16 @@ describe('CompilerModule', () => {
     let srcDir: string
     let extractSpy: jest.SpyInstance
 
+    /**
+     * Toolchain invocations only — the compiler and archiver.
+     *
+     * The pass also asks arduino-cli for the include path it would use, which
+     * is an `arduino-cli compile --only-compilation-database` call rather than
+     * a toolchain one.  Filtering keeps these assertions about the compile.
+     */
+    const toolchainCalls = (calls: readonly string[]) =>
+      calls.filter((cmd) => !cmd.includes('--only-compilation-database'))
+
     const cannedProps: ToolchainProperties = {
       fqbn: 'arduino:avr:uno',
       properties: {
@@ -475,6 +485,146 @@ describe('CompilerModule', () => {
       ).rejects.toThrow(/no \.cpp sources found under/)
     })
 
+    /**
+     * Stand in for arduino-cli's `--only-compilation-database`: write the
+     * database it would have written, into the `--build-path` it was given.
+     */
+    const writeCompilationDatabase = (cmd: string, includeDirs: readonly string[]) => {
+      const buildPath = /--build-path\s+(\S+)/.exec(cmd)?.[1]
+      if (!buildPath) throw new Error('database run was given no --build-path')
+      fs.mkdirSync(buildPath, { recursive: true })
+      fs.writeFileSync(
+        join(buildPath, 'compile_commands.json'),
+        JSON.stringify([{ file: 'x.cpp', arguments: ['g++', '-c', ...includeDirs.map((dir) => `-I${dir}`), 'x.cpp'] }]),
+        'utf-8',
+      )
+    }
+
+    it('compiles with the include path arduino-cli reports, transitive libraries and all', async () => {
+      // Discovery is arduino-cli's job: it is transitive (WiFi.h pulls in
+      // Network.h from a second library) and it preprocesses, so a header
+      // behind an #ifdef for another architecture costs nothing. Rebuilding
+      // that here would approximate it and keep missing cases.
+      fs.writeFileSync(join(srcDir, 'c_blocks_code.cpp'), '#include <WiFi.h>\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        if (cmd.includes('--only-compilation-database')) {
+          writeCompilationDatabase(cmd, ['/core/libraries/WiFi/src', '/core/libraries/Network/src'])
+        }
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      const compileCmd = toolchainCalls(execCalls)[0]
+      expect(compileCmd).toContain('-I/core/libraries/WiFi/src')
+      expect(compileCmd).toContain('-I/core/libraries/Network/src')
+    })
+
+    it('asks arduino-cli before the TUs leave src/, and offers it every library', async () => {
+      // Discovery walks the library's own sources for their includes. Run it
+      // after the stash and it sees an empty src/, resolves nothing, and the
+      // compile fails on the first library header.
+      fs.writeFileSync(join(srcDir, 'c_blocks_code.cpp'), '#include <WiFi.h>\n', 'utf-8')
+      fs.mkdirSync(join(buildDir, 'libraries', 'SensorKit', 'src'), { recursive: true })
+
+      let srcHeldTheTU: boolean | undefined
+      let databaseCmd = ''
+      execImpl.current = async (cmd) => {
+        if (cmd.includes('--only-compilation-database')) {
+          srcHeldTheTU = fs.existsSync(join(srcDir, 'c_blocks_code.cpp'))
+          databaseCmd = cmd
+          writeCompilationDatabase(cmd, [])
+        }
+        return { stdout: '', stderr: '' }
+      }
+
+      await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      expect(srcHeldTheTU).toBe(true)
+      // The build tree's own sources, and every library a `.stlib` shipped.
+      expect(databaseCmd).toContain(`--library ${srcDir}`)
+      expect(databaseCmd).toContain(`--library ${join(buildDir, 'libraries', 'SensorKit')}`)
+    })
+
+    it('compiles the resource libraries into the archive, with path-derived object names', async () => {
+      // arduino-cli will not build these: it compiles a library only when it
+      // discovers an include for it, and the one TU that includes them is
+      // moved out of its view before it runs. Putting that include back into
+      // the sketch is worse — the library's macros then rewrite unrelated
+      // code in the sketch's own translation unit. So they are built here,
+      // as the Runtime v4 Makefile builds the same tree.
+      fs.writeFileSync(join(srcDir, 'c_blocks_code.cpp'), '#include <SensorKit.h>\n', 'utf-8')
+      const sensorKit = join(buildDir, 'libraries', 'SensorKit', 'src')
+      const displayKit = join(buildDir, 'libraries', 'DisplayKit', 'src')
+      fs.mkdirSync(join(sensorKit, 'transport'), { recursive: true })
+      fs.mkdirSync(displayKit, { recursive: true })
+      fs.writeFileSync(join(sensorKit, 'SensorKit.cpp'), '// sensor\n', 'utf-8')
+      fs.writeFileSync(join(sensorKit, 'transport', 'util.cpp'), '// sensor util\n', 'utf-8')
+      // Same file name in a second library — a flat object directory would
+      // have one overwrite the other.
+      fs.writeFileSync(join(displayKit, 'util.cpp'), '// display util\n', 'utf-8')
+      fs.writeFileSync(join(sensorKit, 'SensorKit.h'), '#pragma once\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        if (cmd.includes('--only-compilation-database')) writeCompilationDatabase(cmd, [])
+        return { stdout: '', stderr: '' }
+      }
+
+      const result = await compilerModule.handlePrecompileUserLib({
+        compilationPath: buildDir,
+        fqbn: 'arduino:avr:uno',
+        handleOutputData: noopLog,
+      })
+
+      const compiled = toolchainCalls(execCalls).join('\n')
+      expect(compiled).toContain(join(sensorKit, 'SensorKit.cpp'))
+      expect(compiled).toContain(join(sensorKit, 'transport', 'util.cpp'))
+      expect(compiled).toContain(join(displayKit, 'util.cpp'))
+
+      // Distinct objects, and all of them in the archive.
+      const objectNames = result.objectFiles.map((file) => basename(file))
+      expect(objectNames).toContain('SensorKit__src__transport__util.cpp.o')
+      expect(objectNames).toContain('DisplayKit__src__util.cpp.o')
+      expect(new Set(objectNames).size).toBe(objectNames.length)
+    })
+
+    it('still compiles when arduino-cli cannot produce a database', async () => {
+      // Falling back to the core/variant/build-tree includes is what the pass
+      // did before: a TU needing no library still builds, and one that does
+      // fails naming the header it wanted.
+      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
+
+      const execCalls: string[] = []
+      execImpl.current = async (cmd) => {
+        execCalls.push(cmd)
+        if (cmd.includes('--only-compilation-database')) throw new Error('no core installed')
+        return { stdout: '', stderr: '' }
+      }
+
+      await expect(
+        compilerModule.handlePrecompileUserLib({
+          compilationPath: buildDir,
+          fqbn: 'arduino:avr:uno',
+          handleOutputData: noopLog,
+        }),
+      ).resolves.toBeDefined()
+
+      expect(toolchainCalls(execCalls)[0]).toContain(`-I${srcDir}`)
+    })
+
     it('excludes arduino.cpp from the compile set so the board HAL stays with arduino-cli', async () => {
       fs.writeFileSync(join(srcDir, 'arduino.cpp'), '// HAL\n', 'utf-8')
       fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
@@ -492,9 +642,10 @@ describe('CompilerModule', () => {
         handleOutputData: noopLog,
       })
 
-      // Two compile invocations + one ar invocation = 3 exec calls.
-      expect(execCalls).toHaveLength(3)
-      const compileCmds = execCalls.slice(0, 2).join('\n')
+      // Two compile invocations + one ar invocation = 3 toolchain calls.
+      const toolchain = toolchainCalls(execCalls)
+      expect(toolchain).toHaveLength(3)
+      const compileCmds = toolchain.slice(0, 2).join('\n')
       expect(compileCmds).toContain('pou_MAIN.cpp')
       expect(compileCmds).toContain('configuration.cpp')
       expect(compileCmds).not.toContain('arduino.cpp')

@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
-import crypto, { createHash } from 'node:crypto'
+import crypto, { createHash, randomUUID } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import { existsSync, promises as fs } from 'node:fs'
-import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
@@ -26,6 +27,7 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
+import { parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -36,7 +38,11 @@ import {
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
-import { pickVerifyBoard } from '@root/middleware/shared/utils/library/pick-verify-board'
+import {
+  pickVerifyBoard,
+  SIMULATOR_BOARD,
+  SIMULATOR_CORE,
+} from '@root/middleware/shared/utils/library/pick-verify-board'
 
 /**
  * Shared bridge contract between `compileLibrary` and its inner
@@ -96,13 +102,7 @@ type ProjectDataWithCppPous = PLCProjectData & {
 const POST_BUILD_START_TIMEOUT_MS = 5000
 const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
-/**
- * Boards a library verification resolves to by name rather than through the
- * catalogue.  The simulator stands in whenever an Arduino target cannot be
- * resolved — it is bundled, so it is the one board always installed.
- */
-const SIMULATOR_BOARD = 'OpenPLC Simulator'
-const SIMULATOR_CORE = 'arduino:avr'
+/** The runtime a `build.verify: "runtime"` target resolves to. */
 const RUNTIME_V4_BOARD = 'OpenPLC Runtime v4'
 
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
@@ -209,9 +209,13 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
-    // Backs the always-on debugger's DEBUG_GET_BOARD_ID (FC 0x48). ModbusSlave.cpp
-    // includes <ArduinoUniqueID.h> unconditionally (not behind a USE_*_BLOCK gate),
-    // so the lib must be installed for every Arduino build.
+    // Backs DEBUG_GET_BOARD_ID (FC 0x48) in modbus_debug.cpp, which includes
+    // <ArduinoUniqueID.h> unless defines.h carries OPENPLC_NO_UNIQUE_ID — i.e.
+    // only on a board whose package declares `isLicensable`, since a unique id
+    // exists solely to bind a paid VPP licence to hardware. Kept in the global
+    // list rather than moved behind that gate: installing a library nothing
+    // includes costs a one-time download and changes no build, whereas a
+    // conditional install is one more way for a licensable board to fail late.
     'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',
@@ -414,6 +418,135 @@ class CompilerModule {
    * `src/` only when the folder is named with its own `--library`, so each
    * has to reach the command line.
    */
+  /**
+   * The `-I` flags arduino-cli itself would use for this sketch.
+   *
+   * The pre-compile pass invokes the toolchain directly, so it never gets
+   * arduino-cli's library discovery — and that discovery is not something to
+   * reimplement. It is transitive (`WiFi.h` pulls `Network.h` from a second
+   * library), it honours `depends=` in `library.properties`, and it resolves
+   * conditional includes by preprocessing, so a header behind `#ifdef ESP8266`
+   * costs nothing on an ESP32. Every hand-rolled approximation of that gets
+   * one layer further and stops.
+   *
+   * So the answer is asked for rather than guessed: `--only-compilation-database`
+   * runs discovery and writes the command line it would have used, without
+   * compiling anything. This MUST run before the TUs are stashed out of `src/`
+   * — discovery walks the library's sources, and a stashed file's `#include`
+   * is a file arduino-cli never sees.
+   *
+   * Returns `[]` when the database cannot be produced. The pass then compiles
+   * with the core, variant and build-tree includes alone, which is what it did
+   * before — a TU needing no library still builds, and one that does fails
+   * naming the header it wanted.
+   */
+  async #discoverIncludeFlags({
+    fqbn,
+    sketchPath,
+    libraryPaths,
+  }: {
+    fqbn: string
+    sketchPath: string
+    libraryPaths: readonly string[]
+  }): Promise<string[]> {
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
+
+    // A build path of its own: the database run must not disturb the tree the
+    // real compile is about to use.
+    const databasePath = join(os.tmpdir(), `openplc-cdb-${randomUUID()}`)
+    try {
+      await execRecipeArgv(
+        [
+          binaryPath,
+          'compile',
+          '--fqbn',
+          fqbn,
+          '--only-compilation-database',
+          '--build-path',
+          databasePath,
+          ...libraryPaths.flatMap((libraryPath) => ['--library', libraryPath]),
+          sketchPath,
+          ...this.arduinoCliBaseParameters,
+        ],
+        { maxBuffer: 16 * 1024 * 1024 },
+      )
+
+      const raw = await readFile(join(databasePath, 'compile_commands.json'), 'utf-8')
+      const entries = JSON.parse(raw) as Array<{ arguments?: string[]; command?: string }>
+
+      // Order is preserved and duplicates dropped: arduino-cli emits the same
+      // include set per TU, and `-I` order decides which of two same-named
+      // headers wins.
+      const seen = new Set<string>()
+      const flags: string[] = []
+      for (const entry of entries) {
+        for (const token of entry.arguments ?? entry.command?.split(/\s+/) ?? []) {
+          if (!token.startsWith('-I') || token.length === 2) continue
+          if (seen.has(token)) continue
+          seen.add(token)
+          flags.push(token)
+        }
+      }
+      return flags
+    } catch {
+      return []
+    } finally {
+      await rm(databasePath, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
+
+  /**
+   * Every `.cpp` a resource library ships, with the object name each will take.
+   *
+   * A `.stlib` carries the C/C++ libraries its blocks compile against, and
+   * something has to build them. arduino-cli will not: it compiles a library
+   * only when it discovers an include for it, and the one translation unit
+   * that includes these is moved out of its view before it runs. Putting that
+   * include back into the sketch is worse than the disease — a library's
+   * macros then land in the sketch's own translation unit, where an
+   * object-like `#define` silently rewrites an enum constant of the same name
+   * in unrelated code.
+   *
+   * So the pre-compile pass builds them, exactly as the Runtime v4 Makefile
+   * does for the same archive: it finds every `.cpp` under the generated tree,
+   * which sweeps up each resource library's sources. Both consumers compile
+   * the resource tree themselves rather than asking a build system to infer
+   * it.
+   *
+   * Object names are derived from the path below `libraries/`, not the file
+   * name: two libraries may each ship a `util.cpp`, and a flat object
+   * directory would have the second overwrite the first.
+   */
+  async #resourceLibrarySources(compilationPath: string): Promise<Array<{ sourcePath: string; objectName: string }>> {
+    const root = join(compilationPath, 'libraries')
+    const found: Array<{ sourcePath: string; objectName: string }> = []
+
+    const walk = async (dir: string): Promise<void> => {
+      let entries: Dirent[]
+      try {
+        entries = await readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        // Symlinks are not followed: the archive must hold what the library
+        // shipped, not whatever a link happened to point at.
+        if (entry.isSymbolicLink()) continue
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          await walk(full)
+        } else if (entry.name.endsWith('.cpp')) {
+          const objectName = path.relative(root, full).split(path.sep).join('__')
+          found.push({ sourcePath: full, objectName })
+        }
+      }
+    }
+
+    await walk(root)
+    return found.sort((a, b) => a.objectName.localeCompare(b.objectName))
+  }
+
   async #resourceLibraryDirs(compilationPath: string): Promise<string[]> {
     const root = join(compilationPath, 'libraries')
     try {
@@ -1311,7 +1444,11 @@ class CompilerModule {
       variables: pou.variables,
     })) as CppPouDataHeader[]
 
-    const headerContent: string = generateCBlocksHeader(cppPous)
+    // The project's data-type names let the generator tell a structure or
+    // enumeration (which strucpp aliases as `IEC_<NAME>`) from a function block
+    // instance (a bare `class <NAME>`), which the variable alone cannot say.
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const headerContent: string = generateCBlocksHeader(cppPous, userTypeNames)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
 
     try {
@@ -1344,7 +1481,10 @@ class CompilerModule {
     // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
     // strucpp-free and is compiled by arduino-cli in the core's native
     // standard.
-    const codeContent = generateCBlocksCode(cppPous)
+    // Every data type the project declares is aliased into the block's scope,
+    // including ones reachable only through a structure member.
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const codeContent = generateCBlocksCode(cppPous, userTypeNames)
     const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {
@@ -1462,13 +1602,28 @@ class CompilerModule {
     fqbn: string
     extraCxxFlags?: string[]
     handleOutputData: HandleOutputDataCallback
-  }): Promise<{ archivePath: string; archCandidates: string[]; objectFiles: string[] }> {
+  }): Promise<{
+    archivePath: string
+    archCandidates: string[]
+    objectFiles: string[]
+  }> {
     const tcProps = await this.extractToolchainProperties(fqbn)
 
     const srcDir = join(compilationPath, 'src')
     const baremetalDir = join(compilationPath, 'examples', 'Baremetal')
     const sourcesStash = join(compilationPath, 'precompile', 'sources')
     const objDir = join(compilationPath, 'precompile', 'obj')
+
+    // Ask arduino-cli what it would put on the include path, BEFORE the TUs
+    // leave `src/`. Its discovery walks the library's sources, so a file
+    // already stashed is one it never sees — and its answer is what makes a
+    // block's `#include <WiFi.h>` resolve here, transitive dependencies and
+    // all. See `#discoverIncludeFlags`.
+    const discoveredIncludes = await this.#discoverIncludeFlags({
+      fqbn,
+      sketchPath: baremetalDir,
+      libraryPaths: [srcDir, join(srcDir, 'lib'), ...(await this.#resourceLibraryDirs(compilationPath))],
+    })
 
     // Stash strucpp-emitted .cpp out of src/ BEFORE compile, then read the
     // stash to discover the TU set. Two reasons:
@@ -1503,6 +1658,9 @@ class CompilerModule {
     // Sorted for deterministic archive-member ordering downstream.
     const stashEntries = (await readdir(sourcesStash)).filter((name) => name.endsWith('.cpp')).sort()
     const sources = stashEntries.map((name) => join(sourcesStash, name))
+
+    // The resource libraries build here too — see `#resourceLibrarySources`.
+    const resourceSources = await this.#resourceLibrarySources(compilationPath)
 
     if (sources.length === 0) {
       throw new Error(`handlePrecompileUserLib: no .cpp sources found under ${srcDir} or ${sourcesStash}`)
@@ -1558,6 +1716,7 @@ class CompilerModule {
       ...(variantPath ? [`-I${variantPath}`] : []),
       `-I${srcDir}`,
       `-I${baremetalDir}`,
+      ...discoveredIncludes,
     ]
     const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
 
@@ -1592,7 +1751,11 @@ class CompilerModule {
     // pou_MAIN 457), which overflowed the segment and failed the link with
     // "section `.text1' will not fit in region `iram1_0_seg'" — a message that
     // names neither this archive nor the reason.
-    const objectFiles = sources.map((sourcePath) => join(objDir, `${path.basename(sourcePath)}.o`))
+    const compileUnits = [
+      ...sources.map((sourcePath) => ({ sourcePath, objectName: path.basename(sourcePath) })),
+      ...resourceSources,
+    ]
+    const objectFiles = compileUnits.map(({ objectName }) => join(objDir, `${objectName}.o`))
 
     // Cap concurrent toolchain spawns at the host's logical core count.
     // An unbounded `sources.map(async …)` was dispatching one g++ per TU
@@ -1603,7 +1766,7 @@ class CompilerModule {
     // covers environments where `os.cpus()` reports zero.
     const compileConcurrency = os.cpus().length
 
-    await runWithConcurrencyLimit(sources, compileConcurrency, async (sourcePath, idx) => {
+    await runWithConcurrencyLimit(compileUnits, compileConcurrency, async ({ sourcePath }, idx) => {
       const objectPath = objectFiles[idx]
 
       const argv = [
@@ -3386,16 +3549,29 @@ class CompilerModule {
   ): Promise<void> {
     _mainProcessPort.start()
 
-    // The IPC args contract is preserved verbatim from the pre-
-    // refactor signature so the renderer-side adapter is unchanged:
+    // IPC args:
     //   [projectPath, projectData (build-pass), verifyProjectData,
-    //    cleanBuild?]
-    const [projectPath, projectData, verifyProjectData, cleanBuild = false] = args as [
+    //    cleanBuild?, nativePous?]
+    //
+    // `nativePous` is appended rather than derived here: it has to be read
+    // off the RAW project data, and by the time anything arrives over this
+    // channel `preprocessPous` has already lowered every native body to
+    // bridge ST and rewritten its language tag. An older renderer omits it,
+    // which degrades to "this project has no native POUs".
+    const [projectPath, projectData, verifyProjectData, cleanBuild = false, rawNativePous] = args as [
       string,
       PLCProjectData,
       PLCProjectData,
       boolean | undefined,
+      unknown,
     ]
+
+    // Validated at the boundary rather than trusted: this crosses IPC, so it
+    // arrives as `unknown` whatever the renderer intended. A malformed entry
+    // would otherwise throw inside the pipeline's read loop, and this handler
+    // is invoked with `void` — the renderer would wait for a result that never
+    // arrives. `parseNativePouRefs` drops what it cannot read.
+    const nativePous = parseNativePouRefs(rawNativePous)
 
     // Bridge the orchestrator's structured port API onto the desktop
     // platform's existing helpers.  This is the only desktop-specific
@@ -3415,6 +3591,7 @@ class CompilerModule {
         projectData,
         verifyProjectData,
         cleanBuild,
+        nativePous,
       },
       libraryPort,
       (event) => _mainProcessPort.postMessage({ logLevel: event.level, message: event.message }),

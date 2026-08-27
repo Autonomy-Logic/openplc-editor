@@ -27,39 +27,19 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
 })
 
 describe('generateCBlocksCode', () => {
-  it('carries VAR_IN_OUT pins into the struct, the defines and the undefs', () => {
-    // strucpp stores an FB's in/out parameter as a by-value member of the same
-    // shape as an input, so it needs no separate treatment — only including.
-    const variables: PLCVariable[] = [
-      makeScalarVar('SP', 'input', 'INT'),
-      makeScalarVar('PV', 'output', 'INT'),
-      makeScalarVar('LEVEL', 'inOut', 'INT'),
-    ]
-    const result = generateCBlocksCode([{ name: 'Tank', code: 'void setup() { }\nvoid loop() { }', variables }])
-
-    expect(result).toContain('  strucpp::IEC_INT *LEVEL;')
-    expect(result).toContain('#define LEVEL (*(vars->LEVEL))')
-    expect(result).toContain('#undef LEVEL')
-    // Inputs, then outputs, then in-outs — strucpp's own field order.
-    expect(result.indexOf('*SP;')).toBeLessThan(result.indexOf('*PV;'))
-    expect(result.indexOf('*PV;')).toBeLessThan(result.indexOf('*LEVEL;'))
-  })
-
   it('returns empty string for empty pous array', () => {
     const result = generateCBlocksCode([])
     expect(result).toBe('')
   })
 
-  it('emits the c_blocks baseline (strucpp includes + raw IEC typedefs) before per-POU code', () => {
+  it('emits the c_blocks baseline (interface header + raw IEC typedefs) before per-POU code', () => {
     const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
     const code = 'void setup() { }\nvoid loop() { }'
     const result = generateCBlocksCode([{ name: 'B', code, variables }])
 
-    // Baseline: strucpp wrappers visible to the auto-generated struct
-    // — covers numeric AND STRING pins now (every pin field qualifies
-    // as `strucpp::IEC_*`).
-    expect(result).toContain('#include "iec_var.hpp"')
-    expect(result).toContain('#include "iec_string.hpp"')
+    // Baseline: the interface header, which defines the struct and carries the
+    // strucpp wrappers and the project's own types transitively.
+    expect(result).toContain('#include "c_blocks.h"')
     // Baseline: raw file-scope typedefs for user-local variables.
     expect(result).toContain('typedef int16_t   IEC_INT;')
     expect(result).toContain('typedef float    IEC_REAL;')
@@ -75,9 +55,9 @@ describe('generateCBlocksCode', () => {
 
   it("undefines Arduino.h's min/max macros before pulling in strucpp/std headers", () => {
     // Regression guard: Arduino.h defines `min` / `max` as preprocessor
-    // macros that wreck `<algorithm>` / `<limits>` (both transitively
-    // included via iec_string.hpp). Order must be:
-    //   include <Arduino.h>  ->  #undef min/max  ->  #include "iec_string.hpp"
+    // macros that wreck `<algorithm>` / `<limits>` (pulled in transitively by
+    // the strucpp headers behind c_blocks.h). Order must be:
+    //   include <Arduino.h>  ->  #undef min/max  ->  #include "c_blocks.h"
     const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
     const code = 'void setup() { }\nvoid loop() { }'
     const result = generateCBlocksCode([{ name: 'B', code, variables }])
@@ -85,13 +65,13 @@ describe('generateCBlocksCode', () => {
     const arduinoIdx = result.indexOf('#include <Arduino.h>')
     const undefMinIdx = result.indexOf('#undef min')
     const undefMaxIdx = result.indexOf('#undef max')
-    const iecStringIdx = result.indexOf('#include "iec_string.hpp"')
+    const strucppIdx = result.indexOf('#include "c_blocks.h"')
 
     expect(arduinoIdx).toBeGreaterThan(-1)
     expect(undefMinIdx).toBeGreaterThan(arduinoIdx)
     expect(undefMaxIdx).toBeGreaterThan(arduinoIdx)
-    expect(iecStringIdx).toBeGreaterThan(undefMinIdx)
-    expect(iecStringIdx).toBeGreaterThan(undefMaxIdx)
+    expect(strucppIdx).toBeGreaterThan(undefMinIdx)
+    expect(strucppIdx).toBeGreaterThan(undefMaxIdx)
   })
 
   it('generates struct, extern declarations, defines, code, and undefs for a pou', () => {
@@ -100,17 +80,15 @@ describe('generateCBlocksCode', () => {
 
     const result = generateCBlocksCode([{ name: 'MyBlock', code, variables }])
 
-    // Struct definition — fields are strucpp::IEC_* so user writes
-    // route through IECVar::operator= (force-respect).
-    expect(result).toContain('//definition of external blocks - MYBLOCK')
-    expect(result).toContain('typedef struct {')
-    expect(result).toContain('  strucpp::IEC_INT *SPEED;')
-    expect(result).toContain('  strucpp::IEC_REAL *RESULT;')
-    expect(result).toContain('} MYBLOCK_VARS;')
-
-    // Extern declarations
-    expect(result).toContain('extern "C" void myblock_setup(MYBLOCK_VARS *vars);')
-    expect(result).toContain('extern "C" void myblock_loop(MYBLOCK_VARS *vars);')
+    // The struct and the two entry-point declarations belong to c_blocks.h and
+    // must NOT be restated here. Two definitions of one typedef is what broke
+    // enumeration pins: the header spelled the field `strucpp::IEC_MODE` and
+    // this file spelled it `strucpp::MODE`, so the assignment in the POU glue
+    // failed to compile. Pin the absence so the duplication cannot come back.
+    expect(result).not.toContain('typedef struct {')
+    expect(result).not.toContain('} MYBLOCK_VARS;')
+    expect(result).not.toContain('strucpp::IEC_INT *SPEED;')
+    expect(result).not.toContain('extern "C" void myblock_setup(MYBLOCK_VARS *vars);')
 
     // Defines for input and output
     expect(result).toContain('#define speed (*(vars->SPEED))')
@@ -125,6 +103,24 @@ describe('generateCBlocksCode', () => {
     // Undefs
     expect(result).toContain('#undef speed')
     expect(result).toContain('#undef result')
+  })
+
+  it('undefines Arduino’s abs macro, which breaks <chrono> on the mbed cores', () => {
+    // `<chrono>` calls `abs` with a template argument list the one-parameter
+    // macro cannot swallow: `macro "abs" passed 2 arguments, but takes just 1`,
+    // and the standard header then fails to parse. AVR never showed it — its
+    // libstdc++ is the vendored freestanding port and never reaches <chrono>.
+    const result = generateCBlocksCode([{ name: 'B', code: 'void setup() { }\nvoid loop() { }', variables: [] }])
+
+    expect(result).toContain('#undef abs')
+  })
+
+  it('leaves the Arduino macros that shadow nothing standard', () => {
+    // `constrain` and `sq` collide with no standard name, so user code keeps them.
+    const result = generateCBlocksCode([{ name: 'B', code: 'void setup() { }\nvoid loop() { }', variables: [] }])
+
+    expect(result).not.toContain('#undef constrain')
+    expect(result).not.toContain('#undef sq')
   })
 
   it('generates array defines with direct struct dereference (no pointer deref)', () => {
@@ -143,14 +139,15 @@ describe('generateCBlocksCode', () => {
 
     const result = generateCBlocksCode([{ name: 'empty', code, variables: [] }])
 
-    expect(result).toContain('typedef struct {')
-    expect(result).toContain('} EMPTY_VARS;')
+    // The struct lives in c_blocks.h — see the duplication regression above.
+    expect(result).not.toContain('typedef struct {')
+    expect(result).not.toContain('} EMPTY_VARS;')
     // No #define / #undef for variables (the only `#define`s in the
     // baseline now are the Arduino min/max macro guards).
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
-    // Strip the baseline's `#undef min` / `#undef max` (Arduino.h macro
-    // scrubbing — see baseline) before asserting no per-variable undefs.
-    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max)\s*$/gm, '')
+    // Strip the baseline's Arduino macro scrubbing (`#undef min` / `max` / `abs`
+    // — see baseline) before asserting no per-variable undefs.
+    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs)\s*$/gm, '')
     expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 
@@ -187,17 +184,87 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('// comment about setup')
   })
 
-  it('filters variables by class (only input and output)', () => {
-    const variables: PLCVariable[] = [
-      makeScalarVar('inVar', 'input', 'INT'),
-      {
-        name: 'localVar',
-        class: 'local',
-        type: { definition: 'base-type', value: 'INT' },
+  describe('project type aliases', () => {
+    const code = 'void setup() { }\nvoid loop() { }'
+    const userVar = (name: string, typeName: string): PLCVariable => ({
+      name,
+      class: 'input',
+      type: { definition: 'user-data-type', value: typeName },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+
+    it('aliases every type the project declares, not only the ones a pin names', () => {
+      // A type reachable only through a structure member still has to be in
+      // scope: given `o : Outer` with a `State` member, the block writes
+      // `o.STATE_ = STATE::BUSY`, and walking pin types alone left STATE
+      // undeclared — which failed the build on hardware.
+      const result = generateCBlocksCode(
+        [{ name: 'B', code, variables: [userVar('o', 'Outer')] }],
+        ['Outer', 'Inner', 'State'],
+      )
+
+      expect(result).toContain('using OUTER = strucpp::OUTER;')
+      expect(result).toContain('using INNER = strucpp::INNER;')
+      expect(result).toContain('using STATE = strucpp::STATE;')
+    })
+
+    it('aliases a type named by a pin even when the project does not declare it', () => {
+      // A function block is a POU, not a data type, so it never appears among
+      // the project's dataTypes — but a block holding an instance may want to
+      // name the class.
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [userVar('h', 'Helper')] }], [])
+
+      expect(result).toContain('using HELPER = strucpp::HELPER;')
+    })
+
+    it('emits each alias once when a type is both declared and named by a pin', () => {
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [userVar('m', 'Motor')] }], ['Motor'])
+
+      expect(result.match(/using MOTOR = strucpp::MOTOR;/g)).toHaveLength(1)
+    })
+
+    it('aliases the element type of an array of a user type', () => {
+      const bank: PLCVariable = {
+        name: 'bank',
+        class: 'input',
+        type: {
+          definition: 'array',
+          value: 'ARRAY [0..3] OF Motor',
+          data: { baseType: { definition: 'user-data-type', value: 'Motor' }, dimensions: [{ dimension: '0..3' }] },
+        },
         location: '',
         documentation: '',
         debug: false,
-      },
+      }
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [bank] }], [])
+
+      expect(result).toContain('using MOTOR = strucpp::MOTOR;')
+    })
+
+    it('emits no alias block when the project has no user types at all', () => {
+      const result = generateCBlocksCode([{ name: 'B', code, variables: [makeScalarVar('x', 'input', 'INT')] }], [])
+
+      expect(result).not.toContain('using ')
+    })
+  })
+
+  it('binds every class the user can declare, and nothing the toolchain injected', () => {
+    const byClass = (name: string, cls: PLCVariable['class'], type: string): PLCVariable => ({
+      name,
+      class: cls,
+      type: { definition: 'base-type', value: type },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+    const variables: PLCVariable[] = [
+      makeScalarVar('inVar', 'input', 'INT'),
+      byClass('localVar', 'local', 'INT'),
+      byClass('tempVar', 'temp', 'INT'),
+      byClass('ioVar', 'inOut', 'INT'),
+      byClass('hasBeenInitialized', 'local', 'BOOL'),
       makeScalarVar('outVar', 'output', 'INT'),
     ]
     const code = 'void setup() { }\nvoid loop() { }'
@@ -206,9 +273,16 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('#define inVar')
     expect(result).toContain('#define outVar')
-    expect(result).not.toContain('#define localVar')
+    expect(result).toContain('#define localVar')
+    expect(result).toContain('#define tempVar')
+    expect(result).toContain('#define ioVar')
+    // The setup() latch stays out of the user's reach — see the header tests.
+    expect(result).not.toContain('#define hasBeenInitialized')
     expect(result).toContain('#undef inVar')
     expect(result).toContain('#undef outVar')
-    expect(result).not.toContain('#undef localVar')
+    expect(result).toContain('#undef localVar')
+    expect(result).toContain('#undef tempVar')
+    expect(result).toContain('#undef ioVar')
+    expect(result).not.toContain('#undef hasBeenInitialized')
   })
 })

@@ -143,14 +143,23 @@ describe('composeFirmwareBundle — strucpp output', () => {
 })
 
 describe('composeFirmwareBundle — c_blocks_code.cpp overwrite semantics', () => {
-  it('OVERWRITES examples/Baremetal/c_blocks_code.cpp when cBlocks.code is non-null', () => {
+  it('puts the generated c_blocks_code.cpp under src/, on the pre-compiled side', () => {
+    // Not next to the sketch: there arduino-cli builds it at whatever standard
+    // the core ships, and this unit includes `generated.hpp`, which needs C++17.
+    // On an mbed core (gnu++14) that failed with `'is_arithmetic_v' is not a
+    // member of 'std'`; the AVR targets hid it by declaring -std=gnu++17 in
+    // their hals.json cxx_flags, which a VPP board such as Opta does not.
     const skeleton = { 'examples/Baremetal/c_blocks_code.cpp': '// static baseline\n' }
     const out = composeFirmwareBundle({
       ...baseInput,
       firmwareSkeleton: skeleton,
       cBlocks: { header: 'h', code: 'void blink_setup(void *) {}\n' },
     })
-    expect(out['examples/Baremetal/c_blocks_code.cpp']).toBe('void blink_setup(void *) {}\n')
+
+    expect(out['src/c_blocks_code.cpp']).toBe('void blink_setup(void *) {}\n')
+    // The skeleton's own baseline is left alone. It defines no symbols and pulls
+    // in no strucpp header, so it compiles at the core's standard regardless.
+    expect(out['examples/Baremetal/c_blocks_code.cpp']).toBe('// static baseline\n')
   })
 
   it('LEAVES examples/Baremetal/c_blocks_code.cpp untouched when cBlocks.code is null', () => {
@@ -196,7 +205,10 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
 
     expect(out).toEqual({
       'examples/Baremetal/Baremetal.ino': 'BAREMETAL_INO',
-      'examples/Baremetal/c_blocks_code.cpp': 'CBLOCKS_CODE_WITH_USER',
+      // The skeleton's static baseline survives alongside the generated unit:
+      // it defines no symbols and pulls in no strucpp header.
+      'examples/Baremetal/c_blocks_code.cpp': 'STATIC_BASELINE',
+      'src/c_blocks_code.cpp': 'CBLOCKS_CODE_WITH_USER',
       'src/arduino.cpp': 'ARDUINO_HAL',
       'src/iec_std_lib.hpp': 'STRUCPP_RUNTIME_HEADER',
       'src/generated.cpp': 'GEN_CPP',
