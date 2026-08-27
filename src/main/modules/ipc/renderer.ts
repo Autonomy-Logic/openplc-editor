@@ -41,9 +41,11 @@ import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
   Branch,
+  BranchDiffWithBase,
   Commit,
   CommitFile,
   CommitInfo,
+  MergeResult,
   PendingChange,
   Stash,
   VersionControlResult,
@@ -288,6 +290,19 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-vc:pop-stash', projectId, ref),
   edgeVcDropStash: (projectId: string, ref: string): Promise<VersionControlResult<null>> =>
     ipcRenderer.invoke('edge-vc:drop-stash', projectId, ref),
+  edgeVcBranchDiffWithBase: (
+    projectId: string,
+    source: string,
+    target: string,
+  ): Promise<VersionControlResult<BranchDiffWithBase>> =>
+    ipcRenderer.invoke('edge-vc:branch-diff-with-base', projectId, source, target),
+  edgeVcMergeBranches: (params: {
+    projectId: string
+    sourceBranch: string
+    targetBranch: string
+    commitMessage?: string
+    resolutions?: Record<string, string>
+  }): Promise<VersionControlResult<MergeResult>> => ipcRenderer.invoke('edge-vc:merge-branches', params),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)

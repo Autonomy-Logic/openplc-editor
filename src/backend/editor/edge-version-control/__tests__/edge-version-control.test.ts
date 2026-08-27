@@ -17,6 +17,7 @@
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
 import {
   applyStash,
+  getBranchDiffWithBase,
   createBranch,
   createCommit,
   createStash,
@@ -28,6 +29,7 @@ import {
   listBranches,
   listCommits,
   listStashes,
+  mergeBranches,
   popStash,
   previewSwitchCarry,
   restoreCommit,
@@ -344,5 +346,106 @@ describe('the routes whose answer nobody reads', () => {
     request.mockResolvedValueOnce({ status: 403, body: '{}' })
 
     await expect(discardChanges('p1')).resolves.toMatchObject({ ok: false, failure: { status: 403 } })
+  })
+})
+
+
+describe('merging', () => {
+  it('asks for the three-way diff with both branches named', async () => {
+    request.mockResolvedValueOnce(ok({ source: {}, target: {}, base: null, conflicts: [] }))
+
+    await getBranchDiffWithBase('p1', 'feature', 'main')
+
+    expect(callArgs().path).toBe('/projects/p1/branches-diff-with-base?source=feature&target=main')
+  })
+
+  it('encodes branch names that need it', async () => {
+    request.mockResolvedValueOnce(ok({ conflicts: [] }))
+
+    await getBranchDiffWithBase('p1', 'feat/edge 602', 'main')
+
+    expect(callArgs().path).toContain('source=feat%2Fedge+602')
+  })
+
+  it('posts the merge with both branches and the message', async () => {
+    request.mockResolvedValueOnce(ok({ message: 'Merged', mergeCommit: { hash: 'abc' } }))
+
+    await mergeBranches({
+      projectId: 'p1',
+      sourceBranch: 'feature',
+      targetBranch: 'main',
+      commitMessage: 'Merge feature',
+    })
+
+    expect(callArgs()).toMatchObject({
+      path: '/projects/p1/branches/merge',
+      init: { method: 'POST', json: { sourceBranch: 'feature', targetBranch: 'main', commitMessage: 'Merge feature' } },
+    })
+  })
+
+  it('omits the message and resolutions when there are none', async () => {
+    request.mockResolvedValueOnce(ok({ message: 'Merged' }))
+
+    await mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })
+
+    const json = callArgs().init.json as Record<string, unknown>
+    expect(json).toEqual({ sourceBranch: 'feature', targetBranch: 'main' })
+  })
+
+  it('sends resolutions when the user decided per file', async () => {
+    request.mockResolvedValueOnce(ok({ message: 'Merged' }))
+
+    await mergeBranches({
+      projectId: 'p1',
+      sourceBranch: 'feature',
+      targetBranch: 'main',
+      resolutions: { 'pous/programs/main.st': 'x := TRUE;' },
+    })
+
+    expect((callArgs().init.json as { resolutions: Record<string, string> }).resolutions).toEqual({
+      'pous/programs/main.st': 'x := TRUE;',
+    })
+  })
+
+  it('names a conflict as its own kind, with the files', async () => {
+    request.mockResolvedValueOnce({
+      status: 409,
+      // Top level, like the carry rejection — the same place the web adapter reads it.
+      body: JSON.stringify({
+        hasConflicts: true,
+        conflictedFiles: ['pous/programs/main.st'],
+        message: 'Merge conflicts detected',
+      }),
+    })
+
+    await expect(
+      mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' }),
+    ).resolves.toEqual({
+      ok: false,
+      failure: {
+        kind: 'merge-conflict',
+        conflictedFiles: ['pous/programs/main.st'],
+        message: 'Merge conflicts detected',
+      },
+    })
+  })
+
+  it('treats a 409 without hasConflicts as an ordinary failure', async () => {
+    request.mockResolvedValueOnce({ status: 409, body: JSON.stringify({ message: 'Nothing to merge' }) })
+
+    // Otherwise the resolver opens with an empty file list.
+    await expect(
+      mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' }),
+    ).resolves.toMatchObject({ failure: { kind: 'http', status: 409 } })
+  })
+
+  it('does NOT report a merge as failed when the server never answered', async () => {
+    request.mockRejectedValueOnce(new Error('ECONNRESET'))
+
+    // A merge writes a commit. An unanswered POST may well have made one, so calling it a
+    // failure invites the user to merge the same branch twice.
+    await expect(
+      mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' }),
+    ).resolves.toMatchObject({ failure: { kind: 'unreachable' } })
   })
 })

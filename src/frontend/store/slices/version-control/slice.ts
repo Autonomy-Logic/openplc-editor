@@ -14,6 +14,7 @@ const initialState: VersionControlSlice['versionControl'] = {
   pendingChangesCount: 0,
   headContent: null,
   historyView: null,
+  mergeView: null,
 }
 
 function dedupeByPath(entries: InitialPendingEntry[]): InitialPendingEntry[] {
@@ -63,6 +64,20 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
       setState(
         produce<VersionControlSlice>((draft) => {
           draft.versionControl.historyView = null
+        }),
+      ),
+
+    openMergeView: (view: { sourceBranch: string; targetBranch?: string }) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.mergeView = { ...view }
+        }),
+      ),
+
+    closeMergeView: () =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.mergeView = null
         }),
       ),
 

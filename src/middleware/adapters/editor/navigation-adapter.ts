@@ -14,7 +14,7 @@
  *   - An EXTERNAL URL still opens a window. `openInNewWindow` is how the editor links out
  *     to Edge's own pages (sign-up, profile), and that has always worked.
  *
- * `/history` IS INTERCEPTED, and that is the point of this file now. The commit's
+ * `/history` AND `/merge` ARE INTERCEPTED, and that is the point of this file now. The commit's
  * full-file view is a real screen the desktop has to offer: source control is on for cloud
  * projects, so "View all files" is reachable, and a `window.open('/history?…')` would open
  * a BrowserWindow onto a route that does not exist — an empty window in development and a
@@ -34,6 +34,7 @@ import { buildNavigationUrl } from '../../shared/ports/navigation-port'
 
 /** The routed screens the desktop renders in place rather than navigating to. */
 const HISTORY_PATH = '/history'
+const MERGE_PATH = '/merge'
 
 /**
  * Decline a destination this build has no screen for.
@@ -66,9 +67,31 @@ export function createEditorNavigationAdapter(): NavigationPort {
     return true
   }
 
+  /**
+   * Reads the two params the `/merge` route declares. `source` is the only required one —
+   * without a branch to merge there is nothing to show, and `target` is legitimately
+   * absent when the user opens merge from the branch they are on: the screen then falls
+   * back to the default branch, exactly as the web page does.
+   */
+  const openMerge = (search?: NavigationSearch): boolean => {
+    const sourceBranch = search?.source
+
+    if (!sourceBranch) {
+      return false
+    }
+
+    useOpenPLCStore.getState().versionControlActions.openMergeView({ sourceBranch, targetBranch: search?.target })
+
+    return true
+  }
+
   return {
     navigate(path: string, search?: NavigationSearch): void {
       if (path === HISTORY_PATH && openHistory(search)) {
+        return
+      }
+
+      if (path === MERGE_PATH && openMerge(search)) {
         return
       }
 
@@ -82,6 +105,10 @@ export function createEditorNavigationAdapter(): NavigationPort {
 
     openInNewWindow(path: string, search?: NavigationSearch): void {
       if (path === HISTORY_PATH && openHistory(search)) {
+        return
+      }
+
+      if (path === MERGE_PATH && openMerge(search)) {
         return
       }
 

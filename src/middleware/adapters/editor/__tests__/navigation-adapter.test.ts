@@ -15,9 +15,11 @@ import { createEditorNavigationAdapter } from '../navigation-adapter'
 const openHistoryView = jest.fn()
 const closeHistoryView = jest.fn()
 
+const openMergeView = jest.fn()
+
 jest.mock('../../../../frontend/store', () => ({
   useOpenPLCStore: {
-    getState: () => ({ versionControlActions: { openHistoryView, closeHistoryView } }),
+    getState: () => ({ versionControlActions: { openHistoryView, closeHistoryView, openMergeView } }),
   },
 }))
 
@@ -49,6 +51,8 @@ describe('navigate', () => {
    * project and dropped the user on the start screen with their unsaved edits gone.
    */
   it('refuses an in-app route this build cannot render, leaving the app alone', () => {
+    // `/conflicts` has no desktop screen; `/history` and `/merge` do, and are covered
+    // separately. The refusal path still matters for whatever gets routed next.
     adapter.navigate('/conflicts', { branch: 'feat/foo' })
 
     expect(stubWindow.location.href).toBe('about:blank')
@@ -124,11 +128,11 @@ describe('the commit history screen is rendered in place, not navigated to', () 
     expect(stubWindow.open).not.toHaveBeenCalled()
   })
 
-  it('does not mistake another route for the history screen', () => {
+  it('does not mistake the merge route for the history screen', () => {
     adapter.navigate('/merge', { project_id: 'p1', source: 'feat' })
 
-    // Interception is exact: only `/history` becomes store state. `/merge` is simply
-    // declined — which is the point of the fix, and is asserted on its own below.
+    // Interception is exact: each route reaches its own screen, and neither falls through
+    // to a navigation.
     expect(openHistoryView).not.toHaveBeenCalled()
     expect(stubWindow.location.href).toBe('about:blank')
   })
@@ -139,14 +143,30 @@ describe('the commit history screen is rendered in place, not navigated to', () 
  * The merge entry is the reason this file changed. It is the one caller that asked for a
  * route the desktop has no screen for, and the old fallback answered by restarting the app.
  */
-describe('the destination that has no desktop screen', () => {
-  it('does not reload the renderer for /merge', () => {
+describe('the merge screen is rendered in place too', () => {
+  it('turns a merge request into store state instead of a navigation', () => {
     adapter.navigate('/merge', { project_id: 'p1', source: 'feat', target: 'main' })
 
-    // The whole defect in one assertion: anything written here takes the open project
-    // down with it.
+    // This used to write `location.href`, which reloaded the renderer and closed the open
+    // project. It is now the same interception `/history` gets.
+    expect(openMergeView).toHaveBeenCalledWith({ sourceBranch: 'feat', targetBranch: 'main' })
     expect(stubWindow.location.href).toBe('about:blank')
     expect(stubWindow.open).not.toHaveBeenCalled()
+  })
+
+  it('accepts a merge with no target, which the screen resolves itself', () => {
+    adapter.navigate('/merge', { project_id: 'p1', source: 'feat' })
+
+    // Legitimately absent when merge is opened from the branch you are on; the screen
+    // falls back to the default branch, as the web page does.
+    expect(openMergeView).toHaveBeenCalledWith({ sourceBranch: 'feat', targetBranch: undefined })
+  })
+
+  it('declines a merge with no source branch rather than opening an empty screen', () => {
+    adapter.navigate('/merge', { project_id: 'p1' })
+
+    expect(openMergeView).not.toHaveBeenCalled()
+    expect(stubWindow.location.href).toBe('about:blank')
   })
 
   it('does not open a window onto an in-app path either', () => {

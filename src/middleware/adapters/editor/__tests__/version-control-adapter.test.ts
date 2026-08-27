@@ -15,7 +15,11 @@
  * swallows it.
  */
 
-import { StashConflictError, SwitchBranchCarryConflictError } from '../../../shared/ports/version-control-port'
+import {
+  MergeConflictError,
+  StashConflictError,
+  SwitchBranchCarryConflictError,
+} from '../../../shared/ports/version-control-port'
 import { createEditorVersionControlAdapter } from '../version-control-adapter'
 
 const computeGraphicalDiffImpl = jest.fn((_original: string, _current: string, _path: string) => ({
@@ -45,6 +49,8 @@ const CHANNELS = [
   'edgeVcApplyStash',
   'edgeVcPopStash',
   'edgeVcDropStash',
+  'edgeVcBranchDiffWithBase',
+  'edgeVcMergeBranches',
 ] as const
 
 type Bridge = Record<string, jest.Mock>
@@ -225,5 +231,50 @@ describe('the graphical diff', () => {
     // more correct. Shared module, so the desktop and the web produce the same diff.
     expect(computeGraphicalDiffImpl).toHaveBeenCalledWith('<before/>', '<after/>', 'pous/programs/main.xml')
     expect(result).toEqual({ isLadder: true })
+  })
+})
+
+
+describe('the merge conflict crosses IPC as itself', () => {
+  it('rebuilds MergeConflictError, with the files the resolver needs', async () => {
+    bridge.edgeVcMergeBranches.mockResolvedValueOnce({
+      ok: false,
+      failure: {
+        kind: 'merge-conflict',
+        conflictedFiles: ['pous/programs/main.st', 'devices/configuration.json'],
+        message: 'Merge conflicts detected',
+      },
+    })
+
+    const vc = createEditorVersionControlAdapter()
+    const error = await vc
+      .mergeBranches?.({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })
+      .catch((e: unknown) => e)
+
+    // `instanceof`, not the message: the screen opens its conflict resolver on the type,
+    // and the prototype is exactly what a structured clone destroys.
+    expect(error).toBeInstanceOf(MergeConflictError)
+    expect(error).toMatchObject({ conflictedFiles: ['pous/programs/main.st', 'devices/configuration.json'] })
+  })
+
+  it('passes the merge through on success', async () => {
+    bridge.edgeVcMergeBranches.mockResolvedValueOnce({
+      ok: true,
+      data: { message: 'Merged', mergeCommit: { shortHash: 'abc1234' } },
+    })
+
+    const vc = createEditorVersionControlAdapter()
+
+    await expect(
+      vc.mergeBranches?.({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' }),
+    ).resolves.toMatchObject({ message: 'Merged' })
+  })
+
+  it('reaches the diff channel with both branches', async () => {
+    bridge.edgeVcBranchDiffWithBase.mockResolvedValueOnce({ ok: true, data: { conflicts: [] } })
+
+    await createEditorVersionControlAdapter().getBranchDiffWithBase?.('p1', 'feature', 'main')
+
+    expect(bridge.edgeVcBranchDiffWithBase).toHaveBeenCalledWith('p1', 'feature', 'main')
   })
 })

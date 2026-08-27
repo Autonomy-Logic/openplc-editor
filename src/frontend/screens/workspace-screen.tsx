@@ -15,6 +15,7 @@ import {
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
+import { BranchMergeView } from '../components/_features/[workspace]/branches/branch-merge-view'
 import { CommitHistoryView } from '../components/_features/[workspace]/commit-history'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
@@ -132,14 +133,17 @@ const WorkspaceScreen = () => {
   )
 
   // Version control state
-  const { activePanel, pendingChangesCount, historyView } = useOpenPLCStore(
+  const { activePanel, pendingChangesCount, historyView, mergeView } = useOpenPLCStore(
     useShallow((s) => ({
       activePanel: s.versionControl.activePanel,
       pendingChangesCount: s.versionControl.pendingChangesCount,
       historyView: s.versionControl.historyView,
+      mergeView: s.versionControl.mergeView,
     })),
   )
-  const { setActivePanel, closeHistoryView } = useOpenPLCStore(useCallback((s) => s.versionControlActions, []))
+  const { setActivePanel, closeHistoryView, closeMergeView } = useOpenPLCStore(
+    useCallback((s) => s.versionControlActions, []),
+  )
   const sharedWorkspaceActions = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
 
   const isDebuggerVisible = useIsDebuggerVisible()
@@ -953,6 +957,29 @@ const WorkspaceScreen = () => {
             onRestored={() => {
               closeHistoryView()
               void reloadOpenProject('The project was restored but could not be reloaded.')
+            }}
+          />
+        </div>
+      )}
+
+      {/* The branch merge screen, laid over the workspace.
+       *
+       * Same arrangement as the commit view above, and set the same way: only a platform
+       * whose navigation adapter has nowhere else to put it — the desktop, with no router.
+       * The web navigates to `/merge` instead and leaves this null.
+       *
+       * Closing on a completed merge reloads the project, because the merge moved the
+       * branch on the server and everything in memory is now behind it. */}
+      {hasVersionControl && projectPath && mergeView && (
+        <div className='absolute inset-0 z-50'>
+          <BranchMergeView
+            projectId={projectPath}
+            sourceBranch={mergeView.sourceBranch}
+            targetParam={mergeView.targetBranch}
+            onBack={closeMergeView}
+            onMerged={() => {
+              closeMergeView()
+              void reloadOpenProject('The merge completed but the project could not be reloaded.')
             }}
           />
         </div>

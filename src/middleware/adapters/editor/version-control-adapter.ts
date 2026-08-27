@@ -23,14 +23,20 @@
 
 import { computeGraphicalDiff as computeGraphicalDiffImpl } from '../../../backend/shared/utils/graphical-diff'
 import type {
+  BranchDiffWithBase,
   Commit,
   GraphicalDiffResult,
   ListCommitsOptions,
+  MergeResult,
   SwitchBranchStrategy,
   VersionControlPort,
   VersionControlResult,
 } from '../../shared/ports/version-control-port'
-import { StashConflictError, SwitchBranchCarryConflictError } from '../../shared/ports/version-control-port'
+import {
+  MergeConflictError,
+  StashConflictError,
+  SwitchBranchCarryConflictError,
+} from '../../shared/ports/version-control-port'
 
 /**
  * Turn a reported failure back into the error the UI expects, or hand back the data.
@@ -52,6 +58,8 @@ function unwrap<T>(result: VersionControlResult<T>): T {
       throw new SwitchBranchCarryConflictError(failure.conflictedFiles)
     case 'stash-conflict':
       throw new StashConflictError()
+    case 'merge-conflict':
+      throw new MergeConflictError(failure.conflictedFiles, failure.message)
     case 'signed-out':
       throw new Error('Not signed in to Autonomy Edge.')
     case 'unreachable':
@@ -113,6 +121,8 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
   const applyStash = channel(bridge.edgeVcApplyStash, 'edge-vc:apply-stash')
   const popStash = channel(bridge.edgeVcPopStash, 'edge-vc:pop-stash')
   const dropStash = channel(bridge.edgeVcDropStash, 'edge-vc:drop-stash')
+  const branchDiffWithBase = channel(bridge.edgeVcBranchDiffWithBase, 'edge-vc:branch-diff-with-base')
+  const merge = channel(bridge.edgeVcMergeBranches, 'edge-vc:merge-branches')
 
   return {
     listBranches: (projectId: string) => listBranches(projectId),
@@ -161,6 +171,17 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
     dropStash: async (projectId: string, ref: string) => {
       await dropStash(projectId, ref)
     },
+
+    getBranchDiffWithBase: (projectId: string, source: string, target: string): Promise<BranchDiffWithBase> =>
+      branchDiffWithBase(projectId, source, target),
+
+    mergeBranches: (params: {
+      projectId: string
+      sourceBranch: string
+      targetBranch: string
+      commitMessage?: string
+      resolutions?: Record<string, string>
+    }): Promise<MergeResult> => merge(params),
 
     // Stays in the renderer: it is synchronous by contract, and it is pure computation
     // over two file contents the caller already holds. Sending a whole LD program across

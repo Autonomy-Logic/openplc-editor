@@ -179,8 +179,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   // open project lives on Edge. The repository sits beside the project on the server,
   // so a project opened from disk has no history to show — see `isRemoteProjectPath`.
   hasVersionControl: true,
-  // No merge screen on the desktop yet — see `hasBranchMerge`.
-  hasBranchMerge: false,
+  hasBranchMerge: true,
   hasAboutDialog: true,
   hasPythonLSP: true,
   // Worker wired via src/frontend/services/st-lsp/boot.ts, started

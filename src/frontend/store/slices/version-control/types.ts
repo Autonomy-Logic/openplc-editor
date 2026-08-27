@@ -75,6 +75,11 @@ export type VersionControlState = {
      * over itself. Same screen either way — see `CommitHistoryView`.
      */
     historyView: { commitHash: string; file?: string } | null
+    /**
+     * The branch merge screen that is open, or `null`. Desktop only, for the same reason as
+     * `historyView`: the web reaches `/merge` through its router and leaves this null.
+     */
+    mergeView: { sourceBranch: string; targetBranch?: string } | null
   }
 }
 
@@ -87,6 +92,10 @@ export type VersionControlActions = {
   openHistoryView: (view: { commitHash: string; file?: string }) => void
   /** Close it, returning to the workspace underneath. */
   closeHistoryView: () => void
+  /** Open the merge screen for a branch. Desktop only — see `mergeView`. */
+  openMergeView: (view: { sourceBranch: string; targetBranch?: string }) => void
+  /** Close it, returning to the workspace underneath. */
+  closeMergeView: () => void
   /** Set (or clear, with `null`) the lazily-fetched HEAD snapshot used as the
    *  "original" side of source-control diffs. */
   setHeadContent: (content: Record<string, string> | null) => void

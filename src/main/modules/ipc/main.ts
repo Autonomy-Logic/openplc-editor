@@ -20,11 +20,13 @@ import {
   deleteBranch,
   discardChanges,
   dropStash,
+  getBranchDiffWithBase,
   getChanges,
   getCommitFiles,
   listBranches,
   listCommits,
   listStashes,
+  mergeBranches,
   popStash,
   previewSwitchCarry,
   restoreCommit,
@@ -662,6 +664,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-vc:apply-stash', this.handleEdgeVcApplyStash)
     this.registerHandle('edge-vc:pop-stash', this.handleEdgeVcPopStash)
     this.registerHandle('edge-vc:drop-stash', this.handleEdgeVcDropStash)
+    this.registerHandle('edge-vc:branch-diff-with-base', this.handleEdgeVcBranchDiffWithBase)
+    this.registerHandle('edge-vc:merge-branches', this.handleEdgeVcMergeBranches)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -1204,6 +1208,56 @@ class MainProcessBridge implements MainIpcModule {
       // Anything but an explicit 'public' stays private. Guessing in the other direction
       // would publish someone's work to the world on a malformed value.
       visibility: source.visibility === 'public' ? 'public' : 'private',
+    })
+  }
+
+handleEdgeVcBranchDiffWithBase = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    source: unknown,
+    target: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const from = MainProcessBridge.vcString(source)
+    const to = MainProcessBridge.vcString(target)
+
+    return id && from && to ? getBranchDiffWithBase(id, from, to) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcMergeBranches = (
+    _event: IpcMainInvokeEvent,
+    params: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const projectId = MainProcessBridge.vcString(source.projectId)
+    const sourceBranch = MainProcessBridge.vcString(source.sourceBranch)
+    const targetBranch = MainProcessBridge.vcString(source.targetBranch)
+
+    if (!projectId || !sourceBranch || !targetBranch) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // Resolutions decide file CONTENT, so a malformed map is refused rather than partially
+    // forwarded: dropping an entry would merge with the wrong side of a conflict silently.
+    let resolutions: Record<string, string> | undefined
+
+    if (source.resolutions !== undefined) {
+      const record = MainProcessBridge.vcRecord(source.resolutions)
+      const entries = Object.entries(record)
+
+      if (!entries.every(([key, value]) => key.length > 0 && typeof value === 'string')) {
+        return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+      }
+
+      resolutions = Object.fromEntries(entries.map(([key, value]) => [key, String(value)]))
+    }
+
+    return mergeBranches({
+      projectId,
+      sourceBranch,
+      targetBranch,
+      commitMessage: MainProcessBridge.vcString(source.commitMessage),
+      resolutions,
     })
   }
 

@@ -174,6 +174,23 @@ function carryConflict(body: string): EdgeVcFailure | null {
   return payload?.hasConflicts ? { kind: 'carry-conflict', conflictedFiles: payload.conflictedFiles ?? [] } : null
 }
 
+/**
+ * The merge refusal. Same top-level body shape as the carry rejection, and the same
+ * discriminator: only `hasConflicts` means "decide per file", so any other 409 on the
+ * route stays an ordinary failure.
+ */
+function mergeConflict(body: string): EdgeVcFailure | null {
+  const payload = parseJsonBody<{ hasConflicts?: boolean; conflictedFiles?: string[]; message?: string }>(body)
+
+  return payload?.hasConflicts
+    ? {
+        kind: 'merge-conflict',
+        conflictedFiles: payload.conflictedFiles ?? [],
+        message: payload.message ?? 'The merge has conflicts that need resolving',
+      }
+    : null
+}
+
 /** Apply and pop answer 409 when the stash will not go on cleanly. */
 function stashConflict(): EdgeVcFailure {
   return { kind: 'stash-conflict' }
@@ -315,4 +332,39 @@ export function popStash(projectId: string, ref: string) {
 
 export function dropStash(projectId: string, ref: string) {
   return callVoid(`/projects/${projectId}/stashes/drop`, { method: 'POST', json: { ref } })
+}
+
+// ---------------------------------------------------------------------------
+// Merging
+// ---------------------------------------------------------------------------
+
+export function getBranchDiffWithBase(projectId: string, source: string, target: string) {
+  const params = new URLSearchParams({ source, target })
+
+  return call<unknown>(`/projects/${projectId}/branches-diff-with-base?${params}`)
+}
+
+/**
+ * A merge is the one call here that can take real time: the server walks three trees and
+ * writes a commit. It gets the same 30s budget as the rest, which matches the web build.
+ *
+ * `mergeConflict` is what turns the 409 into its own kind, so the renderer can rebuild
+ * `MergeConflictError` and open the resolver instead of reporting a failure.
+ */
+export function mergeBranches(params: {
+  projectId: string
+  sourceBranch: string
+  targetBranch: string
+  commitMessage?: string
+  resolutions?: Record<string, string>
+}) {
+  const json: Record<string, unknown> = {
+    sourceBranch: params.sourceBranch,
+    targetBranch: params.targetBranch,
+  }
+
+  if (params.commitMessage) json.commitMessage = params.commitMessage
+  if (params.resolutions) json.resolutions = params.resolutions
+
+  return call<unknown>(`/projects/${params.projectId}/branches/merge`, { method: 'POST', json }, mergeConflict)
 }
