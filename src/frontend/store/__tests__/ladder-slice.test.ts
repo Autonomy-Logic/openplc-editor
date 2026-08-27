@@ -1551,3 +1551,23 @@ describe('createLadderFlowSlice', () => {
     expect(store.getState().ladderFlows[0].rungs[0].selectedNodes).toBeDefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// DOPE-592
+// ---------------------------------------------------------------------------
+describe('addLadderFlow with an unparseable body', () => {
+  it('degrades to an empty canvas instead of throwing', () => {
+    const store = makeStore()
+
+    // What `createFallbackPou` produces when a graphical body fails to parse:
+    // the FBD shape, with no `rungs` at all. Reaching `addLadderFlow` with this
+    // used to throw inside the route loader and take the editor down to its
+    // error boundary, so the project could never be opened.
+    const fallbackBody = { name: 'main', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+
+    expect(() =>
+      store.getState().ladderFlowActions.addLadderFlow(fallbackBody as unknown as LadderFlowType),
+    ).not.toThrow()
+    expect(store.getState().ladderFlows[0].rungs).toEqual([])
+  })
+})

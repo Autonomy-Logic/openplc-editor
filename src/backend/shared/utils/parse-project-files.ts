@@ -11,6 +11,7 @@
 import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-text-parser'
 import {
   detectLanguageFromExtension,
+  findGraphicalBodyStartIndex,
   findLastEndVarIndex,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
@@ -168,7 +169,12 @@ function createFallbackPou(content: string, language: string, pouType: string, p
   )
   let variablesText = 'VAR\nEND_VAR'
   if (varStartIndex !== -1) {
-    const lastEnd = findLastEndVarIndex(remainingContent, varStartIndex)
+    // Graphical bodies bound the scan at the JSON, for the reason spelled out on
+    // `findLastEndVarIndex`: without it this fallback repeats the very failure it
+    // exists to recover from (DOPE-592).
+    const bodyStart =
+      language === 'ld' || language === 'fbd' ? findGraphicalBodyStartIndex(remainingContent, varStartIndex) : -1
+    const lastEnd = findLastEndVarIndex(remainingContent, varStartIndex, bodyStart === -1 ? undefined : bodyStart)
     if (lastEnd !== -1) {
       variablesText = remainingContent.slice(varStartIndex, lastEnd)
       bodyStartIndex = lastEnd

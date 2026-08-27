@@ -36,20 +36,44 @@ const formatParseError = (message: string, lineNumber?: number): string => {
 }
 
 /**
+ * Index at which a graphical POU's JSON body starts, or -1 when there is none.
+ *
+ * `serializeGraphicalPouToString` writes the variable declarations, a blank
+ * line, then `JSON.stringify(body, null, 2)` — so the body always opens with a
+ * brace in column 0. The anchor is the line start rather than the first brace
+ * anywhere, because a declaration line may legitimately carry one inside an
+ * initial value or an inline `(* ... *)` comment, and those stay indented.
+ */
+export const findGraphicalBodyStartIndex = (content: string, fromIndex: number): number => {
+  const match = content.slice(fromIndex).match(/^[ \t]*\{/m)
+  /* istanbul ignore next -- a matched regex always carries an index */
+  if (match?.index === undefined) return -1
+  return fromIndex + match.index
+}
+
+/**
  * Helper function to find the last END_VAR in the content
  * @param content - The content to search
  * @param startIndex - The index to start searching from
+ * @param stopAtIndex - Optional exclusive upper bound for the search. Graphical
+ *   POUs pass the start of their JSON body: a placed native (C/C++, Python)
+ *   library block carries its authored source in `node.data.variant.body`, and
+ *   that source has its own VAR ... END_VAR. Scanning the whole file would take
+ *   the embedded END_VAR as the end of the declarations and slice the body from
+ *   the middle of the JSON, so the POU failed to parse and the project could
+ *   not be opened at all (DOPE-592).
  * @returns The index after the last END_VAR, or -1 if not found
  */
-export const findLastEndVarIndex = (content: string, startIndex: number): number => {
+export const findLastEndVarIndex = (content: string, startIndex: number, stopAtIndex?: number): number => {
+  const region = stopAtIndex === undefined ? content : content.slice(0, stopAtIndex)
   let lastEndVarIndex = -1
   let searchIndex = startIndex
 
-  let endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+  let endVarMatch = region.slice(searchIndex).match(/\bEND_VAR\b/i)
   while (endVarMatch && endVarMatch.index !== undefined) {
     lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
     searchIndex = lastEndVarIndex
-    endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+    endVarMatch = region.slice(searchIndex).match(/\bEND_VAR\b/i)
   }
 
   return lastEndVarIndex
@@ -298,7 +322,12 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
 
     if (varStartIndex !== -1) {
       const varSectionStart = varStartIndex
-      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
+      const bodyStart = findGraphicalBodyStartIndex(remainingContent, varSectionStart)
+      const lastEndVarIndex = findLastEndVarIndex(
+        remainingContent,
+        varSectionStart,
+        bodyStart === -1 ? undefined : bodyStart,
+      )
 
       if (lastEndVarIndex !== -1) {
         variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)

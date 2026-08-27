@@ -1,6 +1,7 @@
 import * as iecStringModule from '../../generate-iec-string-to-variables'
 import {
   detectLanguageFromExtension,
+  findGraphicalBodyStartIndex,
   findLastEndVarIndex,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
@@ -543,5 +544,95 @@ describe('detectLanguageFromExtension', () => {
 
   it('throws for unsupported extension', () => {
     expect(() => detectLanguageFromExtension('file.java')).toThrow('Unsupported extension')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DOPE-592: a placed native library block carries its own VAR ... END_VAR
+// ---------------------------------------------------------------------------
+describe('graphical POU holding a native library block', () => {
+  // A C++ library block's authored source, as `node.data.variant.body` used to
+  // carry it. Two details matter and both are what shipped in real projects:
+  // END_VAR is indented (so a space precedes it and the \bEND_VAR\b word
+  // boundary matches, which an escaped newline alone would have blocked), and
+  // the body continues past it with content that is not JSON.
+  const nativeBlockSource = [
+    'FUNCTION_BLOCK TCP_CLIENT',
+    'VAR_INPUT',
+    '  EN : BOOL;',
+    '  END_VAR',
+    'VAR',
+    '  fd : INT;',
+    '  END_VAR',
+    '#ifdef ARDUINO',
+    '#include <WiFi.h>',
+    '#endif',
+  ].join('\n')
+
+  const body = {
+    name: 'main',
+    rungs: [
+      {
+        id: 'rung-1',
+        nodes: [
+          {
+            id: 'block-1',
+            type: 'block',
+            data: { variant: { name: 'TCP_CLIENT', language: 'cpp', body: nativeBlockSource } },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  }
+
+  const content = `PROGRAM main\nVAR\n  x : BOOL;\nEND_VAR\n\n${JSON.stringify(body, null, 2)}\nEND_PROGRAM\n`
+
+  it('parses the body instead of slicing it from the embedded END_VAR', () => {
+    const pou = parseGraphicalPouFromString(content, 'ld', 'program')
+    expect((pou.body.value as typeof body).rungs).toHaveLength(1)
+    expect((pou.body.value as typeof body).rungs[0].nodes[0].data.variant.name).toBe('TCP_CLIENT')
+  })
+
+  it("still reads the POU's own variables, not the block's", () => {
+    const pou = parseGraphicalPouFromString(content, 'ld', 'program')
+    expect(pou.interface?.variables.map((v) => v.name)).toEqual(['x'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findGraphicalBodyStartIndex
+// ---------------------------------------------------------------------------
+describe('findGraphicalBodyStartIndex', () => {
+  it('finds the brace that opens the body in column 0', () => {
+    const content = 'VAR\n  x : BOOL;\nEND_VAR\n\n{\n  "name": "main"\n}\n'
+    expect(findGraphicalBodyStartIndex(content, 0)).toBe(content.indexOf('{'))
+  })
+
+  it('ignores a brace inside a declaration line', () => {
+    // Only a line-initial brace opens a body, so an initial value or an inline
+    // comment carrying one cannot cut the declaration scan short.
+    const content = 'VAR\n  x : STRING := \'{}\'; (* {shape} *)\nEND_VAR\n\n{\n  "name": "m"\n}\n'
+    expect(findGraphicalBodyStartIndex(content, 0)).toBe(content.indexOf('\n{\n') + 1)
+  })
+
+  it('returns -1 when there is no body', () => {
+    expect(findGraphicalBodyStartIndex('VAR\n  x : BOOL;\nEND_VAR\n', 0)).toBe(-1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findLastEndVarIndex bound
+// ---------------------------------------------------------------------------
+describe('findLastEndVarIndex with an upper bound', () => {
+  it('ignores an END_VAR at or past the bound', () => {
+    const content = 'VAR x : INT; END_VAR\n{ "s": "VAR y; END_VAR" }'
+    const bound = content.indexOf('{')
+    expect(findLastEndVarIndex(content, 0, bound)).toBe(content.indexOf('END_VAR') + 'END_VAR'.length)
+  })
+
+  it('returns -1 when the bound excludes every END_VAR', () => {
+    const content = 'VAR x : INT; END_VAR'
+    expect(findLastEndVarIndex(content, 0, 5)).toBe(-1)
   })
 })

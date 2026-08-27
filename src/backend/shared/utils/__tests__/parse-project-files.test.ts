@@ -909,3 +909,52 @@ describe('data type file hydration', () => {
     expect(result.projectData.dataTypes).toEqual([structWithDoc])
   })
 })
+
+// ---------------------------------------------------------------------------
+// DOPE-592
+// ---------------------------------------------------------------------------
+describe('graphical POU holding a native library block', () => {
+  // A ladder body whose block variant used to carry the whole authored source of
+  // a native (C/C++) library block, VAR ... END_VAR and all. Both the parser and
+  // this fallback took that embedded END_VAR as the end of the declarations and
+  // sliced the body from the middle of the JSON, so the POU came back with an
+  // empty FBD-shaped body and the project could not be opened.
+  const nativeBlockSource = [
+    'FUNCTION_BLOCK TCP_CLIENT',
+    'VAR_INPUT',
+    '  EN : BOOL;',
+    '  END_VAR',
+    '#ifdef ARDUINO',
+    '#endif',
+  ].join('\n')
+
+  const ladderBody = {
+    name: 'Main',
+    rungs: [
+      {
+        id: 'rung-1',
+        nodes: [
+          {
+            id: 'block-1',
+            type: 'block',
+            data: { variant: { name: 'TCP_CLIENT', body: nativeBlockSource } },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  }
+
+  const content = `PROGRAM Main\nVAR\n  x : BOOL;\nEND_VAR\n\n${JSON.stringify(ladderBody, null, 2)}\nEND_PROGRAM\n`
+
+  it('parses the rungs and reports no warning', () => {
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/Main.ld', content }]
+    const result = parseProjectFiles('/p', makeProjectJson(), '{}', '[]', pouFiles, [], [])
+
+    // No warning at all is the point: the POU parsed, it did not fall back.
+    expect(result.warnings).toBeUndefined()
+    expect(result.projectData.pous).toHaveLength(1)
+    const body = result.projectData.pous[0].body as { language: string; value: { rungs?: unknown[] } }
+    expect(body.value.rungs).toHaveLength(1)
+  })
+})
