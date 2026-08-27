@@ -8,10 +8,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
+import { getCppMemberCompletions, projectTypeNamePredicate } from '../../../../../services/cpp-scope'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
-import { pouUri } from '../../../../../services/st-lsp'
+import { pouUri, splitExpression } from '../../../../../services/st-lsp'
 import { openPLCStoreBase, useOpenPLCStore } from '../../../../../store'
 import { applyAcceptedHunks, computeHunks } from '../../../../../utils/ai-diff-review'
+import { memberChainBefore } from '../../../../../utils/cpp/member-chain'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../../../utils/PLC/pou-file-extensions'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../../../../../utils/PLC/pou-text-parser'
 import { Modal, ModalContent, ModalTitle } from '../../../../_molecules/modal'
@@ -739,13 +741,52 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     const completionDisposable = monaco.languages.registerCompletionItemProvider('cpp', {
-      provideCompletionItems: (model, position) => {
+      // `.` re-triggers the provider: without it Monaco only asks while a word
+      // is being typed, so `motor.` alone would never open the member list.
+      triggerCharacters: ['.'],
+      provideCompletionItems: async (model, position) => {
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,
           endLineNumber: position.lineNumber,
           startColumn: word.startColumn,
           endColumn: word.endColumn,
+        }
+
+        // Member access is answered on its own: after a `.` the only valid
+        // completions are that expression's members, so offering the standard
+        // library, snippets and every in-scope name alongside them would bury
+        // the answer under a hundred irrelevant entries.
+        const lineBeforeCursor = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        })
+        const { anchor } = splitExpression(memberChainBefore(lineBeforeCursor))
+        if (anchor !== '') {
+          const members = await getCppMemberCompletions(
+            name,
+            anchor,
+            projectTypeNamePredicate(pous, dataTypes, sliceLibraries),
+          )
+          if (members.length > 0) {
+            return {
+              suggestions: members.map((member) => ({
+                label: member.label,
+                insertText: member.label,
+                kind: monaco.languages.CompletionItemKind.Field,
+                // The IEC name is worth showing: it is what the variables
+                // table and every other language call this member, and it is
+                // not always recoverable from the C++ spelling.
+                detail: member.type ? `${member.type} — ${member.iecName}` : member.iecName,
+                range,
+              })),
+            }
+          }
+          // No members resolved (LSP not ready, or not a composite type):
+          // fall through rather than assert an empty list, which would look
+          // like "this expression has nothing" instead of "ask again later".
         }
 
         const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
@@ -777,7 +818,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language, deviceBoard, pouVariables])
+  }, [language, deviceBoard, pouVariables, name, pous, dataTypes, sliceLibraries])
 
   // -----------------------------------------------------------------------
   // AI inline completion provider (gated by hasAIAssistant)
