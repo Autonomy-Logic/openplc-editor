@@ -66,16 +66,6 @@ export interface ShmLeaf {
   /** How the field is laid out and decoded. */
   descriptor: ShmFieldDescriptor
   /**
-   * The same leaf as the compiler names it, relative to the POU instance —
-   * `MOTORS[0].SPEED`, `GRID2[1][0]`.
-   *
-   * This is the string that makes the layout checkable: `debug-map.json`
-   * enumerates every leaf of the program with a path in exactly this form, so a
-   * build-time comparison can prove our layout agrees with what the compiler
-   * actually emitted, rather than hoping two independent walks match.
-   */
-  mapPath: string
-  /**
    * Whether this leaf is an element of an array OF that same type.
    *
    * It changes how an enumeration is reached, and only an enumeration.
@@ -185,8 +175,22 @@ export const pythonClassNameFor = (typeName: string): string => typeName.toUpper
 const indexDataTypes = (dataTypes: readonly PLCDataType[]): Map<string, PLCDataType> =>
   new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
 
-/** IEC base type an enumeration is stored as. STruC++ defaults to INT. */
-const ENUM_BASE_DESCRIPTOR = SHM_SCALAR_TYPES.int
+/**
+ * How an enumeration crosses: as a 32-bit signed integer.
+ *
+ * Matches the C++ storage rather than the IEC view, deliberately. The editor's
+ * enumerated data type carries no base type, so `type-codegen` emits a bare
+ * `enum class Mode { … }` — and a C++ enum with no explicit base has `int` as
+ * its underlying type, i.e. 32 bits. `debug-map.json` reports such a leaf as
+ * `INT size=2` because that is the IEC-level view, and this used to follow that,
+ * casting through `int16_t`.
+ *
+ * Nothing had gone wrong (no project has 32 768 enumerators), but the cast was
+ * narrowing something the compiler stores wide, which is a truncation waiting
+ * for a reason. Carrying the full width removes the question instead of
+ * documenting it. The four extra bytes per enumeration are irrelevant here.
+ */
+const ENUM_BASE_DESCRIPTOR = SHM_SCALAR_TYPES.dint
 
 /** Everything the recursion carries that does not change between levels. */
 interface WalkEnv {
@@ -210,7 +214,6 @@ const walkDeclaration = (
   path: ReadonlyArray<string | number>,
   field: string,
   access: string,
-  mapPath: string,
   objectPath: ReadonlyArray<string | null>,
   env: WalkEnv,
   depth: number,
@@ -220,19 +223,7 @@ const walkDeclaration = (
 
   const element = elementTypeOf(declaration)
   if (shape.dims === null) {
-    return walk(
-      declaration.name,
-      element.value,
-      element.definition,
-      path,
-      field,
-      access,
-      mapPath,
-      objectPath,
-      false,
-      env,
-      depth,
-    )
+    return walk(declaration.name, element.value, element.definition, path, field, access, objectPath, false, env, depth)
   }
 
   const leaves: ShmLeaf[] = []
@@ -244,7 +235,6 @@ const walkDeclaration = (
       [...path, ...indices],
       `${field}_${indices.join('_')}`,
       `${access}${subscriptFor(indices)}`,
-      `${mapPath}${mapSubscriptFor(indices)}`,
       // A list node carries no class name; its length comes from the indices.
       [...objectPath, ...indices.map(() => null)],
       // Directly an element of this array — see `ShmLeaf.arrayElement`.
@@ -272,7 +262,6 @@ const walk = (
   path: ReadonlyArray<string | number>,
   field: string,
   access: string,
-  mapPath: string,
   objectPath: ReadonlyArray<string | null>,
   arrayElement: boolean,
   env: WalkEnv,
@@ -295,7 +284,6 @@ const walk = (
         [...path, member.name],
         `${field}_${member.name}`,
         `${access}.${mangledMemberName(member.name, member.type.value, userTypeNames)}`,
-        `${mapPath}.${member.name.toUpperCase()}`,
         // This node is an instance of the structure; the member is one level in.
         [...objectPath.slice(0, -1), dataType.name, null],
         env,
@@ -318,7 +306,6 @@ const walk = (
           field,
           path,
           access,
-          mapPath,
           objectPath,
           descriptor: ENUM_BASE_DESCRIPTOR,
           enumTypeName: dataType.name,
@@ -374,7 +361,6 @@ const walk = (
         // A pin is a member of the instance's class, upper-cased, and mangled by
         // the same rule as any other member.
         `${access}.${mangledMemberName(pin.name, pin.type.value, userTypeNames)}`,
-        `${mapPath}.${pinName}`,
         // This node is the instance; its class is named by the block type.
         [...objectPath.slice(0, -1), pythonClassNameFor(typeValue), null],
         env,
@@ -405,7 +391,7 @@ const walk = (
   }
 
   return {
-    leaves: [{ field, path, access, mapPath, objectPath, descriptor }],
+    leaves: [{ field, path, access, objectPath, descriptor }],
   }
 }
 
@@ -499,9 +485,6 @@ const elementIndices = (dims: readonly Dimension[]): number[][] => {
 const subscriptFor = (indices: readonly number[]): string =>
   indices.length === 1 ? `[${indices[0]}]` : `(${indices.join(', ')})`
 
-/** How the compiler spells the same subscript in a debug-map path. */
-const mapSubscriptFor = (indices: readonly number[]): string => indices.map((i) => `[${i}]`).join('')
-
 /**
  * The scalar fields one interface variable contributes, in order — or the reason
  * it cannot cross.
@@ -521,19 +504,7 @@ export const describeShmLeaves = (variable: PLCVariable, context: ShmWalkContext
     direction: context.direction,
   }
 
-  // The variable's own name is its `mapPath` root: the compiler names a POU
-  // instance's leaves `INSTANCE0.<POU>.<NAME>…`, and the prefix is the caller's
-  // to add when it checks a layout against `debug-map.json`.
-  return walkDeclaration(
-    variable,
-    [variable.name],
-    variable.name,
-    variable.name.toUpperCase(),
-    variable.name.toUpperCase(),
-    [null],
-    env,
-    0,
-  )
+  return walkDeclaration(variable, [variable.name], variable.name, variable.name.toUpperCase(), [null], env, 0)
 }
 
 /** Every leaf of every variable, in order, or the first refusal encountered. */

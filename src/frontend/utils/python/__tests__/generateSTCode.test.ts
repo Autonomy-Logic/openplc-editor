@@ -180,7 +180,7 @@ describe('generateSTCode (python)', () => {
       dataTypes: [MODE],
     })
 
-    expect(result).toContain('data_in.modes_0 = static_cast<int16_t>(MODES[0]);')
+    expect(result).toContain('data_in.modes_0 = static_cast<int32_t>(MODES[0]);')
     expect(result).toContain('MODES[0] = static_cast<MODE>(data_out.modes_0);')
     expect(result).not.toContain('MODES[0].get().get()')
     expect(result).not.toContain('MODES[0].set(')
@@ -296,7 +296,7 @@ describe('generateSTCode (python)', () => {
     })
 
     expect(result).toContain('reinterpret_cast<const char16_t*>(data_out.wmsg.body)')
-    expect(result).toContain('strucpp::IECWString<254>')
+    expect(result).toContain('strucpp::IEC_WSTRING::value_type')
   })
 
   it('emits int64 fields for the duration and calendar types', () => {
@@ -327,7 +327,7 @@ describe('generateSTCode (python)', () => {
     })
 
     expect(result).toContain(
-      'MSG = strucpp::IECString<254>(reinterpret_cast<const char*>(data_out.msg.body), data_out.msg.len);',
+      'MSG = strucpp::IEC_STRING::value_type(reinterpret_cast<const char*>(data_out.msg.body), data_out.msg.len);',
     )
   })
 
@@ -360,7 +360,7 @@ describe('generateSTCode (python)', () => {
 
     expect(result).toContain('auto __cur = WMSG.get();')
     expect(result).toContain('if (__cur.length() <= STR_MAX_LEN)')
-    expect(result).toContain('strucpp::IECWString<254>(reinterpret_cast<const char16_t*>(data_out.wmsg.body)')
+    expect(result).toContain('strucpp::IEC_WSTRING::value_type(reinterpret_cast<const char16_t*>(data_out.wmsg.body)')
   })
 
   it('reads / writes the runtime SHM-pointer locals through their IECVars', () => {
@@ -440,7 +440,7 @@ describe('generateSTCode (python)', () => {
       // scoped enum but not to an integer.
       const result = run([userTyped('md', 'input', 'Mode')], [MODE])
 
-      expect(result).toContain('data_in.md = static_cast<int16_t>(MD.get().get());')
+      expect(result).toContain('data_in.md = static_cast<int32_t>(MD.get().get());')
     })
 
     it('writes an enumeration back through set(), not operator=', () => {

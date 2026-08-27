@@ -96,11 +96,18 @@ const generateLeafCopy = (leaf: ShmLeaf, struct: string, toShm: boolean): string
     // cap, Python holds the whole value and the write-back is faithful; over it,
     // Python holds a prefix and the IEC value is left alone. A string that fits
     // — the ordinary case — round-trips exactly as before.
-    const wrapper = wide ? 'IECWString' : 'IECString'
+    // The capacity comes from strucpp, not from a literal here.
+    // `IEC_STRING` / `IEC_WSTRING` are the aliases strucpp declares FOR CODEGEN
+    // (`using IEC_STRING = IECStringVar<254>;`), and `::value_type` is the value
+    // type behind the variable — so this names exactly the type the compiler
+    // gave the variable, and tracks it if strucpp ever changes the default. It
+    // used to say `IECString<254>`, which was the right number written in the
+    // wrong place: nothing would have caught it drifting.
+    const alias = wide ? 'IEC_WSTRING' : 'IEC_STRING'
     const pointer = wide ? 'const char16_t*' : 'const char*'
     let code = `        { auto __cur = ${access}.get();\n`
     code += `          if (__cur.length() <= STR_MAX_LEN)\n`
-    code += `            ${access} = strucpp::${wrapper}<254>(reinterpret_cast<${pointer}>(${shm}.body), ${shm}.len); }\n`
+    code += `            ${access} = strucpp::${alias}::value_type(reinterpret_cast<${pointer}>(${shm}.body), ${shm}.len); }\n`
     return code
   }
 

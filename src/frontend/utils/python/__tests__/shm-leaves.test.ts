@@ -105,7 +105,7 @@ describe('describeShmLeaves', () => {
     expect(leaf.field).toBe('x')
     expect(leaf.path).toEqual(['x'])
     expect(leaf.access).toBe('X')
-    expect(leaf.mapPath).toBe('X')
+    expect(leaf.access).toBe('X')
   })
 
   it('describes an array as one leaf PER ELEMENT, at its declared indices', () => {
@@ -116,7 +116,7 @@ describe('describeShmLeaves', () => {
     const leaves = leavesOf(describeShmLeaves(arrayOf('data', 'INT', '2..5'), inbound()))
 
     expect(leaves).toHaveLength(4)
-    expect(leaves.map((l) => l.mapPath)).toEqual(['DATA[2]', 'DATA[3]', 'DATA[4]', 'DATA[5]'])
+    expect(leaves.map((l) => l.access)).toEqual(['DATA[2]', 'DATA[3]', 'DATA[4]', 'DATA[5]'])
     expect(leaves.map((l) => l.access)).toEqual(['DATA[2]', 'DATA[3]', 'DATA[4]', 'DATA[5]'])
     // Python index == IEC index, on every surface.
     expect(leaves.map((l) => l.path)).toEqual([
@@ -162,7 +162,10 @@ describe('describeShmLeaves', () => {
   it('describes an enumeration as its stored integer, naming the type for Python', () => {
     const [leaf] = leavesOf(describeShmLeaves(userTyped('md', 'Mode'), inbound([MODE])))
 
-    expect(leaf.descriptor.cType).toBe('int16_t')
+    // 32-bit, matching the C++ storage: the editor's enumerated type carries no
+    // base type, so strucpp emits a bare `enum class` whose underlying type is
+    // `int`. Narrowing to int16 was a truncation waiting for a reason.
+    expect(leaf.descriptor.cType).toBe('int32_t')
     expect(leaf.enumTypeName).toBe('Mode')
     // The access stays assignable; the emitter casts through the wrapper, since
     // an IEC_ENUM_Var yields an IEC_ENUM_Value that converts to the scoped enum
@@ -215,7 +218,7 @@ describe('describeShmLeaves', () => {
     const leaves = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
 
     expect(leaves.map((l) => l.access)).toEqual(['R.TRIMS[1]', 'R.TRIMS[2]', 'R.TRIMS[3]'])
-    expect(leaves.map((l) => l.mapPath)).toEqual(['R.TRIMS[1]', 'R.TRIMS[2]', 'R.TRIMS[3]'])
+    expect(leaves.map((l) => l.access)).toEqual(['R.TRIMS[1]', 'R.TRIMS[2]', 'R.TRIMS[3]'])
   })
 
   it('refuses an array member whose dimension text is malformed', () => {
@@ -402,7 +405,7 @@ describe('describeShmLeaves', () => {
       const instance: PLCVariable = { ...ton('g'), type: { definition: 'derived', value: 'Grid' } }
       const leaves = leavesOf(describeShmLeaves(instance, { dataTypes: [], pous: [gridBlock], direction: 'in' }))
 
-      expect(leaves.map((l) => l.mapPath)).toEqual(['G.CELLS[0][0]', 'G.CELLS[0][1]', 'G.CELLS[1][0]', 'G.CELLS[1][1]'])
+      expect(leaves.map((l) => l.access)).toEqual(['G.CELLS(0, 0)', 'G.CELLS(0, 1)', 'G.CELLS(1, 0)', 'G.CELLS(1, 1)'])
       expect(leaves[0].access).toBe('G.CELLS(0, 0)')
     })
 
@@ -499,7 +502,7 @@ describe('describeShmLeaves', () => {
       }
       const leaves = leavesOf(describeShmLeaves(bank, { ...inbound(), libraries: [TON_LIB] }))
 
-      expect(leaves.map((l) => l.mapPath)).toEqual([
+      expect(leaves.map((l) => l.access)).toEqual([
         'BANK[0].IN',
         'BANK[0].PT',
         'BANK[0].Q',
@@ -526,7 +529,7 @@ describe('describeShmLeaves', () => {
       const bank = arrayOfRank('bank', 'Motor', ['0..1'], 'user-data-type')
       const leaves = leavesOf(describeShmLeaves(bank, inbound([MOTOR])))
 
-      expect(leaves.map((l) => l.mapPath)).toEqual(['BANK[0].SPEED', 'BANK[0].LABEL', 'BANK[1].SPEED', 'BANK[1].LABEL'])
+      expect(leaves.map((l) => l.access)).toEqual(['BANK[0].SPEED', 'BANK[0].LABEL', 'BANK[1].SPEED', 'BANK[1].LABEL'])
       // The class name for each element's node travels with the leaf, so the
       // Python assembler never has to walk the project's types again.
       expect(leaves[0].objectPath).toEqual([null, 'Motor', null])
@@ -609,13 +612,13 @@ describe('describeShmLeaves — array shapes, following the compiler', () => {
   it('expands a two-dimensional array row-major, at its declared bounds', () => {
     const leaves = leavesOf(describeShmLeaves(arrayOfRank('grid', 'INT', ['1..2', '0..2']), inbound()))
 
-    expect(leaves.map((l) => l.mapPath)).toEqual([
-      'GRID[1][0]',
-      'GRID[1][1]',
-      'GRID[1][2]',
-      'GRID[2][0]',
-      'GRID[2][1]',
-      'GRID[2][2]',
+    expect(leaves.map((l) => l.access)).toEqual([
+      'GRID(1, 0)',
+      'GRID(1, 1)',
+      'GRID(1, 2)',
+      'GRID(2, 0)',
+      'GRID(2, 1)',
+      'GRID(2, 2)',
     ])
     // strucpp passes rank >= 2 as Array2D/Array3D, whose storage is private, so
     // the element is reached through `operator()` rather than a flat subscript.
@@ -626,9 +629,9 @@ describe('describeShmLeaves — array shapes, following the compiler', () => {
     const leaves = leavesOf(describeShmLeaves(arrayOfRank('cube', 'INT', ['0..1', '0..1', '0..1']), inbound()))
 
     expect(leaves).toHaveLength(8)
-    expect(leaves[0].mapPath).toBe('CUBE[0][0][0]')
+
     expect(leaves[0].access).toBe('CUBE(0, 0, 0)')
-    expect(leaves[7].mapPath).toBe('CUBE[1][1][1]')
+    expect(leaves[7].access).toBe('CUBE(1, 1, 1)')
   })
 
   it('refuses beyond rank 3, which is where the compiler stops generating containers', () => {
@@ -642,14 +645,14 @@ describe('describeShmLeaves — array shapes, following the compiler', () => {
   it('expands an array of STRING, one length-and-body pair per element', () => {
     const leaves = leavesOf(describeShmLeaves(arrayOf('names', 'STRING', '0..2'), inbound()))
 
-    expect(leaves.map((l) => l.mapPath)).toEqual(['NAMES[0]', 'NAMES[1]', 'NAMES[2]'])
+    expect(leaves.map((l) => l.access)).toEqual(['NAMES[0]', 'NAMES[1]', 'NAMES[2]'])
     expect(leaves.every((l) => l.descriptor.kind === 'string')).toBe(true)
   })
 
   it('expands an array of WSTRING', () => {
     const leaves = leavesOf(describeShmLeaves(arrayOf('names', 'WSTRING', '0..1'), inbound()))
 
-    expect(leaves.map((l) => l.mapPath)).toEqual(['NAMES[0]', 'NAMES[1]'])
+    expect(leaves.map((l) => l.access)).toEqual(['NAMES[0]', 'NAMES[1]'])
     expect(leaves.every((l) => l.descriptor.kind === 'wstring')).toBe(true)
   })
 
@@ -658,7 +661,7 @@ describe('describeShmLeaves — array shapes, following the compiler', () => {
       describeShmLeaves(arrayOfRank('modes', 'Mode', ['0..2'], 'user-data-type'), inbound([MODE])),
     )
 
-    expect(leaves.map((l) => l.mapPath)).toEqual(['MODES[0]', 'MODES[1]', 'MODES[2]'])
+    expect(leaves.map((l) => l.access)).toEqual(['MODES[0]', 'MODES[1]', 'MODES[2]'])
     expect(leaves.every((l) => l.enumTypeName === 'Mode')).toBe(true)
   })
 
@@ -666,19 +669,59 @@ describe('describeShmLeaves — array shapes, following the compiler', () => {
     const leaves = leavesOf(describeShmLeaves(arrayOf('one', 'INT', '0..0'), inbound()))
 
     expect(leaves).toHaveLength(1)
-    expect(leaves[0].mapPath).toBe('ONE[0]')
+    expect(leaves[0].access).toBe('ONE[0]')
     expect(leaves[0].path).toEqual(['one', 0])
   })
 
   it('leaves a genuine scalar unsubscripted', () => {
     const [leaf] = leavesOf(describeShmLeaves(scalar('x', 'INT'), inbound()))
 
-    expect(leaf.mapPath).toBe('X')
+    expect(leaf.access).toBe('X')
     expect(leaf.path).toEqual(['x'])
   })
 
   it('still refuses an array whose bounds cannot be read', () => {
     const bad = arrayOfRank('bad', 'INT', ['nonsense'])
     expect(refusalOf(describeShmLeaves(bad, inbound()))?.reason).toContain('array bounds cannot be read')
+  })
+})
+
+describe('refusals propagate from wherever they happen', () => {
+  it('surfaces a nested structure member the boundary cannot describe, naming its path', () => {
+    // The refusal has to travel out of the member loop rather than be swallowed
+    // into a partial leaf list — a layout missing a field is exactly the silent
+    // corruption the walk exists to prevent.
+    const inner: PLCDataType = {
+      name: 'Inner',
+      derivation: 'structure',
+      variable: [{ name: 'mystery', type: { definition: 'base-type', value: 'NotAType' } }],
+    }
+    const outer: PLCDataType = {
+      name: 'Outer',
+      derivation: 'structure',
+      variable: [{ name: 'deep', type: { definition: 'user-data-type', value: 'Inner' } }],
+    }
+    const refusal = refusalOf(describeShmLeaves(userTyped('o', 'Outer'), inbound([outer, inner])))
+
+    expect(refusal?.path).toEqual(['o', 'deep', 'mystery'])
+    expect(refusal?.reason).toContain('not a type a Python block can exchange')
+  })
+
+  it('surfaces an array whose ELEMENT type cannot be described', () => {
+    // The refusal happens inside the per-element expansion, so it has to travel
+    // out of that loop too — otherwise the array contributes a short leaf list
+    // and every field after it shifts.
+    const bad = arrayOfRank('junk', 'NotAType', ['0..1'])
+    const refusal = refusalOf(describeShmLeaves(bad, inbound()))
+
+    expect(refusal?.reason).toContain('not a type a Python block can exchange')
+    // The path names the element that failed, not just the variable.
+    expect(refusal?.path).toEqual(['junk', 0])
+  })
+
+  it('lists instances with no data types supplied, which is the library-only case', () => {
+    // `dataTypes` defaults to empty: a project can declare no structures at all
+    // and still instantiate a library function block.
+    expect(pythonFunctionBlockInstances([userTyped('t', 'TON')]).map((v) => v.name)).toEqual(['t'])
   })
 })

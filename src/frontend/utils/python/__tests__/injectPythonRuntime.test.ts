@@ -272,13 +272,13 @@ describe('structures and enumerations', () => {
     }
     const result = run([userTyped('r', 'input', 'Rig')], [rig, MODE])
 
-    expect(result).toContain(`(('r', 'state'), ('Rig', None), 'h', 0, 2, 'Mode')`)
+    expect(result).toContain(`(('r', 'state'), ('Rig', None), 'i', 0, 4, 'Mode')`)
   })
 
   it('wraps a top-level enumeration in its IntEnum after decoding', () => {
     const result = run([userTyped('md', 'input', 'Mode')], [MODE])
 
-    expect(result).toContain(`(('md',), (None,), 'h', 0, 2, 'Mode')`)
+    expect(result).toContain(`(('md',), (None,), 'i', 0, 4, 'Mode')`)
   })
 
   it('packs a structure member by member, through the attribute path', () => {
@@ -694,7 +694,7 @@ describe('a function block pin that is itself composite', () => {
   })
 
   it('wraps an enumeration pin back into its class', () => {
-    expect(run()).toContain(`(('drv', 'STATE'), ('DRIVE', None), 'h', 129, 2, 'Mode')`)
+    expect(run()).toContain(`(('drv', 'STATE'), ('DRIVE', None), 'i', 129, 4, 'Mode')`)
   })
 
   it('declares the classes reached only through a pin', () => {

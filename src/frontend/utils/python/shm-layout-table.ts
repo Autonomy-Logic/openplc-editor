@@ -46,10 +46,6 @@ const kindLiteral = (leaf: ShmLeaf): string => {
   return `'${leaf.descriptor.pyFormat}'`
 }
 
-/** Packed width of a leaf list — the offset just past its last field. */
-export const layoutTotalBytes = (leaves: readonly ShmLeaf[]): number =>
-  leaves.reduce((total, leaf) => total + leaf.descriptor.size, 0)
-
 /**
  * The layout table for one direction, as a Python literal.
  *
