@@ -42,23 +42,34 @@ afterEach(() => {
 })
 
 describe('navigate', () => {
-  it('builds and assigns a URL with search params to window.location.href', () => {
+  /**
+   * These two used to assert the opposite — that an unknown route was written to
+   * `location.href`. That WAS the behaviour, and it was the bug: inside the Electron
+   * renderer the assignment reloads the SPA shell, so pressing "Merge" closed the open
+   * project and dropped the user on the start screen with their unsaved edits gone.
+   */
+  it('refuses an in-app route this build cannot render, leaving the app alone', () => {
     adapter.navigate('/conflicts', { branch: 'feat/foo' })
 
-    expect(stubWindow.location.href).toContain('/conflicts')
-    expect(stubWindow.location.href).toContain('branch=')
+    expect(stubWindow.location.href).toBe('about:blank')
   })
 
-  it('handles a navigation with no search params', () => {
+  it('refuses it whether or not there are search params', () => {
     adapter.navigate('/home')
 
-    expect(stubWindow.location.href).toContain('/home')
+    expect(stubWindow.location.href).toBe('about:blank')
   })
 })
 
 describe('openInNewWindow', () => {
-  it('opens the built URL in a new window', () => {
-    adapter.openInNewWindow('/diff', { commit: 'abc123' })
+  /**
+   * These asserted that ANY path opened a window, `/diff` included. An in-app path no
+   * longer does: the desktop has no such route, so the window would show an empty page in
+   * development and a missing `file://` in a packaged build. An external URL — how the
+   * editor reaches Edge's own pages — still opens one, and that is the distinction now.
+   */
+  it('opens an external URL in a new window, with its params', () => {
+    adapter.openInNewWindow('https://edge.example.com/diff', { commit: 'abc123' })
 
     expect(stubWindow.open).toHaveBeenCalledTimes(1)
     const [url, target] = stubWindow.open.mock.calls[0]
@@ -67,12 +78,10 @@ describe('openInNewWindow', () => {
     expect(target).toBe('_blank')
   })
 
-  it('opens with no search params', () => {
+  it('refuses an in-app path instead of opening an empty window', () => {
     adapter.openInNewWindow('/diff')
 
-    expect(stubWindow.open).toHaveBeenCalledTimes(1)
-    const [, target] = stubWindow.open.mock.calls[0]
-    expect(target).toBe('_blank')
+    expect(stubWindow.open).not.toHaveBeenCalled()
   })
 })
 
@@ -109,15 +118,51 @@ describe('the commit history screen is rendered in place, not navigated to', () 
   it('does not open an empty screen when there is no commit to show', () => {
     adapter.openInNewWindow('/history', { project_id: 'p1' })
 
+    // Nothing to show, and nothing to open: `/history` is an in-app path, so the request
+    // is declined rather than becoming a blank window.
     expect(openHistoryView).not.toHaveBeenCalled()
-    // Falls through to the normal behaviour rather than swallowing the click silently.
-    expect(stubWindow.open).toHaveBeenCalled()
+    expect(stubWindow.open).not.toHaveBeenCalled()
   })
 
-  it('leaves every other route alone', () => {
+  it('does not mistake another route for the history screen', () => {
     adapter.navigate('/merge', { project_id: 'p1', source: 'feat' })
 
+    // Interception is exact: only `/history` becomes store state. `/merge` is simply
+    // declined — which is the point of the fix, and is asserted on its own below.
     expect(openHistoryView).not.toHaveBeenCalled()
-    expect(stubWindow.location.href).toContain('/merge')
+    expect(stubWindow.location.href).toBe('about:blank')
+  })
+})
+
+
+/**
+ * The merge entry is the reason this file changed. It is the one caller that asked for a
+ * route the desktop has no screen for, and the old fallback answered by restarting the app.
+ */
+describe('the destination that has no desktop screen', () => {
+  it('does not reload the renderer for /merge', () => {
+    adapter.navigate('/merge', { project_id: 'p1', source: 'feat', target: 'main' })
+
+    // The whole defect in one assertion: anything written here takes the open project
+    // down with it.
+    expect(stubWindow.location.href).toBe('about:blank')
+    expect(stubWindow.open).not.toHaveBeenCalled()
+  })
+
+  it('does not open a window onto an in-app path either', () => {
+    adapter.openInNewWindow('/merge', { project_id: 'p1' })
+
+    // A BrowserWindow pointed at a route this build lacks is an empty page in development
+    // and a missing file:// in a packaged app.
+    expect(stubWindow.open).not.toHaveBeenCalled()
+  })
+
+  it('still opens a real external link', () => {
+    adapter.openInNewWindow('https://edge.example.com/signup')
+
+    // How the editor reaches Edge's own pages — sign-up, profile. Refusing these would
+    // have traded one broken affordance for another.
+    expect(stubWindow.open).toHaveBeenCalled()
+    expect(String(stubWindow.open.mock.calls[0][0])).toContain('edge.example.com/signup')
   })
 })

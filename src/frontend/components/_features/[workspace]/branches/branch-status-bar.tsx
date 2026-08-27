@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
 import { SwitchBranchCarryConflictError } from '../../../../../middleware/shared/ports/version-control-port'
-import { useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
+import { useCapabilities, useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
 import { useOpenPLCStore } from '../../../../store'
 import { toast } from '../../../../utils/toast'
@@ -18,6 +18,7 @@ type BranchStatusBarProps = {
 
 export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarProps) {
   const versionControl = useVersionControl()
+  const caps = useCapabilities()
   const navigation = useNavigation()
   const checkIfAllFilesAreSaved = useOpenPLCStore((s) => s.fileActions.checkIfAllFilesAreSaved)
   const pendingChangesCount = useOpenPLCStore((s) => s.versionControl.pendingChangesCount)
@@ -212,7 +213,10 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         onClose={() => setShowSwitcher(false)}
         onSelect={handleSelect}
         onDelete={handleDelete}
-        onMerge={handleMerge}
+        // Withheld where there is no screen to reach: the desktop has version control but
+        // not the merge page, and handing it a callback meant a menu entry that closed the
+        // open project instead of merging anything.
+        onMerge={caps.hasBranchMerge ? handleMerge : undefined}
       />
 
       <DeleteBranchModal

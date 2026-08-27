@@ -78,6 +78,16 @@ export interface PlatformCapabilities {
 
   /** True if the app supports version control (branches, commits, change tracking). */
   hasVersionControl: boolean
+  /**
+   * Whether this build can show the branch merge screen.
+   *
+   * Separate from `hasVersionControl` because the desktop has version control and no
+   * merge screen: the web's is a routed page wired to its own API layer, which the editor
+   * does not have. Offering the entry anyway meant a menu item that reloaded the renderer
+   * and closed the open project, so it is hidden until the screen exists rather than left
+   * pointing at nothing.
+   */
+  hasBranchMerge: boolean
 
   /** True if the app supports the "About" dialog. */
   hasAboutDialog: boolean
@@ -169,6 +179,8 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   // open project lives on Edge. The repository sits beside the project on the server,
   // so a project opened from disk has no history to show — see `isRemoteProjectPath`.
   hasVersionControl: true,
+  // No merge screen on the desktop yet — see `hasBranchMerge`.
+  hasBranchMerge: false,
   hasAboutDialog: true,
   hasPythonLSP: true,
   // Worker wired via src/frontend/services/st-lsp/boot.ts, started
@@ -205,6 +217,7 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasProjectExport: true,
   hasProjectImport: true,
   hasVersionControl: true,
+  hasBranchMerge: true,
   hasAboutDialog: true,
   // `monaco-pyright-lsp` ships its own ESM worker via
   // `new Worker(new URL('./worker.js', import.meta.url))` which Vite
