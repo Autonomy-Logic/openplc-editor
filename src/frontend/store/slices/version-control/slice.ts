@@ -81,6 +81,13 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
         }),
       ),
 
+    setRawLoadedContent: (content: Record<string, string>) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.rawLoadedContent = { ...content }
+        }),
+      ),
+
     setHeadContent: (content: Record<string, string> | null) =>
       setState(
         produce<VersionControlSlice>((draft) => {

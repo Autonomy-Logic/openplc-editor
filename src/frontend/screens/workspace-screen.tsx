@@ -59,6 +59,7 @@ import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monit
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
+import { buildAllProjectFileContentsPure } from '../services/save-actions'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
 import { buildGlobalCompositeKey, GLOBAL_CONFIG_NAME } from '../utils/debug-variable-finder'
@@ -133,12 +134,13 @@ const WorkspaceScreen = () => {
   )
 
   // Version control state
-  const { activePanel, pendingChangesCount, historyView, mergeView } = useOpenPLCStore(
+  const { activePanel, pendingChangesCount, historyView, mergeView, rawLoadedContent } = useOpenPLCStore(
     useShallow((s) => ({
       activePanel: s.versionControl.activePanel,
       pendingChangesCount: s.versionControl.pendingChangesCount,
       historyView: s.versionControl.historyView,
       mergeView: s.versionControl.mergeView,
+      rawLoadedContent: s.versionControl.rawLoadedContent,
     })),
   )
   const { setActivePanel, closeHistoryView, closeMergeView } = useOpenPLCStore(
@@ -164,6 +166,49 @@ const WorkspaceScreen = () => {
   // true there and nothing changes.
   const hasVersionControl =
     capabilities.hasVersionControl && projectCaps.hasVersionControl && isRemoteProjectPath(projectPath)
+
+  /**
+   * Establish the version-control sync point for the project that just loaded.
+   *
+   * `pickContentForSave` needs two things per path: the serialization taken at load time,
+   * and the bytes as they arrived. Given both, a file whose fresh serialization still equals
+   * the load-time one is echoed back unchanged; given neither, every file is re-serialised on
+   * every save. That is what made a save rewrite an entire project in the editor's own
+   * formatting — 62KB to 147KB on a real one — and report every file as modified against
+   * HEAD.
+   *
+   * KEYED ON THE RAW MAP'S IDENTITY, not on `projectPath`. A branch switch, restore, discard
+   * or stash reloads the same project: the path does not change, but the loaded bytes do, and
+   * the sync point has to follow them. The store replaces the map on every load, so its
+   * identity is the signal that one happened.
+   *
+   * SKIPPED WHERE SOMETHING ALREADY DID IT. The web establishes this in its router page
+   * before the workspace mounts, so `loadedSerialized` is already populated by the time this
+   * runs there and it leaves it alone. The condition is about state, not about which product
+   * this is — a platform that starts doing it earlier gets the same treatment for free.
+   */
+  useEffect(() => {
+    if (!projectPath) {
+      return
+    }
+
+    const state = useOpenPLCStore.getState()
+
+    if (Object.keys(state.versionControl.loadedSerialized).length > 0) {
+      return
+    }
+
+    // Serialised from the state that was just loaded, which is what makes it a baseline:
+    // anything differing from it later is a real edit.
+    const baselineContent = buildAllProjectFileContentsPure()
+
+    state.versionControlActions.initBaseline({
+      initialPending: [],
+      baselineContent,
+      rawLoadedContent: state.versionControl.rawLoadedContent,
+      loadedSerialized: baselineContent,
+    })
+  }, [projectPath, rawLoadedContent])
 
   // Start global runtime polling for status and logs
   useRuntimePolling()

@@ -132,6 +132,36 @@ async function readEnvelope(projectId: string): Promise<ApiProjectFiles | null> 
  * `canEdit` rides along from the server's own capabilities rather than being assumed:
  * a project shared read-only must not offer a save that will be refused.
  */
+/**
+ * The raw-content map the save flow consults, in the shape the web build produces.
+ *
+ * Deliberately the same keys the web adapter uses — `project.json`, the two device files,
+ * and every POU/server/remote-device path. Anything the save flow does not ask about is
+ * left out on purpose: a key nobody reads is a key that can only drift.
+ */
+function rawLoadedFilesFrom(raw: {
+  projectJson: string
+  deviceConfig: string
+  pinMapping: string
+  pouFiles: Array<{ relativePath: string; content: string }>
+  serverFiles: Array<{ relativePath: string; content: string }>
+  remoteDeviceFiles: Array<{ relativePath: string; content: string }>
+}): Record<string, string> {
+  const map: Record<string, string> = {
+    'project.json': raw.projectJson,
+    'devices/configuration.json': raw.deviceConfig,
+    'devices/pin-mapping.json': raw.pinMapping,
+  }
+
+  for (const group of [raw.pouFiles, raw.serverFiles, raw.remoteDeviceFiles]) {
+    for (const file of group) {
+      map[file.relativePath] = file.content
+    }
+  }
+
+  return map
+}
+
 export async function readCloudProject(projectId: string): Promise<RawProjectFiles> {
   try {
     const response = await edgeAuthedRequest(detailsPath(projectId))
@@ -167,9 +197,27 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       }
     }
 
+    const raw = apiFilesToRaw(projectId, files)
+
     return {
       success: true,
-      data: { ...apiFilesToRaw(projectId, files), canEdit: payload?.capabilities?.canEdit },
+      data: {
+        ...raw,
+        canEdit: payload?.capabilities?.canEdit,
+        /**
+         * The bytes exactly as the API sent them, keyed by path.
+         *
+         * The save flow echoes these back for files the user did not edit, instead of
+         * re-serialising them. Without it every save rewrites every file in the editor's
+         * own formatting: same meaning, different bytes, so the project grows (62KB to
+         * 147KB on a real one) and git reports every file as modified.
+         *
+         * Built from the parsed result rather than the envelope so the keys match the
+         * paths the save flow asks about — and match what the web adapter produces, since
+         * the point is for the two to behave the same.
+         */
+        rawLoadedFiles: rawLoadedFilesFrom(raw),
+      },
     }
   } catch (error) {
     // Never reached the server. Said plainly, because "you are offline" and "this project

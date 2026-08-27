@@ -96,6 +96,12 @@ export type VersionControlActions = {
   openMergeView: (view: { sourceBranch: string; targetBranch?: string }) => void
   /** Close it, returning to the workspace underneath. */
   closeMergeView: () => void
+  /**
+   * Keep the bytes a reader handed over, so the save flow can echo unedited files back
+   * unchanged. Set on every project load — including a reopen, so a stale map from the
+   * previous project is never left behind.
+   */
+  setRawLoadedContent: (content: Record<string, string>) => void
   /** Set (or clear, with `null`) the lazily-fetched HEAD snapshot used as the
    *  "original" side of source-control diffs. */
   setHeadContent: (content: Record<string, string> | null) => void

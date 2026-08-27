@@ -208,6 +208,19 @@ export interface RawProjectFiles {
      * "not pending" case (normal project, has `project.json`).
      */
     pendingPlcopenSource?: string
+    /**
+     * The file bytes exactly as the source handed them over, keyed by relative path.
+     *
+     * Present for a reader that has a notion of "as loaded" separate from the parsed
+     * result — a cloud project, whose bytes came off the wire. Absent for the filesystem
+     * reader, where the files on disk ARE the loaded state, and the sync point treats
+     * absent the same as nothing to echo.
+     *
+     * The save flow uses it to upload unedited files unchanged instead of re-serialising
+     * them, which is what keeps a save from rewriting every file in the editor's own
+     * formatting and reporting the whole project as modified.
+     */
+    rawLoadedFiles?: Record<string, string>
   }
   /**
    * `status` carries the HTTP status when the platform had one, for the same

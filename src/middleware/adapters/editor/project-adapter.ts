@@ -259,7 +259,20 @@ export function createEditorProjectAdapter(): ProjectPort {
         // version-skewed main process must not crash project open.
         Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
       )
-      return { success: true, data: parsed }
+      return {
+        success: true,
+        data: {
+          ...parsed,
+          /**
+           * Carried through so the save flow can echo unedited files back byte-for-byte
+           * instead of re-serialising them. `RawProjectFiles` only has it for a cloud
+           * project — the filesystem reader has the files on disk and no separate notion of
+           * "as loaded" — so it is absent for a local one, which the sync point treats the
+           * same as having nothing to echo.
+           */
+          rawLoadedFiles: raw.data.rawLoadedFiles,
+        },
+      }
     },
 
     async readProjectFiles(projectPath: string): Promise<RawProjectFiles> {

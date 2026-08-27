@@ -301,3 +301,57 @@ describe('saveCloudProject', () => {
     await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false, error: 'ECONNRESET' })
   })
 })
+
+
+/**
+ * The bytes as loaded.
+ *
+ * The save flow echoes these back for files the user did not touch. Without them every save
+ * re-serialises the whole project in the editor's own formatting — same meaning, different
+ * bytes — which grew a real project from 62KB to 147KB and reported every file as modified
+ * against HEAD. The web build has had this since it shipped; these tests are the desktop
+ * catching up, so they check the same keys the web adapter produces.
+ */
+describe('readCloudProject carries the raw bytes', () => {
+  it('keys the project and device files exactly as the save flow asks for them', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.data?.rawLoadedFiles).toMatchObject({
+      'project.json': FILES['project.json'],
+      'devices/configuration.json': '{}',
+      'devices/pin-mapping.json': '[]',
+    })
+  })
+
+  it('includes every POU under its own relative path', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    const result = await readCloudProject('p1')
+
+    // The same path the parsed `pouFiles` entry carries, because that is the key
+    // `pickContentForSave` looks up.
+    expect(result.data?.rawLoadedFiles?.['pous/programs/main.st']).toBe('x := TRUE;')
+  })
+
+  it('hands back the bytes verbatim, not a re-serialisation', async () => {
+    // Deliberately ugly formatting: the point of the map is that it survives untouched.
+    const ugly = '{\n\t"meta" :   {"name":"Irrigation"}   }'
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, 'project.json': ugly } }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.data?.rawLoadedFiles?.['project.json']).toBe(ugly)
+  })
+
+  it('leaves out what the save flow never asks about', async () => {
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, 'README.md': '# hi' } }))
+
+    const result = await readCloudProject('p1')
+
+    // A key nobody reads is a key that can only drift. README is not produced by the save
+    // flow, so echoing it would not save it either — that gap is its own problem.
+    expect(result.data?.rawLoadedFiles).not.toHaveProperty('README.md')
+  })
+})
