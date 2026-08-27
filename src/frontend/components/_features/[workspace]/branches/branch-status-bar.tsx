@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
 import { SwitchBranchCarryConflictError } from '../../../../../middleware/shared/ports/version-control-port'
@@ -32,6 +32,54 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
   const [pendingBranchSwitch, setPendingBranchSwitch] = useState<Branch | null>(null)
   const [carryCheckState, setCarryCheckState] = useState<CarryCheckState>('loading')
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
+
+  /**
+   * Reconcile the remembered branch against the ones that actually exist.
+   *
+   * The active branch is client state, kept in `localStorage` per project, and nothing used
+   * to check it was still real. A branch deleted anywhere else — the web editor, another
+   * machine, or a merge that removed its source — left this bar naming it indefinitely, and
+   * worse: the history section passes the name straight into `listCommits({ branch })`, so a
+   * stale name meant querying a branch the server no longer has.
+   *
+   * Falling back to the default branch is the honest answer, because that is where the
+   * server puts a working tree whose branch went away.
+   *
+   * WHAT THIS DOES NOT FIX. If the remembered branch still exists but the server's checkout
+   * moved to a different one, the two remain out of step and this cannot tell: the API
+   * reports `defaultBranch` and each branch's head, but never which branch is checked out.
+   * Closing that gap needs the backend to say so — forcing a `switchBranch` on open instead
+   * would be a write on every project open, and with `discard` it could throw away
+   * server-side edits nobody asked to lose.
+   */
+  useEffect(() => {
+    if (!versionControl || !projectId) {
+      return
+    }
+
+    let alive = true
+
+    versionControl
+      .listBranches(projectId)
+      .then(({ branches }) => {
+        // An empty list means the request told us nothing useful, not that every branch is
+        // gone — leaving the remembered name alone is safer than resetting on a blank answer.
+        if (!alive || branches.length === 0 || branches.some((branch) => branch.name === activeBranchName)) {
+          return
+        }
+
+        const fallback = branches.find((branch) => branch.isDefault) ?? branches[0]
+
+        setActiveBranch(fallback.name)
+      })
+      .catch(() => {
+        // Offline or denied. The remembered name is all there is, so it stays.
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [projectId, versionControl, activeBranchName, setActiveBranch])
 
   const doSwitch = useCallback(
     async (branch: Branch, strategy: 'discard' | 'carry' = 'discard') => {
