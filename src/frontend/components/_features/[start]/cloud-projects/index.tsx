@@ -156,10 +156,36 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudP
           them to fix the wrong problem — which is why the list request reports which
           case it hit rather than answering with an empty array. */}
       {result === null ? (
-        // Deliberately blank while the first answer is in flight: a returning user's
-        // stored session is usually about to resolve, and flashing "Sign in" at them
-        // first would be worse than a beat of nothing. The heading holds the space.
-        <div className='h-[52px]' />
+        // Placeholder cards, not a spinner and not blank.
+        //
+        // A returning user's stored session is usually about to resolve, so flashing
+        // "Sign in" at them first would be worse than showing nothing — but showing
+        // nothing made the section look empty rather than busy, and the row below then
+        // jumped as the real cards arrived. Cards the same size as the real ones keep
+        // the layout still and say what is coming.
+        //
+        // Three is not a guess at how many will arrive: it is enough to read as a row
+        // without claiming a count. `aria-hidden` because there is nothing here to
+        // announce, and `role=status` on the wrapper is what a screen reader hears.
+        <div className='flex h-auto w-full flex-wrap gap-[25px]' role='status' aria-label='Loading cloud projects'>
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              aria-hidden
+              className='h-[160px] w-[224px] animate-pulse overflow-hidden rounded-lg bg-neutral-200 dark:bg-neutral-800'
+            >
+              {/* Mirrors the folder card's own layout — the tab across the top, then the
+                  two lines of text at the bottom left — so the placeholder resolves into
+                  the real card instead of being replaced by something differently shaped. */}
+              <div className='h-[33px] w-[60%] rounded-br-lg bg-neutral-300 dark:bg-neutral-700' />
+              <div className='flex h-[127px] flex-col justify-end gap-2 p-3'>
+                <div className='h-3 w-[55%] rounded bg-neutral-300 dark:bg-neutral-700' />
+                <div className='h-2 w-[75%] rounded bg-neutral-300/70 dark:bg-neutral-700/70' />
+                <div className='h-2 w-[40%] rounded bg-neutral-300/50 dark:bg-neutral-700/50' />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : result.status === 'signed-out' ? (
         /* A card with a real button, not a line of grey text. This is the one place in
            the editor where someone who has never signed in learns what an account is
