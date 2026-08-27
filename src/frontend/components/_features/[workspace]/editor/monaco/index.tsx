@@ -765,10 +765,25 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         })
         const { anchor } = splitExpression(memberChainBefore(lineBeforeCursor))
         if (anchor !== '') {
+          // Read the store at query time rather than closing over `pous` /
+          // `dataTypes` / `libraries`. Those are destructured from an
+          // unselected `useOpenPLCStore()`, and `updatePou` runs on every
+          // keystroke with no debounce, so immer hands back a fresh `pous`
+          // array per character. Naming them as deps below would dispose and
+          // re-register this provider — and the signature-help provider with
+          // it — on every keystroke, including the `.` that opens the member
+          // list while the query is still in flight. The predicate is rebuilt
+          // per query by design, so reading here is the same answer for free.
+          const {
+            project: {
+              data: { pous: currentPous, dataTypes: currentDataTypes },
+            },
+            libraries: currentLibraries,
+          } = openPLCStoreBase.getState()
           const members = await getCppMemberCompletions(
             name,
             anchor,
-            projectTypeNamePredicate(pous, dataTypes, sliceLibraries),
+            projectTypeNamePredicate(currentPous, currentDataTypes, currentLibraries),
           )
           if (members.length > 0) {
             return {
@@ -818,7 +833,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       completionDisposable.dispose()
       signatureHelpDisposable.dispose()
     }
-  }, [language, deviceBoard, pouVariables, name, pous, dataTypes, sliceLibraries])
+  }, [language, deviceBoard, pouVariables, name])
 
   // -----------------------------------------------------------------------
   // AI inline completion provider (gated by hasAIAssistant)

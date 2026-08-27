@@ -98,6 +98,20 @@ export function projectTypeNamePredicate(
  * @returns the IEC anchor, or `null` when a segment doesn't resolve — a typo,
  *   or a chain through something with no members.
  */
+/**
+ * Split a chain segment into the member name and any array subscript.
+ *
+ * `items[0]` is one segment but two things: the member is `items`, and `[0]`
+ * selects an element of it. Only the name half has a C++ spelling to match
+ * against; the subscript is carried through to the LSP untouched, since
+ * strucpp is what decides whether an element is addressable.
+ */
+function splitSubscript(segment: string): { name: string; subscript: string } {
+  const bracket = segment.indexOf('[')
+  if (bracket < 0) return { name: segment, subscript: '' }
+  return { name: segment.slice(0, bracket), subscript: segment.slice(bracket) }
+}
+
 async function toIecAnchor(
   api: ScopedQueryApi,
   pouName: string,
@@ -108,12 +122,13 @@ async function toIecAnchor(
   let iecAnchor = `${segments[0] ?? ''}.`
 
   for (const segment of segments.slice(1)) {
+    const { name, subscript } = splitSubscript(segment)
     const candidates = await api.completeInScope(pouName, iecAnchor)
     const match = candidates
       .filter((item) => isValueCompletionKind(item.kind))
-      .find((item) => cppMemberSpelling(item.label, item.type, { isUserDefinedType }) === segment)
+      .find((item) => cppMemberSpelling(item.label, item.type, { isUserDefinedType }) === name)
     if (!match) return null
-    iecAnchor += `${match.label}.`
+    iecAnchor += `${match.label}${subscript}.`
   }
 
   return iecAnchor

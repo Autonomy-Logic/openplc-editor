@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from '@jest/globals'
 
 import { getCppMemberCompletions, projectTypeNamePredicate } from '../cpp-scope'
+import type { SystemLibrary, SystemLibraryPou } from '../../../middleware/shared/ports/library-types'
+import type { PLCDataType, PLCPou } from '../../../middleware/shared/ports/types'
+import type { LibraryState } from '../../store/slices/library'
 import { registerScopedQueryApi, type ScopedCompletionItem } from '../st-lsp/scoped-query'
 
 /** strucpp emits Variable(6) for instance members, Field(5) for STRUCT members. */
@@ -117,6 +120,40 @@ describe('getCppMemberCompletions', () => {
     expect(members.map((m) => m.label)).toEqual(['SPEED'])
   })
 
+  it('carries an array subscript through to the LSP', async () => {
+    // `items[0]` is one segment but two things: `items` has a C++ spelling to
+    // match, `[0]` selects an element and is strucpp's business. Comparing the
+    // whole segment against the spelling never matched, so nested completion
+    // through an array-valued member returned nothing.
+    const asked = withScopedQuery({
+      'm.': [{ label: 'items', insertText: 'items', type: 'Gear', kind: FIELD }],
+      'm.items[0].': [{ label: 'ratio', insertText: 'ratio', type: 'INT', kind: FIELD }],
+    })
+
+    const members = await getCppMemberCompletions('Probe', 'm.ITEMS[0].', isUserDefinedType)
+
+    expect(asked).toEqual(['m.', 'm.items[0].'])
+    expect(members.map((m) => m.label)).toEqual(['RATIO'])
+  })
+
+  it('carries a multi-dimensional subscript through unchanged', async () => {
+    const asked = withScopedQuery({
+      'g.': [{ label: 'grid', insertText: 'grid', type: 'Gear', kind: FIELD }],
+      'g.grid[1,2].': [{ label: 'ratio', insertText: 'ratio', type: 'INT', kind: FIELD }],
+    })
+
+    await getCppMemberCompletions('Probe', 'g.GRID[1,2].', isUserDefinedType)
+
+    expect(asked).toEqual(['g.', 'g.grid[1,2].'])
+  })
+
+  it('leaves a subscript on the root segment alone', async () => {
+    const asked = withScopedQuery({ 'bank[1].': [{ label: 'speed', insertText: 'speed', type: 'INT', kind: FIELD }] })
+    const members = await getCppMemberCompletions('Probe', 'bank[1].', isUserDefinedType)
+    expect(asked).toEqual(['bank[1].'])
+    expect(members.map((m) => m.label)).toEqual(['SPEED'])
+  })
+
   it('gives up quietly when a segment does not resolve', async () => {
     // A typo, or a chain through a scalar. Returning [] lets the provider fall
     // back to its flat list instead of asserting "this has no members".
@@ -151,23 +188,37 @@ describe('getCppMemberCompletions', () => {
 })
 
 describe('projectTypeNamePredicate', () => {
-  const pous = [
-    { name: 'Drive', pouType: 'function-block' },
-    { name: 'main', pouType: 'program' },
-    { name: 'Scale', pouType: 'function' },
-  ] as never
-  const dataTypes = [{ name: 'Motor' }, { name: 'Mode' }] as never
-  const libraries = {
-    system: [
-      {
-        pous: [
-          { name: 'TON', type: 'function-block' },
-          { name: 'ADD', type: 'function' },
-        ],
-      },
-    ],
+  const pou = (name: string, pouType: PLCPou['pouType']): PLCPou => ({
+    name,
+    pouType,
+    body: { language: 'st', value: '' },
+  })
+  const libraryPou = (name: string, type: SystemLibraryPou['type']): SystemLibraryPou => ({
+    name,
+    type,
+    language: 'st',
+    variables: [],
+    body: '',
+    documentation: '',
+  })
+  const systemLibrary = (name: string, pous: SystemLibraryPou[]): SystemLibrary => ({
+    name,
+    author: '',
+    version: '1.0.0',
+    stPath: '',
+    cPath: '',
+    pous,
+  })
+
+  const pous: PLCPou[] = [pou('Drive', 'function-block'), pou('main', 'program'), pou('Scale', 'function')]
+  const dataTypes: PLCDataType[] = [
+    { name: 'Motor', derivation: 'structure', variable: [] },
+    { name: 'Mode', derivation: 'enumerated', values: [{ description: 'IDLE' }] },
+  ]
+  const libraries: LibraryState['libraries'] = {
+    system: [systemLibrary('iec-standard-fb', [libraryPou('TON', 'function-block'), libraryPou('ADD', 'function')])],
     user: [],
-  } as never
+  }
 
   it('recognises data types, the project’s own function blocks and library blocks', () => {
     const isUdt = projectTypeNamePredicate(pous, dataTypes, libraries)

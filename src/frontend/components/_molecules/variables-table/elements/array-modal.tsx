@@ -19,6 +19,17 @@ type Pou = { type: string; name: string }
 type UserLibWithPous = { pous: Pou[] }
 type UserLibFunctionBlock = { type: string; name: string }
 
+/**
+ * Which shape of user library this is.
+ *
+ * A predicate rather than an inline `'pous' in userLib && …`: the two members
+ * of the union share no discriminant, so the inline form leaves the else
+ * branch un-narrowed and every access on it reads as unsafe. Written this way
+ * both branches are typed without an assertion.
+ */
+const hasPous = (lib: UserLibWithPous | UserLibFunctionBlock): lib is UserLibWithPous =>
+  'pous' in lib && Array.isArray(lib.pous)
+
 export const ArrayModal = ({
   arrayModalIsOpen,
   closeContainer,
@@ -61,14 +72,13 @@ export const ArrayModal = ({
   )
 
   const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
-    if ('pous' in userLib && Array.isArray(userLib.pous)) {
+    if (hasPous(userLib)) {
       return userLib.pous
         .filter((pou) => pou?.type === 'function-block')
         .filter(hasStringName)
         .map((pou) => pou.name.toUpperCase())
     }
-    const fb = userLib as UserLibFunctionBlock
-    return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
+    return userLib.type === 'function-block' && typeof userLib.name === 'string' ? [userLib.name.toUpperCase()] : []
   })
 
   const VariableTypes = [

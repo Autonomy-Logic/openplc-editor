@@ -2,11 +2,28 @@ name: CI - Unit Tests
 
 on:
   workflow_dispatch:
+  # Callable from `ci.yml` so every pull request reports a test result. Until
+  # this was wired up, the only trigger was `workflow_dispatch`, which meant a
+  # green PR said "compiles and is in sync" and said nothing at all about the
+  # tests — the figures in a PR description were nobody's to check.
+  workflow_call:
 
 jobs:
   unit-tests:
     name: Unit Tests + Coverage
     runs-on: ubuntu-latest
+    # REPORTING-ONLY, deliberately. Two suites already fail to load on
+    # `development` — `frontend/store/__tests__/device-types.test.ts` and
+    # `frontend/hooks/__tests__/use-device-connect.test.ts` — and
+    # `jest --collectCoverage` also enforces coverage thresholds. Failing the
+    # job today would block every pull request on breakage none of them
+    # introduced. (No individual test fails: 7366 pass.)
+    #
+    # So the result is surfaced but not enforced: the number is visible on each
+    # PR, and a new failure shows up as a diff against a known baseline instead
+    # of being invisible. Drop this flag — and make the check required in branch
+    # protection — once those two suites load. That is its own ticket.
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
