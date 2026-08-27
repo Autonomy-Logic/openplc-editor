@@ -51,6 +51,7 @@ import { parseScopedCompletionType } from './completion-type'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { getSyncedDocumentText } from './project-sync'
 import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
 import {
   DATA_TYPES_URI,
@@ -97,6 +98,10 @@ interface LoadStlibBufferParams {
  *     aggregate datatypes document. Both frames open with a `TYPE`
  *     line, so the shift is the type's span start minus that frame.
  *   - Anything else: pass through unchanged.
+ *
+ * Both views render a slice of a bigger document, so they also carry a
+ * `lineWindow` — without it their frame lines resolve onto the
+ * neighbouring slice.
  */
 function resolveStLspContext(modelUri: string): LspContext {
   const varsPou = parsePouVarsUri(modelUri)
@@ -104,7 +109,18 @@ function resolveStLspContext(modelUri: string): LspContext {
     const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === varsPou)
     const isStLanguage = pou?.body.language === 'st'
     const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
-    return { lspUri, lineOffset: POU_DECLARATION_LINE_COUNT }
+    // Skipped until project-sync registers the body line: an
+    // unpopulated registry reads as 0 and would window the view to nothing.
+    const bodyLine = getBodyLineOffset(lspUri)
+    const varsWindow =
+      bodyLine > POU_DECLARATION_LINE_COUNT
+        ? { startLine: POU_DECLARATION_LINE_COUNT, endLineExclusive: bodyLine }
+        : null
+    return {
+      lspUri,
+      lineOffset: POU_DECLARATION_LINE_COUNT,
+      ...(varsWindow ? { lineWindow: varsWindow } : {}),
+    }
   }
   const dtName = parseDtViewUri(modelUri)
   if (dtName !== null) {
@@ -114,7 +130,7 @@ function resolveStLspContext(modelUri: string): LspContext {
     // never indexed it, so every provider answers nothing rather than
     // answering for whichever type happens to be first.
     if (!span) return { lspUri: modelUri, lineOffset: 0 }
-    return { lspUri: DATA_TYPES_URI, lineOffset: dtViewLineOffset(span) }
+    return { lspUri: DATA_TYPES_URI, lineOffset: dtViewLineOffset(span), lineWindow: dtViewWindow(span) }
   }
   return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
 }
@@ -176,6 +192,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     completionTriggerCharacters: ['.', ':'],
     signatureHelpTriggerCharacters: ['(', ','],
     resolveLspContext: resolveStLspContext,
+    getLspDocumentText: getSyncedDocumentText,
     definitionInterceptors: monacoApi
       ? [
           // Reroute graphical-POU stubs to the graphical editor.

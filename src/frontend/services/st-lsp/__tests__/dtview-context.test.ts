@@ -4,6 +4,8 @@
 import type { Diagnostic } from 'vscode-languageserver-protocol'
 
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
+import { monacoPositionToLsp } from '../../lsp-shared/converters'
+import { lspLineInWindow } from '../../lsp-shared/internal/line-window'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from '../dtview-context'
 
 const enumType = (name: string): PLCDataType => ({
@@ -95,5 +97,28 @@ describe('diagnosticsInSpan', () => {
   it('returns nothing when the entry is clean', () => {
     const span = dtViewSpan(DATA_TYPES, 'Colors')
     expect(span && diagnosticsInSpan([diagnosticAt(3)], span)).toEqual([])
+  })
+})
+
+describe('dt view request window', () => {
+  // Which view lines reach a line the view actually owns, walking the
+  // same arithmetic the providers do.
+  const reach = (dtName: string, viewLines: number[]) => {
+    const span = dtViewSpan(DATA_TYPES, dtName)
+    if (!span) throw new Error(`no span for ${dtName}`)
+    const lineOffset = dtViewLineOffset(span)
+    const lineWindow = dtViewWindow(span)
+    return viewLines.map((lineNumber) =>
+      lspLineInWindow(monacoPositionToLsp({ lineNumber, column: 3 }, lineOffset).line, lineWindow),
+    )
+  }
+
+  it('rejects both frame lines of a later entry, accepts its own', () => {
+    // Motor.dt renders TYPE / Motor : STRUCT / speed / END_STRUCT / END_TYPE.
+    expect(reach('Motor', [1, 2, 3, 4, 5])).toEqual([false, true, true, true, false])
+  })
+
+  it('rejects both frame lines of the first entry, whose offset is zero', () => {
+    expect(reach('Colors', [1, 2, 3])).toEqual([false, true, false])
   })
 })
