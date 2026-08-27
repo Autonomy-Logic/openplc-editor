@@ -100,6 +100,16 @@ export interface StlibArchiveDTO {
     variables: unknown[]
     documentation?: string
   }>
+  /** Files the library ships for its blocks to compile against —
+   *  headers they `#include`, `.cpp` units they need linked.  The
+   *  consumer's program build materialises them into its own build
+   *  tree, so a library and its sources cannot drift apart.  `path`
+   *  is reproduced verbatim from the library's `resources/` tree.
+   *  Absent on libraries that ship none. */
+  resources?: Array<{
+    path: string
+    content: string
+  }>
 }
 
 export interface LibraryPort {

@@ -37,6 +37,8 @@
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { checkPathId } from '@root/backend/shared/utils/path-safety'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
+import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
+import { parseVerifyTarget } from '@root/middleware/shared/utils/library/manifest-build-block'
 
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
@@ -61,6 +63,9 @@ export interface LibraryBuildManifest {
   name: string
   version: string
   namespace: string
+  /** Toolchain the library is verified with, from the manifest's `build`
+   *  block.  Defaults to `{ mode: 'arduino' }` when the block is absent. */
+  verifyTarget: LibraryVerifyTarget
   /** Whatever else was in the JSON.  Forwarded to strucpp's
    *  compileStlib via the spread in `composeStlibInputs`, so
    *  upstream additions don't require an editor change. */
@@ -113,6 +118,9 @@ function parseLibraryManifest(json: string): ManifestParseResult {
     )
   }
 
+  const verify = parseVerifyTarget(obj)
+  if ('errors' in verify) errors.push(...verify.errors)
+
   if (errors.length > 0) return { ok: false, errors }
 
   return {
@@ -121,6 +129,7 @@ function parseLibraryManifest(json: string): ManifestParseResult {
       name: obj.name as string,
       version: obj.version as string,
       namespace: obj.namespace as string,
+      verifyTarget: (verify as { target: LibraryVerifyTarget }).target,
       extra: obj,
     },
   }
@@ -324,6 +333,20 @@ export interface LibraryCppBlock {
   documentation?: string
 }
 
+/**
+ * One file from the library project's `resources/` directory, carried verbatim
+ * through the `.stlib` so a library and the sources it was built against ship
+ * together.
+ *
+ * `resources/` holds library folders, so `path` is relative to `resources/`
+ * and its first segment names the library the file belongs to.  The consumer
+ * reproduces the layout and resolves each folder as a library.
+ */
+export interface LibraryResource {
+  path: string
+  content: string
+}
+
 export interface LibraryBuildAux {
   pouDocs?: Record<string, string>
   dependencyArchives?: unknown[]
@@ -333,6 +356,9 @@ export interface LibraryBuildAux {
    *  `cppBlocks` field after compileStlib returns.  See
    *  `LibraryCppBlock` for the per-entry shape. */
   cppBlocks?: LibraryCppBlock[]
+  /** Files from the library project's `resources/` tree.  Stamped onto the
+   *  archive's `resources` field for the consumer to materialise. */
+  resources?: LibraryResource[]
 }
 
 /**
@@ -424,10 +450,27 @@ export function libraryBuildFromTranspiledSt(
     }
   }
 
+  // `injectLibraryCppBlocks` emits each grafted POU as `<name>__<BLOCK>`, a C
+  // identifier, but `checkPathId` permits `.` and `-`.  Only libraries that
+  // ship blocks reach C, so an ST-only library keeps any name it had.
+  if (hasCppBlocks && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(manifest.name)) {
+    return {
+      success: false,
+      errors: [
+        {
+          message: `manifest.name must be a valid C identifier (letters, digits, underscore; cannot start with a digit) because this library ships C/C++ blocks, which are emitted as \`${manifest.name}__<BLOCK>\`. Got: ${JSON.stringify(manifest.name)}`,
+        },
+      ],
+    }
+  }
+
   const compileRes = compileStlib(sources, {
     name: manifest.name,
     version: manifest.version,
     namespace: manifest.namespace,
+    // A library whose content is entirely C/C++ blocks leaves strucpp no ST
+    // to compile; without this it refuses with "No source files provided".
+    ...(hasCppBlocks ? { allowEmptySources: true } : {}),
     ...(aux?.dependencyArchives && aux.dependencyArchives.length > 0
       ? { dependencies: aux.dependencyArchives as never }
       : {}),
@@ -473,6 +516,7 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
     }
     dependencies?: Array<{ name: string; version: string }>
     cppBlocks?: LibraryCppBlock[]
+    resources?: LibraryResource[]
   }
   if (!arch.manifest) return
 
@@ -525,6 +569,12 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
       ...(b.documentation && b.documentation.length > 0 ? { documentation: b.documentation } : {}),
     }))
   }
+
+  // Resources ride through the same way.  The field stays absent on libraries
+  // that ship none, so such an archive still loads in an editor without them.
+  if (aux?.resources && aux.resources.length > 0) {
+    arch.resources = aux.resources.map((r) => ({ path: r.path, content: r.content }))
+  }
 }
 
 /**
@@ -554,10 +604,10 @@ function inferCategory(fileName: string): string | undefined {
  * (Phase 8) doesn't try to recurse back into the library branch.
  *
  * Verification runs the resulting project through the standard
- * ST→C++→arduino-cli pipeline against the OpenPLC Simulator
- * target.  Compile failures there are surfaced as warnings — the
- * `.stlib` is still produced (the user may legitimately target a
- * platform with more memory than the AVR simulator).
+ * ST→C++→arduino-cli pipeline against the manifest's verify target.
+ * Compile failures there are surfaced as warnings — the `.stlib` is still
+ * produced, because it carries source and the consumer compiles it for its
+ * own board.
  */
 export function composeVerificationProject(project: PLCProject): PLCProject {
   const stubbed = stubProgramFor(project)

@@ -112,17 +112,19 @@ const processUserCode = (pou: CppPouData): string => {
   const setupFunctionName = `${pou.name.toLowerCase()}_setup`
   const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-  const inputVariables = pou.variables.filter((v) => v.class === 'input')
-  const outputVariables = pou.variables.filter((v) => v.class === 'output')
+  // Strucpp stores an FB's in/out parameter as a by-value member, the same
+  // shape as an input, so it needs no separate handling here.  Order mirrors
+  // strucpp's own field order.
+  const pinVariables = [
+    ...pou.variables.filter((v) => v.class === 'input'),
+    ...pou.variables.filter((v) => v.class === 'output'),
+    ...pou.variables.filter((v) => v.class === 'inOut'),
+  ]
 
   let processedCode = `//definition of external blocks - ${pou.name.toUpperCase()}\n`
   processedCode += `typedef struct {\n`
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateStructMember(variable)
-  })
-
-  outputVariables.forEach((variable) => {
+  pinVariables.forEach((variable) => {
     processedCode += generateStructMember(variable)
   })
 
@@ -131,11 +133,7 @@ const processUserCode = (pou: CppPouData): string => {
   processedCode += `extern "C" void ${setupFunctionName}(${structName} *vars);\n`
   processedCode += `extern "C" void ${loopFunctionName}(${structName} *vars);\n\n`
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateDefine(variable)
-  })
-
-  outputVariables.forEach((variable) => {
+  pinVariables.forEach((variable) => {
     processedCode += generateDefine(variable)
   })
 
@@ -153,10 +151,7 @@ const processUserCode = (pou: CppPouData): string => {
   processedCode += modifiedUserCode
   processedCode += '\n'
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateUndef(variable)
-  })
-  outputVariables.forEach((variable) => {
+  pinVariables.forEach((variable) => {
     processedCode += generateUndef(variable)
   })
   processedCode += '\n'

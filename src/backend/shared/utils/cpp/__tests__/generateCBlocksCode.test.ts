@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksCode } from '../generateCBlocksCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'inOut', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -27,6 +27,24 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
 })
 
 describe('generateCBlocksCode', () => {
+  it('carries VAR_IN_OUT pins into the struct, the defines and the undefs', () => {
+    // strucpp stores an FB's in/out parameter as a by-value member of the same
+    // shape as an input, so it needs no separate treatment — only including.
+    const variables: PLCVariable[] = [
+      makeScalarVar('SP', 'input', 'INT'),
+      makeScalarVar('PV', 'output', 'INT'),
+      makeScalarVar('LEVEL', 'inOut', 'INT'),
+    ]
+    const result = generateCBlocksCode([{ name: 'Tank', code: 'void setup() { }\nvoid loop() { }', variables }])
+
+    expect(result).toContain('  strucpp::IEC_INT *LEVEL;')
+    expect(result).toContain('#define LEVEL (*(vars->LEVEL))')
+    expect(result).toContain('#undef LEVEL')
+    // Inputs, then outputs, then in-outs — strucpp's own field order.
+    expect(result.indexOf('*SP;')).toBeLessThan(result.indexOf('*PV;'))
+    expect(result.indexOf('*PV;')).toBeLessThan(result.indexOf('*LEVEL;'))
+  })
+
   it('returns empty string for empty pous array', () => {
     const result = generateCBlocksCode([])
     expect(result).toBe('')

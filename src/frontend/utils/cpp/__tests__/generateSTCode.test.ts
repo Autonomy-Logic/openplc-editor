@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generateSTCode } from '../generateSTCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'inOut', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -27,6 +27,22 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
 })
 
 describe('generateSTCode (cpp)', () => {
+  it('assigns a pointer for VAR_IN_OUT pins', () => {
+    // The FB's in/out parameter is a class member like any other pin, so its
+    // address goes into the struct the same way.
+    const result = generateSTCode({
+      pouName: 'Tank',
+      allVariables: [
+        makeScalarVar('SP', 'input', 'INT'),
+        makeScalarVar('PV', 'output', 'INT'),
+        makeScalarVar('LEVEL', 'inOut', 'INT'),
+      ],
+    })
+
+    expect(result).toContain('vars.LEVEL = &LEVEL;')
+    expect(result.indexOf('vars.PV')).toBeLessThan(result.indexOf('vars.LEVEL'))
+  })
+
   it('generates ST stub with strucpp-style direct pointer assignment for scalars', () => {
     const result = generateSTCode({
       pouName: 'MyBlock',

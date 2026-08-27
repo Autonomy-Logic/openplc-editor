@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksHeader } from '../generateCBlocksHeader'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'inOut', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -27,6 +27,17 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
 })
 
 describe('generateCBlocksHeader', () => {
+  it('declares VAR_IN_OUT pins, matching the struct generateCBlocksCode emits', () => {
+    const variables: PLCVariable[] = [
+      makeScalarVar('SP', 'input', 'INT'),
+      makeScalarVar('PV', 'output', 'INT'),
+      makeScalarVar('LEVEL', 'inOut', 'INT'),
+    ]
+    const result = generateCBlocksHeader([{ name: 'Tank', variables }])
+
+    expect(result).toContain('  strucpp::IEC_INT *LEVEL;')
+    expect(result.indexOf('*PV;')).toBeLessThan(result.indexOf('*LEVEL;'))
+  })
   it('generates header with guard macros for empty pous array', () => {
     const result = generateCBlocksHeader([])
     expect(result).toContain('#ifndef C_BLOCKS_H')

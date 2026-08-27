@@ -8,16 +8,20 @@ import { getLanguageFromExtension } from './pou-file-extensions'
  * @returns Object with documentation and remaining content
  */
 const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
-  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
-  if (docMatch) {
-    return {
-      documentation: docMatch[1].trim(),
-      remainingContent: content.slice(docMatch[0].length),
-    }
+  // A comment is legal wherever whitespace is, so a header may be written as
+  // several consecutive blocks.  Taking only the first leaves the rest in
+  // front of the declaration, which the declaration regex then fails to match.
+  const blocks: string[] = []
+  let remainingContent = content
+  for (;;) {
+    const docMatch = remainingContent.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
+    if (!docMatch) break
+    blocks.push(docMatch[1].trim())
+    remainingContent = remainingContent.slice(docMatch[0].length)
   }
   return {
-    documentation: '',
-    remainingContent: content,
+    documentation: blocks.join('\n\n'),
+    remainingContent,
   }
 }
 

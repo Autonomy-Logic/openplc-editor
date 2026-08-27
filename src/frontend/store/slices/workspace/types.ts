@@ -39,6 +39,7 @@ export type WorkspaceProjectTreeLeafType =
   | 'package-manager'
   | 'library-manager'
   | 'library-manifest'
+  | 'build-settings'
   | 'user-management'
   | 'ethercat-device'
   | null

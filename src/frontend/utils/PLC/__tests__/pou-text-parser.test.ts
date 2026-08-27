@@ -91,6 +91,26 @@ END_PROGRAM`
     expect(result.documentation).toBe('This is documented')
   })
 
+  it('parses a header written as several consecutive comment blocks', () => {
+    const content = `(* First paragraph *)
+
+(* Second paragraph *)
+
+PROGRAM Main
+VAR
+  x : INT;
+END_VAR
+
+x := 1;
+
+END_PROGRAM`
+
+    const result = parseTextualPouFromString(content, 'st', 'program')
+    expect(result.name).toBe('Main')
+    expect(result.documentation).toBe('First paragraph\n\nSecond paragraph')
+    expect(result.interface?.variables.length).toBe(1)
+  })
+
   it('parses a function with return type', () => {
     const content = `FUNCTION MyFunc : INT
 VAR_INPUT

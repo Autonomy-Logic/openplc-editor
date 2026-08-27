@@ -51,6 +51,10 @@ export interface ComposeFirmwareBundleInput {
    *      `examples/Baremetal/c_blocks_code.cpp` alone.  Otherwise
    *      pass `generateCBlocksCode(originalCppPous)` and the
    *      static file gets overwritten with the user-facing version. */
+  /** Libraries the enabled `.stlib` archives carry, each an ordinary
+   *  library folder.  `path` is relative to that folder's root and is
+   *  written as-is.  Empty when no enabled library ships resources. */
+  libraryResources: Array<{ name: string; files: Array<{ path: string; content: string }> }>
   cBlocks: {
     header: string
     code: string | null
@@ -115,6 +119,7 @@ export function buildCBlocksFromPous(originalCppPous: CppPouDataCode[]): Compose
  * Assemble the firmware file tree.
  *
  * Layout produced (paths relative to project root):
+ *  - `libraries/<name>/…`                            — one Arduino library per resource library
  *  - `examples/Baremetal/Baremetal.ino`              — from skeleton
  *  - `examples/Baremetal/c_blocks_code.cpp`          — overwritten when `cBlocks.code !== null`
  *  - `examples/Baremetal/modules/...`                — from skeleton (Arduino library helpers)
@@ -125,20 +130,57 @@ export function buildCBlocksFromPous(originalCppPous: CppPouDataCode[]): Compose
  *  - `src/<strucpp-runtime-header>.hpp`              — from skeleton (strucpp runtime headers)
  *  - other skeleton entries                          — passed through verbatim
  *
- * Ordering: skeleton first, then overwrites.  Strucpp output
- * overwrites any same-named skeleton file (strucpp generally adds
- * new files; collisions are intentional when they happen).
+ * Ordering: resource libraries first, then the skeleton, then
+ * overwrites, so a collision resolves in the build's favour.
+ * Strucpp output overwrites any same-named skeleton file
+ * (strucpp generally adds new files; collisions are intentional when
+ * they happen).
  * `c_blocks.h` and `defines.h` overwrite the skeleton's static
  * stubs.  `c_blocks_code.cpp` is overwritten ONLY when the project
  * has C/C++ POUs — otherwise the static baseline stays.
  */
-export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton } = input
+/**
+ * A stand-in `library.properties` for a folder that ships none.  Without one
+ * arduino-cli reads the folder as a 1.0 legacy library and ignores everything
+ * below its root; with one it compiles `src/` recursively.  `architectures=*`
+ * so the target never filters it out.
+ */
+function libraryProperties(name: string): string {
+  return [
+    `name=${name}`,
+    'version=1.0.0',
+    'author=OpenPLC Editor',
+    'maintainer=OpenPLC Editor <noreply@autonomylogic.com>',
+    'sentence=Resources shipped by an OpenPLC library',
+    'paragraph=Materialised from the library archive so its C/C++ blocks compile against the sources they were built with.',
+    'category=Other',
+    'architectures=*',
+    '',
+  ].join('\n')
+}
 
-  // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
+export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
+  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton, libraryResources } = input
+
+  const files: Record<string, string> = {}
+
+  // Each folder is written as it stands and named with its own `--library`,
+  // which is what makes arduino-cli compile everything under its `src/`.
+  // They sit beside the sketch, so a resource cannot shadow a firmware file.
+  for (const library of libraryResources) {
+    const root = `libraries/${library.name}`
+    for (const file of library.files) {
+      files[`${root}/${file.path}`] = file.content
+    }
+    if (!library.files.some((file) => file.path === 'library.properties')) {
+      files[`${root}/library.properties`] = libraryProperties(library.name)
+    }
+  }
+
+  // Skeleton next (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
   // entries.
-  const files: Record<string, string> = { ...firmwareSkeleton }
+  Object.assign(files, firmwareSkeleton)
 
   // Strucpp output lands under `src/` alongside the runtime glue
   // — arduino-cli's `--library src` pass picks every TU there into

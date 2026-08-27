@@ -25,17 +25,18 @@ const generateCBlocksHeader = (cppPous: CppPouData[]): string => {
     const setupFunctionName = `${pou.name.toLowerCase()}_setup`
     const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-    const inputVariables = pou.variables.filter((v) => v.class === 'input')
-    const outputVariables = pou.variables.filter((v) => v.class === 'output')
+    // Same set and order as `generateCBlocksCode` — the two emit the same
+    // struct and must not diverge.
+    const pinVariables = [
+      ...pou.variables.filter((v) => v.class === 'input'),
+      ...pou.variables.filter((v) => v.class === 'output'),
+      ...pou.variables.filter((v) => v.class === 'inOut'),
+    ]
 
     headerContent += `//definition of external blocks - ${pou.name.toUpperCase()}\n`
     headerContent += `typedef struct {\n`
 
-    inputVariables.forEach((variable) => {
-      headerContent += generateStructMember(variable)
-    })
-
-    outputVariables.forEach((variable) => {
+    pinVariables.forEach((variable) => {
       headerContent += generateStructMember(variable)
     })
 

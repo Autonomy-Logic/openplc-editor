@@ -70,6 +70,11 @@ import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
+  addLibraryResource,
+  listLibraryResources,
+  removeLibraryResource,
+} from '../../../backend/editor/services/library-resources-service'
+import {
   getOpenProjectPath,
   getPlcopenExportSavePath,
   getPlcopenImportFilePath,
@@ -707,6 +712,11 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('file:watch-stop', this.handleFileWatchStop)
     this.registerHandle('file:watch-stop-all', this.handleFileWatchStopAll)
     this.registerHandle('file:read-content', this.handleFileReadContent)
+
+    // ===================== LIBRARY RESOURCES =====================
+    this.registerHandle('library-resources:list', this.handleLibraryResourcesList)
+    this.registerHandle('library-resources:add', this.handleLibraryResourcesAdd)
+    this.registerHandle('library-resources:remove', this.handleLibraryResourcesRemove)
   }
 
   // ===================== HANDLER METHODS =====================
@@ -2505,6 +2515,47 @@ class MainProcessBridge implements MainIpcModule {
         }
       })
     })
+  }
+
+  // ===================== LIBRARY RESOURCES HANDLERS =====================
+  //
+  // A library project's `resources/` directory, managed from the Build
+  // Settings dialog.  Every path is derived from the open project rather
+  // than taken from the renderer, so there is nothing here for a compromised
+  // renderer to point somewhere else — the one renderer-supplied string is a
+  // folder name, which the service checks as a path component.
+
+  handleLibraryResourcesList = async () => {
+    if (!this.currentProjectPath) return { success: false, error: 'No project is open' }
+    try {
+      return { success: true, folders: await listLibraryResources(this.currentProjectPath) }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  handleLibraryResourcesAdd = async () => {
+    if (!this.currentProjectPath) return { success: false, error: 'No project is open' }
+    if (!this.mainWindow) return { success: false, error: 'No main window' }
+    const picked = await dialog.showOpenDialog(this.mainWindow, {
+      title: 'Add library folder to resources',
+      properties: ['openDirectory'],
+    })
+    if (picked.canceled || picked.filePaths.length === 0) return { success: false, canceled: true }
+    try {
+      return await addLibraryResource(this.currentProjectPath, picked.filePaths[0])
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  handleLibraryResourcesRemove = async (_event: IpcMainInvokeEvent, folderName: string) => {
+    if (!this.currentProjectPath) return { success: false, error: 'No project is open' }
+    try {
+      return await removeLibraryResource(this.currentProjectPath, folderName)
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
   }
 
   // ===================== EVENT HANDLERS =====================

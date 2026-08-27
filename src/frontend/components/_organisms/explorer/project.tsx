@@ -6,7 +6,11 @@ import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
-import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
+import {
+  BUILD_SETTINGS_TAB_NAME,
+  CreateEditorObjectFromTab,
+  LIBRARY_MANIFEST_TAB_NAME,
+} from '../../../store/slices/tabs/utils'
 import { isUserManagementCapableRuntime } from '../../../utils/device'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
@@ -196,18 +200,35 @@ const Project = () => {
               is mandatory for `.stlib` builds).  Only rendered for
               library projects. */}
           {projectCaps.hasLibraryManifest && (
-            <ProjectTreeLeaf
-              leafLang='libraryManifest'
-              leafType='library-manifest'
-              label={LIBRARY_MANIFEST_TAB_NAME}
-              onClick={() =>
-                handleCreateTab({
-                  name: LIBRARY_MANIFEST_TAB_NAME,
-                  path: '/library.json',
-                  elementType: { type: 'library-manifest' },
-                })
-              }
-            />
+            <>
+              <ProjectTreeLeaf
+                leafLang='libraryManifest'
+                leafType='library-manifest'
+                label={LIBRARY_MANIFEST_TAB_NAME}
+                onClick={() =>
+                  handleCreateTab({
+                    name: LIBRARY_MANIFEST_TAB_NAME,
+                    path: '/library.json',
+                    elementType: { type: 'library-manifest' },
+                  })
+                }
+              />
+              {/* Build Settings sits under the manifest because that is where
+                  it is stored: the verify target is a `build` block in
+                  `library.json`. */}
+              <ProjectTreeLeaf
+                leafLang='buildSettings'
+                leafType='build-settings'
+                label={BUILD_SETTINGS_TAB_NAME}
+                onClick={() =>
+                  handleCreateTab({
+                    name: BUILD_SETTINGS_TAB_NAME,
+                    path: '/build-settings',
+                    elementType: { type: 'build-settings' },
+                  })
+                }
+              />
+            </>
           )}
 
           {/* Project Functions tree branch */}

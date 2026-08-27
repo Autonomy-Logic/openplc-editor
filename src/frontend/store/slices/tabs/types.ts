@@ -19,6 +19,7 @@ export type TabsProps = {
     | { type: 'package-manager' }
     | { type: 'library-manager' }
     | { type: 'library-manifest' }
+    | { type: 'build-settings' }
     | { type: 'user-management' }
     | { type: 'ethercat-device'; busName: string; deviceId: string }
     | { type: 'diff-viewer'; filePath: string }

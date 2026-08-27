@@ -144,6 +144,16 @@ const CreateLibraryManifestEditor = (name = LIBRARY_MANIFEST_TAB_NAME): EditorMo
   meta: { name },
 })
 
+/** Canonical tab name + factory for the Library Project's Build Settings.
+ *  Nothing is saved under this name — the verify target lives in
+ *  `library.json`, so the Manifest file entry carries the dirty flag. */
+const BUILD_SETTINGS_TAB_NAME = 'Build Settings'
+
+const CreateBuildSettingsEditor = (name = BUILD_SETTINGS_TAB_NAME): EditorModel => ({
+  type: 'plc-build-settings',
+  meta: { name },
+})
+
 /** Read-only source-control diff tab. The tab `name` doubles as the unique
  *  editor key, so it must not collide with the editable POU tab of the same
  *  POU — callers pass a `Diff: <filePath>` style name. `filePath` is the
@@ -203,6 +213,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateLibraryManagerEditor(name)
     case 'library-manifest':
       return CreateLibraryManifestEditor(name)
+    case 'build-settings':
+      return CreateBuildSettingsEditor(name)
     case 'user-management':
       return CreateUserManagementEditor(name)
     case 'diff-viewer':
@@ -211,6 +223,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
 }
 
 export {
+  BUILD_SETTINGS_TAB_NAME,
+  CreateBuildSettingsEditor,
   CreateDeviceEditor,
   CreateDiffViewerEditor,
   CreateEditorModelObject,

@@ -13,6 +13,7 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
+import { buildArduinoCliCompileArgs } from '../../firmware/build-arduino-cli-args'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type {
   CompilerPlatformPort,
@@ -204,6 +205,114 @@ describe('runCompilePipeline — simulator path', () => {
   // was resolved onto boardEntry but never forwarded to installArduinoCore,
   // so vendor cores outside arduino-cli's built-in index could not be
   // installed — "Platform 'industrialshields:esp32' not found".
+  it('materialises resources from enabled libraries into the firmware bundle', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        projectData: {
+          ...projectDataFixture,
+          libraries: [{ name: 'demo_lib', version: '0.1.0' }],
+        } as unknown as PLCProjectData,
+        libraryArchives: [
+          {
+            manifest: { name: 'demo_lib' },
+            // Two library folders in one archive's resources/ tree.
+            resources: [
+              { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+              { path: 'DemoProtocol/src/DemoApi.h', content: '#pragma once\n' },
+              { path: 'DemoProtocol/src/transport/Serial.cpp', content: '// serial\n' },
+              { path: 'DemoSupport/src/DemoSupport.h', content: '// support\n' },
+            ],
+          },
+          // Resolved alongside the enabled set but not enabled by the
+          // project — its resources must not reach the build.
+          {
+            manifest: { name: 'oscat-basic' },
+            resources: [{ path: 'Oscat/src/Oscat.h', content: '// oscat\n' }],
+          },
+        ],
+      }),
+      port,
+      emit,
+    )
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    // Each folder in resources/ becomes its own library, layout preserved.
+    expect(callArgs.files['libraries/DemoProtocol/library.properties']).toBe('name=DemoProtocol\n')
+    expect(callArgs.files['libraries/DemoProtocol/src/DemoApi.h']).toBe('#pragma once\n')
+    expect(callArgs.files['libraries/DemoProtocol/src/transport/Serial.cpp']).toBe('// serial\n')
+    expect(callArgs.files['libraries/DemoSupport/src/DemoSupport.h']).toBe('// support\n')
+
+    // Not enabled by the project, so neither its files nor its --library
+    // reach the build.
+    expect(callArgs.files['libraries/Oscat/src/Oscat.h']).toBeUndefined()
+
+    // arduino-cli only recurses into a library that has a library.properties,
+    // so each folder has to be named on the command line as its own library.
+    const [, argOptions] = jest.mocked(buildArduinoCliCompileArgs).mock.calls.at(-1)!
+    expect(argOptions.resourceLibraryPaths).toEqual(['libraries/DemoProtocol', 'libraries/DemoSupport'])
+  })
+
+  it("materialises a library project's own resources when it verifies itself", async () => {
+    // A library project does not list itself in `libraries`, so without this
+    // its blocks resolve their includes against whatever is installed on the
+    // machine — or fail.
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        projectData: {
+          ...projectDataFixture,
+          ownLibraryResources: [
+            { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+            { path: 'DemoProtocol/src/DemoApi.h', content: '#pragma once\n' },
+          ],
+        } as unknown as PLCProjectData,
+        libraryArchives: [],
+      }),
+      port,
+      emit,
+    )
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['libraries/DemoProtocol/src/DemoApi.h']).toBe('#pragma once\n')
+
+    const [, argOptions] = jest.mocked(buildArduinoCliCompileArgs).mock.calls.at(-1)!
+    expect(argOptions.resourceLibraryPaths).toEqual(['libraries/DemoProtocol'])
+  })
+
+  it('skips a resource whose path would escape the build directory', async () => {
+    // Archive paths become files under the compilation path, and an installed
+    // `.stlib` is untrusted by the time a consuming project unpacks it.
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        projectData: {
+          ...projectDataFixture,
+          libraries: [{ name: 'demo_lib', version: '0.1.0' }],
+        } as unknown as PLCProjectData,
+        libraryArchives: [
+          {
+            manifest: { name: 'demo_lib' },
+            resources: [
+              { path: '../../escaped.h', content: '// escaped\n' },
+              { path: '/etc/passwd', content: '// absolute\n' },
+              { path: 'DemoProtocol/../../escaped.h', content: '// traversal\n' },
+              { path: 'DemoProtocol/src/DemoApi.h', content: '// fine\n' },
+            ],
+          },
+        ],
+      }),
+      port,
+      emit,
+    )
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    const keys = Object.keys(callArgs.files)
+    expect(keys.some((k) => k.includes('..'))).toBe(false)
+    expect(keys.some((k) => k.includes('passwd'))).toBe(false)
+    expect(callArgs.files['libraries/DemoProtocol/src/DemoApi.h']).toBe('// fine\n')
+  })
+
   it('forwards boardEntry.boardManagerUrl to installArduinoCore', async () => {
     const port = makePort()
     const { emit } = captureEvents()

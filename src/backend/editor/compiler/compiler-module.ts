@@ -8,6 +8,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { HardwareModule } from '@root/backend/editor/hardware'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
@@ -34,6 +35,8 @@ import {
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
+import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
+import { pickVerifyBoard } from '@root/middleware/shared/utils/library/pick-verify-board'
 
 /**
  * Shared bridge contract between `compileLibrary` and its inner
@@ -93,6 +96,15 @@ type ProjectDataWithCppPous = PLCProjectData & {
 const POST_BUILD_START_TIMEOUT_MS = 5000
 const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
+/**
+ * Boards a library verification resolves to by name rather than through the
+ * catalogue.  The simulator stands in whenever an Arduino target cannot be
+ * resolved — it is bundled, so it is the one board always installed.
+ */
+const SIMULATOR_BOARD = 'OpenPLC Simulator'
+const SIMULATOR_CORE = 'arduino:avr'
+const RUNTIME_V4_BOARD = 'OpenPLC Runtime v4'
+
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
@@ -121,6 +133,7 @@ import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
+import type { AvailableBoards } from '../hardware/types'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -396,21 +409,64 @@ class CompilerModule {
   }
 
   /**
-   * Resolve a board target to the arduino-cli core ID
-   * (`arduino-cli core install` target — e.g. `arduino:avr`).
-   *
-   * Single source of truth: reads from the shared
-   * `backend/shared/firmware/hals.json` bundle, the same file the
-   * renderer's `bridge.getAvailableBoards()` exposes via
-   * `boardInfo.core`.
-   * Used internally by the library-project verification path so a
-   * future hals.json edit (rename, new board, version bump)
-   * propagates to verification automatically — without any code
-   * change here.
+   * Absolute paths to the library folders the firmware bundle materialised
+   * under `<compilationPath>/libraries/`.  arduino-cli compiles a library's
+   * `src/` only when the folder is named with its own `--library`, so each
+   * has to reach the command line.
    */
-  async #getBoardCore(board: string): Promise<string | null> {
-    const halsFileContent = await readHalsFile<HalsFile>()
-    return halsFileContent[board]?.['core'] ?? null
+  async #resourceLibraryDirs(compilationPath: string): Promise<string[]> {
+    const root = join(compilationPath, 'libraries')
+    try {
+      const entries = await readdir(root, { withFileTypes: true })
+      return entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(root, entry.name))
+        .sort()
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * The board a library's verify target compiles against.
+   *
+   * A target names a core, not a board, because that is what a library
+   * targets — but arduino-cli needs an FQBN, so one installed board of that
+   * core stands in for it.  `pickVerifyBoard` owns that choice, shared with
+   * Build Settings so the screen names the board the build will use.
+   *
+   * Falls back to the simulator when the target names no core, or names one
+   * with no board installed: verification is advisory and the `.stlib` still
+   * builds, so this warns rather than fails.
+   */
+  async #resolveVerifyBoard(
+    target: LibraryVerifyTarget,
+    warn: (message: string) => void,
+  ): Promise<{ board: string; core: string | null }> {
+    if (target.mode === 'runtime') {
+      return { board: RUNTIME_V4_BOARD, core: null }
+    }
+    if (!target.core) {
+      return { board: SIMULATOR_BOARD, core: SIMULATOR_CORE }
+    }
+
+    let boards: AvailableBoards
+    try {
+      boards = await new HardwareModule().getAvailableBoards()
+    } catch (error) {
+      warn(`Could not read the board catalogue (${getErrorMessage(error)}) — verifying against ${SIMULATOR_BOARD}.`)
+      return { board: SIMULATOR_BOARD, core: SIMULATOR_CORE }
+    }
+
+    const chosen = pickVerifyBoard(
+      [...boards.entries()].map(([name, info]) => ({ name, core: info.core, compiler: info.compiler })),
+      target.core,
+    )
+    if (!chosen) {
+      warn(`No board is installed for core "${target.core}" — verifying against ${SIMULATOR_BOARD}.`)
+      return { board: SIMULATOR_BOARD, core: SIMULATOR_CORE }
+    }
+    return { board: chosen, core: target.core }
   }
 
   /**
@@ -1804,6 +1860,7 @@ class CompilerModule {
       ...buildArduinoCliCompileArgs(compileEntry, {
         sketchPath: join(baremetalPath, 'Baremetal.ino'),
         libraryPath: join(compilationPath, 'src'),
+        resourceLibraryPaths: await this.#resourceLibraryDirs(compilationPath),
         avrLibStdCppInclude,
         cleanBuild,
       }),
@@ -3314,13 +3371,13 @@ class CompilerModule {
    *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
    *      shape `library-manager-module` persists user-installed
    *      archives with) to `<projectPath>/build/<name>.stlib`.
-   *   6. (Phase 8) Run an end-to-end avr-gcc verification compile
-   *      against the OpenPLC Simulator target, gated by an MD5
-   *      cache keyed off the produced program.st.  Verification
-   *      failures surface as warnings on `result.verification`,
-   *      never as build errors — a legitimate user target may have
-   *      more memory than the AVR simulator.  `cleanBuild` skips
-   *      the cache and forces a re-verification.
+   *   6. Run an end-to-end verification compile against the target the
+   *      manifest's `build` block names, gated by an MD5 cache keyed off
+   *      the verified sources and that target.  Verification failures
+   *      surface as warnings on `result.verification`, never as build
+   *      errors — the `.stlib` carries source and the consumer compiles it
+   *      for its own board.  `cleanBuild` skips the cache and forces a
+   *      re-verification.
    */
   async compileLibrary(
     args: Array<string | PLCProjectData | boolean>,
@@ -3346,8 +3403,8 @@ class CompilerModule {
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
       loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
-      runVerificationCompile: ({ projectPath: p, verifyProjectData: v, emit }) =>
-        this.runVerificationCompile(p, v as PLCProjectData, mainProcessBridge, (message, logLevel) =>
+      runVerificationCompile: ({ projectPath: p, verifyProjectData: v, target, emit }) =>
+        this.runVerificationCompile(p, v as PLCProjectData, target, mainProcessBridge, (message, logLevel) =>
           emit(message, logLevel),
         ),
     })
@@ -3371,9 +3428,9 @@ class CompilerModule {
 
   /**
    * Run an end-to-end verification compile of a synthetic Library
-   * Project against the OpenPLC Simulator target.  Reuses the full
-   * `compileProgram` pipeline (strucpp → arduino-cli → bundled
-   * avr-gcc) by feeding it a private `MessageChannelMain` — verifies
+   * Project against the manifest's verify target.  Reuses the full
+   * `compileProgram` pipeline (strucpp → arduino-cli → the core's
+   * toolchain) by feeding it a private `MessageChannelMain` — verifies
    * the same way the program build does, against the same binaries,
    * with zero code duplication.
    *
@@ -3396,17 +3453,17 @@ class CompilerModule {
   private async runVerificationCompile(
     projectPath: string,
     verifyData: PLCProjectData,
+    target: LibraryVerifyTarget,
     bridge: LibraryVerificationBridge,
     forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
   ): Promise<{ success: boolean; message?: string }> {
-    // Look up the simulator board's core ID from `hals.json` —
-    // single source of truth shared with the renderer-side
-    // `boardInfo.core` lookup.  Falls back to a sensible default
-    // only if hals.json has been mangled; the resulting compile
-    // would fail at `core install` and surface as a verification
-    // warning, which is the documented advisory behaviour.
-    const SIMULATOR_BOARD = 'OpenPLC Simulator'
-    const boardCore = (await this.#getBoardCore(SIMULATOR_BOARD)) ?? 'arduino:avr'
+    const { board, core: boardCore } = await this.#resolveVerifyBoard(target, (message) =>
+      forwardLog(message, 'warning'),
+    )
+    // Name the board, not just the core: which board stands in for a core
+    // decides the FQBN and the defines, so a compile error that only that
+    // board produces is otherwise unattributable.
+    forwardLog(`Verifying against ${board}${boardCore ? ` (${boardCore})` : ''}.`, 'info')
 
     return new Promise((resolve) => {
       const channel = new MessageChannelMain()
@@ -3470,7 +3527,7 @@ class CompilerModule {
       // values the inner `compileProgram` re-casts off `args as [...]`,
       const compileArgs: Array<string | null | boolean | undefined | object> = [
         projectPath,
-        SIMULATOR_BOARD,
+        board,
         boardCore,
         true,
         verifyData,

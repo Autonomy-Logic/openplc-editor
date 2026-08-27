@@ -138,7 +138,7 @@ export const BuildOptionsPopover = ({
               />
               <OptionRow
                 label='Clean build'
-                description='Skip the verification cache and re-verify against the simulator.'
+                description='Skip the verification cache and verify again.'
                 disabled={false}
                 disabledReason=''
                 onClick={() => choose('clean-upload')}
