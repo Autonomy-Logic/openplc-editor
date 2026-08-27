@@ -16,6 +16,12 @@ import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
+  /**
+   * Bumped whenever something on this screen changes what is on the Edge account, so the
+   * cloud list re-reads. The two sections are siblings that know nothing about each
+   * other; this screen is the only place that knows both are here.
+   */
+  const [cloudRevision, setCloudRevision] = useState(0)
   const capabilities = useCapabilities()
   useSystem()
   const projectPort = useProject()
@@ -128,8 +134,11 @@ const StartScreen = () => {
             an editor with no account, or nobody signed in, looks exactly as it did. The
             filter box covers both sections, because a person searching for a project
             does not care which side of the line it is on. */}
-        <StartCloudProjects searchNameFilterValue={searchFilterValue} />
-        <DisplayRecentProjects searchNameFilterValue={searchFilterValue} />
+        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} />
+        <DisplayRecentProjects
+          searchNameFilterValue={searchFilterValue}
+          onProjectUploaded={() => setCloudRevision((current) => current + 1)}
+        />
       </StartMainContent>
     </>
   )

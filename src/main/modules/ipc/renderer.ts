@@ -19,8 +19,11 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  CloudFoldersResult,
   CloudProjectsResult,
   RawProjectFiles,
+  UploadProjectParams,
+  UploadProjectResult,
   WriteProjectFiles,
 } from '@root/middleware/shared/ports/project-port'
 import type {
@@ -216,6 +219,10 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-projects:save-project', files),
   edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('edge-projects:save-file', filePath, content),
+  // ----- Publishing a local project to Edge -----
+  edgeUploadListFolders: (): Promise<CloudFoldersResult> => ipcRenderer.invoke('edge-upload:list-folders'),
+  edgeUploadProject: (params: UploadProjectParams): Promise<UploadProjectResult> =>
+    ipcRenderer.invoke('edge-upload:project', params),
   // ----- Edge version control -----
   // One channel per operation, matching how `edge-account:*` and `edge-projects:*` are
   // laid out. `EdgeVcResult` rather than a thrown error because a typed error class does

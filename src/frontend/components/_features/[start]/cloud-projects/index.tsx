@@ -41,9 +41,19 @@ const RECENT_LIMIT = 5
 export type StartCloudProjectsProps = {
   /** Same filter box the local list uses, so one search covers both sections. */
   searchNameFilterValue: string
+  /**
+   * Bumped by whoever changed what is on the account, to ask for a re-read.
+   *
+   * A number rather than a callback handed upward: this list already reloads from an
+   * effect, and a counter turns "something changed" into an ordinary dependency instead
+   * of an imperative handle the parent has to hold and remember to call. Publishing a
+   * local project is the case that needs it — the new project belongs at the top of this
+   * list, and until this existed it only appeared after a restart.
+   */
+  revision?: number
 }
 
-const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) => {
+const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudProjectsProps) => {
   const caps = useCapabilities()
   const edgeAccount = useEdgeAccountPort()
   const project = useProject()
@@ -78,7 +88,10 @@ const StartCloudProjects = ({ searchNameFilterValue }: StartCloudProjectsProps) 
     }
 
     void load()
-  }, [available, load])
+    // `revision` is a dependency, not a value this reads: changing it is the whole
+    // signal. Listed explicitly so the exhaustive-deps rule and the reader agree about
+    // why a number nothing dereferences belongs here.
+  }, [available, load, revision])
 
   // The session's own signal, not a poll: signing in through the menu makes the list
   // appear, and signing out empties it, without either component knowing about the other.

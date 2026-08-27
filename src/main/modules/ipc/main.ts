@@ -5,6 +5,7 @@ import {
   signIn as signInToEdge,
   signOut as signOutOfEdge,
 } from '@root/backend/editor/edge-account/edge-account-service'
+import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
 import {
   listRecentCloudProjects,
   readCloudProject,
@@ -59,8 +60,10 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  CloudFoldersResult,
   CloudProjectsResult,
   RawProjectFiles,
+  UploadProjectResult,
   WriteProjectFiles,
 } from '@root/middleware/shared/ports/project-port'
 import type {
@@ -639,6 +642,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    // ----- Publishing a local project to Edge -----
+    this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
+    this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
     // ----- Edge version control (branches, commits, changes, stashes) -----
     this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
     this.registerHandle('edge-vc:create-branch', this.handleEdgeVcCreateBranch)
@@ -1170,6 +1176,36 @@ class MainProcessBridge implements MainIpcModule {
     ok: false,
     failure: { kind: 'http', status: 400, message: 'The editor made an invalid version-control request.' },
   } as const satisfies VersionControlResult<never>
+
+  handleEdgeUploadListFolders = (): Promise<CloudFoldersResult> => listCloudFolders()
+
+  /**
+   * Validates before it touches the filesystem. `projectPath` becomes a directory walk and
+   * `parentFolderId` becomes a form field the server trusts, so neither may arrive as
+   * anything but a non-empty string, and visibility is narrowed to the two the API accepts
+   * rather than forwarded — a typo would otherwise publish a project as public.
+   */
+  handleEdgeUploadProject = (_event: IpcMainInvokeEvent, params: unknown): Promise<UploadProjectResult> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const projectPath = MainProcessBridge.vcString(source.projectPath)
+    const parentFolderId = MainProcessBridge.vcString(source.parentFolderId)
+
+    if (!projectPath || !parentFolderId) {
+      return Promise.resolve({
+        status: 'failed',
+        failure: { reason: 'unreadable', message: 'The editor made an invalid upload request.' },
+      })
+    }
+
+    return uploadProjectToCloud({
+      projectPath,
+      parentFolderId,
+      projectName: MainProcessBridge.vcString(source.projectName),
+      // Anything but an explicit 'public' stays private. Guessing in the other direction
+      // would publish someone's work to the world on a malformed value.
+      visibility: source.visibility === 'public' ? 'public' : 'private',
+    })
+  }
 
   handleEdgeVcListBranches = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<VersionControlResult<unknown>> => {
     const id = MainProcessBridge.vcString(projectId)

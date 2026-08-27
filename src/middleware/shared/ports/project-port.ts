@@ -246,7 +246,73 @@ export interface CloudProjectSummary {
   updatedAt: string
 }
 
+// ---------------------------------------------------------------------------
+// Publishing a local project to Autonomy Edge
+// ---------------------------------------------------------------------------
+
+/** A destination the user can publish into. Flattened, with `depth` to read as a tree. */
+export interface CloudFolder {
+  id: string
+  /** Display-ready. The account's root folder is named after the user id on the wire. */
+  name: string
+  depth: number
+}
+
+export type CloudFoldersResult =
+  | { status: 'ok'; folders: CloudFolder[] }
+  | { status: 'signed-out' }
+  | { status: 'unreachable' }
+
+/**
+ * Why publishing did not happen, as data.
+ *
+ * Each case exists because the user's next move differs. "This folder is not an OpenPLC
+ * project" is a different problem from "your project is too big" and from "the connection
+ * dropped, so check Edge before trying again" — and the last one matters most: the upload
+ * is not idempotent, so an unanswered request may well have created the project.
+ */
+export type UploadProjectFailure =
+  | { reason: 'no-manifest' }
+  | { reason: 'empty' }
+  | { reason: 'too-many-files'; count: number }
+  | { reason: 'too-deep' }
+  | { reason: 'file-too-large'; relativePath: string; bytes: number }
+  | { reason: 'too-large'; bytes: number }
+  | { reason: 'unreadable'; message: string }
+  | { reason: 'signed-out' }
+  | { reason: 'unreachable'; message: string }
+  | { reason: 'rejected'; status: number; message: string }
+
+export type UploadProjectResult =
+  | { status: 'ok'; projectId: string | null; uploadedFiles: number }
+  | { status: 'failed'; failure: UploadProjectFailure }
+
+export interface UploadProjectParams {
+  /** Absolute path of the project directory on this machine. */
+  projectPath: string
+  parentFolderId: string
+  /** Overrides the name inside `project.json`. */
+  projectName?: string
+  visibility: 'public' | 'private'
+}
+
 export interface ProjectPort {
+  /**
+   * Folders on Autonomy Edge the signed-in account can publish into.
+   *
+   * Optional: only a platform that can hold local projects AND reach Edge has anything to
+   * publish. Absent everywhere else, including the web build, where a project is already
+   * on Edge by definition.
+   */
+  listCloudFolders?(): Promise<CloudFoldersResult>
+
+  /**
+   * Archive a project on this machine and import it into Edge.
+   *
+   * Optional for the same reason as `listCloudFolders`.
+   */
+  uploadProjectToCloud?(params: UploadProjectParams): Promise<UploadProjectResult>
+
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
 

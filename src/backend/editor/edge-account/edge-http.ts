@@ -50,6 +50,15 @@ export interface EdgeRequestInit {
   method?: 'GET' | 'POST' | 'DELETE'
   /** Serialised and sent as `application/json`. */
   json?: unknown
+  /**
+   * A body that is already bytes, with its own content type — the multipart form
+   * `POST /projects/import` wants, which no amount of JSON can express.
+   *
+   * Mutually exclusive with `json`; `json` wins if both are somehow set, because a
+   * caller passing both has a bug and picking the structured one keeps the failure
+   * legible instead of sending a form the server cannot parse.
+   */
+  raw?: { body: Buffer; contentType: string }
   /** Bearer token, for the routes that need one. */
   accessToken?: string | null
   /**
@@ -71,7 +80,11 @@ export interface EdgeRequestInit {
 export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<EdgeHttpResponse> {
   return new Promise((resolve, reject) => {
     const url = new URL(path.startsWith('/') ? path : `/${path}`, `${getEdgeApiBaseUrl()}/`)
-    const payload = init.json === undefined ? undefined : JSON.stringify(init.json)
+    const json = init.json === undefined ? undefined : JSON.stringify(init.json)
+    // Bytes either way, so one write path serves both. A JSON string is encoded here
+    // rather than by `req.write`'s default so its Content-Length below is measured on
+    // exactly what goes out.
+    const payload = json !== undefined ? Buffer.from(json, 'utf-8') : init.raw?.body
 
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -82,8 +95,8 @@ export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<E
       // Byte length, not string length. A password with non-ASCII characters makes
       // the two differ, and a short Content-Length truncates the body server-side
       // into a validation error that reads like a wrong password.
-      headers['Content-Type'] = 'application/json'
-      headers['Content-Length'] = String(Buffer.byteLength(payload))
+      headers['Content-Type'] = json !== undefined ? 'application/json' : (init.raw?.contentType ?? 'application/json')
+      headers['Content-Length'] = String(payload.length)
     }
 
     if (init.accessToken) {

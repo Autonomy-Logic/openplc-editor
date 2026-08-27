@@ -12,6 +12,7 @@
 
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type {
+  CloudFoldersResult,
   CloudProjectsResult,
   CreatePouParams,
   CreateProjectParams,
@@ -19,6 +20,8 @@ import type {
   ProjectResponse,
   RawProjectFiles,
   RenamePouParams,
+  UploadProjectParams,
+  UploadProjectResult,
   WriteProjectFiles,
 } from '../../shared/ports/project-port'
 import type {
@@ -341,6 +344,43 @@ export function createEditorProjectAdapter(): ProjectPort {
 
     async pickPath(): Promise<{ success: boolean; path?: string; error?: { title: string; description: string } }> {
       return window.bridge.pathPicker()
+    },
+
+    /**
+     * Where a local project can be published. Guarded like `listRecentCloudProjects`: a
+     * renderer paired with a main process that predates this channel would otherwise raise
+     * "is not a function" and take the start screen down over a menu item nobody clicked.
+     */
+    async listCloudFolders(): Promise<CloudFoldersResult> {
+      if (typeof window.bridge.edgeUploadListFolders !== 'function') {
+        return { status: 'unreachable' }
+      }
+
+      const result = await window.bridge.edgeUploadListFolders().catch((): CloudFoldersResult => ({
+        status: 'unreachable',
+      }))
+
+      // Shape-checked, not trusted: a stale main bundle answering with something else must
+      // not become an empty folder list, which would read as "you have no folders".
+      return typeof result === 'object' && result !== null && 'status' in result ? result : { status: 'unreachable' }
+    },
+
+    async uploadProjectToCloud(params: UploadProjectParams): Promise<UploadProjectResult> {
+      if (typeof window.bridge.edgeUploadProject !== 'function') {
+        return {
+          status: 'failed',
+          failure: { reason: 'unreadable', message: 'This build of the editor cannot publish to Autonomy Edge.' },
+        }
+      }
+
+      return window.bridge.edgeUploadProject(params).catch(
+        (error: unknown): UploadProjectResult => ({
+          status: 'failed',
+          // A rejection here is the IPC call itself failing, which says nothing about
+          // whether the import ran. Reported as unreachable for that reason.
+          failure: { reason: 'unreachable', message: error instanceof Error ? error.message : 'The upload failed.' },
+        }),
+      )
     },
 
     listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
