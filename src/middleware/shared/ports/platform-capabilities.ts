@@ -165,7 +165,10 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasLocalFilesystem: true,
   hasProjectExport: true,
   hasProjectImport: true,
-  hasVersionControl: false,
+  // On for cloud projects only, which the shared gate enforces by asking whether the
+  // open project lives on Edge. The repository sits beside the project on the server,
+  // so a project opened from disk has no history to show — see `isRemoteProjectPath`.
+  hasVersionControl: true,
   hasAboutDialog: true,
   hasPythonLSP: true,
   // Worker wired via src/frontend/services/st-lsp/boot.ts, started

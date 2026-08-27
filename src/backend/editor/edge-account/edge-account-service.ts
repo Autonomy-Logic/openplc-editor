@@ -168,7 +168,7 @@ async function usableAccessToken(): Promise<string | null> {
  */
 export async function edgeAuthedRequest(
   path: string,
-  init: { method?: 'GET' | 'POST'; json?: unknown } = {},
+  init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown; timeoutMs?: number } = {},
 ): Promise<{ status: number; body: string } | null> {
   const token = await usableAccessToken()
 

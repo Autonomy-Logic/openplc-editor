@@ -33,6 +33,7 @@ import type {
   RecentProject,
   Unsubscribe,
 } from '../../shared/ports/types'
+import { isRemoteProjectPath } from '../../shared/ports/types'
 
 /** Editor IPC POU shape (discriminated union). */
 interface IpcPou {
@@ -177,25 +178,13 @@ function mapIpcResponse(
 /**
  * Whether an identifier names a project on Autonomy Edge rather than one on disk.
  *
- * The editor now opens both, and `project.meta.path` is the single identifier every save
- * flows through — so this is the one place that decides which world a project belongs to.
- * The test is "is it an absolute filesystem path": local projects always are, and a cloud
- * id (a cuid) never is. Deciding by shape rather than by a prefix we invent keeps the
- * cloud identifier byte-identical to the one the API uses, which is what lets the shared
- * save flow drive both platforms without knowing which it is on — the web build already
- * puts a bare project id in that field.
+ * The editor opens both, and `project.meta.path` is the single identifier every save flows
+ * through — so this decides which world a project belongs to. It delegates rather than
+ * deciding: the shared UI needs the same answer to know whether to offer version control,
+ * and two copies of this test would eventually disagree about a Windows path and send a
+ * save to the wrong place. The name stays because the save flow reads better for it.
  */
-export function isCloudProjectId(identifier: string): boolean {
-  if (identifier.length === 0) {
-    return false
-  }
-
-  const isPosixAbsolute = identifier.startsWith('/')
-  // `C:\...` or `C:/...`, and `\\server\share` for a UNC path.
-  const isWindowsAbsolute = /^[A-Za-z]:[\\/]/.test(identifier) || identifier.startsWith('\\\\')
-
-  return !isPosixAbsolute && !isWindowsAbsolute
-}
+export const isCloudProjectId = isRemoteProjectPath
 
 export function createEditorProjectAdapter(): ProjectPort {
   return {

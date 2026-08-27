@@ -98,6 +98,36 @@ export class StashConflictError extends Error {
 export type SwitchBranchStrategy = 'discard' | 'carry'
 
 /**
+ * How a version-control operation can fail, as data rather than as an exception.
+ *
+ * The desktop runs these operations in its main process and reports the outcome across
+ * IPC, which structure-clones the value: an `Error` subclass sent that way arrives with
+ * its prototype gone, so `instanceof` answers false and the two conflict flows below stop
+ * working. Describing the failure instead, and rebuilding the error on the far side, is
+ * what keeps the desktop's components identical to the web's.
+ *
+ * Each case is kept apart because each needs a different thing from the user:
+ *
+ *  - `signed-out` — no session to spend; sign in. Nothing is wrong with the project.
+ *  - `unreachable` — the server never answered, so it is UNKNOWN whether the operation
+ *    ran. Reporting this as a refusal would be a lie in the more dangerous direction.
+ *  - `carry-conflict` — the edits cannot be carried to the target branch. Carries the
+ *    conflicted paths, which is what the switch modal reopens with.
+ *  - `stash-conflict` — the stash will not apply cleanly. The stash is kept.
+ *  - `http` — anything else, with the status, so a 403 on a read-only project reads
+ *    differently from a 500.
+ */
+export type VersionControlFailure =
+  | { kind: 'signed-out' }
+  | { kind: 'unreachable'; message: string }
+  | { kind: 'carry-conflict'; conflictedFiles: string[] }
+  | { kind: 'stash-conflict' }
+  | { kind: 'http'; status: number; message: string }
+
+/** A version-control outcome in transportable form. See {@link VersionControlFailure}. */
+export type VersionControlResult<T> = { ok: true; data: T } | { ok: false; failure: VersionControlFailure }
+
+/**
  * Thrown by `switchBranch` when called with `strategy: 'carry'` and the
  * server detects conflicts that would block the carry. The project state on
  * the server is unchanged — the user can pick discard, cancel, or resolve

@@ -47,11 +47,17 @@ export interface EdgeHttpResponse {
 }
 
 export interface EdgeRequestInit {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'DELETE'
   /** Serialised and sent as `application/json`. */
   json?: unknown
   /** Bearer token, for the routes that need one. */
   accessToken?: string | null
+  /**
+   * Overrides {@link REQUEST_TIMEOUT_MS}. Version control needs it: committing or
+   * switching a branch runs a real git operation on the server against a whole
+   * project, and 15s is a budget sized for an auth round trip, not for that.
+   */
+  timeoutMs?: number
 }
 
 /**
@@ -73,10 +79,10 @@ export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<E
     }
 
     if (payload !== undefined) {
-      headers['Content-Type'] = 'application/json'
       // Byte length, not string length. A password with non-ASCII characters makes
       // the two differ, and a short Content-Length truncates the body server-side
       // into a validation error that reads like a wrong password.
+      headers['Content-Type'] = 'application/json'
       headers['Content-Length'] = String(Buffer.byteLength(payload))
     }
 
@@ -105,8 +111,10 @@ export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<E
       })
     })
 
-    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      req.destroy(new Error(`Edge account request timed out after ${REQUEST_TIMEOUT_MS}ms`))
+    const timeoutMs = init.timeoutMs ?? REQUEST_TIMEOUT_MS
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Edge account request timed out after ${timeoutMs}ms`))
     })
 
     req.on('error', reject)

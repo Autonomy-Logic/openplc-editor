@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
 
-import { projectCapabilities } from '../../middleware/shared/ports/types'
+import { isRemoteProjectPath, projectCapabilities } from '../../middleware/shared/ports/types'
 import {
   useCapabilities,
   useChatPanel,
@@ -145,12 +145,19 @@ const WorkspaceScreen = () => {
   const debugNonBoolValues = useDebugNonBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
 
-  // Version control is an intersection: the host must support it
-  // (web edition has its own VC adapter; desktop has git) AND the
-  // project type must allow it.  Library projects ship without VC
-  // for now — git-on-library is plausible but out of scope and
-  // would re-introduce the same UI churn we just removed.
-  const hasVersionControl = capabilities.hasVersionControl && projectCaps.hasVersionControl
+  // Version control is an intersection of three things: the host must support
+  // it, the project type must allow it, and the project must actually live on
+  // the server.  Library projects ship without VC for now — git-on-library is
+  // plausible but out of scope and would re-introduce the same UI churn we
+  // just removed.
+  //
+  // The third term is what keeps the desktop honest.  The repository sits
+  // beside the project on Edge, so a project opened from disk has no history
+  // to show; offering branches for it would be offering a button that cannot
+  // work.  On the web every project is an Edge project, so the term is always
+  // true there and nothing changes.
+  const hasVersionControl =
+    capabilities.hasVersionControl && projectCaps.hasVersionControl && isRemoteProjectPath(projectPath)
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
@@ -908,6 +915,7 @@ const WorkspaceScreen = () => {
       {hasVersionControl && projectPath && (
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
       )}
+
     </div>
   )
 }

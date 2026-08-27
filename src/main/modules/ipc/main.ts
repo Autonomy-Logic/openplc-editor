@@ -11,6 +11,24 @@ import {
   saveCloudFile,
   saveCloudProject,
 } from '@root/backend/editor/edge-projects'
+import {
+  applyStash,
+  createBranch,
+  createCommit,
+  createStash,
+  deleteBranch,
+  discardChanges,
+  dropStash,
+  getChanges,
+  getCommitFiles,
+  listBranches,
+  listCommits,
+  listStashes,
+  popStash,
+  previewSwitchCarry,
+  restoreCommit,
+  switchBranch,
+} from '@root/backend/editor/edge-version-control'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import type {
@@ -30,11 +48,6 @@ import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
-  CloudProjectsResult,
-  RawProjectFiles,
-  WriteProjectFiles,
-} from '@root/middleware/shared/ports/project-port'
-import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
@@ -46,12 +59,18 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  CloudProjectsResult,
+  RawProjectFiles,
+  WriteProjectFiles,
+} from '@root/middleware/shared/ports/project-port'
+import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
+import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -620,6 +639,23 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    // ----- Edge version control (branches, commits, changes, stashes) -----
+    this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
+    this.registerHandle('edge-vc:create-branch', this.handleEdgeVcCreateBranch)
+    this.registerHandle('edge-vc:delete-branch', this.handleEdgeVcDeleteBranch)
+    this.registerHandle('edge-vc:switch-branch', this.handleEdgeVcSwitchBranch)
+    this.registerHandle('edge-vc:preview-switch-carry', this.handleEdgeVcPreviewSwitchCarry)
+    this.registerHandle('edge-vc:list-commits', this.handleEdgeVcListCommits)
+    this.registerHandle('edge-vc:create-commit', this.handleEdgeVcCreateCommit)
+    this.registerHandle('edge-vc:get-commit-files', this.handleEdgeVcGetCommitFiles)
+    this.registerHandle('edge-vc:restore-commit', this.handleEdgeVcRestoreCommit)
+    this.registerHandle('edge-vc:get-changes', this.handleEdgeVcGetChanges)
+    this.registerHandle('edge-vc:discard-changes', this.handleEdgeVcDiscardChanges)
+    this.registerHandle('edge-vc:list-stashes', this.handleEdgeVcListStashes)
+    this.registerHandle('edge-vc:create-stash', this.handleEdgeVcCreateStash)
+    this.registerHandle('edge-vc:apply-stash', this.handleEdgeVcApplyStash)
+    this.registerHandle('edge-vc:pop-stash', this.handleEdgeVcPopStash)
+    this.registerHandle('edge-vc:drop-stash', this.handleEdgeVcDropStash)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -1093,6 +1129,248 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     return saveCloudFile(filePath, content)
+  }
+
+  // -------------------------------------------------------------------------
+  // Edge version control
+  // -------------------------------------------------------------------------
+  //
+  // Every handler validates before it builds a URL. A non-string project id would
+  // otherwise be interpolated as `undefined` and ask the API about a project by that
+  // name, and a missing branch name would POST an empty one — both come back as a
+  // confusing 400 rather than as the local mistake they are.
+  //
+  // Optional arguments are normalised rather than forwarded: `undefined` arriving over
+  // IPC as `null` is the difference between "commit everything" and "commit no files".
+
+  /** Non-empty string, or nothing. */
+  private static vcString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.length > 0 ? value : undefined
+  }
+
+  /** Narrows an IPC argument to something indexable, without asserting. */
+  private static vcRecord(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value))
+      : {}
+  }
+
+  /** An array of non-empty strings, or nothing — never a partially valid list. */
+  private static vcStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+      return undefined
+    }
+
+    const strings = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+
+    return strings.length === value.length ? strings : undefined
+  }
+
+  private static readonly VC_BAD_REQUEST = {
+    ok: false,
+    failure: { kind: 'http', status: 400, message: 'The editor made an invalid version-control request.' },
+  } as const satisfies VersionControlResult<never>
+
+  handleEdgeVcListBranches = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? listBranches(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcCreateBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    name: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const branchName = MainProcessBridge.vcString(name)
+
+    return id && branchName ? createBranch(id, branchName) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDeleteBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    branchId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const branch = MainProcessBridge.vcString(branchId)
+
+    return id && branch ? deleteBranch(id, branch) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcSwitchBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    branchName: unknown,
+    strategy: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const name = MainProcessBridge.vcString(branchName)
+
+    if (!id || !name) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // Anything but an explicit 'carry' discards, which is the endpoint's own default and
+    // the safer reading of a malformed value: carrying edits on a guess could move work
+    // onto a branch the user did not mean to touch.
+    return switchBranch(id, name, strategy === 'carry' ? 'carry' : 'discard')
+  }
+
+  handleEdgeVcPreviewSwitchCarry = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    targetBranch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const target = MainProcessBridge.vcString(targetBranch)
+
+    return id && target ? previewSwitchCarry(id, target) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcListCommits = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    options: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    if (!id) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    const source = MainProcessBridge.vcRecord(options)
+    const limit = typeof source.limit === 'number' && Number.isInteger(source.limit) ? source.limit : undefined
+    const offset = typeof source.offset === 'number' && Number.isInteger(source.offset) ? source.offset : undefined
+
+    return listCommits(id, { limit, offset, branch: MainProcessBridge.vcString(source.branch) })
+  }
+
+  handleEdgeVcCreateCommit = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    message: unknown,
+    files: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitMessage = MainProcessBridge.vcString(message)
+
+    return id && commitMessage
+      ? createCommit(id, commitMessage, MainProcessBridge.vcStringArray(files), MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcGetCommitFiles = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    hash: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitHash = MainProcessBridge.vcString(hash)
+
+    return id && commitHash
+      ? getCommitFiles(id, commitHash, MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcRestoreCommit = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    hash: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitHash = MainProcessBridge.vcString(hash)
+
+    return id && commitHash
+      ? restoreCommit(id, commitHash, MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcGetChanges = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    includeContent: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? getChanges(id, includeContent === true) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDiscardChanges = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    files: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    if (!id) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // A malformed list is refused rather than dropped: silently discarding nothing when
+    // the user asked to discard three files would look like the button is broken, and
+    // silently discarding everything would destroy work.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return discardChanges(id, MainProcessBridge.vcStringArray(files))
+  }
+
+  handleEdgeVcListStashes = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? listStashes(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcCreateStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    message: unknown,
+    files: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id
+      ? createStash(id, MainProcessBridge.vcString(message), MainProcessBridge.vcStringArray(files))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcApplyStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? applyStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcPopStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? popStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDropStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? dropStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
   }
 
   handleCatalogList = async (

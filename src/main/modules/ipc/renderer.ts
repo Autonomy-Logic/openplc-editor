@@ -6,11 +6,6 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
-import type {
-  CloudProjectsResult,
-  RawProjectFiles,
-  WriteProjectFiles,
-} from '@root/middleware/shared/ports/project-port'
 import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
@@ -24,6 +19,11 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  CloudProjectsResult,
+  RawProjectFiles,
+  WriteProjectFiles,
+} from '@root/middleware/shared/ports/project-port'
+import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
   PublicLibrary,
@@ -36,6 +36,15 @@ import type {
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
+import type {
+  Branch,
+  Commit,
+  CommitFile,
+  CommitInfo,
+  PendingChange,
+  Stash,
+  VersionControlResult,
+} from '@root/middleware/shared/ports/version-control-port'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -207,6 +216,71 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-projects:save-project', files),
   edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('edge-projects:save-file', filePath, content),
+  // ----- Edge version control -----
+  // One channel per operation, matching how `edge-account:*` and `edge-projects:*` are
+  // laid out. `EdgeVcResult` rather than a thrown error because a typed error class does
+  // not survive IPC: the adapter rebuilds the real error on the other side.
+  edgeVcListBranches: (projectId: string): Promise<VersionControlResult<{ branches: Branch[] }>> =>
+    ipcRenderer.invoke('edge-vc:list-branches', projectId),
+  edgeVcCreateBranch: (projectId: string, name: string): Promise<VersionControlResult<{ branch: Branch }>> =>
+    ipcRenderer.invoke('edge-vc:create-branch', projectId, name),
+  edgeVcDeleteBranch: (projectId: string, branchId: string): Promise<VersionControlResult<null>> =>
+    ipcRenderer.invoke('edge-vc:delete-branch', projectId, branchId),
+  edgeVcSwitchBranch: (
+    projectId: string,
+    branchName: string,
+    strategy: 'discard' | 'carry',
+  ): Promise<VersionControlResult<{ message: string; branch: string }>> =>
+    ipcRenderer.invoke('edge-vc:switch-branch', projectId, branchName, strategy),
+  edgeVcPreviewSwitchCarry: (
+    projectId: string,
+    targetBranch: string,
+  ): Promise<VersionControlResult<{ conflicts: string[] }>> =>
+    ipcRenderer.invoke('edge-vc:preview-switch-carry', projectId, targetBranch),
+  edgeVcListCommits: (
+    projectId: string,
+    options: { limit?: number; offset?: number; branch?: string },
+  ): Promise<VersionControlResult<{ commits: Commit[]; total: number; page: number }>> =>
+    ipcRenderer.invoke('edge-vc:list-commits', projectId, options),
+  edgeVcCreateCommit: (
+    projectId: string,
+    message: string,
+    files?: string[],
+    branch?: string,
+  ): Promise<VersionControlResult<Commit>> => ipcRenderer.invoke('edge-vc:create-commit', projectId, message, files, branch),
+  edgeVcGetCommitFiles: (
+    projectId: string,
+    hash: string,
+    branch?: string,
+  ): Promise<VersionControlResult<{ files: CommitFile[]; parentFiles: CommitFile[]; commit: CommitInfo }>> =>
+    ipcRenderer.invoke('edge-vc:get-commit-files', projectId, hash, branch),
+  edgeVcRestoreCommit: (
+    projectId: string,
+    hash: string,
+    branch?: string,
+  ): Promise<VersionControlResult<{ message: string; restoredCommit: Commit }>> =>
+    ipcRenderer.invoke('edge-vc:restore-commit', projectId, hash, branch),
+  edgeVcGetChanges: (
+    projectId: string,
+    includeContent?: boolean,
+  ): Promise<VersionControlResult<{ changes: PendingChange[]; hasChanges: boolean }>> =>
+    ipcRenderer.invoke('edge-vc:get-changes', projectId, includeContent),
+  edgeVcDiscardChanges: (projectId: string, files?: string[]): Promise<VersionControlResult<null>> =>
+    ipcRenderer.invoke('edge-vc:discard-changes', projectId, files),
+  edgeVcListStashes: (projectId: string): Promise<VersionControlResult<{ stashes: Stash[] }>> =>
+    ipcRenderer.invoke('edge-vc:list-stashes', projectId),
+  edgeVcCreateStash: (
+    projectId: string,
+    message?: string,
+    files?: string[],
+  ): Promise<VersionControlResult<{ stash: Stash }>> =>
+    ipcRenderer.invoke('edge-vc:create-stash', projectId, message, files),
+  edgeVcApplyStash: (projectId: string, ref: string): Promise<VersionControlResult<{ message: string }>> =>
+    ipcRenderer.invoke('edge-vc:apply-stash', projectId, ref),
+  edgeVcPopStash: (projectId: string, ref: string): Promise<VersionControlResult<{ message: string }>> =>
+    ipcRenderer.invoke('edge-vc:pop-stash', projectId, ref),
+  edgeVcDropStash: (projectId: string, ref: string): Promise<VersionControlResult<null>> =>
+    ipcRenderer.invoke('edge-vc:drop-stash', projectId, ref),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)
