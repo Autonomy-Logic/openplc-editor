@@ -162,14 +162,6 @@ jobs:
             else
               DIFF_COUNT=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['total_diffs'])")
               echo "Still $DIFF_COUNT difference(s) with PR #$PR_NUMBER"
-              echo "$RESULT" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-for surface, info in d['surfaces'].items():
-    if not info['match']:
-        for diff in info['diffs']:
-            print(f\"    DEBUG {surface}: {diff['reason']}: {diff.get('file', diff)}\")
-"
             fi
 
             echo "::endgroup::"
