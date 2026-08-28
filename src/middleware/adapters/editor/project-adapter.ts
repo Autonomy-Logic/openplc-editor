@@ -271,6 +271,16 @@ export function createEditorProjectAdapter(): ProjectPort {
            * same as having nothing to echo.
            */
           rawLoadedFiles: raw.data.rawLoadedFiles,
+          /**
+           * Whether this account may persist changes, straight from the server's own
+           * capabilities. Dropping it made the store fall back to "editable", which left
+           * the read-only guards dead on the desktop: a viewer saw Commit, Discard and
+           * Restore enabled and found out only when Edge refused the write.
+           *
+           * Absent for a project on disk, where there is no remote permission to speak of,
+           * and the store reads absent as editable — which is correct there.
+           */
+          canEdit: raw.data.canEdit,
         },
       }
     },
