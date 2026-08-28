@@ -15,6 +15,8 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
+// Aliased: the bare name `Node` resolves to lib.dom's Node in this file.
+import type { Node as FlowNode } from '@xyflow/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
@@ -36,6 +38,7 @@ import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
+import ExecuteElement from '../elements/ladder/execute'
 
 const EMPTY_DIVERGENCES: string[] = []
 
@@ -52,6 +55,7 @@ export default function LadderEditor() {
   const blockElementModal = useOpenPLCStore((state) => state.modals['block-ladder-element'])
   const contactElementModal = useOpenPLCStore((state) => state.modals['contact-ladder-element'])
   const coilElementModal = useOpenPLCStore((state) => state.modals['coil-ladder-element'])
+  const executeElementModal = useOpenPLCStore((state) => state.modals['execute-ladder-element'])
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
@@ -296,6 +300,14 @@ export default function LadderEditor() {
               onClose={handleModalClose}
               node={coilElementModal.data as CoilNode}
               isOpen={coilElementModal.open}
+            />
+          )}
+          {executeElementModal?.open && (
+            <ExecuteElement
+              onClose={handleModalClose}
+              node={executeElementModal.data as FlowNode | null}
+              isOpen={executeElementModal.open}
+              pouName={pouName}
             />
           )}
         </Portal.Root>

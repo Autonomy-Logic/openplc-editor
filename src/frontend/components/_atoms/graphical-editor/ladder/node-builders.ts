@@ -62,6 +62,19 @@ export const defaultCustomNodesStyles: CustomLadderNodeTypes = {
       offsetY: 0,
     },
   },
+  execute: {
+    width: constants.DEFAULT_EXECUTE_WIDTH,
+    // Nominal only — an Execute node carries its own `height`, derived
+    // from its line count, and the layout reads `node.height` first.
+    height: constants.DEFAULT_EXECUTE_HEIGHT,
+    gap: 60,
+    verticalGap: 80,
+    handle: {
+      x: constants.DEFAULT_EXECUTE_CONNECTOR_X,
+      y: constants.DEFAULT_EXECUTE_CONNECTOR_Y,
+      offsetY: 0,
+    },
+  },
   parallel: {
     width: constants.DEFAULT_PARALLEL_WIDTH,
     height: constants.DEFAULT_PARALLEL_HEIGHT,
@@ -134,6 +147,7 @@ export const nodesBuilder = {
   block: buildNodes.buildBlockNode,
   coil: buildNodes.buildCoilNode,
   contact: buildNodes.buildContactNode,
+  execute: buildNodes.buildExecuteNode,
   parallel: buildNodes.buildParallel,
   parallelPlaceholder: buildNodes.builderPlaceholderNode,
   placeholder: buildNodes.builderPlaceholderNode,

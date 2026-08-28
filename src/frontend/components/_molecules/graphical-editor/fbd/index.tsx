@@ -39,6 +39,7 @@ import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
+import ExecuteElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/execute'
 import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
@@ -55,6 +56,7 @@ const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
 }
 const SNAP_GRID: SnapGrid = [16, 16]
 const PRO_OPTIONS = { hideAttribution: true }
+const NOOP = () => {}
 const CONTROLS_CONFIG = { showInteractive: false }
 
 // --- Debug edge coloring ---
@@ -213,6 +215,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const deleteVariable = useOpenPLCStore((state) => state.projectActions.deleteVariable)
   const { closeModal, openModal } = useOpenPLCStore((state) => state.modalActions)
   const blockElementModal = useOpenPLCStore((state) => state.modals['block-fbd-element'])
+  const executeElementModal = useOpenPLCStore((state) => state.modals['execute-fbd-element'])
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const hasProgramInstance = useOpenPLCStore((state) =>
     state.project.data.configurations.resource.instances.some((instance) => instance.program === pouName),
@@ -755,6 +758,15 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * Handle the double click of a node
    */
   const handleNodeDoubleClick = (node: FlowNode) => {
+    // Execute opens even while debugging — read-only, so the running
+    // snippet can be read with live value badges. See the ladder rung
+    // body for the same carve-out.
+    if (node.type === 'execute') {
+      openModal('execute-fbd-element', node)
+      return
+    }
+    if (isDebuggerActive) return
+
     const modalToOpen = node.type === 'block' && 'block-fbd-element'
     if (!modalToOpen) return
 
@@ -819,9 +831,19 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           nodesConnectable: !isDebuggerActive,
           elementsSelectable: true,
 
+          // React Flow gives a node `pointer-events: none` when it is neither
+          // selectable nor draggable and carries no click handler — which is
+          // exactly the state debug puts every node in, so double-click never
+          // reached the Execute box and its read-only modal was unreachable.
+          // A no-op click handler keeps the node interactive; the ladder rung
+          // does the same thing for the same reason.
+          onNodeClick: isDebuggerActive ? NOOP : undefined,
+
           onDelete: isDebuggerActive ? undefined : onDelete,
           onConnect: isDebuggerActive ? undefined : onConnect,
-          onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
+          // Always wired — `handleNodeDoubleClick` decides per node type
+          // whether a debug session suppresses the modal.
+          onNodeDoubleClick,
 
           onDragEnter: isDebuggerActive ? undefined : onDragEnterViewport,
           onDragLeave: isDebuggerActive ? undefined : onDragLeaveViewport,
@@ -849,6 +871,14 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           onClose={handleModalClose}
           selectedNode={blockElementModal.data as BlockNode<object>}
           isOpen={blockElementModal.open}
+        />
+      )}
+      {executeElementModal.open && (
+        <ExecuteElement
+          onClose={handleModalClose}
+          node={executeElementModal.data as FlowNode | null}
+          isOpen={executeElementModal.open}
+          pouName={pouName}
         />
       )}
     </div>

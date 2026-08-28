@@ -141,7 +141,11 @@ const Debugger = ({ graphList }: DebuggerData) => {
             <span className='flex h-7 select-none items-center justify-center rounded-md bg-inherit  p-2 text-cp-sm font-medium text-neutral-1000 outline-none  dark:text-white'>
               Range
             </span>
-            <div className='relative z-[999999] flex gap-2'>
+            {/* Stacks above the chart and nothing else — modal overlays are
+                z-50, so anything higher paints through an open dialog. The
+                Select's dropdown is portalled to body and keeps its own
+                z-index; it cannot open while a modal holds focus. */}
+            <div className='relative z-10 flex gap-2'>
               <Select.Root onValueChange={(value) => setRange(Number(value))}>
                 <Select.Trigger
                   value={String(range)}

@@ -1,0 +1,306 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://www.plcopen.org/xml/tc6_0200">
+  <fileHeader companyName="" productName="CODESYS" productVersion="CODESYS V3.5 SP22 Patch 1" creationDateTime="2026-08-28T09:52:30.8266995" />
+  <contentHeader name="execute-test.project" modificationDateTime="2026-08-28T09:52:13.9833565">
+    <coordinateInfo>
+      <fbd>
+        <scaling x="1" y="1" />
+      </fbd>
+      <ld>
+        <scaling x="1" y="1" />
+      </ld>
+      <sfc>
+        <scaling x="1" y="1" />
+      </sfc>
+    </coordinateInfo>
+    <addData>
+      <data name="http://www.3s-software.com/plcopenxml/projectinformation" handleUnknown="implementation">
+        <ProjectInformation />
+      </data>
+    </addData>
+  </contentHeader>
+  <types>
+    <dataTypes />
+    <pous>
+      <pou name="PLC_PRG" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="myValue">
+              <type>
+                <INT />
+              </type>
+            </variable>
+            <variable name="myNewValue">
+              <type>
+                <INT />
+              </type>
+            </variable>
+            <variable name="myContact">
+              <type>
+                <BOOL />
+              </type>
+            </variable>
+            <variable name="myCoil">
+              <type>
+                <BOOL />
+              </type>
+            </variable>
+            <variable name="myValue_1">
+              <type>
+                <INT />
+              </type>
+            </variable>
+            <variable name="myNewValue_1">
+              <type>
+                <INT />
+              </type>
+            </variable>
+            <variable name="myContact_1">
+              <type>
+                <BOOL />
+              </type>
+            </variable>
+            <variable name="myCoil_1">
+              <type>
+                <BOOL />
+              </type>
+            </variable>
+          </localVars>
+        </interface>
+        <body>
+          <LD>
+            <leftPowerRail localId="0">
+              <position x="0" y="0" />
+              <connectionPointOut formalParameter="none" />
+            </leftPowerRail>
+            <comment localId="3" height="0" width="0">
+              <position x="0" y="0" />
+              <content>
+                <xhtml xmlns="http://www.w3.org/1999/xhtml">ST Block Comment</xhtml>
+              </content>
+            </comment>
+            <vendorElement localId="2">
+              <position x="0" y="0" />
+              <alternativeText>
+                <xhtml xmlns="http://www.w3.org/1999/xhtml">ST Block Network </xhtml>
+              </alternativeText>
+              <addData>
+                <data name="http://www.3s-software.com/plcopenxml/fbdelementtype" handleUnknown="implementation">
+                  <ElementType xmlns="">networktitle</ElementType>
+                </data>
+              </addData>
+            </vendorElement>
+            <contact localId="4">
+              <position x="0" y="0" />
+              <connectionPointIn>
+                <connection refLocalId="0" />
+              </connectionPointIn>
+              <connectionPointOut />
+              <variable>myContact</variable>
+            </contact>
+            <block localId="5" typeName="EXECUTE">
+              <position x="0" y="0" />
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <connection refLocalId="4" />
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables />
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut />
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://www.3s-software.com/plcopenxml/stcode" handleUnknown="implementation">
+                  <STCode xmlns="">// escaping test: &lt; &gt; &lt;= &gt;= &lt;&gt;
+(* block comment: ampersand &amp; , less-than &lt; , greater-than &gt; , quotes 'single' "double" *)
+IF myValue &lt; 10 AND myContact THEN
+    myNewValue := myValue + 1;
+ELSIF (myValue &gt;= 10) AND (myValue &lt;= 100) THEN
+    myNewValue := myValue - 1;
+ELSIF myValue &lt;&gt; 0 THEN
+    myNewValue := 0;
+ELSE
+    myNewValue := -1;
+END_IF;
+
+FOR myValue := 0 TO 5 BY 1 DO
+    myNewValue := myNewValue + myValue;
+END_FOR;
+
+CASE myNewValue OF
+    0, 1: myCoil := TRUE;
+    2..5: myCoil := FALSE;
+ELSE
+    myCoil := myContact;
+END_CASE;
+</STCode>
+                </data>
+              </addData>
+            </block>
+            <coil localId="6">
+              <position x="0" y="0" />
+              <connectionPointIn>
+                <connection refLocalId="5" />
+              </connectionPointIn>
+              <connectionPointOut />
+              <variable>myCoil</variable>
+            </coil>
+            <comment localId="9" height="0" width="0">
+              <position x="0" y="0" />
+              <content>
+                <xhtml xmlns="http://www.w3.org/1999/xhtml">ST Block Comment 1</xhtml>
+              </content>
+            </comment>
+            <vendorElement localId="8">
+              <position x="0" y="0" />
+              <alternativeText>
+                <xhtml xmlns="http://www.w3.org/1999/xhtml">ST Block Network 1</xhtml>
+              </alternativeText>
+              <addData>
+                <data name="http://www.3s-software.com/plcopenxml/fbdelementtype" handleUnknown="implementation">
+                  <ElementType xmlns="">networktitle</ElementType>
+                </data>
+              </addData>
+            </vendorElement>
+            <contact localId="10">
+              <position x="0" y="0" />
+              <connectionPointIn>
+                <connection refLocalId="0" />
+              </connectionPointIn>
+              <connectionPointOut />
+              <variable>myContact_1</variable>
+            </contact>
+            <block localId="11" typeName="EXECUTE">
+              <position x="0" y="0" />
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <connection refLocalId="10" />
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables />
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut />
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://www.3s-software.com/plcopenxml/stcode" handleUnknown="implementation">
+                  <STCode xmlns="">// Comment in ST Block 1
+myNewValue_1 := myValue_1 + 111;
+</STCode>
+                </data>
+              </addData>
+            </block>
+            <coil localId="12">
+              <position x="0" y="0" />
+              <connectionPointIn>
+                <connection refLocalId="11" />
+              </connectionPointIn>
+              <connectionPointOut />
+              <variable>myCoil_1</variable>
+            </coil>
+            <rightPowerRail localId="2147483647">
+              <position x="0" y="0" />
+              <connectionPointIn />
+            </rightPowerRail>
+          </LD>
+        </body>
+        <addData>
+          <data name="http://www.3s-software.com/plcopenxml/objectid" handleUnknown="discard">
+            <ObjectId>ac119dd2-2f51-4cdc-a0c4-34317ee586a8</ObjectId>
+          </data>
+        </addData>
+      </pou>
+      <pou name="FBD_Test_Execute" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="myNewVarFBD">
+              <type>
+                <INT />
+              </type>
+            </variable>
+          </localVars>
+        </interface>
+        <body>
+          <FBD>
+            <vendorElement localId="10000000000">
+              <position x="0" y="0" />
+              <alternativeText>
+                <xhtml xmlns="http://www.w3.org/1999/xhtml">FBD Implementation Attributes</xhtml>
+              </alternativeText>
+              <addData>
+                <data name="http://www.3s-software.com/plcopenxml/fbd/implementationattributes" handleUnknown="implementation">
+                  <fbdattributes xmlns="">
+                    <attribute name="BoxInputFlagsSupported" value="true" />
+                  </fbdattributes>
+                </data>
+              </addData>
+            </vendorElement>
+            <inVariable localId="10000000001">
+              <position x="0" y="0" />
+              <connectionPointOut />
+              <expression>TRUE</expression>
+            </inVariable>
+            <block localId="10000000002" typeName="EXECUTE">
+              <position x="0" y="0" />
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <connection refLocalId="10000000001" />
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables />
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut />
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://www.3s-software.com/plcopenxml/fbdcalltype" handleUnknown="implementation">
+                  <CallType xmlns="">execute</CallType>
+                </data>
+                <data name="http://www.3s-software.com/plcopenxml/inputparamtypes" handleUnknown="implementation">
+                  <InputParamTypes xmlns="">BOOL</InputParamTypes>
+                </data>
+                <data name="http://www.3s-software.com/plcopenxml/outputparamtypes" handleUnknown="implementation">
+                  <OutputParamTypes xmlns="">BOOL</OutputParamTypes>
+                </data>
+                <data name="http://www.3s-software.com/plcopenxml/stcode" handleUnknown="implementation">
+                  <STCode xmlns="">// FBD escaping test: a &lt; b , c &gt; d , e &lt;&gt; f
+IF myNewVarFBD &lt; 100 AND myNewVarFBD &lt;&gt; 0 THEN
+    myNewVarFBD := myNewVarFBD + 1;
+ELSE
+    myNewVarFBD := 0;
+END_IF;</STCode>
+                </data>
+              </addData>
+            </block>
+          </FBD>
+        </body>
+        <addData>
+          <data name="http://www.3s-software.com/plcopenxml/objectid" handleUnknown="discard">
+            <ObjectId>0350dfcf-d579-48f1-bb55-c69096e9fb64</ObjectId>
+          </data>
+        </addData>
+      </pou>
+    </pous>
+  </types>
+  <instances>
+    <configurations />
+  </instances>
+  <addData>
+    <data name="http://www.3s-software.com/plcopenxml/projectstructure" handleUnknown="discard">
+      <ProjectStructure>
+        <Object Name="PLC_PRG" ObjectId="ac119dd2-2f51-4cdc-a0c4-34317ee586a8" />
+        <Object Name="FBD_Test_Execute" ObjectId="0350dfcf-d579-48f1-bb55-c69096e9fb64" />
+      </ProjectStructure>
+    </data>
+  </addData>
+</project>

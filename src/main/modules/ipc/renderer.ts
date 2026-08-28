@@ -308,6 +308,7 @@ const rendererProcessBridge = {
       message: string
     }>,
   exportProjectRequest: (callback: IpcRendererCallbacks) => subscribe('compiler:export-project-request', callback),
+  importProjectRequest: (callback: IpcRendererCallbacks) => subscribe('project:import-plcopen-request', callback),
   generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])

@@ -48,6 +48,7 @@ beforeEach(() => {
     saveFileAccelerator: register('saveFile'),
     closeProjectAccelerator: register('closeProject'),
     exportProjectRequest: register('exportProject'),
+    importProjectRequest: register('importProject'),
     closeTabAccelerator: register('closeTab'),
     deleteFileAccelerator: register('deleteFile'),
     findInProjectAccelerator: register('findInProject'),
@@ -102,7 +103,6 @@ testAccelerator('onOpenProject', 'openProject', 'handleOpenProjectRequest')
 testAccelerator('onSaveProject', 'saveProject', 'saveProjectAccelerator')
 testAccelerator('onSaveFile', 'saveFile', 'saveFileAccelerator')
 testAccelerator('onCloseProject', 'closeProject', 'closeProjectAccelerator')
-testAccelerator('onExportProject', 'exportProject', 'exportProjectRequest')
 testAccelerator('onCloseTab', 'closeTab', 'closeTabAccelerator')
 testAccelerator('onDeleteFile', 'deleteFile', 'deleteFileAccelerator')
 testAccelerator('onFindInProject', 'findInProject', 'findInProjectAccelerator')
@@ -111,6 +111,52 @@ testAccelerator('onRedo', 'redo', 'handleRedoRequest')
 testAccelerator('onSwitchPerspective', 'switchPerspective', 'switchPerspective')
 testAccelerator('onAbout', 'about', 'aboutModalAccelerator')
 testAccelerator('onQuitApp', 'quitApp', 'quitAppRequest')
+testAccelerator('onImportProject', 'importProject', 'importProjectRequest')
+
+describe('onExportProject', () => {
+  // Regression: the adapter used to swallow the IPC argument
+  // (`() => callback()`), so "Export to CODESYS XML" silently produced
+  // old-editor XML. The two menu items drive two genuinely different
+  // generators, so the dialect has to survive the trip.
+  it('forwards the codesys dialect the menu asked for', () => {
+    const cb = jest.fn()
+    adapter.onExportProject(cb)
+
+    fire('exportProject', {}, 'codesys')
+
+    expect(cb).toHaveBeenCalledWith('codesys')
+  })
+
+  it('forwards the old-editor dialect', () => {
+    const cb = jest.fn()
+    adapter.onExportProject(cb)
+
+    fire('exportProject', {}, 'old-editor')
+
+    expect(cb).toHaveBeenCalledWith('old-editor')
+  })
+
+  it('falls back to old-editor for an unrecognised or absent dialect', () => {
+    const cb = jest.fn()
+    adapter.onExportProject(cb)
+
+    fire('exportProject', {}, undefined)
+    fire('exportProject', {}, 'something-else')
+
+    expect(cb).toHaveBeenNthCalledWith(1, 'old-editor')
+    expect(cb).toHaveBeenNthCalledWith(2, 'old-editor')
+  })
+
+  it('returns an unsubscribe function that deactivates the callback', () => {
+    const cb = jest.fn()
+    const unsub = adapter.onExportProject(cb)
+
+    unsub()
+    fireIfRegistered('exportProject', {}, 'codesys')
+
+    expect(cb).not.toHaveBeenCalled()
+  })
+})
 
 describe('onOpenRecent', () => {
   it('registers a bridge listener and passes response data to the callback', () => {

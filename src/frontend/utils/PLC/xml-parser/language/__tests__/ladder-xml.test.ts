@@ -67,20 +67,20 @@ describe('parseLadderXml', () => {
     expect(warnings).toEqual([])
     expect(body.rungs).toHaveLength(1)
     const rung = body.rungs[0]
-    // Node order within a rung follows the raw XML's element-type grouping
-    // (leftPowerRail, rightPowerRail, contact, coil, ...) — see
-    // parseLadderXml's node-collection loop — not rung/visual position.
-    expect(rung.nodes.map((n) => n.id)).toEqual(['LEFT-POWER-RAIL-1', 'RIGHT-POWER-RAIL-4', 'CONTACT-2', 'COIL-3'])
+    // Electrical order, not the element-type grouping the parse produces
+    // (leftPowerRail, rightPowerRail, contact, coil, ...) — the ladder editor
+    // reads this array as the rung's serial spine. See orderRungNodes.
+    expect(rung.nodes.map((n) => n.id)).toEqual(['left-rail-1', 'CONTACT-2', 'COIL-3', 'right-rail-4'])
     // Edge order follows pendingEdges collection order (grouped by the
     // consuming node's XML element type), not visual left-to-right order —
     // compare as a set of {source,target} pairs instead of an exact sequence.
     expect(rung.edges).toHaveLength(3)
     expect(rung.edges.map((e) => `${e.source}->${e.target}`).sort()).toEqual(
-      ['LEFT-POWER-RAIL-1->CONTACT-2', 'CONTACT-2->COIL-3', 'COIL-3->RIGHT-POWER-RAIL-4'].sort(),
+      ['left-rail-1->CONTACT-2', 'CONTACT-2->COIL-3', 'COIL-3->right-rail-4'].sort(),
     )
     expect(rung.edges.every((e) => e.type === 'smoothstep')).toBe(true)
-    expect((rung.nodes[2].data as { variable: { name: string } }).variable).toEqual({ name: 'X1' })
-    expect((rung.nodes[3].data as { variable: { name: string } }).variable).toEqual({ name: 'Y1' })
+    expect((rung.nodes[1].data as { variable: { name: string } }).variable).toEqual({ name: 'X1' })
+    expect((rung.nodes[2].data as { variable: { name: string } }).variable).toEqual({ name: 'Y1' })
     expect(rung.defaultBounds).toEqual([0, 0, 170, 40])
     expect(rung.reactFlowViewport).toEqual([170, 40])
   })
@@ -101,6 +101,36 @@ describe('parseLadderXml', () => {
           '@height': '40',
           position: { '@x': '0', '@y': '100' },
           connectionPointOut: { relPosition: { '@x': '20', '@y': '20' } },
+        },
+      ],
+      // One coil per rail: a component of nothing but rails carries no logic
+      // and is dropped, so each rung needs an element to exist at all.
+      coil: [
+        {
+          '@localId': '3',
+          '@negated': 'false',
+          '@width': '40',
+          '@height': '40',
+          position: { '@x': '50', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '1', '@formalParameter': 'left-rail' }],
+          },
+          connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
+          variable: ['Y1'],
+        },
+        {
+          '@localId': '4',
+          '@negated': 'false',
+          '@width': '40',
+          '@height': '40',
+          position: { '@x': '50', '@y': '100' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '2', '@formalParameter': 'left-rail' }],
+          },
+          connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
+          variable: ['Y2'],
         },
       ],
     })
@@ -304,5 +334,182 @@ describe('parseLadderXml', () => {
     })
     expect(body.rungs[0].edges).toEqual([])
     expect(warnings).toEqual(['POU "p": LD connection references unknown localId "doesnotexist", skipped'])
+  })
+  // Regression: rails used to import as `LEFT-POWER-RAIL-<id>` /
+  // `RIGHT-POWER-RAIL-<id>`, but the rung layout resolves them by the
+  // `left-rail` / `right-rail` prefix. `changeRailBounds` therefore found no
+  // right rail on an imported rung and returned early, so the rail never
+  // repositioned and elements added afterwards ran straight past it.
+  it('names rails with the prefix the rung layout looks them up by', () => {
+    const { body } = parseLadderXml('p', {
+      leftPowerRail: [
+        {
+          '@localId': '1',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '0', '@y': '0' },
+          connectionPointOut: { relPosition: { '@x': '3', '@y': '20' } },
+        },
+      ],
+      contact: [
+        {
+          '@localId': '2',
+          '@negated': 'false',
+          '@width': '40',
+          '@height': '40',
+          position: { '@x': '50', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '1', '@formalParameter': 'left-rail' }],
+          },
+          connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
+          variable: ['X1'],
+        },
+      ],
+      rightPowerRail: [
+        {
+          '@localId': '3',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '400', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '2', '@formalParameter': 'output' }],
+          },
+        },
+      ],
+    })
+
+    const ids = body.rungs.flatMap((rung) => rung.nodes.map((node) => node.id))
+    expect(ids.some((id) => id.startsWith('left-rail'))).toBe(true)
+    expect(ids.some((id) => id.startsWith('right-rail'))).toBe(true)
+  })
+
+  // Regression: nodes used to reach the editor grouped by XML element type
+  // (every <contact>, then every <coil>, then every <block>), because that is
+  // how they are parsed. The ladder editor reads a rung's node array as its
+  // serial spine — `appendSerialConnection` and `getPreviousElement` treat the
+  // entry before a node as its electrical predecessor — so inserting an element
+  // wired it to whatever was parsed before it. With a rung whose only element
+  // was a block, that predecessor was the right power rail, which has no output
+  // connector: adding a contact next to the block threw.
+  it('orders a rung electrically, whatever order the elements were parsed in', () => {
+    const { body } = parseLadderXml('p', {
+      leftPowerRail: [
+        {
+          '@localId': '1',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '0', '@y': '0' },
+          connectionPointOut: { relPosition: { '@x': '3', '@y': '20' } },
+        },
+      ],
+      // Parsed after the right rail, but electrically between the two rails.
+      coil: [
+        {
+          '@localId': '4',
+          '@negated': 'false',
+          '@width': '40',
+          '@height': '40',
+          position: { '@x': '120', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '3', '@formalParameter': 'output' }],
+          },
+          connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
+          variable: ['Y1'],
+        },
+      ],
+      contact: [
+        {
+          '@localId': '3',
+          '@negated': 'false',
+          '@width': '40',
+          '@height': '40',
+          position: { '@x': '50', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '1', '@formalParameter': 'left-rail' }],
+          },
+          connectionPointOut: { relPosition: { '@x': '40', '@y': '20' } },
+          variable: ['X1'],
+        },
+      ],
+      rightPowerRail: [
+        {
+          '@localId': '2',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '400', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '4', '@formalParameter': 'output' }],
+          },
+        },
+      ],
+    })
+
+    expect(body.rungs).toHaveLength(1)
+    expect(body.rungs[0].nodes.map((node) => node.id)).toEqual(['left-rail-1', 'CONTACT-3', 'COIL-4', 'right-rail-2'])
+  })
+
+  // A foreign or hand-edited file can declare typeName="EXECUTE" without the
+  // EN/ENO formal parameters we always write. The rung layout reads
+  // `inputConnector` / `outputConnector` to place whatever is inserted beside
+  // an element, and an undefined one throws — so the importer supplies them.
+  it('gives an Execute element EN and ENO even when the file declares neither', () => {
+    const { body } = parseLadderXml('p', {
+      leftPowerRail: [
+        {
+          '@localId': '1',
+          position: { '@x': '0', '@y': '0' },
+          connectionPointOut: { relPosition: { '@x': '3', '@y': '20' } },
+        },
+      ],
+      block: [
+        {
+          '@localId': '2',
+          '@typeName': 'EXECUTE',
+          position: { '@x': '50', '@y': '0' },
+          addData: { data: { '@name': 'http://openplc.org/plcopenxml/stcode', STCode: 'x := 1;' } },
+        },
+      ],
+    })
+
+    const execute = body.rungs[0].nodes.find((node) => node.type === 'execute')
+    const data = execute?.data as {
+      inputConnector?: { id?: string }
+      outputConnector?: { id?: string }
+      code: string
+    }
+
+    expect(data.inputConnector?.id).toBe('EN')
+    expect(data.outputConnector?.id).toBe('ENO')
+    expect(data.code).toBe('x := 1;')
+    // Sized from its snippet rather than left 0x0 — CODESYS omits width and
+    // height entirely.
+    expect(execute?.width).toBeGreaterThan(0)
+    expect(execute?.height).toBeGreaterThan(0)
+  })
+
+  // A component holding nothing but power rails is a rail the file left
+  // unwired — CODESYS writes its <rightPowerRail> with an empty
+  // <connectionPointIn>. It would otherwise import as a rung the editor cannot
+  // lay out or add elements to.
+  it('skips a network that has no elements, and says so', () => {
+    const { body, warnings } = parseLadderXml('p', {
+      rightPowerRail: [
+        {
+          '@localId': '9',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '400', '@y': '0' },
+          connectionPointIn: { relPosition: { '@x': '0', '@y': '20' }, connection: [] },
+        },
+      ],
+    })
+
+    expect(body.rungs).toEqual([])
+    expect(warnings).toEqual(['POU "p": 1 LD network(s) with no elements (unwired power rail) skipped'])
   })
 })

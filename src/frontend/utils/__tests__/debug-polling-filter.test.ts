@@ -1661,4 +1661,112 @@ describe('buildActiveIndexSet', () => {
       expect(activeIndexes).not.toContain(99)
     })
   })
+  // -------------------------------------------------------------------------
+  // Execute ("ST Block") elements
+  // -------------------------------------------------------------------------
+  describe('Execute element snippets', () => {
+    it('polls variables referenced in an LD Execute snippet', () => {
+      const pou = makePou(
+        'Main',
+        'program',
+        [makeVariable('COUNTER'), makeVariable('LIMIT'), makeVariable('UNUSED')],
+        'ld',
+      )
+      const indexMap = new Map([
+        ['Main:COUNTER', 10],
+        ['Main:LIMIT', 11],
+        ['Main:UNUSED', 12],
+      ])
+      const ldFlow = {
+        name: 'Main',
+        rungs: [
+          {
+            nodes: [{ type: 'execute', data: { code: 'IF COUNTER < LIMIT THEN\n  COUNTER := COUNTER + 1;\nEND_IF;' } }],
+          },
+        ],
+      }
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        editorName: 'Main',
+        editorLanguage: 'ld',
+        ladderFlows: [ldFlow],
+      })
+
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toEqual(expect.arrayContaining([10, 11]))
+      // A declared variable the snippet never mentions stays unpolled.
+      expect(activeIndexes).not.toContain(12)
+    })
+
+    it('polls variables referenced in an FBD Execute snippet', () => {
+      const pou = makePou('Fbd', 'program', [makeVariable('TOTAL')], 'fbd')
+      const indexMap = new Map([['Fbd:TOTAL', 20]])
+      const fbdFlow = {
+        name: 'Fbd',
+        rung: { nodes: [{ type: 'execute', data: { code: 'TOTAL := TOTAL + 222;' } }] },
+      }
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        editorName: 'Fbd',
+        editorLanguage: 'fbd',
+        fbdFlows: [fbdFlow],
+      })
+
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toContain(20)
+    })
+
+    it('ignores an Execute node with an empty or missing snippet', () => {
+      const pou = makePou('Main', 'program', [makeVariable('COUNTER')], 'ld')
+      const indexMap = new Map([['Main:COUNTER', 10]])
+      const ldFlow = {
+        name: 'Main',
+        rungs: [
+          {
+            nodes: [
+              { type: 'execute', data: { code: '' } },
+              { type: 'execute', data: {} },
+            ],
+          },
+        ],
+      }
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        editorName: 'Main',
+        editorLanguage: 'ld',
+        ladderFlows: [ldFlow],
+      })
+
+      const { activeIndexes } = buildActiveIndexSet(state, new Map(), null)
+      expect(activeIndexes).toEqual([])
+    })
+
+    it('expands FB instance members referenced from an Execute snippet', () => {
+      const pou = makePou('Main', 'program', [makeDerivedVariable('TON0', 'TON')], 'ld')
+      const indexMap = new Map([
+        ['Main:TON0', 30],
+        ['Main:TON0.Q', 31],
+      ])
+      const ldFlow = {
+        name: 'Main',
+        rungs: [{ nodes: [{ type: 'execute', data: { code: 'IF TON0.Q THEN ; END_IF;' } }] }],
+      }
+      const state = makeState({
+        pous: [pou],
+        debugVariableIndexes: indexMap,
+        editorName: 'Main',
+        editorLanguage: 'ld',
+        ladderFlows: [ldFlow],
+      })
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>([
+        [31, [{ compositeKey: 'Main:TON0.Q', type: 'BOOL' }]],
+      ])
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual(expect.arrayContaining([30, 31]))
+    })
+  })
 })
