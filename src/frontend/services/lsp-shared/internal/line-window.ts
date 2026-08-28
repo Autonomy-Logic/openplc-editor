@@ -18,12 +18,35 @@ export function lspLineInWindow(lspLine: number, lineWindow?: LspLineWindow): bo
   return lspLine >= lineWindow.startLine && lspLine < lineWindow.endLineExclusive
 }
 
-/** Edits fully inside the window. A straddling edit is dropped, not truncated: a half-applied range rewrites text the view never shows. */
+/**
+ * Edits fully inside the window. A straddling edit is dropped, not
+ * truncated: a half-applied range rewrites text the view never shows.
+ * One exception: LSP end positions are exclusive, so a whole-line edit
+ * on the window's LAST line may legitimately end at
+ * `{endLineExclusive, 0}` (line plus its newline). That edit is kept,
+ * clamped back inside the window so the newline seam is never touched.
+ */
 export function clipEditsToWindow(edits: LspTextEdit[], lineWindow?: LspLineWindow): LspTextEdit[] {
   if (!lineWindow) return edits
-  return edits.filter(
-    (e) => e.range.start.line >= lineWindow.startLine && e.range.end.line < lineWindow.endLineExclusive,
-  )
+  const clipped: LspTextEdit[] = []
+  for (const e of edits) {
+    if (e.range.start.line < lineWindow.startLine) continue
+    if (e.range.end.line < lineWindow.endLineExclusive) {
+      clipped.push(e)
+      continue
+    }
+    if (e.range.end.line === lineWindow.endLineExclusive && e.range.end.character === 0) {
+      clipped.push({
+        ...e,
+        range: {
+          start: e.range.start,
+          end: { line: lineWindow.endLineExclusive - 1, character: Number.MAX_SAFE_INTEGER },
+        },
+        newText: e.newText.endsWith('\n') ? e.newText.slice(0, -1) : e.newText,
+      })
+    }
+  }
+  return clipped
 }
 
 /**

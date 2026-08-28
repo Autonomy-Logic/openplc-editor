@@ -316,6 +316,8 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
             documentText === undefined ||
             !modelMatchesDocumentWindow(model.getValue(), documentText, lineOffset, lineWindow)
           ) {
+            // Distinguishes "nothing to format" from "guard tripped" in a bug report.
+            console.debug(`[lsp] Format Document skipped: windowed view drifted from ${lspUri}`)
             return []
           }
         }

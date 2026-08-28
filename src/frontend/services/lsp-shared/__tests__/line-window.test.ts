@@ -59,6 +59,28 @@ describe('clipEditsToWindow', () => {
   it('drops an edit starting before the window', () => {
     expect(clipEditsToWindow([edit(1, 3)], MOTOR)).toEqual([])
   })
+
+  it('keeps a whole-last-line edit ending at {endLineExclusive, 0}, clamped inside the window', () => {
+    // LSP ranges are end-exclusive: line 4 plus its newline ends at {5, 0}.
+    const boundary: LspTextEdit = {
+      range: { start: { line: 4, character: 0 }, end: { line: 5, character: 0 } },
+      newText: '  END_STRUCT;\n',
+    }
+    expect(clipEditsToWindow([boundary], MOTOR)).toEqual([
+      {
+        range: { start: { line: 4, character: 0 }, end: { line: 4, character: Number.MAX_SAFE_INTEGER } },
+        newText: '  END_STRUCT;',
+      },
+    ])
+  })
+
+  it('still drops a boundary edit reaching into the next line content', () => {
+    const intoNextLine: LspTextEdit = {
+      range: { start: { line: 4, character: 0 }, end: { line: 5, character: 3 } },
+      newText: 'anything',
+    }
+    expect(clipEditsToWindow([intoNextLine], MOTOR)).toEqual([])
+  })
 })
 
 describe('modelMatchesDocumentWindow', () => {
