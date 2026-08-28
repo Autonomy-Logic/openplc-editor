@@ -23,7 +23,8 @@ function fakeChannel(script: DebugDeviceIdResult[]) {
 const ANSWERED: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([1, 2, 3, 4]) }
 /** Opened, but nothing spoke the debug protocol — a blank board, or a wrong baud. */
 const SILENT: DebugDeviceIdResult = { success: false }
-/** Answered the frame but reported no unique id (a core without ArduinoUniqueID). */
+/** Answered the frame but reported no identity (no license-core linked, or an
+ *  architecture the closed reader refuses: AVR, RP2040). */
 const EMPTY_ID: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([]) }
 
 describe('planBaudAttempts', () => {
@@ -104,10 +105,11 @@ describe('classifyDeviceLink', () => {
     expect(result).toEqual({ status: 'no-firmware' })
   })
 
-  // Cores without ArduinoUniqueID, and boards opting out via
-  // OPENPLC_NO_UNIQUE_ID, answer FC 0x48 with `id_len = 0` on purpose rather than
-  // failing to compile. That is a firmware replying, not a blank board — treating
-  // the empty id as "no firmware" told those users to reflash a working device.
+  // A board with no license-core linked, and one whose architecture the closed
+  // reader refuses, answer FC 0x48 with `id_len = 0` on purpose: they have no
+  // identity a licence could be bound to. That is a firmware replying, not a
+  // blank board — treating the empty id as "no firmware" told those users to
+  // reflash a working device.
   it('keeps a firmware that answers with no unique id at all', async () => {
     const result = await classifyDeviceLink(fakeChannel([EMPTY_ID]), { deviceIdProbe: { attempts: 1, backoffMs: 0 } })
 
