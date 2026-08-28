@@ -1,12 +1,12 @@
 import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
 import { resolveFunctionBlockPins } from '../PLC/function-block-pins'
+import { pythonShmRuntime } from './python-shm-runtime'
+import { renderLayoutTable } from './shm-layout-table'
 import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
-import { describeShmLeaves, pinCrossesInDirection, pythonFunctionBlockInstances } from './shm-leaves'
+import { describeShmLayout, pinCrossesInDirection, pythonFunctionBlockInstances } from './shm-leaves'
 import { SHM_STRING_CHARS } from './shm-type-map'
 
 type PythonRuntimeInjectionParams = {
-  fmtIn: string
-  fmtOut: string
   inputVariables: PLCVariable[]
   outputVariables: PLCVariable[]
   originalCode: string
@@ -196,267 +196,19 @@ const collectReferencedTypes = (
   return ordered
 }
 
-/**
- * Emit the statements that decode one variable from consecutive leaves.
- *
- * A scalar binds straight to its name. A structure is constructed from its
- * members, innermost first, so nesting rebuilds correctly. An enumeration is
- * wrapped in its IntEnum.
- */
-const generateVariableUnpack = (variable: PLCVariable, context: ShmWalkContext, indent: string): string => {
-  const walked = describeShmLeaves(variable, context)
+/** The leaves of a direction, or an empty list when a refusal stopped the build. */
+const leavesFor = (variables: PLCVariable[], context: ShmWalkContext): ShmLeaf[] => {
+  const walked = describeShmLayout(variables, context)
   /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
-  if ('refusal' in walked) return ''
-
-  let code = ''
-  const locals: string[] = []
-  for (const leaf of walked.leaves) {
-    // Each leaf decodes into a temporary named for its path, then the temporaries
-    // are assembled. A flat variable's path is just its own name, so the
-    // temporary *is* the variable and no assembly is needed.
-    const local = leaf.path.length === 1 ? variable.name : `_${leaf.field}`
-    locals.push(local)
-    code += decodeLeaf(leaf, local, indent)
-  }
-
-  if (walked.leaves.length === 1 && walked.leaves[0].path.length === 1) {
-    const only = walked.leaves[0]
-    return only.enumTypeName ? `${code}${indent}${variable.name} = ${only.enumTypeName}(${variable.name})\n` : code
-  }
-
-  code += `${indent}${variable.name} = ${buildValue(variable, context, [variable.name])}\n`
-  return code
-}
-
-/**
- * Construct expression for a composite: a structure, or a function block
- * instance built from the pins that crossed.
- *
- * The two look the same from here — a named type whose members were decoded into
- * temporaries — so one builder covers both, and the only difference is where the
- * member list comes from.
- */
-const buildValue = (variable: PLCVariable, context: ShmWalkContext, path: string[]): string => {
-  const dataTypes = context.dataTypes ?? []
-  const byName = new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
-  const base = variable.type.definition === 'array' ? variable.type.data?.baseType : variable.type
-
-  /**
-   * The expression for whatever sits at `fieldPath`, given its declared type.
-   *
-   * ONE rule, used for a structure's members and for a function block's pins
-   * alike, because the walk treats them alike: it descends into a composite and
-   * emits a temporary per LEAF, never one for the composite itself. A structure
-   * member got that recursion; a pin did not, and emitted a flat
-   * `PIN=_instance_PIN` — a name the decode never assigns. An FB whose pin is a
-   * structure therefore raised `NameError` at module scope, before
-   * `block_init()`. Keeping one rule is what stops the two drifting again.
-   */
-  const valueFor = (typeValue: string, typeDefinition: string, fieldPath: string[]): string => {
-    if (typeDefinition === 'user-data-type' || typeDefinition === 'derived') {
-      const declared = byName.get(typeValue.toUpperCase())
-      // An enumeration crosses as its integer and is wrapped back into the
-      // class. `declared.name`, not the reference's spelling: the class is
-      // emitted under the type's own declared name, so echoing a mixed-case
-      // reference would name a class that does not exist.
-      if (declared?.derivation === 'enumerated') return `${declared.name}(_${fieldPath.join('_')})`
-      // A structure, or a function block instance (no data type by that name).
-      if (!declared || declared.derivation === 'structure') return buildFor(typeValue, fieldPath)
-    }
-    return `_${fieldPath.join('_')}`
-  }
-
-  const buildFor = (typeName: string, fieldPath: string[]): string => {
-    const dataType = byName.get(typeName.toUpperCase())
-
-    if (dataType?.derivation === 'structure') {
-      const args = dataType.variable.map(
-        (member) =>
-          `${member.name}=${valueFor(member.type.value, member.type.definition, [...fieldPath, member.name])}`,
-      )
-      return `${dataType.name}(${args.join(', ')})`
-    }
-
-    // Not a data type, so a function block instance. Its pins are the members,
-    // and only the ones that crossed appear — which for the inbound direction is
-    // inputs, in-outs and outputs.
-    const pins = resolveFunctionBlockPins(typeName, context.pous ?? [], context.libraries ?? [])
-    /* istanbul ignore next -- defensive: an unresolvable instance is refused upstream */
-    if (!pins) return `_${fieldPath.join('_')}`
-    // Must match the walk exactly, or the constructor names a temporary the
-    // decode never produced — hence one shared predicate.
-    const crossing = pins.filter((pin) => pinCrossesInDirection(pin.class, context.direction))
-    const args = crossing.map((pin) => {
-      // Upper-cased on both sides of the `=`: the keyword names the class slot,
-      // and the temporary names the field the walk produced. They are the same
-      // name by construction — see the pin naming note in `shm-leaves`.
-      const upper = pin.name.toUpperCase()
-      return `${upper}=${valueFor(pin.type.value, pin.type.definition, [...fieldPath, upper])}`
-    })
-    return `${pythonClassName(typeName)}(${args.join(', ')})`
-  }
-
-  /* istanbul ignore next -- defensive: callers only assemble composites */
-  return base && (base.definition === 'user-data-type' || base.definition === 'derived')
-    ? buildFor(base.value, path)
-    : `_${path.join('_')}`
-}
-
-/** Decode one leaf out of `_vals` into `local`. */
-const decodeLeaf = (leaf: ShmLeaf, local: string, indent: string): string => {
-  const { descriptor, count, isArray } = leaf
-  let code = ''
-
-  if (isArray) {
-    code += `${indent}${local} = list(_vals[_idx:_idx+${count}])\n`
-    code += `${indent}_idx += ${count}\n`
-    return code
-  }
-
-  if (descriptor.kind === 'string' || descriptor.kind === 'wstring') {
-    code += `${indent}${local}_len = _vals[_idx]\n`
-    code += `${indent}_idx += 1\n`
-    code += `${indent}${local}_body = _vals[_idx]\n`
-    code += `${indent}_idx += 1\n`
-    // The C side clamps the length to the budget, but the prefix is a signed
-    // int8 and the buffer starts zeroed, so clamp on read too: a negative slice
-    // bound would silently truncate from the end instead of failing.
-    code += `${indent}${local}_len = max(0, min(${local}_len, ${SHM_STRING_CHARS}))\n`
-    if (descriptor.kind === 'wstring') {
-      // The length counts UTF-16 code units, so the byte slice is twice it.
-      code += `${indent}${local} = ${local}_body[:${local}_len * 2].decode('utf-16-le', errors='ignore')\n`
-    } else {
-      code += `${indent}${local} = ${local}_body[:${local}_len].decode('utf-8', errors='ignore')\n`
-    }
-    return code
-  }
-
-  code += `${indent}${local} = _vals[_idx]\n`
-  code += `${indent}_idx += 1\n`
-  return code
-}
-
-/**
- * Emit the unpack sequence for a set of variables.
- *
- * Shared by the per-cycle input read and the one-time output seed: both decode
- * the same packed layout, differing only in which buffer they read and at what
- * indentation. Keeping one generator means the two cannot drift in how they
- * interpret a field — the same reason the leaf walk is shared with the C side.
- */
-const generateUnpackCode = (
-  variables: PLCVariable[],
-  context: ShmWalkContext,
-  opts: { header: string; buffer: string; fmt: string; size: string; indent: string },
-): string => {
-  const { header, buffer, fmt, size, indent } = opts
-
-  let code = `${header}\n`
-  code += `${indent}_vals = struct.unpack(${fmt}, ${buffer}.buf[:${size}])\n`
-  code += `${indent}_idx = 0\n`
-  for (const variable of variables) {
-    code += generateVariableUnpack(variable, context, indent)
-  }
-  return code
-}
-
-const generateInputUnpackCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
-  if (variables.length === 0) return '    # No input variables to read'
-  return generateUnpackCode(variables, context, {
-    header: '    # Read input variables',
-    buffer: 'shm_in',
-    fmt: 'fmt_in',
-    size: 'data_size_in',
-    indent: '    ',
-  })
-}
-
-/**
- * Seed the output globals from what the PLC currently holds, before
- * `block_init()` runs.
- *
- * Previously the outputs were initialised from their declarations and written
- * back after the first `block_loop()`, before the user's code had assigned
- * anything — so the IEC-side value was replaced by a default on every start.
- * With RETAIN that is destructive rather than merely wrong. The C stub publishes
- * the live values into shared memory when it maps the segment, and this reads
- * them back. A block that never assigns an output now leaves it exactly as the
- * PLC had it.
- */
-const generateOutputSeedCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
-  if (variables.length === 0) return '# No output variables to seed'
-  return generateUnpackCode(variables, context, {
-    header: '# Seed outputs from the values the PLC already holds',
-    buffer: 'shm_out',
-    fmt: 'fmt_out',
-    size: 'data_size_out',
-    indent: '',
-  })
-}
-
-/** Encode one leaf, reading through the Python attribute path it came from. */
-const encodeLeaf = (leaf: ShmLeaf): string => {
-  const expr = leaf.path.join('.')
-  const { descriptor, isArray } = leaf
-
-  if (isArray) return `    _out.extend(${expr})\n`
-
-  if (descriptor.kind === 'string') {
-    let code = `    _body = ${expr}.encode('utf-8')[:${SHM_STRING_CHARS}]\n`
-    code += `    _len = len(_body)\n`
-    code += `    _body = _body.ljust(${SHM_STRING_CHARS}, b'\\0')\n`
-    code += `    _out.append(_len)\n`
-    code += `    _out.append(_body)\n`
-    return code
-  }
-
-  if (descriptor.kind === 'wstring') {
-    // Truncate on a code-unit boundary, never mid-unit: encode, clip to the byte
-    // budget, then round down to an even length. `_len` is the code-unit count
-    // the C side expects, not the byte count.
-    let code = `    _body = ${expr}.encode('utf-16-le')[:${SHM_STRING_CHARS * 2}]\n`
-    code += `    _body = _body[: len(_body) - (len(_body) % 2)]\n`
-    code += `    _len = len(_body) // 2\n`
-    code += `    _body = _body.ljust(${SHM_STRING_CHARS * 2}, b'\\0')\n`
-    code += `    _out.append(_len)\n`
-    code += `    _out.append(_body)\n`
-    return code
-  }
-
-  // An IntEnum packs as its integer already, but saying so keeps the generated
-  // code honest about what crosses — and survives a user assigning a plain int.
-  if (leaf.enumTypeName) return `    _out.append(int(${expr}))\n`
-
-  return `    _out.append(${expr})\n`
-}
-
-/**
- * Generate Python code that packs output variables into the flat struct format.
- */
-const generateOutputPackCode = (variables: PLCVariable[], context: ShmWalkContext): string => {
-  if (variables.length === 0) return '    # No output variables to write'
-
-  let code = '    # Write output variables\n'
-  code += '    _out = []\n'
-  for (const variable of variables) {
-    const walked = describeShmLeaves(variable, context)
-    /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
-    if ('refusal' in walked) continue
-    for (const leaf of walked.leaves) code += encodeLeaf(leaf)
-  }
-
-  code += '    packed = struct.pack(fmt_out, *_out)\n'
-  code += '    shm_out.buf[:data_size_out] = packed'
-
-  return code
+  return 'refusal' in walked ? [] : walked.leaves
 }
 
 const injectPythonRuntime = (params: PythonRuntimeInjectionParams): string => {
-  const { fmtIn, fmtOut, inputVariables, outputVariables, originalCode, pouName, inbound, outbound } = params
+  const { inputVariables, outputVariables, originalCode, pouName, inbound, outbound } = params
 
-  const outputSeeding = generateOutputSeedCode(outputVariables, outbound)
-  const readInputSection = generateInputUnpackCode(inputVariables, inbound)
-  const writeOutputSection = generateOutputPackCode(outputVariables, outbound)
+  const inLeaves = leavesFor(inputVariables, inbound)
+  const outLeaves = leavesFor(outputVariables, outbound)
+
   // Declared before the user's code, so a block_init() that constructs one of
   // its own structures finds the class already defined. The inbound context is
   // the fuller one — it carries a function block's outputs as well as its
@@ -470,8 +222,12 @@ ${typeDeclarations}
 ${originalCode}
 
 plc_pid = %d
-fmt_in = ('${fmtIn}')
-fmt_out = ('${fmtOut}')
+
+${renderLayoutTable('_SHM_IN', inLeaves)}
+
+${renderLayoutTable('_SHM_OUT', outLeaves)}
+${pythonShmRuntime(SHM_STRING_CHARS)}
+
 try:
     shm_in = shared_memory.SharedMemory(name='%s_in')
     shm_out = shared_memory.SharedMemory(name='%s_out')
@@ -479,14 +235,26 @@ except Exception as e:
     print(f'Error on shared memory: {e}')
     exit(1)
 
-data_size_in = struct.calcsize(fmt_in)
-data_size_out = struct.calcsize(fmt_out)
+data_size_in = _shm_total(_SHM_IN)
+data_size_out = _shm_total(_SHM_OUT)
+
+# The segment was created with sizeof() of the packed struct the C side
+# compiled. If the table and that struct disagree, every field after the first
+# difference is misread — so refuse to start rather than run on a layout that
+# does not describe the memory. Costs one comparison, once.
+if data_size_in > shm_in.size or data_size_out > shm_out.size:
+    print(
+        'Layout mismatch: table needs '
+        + str(data_size_in) + '/' + str(data_size_out)
+        + ' bytes, segment provides ' + str(shm_in.size) + '/' + str(shm_out.size)
+    )
+    exit(1)
 
 # Outputs start from what the PLC already holds, not from their declarations.
 # The stub publishes the live values into shared memory when it maps the
 # segment, so a block that never assigns an output leaves it untouched — and a
 # RETAIN output survives the restart it exists to survive.
-${outputSeeding}
+_shm_unpack(shm_out.buf, _SHM_OUT, globals())
 
 # Initialize block
 block_init()
@@ -496,12 +264,13 @@ while True:
     except Exception as e:
         print('PLC runtime has stopped.')
         break
-${readInputSection}
+
+    _shm_unpack(shm_in.buf, _SHM_IN, globals())
 
     # Run block
     block_loop()
 
-${writeOutputSection}
+    _shm_pack(shm_out.buf, _SHM_OUT, globals())
 
     # Sleep for 100ms
     time.sleep(0.1)

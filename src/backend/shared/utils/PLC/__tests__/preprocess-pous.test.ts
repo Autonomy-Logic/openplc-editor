@@ -475,7 +475,7 @@ describe('preprocessPous — Python interface refusals', () => {
     expect(result.validationError).toContain('mystery')
   })
 
-  it('refuses a multi-dimensional array on a Python POU (one dimension only)', () => {
+  it('accepts a multi-dimensional array on a Python POU, following the compiler', () => {
     const grid: PLCVariable = {
       name: 'grid',
       class: 'input',
@@ -494,8 +494,10 @@ describe('preprocessPous — Python interface refusals', () => {
     const project = makeProjectData([makePythonPou('PyBlock', 'def block_loop():\n    pass', [grid])])
     const result = preprocessPous(project, false, () => {})
 
-    expect(result.validationFailed).toBe(true)
-    expect(result.validationError).toContain('one-dimensional arrays only')
+    // Refused under the count-based model, which had one leaf and a single
+    // subscript. The compiler enumerates `GRID[0][0]`…`GRID[1][2]` as six
+    // leaves, and following that enumeration makes rank 2 ordinary.
+    expect(result.validationFailed).toBe(false)
   })
 
   it('accepts a one-dimensional array, so the rank refusal is not over-broad', () => {

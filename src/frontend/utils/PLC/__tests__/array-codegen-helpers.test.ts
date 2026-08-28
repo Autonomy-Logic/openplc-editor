@@ -7,6 +7,7 @@ import {
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
+  mapArrayElementTypeToIEC,
   mapBaseTypeToIEC,
   mapUserTypeToIEC,
   multiDimensionalContainerType,
@@ -193,6 +194,16 @@ describe('getVariableIECType', () => {
     expect(getVariableIECType(makeUserTypeVar('x', 'MyStruct'))).toBe('MYSTRUCT')
   })
 
+  it('spells a 1-D array of a user-defined type bare, even when it is a declared type', () => {
+    // The scalar rule would wrap this as `IEC_MODE`. strucpp stores the raw
+    // enum as the element (`Array1D<MODE, 0, 1>`), and the C-block glue takes
+    // `&IMODES[0]`, which is a `MODE*` — so the wrapper spelling does not
+    // compile. Passing the declared-type set must not change the answer.
+    const v = makeArrayVar('modes', 'user-data-type', 'Mode', ['0..1'])
+
+    expect(getVariableIECType(v, new Set(['MODE']))).toBe('MODE')
+  })
+
   it('returns IEC type for array without data (falls through to value)', () => {
     const v: PLCVariable = {
       name: 'arr',
@@ -304,6 +315,23 @@ describe('the two native languages accept the same elementary types', () => {
   })
 })
 
+describe('mapArrayElementTypeToIEC', () => {
+  it('keeps the IEC wrapper for an elementary element type', () => {
+    expect(mapArrayElementTypeToIEC('int')).toBe('IEC_INT')
+    expect(mapArrayElementTypeToIEC('string')).toBe('IEC_STRING')
+  })
+
+  it('spells a user-defined element type bare, whatever its derivation', () => {
+    // One rule covers all three: a structure (`using IEC_MOTOR = MOTOR`, the
+    // identity), an enumeration (`using IEC_MODE = IEC_ENUM<MODE>`, a wrapper
+    // strucpp does not use inside arrays) and a function block class (no alias
+    // at all). Bare is what the compiler declares in every case.
+    expect(mapArrayElementTypeToIEC('Motor')).toBe('MOTOR')
+    expect(mapArrayElementTypeToIEC('Mode')).toBe('MODE')
+    expect(mapArrayElementTypeToIEC('Helper')).toBe('HELPER')
+  })
+})
+
 describe('mapUserTypeToIEC', () => {
   // strucpp declares a structure or enumeration and then aliases it
   // (`using IEC_MOTOR = MOTOR`), but a function block class gets no alias. Only
@@ -400,13 +428,24 @@ describe('multiDimensionalContainerType', () => {
     expect(multiDimensionalContainerType(bare)).toBeNull()
   })
 
-  it('applies the user-defined type spelling to the element type', () => {
+  it('spells a user-defined element type bare, matching strucpp', () => {
     // Built with the user-defined element type rather than mutated into one
     // afterwards, so the fixture needs no non-null assertion to reach into
     // `type.data`.
     const v = arrayOfRank(['0..1', '0..1'], 'Motor', 'user-data-type')
 
-    expect(multiDimensionalContainerType(v, new Set(['MOTOR']))).toBe('Array2D<strucpp::IEC_MOTOR, 0, 1, 0, 1>')
+    // strucpp declares `Array2D<MOTOR, 0, 1, 0, 1>`, not `IEC_MOTOR`.
+    expect(multiDimensionalContainerType(v)).toBe('Array2D<strucpp::MOTOR, 0, 1, 0, 1>')
+  })
+
+  it('spells an enumerated element type bare, so the C-block glue compiles', () => {
+    // Regression: the scalar rule spelled this `IEC_MODE`, but `using IEC_MODE =
+    // IEC_ENUM<MODE>` is a wrapper while strucpp stores the raw enum in the
+    // array. The generated glue then failed with `cannot convert MODE* to
+    // IEC_MODE*`, so no C++ block could carry an array of an enumeration.
+    const v = arrayOfRank(['0..1', '0..1'], 'Mode', 'user-data-type')
+
+    expect(multiDimensionalContainerType(v)).toBe('Array2D<strucpp::MODE, 0, 1, 0, 1>')
   })
 
   it('makes generateStructMember emit a pointer to the container', () => {
