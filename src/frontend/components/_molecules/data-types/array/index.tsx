@@ -133,73 +133,59 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
+  // newRows is computed before any setState call — a store write nested inside setTableData's own updater risks a nested-update loop.
   const addNewRow = () => {
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      const newRows = [...prevRows, { dimension: '' }]
-
-      setArrayTable({ selectedRow: newRows.length - 1 })
-      writeDimensions(newRows)
-      return newRows
-    })
+    const newRows = [...tableData, { dimension: '' }]
+    setTableData(newRows)
+    setArrayTable({ selectedRow: newRows.length - 1 })
+    writeDimensions(newRows)
   }
 
   const removeRow = () => {
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      if (arrayTable.selectedRow !== null) {
-        const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
+    if (arrayTable.selectedRow !== null) {
+      const newRows = tableData.filter((_, index) => index !== arrayTable.selectedRow)
+      const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
 
-        const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
-        setArrayTable({ selectedRow: newFocusIndex })
-
-        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-        prevRows = newRows
-      }
-      return prevRows
-    })
+      setTableData(newRows)
+      setArrayTable({ selectedRow: newFocusIndex })
+      writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
+    }
   }
 
   const moveRowUp = () => {
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
-        const newRows = [...prevRows]
-        const temp = newRows[arrayTable.selectedRow]
-        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow - 1]
-        newRows[arrayTable.selectedRow - 1] = temp
+    if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
+      const newRows = [...tableData]
+      const temp = newRows[arrayTable.selectedRow]
+      newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow - 1]
+      newRows[arrayTable.selectedRow - 1] = temp
+      const newFocusIndex = arrayTable.selectedRow - 1
 
-        const newFocusIndex = arrayTable.selectedRow - 1
-        setArrayTable({ selectedRow: newFocusIndex })
-
-        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-        prevRows = newRows
-      }
-      return prevRows
-    })
+      setTableData(newRows)
+      setArrayTable({ selectedRow: newFocusIndex })
+      writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
+    }
   }
 
   const moveRowDown = () => {
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
-        const newRows = [...prevRows]
-        const temp = newRows[arrayTable.selectedRow]
-        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow + 1]
-        newRows[arrayTable.selectedRow + 1] = temp
+    if (arrayTable.selectedRow !== null && arrayTable.selectedRow < tableData.length - 1) {
+      const newRows = [...tableData]
+      const temp = newRows[arrayTable.selectedRow]
+      newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow + 1]
+      newRows[arrayTable.selectedRow + 1] = temp
+      const newFocusIndex = arrayTable.selectedRow + 1
 
-        const newFocusIndex = arrayTable.selectedRow + 1
-        setArrayTable({ selectedRow: newFocusIndex })
-
-        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-        prevRows = newRows
-      }
-      return prevRows
-    })
+      setTableData(newRows)
+      setArrayTable({ selectedRow: newFocusIndex })
+      writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
+    }
   }
 
   return (
