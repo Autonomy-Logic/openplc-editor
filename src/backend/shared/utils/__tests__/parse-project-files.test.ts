@@ -255,14 +255,19 @@ describe('parseProjectFiles — fallback POU creation', () => {
     consoleSpy.mockRestore()
   })
 
-  it('warns with a partial-data message when a graphical POU fails to parse', () => {
+  it('reports an unparseable graphical body as fatal, not as a partial-data warning', () => {
+    // Was a warning + a POU with a default empty body. That blank canvas was
+    // indistinguishable from a legitimately empty diagram and the first save
+    // wrote it over the user's real one, so it is fatal now (DOPE-592).
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       { relativePath: 'pous/programs/FbdPou.fbd', content: 'PROGRAM FbdPou\nnot valid json\nEND_PROGRAM' },
     ]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
-    expect(result.warnings).toBeDefined()
-    expect(result.warnings!.some((w) => w.includes('FbdPou') && w.includes('partial data'))).toBe(true)
+    expect(result.fatalErrors).toBeDefined()
+    expect(result.fatalErrors!.some((e) => e.includes('FbdPou'))).toBe(true)
+    // and it must NOT be downgraded to a recoverable warning
+    expect(result.warnings?.some((w) => w.includes('partial data')) ?? false).toBe(false)
     consoleSpy.mockRestore()
   })
 
@@ -281,7 +286,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
 
   it('fallback handles graphical language (LD) with valid JSON body', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const bodyJson = JSON.stringify({ nodes: [{ id: 'n1' }], edges: [] })
+    const bodyJson = JSON.stringify({ name: 'LdPou', rungs: [{ id: 'n1', nodes: [], edges: [] }] })
     const pouFiles: RawProjectFile[] = [
       {
         relativePath: 'pous/programs/LdPou.ld',
@@ -294,7 +299,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
     consoleSpy.mockRestore()
   })
 
-  it('fallback handles graphical language (FBD) with invalid JSON body (uses default)', () => {
+  it('drops a graphical POU with an invalid JSON body rather than defaulting it', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       {
@@ -303,13 +308,13 @@ describe('parseProjectFiles — fallback POU creation', () => {
       },
     ]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
-    expect(result.projectData.pous).toHaveLength(1)
-    const body = result.projectData.pous[0].body
-    expect(body.language).toBe('fbd')
+    // No POU at all: the caller opens the editor empty and read-only.
+    expect(result.projectData.pous).toHaveLength(0)
+    expect(result.fatalErrors).toHaveLength(1)
     consoleSpy.mockRestore()
   })
 
-  it('fallback handles LD without END_PROGRAM (takes rest of content)', () => {
+  it('treats an LD body that is not JSON as fatal, with or without END_PROGRAM', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       {
@@ -318,7 +323,46 @@ describe('parseProjectFiles — fallback POU creation', () => {
       },
     ]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    expect(result.projectData.pous).toHaveLength(0)
+    expect(result.fatalErrors!.some((e) => e.includes('NoEnd'))).toBe(true)
+    consoleSpy.mockRestore()
+  })
+
+  it.each([
+    ['an FBD-shaped body in an LD POU', 'Main.ld', '{"nodes":[],"edges":[],"viewport":{"x":0,"y":0,"zoom":1}}'],
+    ['an LD-shaped body in an FBD POU', 'Main.fbd', '{"name":"Main","rungs":[]}'],
+    ['a null body', 'Main.ld', 'null'],
+  ])('treats %s as fatal even though it is valid JSON', (_label, file, body) => {
+    // Valid JSON of the wrong shape used to sail through and only fail deep in
+    // a consumer (`value.rungs` / `value.rung.nodes`) — the same class of bug
+    // this change exists to remove. Note the first case is precisely the value
+    // the old fallback manufactured.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pouFiles: RawProjectFile[] = [
+      { relativePath: `pous/programs/${file}`, content: `PROGRAM Main\nVAR\nEND_VAR\n\n${body}\nEND_PROGRAM` },
+    ]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    expect(result.projectData.pous).toHaveLength(0)
+    expect(result.fatalErrors).toHaveLength(1)
+    consoleSpy.mockRestore()
+  })
+
+  it('keeps a malformed VARIABLES section recoverable: the project still opens', () => {
+    // The other half of the DOPE-592 contract. A bad declaration is repairable
+    // in-app (the variables table opens in text mode), so it must stay a
+    // warning and the POU must still load with its body intact.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pouFiles: RawProjectFile[] = [
+      {
+        relativePath: 'pous/programs/BadVars.ld',
+        content:
+          'PROGRAM BadVars\nVAR\n  this is not a declaration\nEND_VAR\n\n{"name":"BadVars","rungs":[]}\nEND_PROGRAM',
+      },
+    ]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    expect(result.fatalErrors).toBeUndefined()
     expect(result.projectData.pous).toHaveLength(1)
+    expect(result.projectData.pous[0].body).toMatchObject({ language: 'ld', value: { rungs: [] } })
     consoleSpy.mockRestore()
   })
 
@@ -907,5 +951,56 @@ describe('data type file hydration', () => {
     }
     const result = parse([], [structWithDoc])
     expect(result.projectData.dataTypes).toEqual([structWithDoc])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DOPE-592
+// ---------------------------------------------------------------------------
+describe('graphical POU holding a native library block', () => {
+  // A ladder body whose block variant used to carry the whole authored source of
+  // a native (C/C++) library block, VAR ... END_VAR and all. Both the parser and
+  // this fallback took that embedded END_VAR as the end of the declarations and
+  // sliced the body from the middle of the JSON, so the POU came back with an
+  // empty FBD-shaped body and the project could not be opened.
+  const nativeBlockSource = [
+    'FUNCTION_BLOCK TCP_CLIENT',
+    'VAR_INPUT',
+    '  EN : BOOL;',
+    '  END_VAR',
+    '#ifdef ARDUINO',
+    '#endif',
+  ].join('\n')
+
+  const ladderBody = {
+    name: 'Main',
+    rungs: [
+      {
+        id: 'rung-1',
+        nodes: [
+          {
+            id: 'block-1',
+            type: 'block',
+            data: { variant: { name: 'TCP_CLIENT', body: nativeBlockSource } },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  }
+
+  const content = `PROGRAM Main\nVAR\n  x : BOOL;\nEND_VAR\n\n${JSON.stringify(ladderBody, null, 2)}\nEND_PROGRAM\n`
+
+  it('parses the rungs and reports no warning', () => {
+    const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/Main.ld', content }]
+    const result = parseProjectFiles('/p', makeProjectJson(), '{}', '[]', pouFiles, [], [])
+
+    // No warning at all is the point: the POU parsed, it did not fall back.
+    expect(result.warnings).toBeUndefined()
+    expect(result.projectData.pous).toHaveLength(1)
+    expect(result.projectData.pous[0].body).toMatchObject({
+      language: 'ld',
+      value: { rungs: [{ id: 'rung-1' }] },
+    })
   })
 })
