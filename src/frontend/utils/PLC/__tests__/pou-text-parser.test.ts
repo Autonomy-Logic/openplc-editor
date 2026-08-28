@@ -590,8 +590,9 @@ describe('graphical POU holding a native library block', () => {
 
   it('parses the body instead of slicing it from the embedded END_VAR', () => {
     const pou = parseGraphicalPouFromString(content, 'ld', 'program')
-    expect((pou.body.value as typeof body).rungs).toHaveLength(1)
-    expect((pou.body.value as typeof body).rungs[0].nodes[0].data.variant.name).toBe('TCP_CLIENT')
+    expect(pou.body.value).toMatchObject({
+      rungs: [{ nodes: [{ data: { variant: { name: 'TCP_CLIENT' } } }] }],
+    })
   })
 
   it("still reads the POU's own variables, not the block's", () => {

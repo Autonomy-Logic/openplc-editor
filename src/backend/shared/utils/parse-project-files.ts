@@ -40,6 +40,32 @@ import { getDefaultSchemaValues } from './default-zod-schema-values'
 
 type FallbackPou = PLCPou & { variablesText?: string }
 
+/**
+ * Thrown when a POU cannot be recovered at all, as opposed to a POU whose
+ * *declarations* are malformed.
+ *
+ * The distinction drives what the editor does on open (DOPE-592):
+ *
+ * - **Recoverable** — the variable declarations don't parse. The body is
+ *   intact, so the project opens normally and the offending variables table
+ *   opens in text mode for the user to fix. `createFallbackPou` keeps the raw
+ *   declarations in `variablesText` for exactly this.
+ * - **Unrecoverable** — a graphical POU's JSON body doesn't parse. There is
+ *   nothing to show and nothing to edit. Substituting an empty body here would
+ *   render a blank canvas indistinguishable from a legitimately empty POU, and
+ *   the first save would write that emptiness over the user's real diagram.
+ *   The project must not open with content in this state.
+ */
+export class UnrecoverablePouError extends Error {
+  constructor(
+    message: string,
+    readonly relativePath: string,
+  ) {
+    super(message)
+    this.name = 'UnrecoverablePouError'
+  }
+}
+
 export interface ParsedProjectData {
   meta: {
     name: string
@@ -73,6 +99,10 @@ export interface ParsedProjectData {
     libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
+  /** POUs that could not be parsed at all. Non-empty means the project must
+   *  NOT be opened with content: see `UnrecoverablePouError`. Distinct from
+   *  `warnings`, which are recoverable and open normally. */
+  fatalErrors?: string[]
   deviceConfiguration?: DeviceConfiguration
   /** Pin mappings parsed from `devices/pin-mapping.json`. Forwarded
    *  to the store's `setDeviceDefinitions`, which accepts BOTH:
@@ -199,8 +229,15 @@ function createFallbackPou(content: string, language: string, pouType: string, p
         : remainingContent.slice(bodyStartIndex).trim()
     try {
       bodyValue = JSON.parse(bodyContent)
-    } catch {
-      bodyValue = { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+    } catch (bodyErr) {
+      // Unrecoverable: see `UnrecoverablePouError`. The old behaviour
+      // substituted `{ nodes: [], edges: [], viewport }` here, which is the FBD
+      // shape — for a ladder POU it has no `rungs` at all, and it is what made
+      // a failed parse look like an empty diagram the user could then save over.
+      throw new UnrecoverablePouError(
+        bodyErr instanceof Error ? bodyErr.message : String(bodyErr),
+        `${pouName}${language === 'ld' ? '.ld' : '.fbd'}`,
+      )
     }
   } else if (language === 'st' || language === 'il' || language === 'python' || language === 'cpp') {
     const endRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
@@ -276,7 +313,11 @@ function foldLegacyVariableAliases(value: unknown): unknown {
   return value
 }
 
-function parsePouFile(file: RawProjectFile, warnings: string[]): (PLCPou & { variablesText?: string }) | null {
+function parsePouFile(
+  file: RawProjectFile,
+  warnings: string[],
+  fatalErrors: string[],
+): (PLCPou & { variablesText?: string }) | null {
   const ext = file.relativePath.split('.').pop()?.toLowerCase()
   /* istanbul ignore if -- defensive: parseProjectFiles upstream only forwards files whose
      extension matched the POU file glob; an extension-less file path can never reach here */
@@ -338,6 +379,18 @@ function parsePouFile(file: RawProjectFile, warnings: string[]): (PLCPou & { var
     try {
       return createFallbackPou(file.content, language, pouType, pouName)
     } catch (fallbackErr) {
+      // An unrecoverable body is not a warning: there is nothing to show and
+      // nothing to repair in-app, and opening with a blank canvas would invite
+      // a save that destroys the original (DOPE-592). Drop the warning pushed
+      // above — it says "loaded with partial data", which is now untrue — and
+      // report it as fatal so the caller opens the editor empty instead.
+      if (fallbackErr instanceof UnrecoverablePouError) {
+        warnings.pop()
+        fatalErrors.push(
+          `POU "${pouName}" (${file.relativePath}) could not be parsed and the project was not opened: ${fallbackErr.message}`,
+        )
+        return null
+      }
       /* istanbul ignore next -- defensive: createFallbackPou itself is non-throwing for any
          (content, language, pouType, pouName) tuple producible by getLanguageFromExt */
       console.error(`[parseProjectFiles] Fallback also failed: ${file.relativePath}`, fallbackErr)
@@ -417,6 +470,7 @@ export function parseProjectFiles(
   dataTypeFiles: RawProjectFile[] = [],
 ): ParsedProjectData {
   const warnings: string[] = []
+  const fatalErrors: string[] = []
 
   // Parse and Zod-validate project.json (matches old backend safeParseProjectFile behavior)
   let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> }
@@ -499,7 +553,7 @@ export function parseProjectFiles(
   // Parse POU files
   const pous: (PLCPou & { variablesText?: string })[] = []
   for (const file of filteredPouFiles) {
-    const pou = parsePouFile(file, warnings)
+    const pou = parsePouFile(file, warnings, fatalErrors)
     if (pou) {
       // Ensure all POUs have a name (derive from filename if missing)
       if (!pou.name) {
@@ -620,6 +674,7 @@ export function parseProjectFiles(
     deviceConfiguration,
     devicePinMapping,
     warnings: warnings.length > 0 ? warnings : undefined,
+    fatalErrors: fatalErrors.length > 0 ? fatalErrors : undefined,
     ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
   }
 }

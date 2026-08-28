@@ -1084,6 +1084,33 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // affected — in-memory editing, simulation, and compilation stay on.
       getState().workspaceActions.setCanEdit(data.canEdit !== false)
 
+      // An unrecoverable POU stops the open here (DOPE-592).
+      //
+      // The editor still opens — the user gets the workspace and, crucially,
+      // the Console explaining exactly which POU failed and why — but it opens
+      // EMPTY and read-only. Loading the rest of the project would be worse
+      // than useless: the broken POU would render as a blank canvas that looks
+      // like a legitimately empty diagram, and the first save would write that
+      // emptiness over the file the user still has on disk. `canEdit: false`
+      // gates every backend write (see `save-actions`), so nothing can be
+      // persisted over the original while the project is in this state.
+      //
+      // Recoverable failures (malformed variable declarations) never reach
+      // here: they stay in `warnings`, the project opens normally, and the
+      // offending variables table opens in text mode for the user to fix.
+      if (data.fatalErrors?.length) {
+        getState().workspaceActions.setCanEdit(false)
+        for (const message of data.fatalErrors) {
+          getState().consoleActions.addLog({ level: 'error', message })
+        }
+        getState().consoleActions.addLog({
+          level: 'error',
+          message:
+            'The project was opened empty and read-only so the unreadable file is not overwritten. Fix the file listed above, then reopen the project.',
+        })
+        return
+      }
+
       // Log any parsing warnings to the app console (after clear so they aren't wiped)
       if (data.warnings) {
         for (const message of data.warnings) {

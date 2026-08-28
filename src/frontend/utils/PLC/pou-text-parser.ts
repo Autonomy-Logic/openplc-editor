@@ -40,12 +40,16 @@ const formatParseError = (message: string, lineNumber?: number): string => {
  *
  * `serializeGraphicalPouToString` writes the variable declarations, a blank
  * line, then `JSON.stringify(body, null, 2)` — so the body always opens with a
- * brace in column 0. The anchor is the line start rather than the first brace
- * anywhere, because a declaration line may legitimately carry one inside an
- * initial value or an inline `(* ... *)` comment, and those stay indented.
+ * brace in **column 0**, and the anchor requires exactly that. A declaration
+ * line may legitimately carry a brace (a struct initial value spilling onto its
+ * own line, a CODESYS-style `{attribute ...}` pragma, an inline `(* ... *)`
+ * comment), but the serializer always indents declarations, so none of them can
+ * be mistaken for the body. Allowing an indented brace here would end the
+ * declaration scan early and report a malformed declaration as invalid body
+ * JSON, pointing the user at the wrong place.
  */
 export const findGraphicalBodyStartIndex = (content: string, fromIndex: number): number => {
-  const match = content.slice(fromIndex).match(/^[ \t]*\{/m)
+  const match = content.slice(fromIndex).match(/^\{/m)
   /* istanbul ignore next -- a matched regex always carries an index */
   if (match?.index === undefined) return -1
   return fromIndex + match.index
