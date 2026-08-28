@@ -4,10 +4,7 @@ import { cn } from '@root/frontend/utils/cn'
 import { ArrowLeftRight, Check, Minus } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 
-import {
-  useDiffEditorTeardown,
-  useDiffModelPaths,
-} from '../editor/diff-viewer/use-diff-editor-teardown'
+import { useDiffEditorTeardown, useDiffModelPaths } from '../editor/diff-viewer/use-diff-editor-teardown'
 
 const CONFLICT_MARKER_RE = /^(<<<<<<<|=======|>>>>>>>)/m
 

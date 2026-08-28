@@ -224,7 +224,6 @@ export interface ListCommitsOptions {
 }
 
 export interface VersionControlPort {
-
   /**
    * Three-way comparison between two branches and their common ancestor, with the server's
    * prediction of which files would conflict.

@@ -71,7 +71,10 @@ describe('the routes match the ones the web build calls', () => {
 
     await createBranch('p1', 'feature')
 
-    expect(callArgs()).toMatchObject({ path: '/projects/p1/branches', init: { method: 'POST', json: { name: 'feature' } } })
+    expect(callArgs()).toMatchObject({
+      path: '/projects/p1/branches',
+      init: { method: 'POST', json: { name: 'feature' } },
+    })
   })
 
   it('deletes a branch by id, with DELETE', async () => {
@@ -349,7 +352,6 @@ describe('the routes whose answer nobody reads', () => {
   })
 })
 
-
 describe('merging', () => {
   it('asks for the three-way diff with both branches named', async () => {
     request.mockResolvedValueOnce(ok({ source: {}, target: {}, base: null, conflicts: [] }))
@@ -418,9 +420,7 @@ describe('merging', () => {
       }),
     })
 
-    await expect(
-      mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' }),
-    ).resolves.toEqual({
+    await expect(mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })).resolves.toEqual({
       ok: false,
       failure: {
         kind: 'merge-conflict',

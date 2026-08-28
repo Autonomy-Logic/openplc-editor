@@ -302,7 +302,6 @@ describe('saveCloudProject', () => {
   })
 })
 
-
 /**
  * The bytes as loaded.
  *

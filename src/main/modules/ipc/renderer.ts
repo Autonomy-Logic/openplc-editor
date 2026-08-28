@@ -256,7 +256,8 @@ const rendererProcessBridge = {
     message: string,
     files?: string[],
     branch?: string,
-  ): Promise<VersionControlResult<Commit>> => ipcRenderer.invoke('edge-vc:create-commit', projectId, message, files, branch),
+  ): Promise<VersionControlResult<Commit>> =>
+    ipcRenderer.invoke('edge-vc:create-commit', projectId, message, files, branch),
   edgeVcGetCommitFiles: (
     projectId: string,
     hash: string,

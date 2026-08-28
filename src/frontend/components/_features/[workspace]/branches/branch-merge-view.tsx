@@ -35,10 +35,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 
 import { GraphicalDiffViewer, isGraphicalFile } from '../editor/diff-viewer'
-import {
-  useDiffEditorTeardown,
-  useDiffModelPaths,
-} from '../editor/diff-viewer/use-diff-editor-teardown'
+import { useDiffEditorTeardown, useDiffModelPaths } from '../editor/diff-viewer/use-diff-editor-teardown'
 import { TextConflictResolver } from './merge-text-conflict-resolver'
 
 // ---------------------------------------------------------------------------
@@ -526,7 +523,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     setIsMerging(false)
     finishAndClose()
   }
-
 
   if (isLoading) {
     return (

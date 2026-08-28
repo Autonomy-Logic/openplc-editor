@@ -6,6 +6,7 @@
  */
 
 import { DiffEditor } from '@monaco-editor/react'
+
 import { GraphicalDiffViewer, isGraphicalFile } from './graphical-diff-viewer'
 import { useDiffEditorTeardown, useDiffModelPaths } from './use-diff-editor-teardown'
 

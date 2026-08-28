@@ -138,7 +138,6 @@ describe('the commit history screen is rendered in place, not navigated to', () 
   })
 })
 
-
 /**
  * The merge entry is the reason this file changed. It is the one caller that asked for a
  * route the desktop has no screen for, and the old fallback answered by restarting the app.

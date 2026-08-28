@@ -103,7 +103,10 @@ async function call<T>(
   } catch (error) {
     // Rejection from `edgeAuthedRequest` means no answer at all — see edge-http's
     // contract. This is the one branch that must not be reported as a denial.
-    return { ok: false, failure: { kind: 'unreachable', message: error instanceof Error ? error.message : 'No answer' } }
+    return {
+      ok: false,
+      failure: { kind: 'unreachable', message: error instanceof Error ? error.message : 'No answer' },
+    }
   }
 
   if (!response) {
@@ -287,9 +290,7 @@ export function getChanges(projectId: string, includeContent?: boolean) {
 
   const query = search.toString()
 
-  return call<{ changes: unknown[]; hasChanges: boolean }>(
-    `/projects/${projectId}/changes${query ? `?${query}` : ''}`,
-  )
+  return call<{ changes: unknown[]; hasChanges: boolean }>(`/projects/${projectId}/changes${query ? `?${query}` : ''}`)
 }
 
 export function discardChanges(projectId: string, files?: string[]) {
@@ -327,7 +328,11 @@ export function applyStash(projectId: string, ref: string) {
 }
 
 export function popStash(projectId: string, ref: string) {
-  return call<{ message: string }>(`/projects/${projectId}/stashes/pop`, { method: 'POST', json: { ref } }, stashConflict)
+  return call<{ message: string }>(
+    `/projects/${projectId}/stashes/pop`,
+    { method: 'POST', json: { ref } },
+    stashConflict,
+  )
 }
 
 export function dropStash(projectId: string, ref: string) {

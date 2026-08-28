@@ -238,7 +238,10 @@ async function collectFiles(
     try {
       contents = await fs.readFile(absolute)
     } catch (error) {
-      return { reason: 'unreadable', message: error instanceof Error ? error.message : `Could not read ${relativePath}` }
+      return {
+        reason: 'unreadable',
+        message: error instanceof Error ? error.message : `Could not read ${relativePath}`,
+      }
     }
 
     if (contents.length > MAX_FILE_BYTES) {

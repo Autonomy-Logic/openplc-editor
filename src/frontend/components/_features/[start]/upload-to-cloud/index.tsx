@@ -17,10 +17,7 @@
 import { CloudUpload, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
-import type {
-  CloudFoldersResult,
-  UploadProjectFailure,
-} from '../../../../../middleware/shared/ports/project-port'
+import type { CloudFoldersResult, UploadProjectFailure } from '../../../../../middleware/shared/ports/project-port'
 import { useProject } from '../../../../../middleware/shared/providers'
 import { cn } from '../../../../utils/cn'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
@@ -81,13 +78,7 @@ function folderConnector(depth: number): string {
   return depth === 0 ? '' : `${'    '.repeat(depth - 1)}└── `
 }
 
-const UploadToCloudModal = ({
-  open,
-  onOpenChange,
-  projectPath,
-  projectName,
-  onUploaded,
-}: UploadToCloudModalProps) => {
+const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUploaded }: UploadToCloudModalProps) => {
   const project = useProject()
 
   const [folders, setFolders] = useState<CloudFoldersResult | null>(null)

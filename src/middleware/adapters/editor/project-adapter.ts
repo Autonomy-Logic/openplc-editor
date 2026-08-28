@@ -379,9 +379,11 @@ export function createEditorProjectAdapter(): ProjectPort {
         return { status: 'unreachable' }
       }
 
-      const result = await window.bridge.edgeUploadListFolders().catch((): CloudFoldersResult => ({
-        status: 'unreachable',
-      }))
+      const result = await window.bridge.edgeUploadListFolders().catch(
+        (): CloudFoldersResult => ({
+          status: 'unreachable',
+        }),
+      )
 
       // Shape-checked, not trusted: a stale main bundle answering with something else must
       // not become an empty folder list, which would read as "you have no folders".

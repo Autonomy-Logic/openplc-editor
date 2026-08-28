@@ -234,7 +234,6 @@ describe('the graphical diff', () => {
   })
 })
 
-
 describe('the merge conflict crosses IPC as itself', () => {
   it('rebuilds MergeConflictError, with the files the resolver needs', async () => {
     bridge.edgeVcMergeBranches.mockResolvedValueOnce({

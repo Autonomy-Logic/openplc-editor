@@ -254,7 +254,11 @@ describe('uploading', () => {
       uploadProjectToCloud({ projectPath: projectDir, parentFolderId: 'f1', visibility: 'private' }),
     ).resolves.toEqual({
       status: 'failed',
-      failure: { reason: 'rejected', status: 409, message: 'Project with name "Irrigation" already exists for this user' },
+      failure: {
+        reason: 'rejected',
+        status: 409,
+        message: 'Project with name "Irrigation" already exists for this user',
+      },
     })
   })
 

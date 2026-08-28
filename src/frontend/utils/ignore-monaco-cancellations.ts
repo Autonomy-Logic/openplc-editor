@@ -28,8 +28,7 @@
  * `Canceled` name is suppressed. Any other rejection still surfaces.
  */
 
-const isMonacoCancellation = (reason: unknown): boolean =>
-  reason instanceof Error && reason.name === 'Canceled'
+const isMonacoCancellation = (reason: unknown): boolean => reason instanceof Error && reason.name === 'Canceled'
 
 /**
  * Installs the listener on `window`. Safe to call more than once: the same

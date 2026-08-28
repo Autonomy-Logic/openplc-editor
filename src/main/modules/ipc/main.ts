@@ -1211,7 +1211,7 @@ class MainProcessBridge implements MainIpcModule {
     })
   }
 
-handleEdgeVcBranchDiffWithBase = (
+  handleEdgeVcBranchDiffWithBase = (
     _event: IpcMainInvokeEvent,
     projectId: unknown,
     source: unknown,
@@ -1224,10 +1224,7 @@ handleEdgeVcBranchDiffWithBase = (
     return id && from && to ? getBranchDiffWithBase(id, from, to) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
   }
 
-  handleEdgeVcMergeBranches = (
-    _event: IpcMainInvokeEvent,
-    params: unknown,
-  ): Promise<VersionControlResult<unknown>> => {
+  handleEdgeVcMergeBranches = (_event: IpcMainInvokeEvent, params: unknown): Promise<VersionControlResult<unknown>> => {
     const source = MainProcessBridge.vcRecord(params)
     const projectId = MainProcessBridge.vcString(source.projectId)
     const sourceBranch = MainProcessBridge.vcString(source.sourceBranch)
@@ -1261,7 +1258,10 @@ handleEdgeVcBranchDiffWithBase = (
     })
   }
 
-  handleEdgeVcListBranches = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<VersionControlResult<unknown>> => {
+  handleEdgeVcListBranches = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
     const id = MainProcessBridge.vcString(projectId)
 
     return id ? listBranches(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
@@ -1411,7 +1411,10 @@ handleEdgeVcBranchDiffWithBase = (
     return discardChanges(id, MainProcessBridge.vcStringArray(files))
   }
 
-  handleEdgeVcListStashes = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<VersionControlResult<unknown>> => {
+  handleEdgeVcListStashes = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
     const id = MainProcessBridge.vcString(projectId)
 
     return id ? listStashes(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
