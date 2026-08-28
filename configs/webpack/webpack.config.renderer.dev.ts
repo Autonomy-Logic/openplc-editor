@@ -227,6 +227,26 @@ const configuration: webpack.Configuration = {
     headers: { 'Access-Control-Allow-Origin': '*' },
     static: { publicPath: '/' },
     historyApiFallback: { verbose: true },
+    client: {
+      overlay: {
+        // Monaco cancels pending work by rejecting with an error it names
+        // `Canceled` — every disposed editor leaves one behind for whichever
+        // debounced contribution was still armed (see
+        // `frontend/utils/ignore-monaco-cancellations.ts`). The runtime guard
+        // there calls `preventDefault`, which silences the console but cannot
+        // silence this overlay: the dev-server client registers its own
+        // listener when the bundle boots, so it always runs first and
+        // `preventDefault` does not stop it. The result is a full-screen
+        // overlay over a cancellation that was deliberate, and since the
+        // overlay sits above everything it swallows every click until
+        // dismissed — reloading a project from the source-control panel used
+        // to leave the app looking frozen.
+        //
+        // This function is serialized into the client bundle, so it must not
+        // reference anything outside itself.
+        runtimeErrors: (error?: Error) => !(error instanceof Error && error.name === 'Canceled'),
+      },
+    },
   },
 }
 
