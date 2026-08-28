@@ -1,11 +1,29 @@
-import type { BoardInfo } from '@root/middleware/shared/ports/types'
+import type { BoardInfo, NativeScreenId } from '@root/middleware/shared/ports/types'
 
 import { hiddenNativeScreens, isNativeScreenAvailable } from '../native-screens'
 
-const board = (hidesNativeScreens?: string[]): BoardInfo =>
-  ({
-    vpp: hidesNativeScreens ? { hidesNativeScreens } : {},
-  }) as unknown as BoardInfo
+/** The required half of `VppMetadata`; none of it matters to these helpers. */
+const VPP_BASE = {
+  packageId: 'com.vendor.pkg',
+  vendor: 'Vendor',
+  deviceId: 'dev',
+  packagePath: '/pkg',
+  screens: {},
+  moduleSystem: null,
+}
+
+/**
+ * A board carrying only what these helpers read.
+ *
+ * No type assertion: the helpers take `Pick<BoardInfo, 'vpp'>`, so a fixture
+ * that supplies a real `vpp` is checked by the compiler rather than waved past
+ * it — which is the point of the repo's no-`as` rule. A cast here would also
+ * have hidden a genuine mistake: an earlier draft passed
+ * `hidesNativeScreens: string[]`, which `NativeScreenId[]` rejects.
+ */
+const board = (hidesNativeScreens?: NativeScreenId[]): Pick<BoardInfo, 'vpp'> => ({
+  vpp: { ...VPP_BASE, ...(hidesNativeScreens ? { hidesNativeScreens } : {}) },
+})
 
 describe('hiddenNativeScreens', () => {
   it('reads the declaration off the board', () => {
@@ -17,7 +35,7 @@ describe('hiddenNativeScreens', () => {
   })
 
   it('is empty for a board that is not a VPP target', () => {
-    expect(hiddenNativeScreens({} as BoardInfo).size).toBe(0)
+    expect(hiddenNativeScreens({}).size).toBe(0)
   })
 
   it('is empty when the board has not resolved yet', () => {

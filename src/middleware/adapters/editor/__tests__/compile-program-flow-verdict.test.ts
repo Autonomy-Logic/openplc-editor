@@ -42,17 +42,24 @@ const projectData: PLCProjectData = {
       documentation: '',
     },
   ],
-  configuration: {
+  // `configurations`, plural. The removed `as unknown as PLCProjectData` was
+  // hiding a fixture keyed `configuration` — the backend zod type's name, not
+  // this port type's — so the object never matched the type it claimed to be.
+  configurations: {
     resource: {
       tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 1 }],
       instances: [{ name: 'instance0', program: 'main', task: 'task0' }],
       globalVariables: [],
     },
   },
-} as unknown as PLCProjectData
+}
 
 const boards = new Map<string, BoardInfo>([
-  ['Test Board', { core: 'arduino:avr', compiler: 'arduino-cli' } as unknown as BoardInfo],
+  // A complete BoardInfo rather than an asserted partial. Only `core` and
+  // `compiler` are read on this path, but `preview` and `specs` are required by
+  // the type, and filling them is cheaper than a cast that would also hide the
+  // day a genuinely required field appears.
+  ['Test Board', { core: 'arduino:avr', compiler: 'arduino-cli', preview: '', specs: {} }],
 ])
 
 /**

@@ -474,7 +474,7 @@ export class ModbusRtuClient implements DeviceModbusTransport {
       // debug table reaches it through a cast that strips the qualifier — so
       // this decode is the difference between a usable message and
       // "Unknown error code: 0x87".
-      if (statusCode === (ModbusDebugResponse.READ_ONLY as number)) {
+      if (statusCode === ModbusDebugResponse.READ_ONLY) {
         return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
       }
 
@@ -571,7 +571,7 @@ export class ModbusRtuClient implements DeviceModbusTransport {
       // debug table reaches it through a cast that strips the qualifier — so
       // this decode is the difference between a usable message and
       // "Unknown error code: 0x87".
-      if (statusCode === (ModbusDebugResponse.READ_ONLY as number)) {
+      if (statusCode === ModbusDebugResponse.READ_ONLY) {
         return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
       }
 

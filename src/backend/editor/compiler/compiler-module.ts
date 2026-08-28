@@ -3479,6 +3479,20 @@ class CompilerModule {
     return new Promise((resolve) => {
       const channel = new MessageChannelMain()
       let firstError: string | null = null
+
+      /**
+       * The build's outcome, from the pipeline's own verdict when it gave one.
+       *
+       * `firstError` is a fallback, not the answer. The inner pipeline reports
+       * success explicitly, and deciding from whether an error-level line was
+       * logged turns a successful compile that emitted an error-shaped
+       * diagnostic into a failed library verification — the same false negative
+       * that was fixed on the program-compile path and left behind here.
+       */
+      const verdict = (success: boolean | undefined): { success: boolean; message?: string } => {
+        const failed = typeof success === 'boolean' ? !success : firstError !== null
+        return failed ? { success: false, message: firstError ?? 'Verification compile failed' } : { success: true }
+      }
       let settled = false
 
       const settle = (result: { success: boolean; message?: string }) => {
@@ -3497,6 +3511,8 @@ class CompilerModule {
           message?: unknown
           logLevel?: 'info' | 'warning' | 'error'
           closePort?: boolean
+          /** The pipeline's own verdict; absent on messages that predate it. */
+          success?: boolean
         }
         if (data.message !== undefined) {
           // `decodePortMessage` returns readable text from the
@@ -3520,7 +3536,7 @@ class CompilerModule {
           }
         }
         if (data.closePort) {
-          settle(firstError ? { success: false, message: firstError } : { success: true })
+          settle(verdict(data.success))
         }
       })
       // `compileProgram` posts intermediate `closePort: true` messages
@@ -3529,8 +3545,10 @@ class CompilerModule {
       // for the port's 'close' event so an inner-pipeline error can't
       // leave the outer library build hanging on an unresolved promise
       // — same convention the renderer-side adapter uses.
+      // No terminal message means no verdict — the inner pipeline jumped
+      // straight to `port.close()`. Fall back to the log.
       channel.port1.on('close', () => {
-        settle(firstError ? { success: false, message: firstError } : { success: true })
+        settle(verdict(undefined))
       })
       channel.port1.start()
 
