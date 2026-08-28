@@ -16,7 +16,7 @@
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
 import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
 import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../shared/debug/types'
-import { deriveDeviceId, deriveVppId } from './device-identity'
+import { deriveDeviceId, deriveVppId, DEVICE_ID_BYTES } from './device-identity'
 import { checkDeviceActivation } from './license-activation-client'
 
 /** Just enough of a transport to run the licensing FCs. */
@@ -43,9 +43,30 @@ const LIC_CRC_COVERAGE = 94
  */
 export type { DeviceLicenseReport, DeviceLicenseState }
 
+/**
+ * What FC 0x48 answered, and WHICH KIND of value it is (DOPE-589).
+ *
+ * The two platforms report different things and the difference decides whether
+ * this side hashes or not, so it is carried in the type rather than in a
+ * comment:
+ *
+ *   - `device-id`: BARE METAL. The closed license-core read the silicon and
+ *     derived the id itself (`license_gate_device_id`), so it is used AS IS.
+ *     Hashing it again would produce an identity no licence was ever issued for
+ *     and no device can reproduce.
+ *   - `anchor`: RUNTIME-V4. The raw device-tree serial, already stripped of its
+ *     trailing bytes on the wire, from which the editor derives the device_id
+ *     with `deriveDeviceId`.
+ *
+ * A single `Uint8Array` field would type-check either way and silently do the
+ * wrong thing on one of them, which is precisely the failure this shape exists
+ * to make impossible.
+ */
+export type DeviceIdentity = { kind: 'device-id'; deviceId: Uint8Array } | { kind: 'anchor'; anchor: Uint8Array }
+
 export interface DeviceLicenseInput {
-  /** Raw hardware anchor bytes from the board-id read (FC 0x48). */
-  anchor: Uint8Array
+  /** What the identity read (FC 0x48) returned, tagged with its kind. */
+  identity: DeviceIdentity
   /** Reverse-domain VPP package id (`package.id`) from `resolveLicensingTarget`. */
   packageId: string
 }
@@ -146,7 +167,7 @@ export async function resolveDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
 ): Promise<DeviceLicenseReport> {
-  const identity = deriveIdentity(input.anchor)
+  const identity = deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
 
@@ -176,7 +197,7 @@ export async function inspectDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
 ): Promise<DeviceLicenseReport> {
-  const identity = deriveIdentity(input.anchor)
+  const identity = deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
 
@@ -194,28 +215,48 @@ export async function inspectDeviceLicense(
 /**
  * Derive the licensing identity, or explain why there is none.
  *
- * An anchor of zero bytes is a REAL reply, not a failure: cores without
- * ArduinoUniqueID support, and boards that opt out with `OPENPLC_NO_UNIQUE_ID`,
- * answer `id_len = 0` rather than fail to compile, and the link classifier
- * correctly counts that as "firmware present".
+ * An identity of zero bytes is a REAL reply, not a failure: a board with no
+ * license-core, and one whose architecture the closed reader refuses (AVR,
+ * RP2040), answer `id_len = 0`, and the link classifier correctly counts that as
+ * "firmware present".
  *
  * It is fatal HERE, and must be caught before deriving anything, because
  * `sha256(prefix || <nothing>)` is a CONSTANT: every such board would share one
  * device id, so one purchase would license an entire fleet and a license issued
  * for one board would verify on all of them.
  */
-function deriveIdentity(anchor: Uint8Array): { deviceId: string } | DeviceLicenseReport {
-  if (anchor.length === 0) {
+function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | DeviceLicenseReport {
+  const bytes = identity.kind === 'device-id' ? identity.deviceId : identity.anchor
+  if (bytes.length === 0) {
     return {
       outcome: {
         state: 'check-failed',
         error:
-          'this board reports no unique hardware id, so no license can be bound to it. ' +
-          'A licensed VPP requires a board whose core exposes a unique id.',
+          'this board reports no licensing identity, so no license can be bound to it. ' +
+          'A licensed VPP requires a board whose license-core can identify it.',
       },
     }
   }
-  return { deviceId: deriveDeviceId(anchor) }
+
+  // Bare metal already derived it inside the closed artifact. The length is
+  // checked rather than trusted: a short id is not a weaker identity, it is a
+  // DIFFERENT one, and a firmware answering the wrong number of bytes must not
+  // send a customer to a checkout for an id no device can reproduce.
+  if (identity.kind === 'device-id') {
+    if (identity.deviceId.length !== DEVICE_ID_BYTES) {
+      return {
+        outcome: {
+          state: 'check-failed',
+          error:
+            `the board reported a ${identity.deviceId.length}-byte device id, expected ${DEVICE_ID_BYTES}. ` +
+            'Its firmware and its license-core disagree about the identity format.',
+        },
+      }
+    }
+    return { deviceId: bytesToHex(identity.deviceId) }
+  }
+
+  return { deviceId: deriveDeviceId(identity.anchor) }
 }
 
 /**

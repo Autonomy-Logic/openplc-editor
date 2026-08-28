@@ -688,42 +688,42 @@ describe('ModbusRtuClient', () => {
   })
 
   // -----------------------------------------------------------------------
-  // getBoardId (FC 0x48)
+  // getDeviceId (FC 0x48)
   // -----------------------------------------------------------------------
-  describe('getBoardId', () => {
+  describe('getDeviceId', () => {
     it('returns id bytes and hex on success', async () => {
       await connectClient()
       const payload = new Uint8Array([ModbusDebugResponse.SUCCESS, 0x03, 0x0a, 0xbc, 0x01])
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload))
-      const result = await client.getBoardId()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_DEVICE_ID, payload))
+      const result = await client.getDeviceId()
       expect(result.success).toBe(true)
-      expect(Array.from(result.boardId!)).toEqual([0x0a, 0xbc, 0x01])
-      expect(result.boardIdHex).toBe('0abc01')
+      expect(Array.from(result.deviceId!)).toEqual([0x0a, 0xbc, 0x01])
+      expect(result.deviceIdHex).toBe('0abc01')
     })
 
     it('handles id_len = 0 (unsupported core) as success with empty id', async () => {
       await connectClient()
       autoRespond(
-        buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])),
+        buildResponse(1, ModbusFunctionCode.DEBUG_GET_DEVICE_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])),
       )
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.success).toBe(true)
-      expect(result.boardIdHex).toBe('')
-      expect(Array.from(result.boardId!)).toEqual([])
+      expect(result.deviceIdHex).toBe('')
+      expect(Array.from(result.deviceId!)).toEqual([])
     })
 
     it('returns error on function code mismatch', async () => {
       await connectClient()
       autoRespond(buildResponse(1, 0x99, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])))
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.success).toBe(false)
       expect(result.error).toBe('Function code mismatch')
     })
 
     it('returns error on unknown status code', async () => {
       await connectClient()
-      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_BOARD_ID, new Uint8Array([0x99, 0x00])))
-      const result = await client.getBoardId()
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_DEVICE_ID, new Uint8Array([0x99, 0x00])))
+      const result = await client.getDeviceId()
       expect(result.success).toBe(false)
       expect(result.error).toContain('Unknown error code')
     })
@@ -733,32 +733,32 @@ describe('ModbusRtuClient', () => {
       autoRespond(
         buildResponse(
           1,
-          ModbusFunctionCode.DEBUG_GET_BOARD_ID,
+          ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
           new Uint8Array([ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b]),
         ),
       )
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.success).toBe(false)
       expect(result.error).toContain('Incomplete board-id data')
     })
 
     it('returns error on too-short response', async () => {
       await connectClient()
-      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS])
+      const frame = new Uint8Array([0x01, ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS])
       const crc = calculateCrc(frame)
       const full = new Uint8Array(frame.length + 2)
       full.set(frame, 0)
       full[frame.length] = (crc >>> 8) & 0xff
       full[frame.length + 1] = crc & 0xff
       autoRespond(full)
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.success).toBe(false)
       expect(result.error).toContain('too short')
     })
 
     it('returns error on timeout', async () => {
       await connectClient()
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.success).toBe(false)
       expect(result.error).toContain('timeout')
     })
@@ -928,10 +928,10 @@ describe('ModbusRtuClient', () => {
       expect(result.error).toBe('non-error string')
     })
 
-    it('getBoardId handles response too short (<10 bytes)', async () => {
+    it('getDeviceId handles response too short (<10 bytes)', async () => {
       await connectClient()
       mockSendRequest(client, new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, 0]))
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.success).toBe(false)
       expect(result.error).toContain('too short')
     })
@@ -956,10 +956,10 @@ describe('ModbusRtuClient', () => {
       expect(result).toEqual({ success: false, error: 'serial port vanished' })
     })
 
-    it('getBoardId handles non-Error exception', async () => {
+    it('getDeviceId handles non-Error exception', async () => {
       await connectClient()
       mockSendRequest(client, 'non-error string')
-      const result = await client.getBoardId()
+      const result = await client.getDeviceId()
       expect(result.error).toBe('non-error string')
     })
   })

@@ -83,31 +83,14 @@ export interface GenerateDefinesInput {
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
   defaultSerial?: string
-  /** Whether this target's board package declares `isLicensable`
-   *  (`TargetCapabilities.isLicensable`).  Governs one define, and the
-   *  polarity is deliberately inverted: a licensable board gets nothing,
-   *  and EVERY OTHER board gets `OPENPLC_NO_UNIQUE_ID`.
-   *
-   *  A hardware unique id exists for exactly one purpose — binding a paid
-   *  VPP licence to a board — so a free target has no use for one, and
-   *  `ArduinoUniqueID` (which `#error`s on any core it doesn't cover, mbed
-   *  included) should never enter the build for one.  Absent is read as
-   *  `false`: a package that says nothing about licensing is a free
-   *  package, and the safe default is the one that compiles everywhere.
-   *
-   *  `modbus_debug.cpp` reads the flag; with it set, `FC 0x48` answers
-   *  `id_len = 0`, which `device-probe` and the licence flow already treat
-   *  as "this board has no unique id". */
-  isLicensable?: boolean
 }
 
 /**
  * Build the contents of `defines.h`.
  *
  * Output sections, in order:
- *   1. `// Board defines` — `boardEntry.define` plus
- *      `OPENPLC_NO_UNIQUE_ID` on every non-licensable target; omitted
- *      entirely only when both sources are empty.
+ *   1. `// Board defines` — `boardEntry.define`; omitted entirely when
+ *      the board declares none.
  *   2. `#define PROGRAM_MD5 "<md5>"` — always.
  *   3. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
  *      over emulated USART0 so avr8js's serial bridge can drive
@@ -130,21 +113,23 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     boardRuntime,
     vppModbusState,
     defaultSerial,
-    isLicensable,
   } = input
 
   let DEFINES_CONTENT = ''
 
-  // 1. Board defines.  Two sources, both landing under the one
-  //    `// Board defines` header:
-  //      - `hals.json`'s per-board `define` field (single-string and
-  //        array forms both supported, emitted verbatim);
-  //      - `OPENPLC_NO_UNIQUE_ID`, emitted for every target that is NOT
-  //        licensable — see the `isLicensable` field doc for why the
-  //        default is the flag rather than its absence.
-  //    An empty list means no header at all (the next section starts
-  //    directly), which is the pre-licensing behaviour for a board with
-  //    no `define` field.
+  // 1. Board defines from `hals.json`'s per-board `define` field
+  //    (single-string and array forms both supported, emitted verbatim).
+  //    An empty list means no header at all: the next section starts
+  //    directly.
+  //
+  //    DOPE-589 removed the second source that briefly lived here,
+  //    `OPENPLC_NO_UNIQUE_ID`. It existed to keep `ArduinoUniqueID` out of
+  //    a build the library refuses to compile in (mbed), and it is
+  //    unnecessary now that the open firmware links no unique-id library
+  //    at all: the identity comes from the closed license-core through
+  //    `license_gate_device_id()`. The list-then-header shape it
+  //    introduced stays, because it is what makes a board with
+  //    `define: []` emit no bare header.
   const boardDefines: string[] = []
   if (boardEntry && boardEntry.define) {
     if (Array.isArray(boardEntry.define)) {
@@ -152,9 +137,6 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     } else if (typeof boardEntry.define === 'string') {
       boardDefines.push(boardEntry.define)
     }
-  }
-  if (isLicensable !== true) {
-    boardDefines.push('OPENPLC_NO_UNIQUE_ID')
   }
   if (boardDefines.length > 0) {
     DEFINES_CONTENT = '// Board defines\n'

@@ -1,7 +1,8 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import type {
-  DebugBoardIdResult,
+  DebugAnchorResult,
+  DebugDeviceIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
   DeviceModbusTransport,
@@ -48,9 +49,9 @@ import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/edito
 import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
-  PATIENT_BOARD_ID_PROBE,
-  QUICK_BOARD_ID_PROBE,
-  SPECULATIVE_BOARD_ID_PROBE,
+  PATIENT_DEVICE_ID_PROBE,
+  QUICK_DEVICE_ID_PROBE,
+  SPECULATIVE_DEVICE_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
 import {
   describeLinkCandidate,
@@ -62,6 +63,7 @@ import {
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
+  type DeviceIdentity,
   inspectDeviceLicense,
   type LicenseReadWritable,
   resolveDeviceLicense,
@@ -87,11 +89,19 @@ interface ChannelUnavailable {
 
 /**
  * What the licensing flow needs from whichever channel carries it: the two
- * license FCs plus the anchor read. `DeviceModbusTransport` satisfies it
+ * license FCs plus the identity read. `DeviceModbusTransport` satisfies it
  * structurally (all three are required there); a debug channel is narrowed into
  * it by `isLicenseChannel`.
+ *
+ * The identity read is EITHER `getDeviceId` (baremetal, an id derived inside the
+ * closed core) OR `getAnchor` (runtime-v4, the raw device-tree serial), never
+ * both, so the union carries which one this channel has and the flow cannot
+ * treat one as the other (DOPE-589).
  */
-type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardIdResult> }
+type LicenseChannel = LicenseReadWritable & {
+  getDeviceId?(): Promise<DebugDeviceIdResult>
+  getAnchor?(): Promise<DebugAnchorResult>
+}
 
 /**
  * Whether a debug channel can carry the licensing flow. The three methods are
@@ -104,7 +114,7 @@ type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardId
  */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
-    typeof client.getBoardId === 'function' &&
+    typeof client.getDeviceId === 'function' &&
     typeof client.readLicense === 'function' &&
     typeof client.writeLicense === 'function'
   )
@@ -1625,7 +1635,7 @@ class MainProcessBridge implements MainIpcModule {
     context: { isLastCandidate: boolean },
   ): Promise<boolean> {
     // The simulator is in-process: there is no hardware to identify, so the
-    // board-id read is not the right question to ask of it.
+    // device-id read is not the right question to ask of it.
     //
     // Retried because the session is opened the instant the emulator starts, and
     // the sketch inside it still has to reach the point where it services Modbus.
@@ -1653,12 +1663,12 @@ class MainProcessBridge implements MainIpcModule {
     // them. Spending the patient budget on the final guess would put ~32s at the
     // end of a sweep whose whole point is to finish quickly.
     const isPatient = !candidate.speculative && (candidate.patient === true || context.isLastCandidate)
-    const boardIdProbe = candidate.speculative
-      ? SPECULATIVE_BOARD_ID_PROBE
+    const deviceIdProbe = candidate.speculative
+      ? SPECULATIVE_DEVICE_ID_PROBE
       : isPatient
-        ? PATIENT_BOARD_ID_PROBE
-        : QUICK_BOARD_ID_PROBE
-    const result = await classifyDeviceLink(client, { boardIdProbe })
+        ? PATIENT_DEVICE_ID_PROBE
+        : QUICK_DEVICE_ID_PROBE
+    const result = await classifyDeviceLink(client, { deviceIdProbe })
     this.deviceLinkProbe = result
     if (result.status !== 'connected-with-firmware') {
       // Traced only when the endpoint is REJECTED, and then with the budget it was
@@ -1667,7 +1677,7 @@ class MainProcessBridge implements MainIpcModule {
       // the budget up front, as this used to, put the line before the outcome it
       // explains and printed it on every success too.
       this.traceDeviceLink(
-        `  ${candidate.descriptor}: "${result.status}" after up to ${boardIdProbe.attempts} id read(s)` +
+        `  ${candidate.descriptor}: "${result.status}" after up to ${deviceIdProbe.attempts} id read(s)` +
           `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, was patient)' : ''}` +
           `${result.error ? ` — ${result.error}` : ''}`,
       )
@@ -1682,7 +1692,7 @@ class MainProcessBridge implements MainIpcModule {
   /**
    * Per-tick liveness read, and the ONE place baremetal run/stop state is polled.
    *
-   * Prefers the status read (FC 0x46) over the board id (0x48): both prove the
+   * Prefers the status read (FC 0x46) over the device id (0x48): both prove the
    * firmware is answering, but the status frame also carries the run/stop state
    * and the mode-switch position — so a switch flipped by hand at the panel shows
    * up within one interval, with no second timer and no extra traffic.
@@ -1696,7 +1706,7 @@ class MainProcessBridge implements MainIpcModule {
       await this.pushPlcState(client, descriptor, 0)
       return true
     }
-    return (await client.getBoardId()).success
+    return (await client.getDeviceId()).success
   }
 
   /**
@@ -1944,29 +1954,61 @@ class MainProcessBridge implements MainIpcModule {
   private deviceLicenseSequenceInFlight = false
 
   /**
-   * Read the anchor the licensing identity derives from, over the held link.
+   * Read this board's licensing identity over the held link, tagged with which
+   * KIND of value the channel answered (DOPE-589).
    *
-   * Read FRESH on every licensing call rather than cached at connect. The anchor
-   * IS the device identity, and a board swapped on the same serial path would
+   * Baremetal answers an id already derived inside the closed license-core;
+   * runtime-v4 answers the raw device-tree anchor and the editor derives from
+   * it. Both arrive as `[FC][status][len][bytes]` on 0x48, which is exactly why
+   * the kind travels in the return value instead of being inferred downstream.
+   *
+   * Read FRESH on every licensing call rather than cached at connect. The
+   * identity IS the device, and a board swapped on the same serial path would
    * otherwise inherit the previous one's — deciding a license question for
    * hardware that is no longer there. One extra frame on an operation that already
    * spends several is not worth that risk.
    */
-  private async readLicenseAnchor(
+  private async readLicenseIdentity(
     client: LicenseChannel,
-  ): Promise<{ anchor: Uint8Array } | { error: string } | { unsupported: true }> {
-    const board = await client.getBoardId()
-    // The target itself said "no hardware anchor to license against" (0x85 on
-    // 0x48 — a runtime-v4 host without a device-tree serial). Terminal, not
-    // retryable: surface it as the 'unsupported' outcome, never check-failed.
-    if (board.unsupported) return { unsupported: true }
-    if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
-    // Liveness evidence for the CONTROL link's poll. On a REST session this
-    // frame rode the debug WebSocket instead — crediting it here is a no-op,
-    // not a lie: a REST session runs no liveness poll (openRestSession never
-    // starts one), so there is no check for this stamp to suppress.
-    this.deviceSession.noteTraffic()
-    return { anchor: board.boardId ?? new Uint8Array(0) }
+  ): Promise<{ identity: DeviceIdentity } | { error: string } | { unsupported: true }> {
+    // The device-condition half of the reply is identical for both forms, so it
+    // is checked once; only the NAME of the bytes differs, and that is the whole
+    // reason the two are separate methods.
+    const settle = (read: { success: boolean; unsupported?: boolean; error?: string }) => {
+      // The target itself said "no identity to license against" (0x85 on 0x48 —
+      // a runtime-v4 host without a device-tree serial). Terminal, not
+      // retryable: surface it as the 'unsupported' outcome, never check-failed.
+      if (read.unsupported) return { unsupported: true } as const
+      if (!read.success) return { error: read.error ?? 'the device did not answer the identity read' } as const
+      // Liveness evidence for the CONTROL link's poll. On a REST session this
+      // frame rode the debug WebSocket instead — crediting it here is a no-op,
+      // not a lie: a REST session runs no liveness poll (openRestSession never
+      // starts one), so there is no check for this stamp to suppress.
+      this.deviceSession.noteTraffic()
+      return null
+    }
+
+    // Exactly one of the two exists on any real channel: the Modbus clients
+    // implement `getDeviceId`, the runtime-v4 WebSocket implements `getAnchor`.
+    // Narrowed on the CHANNEL rather than on the reply, so each branch knows
+    // statically which kind it is holding.
+    if (client.getDeviceId) {
+      const read = await client.getDeviceId()
+      const bad = settle(read)
+      if (bad) return bad
+      return { identity: { kind: 'device-id', deviceId: read.deviceId ?? new Uint8Array(0) } }
+    }
+
+    if (client.getAnchor) {
+      const read = await client.getAnchor()
+      const bad = settle(read)
+      if (bad) return bad
+      return { identity: { kind: 'anchor', anchor: read.anchor ?? new Uint8Array(0) } }
+    }
+
+    // Neither: a programming error rather than a device condition, so it says so
+    // instead of deriving an identity from nothing.
+    return { error: 'this channel carries no identity read (neither 0x48 form)' }
   }
 
   /**
@@ -2020,11 +2062,11 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<DeviceLicenseReport> => {
     return await this.withLicenseChannel('read license', async (client) => {
       try {
-        const anchor = await this.readLicenseAnchor(client)
-        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
-        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
+        const identity = await this.readLicenseIdentity(client)
+        if ('unsupported' in identity) return { outcome: { state: 'unsupported' } }
+        if ('error' in identity) return { outcome: { state: 'check-failed', error: identity.error } }
 
-        return await inspectDeviceLicense(client, { ...request, anchor: anchor.anchor })
+        return await inspectDeviceLicense(client, { ...request, identity: identity.identity })
       } catch (error) {
         return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
       }
@@ -2053,11 +2095,11 @@ class MainProcessBridge implements MainIpcModule {
       this.deviceLicenseSequenceInFlight = true
 
       try {
-        const anchor = await this.readLicenseAnchor(client)
-        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
-        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
+        const identity = await this.readLicenseIdentity(client)
+        if ('unsupported' in identity) return { outcome: { state: 'unsupported' } }
+        if ('error' in identity) return { outcome: { state: 'check-failed', error: identity.error } }
 
-        const report = await resolveDeviceLicense(client, { ...request, anchor: anchor.anchor })
+        const report = await resolveDeviceLicense(client, { ...request, identity: identity.identity })
         // The license FCs are device traffic like any other: without noting them the
         // liveness poll can fall due mid-sequence and declare a healthy link lost.
         this.deviceSession.noteTraffic()

@@ -796,10 +796,6 @@ async function runCompilePipelineInner(
     stProgramFileContent: programSt,
     buildMD5Hash: md5,
     boardRuntime,
-    // Inverted polarity on purpose: this makes the build ask for
-    // `ArduinoUniqueID` only on a board whose package declares
-    // `isLicensable`, and emit `OPENPLC_NO_UNIQUE_ID` for everyone else.
-    isLicensable: targetCapabilities.isLicensable,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
   })
 

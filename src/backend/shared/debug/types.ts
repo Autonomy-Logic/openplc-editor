@@ -59,21 +59,56 @@ export interface DebugVersionResult {
 }
 
 /**
- * Result of the board-id probe (FC 0x48). `boardId` is the raw unique-id bytes
- * (empty when the target has no unique-id support); `boardIdHex` is the same
- * bytes as a lowercase hex string for display.
+ * WHY THERE ARE TWO OF THESE AND NOT ONE (DOPE-589). FC 0x48 answers a
+ * different KIND of value depending on the platform, and one shared type would
+ * make the field name a lie on one of them:
  *
- * `unsupported` (status LIC_UNSUPPORTED, 0x85): the target answered that it has
- * NO hardware anchor to license against — a runtime-v4 host without a
+ *   - bare metal answers the DERIVED device_id. The closed license-core reads
+ *     the silicon and derives it internally (`license_gate_device_id`), so the
+ *     raw factory serial never leaves the artifact and the open firmware links
+ *     no unique-id library at all;
+ *   - runtime-v4 answers the RAW anchor, its device-tree serial, and the
+ *     editor derives the device_id from it in TypeScript.
+ *
+ * The licensing flow takes the union (`DeviceIdentity` in license-flow.ts) so
+ * the compiler makes every caller say which one it holds. Collapsing them back
+ * into one field is how a derived id gets hashed a second time, or a raw serial
+ * gets published as an identity.
+ *
+ * `unsupported` (status LIC_UNSUPPORTED, 0x85) means the target answered that
+ * it has NO identity to license against - a runtime-v4 host with no
  * device-tree serial (x86 box, container). Distinct from a transport failure on
  * purpose: the licensing flow maps it to the terminal `unsupported` outcome
  * (no retry nag) instead of an endlessly retryable check-failed.
  */
-export interface DebugBoardIdResult {
+
+/**
+ * Bare-metal identity read (FC 0x48). `deviceId` is the 16-byte derived
+ * device_id, or EMPTY when the board has no identity a licence can be bound to
+ * (no license-core linked, or an architecture the closed reader refuses).
+ *
+ * An empty id is a SUCCESS reply and must stay one: `device-probe` reads the
+ * successful reply, not the bytes, as proof that firmware is running.
+ */
+export interface DebugDeviceIdResult {
   success: boolean
   unsupported?: boolean
-  boardId?: Uint8Array
-  boardIdHex?: string
+  deviceId?: Uint8Array
+  deviceIdHex?: string
+  error?: string
+}
+
+/**
+ * runtime-v4 identity read (FC 0x48 over the debug WebSocket). `anchor` is the
+ * device-tree serial with its trailing NUL/LF/CR/space already stripped, which
+ * is the same normalization the closed core applies on read - the editor must
+ * hash exactly what the device hashes.
+ */
+export interface DebugAnchorResult {
+  success: boolean
+  unsupported?: boolean
+  anchor?: Uint8Array
+  anchorHex?: string
   error?: string
 }
 
@@ -159,14 +194,23 @@ export interface DebugTransport {
 export interface DeviceChannelTransport {
   connect(): Promise<void>
   disconnect(): void
-  /** Board-id read (FC 0x48). On baremetal it is the readiness probe that says
-   *  whether an OpenPLC firmware is answering at all — and it doubles as the
-   *  LICENSING ANCHOR read. The runtime-v4 WebSocket implements it for the
-   *  anchor alone: the runtime answers 0x48 at the webserver level with the
-   *  hardware anchor the licensed plugin binds its device id to, while readiness
-   *  on a runtime target stays a REST question. Still optional: a medium that
-   *  carries neither role may omit it. */
-  getBoardId?(): Promise<DebugBoardIdResult>
+  /** Identity read (FC 0x48), one function code with two medium-specific
+   *  meanings, hence two methods (DOPE-589).
+   *
+   *  `getDeviceId` is the BAREMETAL read: the closed license-core derives the
+   *  device_id inside the artifact and the firmware reports it, so nothing on
+   *  this side hashes anything. It doubles as the readiness probe that says
+   *  whether an OpenPLC firmware is answering at all - which is why a
+   *  SUCCESSFUL reply matters and an empty id does not fail it.
+   *
+   *  `getAnchor` is the RUNTIME-V4 read: the runtime answers 0x48 at the
+   *  webserver level with the raw device-tree anchor and the editor derives the
+   *  device_id from it. Readiness on a runtime target stays a REST question.
+   *
+   *  Both optional: a medium that carries neither role omits both, and no
+   *  medium implements both. */
+  getDeviceId?(): Promise<DebugDeviceIdResult>
+  getAnchor?(): Promise<DebugAnchorResult>
   /** Runtime status (FC 0x46): run/stop state, mode-switch position, scan
    *  counter, uptime. Doubles as the liveness probe for a held link — any
    *  successful reply proves the firmware is answering — so the device liveness
@@ -262,7 +306,7 @@ export interface DeviceDebugChannel extends DeviceChannelTransport {
 export interface DeviceModbusTransport
   extends Omit<DebugTransport, 'getVariablesList' | 'setVariable'>,
     DeviceChannelTransport {
-  getBoardId(): Promise<DebugBoardIdResult>
+  getDeviceId(): Promise<DebugDeviceIdResult>
   getStatus(): Promise<DebugStatusResult>
   setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
   readLicense(): Promise<DebugLicenseReadResult>

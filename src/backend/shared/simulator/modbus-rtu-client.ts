@@ -547,9 +547,9 @@ export class ModbusRtuClient {
     }
   }
 
-  async getBoardId(): Promise<{ success: boolean; boardId?: Uint8Array; boardIdHex?: string; error?: string }> {
+  async getDeviceId(): Promise<{ success: boolean; deviceId?: Uint8Array; deviceIdHex?: string; error?: string }> {
     try {
-      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, allocBytes(0))
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_DEVICE_ID, allocBytes(0))
       const response = await this.sendRequest(request)
 
       if (response.length < 10) {
@@ -559,7 +559,7 @@ export class ModbusRtuClient {
       const functionCodeResponse = readUint8(response, 7)
       const statusCode = readUint8(response, 8)
 
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_BOARD_ID as number)) {
+      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_DEVICE_ID as number)) {
         return { success: false, error: 'Function code mismatch' }
       }
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
@@ -570,13 +570,13 @@ export class ModbusRtuClient {
       if (response.length < 10 + idLen) {
         return {
           success: false,
-          error: `Incomplete board-id data (expected ${idLen} bytes, got ${response.length - 10})`,
+          error: `Incomplete device-id data (expected ${idLen} bytes, got ${response.length - 10})`,
         }
       }
 
-      const boardId = response.slice(10, 10 + idLen)
-      const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
-      return { success: true, boardId, boardIdHex }
+      const deviceId = response.slice(10, 10 + idLen)
+      const deviceIdHex = Array.from(deviceId, (b) => b.toString(16).padStart(2, '0')).join('')
+      return { success: true, deviceId, deviceIdHex }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

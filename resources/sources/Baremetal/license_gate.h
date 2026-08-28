@@ -22,6 +22,14 @@ typedef enum {
     LIC_GATE_UNSUPPORTED = 3,   /* no license-core linked (weak default) -> unenforced */
 } lic_gate_state_t;
 
+/*
+ * Length of the identity `license_gate_device_id` reports: the first 16 bytes
+ * of sha256(LIC_DEVICE_DOMAIN || anchor), which is exactly the `device_id`
+ * field of the licence blob the verifier memcmp's against. Fixed by the blob
+ * contract, so it is a constant and not a negotiated length.
+ */
+#define LIC_DEVICE_ID_SIZE 16u
+
 /* 2 hours (product decision 2026-08-18; was 15 minutes). Overridable at build
  * (-DLIC_GATE_DEMO_MS=...) for bench tests that must watch the demo expire in
  * seconds; production keeps the default. */
@@ -88,6 +96,43 @@ int license_gate_actuation_allowed(uint32_t now_ms);
  * init is a missing licence, not a licence.
  */
 int license_gate_outputs_permitted(void);
+
+/*
+ * Report THIS board's licensing identity: `device_id`, not the anchor.
+ *
+ * Writes LIC_DEVICE_ID_SIZE bytes into `out` and returns that count, or returns
+ * 0 when this board has no identity a licence can be bound to.
+ *
+ * REPORTING, NEVER ENFORCEMENT. Nothing about actuation consults this, and the
+ * verifier does not either: `license_core_verify` re-reads the silicon through
+ * `license_platform_anchor()` and derives the id again internally, so what this
+ * function hands the open firmware is a value to PUBLISH (FC 0x48 -> the editor
+ * -> the purchase), never a claim the gate believes. Reporting an identity and
+ * asserting one stay different things (Baremetal.ino).
+ *
+ * IT RETURNS THE DIGEST AND NEVER THE ANCHOR, and that is the security
+ * property, not an implementation detail. The raw anchor is a permanent,
+ * non-rotatable factory serial (an ESP32 eFuse MAC, an AVR signature row);
+ * the digest is domain-separated and licensing-specific. Before DOPE-589 FC
+ * 0x48 published the anchor itself on an unauthenticated channel. Handing the
+ * anchor back from here would restore that disclosure behind a new name.
+ *
+ * ZERO IS A REFUSAL, never a zero-length identity -- the same contract
+ * `license_platform_anchor` and `arduino_unique_id_read` state, for the same
+ * reason: sha256(domain || <nothing>) is a CONSTANT, so a zero-length anchor
+ * would give every such board one shared device_id and a single signed blob
+ * would licence the whole population. Callers propagate the refusal; the
+ * editor's licensing flow already treats a zero-length reply as "no licence
+ * can be bound to this board" (license-flow.ts, deriveIdentity).
+ *
+ * The weak default in the open firmware returns 0, so a board with no
+ * license-core reports no identity, which is what it is. A LICENSABLE board
+ * cannot reach that default: the packaging rules refuse to publish a licensable
+ * VPP whose closed archive is not wired in (licensable-wiring.ts), and rule #48
+ * refuses a stale archive -- which is what keeps an archive built before this
+ * function existed from silently answering 0 on a paid board.
+ */
+size_t license_gate_device_id(uint8_t *out, size_t cap);
 
 #ifdef LIC_HOST_TEST
 /*

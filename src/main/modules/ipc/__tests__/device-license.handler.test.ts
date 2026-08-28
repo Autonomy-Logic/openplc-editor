@@ -69,7 +69,7 @@ function createBridge() {
 /** Install a fake held CONTROL client on the bridge's session manager. */
 function holdClient(
   bridge: ReturnType<typeof createBridge>,
-  client: { getBoardId: jest.Mock; readLicense?: jest.Mock; writeLicense?: jest.Mock },
+  client: { getDeviceId: jest.Mock; readLicense?: jest.Mock; writeLicense?: jest.Mock },
 ) {
   const session = (bridge as unknown as { deviceSession: { getClient: () => unknown; noteTraffic: () => void } })
     .deviceSession
@@ -77,9 +77,9 @@ function holdClient(
   return jest.spyOn(session, 'noteTraffic')
 }
 
-function boardIdClient(overrides: Partial<{ getBoardId: jest.Mock }> = {}) {
+function deviceIdClient(overrides: Partial<{ getDeviceId: jest.Mock }> = {}) {
   return {
-    getBoardId: jest.fn(() => Promise.resolve({ success: true, boardId: ANCHOR })),
+    getDeviceId: jest.fn(() => Promise.resolve({ success: true, deviceId: ANCHOR })),
     readLicense: jest.fn(),
     writeLicense: jest.fn(),
     ...overrides,
@@ -130,7 +130,7 @@ afterEach(() => {
 describe('device:read-license', () => {
   it('reads the anchor off the held link and hands it to the inspect flow', async () => {
     const bridge = createBridge()
-    const client = boardIdClient()
+    const client = deviceIdClient()
     const noteTraffic = holdClient(bridge, client)
     licenseFlow.inspectDeviceLicense.mockResolvedValue({
       deviceId: 'abc',
@@ -139,7 +139,7 @@ describe('device:read-license', () => {
 
     const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
 
-    expect(client.getBoardId).toHaveBeenCalledTimes(1)
+    expect(client.getDeviceId).toHaveBeenCalledTimes(1)
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(client, { ...REQUEST, anchor: ANCHOR })
     expect(result).toEqual({ deviceId: 'abc', outcome: { state: 'licensed', how: 'already-stored' } })
     // The board-id read is device traffic; not noting it lets the liveness poll
@@ -159,8 +159,8 @@ describe('device:read-license', () => {
 
   it('reports check-failed when the device will not answer the board-id read', async () => {
     const bridge = createBridge()
-    const client = boardIdClient({
-      getBoardId: jest.fn(() => Promise.resolve({ success: false, error: 'Request timeout' })),
+    const client = deviceIdClient({
+      getDeviceId: jest.fn(() => Promise.resolve({ success: false, error: 'Request timeout' })),
     })
     holdClient(bridge, client)
 
@@ -174,7 +174,7 @@ describe('device:read-license', () => {
     // A board answering id_len = 0 is a real reply; the flow is the layer that
     // knows it cannot be licensed, and it must get the chance to say so.
     const bridge = createBridge()
-    const client = boardIdClient({ getBoardId: jest.fn(() => Promise.resolve({ success: true })) })
+    const client = deviceIdClient({ getDeviceId: jest.fn(() => Promise.resolve({ success: true })) })
     holdClient(bridge, client)
     licenseFlow.inspectDeviceLicense.mockResolvedValue({ outcome: { state: 'check-failed', error: 'no unique id' } })
 
@@ -188,7 +188,7 @@ describe('device:read-license', () => {
 
   it('turns an unexpected throw into check-failed instead of rejecting the IPC call', async () => {
     const bridge = createBridge()
-    holdClient(bridge, boardIdClient())
+    holdClient(bridge, deviceIdClient())
     licenseFlow.inspectDeviceLicense.mockRejectedValue(new Error('port closed'))
 
     const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
@@ -200,7 +200,7 @@ describe('device:read-license', () => {
 describe('device:refresh-license', () => {
   it('runs the full flow over the held link and notes the traffic', async () => {
     const bridge = createBridge()
-    const client = boardIdClient()
+    const client = deviceIdClient()
     const noteTraffic = holdClient(bridge, client)
     licenseFlow.resolveDeviceLicense.mockResolvedValue({
       deviceId: 'abc',
@@ -221,7 +221,7 @@ describe('device:refresh-license', () => {
     // frames while interleaving a read and a write of the same license, one
     // reading back the other's blob and drawing a conclusion about it.
     const bridge = createBridge()
-    holdClient(bridge, boardIdClient())
+    holdClient(bridge, deviceIdClient())
 
     let release: (() => void) | undefined
     let entered = false
@@ -252,7 +252,7 @@ describe('device:refresh-license', () => {
 
   it('clears the sequence guard after a failure, so a retry is possible', async () => {
     const bridge = createBridge()
-    holdClient(bridge, boardIdClient())
+    holdClient(bridge, deviceIdClient())
     licenseFlow.resolveDeviceLicense.mockRejectedValueOnce(new Error('port closed'))
 
     const failed = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
@@ -285,7 +285,7 @@ describe('device:refresh-license', () => {
 
     // The guard is taken AFTER the channel check, so a disconnected device does
     // not leave it set for the next attempt.
-    holdClient(bridge, boardIdClient())
+    holdClient(bridge, deviceIdClient())
     licenseFlow.resolveDeviceLicense.mockResolvedValue({
       deviceId: 'abc',
       outcome: { state: 'licensed', how: 'activated' },
@@ -302,7 +302,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     // FCs ride the debug WebSocket instead, acquired for the call and released
     // in a finally, like every other per-command debug caller.
     const bridge = createBridge()
-    const wsClient = boardIdClient()
+    const wsClient = deviceIdClient()
     const { acquire, release } = holdRestSession(bridge, wsClient)
     licenseFlow.inspectDeviceLicense.mockResolvedValue({
       deviceId: 'abc',
@@ -324,7 +324,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
   it('routes refresh-license over the debug channel', async () => {
     const bridge = createBridge()
-    const wsClient = boardIdClient()
+    const wsClient = deviceIdClient()
     const { release } = holdRestSession(bridge, wsClient)
     licenseFlow.resolveDeviceLicense.mockResolvedValue({
       deviceId: 'abc',
@@ -343,7 +343,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     // contract) must be refused BEFORE anything is asked of it — and still
     // released, or the channel could never close.
     const bridge = createBridge()
-    const partial = { getBoardId: jest.fn(), writeLicense: jest.fn() } // no readLicense
+    const partial = { getDeviceId: jest.fn(), writeLicense: jest.fn() } // no readLicense
     const { release } = holdRestSession(bridge, partial)
 
     const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
@@ -370,8 +370,8 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     // The target itself said "no hardware anchor to license against" — that is
     // a property of the device, not a transient failure, so no retry nag.
     const bridge = createBridge()
-    const wsClient = boardIdClient({
-      getBoardId: jest.fn(() => Promise.resolve({ success: false, unsupported: true, error: 'LIC_UNSUPPORTED' })),
+    const wsClient = deviceIdClient({
+      getDeviceId: jest.fn(() => Promise.resolve({ success: false, unsupported: true, error: 'LIC_UNSUPPORTED' })),
     })
     holdRestSession(bridge, wsClient)
 
@@ -385,8 +385,8 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     // A runtime that predates the license FCs answers 0x48 with an error. The
     // flow must never run — a device id derived from nothing licenses nobody.
     const bridge = createBridge()
-    const wsClient = boardIdClient({
-      getBoardId: jest.fn(() => Promise.resolve({ success: false, error: 'Unknown function code' })),
+    const wsClient = deviceIdClient({
+      getDeviceId: jest.fn(() => Promise.resolve({ success: false, error: 'Unknown function code' })),
     })
     holdRestSession(bridge, wsClient)
 

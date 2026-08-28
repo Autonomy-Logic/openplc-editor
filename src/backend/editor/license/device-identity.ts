@@ -28,8 +28,11 @@ import { createHash } from 'node:crypto'
  *  can never collide with any other `sha256`-derived identifier. */
 const DEVICE_ID_PREFIX = 'openplc-dev-v1|'
 
-/** Device id = first 16 bytes of the digest (matches `lic_blob_t.deviceId`). */
-const DEVICE_ID_BYTES = 16
+/** Device id = first 16 bytes of the digest (matches `lic_blob_t.deviceId`,
+ *  and `LIC_DEVICE_ID_SIZE` in the firmware contract). Exported because the
+ *  bare-metal path no longer derives here: it receives an already-derived id
+ *  from the board and has to check its LENGTH against the same constant. */
+export const DEVICE_ID_BYTES = 16
 
 /** VPP id = first 8 bytes of the digest (matches `lic_blob_t.productId`). */
 const VPP_ID_BYTES = 8
@@ -46,12 +49,10 @@ const VPP_ID_BYTES = 8
  * The anchor is hashed EXACTLY as the board-id read (FC 0x48) answered it,
  * because what 0x48 answers is already what the on-device verifier derives
  * from:
- *   - bare metal answers the raw ArduinoUniqueID bytes (modbus_debug.cpp),
- *     and the closed core reads the same bytes raw (license_platform.c,
- *     ARDUINO branch). A MAC that genuinely ends in 0x00/0x0A/0x0D/0x20
- *     keeps those bytes in its identity — stripping them here would derive
- *     a deviceId the device can never reproduce, and the purchased license
- *     would simply never verify;
+ *   - bare metal no longer reaches this function at all since DOPE-589: the
+ *     closed license-core derives the id inside the artifact and the board
+ *     reports it on FC 0x48, so there is nothing here to normalize. The raw
+ *     anchor never leaves the device;
  *   - a runtime-v4 target answers its device-tree serial with trailing
  *     NUL/LF/CR/space ALREADY stripped: the runtime's webserver strips on
  *     the wire and the closed core's __linux__ branch strips on read — the
