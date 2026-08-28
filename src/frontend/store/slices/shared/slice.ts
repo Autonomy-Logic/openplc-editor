@@ -1099,6 +1099,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // here: they stay in `warnings`, the project opens normally, and the
       // offending variables table opens in text mode for the user to fix.
       if (data.fatalErrors?.length) {
+        // Open the workspace, empty. `setProject` setting `meta.path` is what
+        // moves the app off the start screen, and on the desktop build that is
+        // the ONLY trigger — the web build also keys off `project_id` in the
+        // URL, so skipping this looked fine there and would have stranded
+        // editor users on the start screen with no Console to read.
+        getState().projectActions.setProject({
+          meta: data.meta,
+          data: {
+            ...data.projectData,
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            servers: [],
+            remoteDevices: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+        // After `setProject`, because `clearWorkspace` resets `canEdit` to true.
         getState().workspaceActions.setCanEdit(false)
         for (const message of data.fatalErrors) {
           getState().consoleActions.addLog({ level: 'error', message })

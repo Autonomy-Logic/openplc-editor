@@ -2273,6 +2273,10 @@ describe('createSharedSlice', () => {
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
         const state = store.getState()
+        // The workspace must actually OPEN. `meta.path` is what moves the app
+        // off the start screen, and on the desktop build it is the only
+        // trigger — without it the user never sees the Console below.
+        expect(state.project.meta.path).toBe('/test/path')
         // No content: a blank canvas would look like a legitimate empty diagram.
         expect(state.project.data.pous).toHaveLength(0)
         // Read-only, so no save can write that emptiness over the real file.

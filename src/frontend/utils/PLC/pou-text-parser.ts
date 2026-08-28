@@ -36,6 +36,24 @@ const formatParseError = (message: string, lineNumber?: number): string => {
 }
 
 /**
+ * Is `value` the canonical body shape for this graphical language?
+ *
+ * LD is `{ name, rungs: [...] }`; FBD is `{ name, rung: { nodes: [...] } }`
+ * (see `createPouObject`). `JSON.parse` succeeding says nothing about this:
+ * `null`, or an object carrying the *other* language's shape, parses fine and
+ * then fails much later inside a consumer reading `value.rungs` or
+ * `value.rung.nodes`. Checking here keeps the failure nameable, and at the one
+ * place that already owns "is this POU readable at all".
+ */
+export const isGraphicalBodyShape = (value: unknown, language: 'ld' | 'fbd'): boolean => {
+  if (typeof value !== 'object' || value === null) return false
+  if (language === 'ld') return Array.isArray((value as { rungs?: unknown }).rungs)
+  const rung = (value as { rung?: unknown }).rung
+  if (typeof rung !== 'object' || rung === null) return false
+  return Array.isArray((rung as { nodes?: unknown }).nodes)
+}
+
+/**
  * Index at which a graphical POU's JSON body starts, or -1 when there is none.
  *
  * `serializeGraphicalPouToString` writes the variable declarations, a blank
@@ -362,6 +380,13 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
     let parsedBody: unknown
     try {
       parsedBody = JSON.parse(bodyContent)
+      if (!isGraphicalBodyShape(parsedBody, language as 'ld' | 'fbd')) {
+        throw new SyntaxError(
+          language === 'ld'
+            ? 'expected an object with a "rungs" array'
+            : 'expected an object with a "rung" object holding a "nodes" array',
+        )
+      }
     } catch (jsonError: unknown) {
       if (jsonError instanceof Error) {
         throw new Error(formatParseError(`Invalid JSON in graphical body: ${jsonError.message}`))

@@ -324,7 +324,7 @@ END_PROGRAM`
   })
 
   it('parses an FBD program', () => {
-    const bodyValue = { nodes: [{ id: '1' }], edges: [] }
+    const bodyValue = { name: 'FbdMain', rung: { nodes: [{ id: '1' }], edges: [] } }
     const content = `PROGRAM FbdMain
 ${JSON.stringify(bodyValue, null, 2)}
 END_PROGRAM`
@@ -338,7 +338,7 @@ END_PROGRAM`
     const content = `(* Graphical doc *)
 
 PROGRAM GfxPou
-{}
+{ "rungs": [] }
 END_PROGRAM`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'program')
@@ -347,7 +347,7 @@ END_PROGRAM`
 
   it('parses a function with return type', () => {
     const content = `FUNCTION GfxFunc : BOOL
-{}
+{ "rungs": [] }
 END_FUNCTION`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'function')
@@ -356,7 +356,7 @@ END_FUNCTION`
 
   it('parses a function-block', () => {
     const content = `FUNCTION_BLOCK GfxFB
-{}
+{ "rungs": [] }
 END_FUNCTION_BLOCK`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'function-block')
@@ -372,7 +372,7 @@ VAR_OUTPUT
   b : INT;
 END_VAR
 
-{}
+{ "rungs": [] }
 END_PROGRAM`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'program')

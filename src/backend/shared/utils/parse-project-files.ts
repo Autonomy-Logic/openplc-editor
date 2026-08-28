@@ -13,6 +13,7 @@ import {
   detectLanguageFromExtension,
   findGraphicalBodyStartIndex,
   findLastEndVarIndex,
+  isGraphicalBodyShape,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
@@ -229,6 +230,20 @@ function createFallbackPou(content: string, language: string, pouType: string, p
         : remainingContent.slice(bodyStartIndex).trim()
     try {
       bodyValue = JSON.parse(bodyContent)
+      // Valid JSON is not enough. LD consumers read `value.rungs`, FBD
+      // consumers read `value.rung.nodes`; anything else (`null`, an object of
+      // the *other* language's shape) sails through `JSON.parse` and only fails
+      // later, deep in a consumer — which is the same class of bug this whole
+      // change exists to remove. Reject it here, where it is still nameable.
+      if (!isGraphicalBodyShape(bodyValue, language)) {
+        throw new SyntaxError(
+          `body is not a valid ${language.toUpperCase()} diagram (expected ${
+            language === 'ld'
+              ? 'an object with a "rungs" array'
+              : 'an object with a "rung" object holding a "nodes" array'
+          })`,
+        )
+      }
     } catch (bodyErr) {
       // Unrecoverable: see `UnrecoverablePouError`. The old behaviour
       // substituted `{ nodes: [], edges: [], viewport }` here, which is the FBD

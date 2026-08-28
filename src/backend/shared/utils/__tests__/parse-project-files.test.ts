@@ -286,7 +286,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
 
   it('fallback handles graphical language (LD) with valid JSON body', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const bodyJson = JSON.stringify({ nodes: [{ id: 'n1' }], edges: [] })
+    const bodyJson = JSON.stringify({ name: 'LdPou', rungs: [{ id: 'n1', nodes: [], edges: [] }] })
     const pouFiles: RawProjectFile[] = [
       {
         relativePath: 'pous/programs/LdPou.ld',
@@ -325,6 +325,25 @@ describe('parseProjectFiles — fallback POU creation', () => {
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(0)
     expect(result.fatalErrors!.some((e) => e.includes('NoEnd'))).toBe(true)
+    consoleSpy.mockRestore()
+  })
+
+  it.each([
+    ['an FBD-shaped body in an LD POU', 'Main.ld', '{"nodes":[],"edges":[],"viewport":{"x":0,"y":0,"zoom":1}}'],
+    ['an LD-shaped body in an FBD POU', 'Main.fbd', '{"name":"Main","rungs":[]}'],
+    ['a null body', 'Main.ld', 'null'],
+  ])('treats %s as fatal even though it is valid JSON', (_label, file, body) => {
+    // Valid JSON of the wrong shape used to sail through and only fail deep in
+    // a consumer (`value.rungs` / `value.rung.nodes`) — the same class of bug
+    // this change exists to remove. Note the first case is precisely the value
+    // the old fallback manufactured.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pouFiles: RawProjectFile[] = [
+      { relativePath: `pous/programs/${file}`, content: `PROGRAM Main\nVAR\nEND_VAR\n\n${body}\nEND_PROGRAM` },
+    ]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    expect(result.projectData.pous).toHaveLength(0)
+    expect(result.fatalErrors).toHaveLength(1)
     consoleSpy.mockRestore()
   })
 
