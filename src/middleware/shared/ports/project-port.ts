@@ -51,8 +51,15 @@ export interface ProjectResponse {
      *  on load and auto-migrated by the store on the next save.
      *  See `pinMappingFileSchema` for the on-disk contract. */
     devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
-    /** Warnings from parsing (e.g. dropped files that failed validation). */
+    /** Warnings from parsing (e.g. dropped files that failed validation).
+     *  Recoverable: the project opens normally and these surface in the
+     *  in-app Console. */
     warnings?: string[]
+    /** POUs that could not be parsed at all (DOPE-592). Non-empty means the
+     *  project MUST open empty and read-only, with these on the Console —
+     *  never with content, because a blank canvas would look legitimate and
+     *  the first save would write it over the user's real diagram. */
+    fatalErrors?: string[]
     /** `datatypes/*.dt` files that failed to parse on load, preserved
      *  raw so the save flow echoes them back verbatim. */
     unparsedDataTypeFiles?: RawProjectFile[]

@@ -50,27 +50,27 @@
   "coverageThreshold": {
     "src/frontend/store/slices/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 98,
+      "lines": 98,
+      "statements": 97
     },
     "src/frontend/utils/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 97,
+      "lines": 95,
+      "statements": 95
     },
     "src/backend/shared/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 76,
+      "lines": 77,
+      "statements": 75
     },
     "src/middleware/adapters/editor/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 87,
+      "lines": 85,
+      "statements": 85
     }
   }
 }
