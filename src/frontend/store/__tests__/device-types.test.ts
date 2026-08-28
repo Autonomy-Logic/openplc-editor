@@ -193,7 +193,7 @@ describe('Device slice types', () => {
           includeEthercatStatsInPolling: false,
         },
         deviceConnection: { status: 'disconnected', port: null, transport: null, debugTransport: null },
-        deviceLicense: { phase: 'idle', report: null },
+        deviceLicense: { phase: 'idle', report: null, awaitingPurchaseUntil: null },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
