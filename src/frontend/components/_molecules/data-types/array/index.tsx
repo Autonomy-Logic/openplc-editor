@@ -144,16 +144,15 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const removeRow = () => {
+    if (arrayTable.selectedRow === ROWS_NOT_SELECTED) return
     captureAndPush(editor.meta.name)
 
-    if (arrayTable.selectedRow !== null) {
-      const newRows = tableData.filter((_, index) => index !== arrayTable.selectedRow)
-      const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
+    const newRows = tableData.filter((_, index) => index !== arrayTable.selectedRow)
+    const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
 
-      setTableData(newRows)
-      setArrayTable({ selectedRow: newFocusIndex })
-      writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-    }
+    setTableData(newRows)
+    setArrayTable({ selectedRow: newFocusIndex })
+    writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
   }
 
   const moveRowUp = () => {
@@ -245,6 +244,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                 {
                   ariaLabel: 'Remove table row button',
                   onClick: removeRow,
+                  disabled: arrayTable.selectedRow === ROWS_NOT_SELECTED,
                   icon: <MinusIcon className='stroke-[#0464FB]' />,
                 },
                 {
