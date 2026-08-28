@@ -308,13 +308,17 @@ export class DeviceSessionManager {
       return { client: this.debugClientHeld }
     }
 
-    this.trace(`debug channel: opening ${this.debugCandidate.descriptor} for ${reason}`)
+    // No trace on open/close: the channel is acquired per licence call and
+    // released in the finally, so tracing each one floods the console during
+    // the purchase poll (one open+close pair every tick). Failures still trace.
     let client: DeviceDebugChannel
     try {
       client = this.debugCandidate.create()
       await client.connect()
     } catch (error) {
-      this.trace(`debug channel: could not open — ${describeError(error)} (control connection unaffected)`)
+      this.trace(
+        `debug channel: could not open ${this.debugCandidate.descriptor}: ${describeError(error)} (control connection unaffected)`,
+      )
       return { error: describeError(error) }
     }
     this.debugClientHeld = client
@@ -331,7 +335,6 @@ export class DeviceSessionManager {
     this.debugHolders.delete(reason)
     if (this.debugHolders.size > 0) return
     if (this.debugCandidate === null || !this.debugClientHeld) return
-    this.trace(`debug channel: closing (last holder ${reason} released)`)
     this.debugClientHeld.disconnect()
     this.debugClientHeld = null
   }

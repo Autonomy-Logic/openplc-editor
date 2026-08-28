@@ -25,7 +25,8 @@
  *   4. Verification compile against the OpenPLC Simulator target
  *      via `LibraryBuildPort.verifyCompile`.  MD5 cache hit short-
  *      circuits.  Cache record persisted under `build/`.
- *   5. Gather `pouDocs` + `cppBlocks` from the project data.
+ *   5. Gather `pouDocs` from the project data, and read the authored
+ *      C/C++ / Python POU files off disk for strucpp to carry verbatim.
  *   6. strucpp compile via `libraryBuildFromTranspiledSt`.
  *   7. Write `.stlib` archive to `build/{name}.stlib`.
  *
@@ -41,9 +42,10 @@ import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
 import {
   composeVerificationProject,
   libraryBuildFromTranspiledSt,
-  type LibraryCppBlock,
+  type LibraryNativeSource,
   prepareXmlForLibraryBuild,
 } from './build-pipeline'
+import type { NativePouRef } from './native-pou-list'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -67,6 +69,13 @@ export interface LibraryBuildArgs {
   verifyProjectData: PLCProjectData
   /** Skip the MD5 verification cache and force a fresh verify run. */
   cleanBuild: boolean
+  /** Native (C/C++, Python) POUs, collected from the project data BEFORE
+   *  `preprocessPous` ran — see `collectNativePous`. The pipeline cannot
+   *  derive this itself: by the time it sees `projectData`, every native body
+   *  has been lowered to bridge ST and the language tag rewritten with it, so
+   *  nothing identifies a native POU any more. Omitted or empty means the
+   *  project has none. */
+  nativePous?: NativePouRef[]
 }
 
 // Standard project-relative paths the orchestrator owns.  Centralised
@@ -100,7 +109,7 @@ export async function runLibraryBuildPipeline(
   port: LibraryBuildPort,
   emit: (event: LibraryBuildEvent) => void,
 ): Promise<CompileLibraryResult> {
-  const { projectPath, projectData, verifyProjectData, cleanBuild } = args
+  const { projectPath, projectData, verifyProjectData, cleanBuild, nativePous = [] } = args
 
   emit({ message: 'Starting library build...', level: 'info' })
 
@@ -257,7 +266,9 @@ export async function runLibraryBuildPipeline(
   // POUs contribute their editor "Description" field; data types
   // contribute their own optional documentation.  Both ride through
   // `libraryBuildFromTranspiledSt`'s aux block and get stamped onto
-  // the corresponding manifest entries via `decorateArchive`.
+  // the corresponding manifest entries via `decorateArchive`.  (Native
+  // blocks get their documentation from strucpp instead, which reads the
+  // leading ST comment out of the authored file.)
   // -------------------------------------------------------------------------
   const pouDocs: Record<string, string> = {}
   for (const pou of projectData.pous) {
@@ -272,14 +283,37 @@ export async function runLibraryBuildPipeline(
       pouDocs[name] = doc
     }
   }
-  const cppBlocks: LibraryCppBlock[] = (
-    (projectData as { originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }> })
-      .originalCppPous ?? []
-  ).map((b) => ({
-    name: b.name,
-    code: b.code,
-    variables: b.variables,
-  }))
+  // -------------------------------------------------------------------------
+  // Stage 6b: read the authored C/C++ and Python POU files off the project
+  //
+  // Read from disk, NOT from the preprocessed project data: by this point
+  // `preprocessPous` has replaced every native body with generated bridge ST,
+  // and the archive must carry what the author wrote.  Strucpp stores these
+  // verbatim and the consumer re-derives the bridge at its own build time —
+  // that is what keeps a published library working when the bridge changes.
+  //
+  // A file that cannot be read fails the build naming the block, rather than
+  // producing an archive whose manifest promises a block with no source.
+  // -------------------------------------------------------------------------
+  const nativeSources: LibraryNativeSource[] = []
+  for (const ref of nativePous) {
+    const fileName = ref.relPath.split('/').pop() ?? ref.name
+    let source: string | null
+    try {
+      source = await port.readBuildFile(projectPath, ref.relPath)
+    } catch (error) {
+      return fail(emit, `Could not read "${ref.relPath}": ${formatError(error)}`, { libraryName: manifest.name })
+    }
+    if (source === null || source.trim() === '') {
+      return fail(
+        emit,
+        `Could not read the source for "${ref.name}" at ${ref.relPath}. ` +
+          'C/C++ and Python blocks ship their source verbatim, so the file must be present.',
+        { libraryName: manifest.name },
+      )
+    }
+    nativeSources.push({ fileName, source })
+  }
 
   // -------------------------------------------------------------------------
   // Stage 7: strucpp compileStlib
@@ -289,7 +323,7 @@ export async function runLibraryBuildPipeline(
     pouDocs,
     dependencyArchives: depArchives,
     dependencyRefs: enabledLibraryRefs,
-    cppBlocks,
+    nativeSources,
   })
   if (!stage7.success) {
     for (const err of stage7.errors) {

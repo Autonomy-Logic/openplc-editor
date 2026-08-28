@@ -56,6 +56,23 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
+/**
+ * Register an IPC listener and hand back a per-listener unsubscribe.
+ *
+ * `removeAllListeners(channel)` would drop sibling subscribers on the same
+ * channel, so every `on`-style bridge method routes through here and returns
+ * the disposer instead. Callers that mount the same subscription repeatedly
+ * (React effects re-running on dependency changes) must call it on cleanup —
+ * otherwise dead listeners pile up until Node warns past ten.
+ */
+const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void) => {
+  const listener: IpcRendererCallbacks = (event, ...args) => callback(event, ...args)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
+
 /** Data posted through the MessagePort by the compiler module.
  *  `compileError` carries strucpp's structured `CompileError` (pouName,
  *  section, bodyLine, …) when the message is one of the per-error log
@@ -82,26 +99,22 @@ type CompilerPortMessage = {
  */
 const rendererProcessBridge = {
   // ===================== PROJECT METHODS =====================
-  aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
-  aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
+  aboutAccelerator: (callback: IpcRendererCallbacks) => subscribe('website:about-accelerator', callback),
+  aboutModalAccelerator: (callback: IpcRendererCallbacks) => subscribe('about:open-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:close-project-accelerator', callback),
-  closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
+    subscribe('workspace:close-project-accelerator', callback),
+  closeTabAccelerator: (callback: IpcRendererCallbacks) => subscribe('workspace:close-tab-accelerator', callback),
   createProject: (data: CreateProjectFileProps): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:create', data),
-  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-  deleteFileAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:delete-file-accelerator', callback),
+  createProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:create-accelerator', callback),
+  deleteFileAccelerator: (callback: IpcRendererCallbacks) => subscribe('workspace:delete-file-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:find-in-project-accelerator', callback),
-  handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-project-request', (_event) => callback(_event)),
+    subscribe('project:find-in-project-accelerator', callback),
+  handleOpenProjectRequest: (callback: IpcRendererCallbacks) => subscribe('project:open-project-request', callback),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
-  openRecentAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+  openRecentAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:open-recent-accelerator', callback),
   pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:path-picker'),
   openPathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
@@ -117,22 +130,14 @@ const rendererProcessBridge = {
     xml: string,
   ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
-  removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
-  removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
-  removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
-  removeDeleteFileListener: () => ipcRenderer.removeAllListeners('workspace:delete-file-accelerator'),
-  removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
-  removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
-  removeSaveFileAccelerator: () => ipcRenderer.removeAllListeners('project:save-file-accelerator'),
-  removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
   saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:save-file', filePath, content),
-  saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
+  saveFileAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-file-accelerator', callback),
   writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:write-files', files),
-  saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
+  saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+    subscribe('workspace:switch-perspective-accelerator', callback),
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
@@ -144,13 +149,11 @@ const rendererProcessBridge = {
   }): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:rename', data),
 
   // ===================== EDIT METHODS =====================
-  handleUndoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:undo-request', callback),
-  removeUndoRequestListener: () => ipcRenderer.removeAllListeners('edit:undo-request'),
-  handleRedoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:redo-request', callback),
-  removeRedoRequestListener: () => ipcRenderer.removeAllListeners('edit:redo-request'),
+  handleUndoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:undo-request', callback),
+  handleRedoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:redo-request', callback),
 
   // ===================== APP & SYSTEM METHODS =====================
-  darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
+  darwinAppIsClosing: (callback: IpcRendererCallbacks) => subscribe('app:darwin-is-closing', callback),
   getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   getSystemInfo: (): Promise<{
@@ -312,8 +315,7 @@ const rendererProcessBridge = {
   handleQuitApp: () => ipcRenderer.send('app:quit'),
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
-  quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
-  removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
+  quitAppRequest: (callback: IpcRendererCallbacks) => subscribe('app:quit-accelerator', callback),
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
   /** Drop a recent-projects entry without touching disk — used by the
@@ -331,19 +333,17 @@ const rendererProcessBridge = {
   closeWindow: () => ipcRenderer.send('window-controls:closed'),
   handleCloseOrHideWindow: () => ipcRenderer.send('window-controls:close'),
   handleCloseOrHideWindowAccelerator: () =>
-    ipcRenderer.on('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
+    subscribe('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
   hideWindow: () => ipcRenderer.send('window-controls:hide'),
-  isMaximizedWindow: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
+  isMaximizedWindow: (callback: IpcRendererCallbacks) => subscribe('window-controls:toggle-maximized', callback),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
   reloadWindow: () => ipcRenderer.send('window:reload'),
-  removeHandleCloseOrHideWindowAccelerator: () => ipcRenderer.removeAllListeners('window-controls:request-close'),
-  windowIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:is-closing', callback),
+  windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 
   // ===================== THEME =====================
-  handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
+  handleUpdateTheme: (callback: IpcRendererCallbacks) => subscribe('system:update-theme', callback),
   winHandleUpdateTheme: (theme?: 'light' | 'dark' | 'nineties') => ipcRenderer.send('system:update-theme', theme),
   winGetTheme: (): Promise<'light' | 'dark' | 'nineties' | null> => ipcRenderer.invoke('system:get-theme'),
 
@@ -429,15 +429,13 @@ const rendererProcessBridge = {
       success: boolean
       message: string
     }>,
-  exportProjectRequest: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
+  exportProjectRequest: (callback: IpcRendererCallbacks) => subscribe('compiler:export-project-request', callback),
   generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
     rendererProcessPort.addEventListener('close', () => {})
   },
-  removeExportProjectListener: () => ipcRenderer.removeAllListeners('compiler:export-project-request'),
   setupCompilerEnvironment: (callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])

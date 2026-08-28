@@ -10,10 +10,12 @@ import type { SystemLibrary } from '../../middleware/shared/ports/library-types'
 import type {
   DebugTreeNode,
   FbInstanceInfo,
+  LogObject,
   PLCDataType,
   PLCInstance,
   PLCPou,
   PLCVariable,
+  StructuredCompileError,
 } from '../../middleware/shared/ports/types'
 import type { DebugMap, DebugVariableEntry } from './debug-parser'
 import { packDebugAddr } from './debug-parser'
@@ -51,25 +53,18 @@ export function logCompilerEvent(
   event: {
     message?: string
     level?: string
-    compileError?: import('../../middleware/shared/ports/types').StructuredCompileError
+    compileError?: StructuredCompileError
   },
-  log: (
-    entry: {
-      id: string
-      level: 'error' | 'debug' | 'info' | 'warning'
-      message: string
-      compileError?: import('../../middleware/shared/ports/types').StructuredCompileError
-      transient?: boolean
-    },
-    options?: { redraw?: boolean },
-  ) => void,
+  // Structurally the console slice's `addLog`. Typed off `LogObject` rather
+  // than a hand-copied shape so the two can't drift — the copy is how these
+  // call sites kept minting their own `id` after the store took that over.
+  log: (entry: LogObject, options?: { redraw?: boolean }) => void,
 ): void {
   if (!event.message) return
   const level = (event.level as 'error' | 'debug' | 'info' | 'warning') ?? 'info'
 
   if (event.compileError) {
     log({
-      id: crypto.randomUUID(),
       level,
       message: event.message.trim(),
       compileError: event.compileError,
@@ -104,7 +99,6 @@ export function logCompilerEvent(
     const isFinalLine = index === lines.length - 1
     log(
       {
-        id: crypto.randomUUID(),
         level,
         message,
         // Only a redraw leaves an open line. A plain partial line is left

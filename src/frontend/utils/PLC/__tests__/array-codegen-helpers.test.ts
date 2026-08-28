@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { SHM_SCALAR_TYPES } from '../../python/shm-type-map'
 import {
   generateStructMember,
   getArrayBaseTypeValue,
@@ -7,6 +8,8 @@ import {
   getVariableIECType,
   isArrayVariable,
   mapBaseTypeToIEC,
+  mapUserTypeToIEC,
+  multiDimensionalContainerType,
 } from '../array-codegen-helpers'
 
 // ---------------------------------------------------------------------------
@@ -269,6 +272,150 @@ describe('getArrayStartIndex', () => {
 // ---------------------------------------------------------------------------
 // generateStructMember
 // ---------------------------------------------------------------------------
+describe('the two native languages accept the same elementary types', () => {
+  // A type either crosses into both a C++ block and a Python block, or neither.
+  // They drifted once already: TIME / DATE / TOD / DT / WSTRING were in the
+  // Python shared-memory table but absent from the C++ map, so a C++ block
+  // declaring `TIME` emitted `strucpp::TIME` — a name that does not exist — and
+  // the build failed on generated code the user never wrote. Nothing catches
+  // that except a build, and nobody builds every type by hand.
+  const scalarOf = (value: string): PLCVariable => ({
+    name: 'v',
+    class: 'input',
+    type: { definition: 'base-type', value },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+
+  const pythonTypes = [...Object.keys(SHM_SCALAR_TYPES), 'string', 'wstring']
+
+  it.each(pythonTypes)('%s has a C++ spelling too', (type) => {
+    expect(mapBaseTypeToIEC(type)).toMatch(/^IEC_/)
+  })
+
+  it.each(pythonTypes)('%s resolves for a C++ struct member', (type) => {
+    expect(generateStructMember(scalarOf(type))).toMatch(/^ {2}strucpp::IEC_\w+ \*V;\n$/)
+  })
+
+  it('accepts the long spellings IEC 61131-3 allows for the calendar types', () => {
+    expect(mapBaseTypeToIEC('time_of_day')).toBe('IEC_TOD')
+    expect(mapBaseTypeToIEC('date_and_time')).toBe('IEC_DT')
+  })
+})
+
+describe('mapUserTypeToIEC', () => {
+  // strucpp declares a structure or enumeration and then aliases it
+  // (`using IEC_MOTOR = MOTOR`), but a function block class gets no alias. Only
+  // the project's declared data types carry the prefix; anything else — an FB
+  // instance — keeps the bare class name, because `IEC_HELPER` would name a
+  // type that was never declared.
+  it('prefixes a name the project declares as a data type', () => {
+    expect(mapUserTypeToIEC('Motor', new Set(['MOTOR']))).toBe('IEC_MOTOR')
+  })
+
+  it('leaves a name the project does not declare bare', () => {
+    expect(mapUserTypeToIEC('Helper', new Set(['MOTOR']))).toBe('HELPER')
+  })
+
+  it('leaves every name bare when no data-type set is supplied', () => {
+    // The set is optional so call sites that predate user types keep working;
+    // with nothing to match against, no name can be a data type.
+    expect(mapUserTypeToIEC('Motor')).toBe('MOTOR')
+  })
+
+  it('matches case-insensitively, since the set is uppercased by the caller', () => {
+    expect(mapUserTypeToIEC('mOtOr', new Set(['MOTOR']))).toBe('IEC_MOTOR')
+  })
+})
+
+describe('multiDimensionalContainerType', () => {
+  const arrayOfRank = (
+    dimensions: string[],
+    baseType = 'INT',
+    baseDefinition: 'base-type' | 'user-data-type' = 'base-type',
+  ): PLCVariable => ({
+    name: 'grid',
+    class: 'input',
+    type: {
+      definition: 'array',
+      value: `ARRAY [${dimensions.join(', ')}] OF ${baseType}`,
+      data: {
+        baseType: { definition: baseDefinition, value: baseType },
+        dimensions: dimensions.map((dimension) => ({ dimension })),
+      },
+    },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+
+  it('names the 2-D container with the user’s own bounds', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['1..2', '0..3']))).toBe('Array2D<strucpp::IEC_INT, 1, 2, 0, 3>')
+  })
+
+  it('names the 3-D container', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['0..1', '0..1', '0..1']))).toBe(
+      'Array3D<strucpp::IEC_INT, 0, 1, 0, 1, 0, 1>',
+    )
+  })
+
+  it('returns null for rank one, which is passed as an offset element pointer', () => {
+    // `arr[i]` with IEC indices is a better surface than `arr(i)`, and rank one
+    // is the only rank where the offset trick works.
+    expect(multiDimensionalContainerType(arrayOfRank(['0..9']))).toBeNull()
+  })
+
+  it('returns null past rank three, for which strucpp declares no alias', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['0..1', '0..1', '0..1', '0..1']))).toBeNull()
+  })
+
+  it('returns null when a bound cannot be read rather than guessing one', () => {
+    expect(multiDimensionalContainerType(arrayOfRank(['0..1', 'nonsense']))).toBeNull()
+  })
+
+  it('returns null for anything that is not an array', () => {
+    const scalar: PLCVariable = {
+      name: 'x',
+      class: 'input',
+      type: { definition: 'base-type', value: 'INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    expect(multiDimensionalContainerType(scalar)).toBeNull()
+  })
+
+  it('returns null for an array declaration carrying no dimension data', () => {
+    const bare: PLCVariable = {
+      name: 'grid',
+      class: 'input',
+      type: { definition: 'array', value: 'ARRAY [0..1, 0..1] OF INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    expect(multiDimensionalContainerType(bare)).toBeNull()
+  })
+
+  it('applies the user-defined type spelling to the element type', () => {
+    // Built with the user-defined element type rather than mutated into one
+    // afterwards, so the fixture needs no non-null assertion to reach into
+    // `type.data`.
+    const v = arrayOfRank(['0..1', '0..1'], 'Motor', 'user-data-type')
+
+    expect(multiDimensionalContainerType(v, new Set(['MOTOR']))).toBe('Array2D<strucpp::IEC_MOTOR, 0, 1, 0, 1>')
+  })
+
+  it('makes generateStructMember emit a pointer to the container', () => {
+    expect(generateStructMember(arrayOfRank(['1..2', '0..3']))).toBe(
+      '  strucpp::Array2D<strucpp::IEC_INT, 1, 2, 0, 3> *GRID;\n',
+    )
+  })
+})
+
 describe('generateStructMember', () => {
   // Numeric/time/bit base types resolve to strucpp's IECVar wrapper —
   // the c_blocks_code.cpp baseline keeps file-scope raw typedefs for

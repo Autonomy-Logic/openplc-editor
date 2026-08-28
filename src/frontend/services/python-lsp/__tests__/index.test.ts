@@ -61,7 +61,7 @@ function installMockSharedService(): { service: MockLanguageService; sendNotific
   return { service, sendNotification }
 }
 
-function makeBoolVar(name: string, varClass: 'input' | 'output' | 'local' = 'input'): PLCVariable {
+function makeBoolVar(name: string, varClass: PLCVariable['class'] = 'input'): PLCVariable {
   return {
     id: name,
     name,
@@ -181,8 +181,10 @@ describe('attachPou', () => {
     installMockSharedService()
 
     const service = startPythonLsp({ workerUrl: 'about:blank' })
-    // `local` vars don't get hoisted into module scope; preamble is empty.
-    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'local')], 'pass\n')
+    // `temp` is the one class a Python block cannot express — it is refused at
+    // compile time and so never becomes a module global. Everything else,
+    // `local` included, is hoisted and does get a preamble line.
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('x', 'temp')], 'pass\n')
 
     expect(setBodyLineOffset).toHaveBeenCalledWith(POU_LSP_URI, 0)
   })

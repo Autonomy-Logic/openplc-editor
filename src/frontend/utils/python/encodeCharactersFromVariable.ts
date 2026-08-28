@@ -1,70 +1,59 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Autonomy / OpenPLC Project
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayBaseTypeValue, getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
+import type { ShmLeaf, ShmWalkContext } from './shm-leaves'
+import { describeShmLayout } from './shm-leaves'
 
-const TYPE_ENCODING_MAP: Record<string, string> = {
-  bool: 'B',
-  sint: 'b',
-  int: 'h',
-  dint: 'i',
-  lint: 'q',
-  usint: 'B',
-  uint: 'H',
-  udint: 'I',
-  ulint: 'Q',
-  real: 'f',
-  lreal: 'd',
-  byte: 'B',
-  word: 'H',
-  dword: 'I',
-  lword: 'Q',
-  string: 'b126s',
+/**
+ * Convert a POU's interface variables into the format string Python's
+ * `struct.pack` / `struct.unpack` use for the shared-memory exchange.
+ *
+ * The format is built from the same leaf walk the C-side struct emitter uses, so
+ * the two descriptions of one layout cannot drift: a structure is flattened into
+ * the same fields, in the same order, on both sides.
+ *
+ * Unsupported types are refused upstream (`preprocessPous`) rather than skipped
+ * here. Skipping was the original defect: a dropped field does not merely go
+ * missing, it shifts every later field's offset and silently corrupts them.
+ *
+ * @returns a `struct` format string such as `'=hfb126s'`, native byte order and
+ *   no alignment, matching the `#pragma pack(push, 1)` struct on the C side.
+ */
+const encodeCharactersFromLeaves = (leaves: readonly ShmLeaf[]): string => {
+  const encoded = leaves.map((leaf) => {
+    if (leaf.isArray) {
+      // A repeat count applies only to the FIRST item of a struct format, so
+      // `4b126s` is not four strings. Only single-item formats can carry one,
+      // which is why the walk refuses an array whose element needs more than
+      // one — an array leaf here is always a scalar element.
+      return `${leaf.count}${leaf.descriptor.pyFormat}`
+    }
+    return leaf.descriptor.pyFormat
+  })
+
+  return '=' + encoded.join('')
 }
 
 /**
- * Converts an array of PLC variables into a format string for Python's struct.pack/unpack.
- * For scalar variables, returns the corresponding format character.
- * For array variables, repeats the base type's format character N times (e.g., ARRAY[0..9] OF INT -> '10h').
- * @param variables Array of PLC variables
- * @returns String in the format '=hfb126sib126sH' for use with struct.pack/unpack
+ * `variables` is nullable on purpose. The guard below has always accepted a
+ * missing list — a POU with no interface at all reaches here as `undefined` from
+ * the older project shapes — but the signature claimed otherwise, so the tests
+ * covering that guard had to lie to the compiler with `as unknown as`. Stating
+ * it in the type removes the assertion instead of hiding it.
  */
-
-const encodeCharactersFromVariable = (variables: PLCVariable[]): string => {
+const encodeCharactersFromVariable = (variables: PLCVariable[] | null | undefined, context: ShmWalkContext): string => {
   if (!variables || variables.length === 0) {
     return '='
   }
 
-  const encodedChars = variables
-    .map((variable) => {
-      if (isArrayVariable(variable)) {
-        const baseType = getArrayBaseTypeValue(variable).toLowerCase()
-        const encodingChar = TYPE_ENCODING_MAP[baseType]
-        if (!encodingChar) {
-          console.warn(`Warning: Unknown base type "${baseType}" for array variable "${variable.name}". Skipping.`)
-          return ''
-        }
-        const totalElements = getArrayTotalElements(variable)
-        // For multi-char encodings (e.g., 'b126s' for STRING), the repeat count
-        // only applies to the first char in Python struct format ('10b126s' != 10x'b126s').
-        // Repeat the full encoding string instead.
-        if (encodingChar.length > 1) {
-          return encodingChar.repeat(totalElements)
-        }
-        return `${totalElements}${encodingChar}`
-      }
+  const walked = describeShmLayout(variables, context)
+  // Unreachable through the compile path — `preprocessPous` refuses anything
+  // that cannot cross before any of this runs. Kept as a total function so a
+  // direct caller cannot produce a half-formed layout.
+  /* istanbul ignore next -- defensive: refusals stop the build in preprocess-pous */
+  if ('refusal' in walked) return '='
 
-      const typeValue = variable.type.value.toLowerCase()
-      const encodingChar = TYPE_ENCODING_MAP[typeValue]
-
-      if (!encodingChar) {
-        console.warn(`Warning: Unknown type "${typeValue}" for variable "${variable.name}". Skipping.`)
-        return ''
-      }
-
-      return encodingChar
-    })
-    .filter((char) => char !== '')
-
-  return '=' + encodedChars.join('')
+  return encodeCharactersFromLeaves(walked.leaves)
 }
 
-export { encodeCharactersFromVariable }
+export { encodeCharactersFromLeaves, encodeCharactersFromVariable }

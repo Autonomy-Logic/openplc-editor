@@ -1,6 +1,7 @@
 import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
+import { DEBUG_STRING_CAP } from './variable-sizes'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',
@@ -210,6 +211,35 @@ export const parseIecStringToVariables = (
     if (parsedType.includes(',')) {
       throw new Error(
         `Syntax error on line ${lineNumber}: "${line}". A comma is only allowed between inline ARRAY bounds (e.g. "ARRAY[0..1, 0..2] OF INT"), and no bound may be empty.`,
+      )
+    }
+
+    // A length-qualified string (`STRING[20]`, `WSTRING[8]`) is legal IEC and
+    // legal CODESYS, and STruC++ does not accept it. Left alone it is not even
+    // recognised as a string: it becomes a user data type literally named
+    // "STRING[20]", which is persisted, shown in the type cell, and emitted
+    // verbatim into the generated ST — where the compiler fails with
+    // `Expected Semicolon, found [` pointing at a line the user never wrote.
+    //
+    // Refusing here says what is true today. The transport carries a fixed
+    // DEBUG_STRING_CAP-character budget, so a declared length would not be honoured even if
+    // it parsed; when the compiler grows the declaration, this guard is the one
+    // place that has to change.
+    // Both shapes it can take: on its own (`msg : STRING[20]`) and as an ARRAY's
+    // element type (`tags : ARRAY [0..3] OF STRING[20]`). The array form needs
+    // its own alternative because `parseArrayType` only accepts a bare
+    // identifier after `OF`, so a length-qualified element matches nothing and
+    // used to fall through every branch to the compiler — which then reported
+    // `Expected Semicolon, found [` at a column the user never wrote, plus two
+    // cascading errors on the FOLLOWING line, so even the line number misled.
+    const lengthQualifiedString =
+      /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType) ??
+      /^ARRAY\s*\[[^\]]*\]\s+OF\s+(W?STRING)\s*\[\s*[^\]]*\]\s*$/i.exec(parsedType)
+    if (lengthQualifiedString) {
+      const keyword = lengthQualifiedString[1].toUpperCase()
+      throw new Error(
+        `Syntax error on line ${lineNumber}: "${line}". A declared length is not supported on ${keyword} — ` +
+          `use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`,
       )
     }
 

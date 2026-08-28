@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import { isV4Logs, RuntimeLogEntry, RuntimeLogLevel } from '../../../../middleware/shared/ports'
 import { useOpenPLCStore } from '../../../store'
 import formatTimestamp from '../../../utils/format-timestamp'
+import { newUuid } from '../../../utils/new-uuid'
 import { LogComponent, LogLevel } from '../console/log'
 
 const mapV4LevelToLogLevel = (level: RuntimeLogLevel): LogLevel => {
@@ -70,7 +71,7 @@ const PlcLogs = memo(() => {
   // Generate stable UUIDs for v3 log lines
   const getV3LogKey = (index: number): string => {
     if (!v3LogKeysRef.current.has(index)) {
-      v3LogKeysRef.current.set(index, crypto.randomUUID())
+      v3LogKeysRef.current.set(index, newUuid())
     }
     return v3LogKeysRef.current.get(index)!
   }

@@ -299,7 +299,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
   return {
     ready: sharedService.ready,
 
-    attachPou(uri, pouName, variables, bodyText) {
+    attachPou(uri, pouName, variables, bodyText, dataTypes = []) {
       // `uri` is the Monaco model URI the rest of the editor uses.
       // The LSP communication appends `.py` so basedpyright treats
       // the document as Python source.  Body-line offsets are
@@ -317,7 +317,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       // notification, opened files sit in pyright's document
       // buffer but never enter the analysis queue.
       const lspUri = `${uri}.py`
-      const preamble = generatePythonLspPreamble(variables)
+      const preamble = generatePythonLspPreamble(variables, dataTypes)
       const iecVariableLineMap = getIecVariableLineMap(variables)
       entryByUri.set(uri, { pouName, lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
@@ -330,7 +330,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       sharedService.changeDocument(lspUri, augmentedDocument(uri, bodyText))
     },
 
-    notifyVariablesChange(uri, variables, bodyText) {
+    notifyVariablesChange(uri, variables, bodyText, dataTypes = []) {
       // Variables changed: regenerate the preamble + IEC line map
       // and update the offset registry BEFORE pushing the new
       // document so the diagnostics callback (which fires on the
@@ -340,7 +340,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       // the URI we already opened with pyright.
       const existing = entryByUri.get(uri)
       const lspUri = existing?.lspUri ?? `${uri}.py`
-      const preamble = generatePythonLspPreamble(variables)
+      const preamble = generatePythonLspPreamble(variables, dataTypes)
       const iecVariableLineMap = getIecVariableLineMap(variables)
       entryByUri.set(uri, { pouName: existing?.pouName ?? '', lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
