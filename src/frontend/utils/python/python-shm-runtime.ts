@@ -21,6 +21,14 @@
  * Deliberately dependency-free and 3.7-compatible: it runs under whatever
  * interpreter the runtime venv provides, and a Python block's own imports are
  * the user's business, not ours.
+ *
+ * One hard constraint on this text: **it must not contain a literal percent
+ * sign**. `python_block_loader` writes the generated script with
+ * `fprintf(fp, script_content, pid, shm_name, shm_name)` — the script IS the
+ * format string — so any percent here is parsed as a conversion directive.
+ * glibc happens to emit a malformed one verbatim, but it is undefined
+ * behaviour, and this text ships in every block rather than on some rare path.
+ * Where Python would want `%`, use `//` and multiplication instead.
  */
 
 /**
@@ -81,9 +89,10 @@ def _shm_put(buf, kind, off, value):
         buf[off + 1:off + 1 + _STR_CHARS] = body.ljust(_STR_CHARS, b'\\0')
         return
     if kind == 'wstr':
-        # Truncate on a code-unit boundary, never mid-unit.
+        # Truncate on a code-unit boundary, never mid-unit. Integer division
+        # rather than the modulo operator, deliberately: see the note above.
         body = str(value).encode('utf-16-le')[:_STR_CHARS * 2]
-        body = body[:len(body) - (len(body) % 2)]
+        body = body[:(len(body) // 2) * 2]
         buf[off] = len(body) // 2
         buf[off + 1:off + 1 + _STR_CHARS * 2] = body.ljust(_STR_CHARS * 2, b'\\0')
         return

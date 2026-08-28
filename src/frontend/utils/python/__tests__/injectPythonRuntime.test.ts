@@ -467,6 +467,13 @@ describe('injectPythonRuntime', () => {
       inbound: { direction: 'in' },
       outbound: { direction: 'out' },
     })
+
+    // One row per element, in packed order: REAL is 4 bytes, so the offsets
+    // advance 0, 4, 8. Asserting the first and last pins both the per-element
+    // expansion and the running offset.
+    expect(result).toContain(`(('temps', 0), (None, None), 'f', 0, 4, None)`)
+    expect(result).toContain(`(('temps', 1), (None, None), 'f', 4, 4, None)`)
+    expect(result).toContain(`(('temps', 2), (None, None), 'f', 8, 4, None)`)
   })
 
   it('generates input unpack code for string variables', () => {

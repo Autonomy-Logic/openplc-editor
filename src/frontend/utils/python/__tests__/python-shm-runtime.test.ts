@@ -18,6 +18,16 @@ describe('pythonShmRuntime', () => {
     expect(pythonShmRuntime(SHM_STRING_CHARS)).toBe(fixture)
   })
 
+  it('emits no percent sign, which the loader would read as a format directive', () => {
+    // `python_block_loader` writes the script with
+    // `fprintf(fp, script_content, pid, shm_name, shm_name)`, so the generated
+    // `.py` IS the format string. A literal percent here is a conversion
+    // directive: a malformed one is undefined behaviour, and a well-formed one
+    // (`%s`) consumes a vararg and segfaults the runtime. This text ships in
+    // every block, so the safe number is zero.
+    expect(pythonShmRuntime(SHM_STRING_CHARS)).not.toContain('%')
+  })
+
   it('carries the transport cap from one place', () => {
     expect(pythonShmRuntime(SHM_STRING_CHARS)).toContain(`_STR_CHARS = ${SHM_STRING_CHARS}`)
     // The token must be fully substituted — a leftover marker would be a
