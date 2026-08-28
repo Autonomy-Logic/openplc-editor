@@ -1551,3 +1551,30 @@ describe('createLadderFlowSlice', () => {
     expect(store.getState().ladderFlows[0].rungs[0].selectedNodes).toBeDefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// DOPE-592
+// ---------------------------------------------------------------------------
+describe('addLadderFlow with an unparseable body', () => {
+  it('degrades to an empty canvas instead of throwing', () => {
+    const store = makeStore()
+
+    // An FBD-shaped body — no `rungs` at all — reaching the ladder action.
+    // `createFallbackPou` used to manufacture exactly this on a failed parse;
+    // that is now fatal instead (the project opens empty and read-only), but
+    // the guard stays as defence in depth for any other producer of a
+    // rungless body, because the failure mode is severe: an unguarded
+    // `flow.rungs.some(...)` throws inside the route loader and takes the
+    // whole editor down to its error boundary.
+    const fallbackBody = { name: 'main', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+
+    expect(() =>
+      // The assertion IS the subject: this test exists because a value that is
+      // not a LadderFlowType reaches this action at runtime. Modelling the
+      // shape at the boundary instead would mean widening the production type
+      // to admit the invalid body, which is exactly what we do not want.
+      store.getState().ladderFlowActions.addLadderFlow(fallbackBody as unknown as LadderFlowType),
+    ).not.toThrow()
+    expect(store.getState().ladderFlows[0].rungs).toEqual([])
+  })
+})
