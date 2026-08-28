@@ -81,11 +81,11 @@ export interface PlatformCapabilities {
   /**
    * Whether this build can show the branch merge screen.
    *
-   * Separate from `hasVersionControl` because the desktop has version control and no
-   * merge screen: the web's is a routed page wired to its own API layer, which the editor
-   * does not have. Offering the entry anyway meant a menu item that reloaded the renderer
-   * and closed the open project, so it is hidden until the screen exists rather than left
-   * pointing at nothing.
+   * Both have it today: the screen is shared, and the desktop reaches it through its
+   * navigation adapter rather than a route. The flag stays because the fact it describes
+   * is its own — a build can have version control and no merge screen, which the desktop
+   * briefly did, and the entry then has to be withheld rather than left pointing at
+   * nothing. Collapsing it into `hasVersionControl` would remove the way to say that.
    */
   hasBranchMerge: boolean
 
