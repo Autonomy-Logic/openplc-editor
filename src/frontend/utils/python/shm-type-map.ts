@@ -4,9 +4,9 @@
  * The shared-memory layout for a Python function block's interface — one table,
  * read by both sides of the boundary.
  *
- * Why this file exists.  The C side (`generateSTCode`) and the Python side
- * (`encodeCharactersFromVariable`) each used to carry their own hand-maintained
- * type table, and they disagreed in three places.  Every disagreement was
+ * Why this file exists.  The C side (`generateSTCode`) and the Python side each
+ * used to carry their own hand-maintained type table, and they disagreed in
+ * three places.  Every disagreement was
  * silent and corrupting, because a field the Python format string omits does
  * not merely go missing: `struct.unpack` reads every *later* field from the
  * wrong offset.
