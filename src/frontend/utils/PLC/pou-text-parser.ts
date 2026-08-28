@@ -380,7 +380,10 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
     let parsedBody: unknown
     try {
       parsedBody = JSON.parse(bodyContent)
-      if (!isGraphicalBodyShape(parsedBody, language as 'ld' | 'fbd')) {
+      // Narrow rather than assert: `language` is typed `string` here, and the
+      // `&&` gives TypeScript the literal union for free. Same shape as the
+      // call in `createFallbackPou`, and it keeps the file free of `as`.
+      if ((language === 'ld' || language === 'fbd') && !isGraphicalBodyShape(parsedBody, language)) {
         throw new SyntaxError(
           language === 'ld'
             ? 'expected an object with a "rungs" array'
