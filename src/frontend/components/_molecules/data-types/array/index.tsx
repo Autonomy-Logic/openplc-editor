@@ -187,6 +187,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
   }
 
+  const hasValidRowSelection = arrayTable.selectedRow >= 0 && arrayTable.selectedRow < tableData.length
+
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
@@ -244,20 +246,19 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                 {
                   ariaLabel: 'Remove table row button',
                   onClick: removeRow,
-                  disabled: arrayTable.selectedRow === ROWS_NOT_SELECTED,
+                  disabled: !hasValidRowSelection,
                   icon: <MinusIcon className='stroke-[#0464FB]' />,
                 },
                 {
                   ariaLabel: 'Move table row up button',
                   onClick: moveRowUp,
-                  disabled: arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === 0,
+                  disabled: !hasValidRowSelection || arrayTable.selectedRow === 0,
                   icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
                 },
                 {
                   ariaLabel: 'Move table row down button',
                   onClick: moveRowDown,
-                  disabled:
-                    arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === tableData.length - 1,
+                  disabled: !hasValidRowSelection || arrayTable.selectedRow === tableData.length - 1,
                   icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
                 },
               ]}
