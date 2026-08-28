@@ -47,10 +47,11 @@ const formatParseError = (message: string, lineNumber?: number): string => {
  */
 export const isGraphicalBodyShape = (value: unknown, language: 'ld' | 'fbd'): boolean => {
   if (typeof value !== 'object' || value === null) return false
-  if (language === 'ld') return Array.isArray((value as { rungs?: unknown }).rungs)
-  const rung = (value as { rung?: unknown }).rung
+  if (language === 'ld') return 'rungs' in value && Array.isArray(value.rungs)
+  if (!('rung' in value)) return false
+  const rung = value.rung
   if (typeof rung !== 'object' || rung === null) return false
-  return Array.isArray((rung as { nodes?: unknown }).nodes)
+  return 'nodes' in rung && Array.isArray(rung.nodes)
 }
 
 /**
@@ -380,21 +381,29 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
     let parsedBody: unknown
     try {
       parsedBody = JSON.parse(bodyContent)
-      // Narrow rather than assert: `language` is typed `string` here, and the
-      // `&&` gives TypeScript the literal union for free. Same shape as the
-      // call in `createFallbackPou`, and it keeps the file free of `as`.
-      if ((language === 'ld' || language === 'fbd') && !isGraphicalBodyShape(parsedBody, language)) {
-        throw new SyntaxError(
-          language === 'ld'
-            ? 'expected an object with a "rungs" array'
-            : 'expected an object with a "rung" object holding a "nodes" array',
-        )
-      }
     } catch (jsonError: unknown) {
       if (jsonError instanceof Error) {
         throw new Error(formatParseError(`Invalid JSON in graphical body: ${jsonError.message}`))
       }
       throw new Error(formatParseError('Invalid JSON in graphical body'))
+    }
+
+    // Deliberately OUTSIDE the catch above. A body that parsed but carries the
+    // wrong shape is not a JSON error, and saying "Invalid JSON" about valid
+    // JSON sends the reader hunting for a syntax error that is not there. That
+    // matters here more than usual: on an unrecoverable POU this text is the
+    // Console line that explains why the project opened empty.
+    // Narrowing (not `as`) gives TypeScript the literal union for free.
+    if ((language === 'ld' || language === 'fbd') && !isGraphicalBodyShape(parsedBody, language)) {
+      throw new Error(
+        formatParseError(
+          `Invalid graphical body shape: ${
+            language === 'ld'
+              ? 'expected an object with a "rungs" array'
+              : 'expected an object with a "rung" object holding a "nodes" array'
+          }`,
+        ),
+      )
     }
 
     // returnType is guaranteed non-empty for functions (validated above)

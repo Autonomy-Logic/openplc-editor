@@ -602,6 +602,44 @@ describe('graphical POU holding a native library block', () => {
 })
 
 // ---------------------------------------------------------------------------
+// DOPE-592: a wrong shape is not a JSON error
+// ---------------------------------------------------------------------------
+describe('graphical body diagnostics', () => {
+  const wrap = (body: string) => `PROGRAM main\nVAR\nEND_VAR\n\n${body}\nEND_PROGRAM\n`
+
+  const messageFor = (body: string, language: 'ld' | 'fbd' = 'ld'): string => {
+    try {
+      parseGraphicalPouFromString(wrap(body), language, 'program')
+    } catch (error) {
+      return (error as Error).message
+    }
+    return 'PARSED OK'
+  }
+
+  it('reports malformed JSON as a JSON error', () => {
+    const message = messageFor('{ not json')
+    expect(message).toContain('Invalid JSON in graphical body')
+    expect(message).not.toContain('Invalid graphical body shape')
+  })
+
+  it('reports valid JSON of the wrong shape as a SHAPE error, not a JSON one', () => {
+    // Saying "Invalid JSON" about valid JSON sends the reader hunting for a
+    // syntax error that does not exist. On an unrecoverable POU this text is
+    // the Console line explaining why the project opened empty.
+    const message = messageFor('{ "nodes": [], "edges": [] }')
+    expect(message).toContain('Invalid graphical body shape')
+    expect(message).toContain('"rungs" array')
+    expect(message).not.toContain('Invalid JSON')
+  })
+
+  it('names the FBD container when an FBD body has the wrong shape', () => {
+    const message = messageFor('{ "rungs": [] }', 'fbd')
+    expect(message).toContain('Invalid graphical body shape')
+    expect(message).toContain('"rung" object holding a "nodes" array')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // findGraphicalBodyStartIndex
 // ---------------------------------------------------------------------------
 describe('findGraphicalBodyStartIndex', () => {
