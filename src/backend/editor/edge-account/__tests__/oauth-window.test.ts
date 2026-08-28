@@ -10,6 +10,18 @@
  * licence buy page) get swallowed into a login window.
  */
 
+/**
+ * `oauth-window` imports `electron` at module scope, and CI installs with
+ * `--ignore-scripts` — so Electron's postinstall never runs, the binary path
+ * file is absent, and `require('electron')` throws before a single test can
+ * start. Stubbing what the module reaches for keeps the matcher testable
+ * without a real Electron. Same shape as `utils/__tests__/path-picker.test.ts`.
+ */
+jest.mock('electron', () => ({
+  BrowserWindow: class {},
+  session: { fromPartition: () => ({}) },
+}))
+
 import { edgeOAuthProviderFromUrl } from '../oauth-window'
 
 describe('edgeOAuthProviderFromUrl', () => {
