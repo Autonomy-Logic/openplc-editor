@@ -126,9 +126,14 @@ describe('dt view request window', () => {
 describe('dt view outline', () => {
   // strucpp answers the aggregate document with one top-level symbol per
   // type, its fields as children.
-  const symbol = (name: string, startLine: number, endLine: number, children?: LspDocumentSymbol[]) => {
+  const symbol = (
+    name: string,
+    startLine: number,
+    endLine: number,
+    children?: LspDocumentSymbol[],
+  ): LspDocumentSymbol => {
     const range = { start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 } }
-    return { name, kind: 13, range, selectionRange: range, children } as LspDocumentSymbol
+    return { name, kind: 13, range, selectionRange: range, children }
   }
   const AGGREGATE_SYMBOLS = [symbol('Colors', 1, 1), symbol('Motor', 2, 4, [symbol('speed', 3, 3)])]
 

@@ -92,9 +92,14 @@ describe('clipSymbolsToWindow', () => {
   // strucpp answers DocumentSymbol[]: one top-level entry per type in the
   // aggregate datatypes document, one per POU in a `pou://` document with
   // its VAR declarations as children.
-  const symbol = (name: string, startLine: number, endLine: number, children?: LspDocumentSymbol[]) => {
+  const symbol = (
+    name: string,
+    startLine: number,
+    endLine: number,
+    children?: LspDocumentSymbol[],
+  ): LspDocumentSymbol => {
     const range = { start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 } }
-    return { name, kind: 13, range, selectionRange: range, children } as LspDocumentSymbol
+    return { name, kind: 13, range, selectionRange: range, children }
   }
 
   const COLORS = symbol('Colors', 1, 1)
