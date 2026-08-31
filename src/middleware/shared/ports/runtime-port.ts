@@ -342,7 +342,13 @@ export interface RuntimePort {
     projectPath?: string
     projectName?: string
     metadata?: RuntimeProjectSnapshotMetadata
-    libraries?: Array<{ name: string; version: string; hash: string }>
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
     error?: string
   }>
+
+  /** Install libraries a retrieved project brought with it, by name. */
+  installRetrievedLibraries?(
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }>
 }

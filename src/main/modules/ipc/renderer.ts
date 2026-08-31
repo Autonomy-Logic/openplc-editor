@@ -618,9 +618,15 @@ const rendererProcessBridge = {
     projectPath?: string
     projectName?: string
     metadata?: RuntimeProjectSnapshotMetadata
-    libraries?: Array<{ name: string; version: string; hash: string }>
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
     error?: string
   }> => ipcRenderer.invoke('runtime:retrieve-project', ipAddress),
+  /** Install libraries a retrieved project brought with it, by name. */
+  runtimeInstallRetrievedLibraries: (
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> =>
+    ipcRenderer.invoke('runtime:install-retrieved-libraries', projectPath, names),
   onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
     ipcRenderer.on('runtime:device-discovered', callback)
     return () => ipcRenderer.removeListener('runtime:device-discovered', callback)

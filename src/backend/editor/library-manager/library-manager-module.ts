@@ -388,6 +388,28 @@ export class LibraryManagerModule {
   // Install paths
   // -------------------------------------------------------------------------
 
+  /**
+   * Install a `.stlib` from text rather than a file on disk.
+   *
+   * The archives bundled with a retrieved project arrive as text -- they came
+   * out of a ZIP fetched from a device, never touching the filesystem. Writing
+   * them to a temp file just to read them back would add a failure mode and an
+   * exposure window for no benefit: `installStlib` already reduces to
+   * `prepareStlibUpload(text)` plus the shared persist step.
+   *
+   * The text is validated by the same strucpp preparer as any other install,
+   * so an archive from a device gets no more trust than one a user picked.
+   */
+  async installFromText(archiveText: string): Promise<LibraryInstallResult> {
+    let prepared: PreparedLibrary
+    try {
+      prepared = prepareStlibUpload(archiveText)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    return this.persistPrepared(prepared)
+  }
+
   private async installStlib(filePath: string): Promise<LibraryInstallResult> {
     let prepared: PreparedLibrary
     try {

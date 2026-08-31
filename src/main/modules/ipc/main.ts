@@ -1,5 +1,8 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
+import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
+import { materializeRetrievedProject } from '@root/backend/editor/project/materialize-retrieved-project'
+import type { ProjectSnapshotInfo } from '@root/backend/editor/runtime/runtime-api-client'
 import type {
   DebugBoardIdResult,
   DebugStatusResult,
@@ -9,11 +12,9 @@ import type {
 } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
+import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
-import { materializeRetrievedProject } from '@root/backend/editor/project/materialize-retrieved-project'
-import type { ProjectSnapshotInfo } from '@root/backend/editor/runtime/runtime-api-client'
-import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
@@ -529,6 +530,34 @@ class MainProcessBridge implements MainIpcModule {
   getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
 
   /**
+   * Install the libraries a retrieved project brought with it.
+   *
+   * The archives are re-read from the project's own archive rather than kept
+   * in memory between calls, so installing is always installing what that
+   * project actually carries. Each goes through the same strucpp validation as
+   * a library the user picked by hand -- an archive off a device earns no extra
+   * trust.
+   */
+  handleInstallRetrievedLibraries = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> => {
+    const archives = this.retrievedLibraries.get(projectPath) ?? []
+    const manager = new LibraryManagerModule()
+    const installed: string[] = []
+    const failed: Array<{ name: string; error: string }> = []
+
+    for (const library of archives) {
+      if (!names.includes(library.name)) continue
+      const result = await manager.installFromText(library.archive)
+      if (result.success) installed.push(library.name)
+      else failed.push({ name: library.name, error: result.error ?? 'Install failed' })
+    }
+    return { success: failed.length === 0, installed, failed }
+  }
+
+  /**
    * What a device says about the source project it stores.
    *
    * Authenticated but not admin-gated on the device, so the UI can decide
@@ -554,6 +583,17 @@ class MainProcessBridge implements MainIpcModule {
    * `materialize-retrieved-project` for what depends on the project having a
    * real path from the moment it is opened.
    */
+  /**
+   * Bundled library archives from the most recent retrievals, keyed by the
+   * project they came with.
+   *
+   * Kept here rather than sent to the renderer so the bytes never leave the
+   * process that validates them, and keyed by project path so installing
+   * always installs what THAT project carried rather than whatever was
+   * retrieved most recently.
+   */
+  private retrievedLibraries = new Map<string, Array<{ name: string; archive: string }>>()
+
   handleRuntimeRetrieveProject = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -562,7 +602,7 @@ class MainProcessBridge implements MainIpcModule {
     projectPath?: string
     projectName?: string
     metadata?: SnapshotMetadata
-    libraries?: Array<{ name: string; version: string; hash: string }>
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
     error?: string
   }> => {
     const fetched = await this.runtimeApi.retrieveProjectSnapshot(ipAddress)
@@ -572,15 +612,21 @@ class MainProcessBridge implements MainIpcModule {
       const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
         scratchRoot: join(app.getPath('userData'), 'retrieved-projects'),
       })
+      this.retrievedLibraries.set(
+        materialized.projectPath,
+        materialized.libraries.map(({ name, archive }) => ({ name, archive })),
+      )
       return {
         success: true,
         projectPath: materialized.projectPath,
         projectName: materialized.projectName,
         metadata: materialized.metadata,
-        // Names only: the renderer decides what to offer installing, and the
-        // archives themselves stay in the main process where the library
-        // manager can write them.
-        libraries: materialized.libraries.map(({ name, version, hash }) => ({ name, version, hash })),
+        // Status, not archives. The renderer decides what to offer; the bytes
+        // stay in the main process where the library manager can write them,
+        // and are re-read from the same archive when the user says yes.
+        libraries: await describeRetrievedLibraries(materialized.libraries, (name) =>
+          new LibraryManagerModule().readArchiveText(name),
+        ),
       }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
@@ -747,6 +793,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
     this.registerHandle('runtime:project-snapshot-info', this.handleRuntimeProjectSnapshotInfo)
     this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
+    this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)

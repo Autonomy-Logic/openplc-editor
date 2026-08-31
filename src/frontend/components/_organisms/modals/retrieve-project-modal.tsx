@@ -25,9 +25,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { DiscoveredRuntimeDevice } from '../../../../middleware/shared/ports'
 import { useProject, useRuntime } from '../../../../middleware/shared/providers'
+import { nextStepForDevice } from '../../../services/retrieve-project-connection'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
-import { nextStepForDevice } from '../../../services/retrieve-project-connection'
 import { toast } from '../../../utils/toast'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -150,12 +150,43 @@ const RetrieveProjectModal = () => {
       // flush still runs -- the compiler reads source from disk.
       workspaceActions.setIsEphemeralProject(true)
 
-      const missing = retrieved.libraries ?? []
+      // Anything this machine cannot supply, or supplies differently. The
+      // second case is the one worth separating: a library with the same name
+      // but different bytes builds a DIFFERENT program, silently, and reading
+      // "already installed" would be actively misleading.
+      const libraries = retrieved.libraries ?? []
+      const installable = libraries.filter((library) => library.status !== 'installed')
+
+      if (installable.length > 0 && runtime.installRetrievedLibraries) {
+        const differing = installable.filter((library) => library.status === 'differs')
+        const missing = installable.filter((library) => library.status === 'missing')
+        const lines = [
+          missing.length ? `Not installed here: ${missing.map((l) => l.name).join(', ')}.` : '',
+          differing.length
+            ? `Installed but different from what this project was built with: ${differing
+                .map((l) => l.name)
+                .join(', ')}. Building without updating them produces a different program.`
+            : '',
+        ].filter(Boolean)
+
+        const result = await runtime.installRetrievedLibraries(
+          retrieved.projectPath,
+          installable.map((library) => library.name),
+        )
+        toast({
+          title: result.success
+            ? `Installed ${result.installed.length} librar${result.installed.length === 1 ? 'y' : 'ies'}`
+            : 'Some libraries could not be installed',
+          description: result.success
+            ? lines.join(' ')
+            : result.failed.map((failure) => `${failure.name}: ${failure.error}`).join('; '),
+          variant: result.success ? 'default' : 'fail',
+        })
+      }
+
       toast({
         title: `Retrieved "${retrieved.projectName ?? 'project'}"`,
-        description: missing.length
-          ? `Use Save As to keep it. It uses these libraries: ${missing.map((library) => library.name).join(', ')}.`
-          : 'This project has no location yet — use Save As to keep it.',
+        description: 'This project has no location yet — use Save As to keep it.',
         variant: 'default',
       })
       close()

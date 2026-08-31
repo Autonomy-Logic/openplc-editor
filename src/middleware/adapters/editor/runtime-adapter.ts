@@ -268,5 +268,13 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         return { success: false, error: getErrorMessage(err) }
       }
     },
+
+    async installRetrievedLibraries(projectPath: string, names: string[]) {
+      try {
+        return await window.bridge.runtimeInstallRetrievedLibraries(projectPath, names)
+      } catch (err) {
+        return { success: false, installed: [], failed: [{ name: '', error: getErrorMessage(err) }] }
+      }
+    },
   }
 }
