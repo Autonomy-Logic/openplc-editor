@@ -6,6 +6,7 @@ import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { executeExportPlcopen } from '../../../../services/export-actions'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
+import { executeSaveProjectAs } from '../../../../services/save-project-as'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
 
@@ -47,6 +48,12 @@ export const FileMenu = () => {
     }
   }
 
+  const handleSaveProjectAs = () => {
+    if (!isSaving) {
+      void executeSaveProjectAs(projectPort, capabilities)
+    }
+  }
+
   const handleCloseTab = () => {
     handleRemoveTab(selectedTab)
   }
@@ -74,6 +81,9 @@ export const FileMenu = () => {
           <MenuPrimitive.Item className={ITEM} onClick={handleSaveProject} disabled={isSaving}>
             <span>{i18n.t('menu:file.submenu.saveProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
+          </MenuPrimitive.Item>
+          <MenuPrimitive.Item className={ITEM} onClick={handleSaveProjectAs} disabled={isSaving}>
+            <span>{i18n.t('menu:file.submenu.saveAs')}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={handleCloseTab}>
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>

@@ -50,6 +50,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
       return window.bridge.saveProjectAccelerator(() => callback())
     },
 
+    onSaveProjectAs(callback: () => void): Unsubscribe {
+      return window.bridge.saveProjectAsAccelerator(() => callback())
+    },
+
     onSaveFile(callback: () => void): Unsubscribe {
       return window.bridge.saveFileAccelerator(() => callback())
     },
