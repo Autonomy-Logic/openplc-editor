@@ -63,6 +63,61 @@ const PlcStatusResponseSchema = z.object({
 })
 
 /**
+ * What a device reports about the source project it stores.
+ *
+ * Every field but `present` is optional because a device with nothing stored
+ * answers `{present: false}` alone, and because these values come from whoever
+ * uploaded -- the runtime never opens the archive to check them.
+ */
+const ProjectSnapshotInfoSchema = z.object({
+  present: z.boolean(),
+  projectName: z.string().optional(),
+  editorVersion: z.string().optional(),
+  uploadedBy: z.string().optional(),
+  timestamp: z.string().optional(),
+  sizeBytes: z.number().optional(),
+  formatVersion: z.number().optional(),
+  libraries: z
+    .array(
+      z.object({
+        name: z.string(),
+        version: z.string().optional(),
+        hash: z.string().optional(),
+      }),
+    )
+    .optional(),
+})
+
+export type ProjectSnapshotInfo = z.infer<typeof ProjectSnapshotInfoSchema>
+
+const ProjectSnapshotBodySchema = z.object({
+  projectName: z.string(),
+  contentBase64: z.string(),
+})
+
+type ProjectSnapshotBody = z.infer<typeof ProjectSnapshotBodySchema>
+
+/**
+ * Turn a failed snapshot fetch into something a user can act on.
+ *
+ * The two interesting outcomes are indistinguishable from a transport error in
+ * the raw text: a device with nothing stored (404) and an account without the
+ * privilege to read it (403). Both are real answers, and reporting either as a
+ * broken connection sends people looking for a network problem that is not
+ * there.
+ */
+function describeSnapshotFetchFailure(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower.includes('admin privileges required')) {
+    return 'This account is not an administrator on that device. Only administrators can retrieve a stored project.'
+  }
+  if (lower.includes('no project is stored')) {
+    return 'That device is not storing a project.'
+  }
+  return raw
+}
+
+/**
  * One header value, whatever the wire gave us.
  *
  * `IncomingHttpHeaders` values are `string | string[] | undefined`: a header sent
@@ -491,6 +546,66 @@ export class RuntimeApiClient {
         (r) => !r.success && r.statusCode === 401,
       )
       .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
+  }
+
+  /**
+   * What the device says about the source project it is storing, if any.
+   *
+   * Authenticated but not admin-gated, so the UI can decide whether to OFFER
+   * retrieval without needing the privilege that retrieval itself requires.
+   */
+  async getProjectSnapshotInfo(
+    ipAddress: string,
+  ): Promise<{ success: true; info: ProjectSnapshotInfo } | { success: false; error: string }> {
+    const result = await this.makeRuntimeApiRequest<ProjectSnapshotInfo | null>(
+      ipAddress,
+      '/api/project-snapshot/info',
+      (data) => ProjectSnapshotInfoSchema.safeParse(parseJsonOrNull(data)).data ?? null,
+    )
+    if (!result.success) return { success: false, error: result.error }
+    if (!result.data) return { success: false, error: 'The device sent an unreadable snapshot description' }
+    return { success: true, info: result.data }
+  }
+
+  /**
+   * Fetch the stored source project.
+   *
+   * Admin only on the device: the archive is not encrypted there, so that role
+   * check is the whole of the access control rather than a layer behind one. A
+   * non-admin account gets a 403, which is a real answer and not a transport
+   * failure — the caller says so rather than reporting a broken connection.
+   *
+   * The body is base64 in JSON rather than a binary download because
+   * openplc-web reaches devices through the orchestrator's HTTP proxy, which
+   * decodes as JSON or falls back to text. Editor and web therefore read the
+   * same shape off the same endpoint.
+   */
+  async retrieveProjectSnapshot(
+    ipAddress: string,
+  ): Promise<
+    { success: true; archive: Buffer; projectName: string } | { success: false; error: string }
+  > {
+    const result = await this.makeRuntimeApiRequest<ProjectSnapshotBody | null>(
+      ipAddress,
+      '/api/project-snapshot',
+      (data) => ProjectSnapshotBodySchema.safeParse(parseJsonOrNull(data)).data ?? null,
+    )
+
+    if (!result.success) {
+      return { success: false, error: describeSnapshotFetchFailure(result.error) }
+    }
+    if (!result.data) {
+      return { success: false, error: 'The device sent an unreadable project archive' }
+    }
+
+    let archive: Buffer
+    try {
+      archive = Buffer.from(result.data.contentBase64, 'base64')
+    } catch {
+      return { success: false, error: 'The device sent a project archive that is not valid base64' }
+    }
+
+    return { success: true, archive, projectName: result.data.projectName }
   }
 
   /**

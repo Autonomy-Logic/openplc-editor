@@ -1,5 +1,10 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
-import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type {
+  DiscoveredRuntimeDevice,
+  RuntimeLogEntry,
+  RuntimeProjectSnapshotInfo,
+  RuntimeProjectSnapshotMetadata,
+} from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
   DeviceLicenseReport,
@@ -594,6 +599,28 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
+  /** What a device says about the project it stores; `present: false` when none. */
+  runtimeProjectSnapshotInfo: (
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }> =>
+    ipcRenderer.invoke('runtime:project-snapshot-info', ipAddress),
+  /**
+   * Retrieve the stored project and unpack it to a scratch directory.
+   *
+   * Returns a path, never the archive: those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write lives beside the
+   * write in the main process.
+   */
+  runtimeRetrieveProject: (
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; hash: string }>
+    error?: string
+  }> => ipcRenderer.invoke('runtime:retrieve-project', ipAddress),
   onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
     ipcRenderer.on('runtime:device-discovered', callback)
     return () => ipcRenderer.removeListener('runtime:device-discovered', callback)

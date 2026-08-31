@@ -156,6 +156,8 @@ export type {
   DiscoverDevicesOptions,
   DiscoverDevicesResult,
   DiscoveredRuntimeDevice,
+  RuntimeProjectSnapshotInfo,
+  RuntimeProjectSnapshotMetadata,
   LoginParams,
   LoginResult,
   RuntimeLogsResult,

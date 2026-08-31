@@ -11,6 +11,9 @@ import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-mai
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import { materializeRetrievedProject } from '@root/backend/editor/project/materialize-retrieved-project'
+import type { ProjectSnapshotInfo } from '@root/backend/editor/runtime/runtime-api-client'
+import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
@@ -525,6 +528,65 @@ class MainProcessBridge implements MainIpcModule {
    *  who stored it. Only the username crosses this boundary. */
   getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
 
+  /**
+   * What a device says about the source project it stores.
+   *
+   * Authenticated but not admin-gated on the device, so the UI can decide
+   * whether to offer retrieval without holding the privilege retrieval needs.
+   */
+  handleRuntimeProjectSnapshotInfo = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: ProjectSnapshotInfo; error?: string }> => {
+    const result = await this.runtimeApi.getProjectSnapshotInfo(ipAddress)
+    return result.success ? { success: true, info: result.info } : { success: false, error: result.error }
+  }
+
+  /**
+   * Retrieve the stored project and write it to a scratch directory.
+   *
+   * Fetch and unpack are one IPC call because the archive should not sit in the
+   * renderer at all: it is untrusted bytes from a device, and every check that
+   * decides whether it is safe to write lives next to the write. The renderer
+   * gets back a path and a description, never the archive.
+   *
+   * The scratch location is why this works at all -- see
+   * `materialize-retrieved-project` for what depends on the project having a
+   * real path from the moment it is opened.
+   */
+  handleRuntimeRetrieveProject = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: SnapshotMetadata
+    libraries?: Array<{ name: string; version: string; hash: string }>
+    error?: string
+  }> => {
+    const fetched = await this.runtimeApi.retrieveProjectSnapshot(ipAddress)
+    if (!fetched.success) return { success: false, error: fetched.error }
+
+    try {
+      const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
+        scratchRoot: join(app.getPath('userData'), 'retrieved-projects'),
+      })
+      return {
+        success: true,
+        projectPath: materialized.projectPath,
+        projectName: materialized.projectName,
+        metadata: materialized.metadata,
+        // Names only: the renderer decides what to offer installing, and the
+        // archives themselves stay in the main process where the library
+        // manager can write them.
+        libraries: materialized.libraries.map(({ name, version, hash }) => ({ name, version, hash })),
+      }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
   private makeRuntimeApiMutation = (
     method: 'POST' | 'PUT' | 'DELETE',
     ipAddress: string,
@@ -683,6 +745,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
+    this.registerHandle('runtime:project-snapshot-info', this.handleRuntimeProjectSnapshotInfo)
+    this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
