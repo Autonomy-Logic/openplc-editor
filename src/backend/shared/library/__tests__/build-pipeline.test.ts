@@ -753,10 +753,12 @@ describe('libraryBuildFromTranspiledSt', () => {
     expect('resources' in noRes).toBe(false)
   })
 
-  it('refuses a C/C++ library whose name is not a valid C identifier', () => {
-    // The name is emitted verbatim as `<name>__<BLOCK>`, so a hyphen reaches
-    // the compiler as a subtraction.
-    const compileStlib = jest.fn()
+  it('accepts a hyphenated name from a library that ships native blocks', () => {
+    // The editor used to graft each block as `<name>__<BLOCK>`, so the name had
+    // to be a C identifier.  Upstream now grafts a block under its own name, and
+    // nothing builds a symbol from `manifest.name` any more — `checkPathId` at
+    // parse time is the whole rule.
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { manifest: {}, dependencies: [] } })
     __setStrucppRuntimeForTests(
       makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
     )
@@ -768,29 +770,6 @@ describe('libraryBuildFromTranspiledSt', () => {
       {
         nativeSources: [{ fileName: 'CppOnly.cpp', source: 'FUNCTION_BLOCK CppOnly\nEND_FUNCTION_BLOCK\n' }],
       },
-    )
-
-    expect(res.success).toBe(false)
-    expect(res.errors[0]?.message).toMatch(/valid C identifier/)
-    expect(compileStlib).not.toHaveBeenCalled()
-  })
-
-  it('leaves a non-identifier name alone when the library ships no native blocks', () => {
-    // Such a name never reaches C, and rejecting it would refuse libraries
-    // that build today.
-    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { manifest: {}, dependencies: [] } })
-    __setStrucppRuntimeForTests(
-      makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] }),
-    )
-
-    const res = libraryBuildFromTranspiledSt(
-      'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
-        'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n',
-      [
-        { name: 'Tank', kind: 'FUNCTION_BLOCK' },
-        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
-      ],
-      { ...manifest, name: 'demo-lib', namespace: 'demo_lib' },
     )
 
     expect(res.success).toBe(true)

@@ -1,6 +1,7 @@
 import { PLCDataType } from '@root/middleware/shared/ports/open-plc-types'
 import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
 
+import { isGenericType } from '../../generic-types'
 import { baseTypeTag } from '../base-type-tag'
 
 const parseDimensions = (dimensions: Array<{ dimension: string }>) => {
@@ -78,7 +79,9 @@ export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[
                     return {
                       '@name': variable.name,
                       type: {
-                        [baseTypeTag(variable.type.value)]: '',
+                        [isGenericType(variable.type.value)
+                          ? variable.type.value.trim().toUpperCase()
+                          : baseTypeTag(variable.type.value)]: '',
                       },
                       initialValue: variable.initialValue?.simpleValue.value
                         ? {

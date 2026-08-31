@@ -93,17 +93,45 @@ describe('addLibraryResource', () => {
     expect(second.error).toMatch(/already in resources/)
   })
 
-  it('leaves .git and node_modules behind', async () => {
+  it('takes only library.properties and src/, whatever else the folder holds', async () => {
+    // The author points this at a checkout, not a curated directory. A real
+    // one measured 2725 files, 43 of which were the library.
     const source = makeLibrary(sourceRoot, 'SensorKit')
-    mkdirSync(join(source, '.git'), { recursive: true })
-    writeFileSync(join(source, '.git', 'HEAD'), 'ref: refs/heads/main\n')
-    mkdirSync(join(source, 'node_modules', 'dep'), { recursive: true })
-    writeFileSync(join(source, 'node_modules', 'dep', 'index.js'), '\n')
+    for (const dir of ['.git', 'node_modules', 'build', 'build-asan', 'docker', 'docs', 'examples', 'test']) {
+      mkdirSync(join(source, dir), { recursive: true })
+      writeFileSync(join(source, dir, 'thing'), 'not part of the library\n')
+    }
+    writeFileSync(join(source, 'CMakeLists.txt'), 'project(demo)\n')
+    writeFileSync(join(source, 'README.md'), '# demo\n')
 
     const result = await addLibraryResource(projectPath, source)
     expect(result.success).toBe(true)
-    expect(result.folder?.files.some((file) => file.startsWith('.git/'))).toBe(false)
-    expect(result.folder?.files.some((file) => file.startsWith('node_modules/'))).toBe(false)
+    expect(result.folder?.files).toEqual(['library.properties', 'src/SensorKit.h', 'src/transport/udp.cpp'])
+  })
+
+  it('carries a precompiled binary that sits under src/', async () => {
+    // `precompiled=true` libraries ship a `.a` beside their headers, and it is
+    // as much part of the library as they are.
+    const source = makeLibrary(sourceRoot, 'SensorKit')
+    mkdirSync(join(source, 'src', 'esp32'), { recursive: true })
+    writeFileSync(join(source, 'src', 'esp32', 'libsensor.a'), new Uint8Array([0, 1, 2, 255]))
+
+    const result = await addLibraryResource(projectPath, source)
+    expect(result.success).toBe(true)
+    expect(result.folder?.files).toContain('src/esp32/libsensor.a')
+  })
+
+  it('refuses a folder that is not a library', async () => {
+    // Copying it in would land an empty library whose failure surfaces at the
+    // consumer's link step, a long way from the folder that caused it.
+    const source = join(sourceRoot, 'NotALibrary')
+    mkdirSync(join(source, 'include'), { recursive: true })
+    writeFileSync(join(source, 'include', 'thing.h'), '#pragma once\n')
+
+    const result = await addLibraryResource(projectPath, source)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/library\.properties/)
+    expect(result.error).toMatch(/src\//)
   })
 
   itWithSymlinks('does not follow a symlink out of the tree', async () => {

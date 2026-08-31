@@ -41,6 +41,8 @@ interface IpcPou {
     language?: string
     variables: unknown[]
     returnType?: string
+    /** Base function block, from `FUNCTION_BLOCK X EXTENDS Y`. */
+    extends?: string
     body: { language: string; value: unknown }
     documentation: string
     variablesText?: string
@@ -82,6 +84,9 @@ interface IpcPouResponse {
 
 /**
  * Maps editor discriminated-union POU to port flat POU format.
+ *
+ * Both mappings name every field they carry, so anything unlisted is dropped —
+ * `extends` included, or the base is lost on load.
  */
 function mapIpcPouToPortPou(ipcPou: IpcPou): PLCPou {
   return {
@@ -89,6 +94,7 @@ function mapIpcPouToPortPou(ipcPou: IpcPou): PLCPou {
     pouType: ipcPou.type as PLCPou['pouType'],
     interface: {
       returnType: ipcPou.data.returnType,
+      ...(ipcPou.data.extends ? { extends: ipcPou.data.extends } : {}),
       variables: ipcPou.data.variables as PLCVariable[],
     },
     body: ipcPou.data.body as PLCPou['body'],
@@ -107,6 +113,7 @@ function mapPortPouToIpcPou(portPou: PLCPou): IpcPou {
       language: portPou.body.language,
       variables: (portPou.interface?.variables ?? []) as unknown[],
       ...(portPou.interface?.returnType ? { returnType: portPou.interface.returnType } : {}),
+      ...(portPou.interface?.extends ? { extends: portPou.interface.extends } : {}),
       body: portPou.body as { language: string; value: unknown },
       documentation: portPou.documentation ?? '',
     },

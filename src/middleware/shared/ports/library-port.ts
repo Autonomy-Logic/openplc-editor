@@ -115,6 +115,10 @@ export interface StlibArchiveDTO {
   resources?: Array<{
     path: string
     content: string
+    /** `'base64'` when `content` carries bytes rather than text — see
+     *  `LibraryResource`. Absent on a text file, so an archive of source-only
+     *  libraries is unchanged. */
+    encoding?: 'base64'
   }>
 }
 

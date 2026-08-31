@@ -431,7 +431,12 @@ function encodeByWireFormat(originalInput: string, numericInput: string, meta: I
       if (text.length > DEBUG_STRING_CAP) {
         throw new Error(`STRING value too long: ${text.length} characters (max ${DEBUG_STRING_CAP})`)
       }
-      const buf = new Uint8Array(1 + text.length)
+      // The full wire window, not `1 + text.length`: `handle_set` compares the
+      // received length against `type_ops[tag].size` — the fixed 127-byte
+      // window for a STRING — and answers STATUS_DATA_TOO_LARGE below it, so a
+      // short buffer makes the force a silent no-op. The zero tail is ignored;
+      // the reader decodes `min(length, CAP)` units from the prefix.
+      const buf = new Uint8Array(1 + DEBUG_STRING_CAP)
       buf[0] = text.length
       for (let i = 0; i < text.length; i++) {
         const code = text.charCodeAt(i)

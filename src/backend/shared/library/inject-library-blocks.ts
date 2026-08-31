@@ -31,11 +31,15 @@
  *
  * ## Renaming
  *
- * Each block's name is prefixed with the library's manifest name
- * (`<library>__<block>`) so two libraries can both ship a `Foo`, and so a
+ * Each block's name is prefixed with the library's `namespace`
+ * (`<namespace>__<block>`) so two libraries can both ship a `Foo`, and so a
  * consumer's own POU may also be called `Foo`.  The library-tree picker
  * surfaces the prefixed name, so the user authors their ST against it directly
  * and no source rewriting is needed.
+ *
+ * The prefix is the NAMESPACE, not `manifest.name`: `name` is checked only for
+ * path safety, so a hyphenated `my-lib` would yield `my-lib__FOO`, which no ST
+ * parser accepts. `namespace` is validated as a C++ identifier.
  *
  * Symbol-level renames inside the synthesized POU (the `<NAME>_VARS` struct,
  * the `<name>_setup` / `<name>_loop` functions) follow automatically, because
@@ -50,14 +54,34 @@ import type { PLCPou, PLCProjectData } from '../../../middleware/shared/ports/ty
 /** Separator between the library name and the block name. */
 const LIBRARY_BLOCK_SEPARATOR = '__'
 
-/** Build the project-visible POU name for a library block. */
-export function libraryBlockPouName(libraryName: string, blockName: string): string {
-  return `${libraryName}${LIBRARY_BLOCK_SEPARATOR}${blockName}`
+/**
+ * Build the project-visible POU name for a library block.
+ *
+ * `libraryIdentifier` is the manifest's `namespace`, not its `name`: the result
+ * is parsed as an ST identifier.
+ */
+export function libraryBlockPouName(libraryIdentifier: string, blockName: string): string {
+  return `${libraryIdentifier}${LIBRARY_BLOCK_SEPARATOR}${blockName}`
+}
+
+/**
+ * The identifier an archive's blocks are prefixed with.
+ *
+ * `namespace` is required of every manifest this editor builds, and validated
+ * as a C++ identifier. A foreign archive may lack one, so the name is folded
+ * into an identifier rather than trusted as it stands.
+ */
+function libraryIdentifierOf(manifest: { name: string; namespace?: string }): string {
+  const declared = manifest.namespace
+  if (declared && /^[A-Za-z_][A-Za-z0-9_]*$/.test(declared)) return declared
+  const folded = manifest.name.replace(/[^A-Za-z0-9_]/g, '_')
+  return /^[0-9]/.test(folded) ? `_${folded}` : folded
 }
 
 /** One native block an archive ships, resolved to its authored source. */
 type ResolvedNativeBlock = {
-  libraryName: string
+  /** Identifier form, for the POU name — see the Renaming note above. */
+  libraryIdentifier: string
   blockName: string
   language: 'cpp' | 'python'
   /** The authored file, verbatim — ST header plus native body. */
@@ -98,7 +122,7 @@ function resolveNativeBlocks(
         continue
       }
       blocks.push({
-        libraryName,
+        libraryIdentifier: libraryIdentifierOf(archive.manifest),
         blockName: entry.name,
         language: entry.implementation,
         source,
@@ -143,13 +167,47 @@ export function injectLibraryBlocks(projectData: PLCProjectData, archives: Stlib
     }
     synthesized.push({
       ...parsed,
-      name: libraryBlockPouName(block.libraryName, block.blockName),
+      name: libraryBlockPouName(block.libraryIdentifier, block.blockName),
       pouType: 'function-block',
     })
   }
 
   if (synthesized.length === 0) return projectData
   return { ...projectData, pous: [...projectData.pous, ...synthesized] }
+}
+
+/**
+ * Every data-type name in scope for a compile: the project's own, plus those
+ * the enabled libraries declare.
+ *
+ * The native bridge spells a pin's type from this set: strucpp declares a
+ * POU member of a data type as `IEC_<NAME>`, while a function block instance
+ * keeps its bare class name, and `mapUserTypeToIEC` tells them apart by
+ * membership.
+ *
+ * A library's types are emitted into the consuming project exactly as its own
+ * are, so they must be in the set too — built from the project alone, a pin
+ * typed by a library got `strucpp::MB_SPACE *` against strucpp's own
+ * `IEC_MB_SPACE`.
+ */
+export function projectAndLibraryTypeNames(
+  // Only the two fields this reads, so it takes the port shape and the schema
+  // shape alike — they differ on `configuration`/`configurations`, which is
+  // nothing to do with type names.
+  projectData: { dataTypes?: { name: string }[]; libraries?: { name: string }[] },
+  archives: readonly unknown[],
+): string[] {
+  const names = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+
+  const enabled = new Set((projectData.libraries ?? []).map((ref) => ref.name))
+  for (const archive of archives as StlibArchiveDTO[]) {
+    const libraryName = archive?.manifest?.name
+    if (!libraryName || !enabled.has(libraryName)) continue
+    for (const type of archive.manifest.types ?? []) {
+      names.push(type.name)
+    }
+  }
+  return names
 }
 
 /**

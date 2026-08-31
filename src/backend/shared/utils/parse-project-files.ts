@@ -290,6 +290,7 @@ function parsePouFile(file: RawProjectFile, warnings: string[]): (PLCPou & { var
           pouType: ipcPou.type as PLCPou['pouType'],
           interface: {
             returnType: ipcPou.data.returnType as string | undefined,
+            ...(ipcPou.data.extends ? { extends: ipcPou.data.extends as string } : {}),
             variables: (ipcPou.data.variables as PLCVariable[]) ?? [],
           },
           body: ipcPou.data.body as PLCPou['body'],

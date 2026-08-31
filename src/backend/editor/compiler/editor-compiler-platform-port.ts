@@ -52,6 +52,8 @@ import type {
   UploadRuntimeV3Args,
   UploadRuntimeV4Args,
 } from '@root/middleware/shared/ports/compiler-platform-port'
+import type { BundleFile } from '@root/middleware/shared/utils/library/bundle-file'
+import { isBinaryBundleFile } from '@root/middleware/shared/utils/library/bundle-file'
 import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import { dirname, join } from 'path'
@@ -64,6 +66,26 @@ import type { CompilerModule } from './compiler-module'
  * port stays free of the wider class surface (logging internals,
  * file-watching, etc.).
  */
+
+/**
+ * Write one bundle entry, creating its parent directories.
+ *
+ * A bundle is nearly all generated text, but a library that declares
+ * `precompiled=true` ships a `.a`, which reaches here base64-encoded because
+ * the archive it travelled in is JSON.  Writing that as text would produce a
+ * file the linker rejects, with nothing in the message pointing back here.
+ */
+async function writeBundleFile(absPath: string, file: BundleFile): Promise<void> {
+  await fs.mkdir(dirname(absPath), { recursive: true })
+  if (isBinaryBundleFile(file)) {
+    // Copied into a plain `Uint8Array`: `Buffer` and the `Uint8Array` this
+    // TypeScript lib expects are not assignable to one another.
+    await fs.writeFile(absPath, new Uint8Array(Buffer.from(file.base64, 'base64')))
+    return
+  }
+  await fs.writeFile(absPath, file, 'utf-8')
+}
+
 export interface EditorCompilerHandlers {
   handleCompileArduinoProgram: CompilerModule['handleCompileArduinoProgram']
   handleUploadProgram: CompilerModule['handleUploadProgram']
@@ -290,11 +312,9 @@ export function createEditorCompilerPlatformPort(
         // compile pipeline; doing it here once preserves the same
         // on-disk layout arduino-cli expects.
         await Promise.all(
-          Object.entries(args.files).map(async ([relPath, content]) => {
-            const absPath = join(context.compilationPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
+          Object.entries(args.files).map(async ([relPath, content]) =>
+            writeBundleFile(join(context.compilationPath, relPath), content),
+          ),
         )
 
         // Invoke the existing handler — it spawns arduino-cli compile
@@ -590,13 +610,11 @@ export function createEditorCompilerPlatformPort(
       log: PlatformLog,
     ): Promise<MaterializeRuntimeV4BundleResult> {
       try {
-        const entries: Array<[string, string]> = Object.entries(args.bundle)
+        const entries: Array<[string, BundleFile]> = Object.entries(args.bundle)
         await Promise.all(
-          entries.map(async ([relPath, content]: [string, string]) => {
-            const absPath = join(context.sourceTargetFolderPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
+          entries.map(async ([relPath, content]: [string, BundleFile]) =>
+            writeBundleFile(join(context.sourceTargetFolderPath, relPath), content),
+          ),
         )
         return { written: entries.length }
       } catch (error) {

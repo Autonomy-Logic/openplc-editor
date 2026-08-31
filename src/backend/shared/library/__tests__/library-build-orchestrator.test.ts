@@ -108,6 +108,23 @@ function makePort(): PortHarness {
       if (relPath === 'library.json') return harness.manifestContent
       return harness.files.get(relPath) ?? null
     },
+    async readBuildFileBase64(_projectPath: string, relPath: string) {
+      if (harness.throwOn.readBuildFileBase64) throw harness.throwOn.readBuildFileBase64
+      const content = harness.files.get(relPath)
+      if (content === undefined) return null
+      return Buffer.from(content, 'utf-8').toString('base64')
+    },
+    listProjectDirs(_projectPath: string, relPath: string) {
+      const prefix = `${relPath}/`
+      const names = new Set<string>()
+      for (const key of harness.files.keys()) {
+        if (!key.startsWith(prefix)) continue
+        const rest = key.slice(prefix.length)
+        const slash = rest.indexOf('/')
+        if (slash > 0) names.add(rest.slice(0, slash))
+      }
+      return Promise.resolve([...names].sort())
+    },
     async writeBuildFile(_projectPath: string, relPath: string, content: string) {
       if (harness.throwOn.writeBuildFile) throw harness.throwOn.writeBuildFile
       harness.files.set(relPath, content)
@@ -371,12 +388,18 @@ describe('runLibraryBuildPipeline', () => {
     ])
   })
 
-  it('warns and skips a resource that is not inside a library folder', async () => {
-    // It belongs to no library, so there is nowhere for the consumer to
-    // materialise it. Reported rather than dropped in silence.
+  it('takes only the library out of a resource folder', async () => {
+    // A folder is the author's checkout, so it arrives holding a build tree, a
+    // git directory and loose files. Only `library.properties` and `src/` are
+    // read: everything else is what the two consumers never look at, and
+    // reading it was thousands of files discarded one warning at a time.
     const harness = makePort()
-    harness.files.set('resources/stray.h', '#pragma once\n')
+    harness.files.set('resources/README.md', '# written by the editor\n')
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\n')
     harness.files.set('resources/DemoProtocol/src/DemoApi.h', '// api\n')
+    harness.files.set('resources/DemoProtocol/build/DemoApi.o', 'object file\n')
+    harness.files.set('resources/DemoProtocol/test/test_api.cpp', '// test\n')
+    harness.files.set('resources/DemoProtocol/CMakeLists.txt', 'project(demo)\n')
     const { events, emit } = captureEvents()
 
     await runLibraryBuildPipeline(
@@ -391,15 +414,76 @@ describe('runLibraryBuildPipeline', () => {
     )
 
     const [, , , aux] = mockLibraryBuild.mock.calls[0]
-    expect(aux.resources).toEqual([{ path: 'DemoProtocol/src/DemoApi.h', content: '// api\n' }])
-    expect(events.some((e) => e.level === 'warning' && e.message.includes('stray.h'))).toBe(true)
+    expect(aux.resources).toEqual([
+      { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+      { path: 'DemoProtocol/src/DemoApi.h', content: '// api\n' },
+    ])
+    // Silently, not one warning per file skipped.
+    expect(events.filter((e) => e.level === 'warning')).toEqual([])
+  })
+
+  it('fails the build when a resource folder is not a library', async () => {
+    // Shipping the folder anyway produces an archive whose consumer finds no
+    // headers, and the error surfaces there instead of here.
+    const harness = makePort()
+    harness.files.set('resources/DemoProtocol/DemoApi.h', '// header at the root\n')
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(events.some((e) => e.level === 'error' && e.message.includes('DemoProtocol'))).toBe(true)
+    expect(events.some((e) => e.message.includes('library.properties'))).toBe(true)
+  })
+
+  it('carries a precompiled binary out of src/ base64-encoded', async () => {
+    // A library that declares `precompiled=true` ships a `.a` beside its
+    // headers. Dropping it leaves the consumer to link against nothing.
+    const harness = makePort()
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\nprecompiled=true\n')
+    harness.files.set('resources/DemoProtocol/src/DemoApi.h', '// api\n')
+    harness.files.set('resources/DemoProtocol/src/esp32/libdemo.a', 'binary\uFFFDbytes')
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    const binary = aux.resources.find((r: { path: string }) => r.path.endsWith('libdemo.a'))
+    expect(binary.encoding).toBe('base64')
+    expect(Buffer.from(binary.content, 'base64').toString('utf-8')).toBe('binary\uFFFDbytes')
+    // The text beside it is untouched.
+    const header = aux.resources.find((r: { path: string }) => r.path.endsWith('DemoApi.h'))
+    expect(header.encoding).toBeUndefined()
+    expect(events.some((e) => e.message.includes('1 binary file(s)'))).toBe(true)
   })
 
   it('re-verifies when a resource changed but nothing else did', async () => {
     // The blocks are compiled against these, so a changed resource has to
     // invalidate a cached verification the same way a changed body does.
     const harness = makePort()
-    const before = [{ path: 'DemoProtocol/src/DemoApi.h', content: '#pragma once\n' }]
+    const before = [
+      { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+      { path: 'DemoProtocol/src/DemoApi.h', content: '#pragma once\n' },
+    ]
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\n')
     harness.files.set('resources/DemoProtocol/src/DemoApi.h', '#pragma once\n// changed\n')
     harness.files.set(
       'build/.verify-cache-library.json',

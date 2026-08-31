@@ -1,5 +1,10 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayStartIndex, isArrayVariable, multiDimensionalContainerType } from '../PLC/array-codegen-helpers'
+import {
+  getArrayStartIndex,
+  isArrayVariable,
+  isVariableLengthArray,
+  multiDimensionalContainerType,
+} from '../PLC/array-codegen-helpers'
 import { cBlockExternalVariables, cBlockInterfaceVariables } from './block-interface'
 
 type STCodeGenerationParams = {
@@ -28,10 +33,17 @@ type STCodeGenerationParams = {
  *   index in one `operator()` call — so the container itself is passed and the
  *   block indexes it as `grid(i, j)`, the same accessor the compiler's own
  *   generated code uses.
+ *
+ * - Variable-length arrays: `vars.NAME = &NAME`, for the same reason as a
+ *   multi-dimensional one. The pin is an `ArrayView<n>D`, whose bounds are not
+ *   known until the call, so passing the first element would drop the only
+ *   record of how many elements there are — and there is no lower bound yet to
+ *   offset by. Passing the view keeps `lower_bound()` / `upper_bound()` / `at()`
+ *   reachable from the block.
  */
 const generateVariableAssignment = (variable: PLCVariable): string => {
   const name = variable.name.toUpperCase()
-  if (multiDimensionalContainerType(variable)) {
+  if (multiDimensionalContainerType(variable) || isVariableLengthArray(variable)) {
     return `vars.${name} = &${name};\n`
   }
   if (isArrayVariable(variable)) {

@@ -139,6 +139,11 @@ function projectPou(pou: SchemaPou): TranspilePou {
     interface: {
       variables,
       ...(pou.type === 'function' ? { returnType: stringifyReturnType(pou.data.returnType) } : {}),
+      // Carried across, or the compile path emits the derived block with no
+      // base. Narrowed on `pou.type`: only that variant of the union carries it.
+      ...(pou.type === 'function-block' && pou.data.extends
+        ? { extends: pou.data.extends }
+        : {}),
     },
     body: projectBody(pou.data.body),
   }

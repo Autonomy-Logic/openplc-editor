@@ -38,6 +38,11 @@
 
 import type { LibraryBuildPort } from '../../../middleware/shared/ports/library-build-port'
 import type { CompileLibraryResult } from '../../../middleware/shared/ports/types'
+import {
+  LIBRARY_FOLDER_RULE,
+  LIBRARY_PROPERTIES,
+  LIBRARY_SRC_DIR,
+} from '../../../middleware/shared/utils/library/library-folder'
 import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
 import { isSafeRelativePath } from '../utils/path-safety'
 import {
@@ -104,33 +109,67 @@ const STLIB_OUT_DIR = 'build'
  * Read the library folders under `resources/`, paths intact — the consumer
  * reproduces the layout and resolves each folder as a library.
  *
- * Reports and skips a file that is not inside a folder (it belongs to no
- * library) or is not valid UTF-8 (the archive is JSON).
+ * Only the library is read: `library.properties` and everything under `src/`,
+ * which is what arduino-cli and the runtime Makefile resolve. `library-folder.ts`
+ * owns the rule, and the picker copies by the same one.
+ *
+ * A folder that is not a library fails the build naming it, rather than
+ * shipping an empty directory that fails at the consumer.
  */
 async function readResources(
   port: LibraryBuildPort,
   projectPath: string,
   emit: (event: LibraryBuildEvent) => void,
-): Promise<LibraryResource[]> {
-  const paths = await port.listProjectFiles(projectPath, RESOURCES_REL_PATH)
+): Promise<{ resources: LibraryResource[] } | { error: string }> {
+  const folders = await port.listProjectDirs(projectPath, RESOURCES_REL_PATH)
   const resources: LibraryResource[] = []
-  for (const relPath of paths) {
-    if (!relPath.includes('/') || !isSafeRelativePath(relPath)) {
-      emit({
-        message: `Skipping resource "${relPath}": it is not inside a library folder.`,
-        level: 'warning',
-      })
-      continue
+  for (const folder of folders) {
+    if (!isSafeRelativePath(folder)) {
+      return { error: `Resource folder "${folder}" is not a usable folder name.` }
     }
-    const content = await port.readBuildFile(projectPath, `${RESOURCES_REL_PATH}/${relPath}`)
-    if (content === null) continue
-    if (content.includes('\uFFFD')) {
-      emit({ message: `Skipping resource "${relPath}": not a text file.`, level: 'warning' })
-      continue
+    const folderPath = `${RESOURCES_REL_PATH}/${folder}`
+    const properties = await port.readBuildFile(projectPath, `${folderPath}/${LIBRARY_PROPERTIES}`)
+    const sourcePaths = await port.listProjectFiles(projectPath, `${folderPath}/${LIBRARY_SRC_DIR}`)
+
+    if (properties === null || sourcePaths.length === 0) {
+      const missing: string[] = []
+      if (properties === null) missing.push(LIBRARY_PROPERTIES)
+      if (sourcePaths.length === 0) missing.push(`${LIBRARY_SRC_DIR}/`)
+      return {
+        error: `Resource folder "${folder}" has no ${missing.join(' and no ')} — ${LIBRARY_FOLDER_RULE}.`,
+      }
     }
-    resources.push({ path: relPath, content })
+
+    resources.push({ path: `${folder}/${LIBRARY_PROPERTIES}`, content: properties })
+    for (const sourcePath of sourcePaths) {
+      const relPath = `${folder}/${LIBRARY_SRC_DIR}/${sourcePath}`
+      const text = await port.readBuildFile(projectPath, `${RESOURCES_REL_PATH}/${relPath}`)
+      if (text === null) continue
+      // A `precompiled=true` library ships a `.a` beside its headers, so it
+      // travels too — base64, since the archive is JSON. U+FFFD is what
+      // non-UTF-8 bytes decode to; a text file containing one is carried the
+      // same way, costing a third of its size.
+      if (text.includes('\uFFFD')) {
+        const bytes = await port.readBuildFileBase64(projectPath, `${RESOURCES_REL_PATH}/${relPath}`)
+        if (bytes === null) continue
+        resources.push({ path: relPath, content: bytes, encoding: 'base64' })
+        continue
+      }
+      resources.push({ path: relPath, content: text })
+    }
   }
-  return resources
+
+  const binaries = resources.filter((resource) => resource.encoding === 'base64')
+  if (binaries.length > 0) {
+    // Reported because base64 grows a file by a third and a Runtime v4 upload
+    // is capped per file and in total.
+    const kb = Math.round(binaries.reduce((total, resource) => total + resource.content.length, 0) / 1024)
+    emit({
+      message: `Carrying ${binaries.length} binary file(s) from resources, ${kb} KB encoded.`,
+      level: 'info',
+    })
+  }
+  return { resources }
 }
 
 /**
@@ -289,7 +328,11 @@ export async function runLibraryBuildPipeline(
   // included: a library whose C++ targets no toolchain the editor can drive
   // would otherwise carry a permanent failure that reports nothing.
   // -------------------------------------------------------------------------
-  const resources = await readResources(port, projectPath, emit)
+  const resourcesRead = await readResources(port, projectPath, emit)
+  if ('error' in resourcesRead) {
+    return fail(emit, resourcesRead.error, { libraryName: manifest.name })
+  }
+  const resources = resourcesRead.resources
   const verifyTarget = manifest.verifyTarget
   const nativeSource = nativeSources.map((n) => `${n.fileName}\n${n.source}`).join('\n')
   const resourceSource = resources.map((r) => `${r.path}\n${r.content}`).join('\n')

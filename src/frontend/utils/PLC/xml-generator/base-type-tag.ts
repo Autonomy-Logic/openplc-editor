@@ -1,4 +1,4 @@
-import { lookupBaseType } from '../../iec-types-registry'
+import { lookupBaseType, parseStringLength } from '../../iec-types-registry'
 
 /**
  * Pick the PLCopen TC6 0201 XML element tag for a base type value.
@@ -32,4 +32,17 @@ export const baseTypeTag = (value: string): string => {
  */
 export const isPlcopenStandardType = (value: string): boolean => {
   return lookupBaseType(value)?.xml.plcopenStandard ?? false
+}
+
+/**
+ * Body of a base-type element: the empty string for everything, or the TC6
+ * `length` attribute for a declared string length.
+ *
+ * TC6 carries the length as an attribute, so `STRING(23)` is
+ * `<string length="23"/>`. Without it a save/load round trip drops the
+ * declaration back to the 254-character default.
+ */
+export const baseTypeElementBody = (value: string): '' | { '@length': string } => {
+  const { length, valid } = parseStringLength(value)
+  return length !== undefined && valid ? { '@length': String(length) } : ''
 }

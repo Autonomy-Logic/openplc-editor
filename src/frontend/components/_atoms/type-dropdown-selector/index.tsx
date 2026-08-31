@@ -3,7 +3,9 @@ import _ from 'lodash'
 import { useState } from 'react'
 
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
+import { isLengthQualifiedType } from '../../../utils/iec-types-registry'
 import { DropdownSearchInput } from '../dropdown-search-input'
+import { seedStringLengths, StringLengthMenuItem } from '../string-length-menu-item'
 
 type TypeDropdownSelectorProps = {
   value: string
@@ -25,12 +27,13 @@ export const TypeDropdownSelector = ({
     'base-type': '',
     'user-data-type': '',
   })
+  const [stringLengths, setStringLengths] = useState<Record<string, string>>(() => seedStringLengths(value))
 
   return (
     <PrimitiveDropdown.Root onOpenChange={setPopoverIsOpen} open={popoverIsOpen}>
       <PrimitiveDropdown.Trigger asChild disabled={disabled}>
         <div className='flex h-7 w-full max-w-44 cursor-pointer items-center justify-between rounded-lg border border-neutral-400 bg-white px-3 py-2 text-xs text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'>
-          <span>{value ? _.upperCase(value) : 'Select...'}</span>
+          <span>{value ? value.toUpperCase() : 'Select...'}</span>
           <ArrowIcon size='sm' direction='down' />
         </div>
       </PrimitiveDropdown.Trigger>
@@ -72,17 +75,31 @@ export const TypeDropdownSelector = ({
                       }
                     />
                     {filteredValues.length > 0 ? (
-                      filteredValues.map((value) => (
-                        <PrimitiveDropdown.Item
-                          key={value}
-                          onSelect={() => onSelect(scope.definition as 'base-type' | 'user-data-type', value)}
-                          className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        >
-                          <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                            {_.upperCase(value)}
-                          </span>
-                        </PrimitiveDropdown.Item>
-                      ))
+                      filteredValues.map((entry) =>
+                        isLengthQualifiedType(entry) ? (
+                          <StringLengthMenuItem
+                            key={entry}
+                            typeName={entry.toUpperCase()}
+                            length={stringLengths[entry.toUpperCase()] ?? ''}
+                            onLengthChange={(next) =>
+                              setStringLengths((prev) => ({ ...prev, [entry.toUpperCase()]: next }))
+                            }
+                            onApply={(declaredType) =>
+                              onSelect(scope.definition as 'base-type' | 'user-data-type', declaredType)
+                            }
+                          />
+                        ) : (
+                          <PrimitiveDropdown.Item
+                            key={entry}
+                            onSelect={() => onSelect(scope.definition as 'base-type' | 'user-data-type', entry)}
+                            className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          >
+                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                              {entry.toUpperCase()}
+                            </span>
+                          </PrimitiveDropdown.Item>
+                        ),
+                      )
                     ) : (
                       <div className='flex h-8 items-center justify-center'>
                         <span className='text-xs text-neutral-700 dark:text-neutral-500'>

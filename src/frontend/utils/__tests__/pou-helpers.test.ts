@@ -1,6 +1,7 @@
 import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import {
+  findArrayDataType,
   findFunctionBlockExternalVariables,
   findFunctionBlockVariables,
   findLeafVariables,
@@ -204,6 +205,65 @@ describe('findFunctionBlockVariables', () => {
     expect(names).not.toContain('TMP')
     expect(names).not.toContain('EXT_REF')
   })
+
+  // A derived FB's instance carries every member of its bases, and
+  // debug-table-gen walks the same chain — so a member missing here is one
+  // debug-map.json offers and the watch panel cannot reach.
+  describe('EXTENDS', () => {
+    const fb = (name: string, base: string | undefined, names: string[]): PLCPou => ({
+      name,
+      pouType: 'function-block',
+      interface: {
+        ...(base ? { extends: base } : {}),
+        variables: names.map((n) => ({
+          name: n,
+          class: 'local' as const,
+          type: { definition: 'base-type' as const, value: 'INT' },
+          location: '',
+          documentation: '',
+        })),
+      },
+      body: { language: 'st', value: '' },
+    })
+
+    it('includes inherited members, base first', () => {
+      const pous = [fb('BASE_FB', undefined, ['TICK', 'COUNT']), fb('FAST_FB', 'BASE_FB', ['SELF_KIND'])]
+      const vars = findFunctionBlockVariables('FAST_FB', pous, SYSTEM_LIBS)
+      expect(vars!.map((v) => v.name)).toEqual(['TICK', 'COUNT', 'SELF_KIND'])
+    })
+
+    it('walks a chain more than one level deep', () => {
+      const pous = [fb('A_FB', undefined, ['A1']), fb('B_FB', 'A_FB', ['B1']), fb('C_FB', 'B_FB', ['C1'])]
+      expect(findFunctionBlockVariables('C_FB', pous, SYSTEM_LIBS)!.map((v) => v.name)).toEqual(['A1', 'B1', 'C1'])
+    })
+
+    it('lets a derived declaration hide the base one of the same name', () => {
+      const base = fb('BASE_FB', undefined, ['KIND'])
+      const derived = fb('FAST_FB', 'BASE_FB', ['KIND'])
+      derived.interface!.variables[0].type = { definition: 'base-type', value: 'REAL' }
+      const vars = findFunctionBlockVariables('FAST_FB', [base, derived], SYSTEM_LIBS)
+      expect(vars!.map((v) => v.name)).toEqual(['KIND'])
+      expect(vars![0].type.value).toBe('REAL')
+    })
+
+    it('resolves the base name case-insensitively', () => {
+      const pous = [fb('BASE_FB', undefined, ['TICK']), fb('FAST_FB', 'base_fb', ['SELF_KIND'])]
+      expect(findFunctionBlockVariables('FAST_FB', pous, SYSTEM_LIBS)!.map((v) => v.name)).toEqual([
+        'TICK',
+        'SELF_KIND',
+      ])
+    })
+
+    it('stops at a base that is not a project POU', () => {
+      const pous = [fb('FAST_FB', 'NOT_A_POU', ['SELF_KIND'])]
+      expect(findFunctionBlockVariables('FAST_FB', pous, SYSTEM_LIBS)!.map((v) => v.name)).toEqual(['SELF_KIND'])
+    })
+
+    it('ends a cyclic chain instead of hanging', () => {
+      const pous = [fb('A_FB', 'B_FB', ['A1']), fb('B_FB', 'A_FB', ['B1'])]
+      expect(findFunctionBlockVariables('A_FB', pous, SYSTEM_LIBS)!.map((v) => v.name)).toEqual(['B1', 'A1'])
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -249,6 +309,22 @@ describe('findFunctionBlockExternalVariables', () => {
   it('returns [] for a library FB (black box — not searched in project POUs)', () => {
     // SR is a system-library FB; its externals are not project-visible.
     expect(findFunctionBlockExternalVariables('SR', [])).toEqual([])
+  })
+
+  it('picks up a base FB’s externals, listing one declared at both levels once', () => {
+    const base: PLCPou = {
+      name: 'BaseFB',
+      pouType: 'function-block',
+      interface: { variables: [makeVar('G1', 'external'), makeVar('G2', 'external')] },
+      body: { language: 'st', value: '' },
+    }
+    const derived: PLCPou = {
+      name: 'MyFB',
+      pouType: 'function-block',
+      interface: { extends: 'BaseFB', variables: [makeVar('G2', 'external'), makeVar('S', 'local')] },
+      body: { language: 'st', value: '' },
+    }
+    expect(findFunctionBlockExternalVariables('MyFB', [base, derived]).map((v) => v.name)).toEqual(['G2', 'G1'])
   })
 })
 
@@ -299,6 +375,64 @@ describe('findStructureVariables', () => {
 
   it('returns null for unknown type name', () => {
     expect(findStructureVariables('UnknownType', dataTypes)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findArrayDataType
+// ---------------------------------------------------------------------------
+
+describe('findArrayDataType', () => {
+  const arrayOf = (name: string, baseType: { definition: string; value: string }) =>
+    ({
+      name,
+      derivation: 'array',
+      baseType,
+      dimensions: [{ dimension: '0..7' }],
+    }) as unknown as PLCDataType
+
+  const dataTypes: PLCDataType[] = [
+    arrayOf('A_PROFILE', { definition: 'base-type', value: 'REAL' }),
+    arrayOf('A_MOTORS', { definition: 'user-data-type', value: 'S_MOTOR' }),
+    arrayOf('A_TIMERS', { definition: 'derived', value: 'TON' }),
+    arrayOf('A_GRID', { definition: 'array', value: 'ARRAY [0..1] OF INT' }),
+    { name: 'S_MOTOR', derivation: 'structure', variable: [] },
+    { name: 'E_MODE', derivation: 'enumerated', values: [{ description: 'OFF' }] },
+  ]
+
+  it('returns the element type and bounds, case-insensitively', () => {
+    expect(findArrayDataType('a_profile', dataTypes)).toEqual({
+      baseType: { definition: 'base-type', value: 'REAL' },
+      dimensions: [{ dimension: '0..7' }],
+    })
+  })
+
+  it('carries a structure element through unchanged', () => {
+    expect(findArrayDataType('A_MOTORS', dataTypes)?.baseType).toEqual({
+      definition: 'user-data-type',
+      value: 'S_MOTOR',
+    })
+  })
+
+  // The array walk disambiguates an FB from a structure by name, so a `derived`
+  // element reaches it as a user-data-type rather than a shape it cannot type.
+  it('reports a function-block element as a user data type', () => {
+    expect(findArrayDataType('A_TIMERS', dataTypes)?.baseType).toEqual({
+      definition: 'user-data-type',
+      value: 'TON',
+    })
+  })
+
+  // A nested array needs a second subscript this shape cannot express; a leaf
+  // is better than elements reported with the wrong bounds.
+  it('returns null for an array of arrays', () => {
+    expect(findArrayDataType('A_GRID', dataTypes)).toBeNull()
+  })
+
+  it('returns null for a structure, an enumeration and an unknown name', () => {
+    expect(findArrayDataType('S_MOTOR', dataTypes)).toBeNull()
+    expect(findArrayDataType('E_MODE', dataTypes)).toBeNull()
+    expect(findArrayDataType('NoSuchType', dataTypes)).toBeNull()
   })
 })
 

@@ -160,6 +160,24 @@ export interface LibraryBuildPort {
   listProjectFiles(projectPath: string, relPath: string): Promise<string[]>
 
   /**
+   * Names of the directories directly inside a project-relative directory,
+   * sorted.  Returns `[]` when the directory is absent.
+   *
+   * One level, not recursive: a caller listing the library folders under
+   * `resources/` never descends into an author's `build/` or `.git/`.
+   */
+  listProjectDirs(projectPath: string, relPath: string): Promise<string[]>
+
+  /**
+   * Read a project-relative file as raw bytes, base64-encoded, or `null` when
+   * it is absent.
+   *
+   * `readBuildFile` decodes as UTF-8 and cannot carry a precompiled `.a`.
+   * Text still goes through `readBuildFile`; this is for what is not text.
+   */
+  readBuildFileBase64(projectPath: string, relPath: string): Promise<string | null>
+
+  /**
    * Recursively remove a project-relative subtree.  No-op when the
    * subtree doesn't exist.  Implementations MUST scope deletion to
    * the named subtree — wiping anything outside it is a contract

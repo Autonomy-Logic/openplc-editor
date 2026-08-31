@@ -182,6 +182,33 @@ describe('generateSTCode (cpp)', () => {
     expect(result).toContain('vars.IOVAL = &IOVAL;')
   })
 
+  it('passes a variable-length array as the view itself, not as an element pointer', () => {
+    // strucpp types an `ARRAY [*] OF INT` pin `ArrayView1D<IEC_INT>`, which
+    // carries the runtime bounds. Offsetting to the first element would drop the
+    // length and index `data_[0 - lower]`, out of range for a non-zero lower
+    // bound.
+    const values: PLCVariable = {
+      name: 'values',
+      class: 'inOut',
+      type: {
+        definition: 'array',
+        value: 'ARRAY [*] OF INT',
+        data: {
+          baseType: { definition: 'base-type', value: 'INT' },
+          dimensions: [{ dimension: '*' }],
+        },
+      },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    const result = generateSTCode({ pouName: 'VlaBlock', allVariables: [values] })
+
+    expect(result).toContain('vars.VALUES = &VALUES;')
+    expect(result).not.toContain('&VALUES[')
+  })
+
   describe('VAR_EXTERNAL', () => {
     const ext = (name: string): PLCVariable => ({
       name,

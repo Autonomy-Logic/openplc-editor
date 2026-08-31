@@ -37,6 +37,7 @@ import {
   describeVppRuntimeMismatch,
   isStrucppCompatibleRuntime,
 } from '../firmware/runtime-version-gate'
+import { projectAndLibraryTypeNames } from '../library/inject-library-blocks'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
 import type { DevicePin } from '../types/PLC/devices'
@@ -600,7 +601,9 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
-    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    // The enabled libraries' data types count as well as the project's: a pin
+    // typed by one has to be spelled the way strucpp declared it.
+    const userTypeNames = projectAndLibraryTypeNames(projectData, libraryArchives)
     const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
     const bundle = composeRuntimeV4Bundle({
       programSt,

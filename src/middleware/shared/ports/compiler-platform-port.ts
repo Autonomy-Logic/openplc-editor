@@ -35,6 +35,7 @@
  * server-side, but the pipeline never knows.
  */
 
+import type { BundleFile } from '../utils/library/bundle-file'
 import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
@@ -118,8 +119,12 @@ export interface CompileArduinoArgs {
    *  `src/c_blocks.h`, `examples/Baremetal/c_blocks_code.cpp`,
    *  `src/defines.h`, and the bundled firmware skeleton + strucpp
    *  runtime headers.  On editor: written to disk before
-   *  arduino-cli runs.  On web: POSTed in the request body. */
-  files: Record<string, string>
+   *  arduino-cli runs.  On web: POSTed in the request body.
+   *
+   *  Almost every entry is generated text.  An entry carrying bytes — a
+   *  library's precompiled `.a` — arrives as `{ base64 }` and must be written
+   *  decoded; see `BundleFile`. */
+  files: Record<string, BundleFile>
   /** Argv suffix for arduino-cli compile (after the `compile`
    *  subcommand).  Comes from the shared `buildArduinoCliCompileArgs`
    *  helper. */
@@ -148,8 +153,9 @@ export interface CompileArduinoResult {
 export interface UploadRuntimeV4Args {
   /** File map the runtime extracts on the device.  Already
    *  composed by `composeRuntimeV4Bundle`; the pipeline passes it
-   *  straight through. */
-  bundle: Record<string, string>
+   *  straight through.  A `{ base64 }` entry carries bytes — see
+   *  `BundleFile`. */
+  bundle: Record<string, BundleFile>
   /** Discriminated device context; see `PlatformDeviceContext`. */
   context: PlatformDeviceContext
 }
@@ -397,8 +403,9 @@ export interface CompilerPlatformPort {
 }
 
 export interface MaterializeRuntimeV4BundleArgs {
-  /** Path → file content, as composed by `composeRuntimeV4Bundle`. */
-  bundle: Record<string, string>
+  /** Path → file content, as composed by `composeRuntimeV4Bundle`.  A
+   *  `{ base64 }` entry carries bytes — see `BundleFile`. */
+  bundle: Record<string, BundleFile>
 }
 
 export interface MaterializeRuntimeV4BundleResult {

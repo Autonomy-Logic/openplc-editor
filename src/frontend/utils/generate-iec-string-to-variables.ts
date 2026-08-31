@@ -1,7 +1,7 @@
 import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { DEBUG_STRING_CAP } from './variable-sizes'
+import { MAX_STRING_LENGTH, parseStringLength } from './iec-types-registry'
 
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',
@@ -46,17 +46,23 @@ export const DISALLOWED_LOCATION_CLASSES: ReadonlyArray<PLCVariable['class']> = 
 // `parseArrayType` has declined it, and `parseArrayType` declines blank bounds.
 // Both guards are below; between them, a comma reaches the store only as part of
 // a well-formed multi-dimensional ARRAY.
+//
+// It also accepts `*`, the bound of a variable-length array
+// (`values : ARRAY [*] OF INT;`), and `(` / `)` for a declared string length
+// (`name : STRING(23);`). The parentheses cannot swallow a `(*` comment: the
+// group is lazy and must be followed by `;`, and anything before that
+// semicolon is rejected by `baseTypeSchema` and `identifierRegex`.
 
 // Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\],\.]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\]\(\),\.\*]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 // Alternate format: name AT location : type := initialValue ; (* documentation *)
 // This format is used by some IEC 61131-3 tools and older versions of OpenPLC Editor
 const alternateLineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\],\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\(\),\.\*]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'
@@ -81,8 +87,12 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
  * Also consumed by the data-type text parser (`PLC/data-type-text-parser.ts`).
  */
 export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
-  // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
-  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*)\s*$/i)
+  // ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally
+  // namespaced) that may carry a declared string length —
+  // `ARRAY [0..3] OF STRING(23)`.
+  const arrayMatch = typeStr.match(
+    /^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*(?:\s*[([]\s*\d+\s*[)\]])?)\s*$/i,
+  )
   if (!arrayMatch) return null
 
   const dimensionsStr = arrayMatch[1]
@@ -214,33 +224,29 @@ export const parseIecStringToVariables = (
       )
     }
 
-    // A length-qualified string (`STRING[20]`, `WSTRING[8]`) is legal IEC and
-    // legal CODESYS, and STruC++ does not accept it. Left alone it is not even
-    // recognised as a string: it becomes a user data type literally named
-    // "STRING[20]", which is persisted, shown in the type cell, and emitted
-    // verbatim into the generated ST — where the compiler fails with
-    // `Expected Semicolon, found [` pointing at a line the user never wrote.
+    // A length-qualified string — `STRING(23)`, `WSTRING(8)`. STruC++ emits
+    // `IECStringVar<23>` at 54 bytes where a plain STRING is 518. Square
+    // brackets are accepted and normalised to the parenthesised form.
     //
-    // Refusing here says what is true today. The transport carries a fixed
-    // DEBUG_STRING_CAP-character budget, so a declared length would not be honoured even if
-    // it parsed; when the compiler grows the declaration, this guard is the one
-    // place that has to change.
-    // Both shapes it can take: on its own (`msg : STRING[20]`) and as an ARRAY's
-    // element type (`tags : ARRAY [0..3] OF STRING[20]`). The array form needs
-    // its own alternative because `parseArrayType` only accepts a bare
-    // identifier after `OF`, so a length-qualified element matches nothing and
-    // used to fall through every branch to the compiler — which then reported
-    // `Expected Semicolon, found [` at a column the user never wrote, plus two
-    // cascading errors on the FOLLOWING line, so even the line number misled.
-    const lengthQualifiedString =
-      /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType) ??
-      /^ARRAY\s*\[[^\]]*\]\s+OF\s+(W?STRING)\s*\[\s*[^\]]*\]\s*$/i.exec(parsedType)
-    if (lengthQualifiedString) {
-      const keyword = lengthQualifiedString[1].toUpperCase()
-      throw new Error(
-        `Syntax error on line ${lineNumber}: "${line}". A declared length is not supported on ${keyword} — ` +
-          `use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`,
-      )
+    // Only a malformed or out-of-range length is refused, and refused here
+    // rather than left to fall through: an unrecognised type is stored as a
+    // user data type named "STRING(0)" and emitted verbatim into generated ST.
+    //
+    // The array element form is handled by `parseArrayType` above.
+    const stringWithLength = /^(W?STRING)\s*[([]\s*([^)\]]*?)\s*[)\]]$/i.exec(parsedType)
+    if (stringWithLength) {
+      // Matching the shape commits to a length, so `STRING[]`, `STRING(abc)`,
+      // `STRING(0)` and `STRING(999)` are all reported here. `parseStringLength`
+      // returns `valid: true` with no length for an unqualified name, so the
+      // undefined case must be caught explicitly.
+      const { length, valid } = parseStringLength(parsedType)
+      if (length === undefined || !valid) {
+        throw new Error(
+          `Syntax error on line ${lineNumber}: "${line}". ` +
+            `${stringWithLength[1].toUpperCase()} takes a length from 1 to ${MAX_STRING_LENGTH}, ` +
+            `got "${stringWithLength[2]}".`,
+        )
+      }
     }
 
     const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())

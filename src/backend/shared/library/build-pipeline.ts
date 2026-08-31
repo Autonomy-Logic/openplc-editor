@@ -338,7 +338,13 @@ export interface LibraryNativeSource {
  */
 export interface LibraryResource {
   path: string
+  /** UTF-8 text, or the file's bytes base64-encoded when `encoding` says so. */
   content: string
+  /** Absent for text.  `'base64'` marks a file that is not UTF-8 — a library
+   *  that declares `precompiled=true` ships `.a` files beside its headers, and
+   *  those are part of the library.  The archive is JSON, so they ride
+   *  encoded and the consumer writes the decoded bytes. */
+  encoding?: 'base64'
 }
 
 export interface LibraryBuildAux {
@@ -430,20 +436,6 @@ export function libraryBuildFromTranspiledSt(
         {
           message:
             'Library has no functions, function blocks, or data types to compile.  Add at least one before building.',
-        },
-      ],
-    }
-  }
-
-  // `injectLibraryBlocks` emits each grafted POU as `<name>__<BLOCK>`, a C
-  // identifier, but `checkPathId` permits `.` and `-`.  Only libraries that
-  // ship native blocks reach C, so an ST-only library keeps any name it had.
-  if (nativeSources.length > 0 && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(manifest.name)) {
-    return {
-      success: false,
-      errors: [
-        {
-          message: `manifest.name must be a valid C identifier (letters, digits, underscore; cannot start with a digit) because this library ships C/C++ blocks, which are emitted as \`${manifest.name}__<BLOCK>\`. Got: ${JSON.stringify(manifest.name)}`,
         },
       ],
     }

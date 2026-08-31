@@ -109,6 +109,34 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       }
     },
 
+    async readBuildFileBase64(projectPath: string, relPath: string): Promise<string | null> {
+      const fullPath = resolveProjectRelativePath(projectPath, relPath)
+      try {
+        return (await fs.readFile(fullPath)).toString('base64')
+      } catch (error) {
+        if (isFsNotFound(error)) return null
+        throw error
+      }
+    },
+
+    async listProjectDirs(projectPath: string, relPath: string): Promise<string[]> {
+      const root = resolveProjectRelativePath(projectPath, relPath)
+      let entries
+      try {
+        entries = await fs.readdir(root, { withFileTypes: true })
+      } catch (error) {
+        if (isFsNotFound(error)) return []
+        throw error
+      }
+      // Symlinks are not followed here for the same reason they are not
+      // followed when walking: a link out of the tree would put files the
+      // author never chose into a published archive.
+      return entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort()
+    },
+
     async writeBuildFile(projectPath: string, relPath: string, content: string): Promise<void> {
       const fullPath = resolveProjectRelativePath(projectPath, relPath)
       await fs.mkdir(path.dirname(fullPath), { recursive: true })

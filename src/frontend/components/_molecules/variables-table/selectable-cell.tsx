@@ -11,9 +11,11 @@ import { useOpenPLCStore } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
+import { isLengthQualifiedType } from '../../../utils/iec-types-registry'
 import { hasStringName, safeUpper } from '../../../utils/safe-upper'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
+import { seedStringLengths, StringLengthMenuItem } from '../../_atoms/string-length-menu-item'
 import { TypeChangeModal } from '../type-change-modal'
 import { ArrayModal } from './elements/array-modal'
 
@@ -140,6 +142,7 @@ const SelectableTypeCell = ({
     value: PLCVariable['type']['value']
   } | null>(null)
   const [validationResult, setValidationResult] = useState<TypeChangeValidationResult | null>(null)
+  const [stringLengths, setStringLengths] = useState<Record<string, string>>(() => seedStringLengths(value))
   const variableName = table.options.data[index].name
   const currentVariable = table.options.data[index]
 
@@ -289,11 +292,13 @@ const SelectableTypeCell = ({
             })}
           >
             <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+              {/* `toUpperCase`, not lodash `upperCase`: the latter splits on
+                  punctuation, rendering STRING(15) as "STRING 15". */}
               {cellValue === null
                 ? ''
                 : definition === 'array' || definition === 'derived'
                   ? cellValue
-                  : _.upperCase(cellValue as unknown as string)}
+                  : (cellValue as unknown as string).toUpperCase()}
             </span>
           </div>
         </PrimitiveDropdown.Trigger>
@@ -340,17 +345,31 @@ const SelectableTypeCell = ({
                         />
                       </div>
                       {filteredValues.length > 0 ? (
-                        filteredValues.map((value) => (
-                          <PrimitiveDropdown.Item
-                            key={value}
-                            onSelect={() => onSelect(scope.definition as PLCVariable['type']['definition'], value)}
-                            className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                          >
-                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                              {_.upperCase(value)}
-                            </span>
-                          </PrimitiveDropdown.Item>
-                        ))
+                        filteredValues.map((value) =>
+                          isLengthQualifiedType(value) ? (
+                            <StringLengthMenuItem
+                              key={value}
+                              typeName={value.toUpperCase()}
+                              length={stringLengths[value.toUpperCase()] ?? ''}
+                              onLengthChange={(next) =>
+                                setStringLengths((prev) => ({ ...prev, [value.toUpperCase()]: next }))
+                              }
+                              onApply={(declaredType) =>
+                                onSelect(scope.definition as PLCVariable['type']['definition'], declaredType)
+                              }
+                            />
+                          ) : (
+                            <PrimitiveDropdown.Item
+                              key={value}
+                              onSelect={() => onSelect(scope.definition as PLCVariable['type']['definition'], value)}
+                              className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                            >
+                              <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                                {value.toUpperCase()}
+                              </span>
+                            </PrimitiveDropdown.Item>
+                          ),
+                        )
                       ) : (
                         <div className='flex h-8 w-full items-center justify-center py-1'>
                           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>

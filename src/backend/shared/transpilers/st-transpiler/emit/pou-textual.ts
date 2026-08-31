@@ -67,6 +67,11 @@ export function generateTextualPou(pou: TranspilePou, project: TranspileProject,
     program.push([' : ', []])
     program.push([formatReturnType(pou.interface.returnType), [tagName, 'return']])
   }
+  // Dropped here, a derived block reaches strucpp with no base clause, so it
+  // is emitted with no base class, no inherited pins and no dynamic binding.
+  if (pou.interface.extends) {
+    program.push([` EXTENDS ${pou.interface.extends}`, [tagName, 'extends']])
+  }
   program.push(['\n', []])
 
   const iface = computeInterface(pou.interface.variables)

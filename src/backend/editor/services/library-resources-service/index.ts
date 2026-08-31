@@ -20,6 +20,13 @@ import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { basename, join, relative, sep } from 'node:path'
 
 import { isSafeRelativePath } from '@root/backend/shared/utils/path-safety'
+import {
+  isLibraryDir,
+  isLibraryFile,
+  LIBRARY_FOLDER_RULE,
+  LIBRARY_PROPERTIES,
+  LIBRARY_SRC_DIR,
+} from '@root/middleware/shared/utils/library/library-folder'
 
 import { assertPathContained } from '../../utils/path-containment'
 
@@ -27,16 +34,11 @@ import { assertPathContained } from '../../utils/path-containment'
 const RESOURCES_DIR = 'resources'
 
 /**
- * Bounds on a folder being added.  A picker makes it one click to choose a
- * home directory by mistake, and the copy would otherwise run until the disk
- * filled.  Generous enough that no real library approaches them.
+ * Bounds on what is copied. The allow-list already excludes the directories
+ * that make a checkout large, so these are a backstop.
  */
 const MAX_FILES = 2000
 const MAX_BYTES = 20 * 1024 * 1024
-
-/** Directories never carried into `resources/`: version-control and
- *  dependency trees belong to the source repository, not to the library. */
-const SKIPPED_DIRS = new Set(['.git', 'node_modules'])
 
 /** One library folder under `resources/`, with the files it ships. */
 export interface LibraryResourceFolder {
@@ -100,6 +102,11 @@ export async function addLibraryResource(projectPath: string, sourcePath: string
     // Absent, which is what we want.
   }
 
+  // Checked before the copy, so the wrong folder is reported here rather than
+  // landing an empty library that fails at build time.
+  const notALibrary = await whyNotALibrary(sourcePath)
+  if (notALibrary) return { success: false, error: notALibrary }
+
   const measured = await measure(sourcePath)
   if ('error' in measured) return { success: false, error: measured.error }
 
@@ -110,7 +117,12 @@ export async function addLibraryResource(projectPath: string, sourcePath: string
       // A link out of the tree would put files the author never chose into a
       // published archive.
       dereference: false,
-      filter: (source) => !SKIPPED_DIRS.has(basename(source)),
+      // `cp` asks about the root first and each directory before its contents,
+      // so refusing a directory prunes the whole subtree.
+      filter: (source) => {
+        const rel = relative(sourcePath, source).split(sep).join('/')
+        return rel === '' || isLibraryDir(rel) || isLibraryFile(rel)
+      },
     })
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -146,6 +158,32 @@ export async function removeLibraryResource(
 }
 
 /**
+ * Why `root` is not an Arduino library, or `null` when it is one.
+ *
+ * Both are required: `library.properties` makes arduino-cli treat the folder as
+ * 1.5-format and recurse into `src/`, which is the only place either consumer
+ * reads sources from.
+ */
+async function whyNotALibrary(root: string): Promise<string | null> {
+  const missing: string[] = []
+
+  try {
+    if (!(await stat(join(root, LIBRARY_PROPERTIES))).isFile()) missing.push(LIBRARY_PROPERTIES)
+  } catch {
+    missing.push(LIBRARY_PROPERTIES)
+  }
+
+  try {
+    if (!(await stat(join(root, LIBRARY_SRC_DIR))).isDirectory()) missing.push(`${LIBRARY_SRC_DIR}/`)
+  } catch {
+    missing.push(`${LIBRARY_SRC_DIR}/`)
+  }
+
+  if (missing.length === 0) return null
+  return `"${basename(root)}" has no ${missing.join(' and no ')} — ${LIBRARY_FOLDER_RULE}.`
+}
+
+/**
  * File count and total size of a candidate folder, or the reason it is too
  * big to carry.  Walked before the copy so an accidental pick fails fast
  * instead of half-copying.
@@ -165,11 +203,12 @@ async function measure(root: string): Promise<{ files: number; bytes: number } |
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue
       const full = join(dir, entry.name)
+      const rel = relative(root, full).split(sep).join('/')
       if (entry.isDirectory()) {
-        if (!SKIPPED_DIRS.has(entry.name)) stack.push(full)
+        if (isLibraryDir(rel)) stack.push(full)
         continue
       }
-      if (!entry.isFile()) continue
+      if (!entry.isFile() || !isLibraryFile(rel)) continue
       files += 1
       if (files > MAX_FILES) {
         return { error: `That folder holds more than ${MAX_FILES} files — it does not look like a library.` }
@@ -185,8 +224,9 @@ async function measure(root: string): Promise<{ files: number; bytes: number } |
   return { files, bytes }
 }
 
-/** Every file under `root`, relative and `/`-separated, sorted. Symlinks are
- *  not followed, matching what the build packages. */
+/** The library's files under `root`, relative and `/`-separated, sorted.
+ *  Symlinks are not followed, and everything outside the library is left
+ *  where it is — this is the same rule the build packages by. */
 async function walkFiles(root: string): Promise<string[]> {
   const found: string[] = []
   const stack = [root]
@@ -201,10 +241,11 @@ async function walkFiles(root: string): Promise<string[]> {
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue
       const full = join(dir, entry.name)
+      const rel = relative(root, full).split(sep).join('/')
       if (entry.isDirectory()) {
-        stack.push(full)
-      } else if (entry.isFile()) {
-        found.push(relative(root, full).split(sep).join('/'))
+        if (isLibraryDir(rel)) stack.push(full)
+      } else if (entry.isFile() && isLibraryFile(rel)) {
+        found.push(rel)
       }
     }
   }

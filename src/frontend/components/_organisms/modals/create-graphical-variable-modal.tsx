@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
 import type { VariableClass } from '../../../../middleware/shared/ports/types'
 import type { CreateGraphicalVariableModalData } from '../../../store/slices/modal/types'
+import { cn } from '../../../utils/cn'
+import { isLengthQualifiedType, MAX_STRING_LENGTH, parseStringLength } from '../../../utils/iec-types-registry'
 import { getVariableRestrictionType } from '../../../utils/PLC/validate-variable-type'
 import { Label } from '../../_atoms/label'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
@@ -39,6 +41,8 @@ const CreateGraphicalVariableModal = ({
   const [name, setName] = useState(data.name)
   const [variableClass, setVariableClass] = useState<VariableClass>('local')
   const [typeValue, setTypeValue] = useState(data.suggestedType.value)
+  // Empty means the unqualified type.
+  const [stringLength, setStringLength] = useState('')
 
   // A reused instance must never carry the previous pin's answers over.
   useEffect(() => {
@@ -71,16 +75,20 @@ const CreateGraphicalVariableModal = ({
     onClose()
   }
 
+  const lengthIsOffered = isLengthQualifiedType(typeValue)
+  const declaredType = lengthIsOffered && stringLength.trim() !== '' ? `${typeValue}(${stringLength.trim()})` : typeValue
+  const lengthIsValid = !lengthIsOffered || stringLength.trim() === '' || parseStringLength(declaredType).valid
+
   const handleConfirm = () => {
     const trimmedName = name.trim()
-    if (!trimmedName) return
+    if (!trimmedName || !lengthIsValid) return
     const selected = typeOptions.find((option) => option.value === typeValue)
     data.onConfirm({
       name: trimmedName,
       class: variableClass,
       // An option the list doesn't know can only come from the suggestion, so
       // keep the definition the editor derived for it.
-      type: selected ? { definition: selected.definition, value: selected.value } : data.suggestedType,
+      type: selected ? { definition: selected.definition, value: declaredType } : data.suggestedType,
     })
     onClose()
   }
@@ -154,6 +162,23 @@ const CreateGraphicalVariableModal = ({
               ))}
             </select>
           </div>
+
+          {lengthIsOffered && (
+            <div>
+              <Label htmlFor='new-graphical-variable-string-length' className='mb-2 block text-sm'>
+                Length
+              </Label>
+              <input
+                id='new-graphical-variable-string-length'
+                type='text'
+                inputMode='numeric'
+                placeholder={`1 to ${MAX_STRING_LENGTH} — empty for plain ${typeValue.toUpperCase()}`}
+                value={stringLength}
+                onChange={(event) => setStringLength(event.target.value)}
+                className={cn(inputClass, !lengthIsValid && 'border-red-500 text-red-500')}
+              />
+            </div>
+          )}
         </div>
 
         <div className='flex !h-8 w-full gap-6'>

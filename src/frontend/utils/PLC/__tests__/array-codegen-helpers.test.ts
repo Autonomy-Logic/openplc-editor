@@ -7,6 +7,7 @@ import {
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
+  isVariableLengthArray,
   mapBaseTypeToIEC,
   mapUserTypeToIEC,
   multiDimensionalContainerType,
@@ -298,6 +299,57 @@ describe('the two native languages accept the same elementary types', () => {
     expect(generateStructMember(scalarOf(type))).toMatch(/^ {2}strucpp::IEC_\w+ \*V;\n$/)
   })
 
+  // A declared length has to name the template directly: `IEC_STRING` is a fixed
+  // alias for `IECStringVar<254>`. The spelling must match what STruC++ emitted
+  // for the same declaration, because `<POU>_VARS` holds a pointer to the very
+  // member the function block declares — a disagreement here is an ABI mismatch,
+  // not a compile error.
+  describe('a declared string length on a native block pin', () => {
+    it('names the template rather than the 254-character alias', () => {
+      expect(mapBaseTypeToIEC('STRING(23)')).toBe('IECStringVar<23>')
+      expect(mapBaseTypeToIEC('WSTRING(8)')).toBe('IECWStringVar<8>')
+    })
+
+    it('reaches the struct member', () => {
+      expect(generateStructMember(scalarOf('STRING(23)'))).toBe('  strucpp::IECStringVar<23> *V;\n')
+    })
+
+    it('leaves an unqualified string on the alias', () => {
+      expect(mapBaseTypeToIEC('string')).toBe('IEC_STRING')
+      expect(generateStructMember(scalarOf('STRING'))).toBe('  strucpp::IEC_STRING *V;\n')
+    })
+
+    it('reads the bracket form too, since the parser normalises either way', () => {
+      expect(mapBaseTypeToIEC('STRING[23]')).toBe('IECStringVar<23>')
+    })
+
+    it('does not invent a template for a length nothing can carry', () => {
+      // Falls through to the ordinary spelling rule rather than emitting
+      // `IECStringVar<0>`, which would not compile.
+      expect(mapBaseTypeToIEC('STRING(0)')).not.toContain('IECStringVar<')
+      expect(mapBaseTypeToIEC('INT(4)')).not.toContain('IECStringVar<')
+    })
+
+    it('carries the element length of an array of strings', () => {
+      const arrayOfSized: PLCVariable = {
+        name: 'v',
+        class: 'input',
+        type: {
+          definition: 'array',
+          value: 'ARRAY[0..3] OF STRING(23)',
+          data: {
+            baseType: { definition: 'base-type', value: 'STRING(23)' },
+            dimensions: [{ dimension: '0..3' }],
+          },
+        },
+        location: '',
+        documentation: '',
+        debug: false,
+      }
+      expect(getVariableIECType(arrayOfSized)).toBe('IECStringVar<23>')
+    })
+  })
+
   it('accepts the long spellings IEC 61131-3 allows for the calendar types', () => {
     expect(mapBaseTypeToIEC('time_of_day')).toBe('IEC_TOD')
     expect(mapBaseTypeToIEC('date_and_time')).toBe('IEC_DT')
@@ -326,6 +378,117 @@ describe('mapUserTypeToIEC', () => {
 
   it('matches case-insensitively, since the set is uppercased by the caller', () => {
     expect(mapUserTypeToIEC('mOtOr', new Set(['MOTOR']))).toBe('IEC_MOTOR')
+  })
+})
+
+describe('generic types on a native block pin', () => {
+  // A native block may declare a VAR_INPUT with one of CODESYS's seven generic
+  // types. Every one is the same `IEC_ANY` descriptor at the ABI: the family
+  // constrains what the caller may pass, which the compiler checks at the call
+  // site, not what the block receives.
+  const genericPin = (typeName: string): PLCVariable => ({
+    name: 'p',
+    class: 'input',
+    type: { definition: 'user-data-type', value: typeName },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+
+  it.each(['ANY', 'ANY_BIT', 'ANY_DATE', 'ANY_NUM', 'ANY_REAL', 'ANY_INT', 'ANY_STRING'])(
+    'spells %s as the IEC_ANY descriptor',
+    (generic) => {
+      expect(mapUserTypeToIEC(generic)).toBe('IEC_ANY')
+      expect(generateStructMember(genericPin(generic))).toBe('  strucpp::IEC_ANY *P;\n')
+    },
+  )
+
+  it('matches case-insensitively, as every other type spelling does', () => {
+    expect(mapUserTypeToIEC('any_int')).toBe('IEC_ANY')
+  })
+
+  it('leaves a user type called ANYTHING alone — only the exact names are generic', () => {
+    expect(mapUserTypeToIEC('ANYTHING', new Set(['ANYTHING']))).toBe('IEC_ANYTHING')
+  })
+
+  it('spells __SYSTEM.AnyType as the same descriptor', () => {
+    // The concrete structure a generic parameter carries. A native block may
+    // declare one to keep what it was passed.
+    expect(mapUserTypeToIEC('__SYSTEM.AnyType')).toBe('IEC_ANY')
+    expect(generateStructMember(genericPin('__SYSTEM.AnyType'))).toBe('  strucpp::IEC_ANY *P;\n')
+  })
+})
+
+describe('variable-length arrays', () => {
+  // `ARRAY [*]` is legal as a function block's in-out variable. strucpp passes
+  // it as an ArrayView carrying the runtime bounds, so the struct holds a
+  // pointer to the view: there is no lower bound yet to offset by, and an
+  // element pointer would drop the only record of the length.
+  const vlaOfRank = (
+    dimensions: string[],
+    baseType = 'INT',
+    baseDefinition: 'base-type' | 'user-data-type' = 'base-type',
+  ): PLCVariable => ({
+    name: 'values',
+    class: 'inOut',
+    type: {
+      definition: 'array',
+      value: `ARRAY [${dimensions.join(', ')}] OF ${baseType}`,
+      data: {
+        baseType: { definition: baseDefinition, value: baseType },
+        dimensions: dimensions.map((dimension) => ({ dimension })),
+      },
+    },
+    location: '',
+    documentation: '',
+    debug: false,
+  })
+
+  it('passes a 1-D VLA as a pointer to the view, not to the first element', () => {
+    expect(generateStructMember(vlaOfRank(['*']))).toBe('  strucpp::ArrayView1D<strucpp::IEC_INT> *VALUES;\n')
+  })
+
+  it('passes a 2-D VLA as a view of its own rank', () => {
+    expect(generateStructMember(vlaOfRank(['*', '*'], 'REAL'))).toBe(
+      '  strucpp::ArrayView2D<strucpp::IEC_REAL> *VALUES;\n',
+    )
+  })
+
+  it('spells a user-defined element type the way strucpp declares it', () => {
+    const named = new Set(['MOTOR'])
+    expect(generateStructMember(vlaOfRank(['*'], 'MOTOR', 'user-data-type'), named)).toBe(
+      '  strucpp::ArrayView1D<strucpp::IEC_MOTOR> *VALUES;\n',
+    )
+  })
+
+  it('tolerates whitespace around the bound', () => {
+    expect(isVariableLengthArray(vlaOfRank([' * ']))).toBe(true)
+  })
+
+  it('leaves a fixed array on the element-pointer path', () => {
+    expect(isVariableLengthArray(vlaOfRank(['0..9']))).toBe(false)
+    expect(generateStructMember(vlaOfRank(['0..9']))).toBe('  strucpp::IEC_INT *VALUES;\n')
+  })
+
+  it('does not treat a partly-variable shape as a VLA, since IEC allows no such array', () => {
+    expect(isVariableLengthArray(vlaOfRank(['*', '0..3']))).toBe(false)
+  })
+
+  it('returns null past rank two, for which strucpp declares no ArrayView', () => {
+    expect(isVariableLengthArray(vlaOfRank(['*', '*', '*']))).toBe(false)
+  })
+
+  it('returns false for anything that is not an array', () => {
+    const scalar: PLCVariable = {
+      name: 'x',
+      class: 'input',
+      type: { definition: 'base-type', value: 'INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    }
+
+    expect(isVariableLengthArray(scalar)).toBe(false)
   })
 })
 

@@ -8,8 +8,10 @@ import type { PLCStructureVariable } from '../../../../../../middleware/shared/p
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
+import { isLengthQualifiedType } from '../../../../../utils/iec-types-registry'
 import { hasStringName, safeUpper } from '../../../../../utils/safe-upper'
 import { InputWithRef } from '../../../../_atoms/input'
+import { seedStringLengths, StringLengthMenuItem } from '../../../../_atoms/string-length-menu-item'
 import { ArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }
@@ -72,6 +74,7 @@ const SelectableTypeCell = ({
     'user-data-type': '',
   })
   const [inputFilter, setInputFilter] = useState('')
+  const [stringLengths, setStringLengths] = useState<Record<string, string>>(() => seedStringLengths(value))
 
   const variableName = table.options.data[index].name
 
@@ -119,7 +122,7 @@ const SelectableTypeCell = ({
                 ? ''
                 : definition === 'array' || definition === 'derived'
                   ? cellValue
-                  : _.upperCase(cellValue as unknown as string)}
+                  : (cellValue as unknown as string).toUpperCase()}
             </span>
           </div>
         </PrimitiveDropdown.Trigger>
@@ -163,17 +166,34 @@ const SelectableTypeCell = ({
                       />
                     </div>
                     {scope.values.length > 0 ? (
-                      scope.values.map((value) => (
-                        <PrimitiveDropdown.Item
-                          key={value}
-                          onSelect={() =>
-                            onSelect(scope.definition as PLCStructureVariable['type']['definition'], value)
-                          }
-                          className='flex h-8 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        >
-                          <span className='text-xs text-neutral-700 dark:text-neutral-500'>{_.upperCase(value)}</span>
-                        </PrimitiveDropdown.Item>
-                      ))
+                      scope.values.map((value) =>
+                        isLengthQualifiedType(value) ? (
+                          <StringLengthMenuItem
+                            key={value}
+                            typeName={value.toUpperCase()}
+                            labelClassName='text-xs text-neutral-700 dark:text-neutral-500'
+                            length={stringLengths[value.toUpperCase()] ?? ''}
+                            onLengthChange={(next) =>
+                              setStringLengths((prev) => ({ ...prev, [value.toUpperCase()]: next }))
+                            }
+                            onApply={(declaredType) =>
+                              onSelect(scope.definition as PLCStructureVariable['type']['definition'], declaredType)
+                            }
+                          />
+                        ) : (
+                          <PrimitiveDropdown.Item
+                            key={value}
+                            onSelect={() =>
+                              onSelect(scope.definition as PLCStructureVariable['type']['definition'], value)
+                            }
+                            className='flex h-8 items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          >
+                            <span className='text-xs text-neutral-700 dark:text-neutral-500'>
+                              {value.toUpperCase()}
+                            </span>
+                          </PrimitiveDropdown.Item>
+                        ),
+                      )
                     ) : (
                       <div className='flex h-8 items-center justify-center'>
                         <span className='text-xs text-neutral-700 dark:text-neutral-500'>

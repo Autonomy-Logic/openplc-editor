@@ -45,6 +45,8 @@ export interface TranspilePou {
 export interface TranspilePouInterface {
   /** Only set on `function` POUs. */
   returnType?: string
+  /** Base function block, from `FUNCTION_BLOCK X EXTENDS Y`. */
+  extends?: string
   variables: TranspileVariable[]
 }
 

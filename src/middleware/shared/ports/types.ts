@@ -151,6 +151,12 @@ export interface PLCPou {
   pouType: PouType
   interface?: {
     returnType?: string
+    /**
+     * Base function block, from `FUNCTION_BLOCK X EXTENDS Y`; undefined when
+     * the POU derives from nothing. On the interface because the clause changes
+     * the block's pins and methods, as `returnType` does for a FUNCTION.
+     */
+    extends?: string
     variables: PLCVariable[]
   }
   body: PLCBody

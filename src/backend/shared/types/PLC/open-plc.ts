@@ -241,6 +241,12 @@ type PLCInstance = z.infer<typeof PLCInstanceSchema>
 const PLCFunctionBlockSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
+  /**
+   * Base function block, from `FUNCTION_BLOCK X EXTENDS Y`. Only a function
+   * block may extend another, so this sits here and not on the FUNCTION or
+   * PROGRAM schema.
+   */
+  extends: z.string().optional(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,

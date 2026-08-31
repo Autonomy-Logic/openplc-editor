@@ -13,7 +13,7 @@ import { buildCBlocksFromPous, composeFirmwareBundle } from '../steps/compose-fi
 
 const baseInput = {
   strucppFiles: {},
-  libraryResources: [] as Array<{ name: string; files: Array<{ path: string; content: string }> }>,
+  libraryResources: [] as Array<{ name: string; files: Array<{ path: string; content: string; encoding?: 'base64' }> }>,
   cBlocks: { header: '// Empty file\n', code: null as string | null },
   definesH: '#define PROGRAM_MD5 ""\n',
   firmwareSkeleton: {},
@@ -34,6 +34,28 @@ describe('composeFirmwareBundle — library resources', () => {
     expect(out['libraries/DemoProtocol/library.properties']).toBe('name=DemoProtocol\narchitectures=esp32\n')
     expect(out['libraries/DemoProtocol/src/DemoApi.h']).toBe('#pragma once\n')
     expect(out['libraries/DemoProtocol/src/transport/DemoSerial.cpp']).toBe('// serial\n')
+  })
+
+  it('marks a precompiled binary so the write side decodes it', () => {
+    // Carried base64 because the archive it travelled in is JSON. Handing the
+    // bundle that text as a file's contents would produce an archive the
+    // linker rejects, with nothing in the message pointing back here.
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      libraryResources: [
+        {
+          name: 'DemoProtocol',
+          files: [
+            { path: 'library.properties', content: 'name=DemoProtocol\nprecompiled=true\n' },
+            { path: 'src/esp32/libdemo.a', content: 'AAECAw==', encoding: 'base64' },
+          ],
+        },
+      ],
+    })
+
+    expect(out['libraries/DemoProtocol/src/esp32/libdemo.a']).toEqual({ base64: 'AAECAw==' })
+    // Text beside it is still a plain string.
+    expect(out['libraries/DemoProtocol/library.properties']).toBe('name=DemoProtocol\nprecompiled=true\n')
   })
 
   it("leaves a library's own library.properties alone", () => {

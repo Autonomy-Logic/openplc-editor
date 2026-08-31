@@ -26,6 +26,7 @@ import { runWithConcurrencyLimit } from './run-with-concurrency'
 type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
+import { projectAndLibraryTypeNames } from '@root/backend/shared/library/inject-library-blocks'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
 import { parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
@@ -1431,6 +1432,12 @@ class CompilerModule {
     projectData: ProjectDataWithCppPous,
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
+    /** Every data type in scope — the project's own and the enabled libraries'.
+     *  Tells a structure or enumeration, which strucpp aliases as `IEC_<NAME>`,
+     *  from a function block instance, a bare `class <NAME>`; the variable
+     *  alone cannot say. Built by `projectAndLibraryTypeNames`, which is why it
+     *  is passed rather than derived: only the caller holds the archives. */
+    typeNames: string[],
   ) {
     const originalCppPous = projectData.originalCppPous || []
 
@@ -1444,11 +1451,7 @@ class CompilerModule {
       variables: pou.variables,
     })) as CppPouDataHeader[]
 
-    // The project's data-type names let the generator tell a structure or
-    // enumeration (which strucpp aliases as `IEC_<NAME>`) from a function block
-    // instance (a bare `class <NAME>`), which the variable alone cannot say.
-    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-    const headerContent: string = generateCBlocksHeader(cppPous, userTypeNames)
+    const headerContent: string = generateCBlocksHeader(cppPous, typeNames)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
 
     try {
@@ -1468,6 +1471,12 @@ class CompilerModule {
     // future runtime might branch off this discriminator again.
     _boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
+    /** Every data type in scope — the project's own and the enabled libraries'.
+     *  Tells a structure or enumeration, which strucpp aliases as `IEC_<NAME>`,
+     *  from a function block instance, a bare `class <NAME>`; the variable
+     *  alone cannot say. Built by `projectAndLibraryTypeNames`, which is why it
+     *  is passed rather than derived: only the caller holds the archives. */
+    typeNames: string[],
   ) {
     const originalCppPous = projectData.originalCppPous || []
 
@@ -1481,10 +1490,7 @@ class CompilerModule {
     // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
     // strucpp-free and is compiled by arduino-cli in the core's native
     // standard.
-    // Every data type the project declares is aliased into the block's scope,
-    // including ones reachable only through a structure member.
-    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-    const codeContent = generateCBlocksCode(cppPous, userTypeNames)
+    const codeContent = generateCBlocksCode(cppPous, typeNames)
     const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {
@@ -3432,13 +3438,18 @@ class CompilerModule {
       return
     }
 
+    // Resolved once, outside the compile step: the C-blocks header and code
+    // below need the same archives, to spell a pin typed by a library's own
+    // data type the way strucpp declared it.
+    const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
+    const { archives: libraries, missing: missingLibraries } =
+      mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
+    const typeNames = projectAndLibraryTypeNames(projectData, libraries)
+
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
       const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
       const knownPous = buildKnownPous(projectData.pous)
-      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
-      const { archives: libraries, missing: missingLibraries } =
-        mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel, compileError) => {
@@ -3465,9 +3476,14 @@ class CompilerModule {
 
     // Generate C/C++ blocks header file
     try {
-      await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      await this.handleGenerateCBlocksHeader(
+        projectData,
+        sourceTargetFolderPath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        typeNames,
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -3483,9 +3499,15 @@ class CompilerModule {
 
     // Generate C/C++ blocks code file
     try {
-      await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      await this.handleGenerateCBlocksCode(
+        projectData,
+        compilationPath,
+        boardRuntime,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        typeNames,
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',

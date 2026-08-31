@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { parseStringLength } from '../iec-types-registry'
 import { parseDimensionRange } from './dimension-range'
 
 const BASE_TYPE_TO_IEC: Record<string, string> = {
@@ -87,12 +88,60 @@ const getArrayBaseTypeValue = (variable: PLCVariable): string => {
  * Without `userTypeNames` the bare name is returned, which is the correct
  * answer for a function block and the historical behaviour for everything else.
  */
+/**
+ * The generic type names a native block may declare on a VAR_INPUT, and the one
+ * runtime type they all resolve to.
+ *
+ * All seven share a representation — the `IEC_ANY` descriptor
+ * `{ typeclass, pvalue, diSize }`. The family constrains what the caller may
+ * pass, which the compiler checks at the call site, not what the block receives.
+ */
+const GENERIC_TYPE_TO_IEC: Record<string, string> = {
+  // Not a generic: the descriptor a generic carries, declarable in its own
+  // right so a block can keep what it was handed. Same runtime type.
+  '__SYSTEM.ANYTYPE': 'IEC_ANY',
+
+  ANY: 'IEC_ANY',
+  ANY_BIT: 'IEC_ANY',
+  ANY_DATE: 'IEC_ANY',
+  ANY_NUM: 'IEC_ANY',
+  ANY_REAL: 'IEC_ANY',
+  ANY_INT: 'IEC_ANY',
+  ANY_STRING: 'IEC_ANY',
+}
+
+/**
+ * Whether a pin's declared type is a generic (or the descriptor it carries),
+ * and so resolves to the runtime's `IEC_ANY` rather than to a project type.
+ */
+const isDescriptorPinType = (typeName: string): boolean =>
+  GENERIC_TYPE_TO_IEC[typeName.toUpperCase()] !== undefined
+
 const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>): string => {
   const upper = typeName.toUpperCase()
+  const generic = GENERIC_TYPE_TO_IEC[upper]
+  if (generic) return generic
   return userTypeNames?.has(upper) ? `IEC_${upper}` : upper
 }
 
+/**
+ * strucpp wrapper for a length-qualified string, or `null` for anything else.
+ *
+ * `IEC_STRING` / `IEC_WSTRING` are fixed aliases for the 254-character
+ * wrappers, so a declared length names the template directly. Must match what
+ * STruC++ emits for the same declaration (`IECStringVar<23>`): `<POU>_VARS`
+ * points at the member the function block declares, so a mismatch is an ABI
+ * bug, not a compile error.
+ */
+const sizedStringIECType = (baseType: string): string | null => {
+  const { base, length, valid } = parseStringLength(baseType)
+  if (length === undefined || !valid) return null
+  return base === 'WSTRING' ? `IECWStringVar<${length}>` : `IECStringVar<${length}>`
+}
+
 const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>): string => {
+  const sized = sizedStringIECType(baseType)
+  if (sized) return sized
   const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
   if (elementary) return elementary
   // Not elementary: an array of a user-defined type, or a type the map does not
@@ -164,6 +213,39 @@ const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: Re
   return `Array${dimensions.length}D<strucpp::${elementType}, ${bounds.join(', ')}>`
 }
 
+/** The bound a variable-length array dimension carries. */
+const VARIABLE_LENGTH_BOUND = '*'
+
+/**
+ * strucpp view type for a variable-length array, or `null` for anything else.
+ *
+ * A VLA pin (`ARRAY [*] OF INT`) has no bounds until it is called, so it cannot
+ * be a pointer to its first element: nothing would carry the element count or
+ * the lower bound. strucpp passes `ArrayView<n>D<T>` — data pointer plus runtime
+ * bounds — reached through `lower_bound()` / `upper_bound()` / `at()`, so the
+ * struct holds a pointer to the view itself.
+ *
+ * Rank one and two only: the runtime declares `ArrayView1D` and `ArrayView2D`
+ * and nothing beyond. A mixed shape like `ARRAY [*, 0..3]` is not legal and
+ * falls to the fixed-array path.
+ */
+const variableLengthViewType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string | null => {
+  if (variable.type.definition !== 'array' || !variable.type.data) return null
+
+  const dimensions = variable.type.data.dimensions
+  if (dimensions.length < 1 || dimensions.length > 2) return null
+  if (!dimensions.every((dimension) => dimension.dimension.trim() === VARIABLE_LENGTH_BOUND)) return null
+
+  const elementType = mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
+  return `ArrayView${dimensions.length}D<strucpp::${elementType}>`
+}
+
+/**
+ * Whether a variable is a variable-length array, and so is passed as a view
+ * rather than as a pointer to its first element.
+ */
+const isVariableLengthArray = (variable: PLCVariable): boolean => variableLengthViewType(variable) !== null
+
 /**
  * Generate a C struct member declaration for a variable.
  * Both scalars and arrays use pointers:
@@ -188,6 +270,9 @@ const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: Re
  */
 const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   const name = variable.name.toUpperCase()
+  const variableLength = variableLengthViewType(variable, userTypeNames)
+  if (variableLength) return `  strucpp::${variableLength} *${name};\n`
+
   const multiDimensional = multiDimensionalContainerType(variable, userTypeNames)
   if (multiDimensional) return `  strucpp::${multiDimensional} *${name};\n`
 
@@ -202,6 +287,8 @@ export {
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
+  isDescriptorPinType,
+  isVariableLengthArray,
   mapBaseTypeToIEC,
   mapUserTypeToIEC,
   multiDimensionalContainerType,

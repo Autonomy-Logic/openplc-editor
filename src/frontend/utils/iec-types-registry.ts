@@ -93,6 +93,44 @@ const INDEX: ReadonlyMap<string, IECTypeMetadata> = (() => {
 })()
 
 /**
+ * Largest declared length a STRING / WSTRING may carry — the capacity of the
+ * unqualified type, so `STRING` and `STRING(254)` are the same declaration.
+ */
+export const MAX_STRING_LENGTH = 254
+
+/** Only these two carry a declared length. */
+const LENGTH_QUALIFIED = new Set(['STRING', 'WSTRING'])
+
+/** Whether a declared length may be written after this type name. */
+export function isLengthQualifiedType(name: string): boolean {
+  return LENGTH_QUALIFIED.has(name.trim().toUpperCase())
+}
+
+/**
+ * Split a declared type into its base name and its optional length.
+ * `STRING(23)` is the form STruC++ parses; `STRING[23]` is accepted and
+ * normalised to it.
+ *
+ * `length` is undefined when none was written; `valid` is false for a length
+ * this implementation cannot carry, so callers can tell `STRING` from
+ * `STRING(0)`.
+ */
+export function parseStringLength(name: string): {
+  base: string
+  length?: number
+  valid: boolean
+} {
+  const trimmed = name.trim()
+  const match = /^([A-Za-z_]\w*)\s*[([]\s*(\d+)\s*[)\]]$/.exec(trimmed)
+  if (!match) return { base: trimmed.toUpperCase(), valid: true }
+
+  const base = match[1].toUpperCase()
+  const length = Number(match[2])
+  const valid = LENGTH_QUALIFIED.has(base) && length >= 1 && length <= MAX_STRING_LENGTH
+  return { base, length, valid }
+}
+
+/**
  * Resolve a name (canonical or alias, any case, with surrounding
  * whitespace) to its metadata. Returns `undefined` for non-elementary
  * names so callers can tell "not in the registry" apart from "wrong
@@ -100,9 +138,14 @@ const INDEX: ReadonlyMap<string, IECTypeMetadata> = (() => {
  * `'STRING'`, `'string'`, and the occasional whitespace-padded value;
  * normalising here means downstream callers don't each re-implement
  * it.
+ *
+ * A declared length is stripped first, so `STRING(23)` resolves to the STRING
+ * metadata. Callers wanting the number itself use {@link parseStringLength}.
  */
 export function lookupBaseType(name: string): IECTypeMetadata | undefined {
-  return INDEX.get(name.trim().toUpperCase())
+  const { base, length, valid } = parseStringLength(name)
+  if (length !== undefined && !valid) return undefined
+  return INDEX.get(base)
 }
 
 /**
@@ -111,7 +154,7 @@ export function lookupBaseType(name: string): IECTypeMetadata | undefined {
  * pattern.
  */
 export function isBaseTypeName(name: string): boolean {
-  return INDEX.has(name.trim().toUpperCase())
+  return lookupBaseType(name) !== undefined
 }
 
 /**

@@ -56,7 +56,7 @@ const commentOnlyRegex = /^\(\*[\s\S]*\*\)$/
 // CODESYS converter writes a GVL declaration in — expecting it after the type made
 // this parser reject the very declarations the importer produces.
 const declarationRegex =
-  /^(?<names>\w+(?:\s*,\s*\w+)*)\s*(?:AT\s+(?<location>%[\w.]+)\s*)?:\s*(?<type>[\w\s[\],.]+?)\s*(?::=\s*(?<initial>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/i
+  /^(?<names>\w+(?:\s*,\s*\w+)*)\s*(?:AT\s+(?<location>%[\w.]+)\s*)?:\s*(?<type>[\w\s[\](),.]+?)\s*(?::=\s*(?<initial>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/i
 
 function buildVariableType(typeStr: string): PLCVariableType | null {
   const arrayType = parseArrayType(typeStr)

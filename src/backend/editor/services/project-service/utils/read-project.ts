@@ -342,7 +342,7 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
     const portPou = pou as unknown as {
       name: string
       pouType: string
-      interface?: { returnType?: string; variables: unknown[] }
+      interface?: { returnType?: string; extends?: string; variables: unknown[] }
       body: { language: string; value: unknown }
       documentation?: string
     }
@@ -353,6 +353,11 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
         name: portPou.name,
         variables: portPou.interface?.variables ?? [],
         ...(portPou.pouType === 'function' ? { returnType: portPou.interface?.returnType ?? '' } : {}),
+        // Only a function block may extend another. This flattening names each
+        // field explicitly, so anything unlisted is dropped.
+        ...(portPou.pouType === 'function-block' && portPou.interface?.extends
+          ? { extends: portPou.interface.extends }
+          : {}),
         body: portPou.body,
         documentation: portPou.documentation ?? '',
       },

@@ -30,6 +30,7 @@
  * from one to the other without re-deriving inputs.
  */
 
+import type { BundleFile } from '../../../../middleware/shared/utils/library/bundle-file'
 import type { CppPouData as CppPouDataCode } from '../../utils/cpp/generateCBlocksCode'
 import { generateCBlocksCode } from '../../utils/cpp/generateCBlocksCode'
 import type { CppPouData as CppPouDataHeader } from '../../utils/cpp/generateCBlocksHeader'
@@ -54,7 +55,7 @@ export interface ComposeFirmwareBundleInput {
   /** Libraries the enabled `.stlib` archives carry, each an ordinary
    *  library folder.  `path` is relative to that folder's root and is
    *  written as-is.  Empty when no enabled library ships resources. */
-  libraryResources: Array<{ name: string; files: Array<{ path: string; content: string }> }>
+  libraryResources: Array<{ name: string; files: Array<{ path: string; content: string; encoding?: 'base64' }> }>
   cBlocks: {
     header: string
     code: string | null
@@ -162,10 +163,10 @@ function libraryProperties(name: string): string {
   ].join('\n')
 }
 
-export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
+export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, BundleFile> {
   const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton, libraryResources } = input
 
-  const files: Record<string, string> = {}
+  const files: Record<string, BundleFile> = {}
 
   // Each folder is written as it stands and named with its own `--library`,
   // which is what makes arduino-cli compile everything under its `src/`.
@@ -173,7 +174,7 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   for (const library of libraryResources) {
     const root = `libraries/${library.name}`
     for (const file of library.files) {
-      files[`${root}/${file.path}`] = file.content
+      files[`${root}/${file.path}`] = file.encoding === 'base64' ? { base64: file.content } : file.content
     }
     if (!library.files.some((file) => file.path === 'library.properties')) {
       files[`${root}/library.properties`] = libraryProperties(library.name)

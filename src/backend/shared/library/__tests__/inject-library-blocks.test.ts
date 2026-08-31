@@ -1,6 +1,11 @@
 import type { StlibArchiveDTO } from '../../../../middleware/shared/ports/library-port'
 import type { PLCProjectData } from '../../../../middleware/shared/ports/types'
-import { findLibrariesMissingNativeSources, injectLibraryBlocks, libraryBlockPouName } from '../inject-library-blocks'
+import {
+  findLibrariesMissingNativeSources,
+  injectLibraryBlocks,
+  libraryBlockPouName,
+  projectAndLibraryTypeNames,
+} from '../inject-library-blocks'
 
 // -- helpers ------------------------------------------------------------------
 
@@ -47,7 +52,7 @@ function project(overrides: { libraries?: Array<{ name: string; version: string 
 function archive(
   name: string,
   blocks: Array<{ name: string; language: 'cpp' | 'python'; file?: string; source?: string | null }> = [],
-  opts: { stBlocks?: string[] } = {},
+  opts: { stBlocks?: string[]; namespace?: string; types?: Array<{ name: string; kind: string }> } = {},
 ): StlibArchiveDTO {
   const sources: Array<{ fileName: string; source: string }> = []
   const functionBlocks: unknown[] = (opts.stBlocks ?? []).map((n) => ({
@@ -72,7 +77,16 @@ function archive(
     if (source !== null) sources.push({ fileName, source })
   }
 
-  return { manifest: { name, version: '1.0.0', functionBlocks }, sources } as unknown as StlibArchiveDTO
+  return {
+    manifest: {
+      name,
+      version: '1.0.0',
+      functionBlocks,
+      ...(opts.namespace ? { namespace: opts.namespace } : {}),
+      ...(opts.types ? { types: opts.types } : {}),
+    },
+    sources,
+  } as unknown as StlibArchiveDTO
 }
 
 // -- tests --------------------------------------------------------------------
@@ -80,6 +94,90 @@ function archive(
 describe('libraryBlockPouName', () => {
   it('prefixes the block with its library, double-underscore separated', () => {
     expect(libraryBlockPouName('network_tools', 'TCP_CLIENT')).toBe('network_tools__TCP_CLIENT')
+  })
+})
+
+describe('the identifier a grafted block is prefixed with', () => {
+  // The prefix becomes an ST POU name. `manifest.name` is only checked for path
+  // safety, so `modbee-protocol` is a legal name — and produced
+  // `modbee-protocol__TOPIC`, which no parser accepts. The failure appeared
+  // only in the CONSUMING project, naming a POU nobody wrote.
+  const data = project({ pous: ['main'], libraries: [{ name: 'modbee-protocol', version: '1.0.0' }] })
+
+  it('takes the namespace, so a hyphenated library name still parses', () => {
+    const grafted = injectLibraryBlocks(data, [
+      archive('modbee-protocol', [{ name: 'TOPIC', language: 'cpp' }], { namespace: 'modbee_protocol' }),
+    ])
+    expect(grafted.pous.map((pou) => pou.name)).toContain('modbee_protocol__TOPIC')
+  })
+
+  it('falls back to folding the name when an older archive declares no namespace', () => {
+    const grafted = injectLibraryBlocks(data, [archive('modbee-protocol', [{ name: 'TOPIC', language: 'cpp' }])])
+    expect(grafted.pous.map((pou) => pou.name)).toContain('modbee_protocol__TOPIC')
+  })
+
+  it('does not let a folded name start with a digit', () => {
+    const numeric = project({ pous: ['main'], libraries: [{ name: '3d-tools', version: '1.0.0' }] })
+    const grafted = injectLibraryBlocks(numeric, [archive('3d-tools', [{ name: 'MOVE', language: 'cpp' }])])
+    expect(grafted.pous.map((pou) => pou.name)).toContain('_3d_tools__MOVE')
+  })
+
+  it('ignores a namespace that is not an identifier and folds instead', () => {
+    const grafted = injectLibraryBlocks(data, [
+      archive('modbee-protocol', [{ name: 'TOPIC', language: 'cpp' }], { namespace: 'not an identifier' }),
+    ])
+    expect(grafted.pous.map((pou) => pou.name)).toContain('modbee_protocol__TOPIC')
+  })
+})
+
+describe('projectAndLibraryTypeNames', () => {
+  // The native bridge spells a pin `strucpp::IEC_<NAME>` for a declared data
+  // type and `strucpp::<NAME>` otherwise. Built from the project alone, a pin
+  // typed by a LIBRARY's enum was spelled bare while strucpp had declared
+  // `IEC_<NAME>`, and the POU glue failed on the pointer assignment.
+  const enumType = { name: 'MB_SPACE', kind: 'enum' }
+
+  it('includes the types an enabled library declares', () => {
+    const data = project({ pous: ['main'], libraries: [{ name: 'modbee-protocol', version: '1.0.0' }] })
+    const names = projectAndLibraryTypeNames(data, [archive('modbee-protocol', [], { types: [enumType] })])
+    expect(names).toContain('MB_SPACE')
+  })
+
+  it('leaves out a library the project has not enabled', () => {
+    const data = project({ pous: ['main'] })
+    const names = projectAndLibraryTypeNames(data, [archive('modbee-protocol', [], { types: [enumType] })])
+    expect(names).not.toContain('MB_SPACE')
+  })
+
+  it('keeps the project own types alongside them', () => {
+    const data = {
+      ...project({ pous: ['main'], libraries: [{ name: 'modbee-protocol', version: '1.0.0' }] }),
+      dataTypes: [{ name: 'MOTOR' }],
+    } as unknown as PLCProjectData
+    const names = projectAndLibraryTypeNames(data, [archive('modbee-protocol', [], { types: [enumType] })])
+    expect(names).toEqual(expect.arrayContaining(['MOTOR', 'MB_SPACE']))
+  })
+
+  it('includes every kind of data type, not just enumerations', () => {
+    // The bridge's IEC_ prefix rule applies to all three: strucpp aliases a
+    // structure and an array to themselves and an enumeration to IEC_ENUM<>,
+    // so a pin of any of them is spelled IEC_<NAME>.
+    const data = project({ pous: ['main'], libraries: [{ name: 'modbee-protocol', version: '1.0.0' }] })
+    const names = projectAndLibraryTypeNames(data, [
+      archive('modbee-protocol', [], {
+        types: [
+          { name: 'MB_SPACE', kind: 'enum' },
+          { name: 'MB_CFG', kind: 'struct' },
+          { name: 'MB_TREND', kind: 'alias' },
+        ],
+      }),
+    ])
+    expect(names).toEqual(expect.arrayContaining(['MB_SPACE', 'MB_CFG', 'MB_TREND']))
+  })
+
+  it('copes with an archive that declares no types at all', () => {
+    const data = project({ pous: ['main'], libraries: [{ name: 'modbee-protocol', version: '1.0.0' }] })
+    expect(projectAndLibraryTypeNames(data, [archive('modbee-protocol')])).toEqual([])
   })
 })
 
