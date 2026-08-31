@@ -507,7 +507,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsCompiling(false)
     }
-  }, [compiler, projectData, projectMeta, addLog, isCompiling, executeSave, requestConsoleFollow])
+  }, [compiler, projectData, projectMeta, addLog, isCompiling, canEdit, executeSave, requestConsoleFollow])
 
   // ---------------------------------------------------------------------------
   // Debug Library — run the library's blocks on the simulator
@@ -567,7 +567,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     // triggers can already see it.  `clearDebugState()` drops it when the
     // session ends.
     useOpenPLCStore.getState().workspaceActions.setDebugHarness({
-      programPou: harness.projectData.pous[harness.projectData.pous.length - 1],
+      programPou: harness.programPou,
       instances: harness.projectData.configurations.resource.instances,
     })
 
@@ -587,7 +587,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           if (event.level === 'error' || event.stage === 'error') streamedError = true
           logCompilerEvent(event, addLog)
           if (event.firmwarePath) {
-            void simulatorRun.launch(event.firmwarePath, { attachDebugger: true })
+            // The compile succeeded — it produced firmware — so a failure to
+            // LOAD that firmware never reaches the `!result.success` branch
+            // below. Without this the harness would stay installed with no
+            // emulator behind it, and the watch list would keep showing a
+            // generated program that is not running.
+            void simulatorRun.launch(event.firmwarePath, { attachDebugger: true }).then((launched) => {
+              if (!launched) {
+                useOpenPLCStore.getState().workspaceActions.setDebugHarness(null)
+              }
+            })
           }
         },
       )

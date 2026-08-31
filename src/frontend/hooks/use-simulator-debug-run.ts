@@ -14,7 +14,7 @@
  * debug session hook, so editor and web share it byte-for-byte.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
@@ -64,15 +64,28 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
 
   const [isRunning, setIsRunning] = useState(false)
 
+  // Callers pass these as inline arrows, so their identity changes on every
+  // render. Held in refs and read at call time so the subscription below and
+  // the callbacks in `launch` / `stop` do not churn with the caller's render
+  // cycle — the activity bar re-renders on every debug poll tick.
+  const onStoppedRef = useRef(onStopped)
+  onStoppedRef.current = onStopped
+  const onDebugAttachedRef = useRef(onDebugAttached)
+  onDebugAttachedRef.current = onDebugAttached
+
   // The emulator stopping is a session ending, and a debug session riding it
   // ends with it — which the caller's connection-drop handling already covers
   // for every target. This only mirrors the emulator's own state.
+  //
+  // Subscribed once per emulator, NOT per render: re-subscribing on every
+  // render leaves a window between unsubscribe and re-subscribe in which a
+  // stop event is dropped, stranding the button in its running state.
   useEffect(() => {
     return simulator.onStopped(() => {
       setIsRunning(false)
-      onStopped?.()
+      onStoppedRef.current?.()
     })
-  }, [simulator, onStopped])
+  }, [simulator])
 
   const launch = useCallback(
     async (firmwarePath: string, options: { attachDebugger?: boolean } = {}): Promise<boolean> => {
@@ -88,12 +101,12 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
       if (options.attachDebugger) {
         // No config: starting the emulator opened its session, so the
         // connection manager already knows how to reach it.
-        onDebugAttached?.()
+        onDebugAttachedRef.current?.()
         await debugSession.connectAndStart()
       }
       return true
     },
-    [simulator, debugSession, addLog, onDebugAttached],
+    [simulator, debugSession, addLog],
   )
 
   const stop = useCallback(async (): Promise<void> => {
@@ -127,12 +140,12 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
       }
 
       setIsRunning(false)
-      onStopped?.()
+      onStoppedRef.current?.()
       addLog({ level: 'info', message: 'Simulator stopped.' })
     } catch (error: unknown) {
       addLog({ level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
     }
-  }, [debugSession, simulator, addLog, onStopped])
+  }, [debugSession, simulator, addLog])
 
   return { isRunning, launch, stop }
 }

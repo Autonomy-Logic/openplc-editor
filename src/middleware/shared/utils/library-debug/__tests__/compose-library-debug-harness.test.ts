@@ -48,12 +48,18 @@ function libraryData(pous: PLCPou[]): PLCProjectData {
     dataTypes: [],
     libraries: [],
     configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
-  } as unknown as PLCProjectData
+  }
 }
 
-/** The harness program is always appended last. */
-function harnessProgram(pous: PLCPou[]): PLCPou {
-  return pous[pous.length - 1]
+/**
+ * Locate the harness program by NAME, never by position — the tests must not
+ * encode the append order the composer happens to use, which is the same
+ * coupling `programPou` exists to spare callers.
+ */
+function harnessProgram(harness: { projectData: PLCProjectData; programName: string }): PLCPou {
+  const pou = harness.projectData.pous.find((p) => p.name === harness.programName)
+  if (!pou) throw new Error(`harness program ${harness.programName} missing from projectData.pous`)
+  return pou
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +75,7 @@ describe('composeLibraryDebugHarness', () => {
       { pouName: 'Ramp', instanceVariable: 'RAMP_I' },
     ])
 
-    const program = harnessProgram(harness.projectData.pous)
+    const program = harnessProgram(harness)
     expect(program.name).toBe(HARNESS_PROGRAM_NAME)
     expect(program.pouType).toBe('program')
     // `derived` + the block's own name is exactly what buildFbInstanceMap
@@ -81,9 +87,16 @@ describe('composeLibraryDebugHarness', () => {
     expect(program.body).toEqual({ language: 'st', value: 'PID_I();\nRAMP_I();' })
   })
 
+  it('returns the harness program POU so callers never index into pous', () => {
+    const harness = composeLibraryDebugHarness(libraryData([functionBlock('Pid')]))
+    // Same object, not a copy — the session overlay installs this verbatim.
+    expect(harness.programPou).toBe(harnessProgram(harness))
+    expect(harness.programPou.name).toBe(harness.programName)
+  })
+
   it('flags every harness variable for debug so the watch table fills on connect', () => {
     const harness = composeLibraryDebugHarness(libraryData([functionBlock('Pid')]))
-    const program = harnessProgram(harness.projectData.pous)
+    const program = harnessProgram(harness)
     expect(program.interface?.variables.every((v) => v.debug === true)).toBe(true)
   })
 
@@ -115,7 +128,7 @@ describe('composeLibraryDebugHarness', () => {
     expect(harness.projectData.configurations.resource.globalVariables).toHaveLength(1)
   })
 
-  it('skips functions without comment — they are simply not instantiable state', () => {
+  it('skips functions — they are not instantiable state', () => {
     const fn: PLCPou = {
       name: 'Scale',
       pouType: 'function',
@@ -158,7 +171,7 @@ describe('composeLibraryDebugHarness', () => {
       ]),
     )
 
-    const program = harnessProgram(harness.projectData.pous)
+    const program = harnessProgram(harness)
     expect(program.interface?.variables).toEqual([
       expect.objectContaining({ name: 'BUF_I' }),
       expect.objectContaining({ name: 'BUF_IO_BUFFER', type: { definition: 'base-type', value: 'DINT' } }),
@@ -179,7 +192,7 @@ describe('composeLibraryDebugHarness', () => {
   it('returns no blocks for a library with nothing instantiable', () => {
     const harness = composeLibraryDebugHarness(libraryData([]))
     expect(harness.blocks).toEqual([])
-    expect(harnessProgram(harness.projectData.pous).interface?.variables).toEqual([])
+    expect(harnessProgram(harness).interface?.variables).toEqual([])
   })
 
   it('uniquifies instance names when two blocks generate the same one', () => {
@@ -192,7 +205,7 @@ describe('composeLibraryDebugHarness', () => {
   it('yields the program name when the library already owns LIBDBG_MAIN', () => {
     const harness = composeLibraryDebugHarness(libraryData([functionBlock(HARNESS_PROGRAM_NAME), functionBlock('Pid')]))
     expect(harness.programName).toBe(`${HARNESS_PROGRAM_NAME}_2`)
-    expect(harnessProgram(harness.projectData.pous).name).toBe(`${HARNESS_PROGRAM_NAME}_2`)
+    expect(harnessProgram(harness).name).toBe(`${HARNESS_PROGRAM_NAME}_2`)
     expect(harness.projectData.configurations.resource.instances[0].program).toBe(`${HARNESS_PROGRAM_NAME}_2`)
   })
 

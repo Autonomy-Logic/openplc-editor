@@ -15,7 +15,7 @@ import {
   findLibrariesMissingNativeSources,
   injectLibraryBlocks,
 } from '../../../backend/shared/library/inject-library-blocks'
-import { collectNativePous } from '../../../backend/shared/library/native-pou-list'
+import { collectNativePous, type NativePouRef } from '../../../backend/shared/library/native-pou-list'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type {
   CompileLibraryArgs,
@@ -127,6 +127,29 @@ function inferStage(message: string): CompileProgressEvent['stage'] {
   if (lower.includes('arduino') || lower.includes('compiling') || lower.includes('uploading')) return 'arduino'
   return 'st'
 }
+
+/**
+ * Argument tuple for the `compiler:run-compile-library` channel.
+ *
+ * Declared here, beside `IpcProjectData`, for the same reason
+ * `CompileProgramIpcArgs` is: the renderer bridge and the main-process
+ * handler both name this type instead of restating a loose
+ * `Array<string | ... >`, so adding, removing or reordering a slot is a
+ * compile error on every side at once rather than a cast that silently
+ * still fits.  The main process still VALIDATES what arrives — a type is
+ * a statement about our own callers, not a guarantee about the channel.
+ */
+export type CompileLibraryIpcArgs = [
+  projectPath: string,
+  /** Build-pass project data, `preprocessPous` with `isSimulator: false`. */
+  projectData: IpcProjectData,
+  /**
+   * Native (C/C++, Python) POUs collected from the RAW project data before
+   * preprocessing lowered every native body to bridge ST — the main process
+   * cannot derive this itself.  See `collectNativePous`.
+   */
+  nativePous: NativePouRef[],
+]
 
 export function createEditorCompilerAdapter(): CompilerPort {
   return {
@@ -316,7 +339,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         //     `'close'` event — that's the sole "build done"
         //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
-          [args.projectPath, ipcDataForBuild as never, nativePous as never],
+          [args.projectPath, ipcDataForBuild, nativePous],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult

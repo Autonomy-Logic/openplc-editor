@@ -25,7 +25,7 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
-import { parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
+import { type NativePouRef, parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -53,6 +53,82 @@ import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
  */
 type LibraryCompileBridge = {
   loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+}
+
+/**
+ * Validated form of the `compiler:run-compile-library` payload.
+ *
+ * `CompileLibraryIpcArgs` types what OUR renderer sends; this checks what
+ * actually arrived.  The two are not the same statement — anything crossing
+ * IPC is `unknown` at runtime however the sender was typed.
+ */
+type ParsedCompileLibraryArgs = {
+  projectPath: string
+  projectData: PLCProjectData
+  nativePous: NativePouRef[]
+}
+
+/**
+ * Structural guard over the library-build IPC payload.
+ *
+ * Checks exactly the fields the pipeline dereferences before its first
+ * try/catch — `prepareXmlForLibraryBuild` -> `stubProgramFor` spreads
+ * `data.pous` and `data.configuration.resource.{tasks,instances}` with no
+ * guard of its own.  A malformed payload used to throw a TypeError out of
+ * `runLibraryBuildPipeline`, and because `main.ts` invokes this method with
+ * `void`, that rejection surfaced nowhere: the port was never closed and the
+ * renderer's promise never settled.  Failing here posts a result and closes
+ * the port like any other build failure.
+ *
+ * Deliberately structural rather than a full zod parse of `PLCProjectSchema`:
+ * what crosses this channel is `IpcProjectData`, a hand-maintained
+ * restatement of the project model that legitimately drops fields the schema
+ * requires.  Validating against the schema would reject payloads the build
+ * handles correctly today — a worse failure than the hole it closes.
+ */
+function parseCompileLibraryArgs(
+  raw: unknown,
+): { ok: true; value: ParsedCompileLibraryArgs } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.length < 2) {
+    return {
+      ok: false,
+      error: 'Library build failed: malformed request (expected [projectPath, projectData, nativePous]).',
+    }
+  }
+  const [projectPath, projectData, rawNativePous] = raw as unknown[]
+  if (typeof projectPath !== 'string' || projectPath === '') {
+    return { ok: false, error: 'Library build failed: request carried no project path.' }
+  }
+  if (typeof projectData !== 'object' || projectData === null) {
+    return { ok: false, error: 'Library build failed: request carried no project data.' }
+  }
+  const data = projectData as Record<string, unknown>
+  if (!Array.isArray(data.pous)) {
+    return { ok: false, error: 'Library build failed: project data has no POU list.' }
+  }
+  const configuration = data.configuration
+  if (typeof configuration !== 'object' || configuration === null) {
+    return { ok: false, error: 'Library build failed: project data has no configuration.' }
+  }
+  const resource = (configuration as Record<string, unknown>).resource
+  if (typeof resource !== 'object' || resource === null) {
+    return { ok: false, error: 'Library build failed: project configuration has no resource.' }
+  }
+  const { tasks, instances } = resource as Record<string, unknown>
+  if (!Array.isArray(tasks) || !Array.isArray(instances)) {
+    return { ok: false, error: 'Library build failed: project resource has no task or instance list.' }
+  }
+  return {
+    ok: true,
+    value: {
+      projectPath,
+      // Shape-checked above for everything the pipeline reaches for. The
+      // remaining fields are optional to it (`libraries ?? []`,
+      // `dataTypes ?? []`), so a narrower cast here would buy nothing.
+      projectData: projectData as PLCProjectData,
+      nativePous: parseNativePouRefs(rawNativePous),
+    },
+  }
 }
 
 /**
@@ -101,7 +177,7 @@ import {
 } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { app as electronApp, dialog, MessageChannelMain } from 'electron'
+import { app as electronApp, dialog } from 'electron'
 import JSZip from 'jszip'
 
 import type { PlatformOption } from '../../../middleware/shared/ports/types'
@@ -117,34 +193,6 @@ interface MethodsResult<T> {
   data?: T
 }
 type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'warning' | 'error') => void
-
-/**
- * Decode a `MessagePortMain` payload back to a string, handling the
- * forms a Node `Buffer` survives V8's structured clone as:
- *
- *   - `string` — passthrough.
- *   - `Uint8Array` / `ArrayBuffer` — typed-array decode (this is the
- *     shape Buffers ride as when the channel stays inside the main
- *     process; `.toString()` on a Uint8Array returns the comma-
- *     separated number list and was the cause of the `[verify]
- *     67,111,109,…` console flood).
- *   - `{ type: 'Buffer', data: number[] }` — Electron's IPC
- *     serialisation form, same shape `decodeMessage` in the
- *     `compiler-adapter` already handles.
- *   - anything else — `String(...)` fallback.
- */
-function decodePortMessage(raw: unknown): string {
-  if (typeof raw === 'string') return raw
-  if (raw instanceof Uint8Array) return new TextDecoder().decode(raw)
-  if (raw instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(raw))
-  if (raw && typeof raw === 'object' && 'type' in raw) {
-    const obj = raw as Record<string, unknown>
-    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
-      return new TextDecoder().decode(new Uint8Array(obj.data as number[]))
-    }
-  }
-  return String(raw)
-}
 
 type CompileArduinoProgramArgs = {
   boardTarget: string
@@ -382,24 +430,6 @@ class CompilerModule {
   // structure so the recipe templates resolve.
   #constructShowPropertiesDummyPath(): string {
     return join(this.sourceDirectoryPath, 'show_properties_dummy')
-  }
-
-  /**
-   * Resolve a board target to the arduino-cli core ID
-   * (`arduino-cli core install` target — e.g. `arduino:avr`).
-   *
-   * Single source of truth: reads from the shared
-   * `backend/shared/firmware/hals.json` bundle, the same file the
-   * renderer's `bridge.getAvailableBoards()` exposes via
-   * `boardInfo.core`.
-   * Used internally by the library-project verification path so a
-   * future hals.json edit (rename, new board, version bump)
-   * propagates to verification automatically — without any code
-   * change here.
-   */
-  async #getBoardCore(board: string): Promise<string | null> {
-    const halsFileContent = await readHalsFile<HalsFile>()
-    return halsFileContent[board]?.['core'] ?? null
   }
 
   /**
@@ -3317,27 +3347,29 @@ class CompilerModule {
    * `composeLibraryDebugHarness`.
    */
   async compileLibrary(
-    args: Array<string | PLCProjectData | boolean>,
+    args: unknown,
     _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: LibraryCompileBridge,
   ): Promise<void> {
     _mainProcessPort.start()
 
-    // IPC args: [projectPath, projectData, nativePous?]
-    //
-    // `nativePous` is appended rather than derived here: it has to be read
-    // off the RAW project data, and by the time anything arrives over this
-    // channel `preprocessPous` has already lowered every native body to
+    // IPC args: `CompileLibraryIpcArgs` — [projectPath, projectData,
+    // nativePous]. `nativePous` is sent rather than derived here: it has to be
+    // read off the RAW project data, and by the time anything arrives over
+    // this channel `preprocessPous` has already lowered every native body to
     // bridge ST and rewritten its language tag. An older renderer omits it,
     // which degrades to "this project has no native POUs".
-    const [projectPath, projectData, rawNativePous] = args as [string, PLCProjectData, unknown]
-
-    // Validated at the boundary rather than trusted: this crosses IPC, so it
-    // arrives as `unknown` whatever the renderer intended. A malformed entry
-    // would otherwise throw inside the pipeline's read loop, and this handler
-    // is invoked with `void` — the renderer would wait for a result that never
-    // arrives. `parseNativePouRefs` drops what it cannot read.
-    const nativePous = parseNativePouRefs(rawNativePous)
+    //
+    // Validated rather than trusted — see `parseCompileLibraryArgs` for why a
+    // throw here would strand the renderer instead of failing the build.
+    const parsed = parseCompileLibraryArgs(args)
+    if (!parsed.ok) {
+      _mainProcessPort.postMessage({ logLevel: 'error', message: parsed.error })
+      _mainProcessPort.postMessage({ libraryBuildResult: { success: false, error: parsed.error } })
+      setTimeout(() => _mainProcessPort.close(), 25)
+      return
+    }
+    const { projectPath, projectData, nativePous } = parsed.value
 
     // Bridge the orchestrator's structured port API onto the desktop
     // platform's existing helpers.  This is the only desktop-specific

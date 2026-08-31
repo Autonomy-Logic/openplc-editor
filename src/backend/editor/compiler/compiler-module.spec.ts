@@ -848,4 +848,88 @@ describe('CompilerModule', () => {
       )
     })
   })
+
+  describe('compileLibrary — IPC payload validation', () => {
+    /**
+     * Collects what the module posts over the progress channel, plus whether
+     * it ever closed. A build that neither posts a result nor closes is the
+     * exact failure being guarded against: `main.ts` invokes this method with
+     * `void`, so a throw would leave the renderer's promise unsettled forever.
+     */
+    function makeChannel() {
+      const messages: Record<string, unknown>[] = []
+      let closed = false
+      return {
+        messages,
+        isClosed: () => closed,
+        channel: {
+          start: () => {},
+          postMessage: (m: Record<string, unknown>) => messages.push(m),
+          close: () => {
+            closed = true
+          },
+        },
+      }
+    }
+
+    const bridge = { loadEnabledArchives: () => ({ archives: [], missing: [] }) }
+
+    const wellFormed = {
+      pous: [],
+      dataTypes: [],
+      libraries: [],
+      configuration: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    }
+
+    it('accepts the payload the editor adapter actually sends', async () => {
+      // Guards the other direction from the rejection cases below: a validator
+      // that turns away a well-formed build is a worse regression than the hole
+      // it closes. This is `IpcProjectData`'s shape — note `configuration`
+      // (singular), which is what the adapter emits and what `stubProgramFor`
+      // reads.
+      const compilerModule = new CompilerModule()
+      const { messages, channel } = makeChannel()
+
+      await compilerModule.compileLibrary(['/project', wellFormed, []], channel, bridge)
+
+      const result = messages.find((m) => m.libraryBuildResult)?.libraryBuildResult as
+        | { success: boolean; error?: string }
+        | undefined
+      // It still fails — there is no `library.json` on disk at `/project` — but
+      // it must fail on THAT, having passed the boundary check.
+      expect(result?.error ?? '').not.toMatch(
+        /malformed request|no project path|no project data|no POU list|no configuration|no resource|no task or instance list/,
+      )
+    })
+
+    it.each([
+      ['not an array', 'malformed request'],
+      [[], 'malformed request'],
+      [['/project'], 'malformed request'],
+      [['', wellFormed, []], 'no project path'],
+      [['/project', null, []], 'no project data'],
+      [['/project', {}, []], 'no POU list'],
+      [['/project', { pous: [] }, []], 'no configuration'],
+      [['/project', { pous: [], configuration: {} }, []], 'no resource'],
+      [['/project', { pous: [], configuration: { resource: {} } }, []], 'no task or instance list'],
+    ])('rejects %p with a result and a closed port', async (args, expected) => {
+      const compilerModule = new CompilerModule()
+      const { messages, isClosed, channel } = makeChannel()
+
+      await compilerModule.compileLibrary(args, channel, bridge)
+
+      const result = messages.find((m) => m.libraryBuildResult)?.libraryBuildResult as {
+        success: boolean
+        error: string
+      }
+      // A result is what settles the renderer's promise — the assertion that
+      // matters more than the wording.
+      expect(result).toBeDefined()
+      expect(result.success).toBe(false)
+      expect(result.error).toContain(expected)
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(isClosed()).toBe(true)
+    })
+  })
 })

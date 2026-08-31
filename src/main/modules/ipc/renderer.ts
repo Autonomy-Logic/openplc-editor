@@ -1,4 +1,5 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
@@ -266,21 +267,11 @@ const rendererProcessBridge = {
   },
 
   /** Build the open Library Project into a `.stlib` archive.  Same
-   *  MessageChannel pattern as `runCompileProgram`.  Args:
-   *    [0] projectPath
-   *    [1] projectData preprocessed with `isSimulator: false` (full
-   *        Python-as-ST), used for the library build proper.
-   *    [2] projectData preprocessed with `isSimulator: true` (Python
-   *        as no-op stubs), used as input to the simulator-target
-   *        verification compile so it doesn't try to link Python
-   *        loader externs the AVR simulator runtime doesn't ship.
-   *    [3] cleanBuild flag (skips the verification cache).
-   *  Callback receives a stream of log messages and a final
-   *  `libraryBuildResult`. */
-  runCompileLibrary: (
-    compileArgs: Array<string | PLCProjectData | boolean>,
-    callback: (args: CompilerPortMessage) => void,
-  ) => {
+   *  MessageChannel pattern as `runCompileProgram`; the tuple shape
+   *  is `CompileLibraryIpcArgs`, declared next to the adapter that
+   *  fills it.  Callback receives a stream of log messages and a
+   *  final `libraryBuildResult`. */
+  runCompileLibrary: (compileArgs: CompileLibraryIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)

@@ -94,6 +94,14 @@ export interface LibraryDebugHarness {
    * `CompilerPort.compileProgram` with `isSimulator: true`.
    */
   projectData: PLCProjectData
+  /**
+   * The synthesised program POU itself.  Returned rather than left for
+   * the caller to dig out of `projectData.pous`: reaching for the last
+   * element there would bind the caller to this module's append order,
+   * and a reorder would silently install a library block as the
+   * session's program.
+   */
+  programPou: PLCPou
   /** The synthesised program POU's name (also present in `projectData.pous`). */
   programName: string
   /** The configuration instance holding the program. */
@@ -231,6 +239,7 @@ export function composeLibraryDebugHarness(
         },
       },
     },
+    programPou: harnessProgram,
     programName,
     instanceName: HARNESS_INSTANCE_NAME,
     taskName: HARNESS_TASK_NAME,
