@@ -506,6 +506,16 @@ export class RuntimeApiClient {
     filename: string
     contentType: string
     cleanBuild: boolean
+    /** Optional source-project archive, stored on the device so the project can
+     *  be retrieved later. Its own multipart part rather than something inside
+     *  `program.zip`: in there the runtime would extract it into
+     *  `core/generated` and hand it to the compiler. A runtime without snapshot
+     *  support ignores the extra parts, so sending them is always safe. */
+    snapshotBuffer?: Buffer
+    /** JSON metadata describing `snapshotBuffer`. The runtime never opens the
+     *  archive, so this is the only thing it can report about the stored
+     *  project — the two travel together or not at all. */
+    snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }): Promise<{ success: true; data: string } | { success: false; error: string }> {
     type UploadResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
@@ -515,13 +525,46 @@ export class RuntimeApiClient {
         `Content-Disposition: form-data; name="file"; filename="${headerSafe(opts.filename)}"\r\n` +
         `Content-Type: ${headerSafe(opts.contentType)}\r\n\r\n`,
     )
+
+    // Both parts or neither. A snapshot the device cannot describe is one it
+    // refuses anyway, and it would surface as a warning the user then has to
+    // make sense of.
+    const snapshotBuffer = opts.snapshotBuffer
+    const snapshotMetadata = opts.snapshotMetadata
+    const snapshotParts: Uint8Array[] =
+      snapshotBuffer !== undefined && snapshotMetadata !== undefined
+        ? [
+            asBytes(
+              Buffer.from(
+                `\r\n--${boundary}\r\n` +
+                  `Content-Disposition: form-data; name="snapshot"; filename="project.zip"\r\n` +
+                  `Content-Type: application/zip\r\n\r\n`,
+              ),
+            ),
+            asBytes(snapshotBuffer),
+            asBytes(
+              Buffer.from(
+                `\r\n--${boundary}\r\n` +
+                  `Content-Disposition: form-data; name="snapshot_metadata"\r\n` +
+                  `Content-Type: application/json\r\n\r\n` +
+                  snapshotMetadata,
+              ),
+            ),
+          ]
+        : []
+
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
     // `Buffer.concat` is typed as taking `Uint8Array`s, and this project's
     // TS/@types/node pairing does not accept a `Buffer` there (their iterator
     // types differ). A zero-copy view over the same memory satisfies the
     // signature honestly — the previous `as unknown as` hid the mismatch, and
     // copying a firmware bundle to appease a type would be worse than both.
-    const reqBody = Buffer.concat([asBytes(header), asBytes(opts.fileBuffer), asBytes(footer)])
+    const reqBody = Buffer.concat([
+      asBytes(header),
+      asBytes(opts.fileBuffer),
+      ...snapshotParts,
+      asBytes(footer),
+    ])
     const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
 
     const doRequest = (token: string): Promise<UploadResult> =>
