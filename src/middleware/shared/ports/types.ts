@@ -1402,8 +1402,14 @@ export interface LogSegment {
   className?: string
 }
 
+/**
+ * What a caller hands to `addLog`. Deliberately has no `id`: the entry id is
+ * a rendering key the console's own list owns, so the store mints it (see
+ * `frontend/store/slices/console`). A caller logging "Build process started"
+ * has no business generating one — and every caller that did was reaching for
+ * `crypto.randomUUID`, which does not exist outside a secure context.
+ */
 export interface LogObject {
-  id: string
   level?: 'debug' | 'info' | 'warning' | 'error'
   message: string
   tstamp?: Date

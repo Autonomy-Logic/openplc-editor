@@ -284,12 +284,49 @@ describe('parseIecStringToVariables', () => {
   })
 
   it('still accepts a comma-free non-array type the guard must not touch', () => {
-    // The guard keys on the comma alone, so bracketed non-array types such as a
-    // sized STRING keep parsing exactly as before.
-    const input = 'VAR\n  s : STRING[10];\nEND_VAR'
+    // The comma guard keys on the comma alone, so an ordinary user type keeps
+    // parsing exactly as before.
+    const input = 'VAR\n  m : Motor;\nEND_VAR'
     const result = parseIecStringToVariables(input)
 
-    expect(result[0].type).toEqual({ definition: 'user-data-type', value: 'STRING[10]' })
+    expect(result[0].type).toEqual({ definition: 'user-data-type', value: 'Motor' })
+  })
+
+  describe('a declared string length', () => {
+    // Legal IEC and legal CODESYS, and STruC++ does not accept it. Left alone it
+    // was not even recognised as a string: it became a user data type literally
+    // named "STRING[20]", emitted verbatim into the generated ST, where the
+    // compiler failed with `Expected Semicolon, found [` on a line the user
+    // never wrote.
+    it('is refused, naming the type and what to use instead', () => {
+      expect(() => parseIecStringToVariables('VAR\n  s : STRING[20];\nEND_VAR')).toThrow(
+        /A declared length is not supported on STRING — use plain STRING, which carries up to 126 characters/,
+      )
+    })
+
+    it('is refused for WSTRING too', () => {
+      expect(() => parseIecStringToVariables('VAR\n  s : WSTRING[8];\nEND_VAR')).toThrow(/not supported on WSTRING/)
+    })
+
+    it('is refused whatever the spacing and case', () => {
+      expect(() => parseIecStringToVariables('VAR\n  s : string [ 12 ];\nEND_VAR')).toThrow(/not supported on STRING/)
+    })
+
+    it('is refused when the length is empty, rather than becoming a stranger type', () => {
+      expect(() => parseIecStringToVariables('VAR\n  s : STRING[];\nEND_VAR')).toThrow(/not supported on STRING/)
+    })
+
+    it('still accepts a plain STRING', () => {
+      const result = parseIecStringToVariables('VAR\n  s : STRING;\nEND_VAR')
+
+      expect(result[0].type).toEqual({ definition: 'base-type', value: 'STRING' })
+    })
+
+    it('does not mistake an ARRAY OF STRING for a sized one', () => {
+      const result = parseIecStringToVariables('VAR\n  s : ARRAY[0..2] OF STRING;\nEND_VAR')
+
+      expect(result[0].type.definition).toBe('array')
+    })
   })
 
   it('still accepts a comma inside an initial value', () => {

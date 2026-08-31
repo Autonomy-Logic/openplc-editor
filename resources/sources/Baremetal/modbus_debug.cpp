@@ -17,9 +17,23 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "openplc_version.h"
 
 // ArduinoUniqueID (ricaun) backs the DEBUG_GET_BOARD_ID (0x48) function code.
-// It supports AVR/megaAVR/SAM/SAMD/STM32/ESP/RP2040/Teensy. On a core without
-// support (or when a board intentionally opts out via OPENPLC_NO_UNIQUE_ID),
-// the board-id handler returns id_len = 0 instead of failing to compile.
+// It supports AVR/megaAVR/SAM/SAMD/STM32/ESP/RP2040/Teensy, and its header
+// `#error`s out on anything else rather than degrading — so a core it does not
+// cover has to be kept out of the translation unit, not handled at runtime.
+//
+// A UNIQUE ID IS ONLY EVER NEEDED TO BIND A PURCHASE TO A BOARD, so the build
+// asks for it only on a target whose board package declares `isLicensable`.
+// Every other target — which today is every target — gets
+// OPENPLC_NO_UNIQUE_ID from defines.h and never includes the library, so a core
+// the library rejects is a non-problem unless someone ships a paid VPP for it.
+// Note the polarity: the flag is the DEFAULT, not the exception. See
+// `generateDefinesContent` for the emitter.
+//
+// Without the library, the board-id handler answers id_len = 0. That is a
+// well-formed SUCCESS reply, and both consumers already read it as one:
+// `device-probe` treats the successful reply (not the id bytes) as proof of
+// firmware, and `resolveLicensingTarget` never asks a non-licensable board for
+// an id in the first place.
 #ifndef OPENPLC_NO_UNIQUE_ID
     #include <ArduinoUniqueID.h>
     #define OPENPLC_HAS_UNIQUE_ID

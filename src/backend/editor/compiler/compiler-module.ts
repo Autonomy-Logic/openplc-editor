@@ -25,6 +25,7 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
+import { parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -196,9 +197,13 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
-    // Backs the always-on debugger's DEBUG_GET_BOARD_ID (FC 0x48). ModbusSlave.cpp
-    // includes <ArduinoUniqueID.h> unconditionally (not behind a USE_*_BLOCK gate),
-    // so the lib must be installed for every Arduino build.
+    // Backs DEBUG_GET_BOARD_ID (FC 0x48) in modbus_debug.cpp, which includes
+    // <ArduinoUniqueID.h> unless defines.h carries OPENPLC_NO_UNIQUE_ID — i.e.
+    // only on a board whose package declares `isLicensable`, since a unique id
+    // exists solely to bind a paid VPP licence to hardware. Kept in the global
+    // list rather than moved behind that gate: installing a library nothing
+    // includes costs a one-time download and changes no build, whereas a
+    // conditional install is one more way for a licensable board to fail late.
     'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',
@@ -1255,7 +1260,11 @@ class CompilerModule {
       variables: pou.variables,
     })) as CppPouDataHeader[]
 
-    const headerContent: string = generateCBlocksHeader(cppPous)
+    // The project's data-type names let the generator tell a structure or
+    // enumeration (which strucpp aliases as `IEC_<NAME>`) from a function block
+    // instance (a bare `class <NAME>`), which the variable alone cannot say.
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const headerContent: string = generateCBlocksHeader(cppPous, userTypeNames)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
 
     try {
@@ -1288,7 +1297,10 @@ class CompilerModule {
     // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
     // strucpp-free and is compiled by arduino-cli in the core's native
     // standard.
-    const codeContent = generateCBlocksCode(cppPous)
+    // Every data type the project declares is aliased into the block's scope,
+    // including ones reachable only through a structure member.
+    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const codeContent = generateCBlocksCode(cppPous, userTypeNames)
     const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {
@@ -3397,16 +3409,29 @@ class CompilerModule {
   ): Promise<void> {
     _mainProcessPort.start()
 
-    // The IPC args contract is preserved verbatim from the pre-
-    // refactor signature so the renderer-side adapter is unchanged:
+    // IPC args:
     //   [projectPath, projectData (build-pass), verifyProjectData,
-    //    cleanBuild?]
-    const [projectPath, projectData, verifyProjectData, cleanBuild = false] = args as [
+    //    cleanBuild?, nativePous?]
+    //
+    // `nativePous` is appended rather than derived here: it has to be read
+    // off the RAW project data, and by the time anything arrives over this
+    // channel `preprocessPous` has already lowered every native body to
+    // bridge ST and rewritten its language tag. An older renderer omits it,
+    // which degrades to "this project has no native POUs".
+    const [projectPath, projectData, verifyProjectData, cleanBuild = false, rawNativePous] = args as [
       string,
       PLCProjectData,
       PLCProjectData,
       boolean | undefined,
+      unknown,
     ]
+
+    // Validated at the boundary rather than trusted: this crosses IPC, so it
+    // arrives as `unknown` whatever the renderer intended. A malformed entry
+    // would otherwise throw inside the pipeline's read loop, and this handler
+    // is invoked with `void` — the renderer would wait for a result that never
+    // arrives. `parseNativePouRefs` drops what it cannot read.
+    const nativePous = parseNativePouRefs(rawNativePous)
 
     // Bridge the orchestrator's structured port API onto the desktop
     // platform's existing helpers.  This is the only desktop-specific
@@ -3426,6 +3451,7 @@ class CompilerModule {
         projectData,
         verifyProjectData,
         cleanBuild,
+        nativePous,
       },
       libraryPort,
       (event) => _mainProcessPort.postMessage({ logLevel: event.level, message: event.message }),

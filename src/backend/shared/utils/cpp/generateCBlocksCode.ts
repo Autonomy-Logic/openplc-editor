@@ -1,4 +1,5 @@
-import { generateStructMember, isArrayVariable } from '../../../../frontend/utils/PLC/array-codegen-helpers'
+import { cBlockExternalVariables, cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
+import { isArrayVariable, multiDimensionalContainerType } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
 type CppPouData = {
@@ -8,56 +9,70 @@ type CppPouData = {
 }
 
 /**
- * Self-contained baseline for c_blocks_code.cpp. Carries:
+ * Baseline preamble for c_blocks_code.cpp. Carries:
  *
- *   - The strucpp runtime includes so the auto-generated POU struct
- *     fields (`strucpp::IEC_INT*` / `strucpp::IEC_STRING*` etc.,
- *     emitted by `generateStructMember`) resolve to IECVar /
- *     IECStringVar wrappers.  Force semantics flow through
- *     `IECVar::operator=` (and `IECStringVar::operator=`) on every
- *     user write — uniform across numeric, bit-string, and string
- *     pins.
+ *   - `c_blocks.h`, which defines the interface struct for every C++ POU in the
+ *     project and declares the two entry points this file goes on to define.
+ *     It is included rather than restated: the POU glue includes the same
+ *     header, so the two sides describe one struct and cannot drift apart.
+ *     Through it comes `generated.hpp` — the strucpp runtime wrappers plus this
+ *     project's own structures, enumerations and function block classes — so a
+ *     C block can name every type the Variables Table can declare, and force
+ *     semantics flow through `IECVar::operator=` on every user write.
  *
- *   - File-scope raw numeric typedefs (`IEC_BOOL` / `IEC_INT` /
- *     `IEC_REAL` / etc.) preserved from the MatIEC era.  These exist
- *     ONLY for the user's *local* variables inside `setup()` /
- *     `loop()` (e.g. `IEC_INT my_temp = 0;`).  They never collide
- *     with the auto-generated struct fields because the struct
- *     fully qualifies as `strucpp::IEC_*`.
+ *   - File-scope raw numeric typedefs (`IEC_BOOL` / `IEC_INT` / `IEC_REAL` /
+ *     etc.) preserved from the MatIEC era. These exist ONLY for the user's
+ *     *local* variables inside `setup()` / `loop()` (e.g. `IEC_INT my_temp =
+ *     0;`). They never collide with the struct fields because those fully
+ *     qualify as `strucpp::IEC_*`.
  *
- *   - No raw `IEC_STRING` / `IEC_WSTRING` typedef.  STRING pins now
- *     use the strucpp wrapper end-to-end (`strucpp::IEC_STRING =
- *     IECStringVar<254>`), so user code interacts with them via
- *     `name = "hello";` / `name.length()` / `name[i]` /
- *     `name.c_str()` / `name == "stop"` — the same surface every
- *     other pin already exposes.  Local STRING variables inside
- *     setup() / loop() can also be declared as
- *     `strucpp::IEC_STRING my_buf;` (or `using strucpp::IEC_STRING;`
- *     at the top of the user's POU body, opt-in).
+ *   - No raw `IEC_STRING` / `IEC_WSTRING` typedef. STRING pins use the strucpp
+ *     wrapper end-to-end (`strucpp::IEC_STRING = IECStringVar<254>`), so user
+ *     code interacts with them via `name = "hello";` / `name.length()` /
+ *     `name[i]` / `name.c_str()` / `name == "stop"` — the same surface every
+ *     other pin already exposes. A local STRING inside setup() / loop() can be
+ *     declared `strucpp::IEC_STRING my_buf;` too.
  */
 const C_BLOCKS_BASELINE = `#include <cstdint>
 #include <cstring>
 
 #ifdef ARDUINO
 #include <Arduino.h>
-// Arduino.h defines \`min\` and \`max\` as preprocessor macros, which
-// collide with the \`std::min\` / \`std::max\` function templates and
-// the \`numeric_limits<T>::min()\` / \`max()\` static members that
-// \`<algorithm>\` / \`<limits>\` declare (both pulled in transitively
-// via \`iec_string.hpp\` below). Undef'ing them here keeps the user's
-// c_blocks code free to call \`std::min\` / \`std::max\` and lets the
-// strucpp runtime headers compile cleanly on AVR.
+// Arduino declares several of its helpers as function-like preprocessor macros,
+// and every one of them collides with a standard-library name that the headers
+// below pull in: \`min\` / \`max\` with the \`std::min\` / \`std::max\` templates and
+// \`numeric_limits<T>::min()\` / \`max()\`, and \`abs\` with \`std::abs\` — which is
+// worse, because \`<chrono>\` (reached transitively on the mbed cores) calls
+// \`abs\` with a template argument list the one-parameter macro cannot swallow:
+// \`macro "abs" passed 2 arguments, but takes just 1\`, and the standard header
+// then fails to parse.
+//
+// The AVR targets never showed it, because their libstdc++ is the vendored
+// freestanding port and never reaches \`<chrono>\`. An mbed board does.
+//
+// \`constrain\` and \`sq\` are left alone: neither shadows a standard name, so
+// user code keeps them.
 #undef min
 #undef max
+#undef abs
 #endif
 
-// STruC++ runtime types — IECVar<T> / IECStringVar<N> wrappers under
-// namespace strucpp.  The auto-generated POU struct refers to them
-// as \`strucpp::IEC_*\` for every pin (numeric, bit-string, STRING,
-// WSTRING), keeping force-aware semantics on the user's writes via
-// the wrapper's operator=.
-#include "iec_var.hpp"
-#include "iec_string.hpp"
+// The C block interface — the \`<POU>_VARS\` struct for every C++ POU in this
+// project, and the \`extern "C"\` declarations of the setup/loop entry points
+// defined below.  Declared once, in c_blocks.h, and included rather than
+// restated here: the POU glue strucpp emits includes the same header, so the
+// two sides cannot describe the struct differently.
+//
+// It transitively carries \`generated.hpp\` — the strucpp runtime wrappers plus
+// this project's own structures, enumerations and function block classes — so a
+// C block can name every type the Variables Table can declare.
+//
+// This TU is pre-compiled with the board's toolchain at -std=gnu++17 into
+// libOpenPLCUserLib.a, on the same side of the isolation seam as the rest of
+// the generated code, so the header's C++17 surface is available here. The
+// arduino-cli pass compiles the core in its own (older) standard and never
+// sees this file.
+#include "c_blocks.h"
 
 /*********************/
 /*  IEC Types defs   */
@@ -97,7 +112,13 @@ const generateDefine = (variable: PLCVariable): string => {
   const name = variable.name
   const upperName = name.toUpperCase()
 
-  if (isArrayVariable(variable)) {
+  // A one-dimensional array is a pointer to its first element offset by the
+  // lower bound, so the name binds to the pointer itself and `name[i]` indexes
+  // by the declared IEC range. Everything else — scalars, structures, function
+  // block instances, and multi-dimensional arrays, which are passed as the
+  // container — binds to the dereferenced pointer, so the user writes
+  // `name = 5`, `name.field`, `name()` or `name(i, j)` as the type allows.
+  if (isArrayVariable(variable) && !multiDimensionalContainerType(variable)) {
     return `#define ${name} (vars->${upperName})\n`
   }
   return `#define ${name} (*(vars->${upperName}))\n`
@@ -107,35 +128,76 @@ const generateUndef = (variable: PLCVariable): string => {
   return `#undef ${variable.name}\n`
 }
 
+/**
+ * Bring the project's own type names into the C block's scope.
+ *
+ * The generated declarations live in `namespace strucpp`, so without this a
+ * user has to write `strucpp::MOTOR` / `(strucpp::MODE)` in their own block —
+ * the namespace is an implementation detail of the toolchain leaking into code
+ * that is supposed to look like ordinary C++ against the Variables Table.
+ *
+ * Upper-case throughout, and not a typo: strucpp's lexer upper-cases the whole
+ * ST source except string literals and `{external}` bodies, so a data type the
+ * user declared as `Motor` is `struct MOTOR` by the time `type-codegen` names
+ * it. The aliases below therefore match what the compiler actually emits; an
+ * earlier revision of this comment said `strucpp::Motor`, which would not
+ * resolve.
+ *
+ * A blanket `using namespace strucpp;` is not an option: the baseline defines
+ * raw `IEC_BOOL` / `IEC_INT` / … typedefs at file scope for the user's local
+ * variables, and strucpp declares the same names as `IECVar<T>` wrappers, so
+ * every one of them would become ambiguous. Aliasing only the names this
+ * project actually defines keeps the natural spelling without that collision.
+ *
+ * The bare strucpp name is the right target for both shapes: `strucpp::MOTOR`
+ * is the structure itself and `strucpp::MODE` the enumeration, which is what a
+ * user casts to. The `IEC_`-prefixed aliases stay reserved for pin types in the
+ * generated struct.
+ *
+ * Every type the project declares is aliased, not only the ones a pin names
+ * directly. A type reachable through a structure member needs to be in scope
+ * too: given `o : Outer` where `Outer` has a `State` member, the block writes
+ * `o.STATE_ = STATE::BUSY`, and walking only pin types left `STATE` undeclared.
+ * Types named by a pin are added as well, which is what covers a function block
+ * instance — an FB is a POU, so it is not among the project's data types.
+ */
+const generateUserTypeAliases = (cppPous: CppPouData[], userTypeNames: Iterable<string>): string => {
+  const referenced = new Set<string>(Array.from(userTypeNames, (name) => name.toUpperCase()))
+  for (const pou of cppPous) {
+    for (const variable of pou.variables) {
+      // `derived` is a function block instance, `user-data-type` a structure or
+      // enumeration. A block may name either — casting to an enumeration, or
+      // declaring a local of an FB class — so both belong in scope.
+      if (variable.type.definition === 'user-data-type' || variable.type.definition === 'derived') {
+        referenced.add(variable.type.value.toUpperCase())
+      }
+      if (variable.type.definition === 'array' && variable.type.data?.baseType.definition === 'user-data-type') {
+        referenced.add(variable.type.data.baseType.value.toUpperCase())
+      }
+    }
+  }
+  if (referenced.size === 0) return ''
+
+  let code = "// Project types, reachable without the toolchain's namespace\n"
+  for (const name of Array.from(referenced).sort()) {
+    code += `using ${name} = strucpp::${name};\n`
+  }
+  return code + '\n'
+}
+
 const processUserCode = (pou: CppPouData): string => {
   const structName = `${pou.name.toUpperCase()}_VARS`
   const setupFunctionName = `${pou.name.toLowerCase()}_setup`
   const loopFunctionName = `${pou.name.toLowerCase()}_loop`
 
-  const inputVariables = pou.variables.filter((v) => v.class === 'input')
-  const outputVariables = pou.variables.filter((v) => v.class === 'output')
+  const interfaceVariables = [...cBlockInterfaceVariables(pou.variables), ...cBlockExternalVariables(pou.variables)]
 
-  let processedCode = `//definition of external blocks - ${pou.name.toUpperCase()}\n`
-  processedCode += `typedef struct {\n`
+  // The struct and the two entry-point declarations come from c_blocks.h, which
+  // the baseline includes. Only the name-binding macros and the user's own body
+  // are emitted here.
+  let processedCode = `// ${pou.name.toUpperCase()} — Variables Table names bound to the interface struct\n`
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateStructMember(variable)
-  })
-
-  outputVariables.forEach((variable) => {
-    processedCode += generateStructMember(variable)
-  })
-
-  processedCode += `} ${structName};\n\n`
-
-  processedCode += `extern "C" void ${setupFunctionName}(${structName} *vars);\n`
-  processedCode += `extern "C" void ${loopFunctionName}(${structName} *vars);\n\n`
-
-  inputVariables.forEach((variable) => {
-    processedCode += generateDefine(variable)
-  })
-
-  outputVariables.forEach((variable) => {
+  interfaceVariables.forEach((variable) => {
     processedCode += generateDefine(variable)
   })
 
@@ -153,10 +215,7 @@ const processUserCode = (pou: CppPouData): string => {
   processedCode += modifiedUserCode
   processedCode += '\n'
 
-  inputVariables.forEach((variable) => {
-    processedCode += generateUndef(variable)
-  })
-  outputVariables.forEach((variable) => {
+  interfaceVariables.forEach((variable) => {
     processedCode += generateUndef(variable)
   })
   processedCode += '\n'
@@ -169,10 +228,11 @@ const processUserCode = (pou: CppPouData): string => {
  * Returns an empty string when there are no C++ POUs so the caller can
  * skip writing the file.
  */
-const generateCBlocksCode = (cppPous: CppPouData[]): string => {
+const generateCBlocksCode = (cppPous: CppPouData[], userTypeNames: Iterable<string> = []): string => {
   if (cppPous.length === 0) return ''
 
   let codeContent = C_BLOCKS_BASELINE
+  codeContent += generateUserTypeAliases(cppPous, userTypeNames)
 
   cppPous.forEach((pou) => {
     codeContent += processUserCode(pou)

@@ -134,8 +134,8 @@ export function isUserManagementCapableRuntime(raw: string | null | undefined): 
 export function describeIncompatibleRuntime(raw: string | null | undefined): string {
   const reported = formatVersionForDisplay(raw)
   return (
-    `Runtime version ${reported} is not compatible with this editor.  ` +
-    `Upload requires OpenPLC Runtime v${MIN_RUNTIME_VERSION} or newer (STruC++ pipeline).  ` +
+    `Runtime version ${reported} is not compatible with this editor. ` +
+    `Upload requires OpenPLC Runtime v${MIN_RUNTIME_VERSION} or newer (STruC++ pipeline). ` +
     `Please upgrade the runtime on the target device before pushing this build.`
   )
 }
@@ -156,8 +156,8 @@ export function describeEditorTooOldForRuntime(args: {
   const runtime = formatVersionForDisplay(args.runtimeVersion)
   const where = args.deviceLabel ? ` on ${args.deviceLabel}` : ''
   return (
-    `Runtime ${runtime}${where} requires OpenPLC Editor ${args.minEditorVersion} or newer.  ` +
-    `This editor is ${args.editorVersion}.  ` +
+    `Runtime ${runtime}${where} requires OpenPLC Editor ${args.minEditorVersion} or newer. ` +
+    `This editor is ${args.editorVersion}. ` +
     `Update the editor, or connect to a runtime that accepts ${args.editorVersion}.`
   )
 }
@@ -178,8 +178,8 @@ export function describeVppRuntimeMismatch(args: {
   const runtime = formatVersionForDisplay(args.runtimeVersion)
   const where = args.deviceLabel ? `The runtime at ${args.deviceLabel} reports` : 'The connected runtime reports'
   return (
-    `Board "${args.boardTarget}" requires OpenPLC Runtime v${args.minRuntimeVersion} or newer.  ` +
-    `${where} ${runtime}.  ` +
+    `Board "${args.boardTarget}" requires OpenPLC Runtime v${args.minRuntimeVersion} or newer. ` +
+    `${where} ${runtime}. ` +
     `Upgrade the runtime on that device, or select a board supported by ${runtime}.`
   )
 }

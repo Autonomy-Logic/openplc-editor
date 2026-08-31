@@ -68,7 +68,6 @@ export const useNativeScreenEnforcement = () => {
       const store = useOpenPLCStore.getState()
       if (!result.success) {
         store.consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message:
             `[retain] ${deviceBoard} handles retained variables in its own driver, but the runtime's ` +
@@ -78,7 +77,6 @@ export const useNativeScreenEnforcement = () => {
         return
       }
       store.consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message:
           `[retain] ${deviceBoard} handles retained variables in its own driver; the runtime's ` +

@@ -96,8 +96,17 @@ export interface ProjectSyncHandle {
   dispose(): void
 }
 
+let syncedTextReader: ((uri: string) => string | undefined) | null = null
+
+/** The text of `uri` as last sent to the worker, from the live project sync. */
+export function getSyncedDocumentText(uri: string): string | undefined {
+  return syncedTextReader?.(uri)
+}
+
 export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   const snapshot = emptySnapshot()
+  const readSyncedText = (uri: string) => snapshot.contentByUri.get(uri)
+  syncedTextReader = readSyncedText
   let disposed = false
 
   // A variable's `location` holds EITHER a producer alias name OR a literal
@@ -360,6 +369,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
       }
     },
     dispose() {
+      if (syncedTextReader === readSyncedText) syncedTextReader = null
       if (disposed) return
       disposed = true
       unsubscribePous()

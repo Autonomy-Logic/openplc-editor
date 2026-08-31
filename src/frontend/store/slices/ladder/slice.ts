@@ -163,6 +163,13 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
         produce(({ ladderFlows }: LadderFlowState) => {
           const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
 
+          // A body that failed to parse arrives here as the FBD-shaped fallback
+          // (nodes/edges/viewport, no `rungs`). Degrade to an empty canvas: the
+          // alternative is a throw inside the route loader, which takes the whole
+          // editor down to the error boundary and makes the project unopenable
+          // (DOPE-592). `handleOpenProjectResponse` already guards the same way.
+          const sourceRungs = flow.rungs ?? []
+
           // A VAR_IN_OUT pin no longer has an output side, but loading NEVER converts a rung
           // that still carries the old two-sided pin. In Ladder an edge leaving a block IS the
           // rung chain, so re-pointing it automatically would route the rail around the block
@@ -171,7 +178,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
 
           // Check if any block node has legacy connectedVariables (object instead of array).
           // Only scan + migrate if legacy data is detected — modern projects skip this entirely.
-          const needsMigration = flow.rungs.some((rung) =>
+          const needsMigration = sourceRungs.some((rung) =>
             rung.nodes.some((node) => {
               if (node.type !== 'block') return false
               const cv = (node.data as { connectedVariables?: unknown }).connectedVariables
@@ -180,7 +187,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           )
 
           const rungs = needsMigration
-            ? flow.rungs.map((rung) => ({
+            ? sourceRungs.map((rung) => ({
                 ...rung,
                 selectedNodes: [],
                 nodes: rung.nodes.map((node) => {
@@ -199,7 +206,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                   return node
                 }),
               }))
-            : flow.rungs.map((rung) => ({ ...rung, selectedNodes: [] }))
+            : sourceRungs.map((rung) => ({ ...rung, selectedNodes: [] }))
 
           // handleBranches (the index of contacts/coils wired to a block's
           // secondary handles, e.g. CTUD CD/QD) is runtime-only state — it is

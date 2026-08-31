@@ -10,6 +10,7 @@ import { generateIecVariablesToString } from '../../../utils/generate-iec-variab
 import { hasLegacyInOutOutputHandle } from '../../../utils/graphical/in-out-pin-rules'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
 import { isLegalIdentifier } from '../../../utils/keywords'
+import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
@@ -232,10 +233,10 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames:
       ...next.modbusTcpConfig,
       ioGroups: (next.modbusTcpConfig.ioGroups ?? []).map((group) => ({
         ...group,
-        id: crypto.randomUUID(),
+        id: newUuid(),
         ioPoints: (group.ioPoints ?? []).map((point) => ({
           ...point,
-          id: crypto.randomUUID(),
+          id: newUuid(),
           iecLocation: '',
           alias: undefined,
         })),
@@ -257,7 +258,7 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames:
         taken.add(name)
         return {
           ...slave,
-          id: crypto.randomUUID(),
+          id: newUuid(),
           name,
           channelMappings: (slave.channelMappings ?? []).map((mapping) => ({
             ...mapping,
@@ -1083,10 +1084,55 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // affected — in-memory editing, simulation, and compilation stay on.
       getState().workspaceActions.setCanEdit(data.canEdit !== false)
 
+      // An unrecoverable POU stops the open here (DOPE-592).
+      //
+      // The editor still opens — the user gets the workspace and, crucially,
+      // the Console explaining exactly which POU failed and why — but it opens
+      // EMPTY and read-only. Loading the rest of the project would be worse
+      // than useless: the broken POU would render as a blank canvas that looks
+      // like a legitimately empty diagram, and the first save would write that
+      // emptiness over the file the user still has on disk. `canEdit: false`
+      // gates every backend write (see `save-actions`), so nothing can be
+      // persisted over the original while the project is in this state.
+      //
+      // Recoverable failures (malformed variable declarations) never reach
+      // here: they stay in `warnings`, the project opens normally, and the
+      // offending variables table opens in text mode for the user to fix.
+      if (data.fatalErrors?.length) {
+        // Open the workspace, empty. `setProject` setting `meta.path` is what
+        // moves the app off the start screen, and on the desktop build that is
+        // the ONLY trigger — the web build also keys off `project_id` in the
+        // URL, so skipping this looked fine there and would have stranded
+        // editor users on the start screen with no Console to read.
+        getState().projectActions.setProject({
+          meta: data.meta,
+          data: {
+            ...data.projectData,
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            servers: [],
+            remoteDevices: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+        // After `setProject`, because `clearWorkspace` resets `canEdit` to true.
+        getState().workspaceActions.setCanEdit(false)
+        for (const message of data.fatalErrors) {
+          getState().consoleActions.addLog({ level: 'error', message })
+        }
+        getState().consoleActions.addLog({
+          level: 'error',
+          message:
+            'The project was opened empty and read-only so the unreadable file is not overwritten. Fix the file listed above, then reopen the project.',
+        })
+        return
+      }
+
       // Log any parsing warnings to the app console (after clear so they aren't wiped)
       if (data.warnings) {
         for (const message of data.warnings) {
-          getState().consoleActions.addLog({ id: crypto.randomUUID(), level: 'warning', message })
+          getState().consoleActions.addLog({ level: 'warning', message })
         }
       }
 
@@ -1182,7 +1228,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (restampedCount > 0) {
         getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: `Refreshed ${restampedCount} library block pin type(s) from the current library definitions.`,
         })
@@ -1190,7 +1235,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (convertibleInOutPous.size > 0) {
         getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message:
             `A VAR_IN_OUT parameter is now drawn as a single input-side pin. ` +
@@ -1203,7 +1247,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
       if (libraryInOutBlocks.size > 0) {
         getState().consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message:
             `${[...libraryInOutBlocks].sort().join(', ')}: this project places library blocks with a ` +

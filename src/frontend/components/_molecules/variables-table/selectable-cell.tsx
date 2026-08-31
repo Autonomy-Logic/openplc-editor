@@ -4,13 +4,14 @@ import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
 import { useOpenPLCStore } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
+import { PYTHON_UNSUPPORTED_CLASSES } from '../../../utils/python/block-interface'
 import { hasStringName, safeUpper } from '../../../utils/safe-upper'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
@@ -18,6 +19,10 @@ import { TypeChangeModal } from '../type-change-modal'
 import { ArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCVariable, unknown> & { selected?: boolean }
+
+/** Declaration order shown in the Class dropdown. `global` is a
+ *  configuration-level declaration, not a POU variable, so it is not here. */
+const ALL_VARIABLE_CLASSES: readonly VariableClass[] = ['input', 'output', 'inOut', 'external', 'local', 'temp']
 
 const createVariableType = (
   definition: PLCVariable['type']['definition'],
@@ -58,8 +63,6 @@ const SelectableTypeCell = ({
     workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
 
-  const language = 'language' in editor.meta ? editor.meta.language : null
-
   const VariableTypes = [
     {
       definition: 'base-type',
@@ -99,35 +102,15 @@ const SelectableTypeCell = ({
     },
   ]
 
-  // Filter available types based on language
-  const getAvailableTypes = () => {
-    if (language === 'python' || language === 'cpp') {
-      // Native-language POUs (Python / C++) don't share strucpp's
-      // chrono-backed handling for IEC time types yet, so hide them
-      // from the type dropdown.
-      const excludedTypes = ['TIME', 'DATE', 'TOD', 'DT']
-
-      // Only show Base Type for Python/C++ and filter out specific types
-      const availableTypes = VariableTypes.filter((type) => type.definition === 'base-type').map((type) => ({
-        ...type,
-        values: type.values.filter((value) => !excludedTypes.includes(safeUpper(value))),
-      }))
-
-      return availableTypes
-    }
-    return VariableTypes
-  }
-
-  const getAvailableLibraryTypes = () => {
-    if (language === 'python' || language === 'cpp') {
-      // No library types for Python/C++
-      return []
-    }
-    return LibraryTypes
-  }
-
-  const availableVariableTypes = getAvailableTypes()
-  const availableLibraryTypes = getAvailableLibraryTypes()
+  // Every language offers the same types. Python and C++ blocks used to be
+  // held to base types only, minus TIME/DATE/TOD/DT, because their bridges
+  // could not carry anything else. Both now reach IEC parity — the time and
+  // calendar types travel as 64-bit counts, arrays and user-defined types are
+  // marshalled leaf by leaf, and a variable may be a function block instance —
+  // so the table no longer has a reason to offer them less than the text
+  // editor already accepts.
+  const availableVariableTypes = VariableTypes
+  const availableLibraryTypes = LibraryTypes
 
   const { value, definition } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
@@ -270,15 +253,13 @@ const SelectableTypeCell = ({
             />
           )
         })()}
-      {language !== 'python' && language !== 'cpp' && (
-        <ArrayModal
-          variableName={variableName}
-          VariableRow={index}
-          arrayModalIsOpen={arrayModalIsOpen}
-          setArrayModalIsOpen={setArrayModalIsOpen}
-          closeContainer={() => setPoppoverIsOpen(false)}
-        />
-      )}
+      <ArrayModal
+        variableName={variableName}
+        VariableRow={index}
+        arrayModalIsOpen={arrayModalIsOpen}
+        setArrayModalIsOpen={setArrayModalIsOpen}
+        closeContainer={() => setPoppoverIsOpen(false)}
+      />
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
         <PrimitiveDropdown.Trigger asChild disabled={isDebuggerVisible}>
           <div
@@ -364,17 +345,15 @@ const SelectableTypeCell = ({
               )
             })}
 
-            {language !== 'python' && language !== 'cpp' && (
-              <PrimitiveDropdown.Item
-                onSelect={() => {
-                  setArrayModalIsOpen(true)
-                  setPoppoverIsOpen(false)
-                }}
-                className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
-              >
-                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
-              </PrimitiveDropdown.Item>
-            )}
+            <PrimitiveDropdown.Item
+              onSelect={() => {
+                setArrayModalIsOpen(true)
+                setPoppoverIsOpen(false)
+              }}
+              className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
+            >
+              <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
+            </PrimitiveDropdown.Item>
 
             {availableLibraryTypes.map((scope) => {
               const filteredValues = scope.definition === 'system' ? filteredSystemLibraries : filteredUserLibraries
@@ -447,14 +426,21 @@ const SelectableClassCell = ({
   } = useOpenPLCStore()
 
   const language = 'language' in editor.meta ? editor.meta.language : null
-  const getVariableClasses = () => {
-    if (language === 'python' || language === 'cpp') {
-      return ['input', 'output']
-    }
-    return ['input', 'output', 'inOut', 'external', 'local', 'temp']
-  }
 
-  const variableClasses = getVariableClasses()
+  /**
+   * Every class an IEC POU can declare. Python and C++ blocks were once held
+   * to `input` / `output` because their bridges carried nothing else; both now
+   * marshal the rest too, so the only exclusion left is the one the codegen
+   * itself refuses.
+   *
+   * That exclusion is read from `PYTHON_UNSUPPORTED_CLASSES` rather than
+   * restated here: the picker and the bridge must not be able to disagree
+   * about what a Python block accepts, and a class that stops being refused
+   * should reappear in the dropdown by deleting one entry, not two.
+   */
+  const variableClasses = ALL_VARIABLE_CLASSES.filter(
+    (variableClass) => language !== 'python' || !(variableClass in PYTHON_UNSUPPORTED_CLASSES),
+  )
 
   // Get the current value from the table
   const currentValue = getValue()

@@ -47,13 +47,26 @@ const mockProjectData: PLCProjectData = {
   },
 }
 
-const boardsMap = new Map([
+const boardsMap = new Map<string, Record<string, unknown>>([
   [
     'Arduino Mega',
     {
       compiler: 'arduino-cli' as const,
       core: 'arduino:avr:mega',
       preview: 'mega.png',
+      specs: {},
+    },
+  ],
+  // A Python-capable target. An arduino-cli board REFUSES Python function
+  // blocks (they need the Linux runtime), so a test about grafting a Python
+  // library block has to build for something that can actually run one —
+  // otherwise it is testing the refusal, not the graft.
+  [
+    'OpenPLC Runtime v4',
+    {
+      compiler: 'openplc-compiler' as const,
+      core: '',
+      preview: 'runtime.png',
       specs: {},
     },
   ],
@@ -527,91 +540,93 @@ describe('createEditorCompilerAdapter', () => {
     })
   })
 
-  describe('library-cpp-block injection', () => {
-    it("grafts each enabled library archive's cppBlocks into the project before preprocessing", async () => {
-      // Project enables a library called `motor_lib` that ships a
-      // C++ FB called `Driver`.  The bridge returns the archive with
-      // its cppBlocks; the adapter must inject a synthesized
-      // `motor_lib__Driver` POU into the project's POU list before
-      // it builds the IPC payload, so the program build's
-      // c_blocks.h/code.cpp generation picks up the C++ source.
+  describe('native library-block graft', () => {
+    /** An archive shaped the way strucpp emits one for a native block. */
+    const nativeArchive = (libraryName: string, blockName: string, language: 'cpp' | 'python') => {
+      const ext = language === 'cpp' ? 'cpp' : 'py'
+      const body = language === 'cpp' ? 'void setup() {}\nvoid loop() {}' : 'def block_loop():\n    pass'
+      return {
+        manifest: {
+          name: libraryName,
+          functionBlocks: [
+            {
+              name: blockName,
+              inputs: [],
+              outputs: [],
+              inouts: [],
+              implementation: language,
+              sourceFile: `${blockName}.${ext}`,
+            },
+          ],
+        },
+        sources: [
+          {
+            fileName: `${blockName}.${ext}`,
+            source: `FUNCTION_BLOCK ${blockName}\nVAR_INPUT pwm : INT; END_VAR\n${body}\nEND_FUNCTION_BLOCK\n`,
+          },
+        ],
+      }
+    }
+
+    const compileWith = async (projectData: PLCProjectData, boardTarget = 'Arduino Mega') => {
+      const promise = adapter.compileProgram({ projectData, boardTarget, projectPath: '/p' }, () => {})
+      await flushMicrotasks()
+      compileCallback!({ closePort: true })
+      await promise
+      const ipcArgs = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0][0] as unknown[]
+      return ipcArgs[4] as {
+        pous: Array<{ data: { name: string } }>
+        originalCppPous?: Array<{ name: string }>
+      }
+    }
+
+    it("grafts an enabled library's C++ block into the project before preprocessing", async () => {
+      // The project enables `motor_lib`, which ships a C++ FB called `Driver`.
+      // The adapter must graft a `Driver` POU in before building the
+      // IPC payload, so the program build's c_blocks.h / code.cpp generation
+      // picks the C++ source up — exactly as it would for a user-authored block.
       const projectWithLib: PLCProjectData = {
         ...mockProjectData,
         libraries: [{ name: 'motor_lib', version: '1.0.0' }],
       }
-      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
-        {
-          manifest: { name: 'motor_lib' },
-          cppBlocks: [
-            {
-              name: 'Driver',
-              code: 'void setup() {}\nvoid loop() {}',
-              variables: [
-                {
-                  name: 'pwm',
-                  class: 'input',
-                  type: { definition: 'base-type', value: 'INT' },
-                  location: '',
-                  documentation: '',
-                },
-              ],
-            },
-          ],
-        },
-      ])
+      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([nativeArchive('motor_lib', 'Driver', 'cpp')])
 
-      const promise = adapter.compileProgram(
-        { projectData: projectWithLib, boardTarget: 'Arduino Mega', projectPath: '/p' },
-        () => {},
-      )
-      await flushMicrotasks()
-      compileCallback!({ closePort: true })
-      await promise
-
-      // The IPC payload's POU list should contain the synthesized
-      // `motor_lib__Driver` POU AFTER preprocessing has turned its
-      // cpp body into an ST stub.  preprocessPous also stamps an
-      // `originalCppPous` entry alongside.
-      const ipcArgs = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0][0] as unknown[]
-      const ipcProjectData = ipcArgs[4] as {
-        pous: Array<{ data: { name: string } }>
-        originalCppPous?: Array<{ name: string }>
-      }
-      const pouNames = ipcProjectData.pous.map((p) => p.data.name)
-      expect(pouNames).toContain('motor_lib__Driver')
-      expect(ipcProjectData.originalCppPous?.map((p) => p.name)).toContain('motor_lib__Driver')
+      const ipcProjectData = await compileWith(projectWithLib)
+      expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('Driver')
+      // `preprocessPous` lowered the grafted body and stamped the sidecar,
+      // which is what proves it went through the user-POU path.
+      expect(ipcProjectData.originalCppPous?.map((p) => p.name)).toContain('Driver')
     })
 
-    it("skips library cppBlocks that are not on the project's enabled list", async () => {
+    it("grafts an enabled library's Python block too", async () => {
+      const projectWithLib: PLCProjectData = {
+        ...mockProjectData,
+        libraries: [{ name: 'py_lib', version: '1.0.0' }],
+      }
+      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([nativeArchive('py_lib', 'Scale', 'python')])
+
+      // Runtime v4, not Arduino Mega: a Python block on an arduino-cli target is
+      // refused before the graft can be observed — correctly, and that refusal
+      // has its own tests. This one is about the graft.
+      const ipcProjectData = await compileWith(projectWithLib, 'OpenPLC Runtime v4')
+      expect(ipcProjectData.pous.map((p) => p.data.name)).toContain('Scale')
+    })
+
+    it("skips native blocks from libraries that are not on the project's enabled list", async () => {
       const projectWithLib: PLCProjectData = {
         ...mockProjectData,
         libraries: [{ name: 'enabled_lib', version: '1.0.0' }],
       }
       ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
-        {
-          manifest: { name: 'enabled_lib' },
-          cppBlocks: [{ name: 'OK', code: 'void setup(){}void loop(){}', variables: [] }],
-        },
-        {
-          // Not enabled — must not leak into the project.
-          manifest: { name: 'other_lib' },
-          cppBlocks: [{ name: 'Leak', code: 'void setup(){}void loop(){}', variables: [] }],
-        },
+        nativeArchive('enabled_lib', 'OK', 'cpp'),
+        // Installed but not enabled — must not leak into the build.
+        nativeArchive('other_lib', 'Leak', 'cpp'),
       ])
 
-      const promise = adapter.compileProgram(
-        { projectData: projectWithLib, boardTarget: 'Arduino Mega', projectPath: '/p' },
-        () => {},
-      )
-      await flushMicrotasks()
-      compileCallback!({ closePort: true })
-      await promise
-
-      const ipcArgs = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0][0] as unknown[]
-      const ipcProjectData = ipcArgs[4] as { pous: Array<{ data: { name: string } }> }
+      const ipcProjectData = await compileWith(projectWithLib)
       const pouNames = ipcProjectData.pous.map((p) => p.data.name)
-      expect(pouNames).toContain('enabled_lib__OK')
-      expect(pouNames).not.toContain('other_lib__Leak')
+      expect(pouNames).toContain('OK')
+      expect(pouNames).not.toContain('Leak')
     })
   })
 
@@ -637,12 +652,16 @@ describe('createEditorCompilerAdapter', () => {
       const result = await promise
 
       // Args: [projectPath, ipcDataForBuild, ipcDataForVerify, cleanBuild]
+      // 5th arg: the native-POU inventory, taken from the RAW project data
+      // before `preprocessPous` lowered every native body to bridge ST and
+      // rewrote its language tag. The main process cannot derive it.
       expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
         [
           '/lib/project',
           expect.objectContaining({ pous: expect.any(Array) }),
           expect.objectContaining({ pous: expect.any(Array) }),
           false,
+          expect.any(Array),
         ],
         expect.any(Function),
       )
@@ -741,9 +760,36 @@ describe('createEditorCompilerAdapter', () => {
       await promise
 
       expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
-        ['/lib/project', expect.any(Object), expect.any(Object), true],
+        ['/lib/project', expect.any(Object), expect.any(Object), true, expect.any(Array)],
         expect.any(Function),
       )
+    })
+
+    it('sends the native-POU inventory taken before preprocessing', async () => {
+      // Regression: the pipeline used to infer this from the POU list it
+      // received, which is always `st` by then — so it found none and the
+      // archive shipped the generated bridge instead of the authored source.
+      const withNative = {
+        ...mockProjectData,
+        pous: [
+          ...mockProjectData.pous,
+          {
+            name: 'CPP_SCALE',
+            pouType: 'function-block' as const,
+            body: { language: 'cpp' as const, value: 'void setup() {}\nvoid loop() {}' },
+            interface: { variables: [] },
+            documentation: '',
+          },
+        ],
+      }
+
+      const promise = adapter.compileLibrary!({ projectData: withNative, projectPath: '/lib/project' }, () => {})
+      await flushMicrotasks()
+      libraryCallback!({ closePort: true })
+      await promise
+
+      const args = (window.bridge.runCompileLibrary as jest.Mock).mock.calls[0][0] as unknown[]
+      expect(args[4]).toEqual([{ name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' }])
     })
 
     it('defaults non-error log levels to info when logLevel is missing', async () => {
@@ -987,7 +1033,9 @@ describe('compileForDebug with invalid C++ POU', () => {
     )
 
     expect(result.success).toBe(false)
-    expect(result.error).toBe('POU validation failed.')
+    // The debug path now surfaces the specific reason instead of a bare
+    // "POU validation failed." — the same text the build path already showed.
+    expect(result.error).toBe('POU validation failed. Check C/C++ code for missing setup()/loop() functions.')
     // The bridge should NOT have been called because validation failed early
     expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
     void debugCallback // suppress unused warning
@@ -1022,5 +1070,138 @@ describe('compileForDebug with invalid C++ POU', () => {
     )
 
     expect(progressEvents.length).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// compileForDebug — library FB pins reach the preprocess
+// ---------------------------------------------------------------------------
+describe('compileForDebug — library function block pins', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  /** A Python POU holding an instance of a function block that lives in a library. */
+  const pythonWithLibraryInstance: PLCProjectData = {
+    dataTypes: [],
+    pous: [
+      {
+        name: 'PyTimer',
+        pouType: 'program',
+        interface: {
+          variables: [
+            {
+              name: 'ton0',
+              class: 'local',
+              type: { definition: 'derived', value: 'TON' },
+              location: '',
+              documentation: '',
+              debug: false,
+            },
+          ],
+        },
+        body: { language: 'python', value: 'def block_loop():\n    pass' },
+      },
+    ],
+    configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+  }
+
+  const TON_ARCHIVE = {
+    manifest: {
+      name: 'iec_standard_fb',
+      functionBlocks: [
+        {
+          name: 'TON',
+          inputs: [
+            { name: 'IN', type: 'BOOL' },
+            { name: 'PT', type: 'TIME' },
+          ],
+          inouts: [],
+          outputs: [
+            { name: 'Q', type: 'BOOL' },
+            { name: 'ET', type: 'TIME' },
+          ],
+        },
+      ],
+    },
+  }
+
+  it('passes the loaded archives so a library FB instance resolves', async () => {
+    // `compileForDebug` loaded the archives and then did not forward them, so
+    // `libraries` defaulted to `[]`, `resolveFunctionBlockPins` found nothing,
+    // and a Python POU declaring `ton0 : TON` compiled for upload and failed the
+    // DEBUG compile with "cannot exchange these variables". The archives were
+    // already in hand — only the argument was missing.
+    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([TON_ARCHIVE])
+    ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
+      new Map([['OpenPLC Runtime v4', { name: 'OpenPLC Runtime v4', compiler: 'openplc-compiler' }]]),
+    )
+
+    const adapter = createEditorCompilerAdapter()
+    const promise = adapter.compileForDebug(
+      { projectData: pythonWithLibraryInstance, boardTarget: 'OpenPLC Runtime v4', projectPath: '/p' },
+      () => {},
+    )
+    const result = await Promise.race([promise, new Promise((r) => setTimeout(() => r('pending'), 50))])
+
+    // Either it got past validation (reaching the bridge) or it failed for some
+    // other reason — but NOT for an unresolvable TON.
+    if (typeof result === 'object' && result !== null && 'error' in result) {
+      expect(String((result as { error?: string }).error)).not.toContain('no function block by that name')
+    }
+  })
+
+  it('refuses a Python POU on a board that cannot run it, without calling the bridge', async () => {
+    // The build path had this covered; the debug path did not. Same gate, same
+    // reason — a Python block is no more loadable on an Arduino board when the
+    // compile is for debugging — so the message must name the board and the
+    // bridge must never be reached.
+    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([])
+    ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
+      new Map([['Arduino Mega', { name: 'Arduino Mega', compiler: 'arduino-cli' }]]),
+    )
+
+    const pythonOnly: PLCProjectData = {
+      dataTypes: [],
+      pous: [
+        {
+          name: 'PyBlock',
+          pouType: 'program',
+          interface: { variables: [] },
+          body: { language: 'python', value: 'def block_loop():\n    pass' },
+        },
+      ],
+      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    }
+
+    const adapter = createEditorCompilerAdapter()
+    const result = await adapter.compileForDebug(
+      { projectData: pythonOnly, boardTarget: 'Arduino Mega', projectPath: '/p' },
+      () => {},
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Arduino Mega')
+    expect(result.error).toContain('"PyBlock"')
+    expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
+  })
+
+  it('refuses the same POU when no archive declares the block', async () => {
+    // The other half of the contract: with no library carrying TON, the refusal
+    // is correct and must still name the variable.
+    ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([])
+    ;(window.bridge.getAvailableBoards as jest.Mock).mockResolvedValue(
+      new Map([['OpenPLC Runtime v4', { name: 'OpenPLC Runtime v4', compiler: 'openplc-compiler' }]]),
+    )
+
+    const adapter = createEditorCompilerAdapter()
+    const result = await adapter.compileForDebug(
+      { projectData: pythonWithLibraryInstance, boardTarget: 'OpenPLC Runtime v4', projectPath: '/p' },
+      () => {},
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ton0')
+    expect(window.bridge.runDebugCompilation).not.toHaveBeenCalled()
   })
 })

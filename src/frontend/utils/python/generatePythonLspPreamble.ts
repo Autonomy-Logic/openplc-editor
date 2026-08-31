@@ -23,8 +23,9 @@
  * POU has no input/output variables — keeps the caller's prepend
  * logic uniform without a special case.
  */
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
 import { getArrayTotalElements, isArrayVariable } from '../PLC/array-codegen-helpers'
+import { pythonInterfaceVariables } from './block-interface'
 
 export interface PythonLspPreamble {
   /** Ready-to-prepend text, terminated by a newline (or empty). */
@@ -94,20 +95,39 @@ function defaultPythonLiteralFor(pythonType: string): string {
   if (pythonType === 'int') return '0'
   if (pythonType === 'float') return '0.0'
   if (pythonType === 'str') return "''"
-  // list[...] or any other compound — empty list is the safest no-op
-  // initial value Pyright accepts as compatible with the annotation.
-  if (pythonType.startsWith('list[')) return '[]'
+  // `Any` reaches here, and `None` is assignable to it. Every other annotation
+  // — `list[...]`, a structure, an enumeration — is resolved by
+  // `initialValueFor` before it delegates, so those never arrive.
+  //
+  // This used to carry an `istanbul ignore` claiming it was unreachable. It was
+  // not: a structure or enumeration variable annotated `Motor` fell straight
+  // through the four scalars to `None`, and the preamble declared
+  // `m: Motor = None` — which Pyright correctly rejects, putting a spurious
+  // error on correct user code for the commonest composite case.
   return 'None'
 }
 
+/** The project's data types, indexed the way every other lookup indexes them. */
+const indexTypes = (dataTypes: readonly PLCDataType[]): Map<string, PLCDataType> =>
+  new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
+
 /**
  * Build a Python type annotation string for a single IEC variable.
- * Returns `null` when the variable's type can't be mapped (struct,
- * enum, unsupported scalar, malformed array) — caller skips
- * declaring it rather than risk a Pyright diagnostic on the
- * preamble itself.
+ * Returns `null` when the variable's type can't be mapped at all — caller skips
+ * declaring it rather than risk a Pyright diagnostic on the preamble itself.
+ *
+ * A user-defined type is resolved through `dataTypes` rather than echoed back:
+ *
+ *   - the annotation is the type's OWN declared spelling, because that is what
+ *     `typeStubsFor` names the class. Echoing the variable's spelling meant
+ *     `m : MOTOR` against a type declared `Motor` annotated a class that does
+ *     not exist, and Pyright reported `"MOTOR" is not defined` on generated
+ *     code the user cannot see or fix.
+ *   - a name the project does not declare becomes `Any`. It gets a declaration
+ *     either way, so the name resolves while the user is still typing, but it
+ *     cannot name a class with no stub behind it.
  */
-function annotationFor(variable: PLCVariable): string | null {
+function annotationFor(variable: PLCVariable, dataTypes: readonly PLCDataType[] = []): string | null {
   if (isArrayVariable(variable)) {
     const inner = variable.type.data?.baseType?.value
     if (!inner) return null
@@ -115,11 +135,13 @@ function annotationFor(variable: PLCVariable): string | null {
     if (!innerPython) return null
     return `list[${innerPython}]`
   }
-  if (variable.type.definition !== 'base-type') {
-    // user-data-type (struct / enum) — runtime injection doesn't
-    // pack these across shared memory today; skip silently.
-    return null
+  if (variable.type.definition === 'user-data-type') {
+    const declared = indexTypes(dataTypes).get(variable.type.value.toUpperCase())
+    if (!declared || declared.derivation === 'array') return 'Any'
+    return declared.name
   }
+  /* istanbul ignore next -- defensive: only base-type remains */
+  if (variable.type.definition !== 'base-type') return null
   return mapIecBaseTypeToPython(variable.type.value)
 }
 
@@ -132,30 +154,108 @@ function annotationFor(variable: PLCVariable): string | null {
  * runtime; the preamble's literal is only there to satisfy
  * Pyright's "name has a value" requirement.
  */
-function initialValueFor(variable: PLCVariable, annotation: string): string {
+function initialValueFor(variable: PLCVariable, annotation: string, dataTypes: readonly PLCDataType[] = []): string {
   if (annotation.startsWith('list[')) {
     const innerType = annotation.slice('list['.length, -1)
     const count = getArrayTotalElements(variable)
     const defaultInner = defaultPythonLiteralFor(innerType)
     return count > 0 ? `[${defaultInner}] * ${count}` : '[]'
   }
+  // A class annotation needs a value of that class, not `None`. Pyright is right
+  // to reject `m: Motor = None`, and the user sees the complaint on a line the
+  // preamble wrote.
+  //
+  // A structure stub declares members as annotations and no `__init__`, so
+  // `Motor()` constructs and type-checks. An enumeration cannot be called, so it
+  // takes its first member — which is also the value the PLC starts it at.
+  const declared = indexTypes(dataTypes).get(annotation.toUpperCase())
+  if (declared?.derivation === 'structure') return `${declared.name}()`
+  if (declared?.derivation === 'enumerated') {
+    const first = declared.values[0]?.description
+    return first ? `${declared.name}.${first}` : 'Any'
+  }
   return defaultPythonLiteralFor(annotation)
 }
 
 /**
- * Generate the LSP-only preamble for a POU's variables.  Only
- * `input` and `output` IEC variables get a declaration — those are
- * the classes `injectPythonRuntime` wires through shared memory and
- * therefore the only ones the runtime will actually expose as
- * module-level globals.  Local / temp / inOut / external classes
- * are intentionally skipped so Pyright doesn't pretend symbols
- * exist that the runtime won't bind.
+ * Class stubs for the structures and enumerations a POU's interface uses.
+ *
+ * These mirror what `injectPythonRuntime` actually defines at runtime, so
+ * Pyright resolves `m.speed` and `Mode.RUNNING` to the same shapes the block
+ * will really see. Without them a structure variable has no type to be, and the
+ * editor either says nothing useful or reports an error on correct code.
+ *
+ * The stub bodies are `...` rather than the runtime's real `__init__`: Pyright
+ * only needs the attribute names and their types, and a shorter stub keeps the
+ * preamble's line count — which the diagnostic line mapping depends on — small.
+ */
+function typeStubsFor(variables: PLCVariable[], dataTypes: readonly PLCDataType[]): string[] {
+  if (dataTypes.length === 0) return []
+  const byName = new Map(dataTypes.map((dataType) => [dataType.name.toUpperCase(), dataType]))
+  const emitted = new Set<string>()
+  const lines: string[] = []
+
+  // `emitted` is what breaks a cycle: a structure that contains itself is
+  // declared once and its member simply refers back to it, which is a legal
+  // Python annotation and exactly what Pyright should see.
+  const visit = (typeName: string): void => {
+    const key = typeName.toUpperCase()
+    if (emitted.has(key)) return
+    const dataType = byName.get(key)
+    if (!dataType || dataType.derivation === 'array') return
+    emitted.add(key)
+
+    if (dataType.derivation === 'enumerated') {
+      lines.push(`class ${dataType.name}(IntEnum):`)
+      dataType.values.forEach((value, index) => lines.push(`    ${value.description} = ${index}`))
+      return
+    }
+
+    // Members first, so a nested structure is named before it is referenced.
+    for (const member of dataType.variable) {
+      if (member.type.definition === 'user-data-type') visit(member.type.value)
+    }
+    lines.push(`class ${dataType.name}:`)
+    for (const member of dataType.variable) {
+      const annotation = annotationFor(
+        {
+          name: member.name,
+          type: member.type,
+          location: '',
+          documentation: '',
+        },
+        dataTypes,
+      )
+      lines.push(`    ${member.name}: ${annotation ?? 'Any'}`)
+    }
+  }
+
+  // Only the variables that actually get a declaration below. An array of
+  // structures has no Python annotation and is refused at compile time, so it
+  // gets neither a declaration nor a stub — the editor stays in lockstep with
+  // what the build will accept.
+  for (const variable of variables) {
+    if (variable.type.definition === 'user-data-type') visit(variable.type.value)
+  }
+
+  return lines.length > 0 ? ['from enum import IntEnum', 'from typing import Any', ...lines, ''] : []
+}
+
+/**
+ * Generate the LSP-only preamble for a POU's variables.
+ *
+ * Every class `injectPythonRuntime` wires through shared memory gets a
+ * declaration, because those are exactly the names the runtime binds as module
+ * globals. `temp` is refused for a Python block and so is never one.
  *
  * The header comment makes it obvious in any debug snapshot that
  * the lines are a synthetic Pyright nudge, not user code.
  */
-export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPreamble {
-  const declarable = variables.filter((v) => v.class === 'input' || v.class === 'output')
+export function generatePythonLspPreamble(
+  variables: PLCVariable[],
+  dataTypes: readonly PLCDataType[] = [],
+): PythonLspPreamble {
+  const declarable = pythonInterfaceVariables(variables)
   if (declarable.length === 0) {
     return { text: '', lineCount: 0, variableNameByPreambleLine: new Map() }
   }
@@ -167,6 +267,8 @@ export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPr
     '# names as module-level globals at runtime (see injectPythonRuntime).',
     '# ===================================================================',
   ]
+  const declared = declarable.filter((variable) => annotationFor(variable, dataTypes) !== null)
+  const typeStubs = typeStubsFor(declared, dataTypes)
   const declLines: string[] = []
   const variableNameByPreambleLine = new Map<number, string>()
   // First declaration sits at line `header.length` (header occupies
@@ -174,11 +276,11 @@ export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPr
   // by one line.  Variables whose type can't be mapped to Python
   // (TIME / DATE / TOD / DT / user types) are skipped — they don't
   // get a declaration line, so they don't take a slot in the map.
-  let preambleLine = header.length
+  let preambleLine = header.length + typeStubs.length
   for (const v of declarable) {
-    const annotation = annotationFor(v)
+    const annotation = annotationFor(v, dataTypes)
     if (!annotation) continue
-    declLines.push(`${v.name}: ${annotation} = ${initialValueFor(v, annotation)}`)
+    declLines.push(`${v.name}: ${annotation} = ${initialValueFor(v, annotation, dataTypes)}`)
     variableNameByPreambleLine.set(preambleLine, v.name)
     preambleLine++
   }
@@ -186,7 +288,7 @@ export function generatePythonLspPreamble(variables: PLCVariable[]): PythonLspPr
     return { text: '', lineCount: 0, variableNameByPreambleLine: new Map() }
   }
 
-  const body = [...header, ...declLines, '', '']
+  const body = [...header, ...typeStubs, ...declLines, '', '']
   const text = body.join('\n')
   // `lineCount` is the 0-indexed augmented-document line where the
   // user's first line begins.  Equivalently: the number of newline
