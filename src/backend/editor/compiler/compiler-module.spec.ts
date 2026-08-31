@@ -857,19 +857,36 @@ describe('CompilerModule', () => {
      * `void`, so a throw would leave the renderer's promise unsettled forever.
      */
     function makeChannel() {
-      const messages: Record<string, unknown>[] = []
+      // `unknown[]`, matching `CompileProgressChannel.postMessage(message:
+      // unknown)`. Typing the sink as the shape we hope to find would assume
+      // the very thing these tests exist to check.
+      const messages: unknown[] = []
       let closed = false
       return {
         messages,
         isClosed: () => closed,
         channel: {
           start: () => {},
-          postMessage: (m: Record<string, unknown>) => messages.push(m),
+          postMessage: (m: unknown) => messages.push(m),
           close: () => {
             closed = true
           },
         },
       }
+    }
+
+    /** The build result carried by one of `messages`, or null if none does. */
+    function readBuildResult(messages: unknown[]): { success: boolean; error?: string } | null {
+      for (const message of messages) {
+        if (typeof message !== 'object' || message === null) continue
+        if (!('libraryBuildResult' in message)) continue
+        const result = message.libraryBuildResult
+        if (typeof result !== 'object' || result === null) continue
+        if (!('success' in result) || typeof result.success !== 'boolean') continue
+        const error = 'error' in result && typeof result.error === 'string' ? result.error : undefined
+        return { success: result.success, ...(error === undefined ? {} : { error }) }
+      }
+      return null
     }
 
     const bridge = { loadEnabledArchives: () => ({ archives: [], missing: [] }) }
@@ -892,9 +909,7 @@ describe('CompilerModule', () => {
 
       await compilerModule.compileLibrary(['/project', wellFormed, []], channel, bridge)
 
-      const result = messages.find((m) => m.libraryBuildResult)?.libraryBuildResult as
-        | { success: boolean; error?: string }
-        | undefined
+      const result = readBuildResult(messages)
       // It still fails — there is no `library.json` on disk at `/project` — but
       // it must fail on THAT, having passed the boundary check.
       expect(result?.error ?? '').not.toMatch(
@@ -918,15 +933,12 @@ describe('CompilerModule', () => {
 
       await compilerModule.compileLibrary(args, channel, bridge)
 
-      const result = messages.find((m) => m.libraryBuildResult)?.libraryBuildResult as {
-        success: boolean
-        error: string
-      }
+      const result = readBuildResult(messages)
       // A result is what settles the renderer's promise — the assertion that
       // matters more than the wording.
-      expect(result).toBeDefined()
-      expect(result.success).toBe(false)
-      expect(result.error).toContain(expected)
+      expect(result).not.toBeNull()
+      expect(result?.success).toBe(false)
+      expect(result?.error).toContain(expected)
 
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(isClosed()).toBe(true)

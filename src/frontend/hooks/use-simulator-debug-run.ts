@@ -50,7 +50,17 @@ export interface UseSimulatorDebugRunReturn {
   /**
    * Load `firmwarePath` into the emulator and start it.  With
    * `attachDebugger`, opens a debug session against it once it is up.
-   * Resolves `false` (and logs) when the firmware could not be loaded.
+   *
+   * Resolves `false` when the run did not fully come up — either the
+   * firmware would not load, or it loaded but the debug session failed
+   * to attach.  Callers that installed session state before the compile
+   * use this to tear it back down; both failures leave that state
+   * orphaned otherwise, and the compile itself reports success in both
+   * cases because it did produce firmware.
+   *
+   * Note the asymmetry with `isRunning`: a failed ATTACH still leaves
+   * the emulator running, so the caller's stop control stays live and
+   * `stop()` remains the way to end it.
    */
   launch: (firmwarePath: string, options?: { attachDebugger?: boolean }) => Promise<boolean>
   /** End the debug session (if any) and stop the emulator. */
@@ -102,7 +112,12 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
         // No config: starting the emulator opened its session, so the
         // connection manager already knows how to reach it.
         onDebugAttachedRef.current?.()
-        await debugSession.connectAndStart()
+        // `connectAndStart` reports its own failures to the console and
+        // resolves rather than throwing, so the result is the only signal
+        // that the session did not come up — discarding it told the caller
+        // the run succeeded when only half of it had.
+        const attached = await debugSession.connectAndStart()
+        if (!attached.success) return false
       }
       return true
     },
