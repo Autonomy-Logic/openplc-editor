@@ -17,8 +17,66 @@
  * into the in-memory file map sent to `/compile-arduino`).
  */
 
+import type { ProcessImageSizes } from '@root/middleware/shared/utils/target-capabilities'
+
 import type { DevicePin } from '../../types/PLC/devices'
 import { generateModbusDefines, resolveDebugBaud, resolveDebugSlave, type VppModbusScreenState } from './modbus-defines'
+
+/**
+ * `ProcessImageSizes` field → the `MAX_*` macro `openplc.h` declares its
+ * buffers from.  Order is the emission order, chosen to read like the
+ * header does: inputs before outputs, I/O before memory.
+ *
+ * This table is the whole contract between the capability and the
+ * firmware.  A field added to `ProcessImageSizes` without a line here
+ * is silently not emitted, so the mapping is exhaustive by
+ * construction: `Record<keyof ProcessImageSizes, string>` makes the
+ * compiler reject a new field until it gets a macro.
+ */
+const PROCESS_IMAGE_MACROS: Record<keyof ProcessImageSizes, string> = {
+  digitalInputs: 'MAX_DIGITAL_INPUT',
+  digitalOutputs: 'MAX_DIGITAL_OUTPUT',
+  analogInputs: 'MAX_ANALOG_INPUT',
+  analogOutputs: 'MAX_ANALOG_OUTPUT',
+  realInputs: 'MAX_REAL_INPUT',
+  realOutputs: 'MAX_REAL_OUTPUT',
+  memoryWords: 'MAX_MEMORY_WORD',
+  memoryDwords: 'MAX_MEMORY_DWORD',
+  memoryLwords: 'MAX_MEMORY_LWORD',
+}
+
+/**
+ * Emit the `// Process image` block, or `''` when the target didn't
+ * declare one.
+ *
+ * Absent is the normal case and means "let `openplc.h`'s own `#ifdef`
+ * ladder decide" — that header picks 8 DI / 6 AI / no `%M` area on the
+ * small AVRs and 56 / 32 / 20 elsewhere, and no capability preset can
+ * answer for both halves.  Emitting nothing keeps those boards on the
+ * exact numbers they have always built with.
+ *
+ * A declared image is validated here rather than trusted: it arrives
+ * from a VPP manifest, i.e. third-party JSON.  A malformed value would
+ * otherwise reach `#define MAX_DIGITAL_INPUT undefined` and fail deep
+ * in the C compiler with nothing pointing back at the manifest, so a
+ * field that isn't a non-negative safe integer drops the WHOLE block
+ * (all-or-nothing: the fields size interlocking buffers, and a
+ * half-applied image is worse than none).
+ */
+function generateProcessImageDefines(processImage: ProcessImageSizes | undefined): string {
+  if (!processImage) return ''
+
+  const entries = Object.entries(PROCESS_IMAGE_MACROS) as Array<[keyof ProcessImageSizes, string]>
+
+  const isSlotCount = (value: number): boolean => Number.isSafeInteger(value) && value >= 0
+  if (!entries.every(([field]) => isSlotCount(processImage[field]))) return ''
+
+  let block = '// Process image\n'
+  for (const [field, macro] of entries) {
+    block += `#define ${macro} ${processImage[field]}\n`
+  }
+  return block
+}
 
 export type { VppModbusScreenState } from './modbus-defines'
 
@@ -99,6 +157,15 @@ export interface GenerateDefinesInput {
    *  `id_len = 0`, which `device-probe` and the licence flow already treat
    *  as "this board has no unique id". */
   isLicensable?: boolean
+  /** Process-image slot counts for this target
+   *  (`TargetCapabilities.processImage`), sourced from the VPP manifest.
+   *
+   *  Absent — the normal case, and every non-VPP board — emits no
+   *  `MAX_*` at all, leaving `openplc.h`'s built-in `#ifdef` ladder to
+   *  pick the sizes exactly as it always has.  Present overrides that
+   *  ladder wholesale via the `#ifndef` guards in the header
+   *  (openplc-editor#296). */
+  processImage?: ProcessImageSizes
 }
 
 /**
@@ -108,6 +175,10 @@ export interface GenerateDefinesInput {
  *   1. `// Board defines` — `boardEntry.define` plus
  *      `OPENPLC_NO_UNIQUE_ID` on every non-licensable target; omitted
  *      entirely only when both sources are empty.
+ *   1b. `// Process image` — `MAX_*` slot counts, ONLY when the target
+ *      declared a `processImage`. Absent on every board that doesn't,
+ *      which keeps their output byte-identical to before this section
+ *      existed.
  *   2. `#define PROGRAM_MD5 "<md5>"` — always.
  *   3. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
  *      over emulated USART0 so avr8js's serial bridge can drive
@@ -131,6 +202,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     vppModbusState,
     defaultSerial,
     isLicensable,
+    processImage,
   } = input
 
   let DEFINES_CONTENT = ''
@@ -162,6 +234,14 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
       DEFINES_CONTENT += `#define ${define}\n`
     })
   }
+
+  // 1b. Process image.  Board-level like the block above, so it lands
+  //     in the same run of `#define`s, but sourced from the target's
+  //     capability rather than from `hals.json`.  Empty for every
+  //     target that declares no `processImage` — which is every board
+  //     today except the VPP packages that opt in — so this section
+  //     cannot perturb an existing board's `defines.h`.
+  DEFINES_CONTENT += generateProcessImageDefines(processImage)
 
   // 2. Trailing blank-line pair after the board-defines section
   //    (or at the top of the file when board defines were absent —

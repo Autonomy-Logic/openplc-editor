@@ -261,14 +261,31 @@ void setup()
 // MAP EMPTY BUFFERS (for Modbus)
 // =============================================================================
 #ifdef MODBUS_ENABLED
+
+// Backing storage for discrete slots the PLC program did not claim.
+//
+// The analog and memory slots below alias straight into the Modbus banks,
+// which is what makes an unclaimed %QW readable over Modbus. The discrete
+// banks are bit-packed and cannot be aliased that way, so each unclaimed
+// bit needs a byte of its own -- this array is it.
+//
+// One static block rather than a malloc per slot: this used to call
+// malloc(1) once per unbound point, which on a board with a 15-slot
+// expansion backplane is ~480 one-byte allocations, each carrying its own
+// heap header (often 8 bytes, so ~8x the payload) and fragmenting the heap
+// before the program has run a single scan. A flat array costs exactly
+// MAX_DIGITAL_INPUT + MAX_DIGITAL_OUTPUT bytes, needs no allocator, and
+// cannot fail partway through and leave the image half-mapped
+// (openplc-editor#296).
+static IEC_BOOL empty_discrete[MAX_DIGITAL_INPUT + MAX_DIGITAL_OUTPUT] = {};
+
 void mapEmptyBuffers()
 {
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
         if (bool_output[i/8][i%8] == NULL)
         {
-            bool_output[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
-            *bool_output[i/8][i%8] = 0;
+            bool_output[i/8][i%8] = &empty_discrete[i];
         }
     }
     for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
@@ -282,8 +299,8 @@ void mapEmptyBuffers()
     {
         if (bool_input[i/8][i%8] == NULL)
         {
-            bool_input[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
-            *bool_input[i/8][i%8] = 0;
+            // Offset past the output half -- one array, two disjoint ranges.
+            bool_input[i/8][i%8] = &empty_discrete[MAX_DIGITAL_OUTPUT + i];
         }
     }
     for (int i = 0; i < MAX_ANALOG_INPUT; i++)

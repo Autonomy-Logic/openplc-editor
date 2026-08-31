@@ -137,6 +137,75 @@ export interface TargetCapabilities {
    *  therefore a FIRMWARE fault (built without the backend), never a
    *  hardware limitation — and the flow says exactly that. */
   isLicensable: boolean
+
+  /** How many slots of each IEC area this target's firmware can bind.
+   *
+   *  Sizes the process image: every `AT %…` location must fall inside
+   *  it, and the firmware's buffer arrays / Modbus banks are declared
+   *  from the same numbers (`defines.h` → `openplc.h`).
+   *
+   *  Per-target because the cost is RAM and the range of targets is
+   *  wide: raising a limit grows the pointer arrays, each VPP HAL's
+   *  binding tables, and the Modbus banks in lockstep, so a board with
+   *  a 15-slot backplane and 256 KB of RAM and a board with 32 KB
+   *  cannot share one number (openplc-editor#296).
+   *
+   *  **Optional, and absent on every preset — deliberately.** The
+   *  firmware's own `openplc.h` already picks between two hardcoded
+   *  sets with an `#ifdef` on the MCU: 8 DI / 6 AI / no `%M` area on
+   *  the small AVRs (Uno, Leonardo, Micro — 2 KB of SRAM), 56/32/20 on
+   *  everything else. A preset cannot answer for both halves of that
+   *  ladder, and declaring the 56-series as "the default" would hand a
+   *  Uno seven times the buffers it has RAM for. So absent means "say
+   *  nothing in `defines.h` and let the firmware's `#ifdef` decide" —
+   *  which is byte-for-byte today's behaviour for every board that
+   *  ships without a VPP manifest.
+   *
+   *  A VPP manifest declares it for hardware whose real capacity it
+   *  knows, and that declaration overrides the firmware default. */
+  processImage?: ProcessImageSizes
+}
+
+/**
+ * Slot counts of the firmware process image, one per IEC area/width.
+ *
+ * Names mirror the `MAX_*` macros the Arduino firmware declares its
+ * buffers from (`resources/sources/arduino/openplc.h`) — the emitter in
+ * `generate-defines.ts` maps these fields onto those macros one-to-one,
+ * so a field added here needs a macro there and vice versa.
+ *
+ * Units are SLOTS, not bytes: `digitalInputs: 56` means `%IX0.0`
+ * through `%IX6.7` are bindable, `memoryWords: 20` means `%MW0`
+ * through `%MW19`.
+ *
+ * Every field is required. A partial process image is not a meaningful
+ * thing to declare — the fields are not independent (the firmware sizes
+ * one Modbus holding bank from `analogOutputs + memoryWords`), and an
+ * omitted field silently reading as 0 would disable an entire area.
+ * `resolveTargetCapabilities` merges this object wholesale for the same
+ * reason: a manifest declares all of it or none of it. The manifest
+ * schema enforces the same rule (`required` on all nine fields), so the
+ * two ends cannot drift into a half-declared image.
+ */
+export interface ProcessImageSizes {
+  /** `%IX` bit slots — `MAX_DIGITAL_INPUT`. Rounded up to a byte by the firmware. */
+  digitalInputs: number
+  /** `%QX` bit slots — `MAX_DIGITAL_OUTPUT`. Rounded up to a byte by the firmware. */
+  digitalOutputs: number
+  /** `%IW` word slots — `MAX_ANALOG_INPUT`. */
+  analogInputs: number
+  /** `%QW` word slots — `MAX_ANALOG_OUTPUT`. */
+  analogOutputs: number
+  /** `%ID` REAL slots — `MAX_REAL_INPUT`. */
+  realInputs: number
+  /** `%QD` REAL slots — `MAX_REAL_OUTPUT`. */
+  realOutputs: number
+  /** `%MW` word slots — `MAX_MEMORY_WORD`. */
+  memoryWords: number
+  /** `%MD` dword slots — `MAX_MEMORY_DWORD`. */
+  memoryDwords: number
+  /** `%ML` lword slots — `MAX_MEMORY_LWORD`. */
+  memoryLwords: number
 }
 
 /**

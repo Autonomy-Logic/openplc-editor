@@ -118,6 +118,26 @@ const arrayValidation = ({ value }: { value: string }) => {
 }
 
 /**
+ * The type that has to match the address class, given a variable's declared
+ * type.
+ *
+ * For an array this is the ELEMENT type: `ARRAY [0..66] OF WORD AT %MW60`
+ * occupies 67 consecutive WORD slots, so what has to fit `%MW` is WORD, not
+ * the array (openplc-editor#565). Locating an array used to be rejected
+ * outright — a limitation of the MatIEC-era toolchain that left with MatIEC.
+ *
+ * Returns the type's own name for every other definition, which lands
+ * `user-data-type` and `derived` on the `default` branch below, where they
+ * belong: a STRUCT has no single address class.
+ */
+const addressClassTypeOf = (variableType: PLCVariable['type']): string =>
+  // `data` is optional on the port-side type; an array without it is a
+  // half-built row from the array modal, and falling back to `value` (the
+  // "ARRAY [...] OF T" text) lands it on the `default` branch — rejected with
+  // a message, which is the right answer for a type that isn't finished.
+  variableType.definition === 'array' && variableType.data ? variableType.data.baseType.value : variableType.value
+
+/**
  * Validate a variable's `location`. Single-field model: `location` is either
  * an alias name, a literal IEC address, or empty.
  *   - Empty → unlocated, valid.
@@ -178,7 +198,11 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
     case 'LWORD':
       return 'Valid locations: %QL0, %IL0, %ML0 (change the number to the desired location)'
     default:
-      return ''
+      // Reached by a structure or an enum — types with no single address
+      // class. This used to return an empty string, so the dialog showed
+      // "Please make sure that the location is valid." and nothing else: a
+      // refusal with no reason and nothing to act on.
+      return `A variable of type "${variableType}" cannot have a physical location: only the elementary types (BOOL, BYTE, INT, WORD, DINT, REAL, ...) and arrays of them map onto an IEC address.`
   }
 }
 
@@ -436,18 +460,18 @@ const updateVariableValidation = (
       return response
     }
 
-    if (!variableLocationValidation(location, variableToUpdate.type.value)) {
+    if (!variableLocationValidation(location, addressClassTypeOf(variableToUpdate.type))) {
       response = {
         ok: false,
         title: 'Location is invalid.',
-        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(variableToUpdate.type.value)}`,
+        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClassTypeOf(variableToUpdate.type))}`,
       }
       return response
     }
   }
 
   if (dataToBeUpdated.type) {
-    if (!variableLocationValidation(variableToUpdate.location, dataToBeUpdated.type.value)) {
+    if (!variableLocationValidation(variableToUpdate.location, addressClassTypeOf(dataToBeUpdated.type))) {
       response.data = { ...(response.data ? response.data : {}), location: '' }
     }
     if (dataToBeUpdated.type.definition === 'derived') {

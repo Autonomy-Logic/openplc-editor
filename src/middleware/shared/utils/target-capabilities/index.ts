@@ -6,4 +6,4 @@ export {
   SIMULATOR_CAPABILITIES,
 } from './presets'
 export { type BoardInfoLike, resolveTargetCapabilities } from './resolve'
-export type { AddressProducerCapabilities, DebuggerTransport, TargetCapabilities } from './types'
+export type { AddressProducerCapabilities, DebuggerTransport, ProcessImageSizes, TargetCapabilities } from './types'

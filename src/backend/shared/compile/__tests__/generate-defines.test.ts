@@ -73,6 +73,89 @@ describe('generateDefinesContent — board defines section', () => {
   })
 })
 
+describe('generateDefinesContent — Process image section', () => {
+  // Slot counts big enough to be unmistakable against openplc.h's own
+  // fallbacks (56/32/20), so a test asserting these values can't pass by
+  // accidentally reading the header's numbers back.
+  const P1AM_200_IMAGE = {
+    digitalInputs: 240,
+    digitalOutputs: 240,
+    analogInputs: 64,
+    analogOutputs: 64,
+    realInputs: 64,
+    realOutputs: 64,
+    memoryWords: 128,
+    memoryDwords: 32,
+    memoryLwords: 32,
+  }
+
+  it('emits nothing when the target declares no process image', () => {
+    // THE compatibility guarantee of openplc-editor#296: a board that
+    // says nothing must produce the exact bytes it produced before this
+    // section existed, so `openplc.h`'s `#ifdef` ladder stays in charge.
+    const out = generateDefinesContent(EMPTY_INPUTS)
+    expect(out).not.toContain('// Process image')
+    expect(out).not.toContain('MAX_DIGITAL_INPUT')
+  })
+
+  it('emits one MAX_* define per field, in header order', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, processImage: P1AM_200_IMAGE })
+    expect(out).toContain(
+      '// Process image\n' +
+        '#define MAX_DIGITAL_INPUT 240\n' +
+        '#define MAX_DIGITAL_OUTPUT 240\n' +
+        '#define MAX_ANALOG_INPUT 64\n' +
+        '#define MAX_ANALOG_OUTPUT 64\n' +
+        '#define MAX_REAL_INPUT 64\n' +
+        '#define MAX_REAL_OUTPUT 64\n' +
+        '#define MAX_MEMORY_WORD 128\n' +
+        '#define MAX_MEMORY_DWORD 32\n' +
+        '#define MAX_MEMORY_LWORD 32\n',
+    )
+  })
+
+  it('lands under the board defines, in the same run of #defines', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      isLicensable: true,
+      boardEntry: { define: 'BOARD_X' },
+      processImage: P1AM_200_IMAGE,
+    })
+    expect(out.indexOf('// Board defines')).toBeLessThan(out.indexOf('// Process image'))
+    expect(out.indexOf('// Process image')).toBeLessThan(out.indexOf('//Program MD5'))
+  })
+
+  it('accepts zero as a slot count — an area the board simply does not have', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      processImage: { ...P1AM_200_IMAGE, memoryLwords: 0 },
+    })
+    expect(out).toContain('#define MAX_MEMORY_LWORD 0\n')
+  })
+
+  // A process image arrives from a VPP manifest — third-party JSON that
+  // the editor's types do not police at runtime. A bad value must not
+  // reach `#define MAX_DIGITAL_INPUT NaN` and blow up inside the C
+  // compiler with nothing pointing back at the manifest. The whole block
+  // drops, because the fields size interlocking buffers and a
+  // half-applied image is worse than falling back to the header's.
+  it.each([
+    ['a negative count', { digitalInputs: -1 }],
+    ['a fractional count', { analogInputs: 3.5 }],
+    ['NaN', { memoryWords: Number.NaN }],
+    ['Infinity', { memoryWords: Number.POSITIVE_INFINITY }],
+    ['a non-number', { digitalOutputs: '240' as unknown as number }],
+    ['a missing field', { realOutputs: undefined as unknown as number }],
+  ])('drops the whole block when a field carries %s', (_label, bad) => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      processImage: { ...P1AM_200_IMAGE, ...bad },
+    })
+    expect(out).not.toContain('// Process image')
+    expect(out).not.toContain('MAX_ANALOG_INPUT')
+  })
+})
+
 describe('generateDefinesContent — OPENPLC_NO_UNIQUE_ID', () => {
   // The flag keeps `ArduinoUniqueID` out of the build on any board that
   // cannot be licensed, which is what makes the library's `#error` on an

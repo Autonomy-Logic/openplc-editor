@@ -51,6 +51,7 @@ import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
+import { describeOutOfRangeLocation, findOutOfRangeLocations } from './steps/validate-process-image'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -429,6 +430,31 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
+  // Step 0c: Reject `AT %…` locations with no slot on this target.
+  //
+  // Baremetal targets only — `openplc.h`'s `MAX_*` macros are what bound
+  // the image, and Runtime v3 / v4 compile against neither that header
+  // nor those limits.
+  //
+  // The Python editor refused these at glue-code generation ("wrong
+  // location for var __QX7_0"); the check was lost in the move to
+  // strucpp, and the address silently bound nowhere (openplc-editor#296).
+  // ---------------------------------------------------------------------
+  if (boardRuntime === 'arduino-cli' || boardRuntime === 'simulator') {
+    const outOfRange = findOutOfRangeLocations(processedData, targetCapabilities.processImage)
+    if (outOfRange.length > 0) {
+      for (const issue of outOfRange) {
+        emit({ stage: 'validate', message: describeOutOfRangeLocation(issue, boardTarget), level: 'error' })
+      }
+      return bailError(
+        emit,
+        'validate',
+        'Compilation aborted: some variables are located outside this board’s I/O range.',
+      )
+    }
+  }
+
+  // ---------------------------------------------------------------------
   // Step 1: Transpile the project IR straight to Structured Text via
   // the platform port.  Both adapters (editor + web) route through
   // the in-process JSON-fed transpiler (`st-transpiler/`),
@@ -800,6 +826,10 @@ async function runCompilePipelineInner(
     // `ArduinoUniqueID` only on a board whose package declares
     // `isLicensable`, and emit `OPENPLC_NO_UNIQUE_ID` for everyone else.
     isLicensable: targetCapabilities.isLicensable,
+    // Absent for every target that doesn't declare one, which leaves
+    // `openplc.h`'s own `#ifdef` ladder in charge and keeps that
+    // board's `defines.h` byte-identical (openplc-editor#296).
+    ...(targetCapabilities.processImage !== undefined ? { processImage: targetCapabilities.processImage } : {}),
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
   })
 

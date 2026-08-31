@@ -322,6 +322,78 @@ describe('runCompilePipeline — blank FBD variable guard', () => {
   })
 })
 
+describe('runCompilePipeline — process-image range guard', () => {
+  /** A project whose single POU declares one located variable. */
+  const projectLocatedAt = (location: string) =>
+    ({
+      ...projectDataFixture,
+      pous: [
+        {
+          type: 'program',
+          data: {
+            name: 'main',
+            language: 'st',
+            variables: [{ name: 'coil', location }],
+            documentation: '',
+            body: { language: 'st', value: '' },
+          },
+        },
+      ],
+    }) as unknown as PLCProjectData
+
+  it('bails at the validate stage when a location is past the board’s I/O range', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    // %QX7.0 is slot 56 against the firmware's 56-output fallback — the
+    // exact address from openplc-editor#296. This used to compile clean
+    // and bind nowhere.
+    const result = await runCompilePipeline(
+      makeArgs({ projectData: projectLocatedAt('%QX7.0'), boardRuntime: 'arduino-cli' }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(port.transpileToSt).not.toHaveBeenCalled()
+    const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(validateError?.message).toContain('"coil"')
+    expect(validateError?.message).toContain('%QX7.0')
+    expect(validateError?.message).toContain('%QX (digital outputs)')
+  })
+
+  it('lets an in-range location through to transpilation', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({ projectData: projectLocatedAt('%QX6.7'), boardRuntime: 'arduino-cli' }),
+      port,
+      emit,
+    )
+
+    expect(port.transpileToSt).toHaveBeenCalled()
+  })
+
+  it('skips the check on Runtime v4, which compiles against neither openplc.h nor its limits', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: projectLocatedAt('%QX7.0'),
+        boardRuntime: 'openplc-compiler',
+        isSimulator: false,
+        isRuntimeV4: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.transpileToSt).toHaveBeenCalled()
+  })
+})
+
 describe('runCompilePipeline — arduino direct path', () => {
   it('uploads to the physical board when isSimulator=false and not compileOnly', async () => {
     const port = makePort()
