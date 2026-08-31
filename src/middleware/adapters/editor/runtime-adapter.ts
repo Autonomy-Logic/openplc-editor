@@ -250,5 +250,31 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       const handler = (_event: unknown, device: DiscoveredRuntimeDevice) => callback(device)
       return window.bridge.onRuntimeDeviceDiscovered(handler)
     },
+
+    // --- stored source project ---
+
+    async getProjectSnapshotInfo(ipAddress: string) {
+      try {
+        return await window.bridge.runtimeProjectSnapshotInfo(ipAddress)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async retrieveProject(ipAddress: string) {
+      try {
+        return await window.bridge.runtimeRetrieveProject(ipAddress)
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async installRetrievedLibraries(projectPath: string, names: string[]) {
+      try {
+        return await window.bridge.runtimeInstallRetrievedLibraries(projectPath, names)
+      } catch (err) {
+        return { success: false, installed: [], failed: [{ name: '', error: getErrorMessage(err) }] }
+      }
+    },
   }
 }

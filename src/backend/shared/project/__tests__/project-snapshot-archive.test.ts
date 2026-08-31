@@ -24,6 +24,7 @@ import {
   assertSafeEntryPath,
   SnapshotArchiveError,
   toWriteProjectFiles,
+  writeProjectFilesToMap,
   type SnapshotLibrary,
 } from '../project-snapshot-archive'
 
@@ -47,7 +48,7 @@ function projectFiles(overrides: Partial<WriteProjectFiles> = {}): WriteProjectF
 
 async function build(overrides: Partial<Parameters<typeof buildProjectSnapshot>[0]> = {}) {
   return buildProjectSnapshot({
-    files: projectFiles(),
+    files: writeProjectFilesToMap(projectFiles()),
     projectName: 'Traffic Light',
     editorVersion: '4.2.0',
     uploadedBy: 'op',
@@ -66,7 +67,7 @@ async function library(name = 'Motion', version = '1.2.0'): Promise<SnapshotLibr
 describe('round trip', () => {
   it('carries every project file back unchanged', async () => {
     const original = projectFiles()
-    const { archive } = await build({ files: original })
+    const { archive } = await build({ files: writeProjectFilesToMap(original) })
     const parsed = await parseProjectSnapshot(archive)
     const restored = toWriteProjectFiles(parsed, '/somewhere/else')
 
@@ -90,14 +91,16 @@ describe('round trip', () => {
     // A retrieved project is written into an empty destination. Honouring
     // deletions from an archive would let a device name files to remove on the
     // opening machine.
-    const { archive } = await build({ files: projectFiles({ deletions: ['pous/programs/Gone.st'] }) })
+    const { archive } = await build({
+      files: writeProjectFilesToMap(projectFiles({ deletions: ['pous/programs/Gone.st'] })),
+    })
     const restored = toWriteProjectFiles(await parseProjectSnapshot(archive), '/tmp/p')
     expect(restored.deletions).toEqual([])
   })
 
   it('keeps a library project manifest', async () => {
     const { archive } = await build({
-      files: projectFiles({ libraryManifest: '{"name":"MyLib"}' }),
+      files: writeProjectFilesToMap(projectFiles({ libraryManifest: '{"name":"MyLib"}' })),
     })
     const restored = toWriteProjectFiles(await parseProjectSnapshot(archive), '/tmp/p')
     expect(restored.libraryManifest).toBe('{"name":"MyLib"}')
@@ -105,7 +108,7 @@ describe('round trip', () => {
 
   it('omits optional files a PLC project does not own rather than writing empty ones', async () => {
     const { archive } = await build({
-      files: projectFiles({ deviceConfig: undefined, pinMapping: undefined }),
+      files: writeProjectFilesToMap(projectFiles({ deviceConfig: undefined, pinMapping: undefined })),
     })
     const restored = toWriteProjectFiles(await parseProjectSnapshot(archive), '/tmp/p')
     expect(restored.deviceConfig).toBeUndefined()

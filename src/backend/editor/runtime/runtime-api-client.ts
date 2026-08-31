@@ -63,6 +63,61 @@ const PlcStatusResponseSchema = z.object({
 })
 
 /**
+ * What a device reports about the source project it stores.
+ *
+ * Every field but `present` is optional because a device with nothing stored
+ * answers `{present: false}` alone, and because these values come from whoever
+ * uploaded -- the runtime never opens the archive to check them.
+ */
+const ProjectSnapshotInfoSchema = z.object({
+  present: z.boolean(),
+  projectName: z.string().optional(),
+  editorVersion: z.string().optional(),
+  uploadedBy: z.string().optional(),
+  timestamp: z.string().optional(),
+  sizeBytes: z.number().optional(),
+  formatVersion: z.number().optional(),
+  libraries: z
+    .array(
+      z.object({
+        name: z.string(),
+        version: z.string().optional(),
+        hash: z.string().optional(),
+      }),
+    )
+    .optional(),
+})
+
+export type ProjectSnapshotInfo = z.infer<typeof ProjectSnapshotInfoSchema>
+
+const ProjectSnapshotBodySchema = z.object({
+  projectName: z.string(),
+  contentBase64: z.string(),
+})
+
+type ProjectSnapshotBody = z.infer<typeof ProjectSnapshotBodySchema>
+
+/**
+ * Turn a failed snapshot fetch into something a user can act on.
+ *
+ * The two interesting outcomes are indistinguishable from a transport error in
+ * the raw text: a device with nothing stored (404) and an account without the
+ * privilege to read it (403). Both are real answers, and reporting either as a
+ * broken connection sends people looking for a network problem that is not
+ * there.
+ */
+function describeSnapshotFetchFailure(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower.includes('admin privileges required')) {
+    return 'This account is not an administrator on that device. Only administrators can retrieve a stored project.'
+  }
+  if (lower.includes('no project is stored')) {
+    return 'That device is not storing a project.'
+  }
+  return raw
+}
+
+/**
  * One header value, whatever the wire gave us.
  *
  * `IncomingHttpHeaders` values are `string | string[] | undefined`: a header sent
@@ -494,6 +549,66 @@ export class RuntimeApiClient {
   }
 
   /**
+   * What the device says about the source project it is storing, if any.
+   *
+   * Authenticated but not admin-gated, so the UI can decide whether to OFFER
+   * retrieval without needing the privilege that retrieval itself requires.
+   */
+  async getProjectSnapshotInfo(
+    ipAddress: string,
+  ): Promise<{ success: true; info: ProjectSnapshotInfo } | { success: false; error: string }> {
+    const result = await this.makeRuntimeApiRequest<ProjectSnapshotInfo | null>(
+      ipAddress,
+      '/api/project-snapshot/info',
+      (data) => ProjectSnapshotInfoSchema.safeParse(parseJsonOrNull(data)).data ?? null,
+    )
+    if (!result.success) return { success: false, error: result.error }
+    if (!result.data) return { success: false, error: 'The device sent an unreadable snapshot description' }
+    return { success: true, info: result.data }
+  }
+
+  /**
+   * Fetch the stored source project.
+   *
+   * Admin only on the device: the archive is not encrypted there, so that role
+   * check is the whole of the access control rather than a layer behind one. A
+   * non-admin account gets a 403, which is a real answer and not a transport
+   * failure — the caller says so rather than reporting a broken connection.
+   *
+   * The body is base64 in JSON rather than a binary download because
+   * openplc-web reaches devices through the orchestrator's HTTP proxy, which
+   * decodes as JSON or falls back to text. Editor and web therefore read the
+   * same shape off the same endpoint.
+   */
+  async retrieveProjectSnapshot(
+    ipAddress: string,
+  ): Promise<
+    { success: true; archive: Buffer; projectName: string } | { success: false; error: string }
+  > {
+    const result = await this.makeRuntimeApiRequest<ProjectSnapshotBody | null>(
+      ipAddress,
+      '/api/project-snapshot',
+      (data) => ProjectSnapshotBodySchema.safeParse(parseJsonOrNull(data)).data ?? null,
+    )
+
+    if (!result.success) {
+      return { success: false, error: describeSnapshotFetchFailure(result.error) }
+    }
+    if (!result.data) {
+      return { success: false, error: 'The device sent an unreadable project archive' }
+    }
+
+    let archive: Buffer
+    try {
+      archive = Buffer.from(result.data.contentBase64, 'base64')
+    } catch {
+      return { success: false, error: 'The device sent a project archive that is not valid base64' }
+    }
+
+    return { success: true, archive, projectName: result.data.projectName }
+  }
+
+  /**
    * Upload a compiled program (multipart) to the runtime, going through the
    * token authority so an expired token is transparently refreshed and the
    * upload retried — the same self-healing every other runtime call gets. This
@@ -506,6 +621,16 @@ export class RuntimeApiClient {
     filename: string
     contentType: string
     cleanBuild: boolean
+    /** Optional source-project archive, stored on the device so the project can
+     *  be retrieved later. Its own multipart part rather than something inside
+     *  `program.zip`: in there the runtime would extract it into
+     *  `core/generated` and hand it to the compiler. A runtime without snapshot
+     *  support ignores the extra parts, so sending them is always safe. */
+    snapshotBuffer?: Buffer
+    /** JSON metadata describing `snapshotBuffer`. The runtime never opens the
+     *  archive, so this is the only thing it can report about the stored
+     *  project — the two travel together or not at all. */
+    snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }): Promise<{ success: true; data: string } | { success: false; error: string }> {
     type UploadResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
@@ -515,13 +640,46 @@ export class RuntimeApiClient {
         `Content-Disposition: form-data; name="file"; filename="${headerSafe(opts.filename)}"\r\n` +
         `Content-Type: ${headerSafe(opts.contentType)}\r\n\r\n`,
     )
+
+    // Both parts or neither. A snapshot the device cannot describe is one it
+    // refuses anyway, and it would surface as a warning the user then has to
+    // make sense of.
+    const snapshotBuffer = opts.snapshotBuffer
+    const snapshotMetadata = opts.snapshotMetadata
+    const snapshotParts: Uint8Array[] =
+      snapshotBuffer !== undefined && snapshotMetadata !== undefined
+        ? [
+            asBytes(
+              Buffer.from(
+                `\r\n--${boundary}\r\n` +
+                  `Content-Disposition: form-data; name="snapshot"; filename="project.zip"\r\n` +
+                  `Content-Type: application/zip\r\n\r\n`,
+              ),
+            ),
+            asBytes(snapshotBuffer),
+            asBytes(
+              Buffer.from(
+                `\r\n--${boundary}\r\n` +
+                  `Content-Disposition: form-data; name="snapshot_metadata"\r\n` +
+                  `Content-Type: application/json\r\n\r\n` +
+                  snapshotMetadata,
+              ),
+            ),
+          ]
+        : []
+
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
     // `Buffer.concat` is typed as taking `Uint8Array`s, and this project's
     // TS/@types/node pairing does not accept a `Buffer` there (their iterator
     // types differ). A zero-copy view over the same memory satisfies the
     // signature honestly — the previous `as unknown as` hid the mismatch, and
     // copying a firmware bundle to appease a type would be worse than both.
-    const reqBody = Buffer.concat([asBytes(header), asBytes(opts.fileBuffer), asBytes(footer)])
+    const reqBody = Buffer.concat([
+      asBytes(header),
+      asBytes(opts.fileBuffer),
+      ...snapshotParts,
+      asBytes(footer),
+    ])
     const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
 
     const doRequest = (token: string): Promise<UploadResult> =>

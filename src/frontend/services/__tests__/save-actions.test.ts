@@ -65,6 +65,46 @@ describe('save-actions', () => {
   })
 
   describe('executeSaveProject', () => {
+    describe('a project retrieved from a device', () => {
+      // It lives in a scratch directory until the user picks a location.
+      // Writing there and reporting success would tell someone their work is
+      // safe when it is somewhere temporary.
+      afterEach(() => {
+        openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(false)
+      })
+
+      it('refuses a user save and says what to do instead', async () => {
+        openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(projectPort, capabilities)
+
+        expect(result.success).toBe(false)
+        expect(projectPort.saveProject).not.toHaveBeenCalled()
+        expect(lastToast()).toMatchObject({ title: 'This project has no location yet' })
+      })
+
+      it('still lets the build flush the project to disk', async () => {
+        // The compiler reads its source from disk, so refusing this would not
+        // protect the project -- it would stop it compiling. This is the whole
+        // reason the two saves are distinguishable.
+        openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(projectPort, capabilities, 'pre-build')
+
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+
+      it('leaves an ordinary project untouched', async () => {
+        const projectPort = makeProjectPort()
+        const result = await executeSaveProject(projectPort, capabilities)
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+    })
+
     it('reports success and clears the updated flag for a valid flow', async () => {
       createLadderPou('ValidPou')
 

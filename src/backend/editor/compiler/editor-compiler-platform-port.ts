@@ -111,6 +111,8 @@ export interface EditorCompilerPlatformPortContext {
       filename: string
       contentType: string
       cleanBuild: boolean
+      snapshotBuffer?: Buffer
+      snapshotMetadata?: string
       onUploadAccepted?: (responseBody: string) => void
     }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   }
@@ -119,6 +121,18 @@ export interface EditorCompilerPlatformPortContext {
    *  in the `archiver`-dependent compressSourceFolder method (which
    *  has its own private state on CompilerModule). */
   compressSourceFolder: (folderPath: string) => Promise<Buffer>
+  /** Build the source-project archive stored on the device so the project can
+   *  be retrieved later. Injected for the same reason as
+   *  `compressSourceFolder`: it reaches the Electron-bound library manager, and
+   *  this adapter has to stay importable outside a real Electron process.
+   *
+   *  Optional so a caller predating it stays valid — absent simply means the
+   *  upload carries no snapshot, which is what an older editor does anyway. */
+  buildUploadSnapshot?: () => Promise<{
+    archive: Buffer
+    metadata: string
+    missingLibraries: string[]
+  } | null>
   /**
    * `package.minRuntimeVersion` of the VPP providing a given board, or
    * null when the board isn't from a VPP / declares no floor
@@ -359,6 +373,28 @@ export function createEditorCompilerPlatformPort(
         // produced no artifacts.
         const fileBuffer = await context.compressSourceFolder(context.sourceTargetFolderPath)
 
+        // The source project, stored on the device beside the artifacts so it
+        // can be retrieved later. Never fatal: the device runs the new program
+        // either way, and failing an upload over the optional half of it would
+        // be a worse outcome than losing retrievability. A runtime without
+        // snapshot support ignores the extra parts, so there is nothing to
+        // probe for first.
+        let snapshot: { archive: Buffer; metadata: string; missingLibraries: string[] } | null = null
+        try {
+          snapshot = (await context.buildUploadSnapshot?.()) ?? null
+          if (snapshot && snapshot.missingLibraries.length > 0) {
+            log(
+              `Stored project will not include these libraries, which are not installed here: ${snapshot.missingLibraries.join(', ')}`,
+              'warning',
+            )
+          }
+        } catch (error) {
+          log(
+            `Could not prepare the project for storage on the device: ${error instanceof Error ? error.message : String(error)}`,
+            'warning',
+          )
+        }
+
         const deployOutcome = await deployRuntimeProgram({
           uploadProgram: () =>
             context.mainProcessBridge.makeRuntimeApiUpload({
@@ -367,6 +403,8 @@ export function createEditorCompilerPlatformPort(
               contentType: 'application/zip',
               fileBuffer,
               cleanBuild: context.cleanBuild,
+              snapshotBuffer: snapshot?.archive,
+              snapshotMetadata: snapshot?.metadata,
               onUploadAccepted: (responseBody) => {
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }

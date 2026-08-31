@@ -152,6 +152,38 @@ export interface DiscoveredRuntimeDevice {
   hostname: string
   runtimeVersion: string
   apiPort: number
+  /** Name of the source project the device is storing, when it has one.
+   *
+   *  Carried on the unauthenticated discovery reply so the retrieve picker can
+   *  be populated without logging in to every device on the network. Display
+   *  only: it is whatever the uploading client said, the device never opened
+   *  the archive to check, and the authoritative name comes from the archive
+   *  itself once retrieved. Absent means the device stores no project. */
+  projectName?: string
+  /** When that project was stored, ISO 8601. Absent alongside `projectName`. */
+  projectTimestamp?: string
+}
+
+/** What a device reports about the project it stores, once authenticated. */
+export interface RuntimeProjectSnapshotInfo {
+  present: boolean
+  projectName?: string
+  editorVersion?: string
+  uploadedBy?: string
+  timestamp?: string
+  sizeBytes?: number
+  formatVersion?: number
+  libraries?: Array<{ name: string; version?: string; hash?: string }>
+}
+
+/** The manifest carried inside a retrieved archive. */
+export interface RuntimeProjectSnapshotMetadata {
+  formatVersion: number
+  projectName: string
+  editorVersion: string
+  uploadedBy: string
+  timestamp: string
+  libraries: Array<{ name: string; version: string; hash: string }>
 }
 
 export interface DiscoverDevicesOptions {
@@ -285,4 +317,38 @@ export interface RuntimePort {
 
   /** Get EtherCAT runtime status (plugin state, slave status, cycle metrics). */
   getEthercatRuntimeStatus?(): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }>
+
+  // --- stored source project ---
+
+  /**
+   * What a device says about the source project it stores.
+   *
+   * Authenticated but not admin-gated on the device, so the UI can decide
+   * whether to offer retrieval without holding the privilege retrieval needs.
+   */
+  getProjectSnapshotInfo?(
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }>
+
+  /**
+   * Retrieve the stored project and unpack it somewhere the editor can open it.
+   *
+   * Returns a path, never the archive. Those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write belongs beside the
+   * write rather than in the renderer.
+   */
+  retrieveProject?(ipAddress: string): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }>
+
+  /** Install libraries a retrieved project brought with it, by name. */
+  installRetrievedLibraries?(
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }>
 }

@@ -388,9 +388,25 @@ export function buildAllProjectFileContents(): Record<string, string> {
  * server error are all routine — so the success toast is load-bearing
  * confirmation the user needs.  Failure toasts fire on both builds.
  */
+/**
+ * Why a save is happening.
+ *
+ * The distinction exists for one case: a project retrieved from a device lives
+ * in a scratch directory until the user picks a location. A USER save there
+ * would report success for work written somewhere temporary, so it is refused
+ * and points at Save As. The build's own flush must still run, because the
+ * compiler reads its source from disk -- refusing it would not protect
+ * anything, it would just stop the project compiling.
+ *
+ * Defaults to `'user'` so every existing call site keeps the stricter meaning;
+ * only the build path opts out.
+ */
+export type SaveReason = 'user' | 'pre-build'
+
 export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
+  reason: SaveReason = 'user',
 ): Promise<{ success: boolean }> {
   // Run any pending debounced graphical write-backs before reading state:
   // a save landing inside the debounce window must serialize the fresh
@@ -413,6 +429,21 @@ export async function executeSaveProject(
     notifyNoWritePermission('save changes to')
     return { success: false }
   }
+
+  // A retrieved project has no location the user chose. Writing to the scratch
+  // directory and reporting success would tell someone their work is safe when
+  // it is somewhere temporary. The build's flush is exempt: it needs the tree
+  // on disk to compile, and scratch is a perfectly good place for that.
+  if (state.workspace.isEphemeralProject && reason === 'user') {
+    toast({
+      title: 'This project has no location yet',
+      description:
+        'It was retrieved from a device. Use Save As to choose where to keep it, then saving works as usual.',
+      variant: 'warn',
+    })
+    return { success: false }
+  }
+
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved, updateFile } = state.fileActions
