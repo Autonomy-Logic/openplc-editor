@@ -515,9 +515,15 @@ class MainProcessBridge implements MainIpcModule {
     filename: string
     contentType: string
     cleanBuild: boolean
+    snapshotBuffer?: Buffer
+    snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }): Promise<{ success: true; data: string } | { success: false; error: string }> =>
     this.runtimeApi.makeRuntimeApiUpload(opts)
+
+  /** Username of the live runtime session, so an uploaded project can record
+   *  who stored it. Only the username crosses this boundary. */
+  getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
 
   private makeRuntimeApiMutation = (
     method: 'POST' | 'PUT' | 'DELETE',

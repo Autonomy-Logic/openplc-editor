@@ -92,7 +92,12 @@ export interface SnapshotMetadata {
 }
 
 export interface BuildProjectSnapshotOptions {
-  files: WriteProjectFiles
+  /** Project-root-relative path to file content, for everything except
+   *  `build/`. A Map rather than `WriteProjectFiles` because the two callers
+   *  have genuinely different sources: the editor walks the project directory
+   *  on disk, web holds the files in memory. `writeProjectFilesToMap` converts
+   *  when a caller already has the structured shape. */
+  files: Map<string, string>
   projectName: string
   editorVersion: string
   /** Runtime account performing the upload. Informational only. */
@@ -188,11 +193,12 @@ export async function buildProjectSnapshot(
   const zip = new JSZip()
   zip.file(SNAPSHOT_MANIFEST_PATH, JSON.stringify(metadata, null, 2))
 
-  // The project's own relative paths, straight from the canonical iterator.
-  // Imported lazily-by-shape rather than by calling the generator directly so
-  // this module stays usable with a plain file map in tests.
-  for (const entry of iterateProjectEntries(files)) {
-    zip.file(entry.relativePath, entry.content)
+  for (const [relativePath, content] of files) {
+    // Refuse to WRITE what we would refuse to read, so a project that somehow
+    // holds an escaping path cannot be handed to a device and blamed on the
+    // device later.
+    assertSafeEntryPath(relativePath)
+    zip.file(relativePath, content)
   }
 
   for (const library of libraries) {
@@ -215,32 +221,24 @@ function libraryFileName(library: SnapshotLibrary): string {
 }
 
 /**
- * Every project file as a relative path plus content.
+ * A structured `WriteProjectFiles` flattened to the path/content map the
+ * archive stores.
  *
- * Deliberately a local walk of `WriteProjectFiles` rather than a call into
- * `iterateWriteProjectFiles`: that generator's entries are typed to a fixed
- * set of literal paths, and this module only needs the path/content pair.
- * Both walk the same shape, so a new file category has to be added in both --
- * the round-trip test is what catches it.
+ * Deliberately a local walk rather than a call into `iterateWriteProjectFiles`:
+ * that generator's entries are typed to a fixed set of literal paths and this
+ * needs only the pair. Both walk the same shape, so a new file category has to
+ * be added in both -- the round-trip test is what catches a miss.
  */
-function* iterateProjectEntries(
-  files: WriteProjectFiles,
-): Generator<{ relativePath: string; content: string }> {
-  yield { relativePath: 'project.json', content: files.projectJson }
-  if (files.deviceConfig !== undefined) {
-    yield { relativePath: 'devices/configuration.json', content: files.deviceConfig }
-  }
-  if (files.pinMapping !== undefined) {
-    yield { relativePath: 'devices/pin-mapping.json', content: files.pinMapping }
-  }
-  if (files.libraryManifest !== undefined) {
-    yield { relativePath: 'library.json', content: files.libraryManifest }
-  }
+export function writeProjectFilesToMap(files: WriteProjectFiles): Map<string, string> {
+  const map = new Map<string, string>()
+  map.set('project.json', files.projectJson)
+  if (files.deviceConfig !== undefined) map.set('devices/configuration.json', files.deviceConfig)
+  if (files.pinMapping !== undefined) map.set('devices/pin-mapping.json', files.pinMapping)
+  if (files.libraryManifest !== undefined) map.set('library.json', files.libraryManifest)
   for (const group of [files.pouFiles, files.serverFiles, files.remoteDeviceFiles, files.dataTypeFiles]) {
-    for (const file of group) {
-      yield { relativePath: file.relativePath, content: file.content }
-    }
+    for (const file of group) map.set(file.relativePath, file.content)
   }
+  return map
 }
 
 /**

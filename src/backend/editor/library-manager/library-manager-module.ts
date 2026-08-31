@@ -218,6 +218,44 @@ export class LibraryManagerModule {
   }
 
   /**
+   * The raw `.stlib` text for one library, or null when this machine does not
+   * have it.
+   *
+   * Text rather than the parsed archive on purpose: this feeds the project
+   * snapshot stored on a device, which bundles libraries verbatim and hashes
+   * them so the opening client can tell "same library" from "same name and
+   * version, different bytes". Re-serialising a parsed archive would hash a
+   * representation of the artifact rather than the artifact.
+   *
+   * User-installed wins over bundled, matching `loadAll`'s precedence: a
+   * library someone installed deliberately is the one the project means.
+   */
+  readArchiveText(name: string): string | null {
+    const entry = this.readRegistry().libraries[name]
+    if (entry) {
+      try {
+        assertPathContained(this.librariesDir, entry.stlibPath, `library[${name}].stlibPath`)
+        if (existsSync(entry.stlibPath)) return readFileSync(entry.stlibPath, 'utf-8')
+      } catch {
+        // Fall through to the bundled copy. A registry entry pointing outside
+        // the libraries directory is exactly what that guard exists to stop.
+      }
+    }
+
+    if (!existsSync(this.bundledDir)) return null
+    for (const file of readdirSync(this.bundledDir).filter((f) => f.endsWith('.stlib'))) {
+      try {
+        const text = readFileSync(join(this.bundledDir, file), 'utf-8')
+        const parsed = JSON.parse(text) as { manifest?: { name?: unknown } }
+        if (parsed.manifest?.name === name) return text
+      } catch {
+        // Skip a malformed bundled archive, as readBundledArchives does.
+      }
+    }
+    return null
+  }
+
+  /**
    * Return every installed archive's parsed contents — bundled then
    * user-installed alphabetical.  Used by the renderer to hydrate
    * the in-memory library state at startup and after install/uninstall
