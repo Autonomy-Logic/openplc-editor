@@ -37,39 +37,23 @@ import {
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 
 /**
- * Shared bridge contract between `compileLibrary` and its inner
- * `runVerificationCompile` step.  Both paths talk to the same
- * runtime API and library-resolution helper.  `loadEnabledArchives`
- * resolves project-enabled library names to parsed `.stlib`
- * archives — bundled libs are always-included, user-installed
- * subset is filtered by name, missing-but-enabled names come back
- * for the caller to surface as a pre-compile error.  The same call
- * feeds the program build (`strucpp.compile`'s `libraries:` option)
- * and the library build (`compileStlib`'s dependency list), so
- * there's exactly one resolution path and no chance of the program
- * compile seeing a different library set than the verification
- * compile.
+ * Bridge contract `compileLibrary` needs from the main process.
+ * `loadEnabledArchives` resolves project-enabled library names to
+ * parsed `.stlib` archives — bundled libs are always-included, the
+ * user-installed subset is filtered by name, and missing-but-enabled
+ * names come back for the caller to surface as a pre-compile error.
+ * The same call feeds the program build (`strucpp.compile`'s
+ * `libraries:` option) and the library build (`compileStlib`'s
+ * dependency list), so there's exactly one resolution path.
+ *
+ * It used to carry the runtime-API methods too, because the library
+ * build ran an inner verification compile through `compileProgram`.
+ * That step is gone, so the library path never touches the runtime
+ * and the contract narrows to the one call it actually makes.
  */
 type LibraryCompileBridge = {
-  makeRuntimeApiRequest: <T = void>(
-    ipAddress: string,
-    endpoint: string,
-    responseParser?: (data: string) => T,
-  ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
-  // Required to satisfy compileProgram's bridge contract; never invoked on the
-  // library path (it compiles with runtimeIpAddress=null, so no upload runs).
-  makeRuntimeApiUpload: (opts: {
-    ipAddress: string
-    fileBuffer: Buffer
-    filename: string
-    contentType: string
-    cleanBuild: boolean
-    onUploadAccepted?: (responseBody: string) => void
-  }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
 }
-
-type LibraryVerificationBridge = LibraryCompileBridge
 
 /**
  * Project data with the optional C++ POU sidecar attached. The base
@@ -3326,13 +3310,11 @@ class CompilerModule {
    *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
    *      shape `library-manager-module` persists user-installed
    *      archives with) to `<projectPath>/build/<name>.stlib`.
-   *   6. (Phase 8) Run an end-to-end avr-gcc verification compile
-   *      against the OpenPLC Simulator target, gated by an MD5
-   *      cache keyed off the produced program.st.  Verification
-   *      failures surface as warnings on `result.verification`,
-   *      never as build errors — a legitimate user target may have
-   *      more memory than the AVR simulator.  `cleanBuild` skips
-   *      the cache and forces a re-verification.
+   *
+   * The build is target-neutral — no avr-gcc pass, no simulator.
+   * Running a library is a separate action the renderer drives
+   * through `compileProgram` with a generated harness project; see
+   * `composeLibraryDebugHarness`.
    */
   async compileLibrary(
     args: Array<string | PLCProjectData | boolean>,
@@ -3341,22 +3323,14 @@ class CompilerModule {
   ): Promise<void> {
     _mainProcessPort.start()
 
-    // IPC args:
-    //   [projectPath, projectData (build-pass), verifyProjectData,
-    //    cleanBuild?, nativePous?]
+    // IPC args: [projectPath, projectData, nativePous?]
     //
     // `nativePous` is appended rather than derived here: it has to be read
     // off the RAW project data, and by the time anything arrives over this
     // channel `preprocessPous` has already lowered every native body to
     // bridge ST and rewritten its language tag. An older renderer omits it,
     // which degrades to "this project has no native POUs".
-    const [projectPath, projectData, verifyProjectData, cleanBuild = false, rawNativePous] = args as [
-      string,
-      PLCProjectData,
-      PLCProjectData,
-      boolean | undefined,
-      unknown,
-    ]
+    const [projectPath, projectData, rawNativePous] = args as [string, PLCProjectData, unknown]
 
     // Validated at the boundary rather than trusted: this crosses IPC, so it
     // arrives as `unknown` whatever the renderer intended. A malformed entry
@@ -3371,18 +3345,12 @@ class CompilerModule {
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
       loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
-      runVerificationCompile: ({ projectPath: p, verifyProjectData: v, emit }) =>
-        this.runVerificationCompile(p, v as PLCProjectData, mainProcessBridge, (message, logLevel) =>
-          emit(message, logLevel),
-        ),
     })
 
     const result = await runLibraryBuildPipeline(
       {
         projectPath,
         projectData,
-        verifyProjectData,
-        cleanBuild,
         nativePous,
       },
       libraryPort,
@@ -3393,123 +3361,6 @@ class CompilerModule {
     // Same 25ms delay the pre-refactor code used so the result
     // message is delivered before the port closes.
     setTimeout(() => _mainProcessPort.close(), 25)
-  }
-
-  /**
-   * Run an end-to-end verification compile of a synthetic Library
-   * Project against the OpenPLC Simulator target.  Reuses the full
-   * `compileProgram` pipeline (strucpp → arduino-cli → bundled
-   * avr-gcc) by feeding it a private `MessageChannelMain` — verifies
-   * the same way the program build does, against the same binaries,
-   * with zero code duplication.
-   *
-   * `forwardLog` is the caller's drain for the inner pipeline's
-   * message stream.  Streaming the strucpp / arduino-cli output is
-   * the difference between "blank console for 30 seconds while
-   * arduino-cli compiles" and "user sees progress" — and crucially
-   * the difference between "the .stlib generated but verification
-   * failed silently" and "the user knows which C++ line tripped
-   * avr-gcc".  We do keep the first error message internally so the
-   * summary line at the end of the build is succinct, but every log
-   * line still flows through.
-   *
-   * Resolves with `{success, message?}` either when the inner
-   * pipeline posts `closePort: true` (happy path) or when its port
-   * closes without one (the many error paths in `compileProgram`).
-   * Never throws — matches the caller's "verification is advisory"
-   * contract.
-   */
-  private async runVerificationCompile(
-    projectPath: string,
-    verifyData: PLCProjectData,
-    bridge: LibraryVerificationBridge,
-    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
-  ): Promise<{ success: boolean; message?: string }> {
-    // Look up the simulator board's core ID from `hals.json` —
-    // single source of truth shared with the renderer-side
-    // `boardInfo.core` lookup.  Falls back to a sensible default
-    // only if hals.json has been mangled; the resulting compile
-    // would fail at `core install` and surface as a verification
-    // warning, which is the documented advisory behaviour.
-    const SIMULATOR_BOARD = 'OpenPLC Simulator'
-    const boardCore = (await this.#getBoardCore(SIMULATOR_BOARD)) ?? 'arduino:avr'
-
-    return new Promise((resolve) => {
-      const channel = new MessageChannelMain()
-      let firstError: string | null = null
-      let settled = false
-
-      const settle = (result: { success: boolean; message?: string }) => {
-        if (settled) return
-        settled = true
-        try {
-          channel.port1.close()
-        } catch {
-          // Already closed — fine.
-        }
-        resolve(result)
-      }
-
-      channel.port1.on('message', (event) => {
-        const data = event.data as {
-          message?: unknown
-          logLevel?: 'info' | 'warning' | 'error'
-          closePort?: boolean
-        }
-        if (data.message !== undefined) {
-          // `decodePortMessage` returns readable text from the
-          // `Uint8Array` Node `Buffer` payloads survive structured
-          // clone as.  Without it, `.toString()` on a Uint8Array
-          // would render comma-separated byte numbers in the
-          // console.
-          const text = decodePortMessage(data.message)
-          // Forward every line — the caller decides how to render
-          // them (PLC-build path would prepend `[verify]`).  Even
-          // info-level messages matter here: avr-gcc compile can
-          // take 10+ seconds on a large library and the user needs
-          // to see progress.
-          forwardLog(text, data.logLevel)
-          // Keep only the FIRST error string for the summary.  Once
-          // arduino-cli or strucpp errors, the cascade usually
-          // continues with knock-on failures; the first one names
-          // the underlying cause.
-          if (data.logLevel === 'error' && firstError === null) {
-            firstError = text
-          }
-        }
-        if (data.closePort) {
-          settle(firstError ? { success: false, message: firstError } : { success: true })
-        }
-      })
-      // `compileProgram` posts intermediate `closePort: true` messages
-      // on its happy path but jumps straight to `port.close()` on its
-      // many error paths, without an explicit close message.  Listen
-      // for the port's 'close' event so an inner-pipeline error can't
-      // leave the outer library build hanging on an unresolved promise
-      // — same convention the renderer-side adapter uses.
-      channel.port1.on('close', () => {
-        settle(firstError ? { success: false, message: firstError } : { success: true })
-      })
-      channel.port1.start()
-
-      // The boolean slots (compileOnly / cleanBuild) are runtime
-      // values the inner `compileProgram` re-casts off `args as [...]`,
-      const compileArgs: Array<string | null | boolean | undefined | object> = [
-        projectPath,
-        SIMULATOR_BOARD,
-        boardCore,
-        true,
-        verifyData,
-        null,
-        null,
-        true,
-        null,
-        undefined,
-      ]
-      void this.compileProgram(compileArgs, channel.port2, bridge).catch((err) =>
-        settle({ success: false, message: getErrorMessage(err) }),
-      )
-    })
   }
 }
 export { CompilerModule }
