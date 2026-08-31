@@ -53,6 +53,7 @@ import {
 } from './converters'
 import {
   clipEditsToWindow,
+  clipSymbolsToWindow,
   lspLineInWindow,
   type LspLineWindow,
   modelMatchesDocumentWindow,
@@ -284,20 +285,28 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerDocumentSymbolProvider(languageId, {
       provideDocumentSymbols: async (model) => {
-        const { lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
         const result = await connection.sendRequest(DocumentSymbolRequest.type, {
-          textDocument: { uri: model.uri.toString() },
+          textDocument: { uri: lspUri },
         })
         if (!result) return []
         if (result.length === 0) return []
+        // A body editor renders the document from `lineOffset` down, so a
+        // preamble symbol converts to a line Monaco rejects the moment the
+        // outline navigates to it.
+        const visible = lineWindow ?? { startLine: lineOffset, endLineExclusive: Number.MAX_SAFE_INTEGER }
         // The handler can return either DocumentSymbol[] (nested
         // hierarchy) or SymbolInformation[] (flat list with
         // containerName).  Monaco's outline view wants
         // DocumentSymbol[] — flat lists get rewrapped.
         if ('range' in result[0]) {
-          return (result as DocumentSymbol[]).map((s) => lspDocumentSymbolToMonaco(s, lineOffset))
+          return clipSymbolsToWindow(result as DocumentSymbol[], visible).map((s) =>
+            lspDocumentSymbolToMonaco(s, lineOffset),
+          )
         }
-        return (result as SymbolInformation[]).map((s) => symbolInformationToDocumentSymbol(s, lineOffset))
+        return (result as SymbolInformation[])
+          .filter((s) => lspLineInWindow(s.location.range.start.line, visible))
+          .map((s) => symbolInformationToDocumentSymbol(s, lineOffset))
       },
     }),
   )
