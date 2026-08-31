@@ -55,6 +55,13 @@ export const FileMenu = () => {
     closeProject()
   }
 
+  // Reachable whether or not a device is connected: the modal owns the
+  // connection handling, including the case where retrieving means
+  // disconnecting from the device currently in use.
+  const handleRetrieveProject = () => {
+    openModal('retrieve-project', null)
+  }
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
@@ -72,6 +79,10 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
           </MenuPrimitive.Item>
+          <MenuPrimitive.Item className={ITEM} onClick={handleRetrieveProject}>
+            <span>{i18n.t('menu:file.submenu.retrieveProject')}</span>
+          </MenuPrimitive.Item>
+          <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
             <span>{i18n.t('menu:file.submenu.closeProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>

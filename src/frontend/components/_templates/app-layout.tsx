@@ -11,7 +11,12 @@ import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import { DataTypeRenameImpactModal } from '../_molecules/rename-impact-modal/data-type-rename-impact-modal'
 import AboutModal from '../_organisms/about-modal'
-import { RuntimeCreateUserModal, RuntimeDiscoverDevicesModal, RuntimeLoginModal } from '../_organisms/modals'
+import {
+  RetrieveProjectModal,
+  RuntimeCreateUserModal,
+  RuntimeDiscoverDevicesModal,
+  RuntimeLoginModal,
+} from '../_organisms/modals'
 import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { ConfirmPlcopenImportModal } from '../_organisms/modals/confirm-plcopen-import-modal'
@@ -162,6 +167,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
           {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}
+          {modals?.['retrieve-project']?.open === true && <RetrieveProjectModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AboutModal />
           <AcceleratorHandler />

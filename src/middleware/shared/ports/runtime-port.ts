@@ -317,4 +317,32 @@ export interface RuntimePort {
 
   /** Get EtherCAT runtime status (plugin state, slave status, cycle metrics). */
   getEthercatRuntimeStatus?(): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }>
+
+  // --- stored source project ---
+
+  /**
+   * What a device says about the source project it stores.
+   *
+   * Authenticated but not admin-gated on the device, so the UI can decide
+   * whether to offer retrieval without holding the privilege retrieval needs.
+   */
+  getProjectSnapshotInfo?(
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }>
+
+  /**
+   * Retrieve the stored project and unpack it somewhere the editor can open it.
+   *
+   * Returns a path, never the archive. Those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write belongs beside the
+   * write rather than in the renderer.
+   */
+  retrieveProject?(ipAddress: string): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; hash: string }>
+    error?: string
+  }>
 }
