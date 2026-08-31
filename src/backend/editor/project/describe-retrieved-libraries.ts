@@ -17,7 +17,7 @@
  * Electron-bound; this keeps the rule testable without standing up an app.
  */
 
-import { hashText, type SnapshotLibrary } from '../../shared/project/project-snapshot-archive'
+import { hashLibraryArchive, type SnapshotLibrary } from '../../shared/project/project-snapshot-archive'
 
 export type RetrievedLibraryStatus = 'installed' | 'differs' | 'missing'
 
@@ -42,7 +42,7 @@ export async function describeRetrievedLibraries(
       described.push({ name: library.name, version: library.version, status: 'missing' })
       continue
     }
-    const localHash = await hashText(local)
+    const localHash = await hashLibraryArchive(local)
     described.push({
       name: library.name,
       version: library.version,

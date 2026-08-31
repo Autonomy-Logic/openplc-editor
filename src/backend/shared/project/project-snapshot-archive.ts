@@ -137,6 +137,29 @@ export async function hashText(text: string): Promise<string> {
 }
 
 /**
+ * Identity of a `.stlib` archive, for telling "same library" from "same name
+ * and version, different bytes".
+ *
+ * Hashes a canonical re-serialisation rather than the raw text, because the two
+ * clients do not have the same bytes to offer. The editor holds the file it
+ * installed; web holds the archive parsed into memory and never sees a file at
+ * all. Hashing raw text would make every project uploaded from one and opened
+ * in the other report as differing, which is precisely the false alarm this
+ * comparison exists to avoid raising.
+ *
+ * Unparseable text falls back to hashing it verbatim: an archive that is not
+ * JSON has no canonical form, and a stable hash of the bytes is still better
+ * than none.
+ */
+export async function hashLibraryArchive(archiveText: string): Promise<string> {
+  try {
+    return await hashText(JSON.stringify(JSON.parse(archiveText)))
+  } catch {
+    return hashText(archiveText)
+  }
+}
+
+/**
  * Reject anything that would escape the destination directory when written.
  *
  * Path traversal is the check that actually matters here: a bomb only exhausts

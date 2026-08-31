@@ -261,7 +261,13 @@ export interface RuntimePort {
    * Web adapter: sends zip as base64.
    * Editor adapter: sends via file path or streamed content.
    */
-  uploadProgram?(programData: string | ArrayBuffer): Promise<{ success: boolean; error?: string }>
+  uploadProgram?(
+    programData: string | ArrayBuffer,
+    /** The source project to store on the device alongside the program, so it
+     *  can be retrieved later. Optional: a runtime without snapshot support
+     *  ignores it, and an upload is complete without one. */
+    snapshot?: { archiveBase64: string; metadata: string },
+  ): Promise<{ success: boolean; error?: string }>
 
   /**
    * Subscribe to token refresh events (e.g., JWT auto-renewal).
