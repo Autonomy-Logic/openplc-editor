@@ -187,9 +187,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog])
 
   const executeSave = useCallback(async (): Promise<boolean> => {
-    const result = await executeSaveProject(projectPort, capabilities)
+    // 'pre-build', not a user save: the compiler reads source from disk, so
+    // this flush has to run even for a project retrieved from a device that has
+    // no chosen location yet. Refusing it would not protect that project, it
+    // would just stop it compiling. The user-facing Save is the one that is
+    // gated, in executeSaveProject.
+    const result = await executeSaveProject(projectPort, capabilities, 'pre-build')
     return result.success
-  }, [projectPort])
+  }, [projectPort, capabilities])
 
   // ---------------------------------------------------------------------------
   // Build (Compile)
