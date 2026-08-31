@@ -15,6 +15,7 @@ import JSZip from 'jszip'
 import type { WriteProjectFiles } from '../../../../middleware/shared/ports/project-port'
 import {
   buildProjectSnapshot,
+  hashLibraryArchive,
   hashText,
   parseProjectSnapshot,
   SNAPSHOT_FORMAT_VERSION,
@@ -185,6 +186,29 @@ describe('libraries', () => {
     const { archive } = await build({ libraries: [a, b] })
     const parsed = await parseProjectSnapshot(archive)
     expect(parsed.libraries.map((l) => l.archive).sort()).toEqual(['A', 'B'])
+  })
+})
+
+describe('library identity', () => {
+  it('ignores formatting so the two clients agree on the same library', async () => {
+    // The editor holds an installed FILE; web holds the same archive parsed in
+    // memory and never sees a file. Hashing raw text would make every project
+    // uploaded from one and opened in the other report as differing -- the
+    // exact false alarm the comparison exists to avoid.
+    const pretty = JSON.stringify({ manifest: { name: 'Motion', version: '1' } }, null, 2)
+    const compact = JSON.stringify({ manifest: { name: 'Motion', version: '1' } })
+    expect(await hashLibraryArchive(pretty)).toBe(await hashLibraryArchive(compact))
+  })
+
+  it('still distinguishes a genuinely different archive', async () => {
+    const theirs = JSON.stringify({ manifest: { name: 'Motion', version: '1' }, body: 'a' })
+    const mine = JSON.stringify({ manifest: { name: 'Motion', version: '1' }, body: 'b' })
+    expect(await hashLibraryArchive(theirs)).not.toBe(await hashLibraryArchive(mine))
+  })
+
+  it('falls back to hashing the bytes when the archive is not JSON', async () => {
+    // No canonical form exists, and a stable hash of the bytes beats none.
+    expect(await hashLibraryArchive('not json')).toBe(await hashText('not json'))
   })
 })
 

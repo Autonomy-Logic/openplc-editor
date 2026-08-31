@@ -18,7 +18,7 @@ import { join, relative, sep } from 'path'
 
 import {
   buildProjectSnapshot,
-  hashText,
+  hashLibraryArchive,
   type SnapshotLibrary,
 } from '../../shared/project/project-snapshot-archive'
 
@@ -133,7 +133,7 @@ export async function buildUploadSnapshot(
       libraries.push({
         name,
         version: readLibraryVersion(archive),
-        hash: await hashText(archive),
+        hash: await hashLibraryArchive(archive),
         archive,
       })
     }
