@@ -333,15 +333,22 @@ export interface RuntimePort {
    * whether to offer retrieval without holding the privilege retrieval needs.
    */
   getProjectSnapshotInfo?(
-    ipAddress: string,
+    /** Desktop passes the device address; web resolves it from its device context. */
+    ipAddress?: string,
   ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }>
 
   /**
    * Retrieve the stored project and unpack it somewhere the editor can open it.
    *
-   * Returns a path, never the archive. Those are untrusted bytes from a device,
-   * and every check deciding whether they are safe to write belongs beside the
-   * write rather than in the renderer.
+   * Desktop only, and it returns a path rather than the archive on purpose:
+   * those are untrusted bytes from a device, and every check deciding whether
+   * they are safe to WRITE belongs beside the write, in the main process,
+   * rather than in the renderer.
+   *
+   * Web implements `retrieveProjectArchive` instead. The split is real rather
+   * than cosmetic: web has no filesystem to unpack onto and imports the project
+   * into its workspace, so forcing both onto one shape would mean one of them
+   * returning a path that does not exist.
    */
   retrieveProject?(ipAddress: string): Promise<{
     success: boolean
@@ -351,6 +358,23 @@ export interface RuntimePort {
     libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
     error?: string
   }>
+
+  /** Username of the live runtime session, for attributing a stored project to
+   *  whoever uploaded it. Only the username -- the password stays inside the
+   *  token authority. */
+  getSessionUsername?(): string | null
+
+  /**
+   * Retrieve the stored project as raw archive bytes.
+   *
+   * Web's counterpart to `retrieveProject`: there is no filesystem to unpack
+   * onto, so the archive is parsed in the browser and imported into the
+   * workspace. The bytes are still untrusted -- the shared parser validates
+   * before yielding any of them.
+   */
+  retrieveProjectArchive?(): Promise<
+    { success: true; archive: Uint8Array; projectName: string } | { success: false; error: string }
+  >
 
   /** Install libraries a retrieved project brought with it, by name. */
   installRetrievedLibraries?(
