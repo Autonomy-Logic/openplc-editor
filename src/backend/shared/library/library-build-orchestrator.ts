@@ -6,11 +6,10 @@
  * Single source of truth for the `.stlib` compilation flow.  Both
  * desktop and web drive this function through their own
  * `LibraryBuildPort` implementation; every decision, every event,
- * every file name, every hash, every error message, every cache rule
- * is owned by this module.  The port carries only the IO primitives
- * (read / write / delete project files, resolve library archives,
- * run a verification compile) — anything that looks like business
- * logic stays here, by design.
+ * every file name, every error message is owned by this module.  The
+ * port carries only the IO primitives (read / write / delete project
+ * files, resolve library archives) — anything that looks like
+ * business logic stays here, by design.
  *
  * Stages:
  *
@@ -21,14 +20,23 @@
  *      The ST lives in memory only — no intermediate file persistence
  *      (see path-constants comment).
  *   3. Resolve project-enabled library archives + fail on missing
- *      names (one place — feeds BOTH verification and strucpp).
- *   4. Verification compile against the OpenPLC Simulator target
- *      via `LibraryBuildPort.verifyCompile`.  MD5 cache hit short-
- *      circuits.  Cache record persisted under `build/`.
- *   5. Gather `pouDocs` from the project data, and read the authored
+ *      names.
+ *   4. Gather `pouDocs` from the project data, and read the authored
  *      C/C++ / Python POU files off disk for strucpp to carry verbatim.
- *   6. strucpp compile via `libraryBuildFromTranspiledSt`.
- *   7. Write `.stlib` archive to `build/{name}.stlib`.
+ *   5. strucpp compile via `libraryBuildFromTranspiledSt`.
+ *   6. Write `.stlib` archive to `build/{name}.stlib`.
+ *
+ * The build is deliberately TARGET-NEUTRAL.  It used to end with an
+ * avr-gcc verification compile against the OpenPLC Simulator board,
+ * which meant every library was judged by whether its generated C++
+ * links on an ATmega2560 — a board most libraries never run on, and a
+ * ~30 s tax on every clean build.  Worse, the project it verified
+ * instantiated nothing (its whole body was `LocalVar := 3;`), so it
+ * never said anything about whether the library behaves.  Running a
+ * library is now its own action: `composeLibraryDebugHarness` builds
+ * a project that instantiates every block and drives it through the
+ * simulator with the debugger attached.  strucpp's `compileStlib` is
+ * what still fails a bad build.
  *
  * The orchestrator returns a structured result; the adapter wraps it
  * in whatever transport it owns (IPC port message on desktop, Promise
@@ -39,12 +47,7 @@
 import type { LibraryBuildPort } from '../../../middleware/shared/ports/library-build-port'
 import type { CompileLibraryResult } from '../../../middleware/shared/ports/types'
 import type { PLCProject, PLCProjectData } from '../types/PLC/open-plc'
-import {
-  composeVerificationProject,
-  libraryBuildFromTranspiledSt,
-  type LibraryNativeSource,
-  prepareXmlForLibraryBuild,
-} from './build-pipeline'
+import { libraryBuildFromTranspiledSt, type LibraryNativeSource, prepareXmlForLibraryBuild } from './build-pipeline'
 import type { NativePouRef } from './native-pou-list'
 
 // ---------------------------------------------------------------------------
@@ -64,11 +67,6 @@ export interface LibraryBuildArgs {
   /** Build-pass project data: Python POUs lowered to runtime ST, C/C++
    *  POUs replaced by stubs with the originals on `originalCppPous`. */
   projectData: PLCProjectData
-  /** Verification-pass project data: Python POUs lowered to no-op
-   *  stubs (the AVR simulator has no Python interpreter). */
-  verifyProjectData: PLCProjectData
-  /** Skip the MD5 verification cache and force a fresh verify run. */
-  cleanBuild: boolean
   /** Native (C/C++, Python) POUs, collected from the project data BEFORE
    *  `preprocessPous` ran — see `collectNativePous`. The pipeline cannot
    *  derive this itself: by the time it sees `projectData`, every native body
@@ -87,10 +85,9 @@ export interface LibraryBuildArgs {
 // persisted.  They're transient artifacts that exist only between
 // `prepareXmlForLibraryBuild` and `libraryBuildFromTranspiledSt` —
 // passing them through the port would force every platform to spend
-// a round-trip on data nobody reads after the build finishes.  Only
-// the user-visible `.stlib` artifact and the verification cache are
-// written to the project tree.
-const VERIFY_CACHE_REL_PATH = 'build/.verify-cache-library.json'
+// a round-trip on data nobody reads after the build finishes.  The
+// user-visible `.stlib` artifact is the only thing this pipeline
+// writes to the project tree.
 const LIBRARY_MANIFEST_REL_PATH = 'library.json'
 const STLIB_OUT_DIR = 'build'
 
@@ -101,15 +98,14 @@ const STLIB_OUT_DIR = 'build'
  * The result mirrors the existing `CompileLibraryResult` shape so the
  * desktop's MessagePort wrapper and the web adapter both surface the
  * same structure to the renderer.  `success: false` from this function
- * is a fatal build error; verification failures show up under
- * `verification.success: false` with `success: true` overall.
+ * is a fatal build error.
  */
 export async function runLibraryBuildPipeline(
   args: LibraryBuildArgs,
   port: LibraryBuildPort,
   emit: (event: LibraryBuildEvent) => void,
 ): Promise<CompileLibraryResult> {
-  const { projectPath, projectData, verifyProjectData, cleanBuild, nativePous = [] } = args
+  const { projectPath, projectData, nativePous = [] } = args
 
   emit({ message: 'Starting library build...', level: 'info' })
 
@@ -164,16 +160,14 @@ export async function runLibraryBuildPipeline(
   const programSt = transpile.programSt
 
   // -------------------------------------------------------------------------
-  // Stage 4: resolve project-enabled library archives
+  // Stage 3: resolve project-enabled library archives
   //
-  // ONE resolution path feeding both verification (so the simulator
-  // compile sees the same symbol set the user's project sees) and
-  // the strucpp library compile.  Missing names fail fast with a
-  // Library-Manager-pointing message before either heavy step runs.
-  // The bundled IEC standard set (TON, TP, CTU, etc.) is included
-  // automatically by every port impl — desktop reads it off disk,
-  // web pulls it from its bundled-stlibs asset glob.  THIS is the
-  // step whose absence on web caused the "Undefined type 'TON'" bug.
+  // Missing names fail fast with a Library-Manager-pointing message
+  // before the strucpp compile runs.  The bundled IEC standard set
+  // (TON, TP, CTU, etc.) is included automatically by every port impl
+  // — desktop reads it off disk, web pulls it from its bundled-stlibs
+  // asset glob.  THIS is the step whose absence on web caused the
+  // "Undefined type 'TON'" bug.
   // -------------------------------------------------------------------------
   const enabledLibraryRefs = (projectData.libraries ?? []).map((ref) => ({
     name: ref.name,
@@ -192,76 +186,7 @@ export async function runLibraryBuildPipeline(
   }
 
   // -------------------------------------------------------------------------
-  // Stage 5: verification compile
-  //
-  // Hash program.st and consult the cache; cache hit short-circuits
-  // the slow avr-gcc compile.  cleanBuild forces a fresh run.
-  // Verification failures are advisory: they surface as warnings on
-  // `verification.success` with the build still producing a `.stlib`.
-  //
-  // The MD5 routes through the platform port instead of `node:crypto`
-  // so the shared module ships without a host-runtime dependency.
-  // Editor's port wires it to Node's hash; web's port wires it to
-  // spark-md5 — both produce byte-identical output.
-  // -------------------------------------------------------------------------
-  const programStMd5 = await port.computeMd5(programSt)
-  let verification: CompileLibraryResult['verification']
-  let usedCache = false
-  if (!cleanBuild) {
-    const cached = await readVerificationCache(port, projectPath, programStMd5)
-    if (cached) {
-      verification = cached
-      usedCache = true
-      emit({
-        message: `Skipping verification (cached: ${cached.success ? 'pass' : 'fail'}). Use "Clean build" to force re-verification.`,
-        level: 'info',
-      })
-    }
-  }
-  if (!verification) {
-    const verifyProject = composeVerificationProject({
-      meta: { name: manifest.name, type: 'plc-library' },
-      data: verifyProjectData,
-    })
-    emit({ message: 'Verifying with OpenPLC Simulator (avr-gcc)...', level: 'info' })
-    try {
-      verification = await port.verifyCompile({
-        projectPath,
-        verifyProjectData: verifyProject.data,
-        emit: (message, logLevel) => {
-          // Demote inner errors to warnings on the way out.  `.stlib`
-          // is still produced, so an error-level `[verify]` line in
-          // the console would falsely suggest the build failed.
-          const level = logLevel === 'error' ? 'warning' : (logLevel ?? 'info')
-          emit({ message: `[verify] ${message}`, level })
-        },
-      })
-    } catch (error) {
-      verification = { success: false, message: formatError(error) }
-    }
-    if (verification.success) {
-      emit({ message: 'Verification passed.', level: 'info' })
-    } else {
-      emit({
-        message: `Verification reported issues (warning only — .stlib will still be generated): ${verification.message ?? 'see log'}`,
-        level: 'warning',
-      })
-    }
-  }
-  if (!usedCache && verification) {
-    try {
-      await port.writeBuildFile(
-        projectPath,
-        VERIFY_CACHE_REL_PATH,
-        JSON.stringify({ md5: programStMd5, ...verification }, null, 2),
-      )
-    } catch (cacheErr) {
-      emit({ message: `Could not write verification cache: ${formatError(cacheErr)}`, level: 'warning' })
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Stage 6: gather per-symbol documentation
+  // Stage 4: gather per-symbol documentation
   //
   // POUs contribute their editor "Description" field; data types
   // contribute their own optional documentation.  Both ride through
@@ -284,7 +209,7 @@ export async function runLibraryBuildPipeline(
     }
   }
   // -------------------------------------------------------------------------
-  // Stage 6b: read the authored C/C++ and Python POU files off the project
+  // Stage 4b: read the authored C/C++ and Python POU files off the project
   //
   // Read from disk, NOT from the preprocessed project data: by this point
   // `preprocessPous` has replaced every native body with generated bridge ST,
@@ -316,33 +241,33 @@ export async function runLibraryBuildPipeline(
   }
 
   // -------------------------------------------------------------------------
-  // Stage 7: strucpp compileStlib
+  // Stage 5: strucpp compileStlib
   // -------------------------------------------------------------------------
   emit({ message: 'Compiling library archive...', level: 'info' })
-  const stage7 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
+  const stage5 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
     pouDocs,
     dependencyArchives: depArchives,
     dependencyRefs: enabledLibraryRefs,
     nativeSources,
   })
-  if (!stage7.success) {
-    for (const err of stage7.errors) {
+  if (!stage5.success) {
+    for (const err of stage5.errors) {
       const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
       emit({ message: `${where}${err.message}`, level: 'error' })
     }
     return {
       success: false,
-      error: stage7.errors[0]?.message ?? 'Library compilation failed.',
+      error: stage5.errors[0]?.message ?? 'Library compilation failed.',
       libraryName: manifest.name,
     }
   }
 
   // -------------------------------------------------------------------------
-  // Stage 8: write .stlib archive
+  // Stage 6: write .stlib archive
   // -------------------------------------------------------------------------
   const stlibRelPath = `${STLIB_OUT_DIR}/${manifest.name}.stlib`
   try {
-    await port.writeBuildFile(projectPath, stlibRelPath, JSON.stringify(stage7.archive, null, 2) + '\n')
+    await port.writeBuildFile(projectPath, stlibRelPath, JSON.stringify(stage5.archive, null, 2) + '\n')
   } catch (error) {
     return fail(emit, `Could not write ${manifest.name}.stlib: ${formatError(error)}`, { libraryName: manifest.name })
   }
@@ -352,43 +277,12 @@ export async function runLibraryBuildPipeline(
     success: true,
     stlibPath: stlibRelPath,
     libraryName: manifest.name,
-    verification,
   }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Read + validate the verification cache.  Returns the cached
- * `{ success, message }` only when the persisted MD5 matches the
- * current `programSt`.  Malformed cache files and missing files are
- * indistinguishable from a fresh build — both return null so the
- * caller falls through to a real verification run.
- */
-async function readVerificationCache(
-  port: LibraryBuildPort,
-  projectPath: string,
-  programStMd5: string,
-): Promise<{ success: boolean; message?: string } | null> {
-  let raw: string | null
-  try {
-    raw = await port.readBuildFile(projectPath, VERIFY_CACHE_REL_PATH)
-  } catch {
-    return null
-  }
-  if (raw === null) return null
-  try {
-    const parsed = JSON.parse(raw) as { md5?: string; success?: boolean; message?: string }
-    if (parsed?.md5 === programStMd5 && typeof parsed.success === 'boolean') {
-      return { success: parsed.success, message: parsed.message }
-    }
-  } catch {
-    /* malformed cache — fall through to fresh run */
-  }
-  return null
-}
 
 function fail(
   emit: (event: LibraryBuildEvent) => void,

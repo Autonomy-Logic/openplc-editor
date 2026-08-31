@@ -77,17 +77,6 @@ export interface ExportXmlArgs {
 export interface CompileLibraryArgs {
   projectData: PLCProjectData
   projectPath: string
-  /**
-   * Skip the verification-result cache for this run.  The MD5 cache
-   * normally short-circuits the slow simulator-target verification
-   * when the program.st coming out of the ST transpiler hasn't changed since
-   * the last successful (or failed) verify; `cleanBuild: true`
-   * forces a fresh compile.
-   *
-   * Pure UX gate — the artefact build itself is always fresh; only
-   * the verification step is cached.
-   */
-  cleanBuild?: boolean
 }
 
 export interface CompilerPort {
@@ -126,9 +115,10 @@ export interface CompilerPort {
    * `projectCapabilities(meta).hasLibraryBuild`.
    *
    * Returns the artefact path on success, or an error string the
-   * console renders directly.  The optional `verification` field
-   * reports the Phase-8 avr-gcc verification result when wired —
-   * a verification failure does NOT fail the build.
+   * console renders directly.  The build is target-neutral: it runs
+   * strucpp and nothing else, so a library that could never link on
+   * one particular board still produces a valid archive.  Executing
+   * the library is a separate action — see `composeLibraryDebugHarness`.
    */
   compileLibrary?(
     args: CompileLibraryArgs,

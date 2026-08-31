@@ -8,15 +8,22 @@
  * primitives the orchestrator cannot perform itself because they
  * cross the platform boundary (filesystem ↔ HTTP, etc.).
  *
+ * The port used to carry a `verifyCompile` primitive that drove the
+ * library through avr-gcc against the OpenPLC Simulator board on
+ * every build.  It is gone: the build is target-neutral, and running
+ * a library is now an explicit action driven from the renderer
+ * through `CompilerPort.compileProgram` with a generated harness
+ * project (`composeLibraryDebugHarness`).
+ *
  * Contract symmetry rule
  * ----------------------
  * Both desktop and web MUST implement every method on this interface
  * with semantically identical behaviour.  When the orchestrator calls
- * `port.readBuildFile(p, 'build/.verify-cache-library.json')`, both
- * platforms return the same content if the project tree carries the
- * same bytes.  Differences are confined to *transport* (fs vs HTTP),
- * never to logic — anything that looks like business logic belongs in
- * the shared orchestrator instead.
+ * `port.readBuildFile(p, 'library.json')`, both platforms return the
+ * same content if the project tree carries the same bytes.
+ * Differences are confined to *transport* (fs vs HTTP), never to
+ * logic — anything that looks like business logic belongs in the
+ * shared orchestrator instead.
  *
  * Web safety reminder
  * -------------------
@@ -29,20 +36,6 @@
  */
 
 import type { TranspileToStArgs, TranspileToStResult } from './compiler-platform-port'
-
-/**
- * Outcome of an attempted verification compile against the OpenPLC
- * Simulator board.  Verification is advisory: a `success: false`
- * surfaces as a warning on the build result, never as a fatal error
- * (the `.stlib` still ships).  See `runLibraryBuildPipeline` for the
- * cache + skip-on-md5-match flow that wraps this.
- */
-export interface LibraryVerificationResult {
-  success: boolean
-  /** Human-readable summary of the failure, surfaced as a console
-   *  warning when `success` is false.  Undefined on success. */
-  message?: string
-}
 
 /**
  * Library-enabled archives the project pulls in for the strucpp
@@ -61,42 +54,18 @@ export interface LibraryArchiveLookupArgs {
   projectLibraryRefs: ReadonlyArray<{ name: string; version: string }>
 }
 
-export interface VerifyCompileArgs {
-  /** Project root path on the host platform.  Same value the build
-   *  orchestrator received; the port impl knows how to interpret it. */
-  projectPath: string
-  /**
-   * Verification-pass project data — Python POUs already lowered to
-   * no-op stubs (the AVR simulator has no Python interpreter).  The
-   * orchestrator preprocesses this separately from the build pass
-   * and hands the result through.
-   *
-   * Typed as `unknown` on purpose: the architecture rule forbids the
-   * port from importing `backend/shared` types.  The orchestrator
-   * lives in `backend/shared` and produces shape-correct data; the
-   * port impl casts to its platform's expected shape (port-shape on
-   * web before invoking `runCompilePipeline`, schema-shape on editor
-   * before threading into the IPC envelope).
-   */
-  verifyProjectData: unknown
-  /** Caller log callback.  Every line the inner compile emits is
-   *  forwarded here; the orchestrator prefixes them with `[verify]`
-   *  before forwarding to its own caller. */
-  emit: (message: string, level: 'info' | 'warning' | 'error') => void
-}
-
 export interface LibraryBuildPort {
   // -------------------------------------------------------------------------
-  // Cryptography + transpile (same signatures `CompilerPlatformPort`
-  // uses for the program build — duplicated here intentionally so the
-  // orchestrator takes a single port object instead of two.  Each
-  // impl is free to delegate to whatever its program-build path uses
-  // internally; the contract is just that bytes in match bytes out.)
+  // Transpile (same signature `CompilerPlatformPort` uses for the
+  // program build — declared here too so the orchestrator takes a
+  // single port object instead of two.  Each impl is free to delegate
+  // to whatever its program-build path uses internally; the contract
+  // is just that bytes in match bytes out.)
+  //
+  // There was a `computeMd5` primitive here as well, hashing
+  // `program.st` to key the verification cache.  Both went out with
+  // the verification stage.
   // -------------------------------------------------------------------------
-
-  /** MD5 hex digest.  Editor wires it to Node's `crypto`; web wires
-   *  it to `spark-md5`.  Both byte-identical. */
-  computeMd5(input: string): Promise<string>
 
   /**
    * Transpile the project IR directly to ST via the in-process
@@ -139,8 +108,8 @@ export interface LibraryBuildPort {
   deleteBuildSubtree(projectPath: string, relPath: string): Promise<void>
 
   // -------------------------------------------------------------------------
-  // Library-resolution and verification (platform-shaped operations
-  // whose implementations differ in transport but not in semantics)
+  // Library resolution (platform-shaped operation whose implementation
+  // differs in transport but not in semantics)
   // -------------------------------------------------------------------------
 
   /**
@@ -151,15 +120,4 @@ export interface LibraryBuildPort {
    * the build with a clear "Library Manager" message.
    */
   loadLibraryArchives(args: LibraryArchiveLookupArgs): Promise<LibraryArchiveLookup>
-
-  /**
-   * Run a verification compile of `verifyProjectData` against the
-   * OpenPLC Simulator board.  Both platform impls internally drive
-   * the shared `runCompilePipeline` — the only thing they own is the
-   * platform-specific arg assembly (board entry, hals data, firmware
-   * skeleton) and the transport.  Failures are advisory: the
-   * orchestrator surfaces them as a warning on the build result,
-   * never as a fatal error.
-   */
-  verifyCompile(args: VerifyCompileArgs): Promise<LibraryVerificationResult>
 }
