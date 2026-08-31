@@ -1,9 +1,14 @@
 /**
  * @jest-environment jsdom
  */
-import type { TextEdit as LspTextEdit } from 'vscode-languageserver-protocol'
+import type { DocumentSymbol as LspDocumentSymbol, TextEdit as LspTextEdit } from 'vscode-languageserver-protocol'
 
-import { clipEditsToWindow, lspLineInWindow, modelMatchesDocumentWindow } from '../internal/line-window'
+import {
+  clipEditsToWindow,
+  clipSymbolsToWindow,
+  lspLineInWindow,
+  modelMatchesDocumentWindow,
+} from '../internal/line-window'
 
 // `Motor` occupies lines 2..4 of the aggregate datatypes document, so
 // its `.dt` view is windowed to [2, 5).
@@ -80,6 +85,72 @@ describe('clipEditsToWindow', () => {
       newText: 'anything',
     }
     expect(clipEditsToWindow([intoNextLine], MOTOR)).toEqual([])
+  })
+})
+
+describe('clipSymbolsToWindow', () => {
+  // strucpp answers DocumentSymbol[]: one top-level entry per type in the
+  // aggregate datatypes document, one per POU in a `pou://` document with
+  // its VAR declarations as children.
+  const symbol = (
+    name: string,
+    startLine: number,
+    endLine: number,
+    children?: LspDocumentSymbol[],
+  ): LspDocumentSymbol => {
+    const range = { start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 } }
+    return { name, kind: 13, range, selectionRange: range, children }
+  }
+
+  const COLORS = symbol('Colors', 1, 1)
+  const MOTOR_SYMBOL = symbol('Motor', 2, 4, [symbol('speed', 3, 3)])
+  const AGGREGATE = [COLORS, MOTOR_SYMBOL]
+
+  it('keeps every symbol when there is no window', () => {
+    expect(clipSymbolsToWindow(AGGREGATE)).toEqual(AGGREGATE)
+  })
+
+  it('keeps only the entry the .dt view renders', () => {
+    expect(clipSymbolsToWindow(AGGREGATE, MOTOR)).toEqual([MOTOR_SYMBOL])
+  })
+
+  it('keeps a matching entry whole, children included', () => {
+    expect(clipSymbolsToWindow(AGGREGATE, MOTOR)[0].children).toEqual([symbol('speed', 3, 3)])
+  })
+
+  it('lifts the children of a POU enclosing the variables window', () => {
+    const pou = symbol('main', 0, 11, [symbol('State', 2, 2), symbol('Enable', 3, 3), symbol('body_local', 7, 7)])
+    expect(clipSymbolsToWindow([pou], { startLine: 1, endLineExclusive: 5 })).toEqual([
+      symbol('State', 2, 2),
+      symbol('Enable', 3, 3),
+    ])
+  })
+
+  it('drops an enclosing symbol whose children all sit outside', () => {
+    const pou = symbol('main', 0, 11, [symbol('body_local', 7, 7)])
+    expect(clipSymbolsToWindow([pou], { startLine: 1, endLineExclusive: 5 })).toEqual([])
+  })
+
+  it('drops entries that end before the window', () => {
+    expect(clipSymbolsToWindow([COLORS], MOTOR)).toEqual([])
+  })
+
+  it('drops entries that start past the window', () => {
+    expect(clipSymbolsToWindow([symbol('Later', 6, 8)], MOTOR)).toEqual([])
+  })
+
+  it('drops a preamble symbol when the window is the body editor bound', () => {
+    // A body editor has no explicit window: the provider bounds it by the
+    // preamble the model never renders, so `lineOffset` is the window start.
+    const pou = symbol('main', 0, 11, [symbol('State', 2, 2), symbol('Enable', 3, 3)])
+    const bodyBound = { startLine: 5, endLineExclusive: Number.MAX_SAFE_INTEGER }
+    expect(clipSymbolsToWindow([pou], bodyBound)).toEqual([])
+  })
+
+  it('keeps everything when the body editor has no preamble', () => {
+    const pou = symbol('main', 0, 11, [symbol('State', 2, 2)])
+    const noPreamble = { startLine: 0, endLineExclusive: Number.MAX_SAFE_INTEGER }
+    expect(clipSymbolsToWindow([pou], noPreamble)).toEqual([pou])
   })
 })
 
