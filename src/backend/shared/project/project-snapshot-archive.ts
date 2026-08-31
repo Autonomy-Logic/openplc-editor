@@ -49,8 +49,19 @@ export const SNAPSHOT_LIBRARY_DIR = '.openplc-snapshot/libraries'
 /**
  * Limits applied when READING an archive. Generous enough that no real project
  * trips them and tight enough that a hostile device cannot exhaust the client.
+ *
+ * Injectable into `parseProjectSnapshot` so the refusal paths can be tested
+ * without building a 100 MB fixture -- a limit with no test proving it fires
+ * is a limit nobody knows is wired up.
  */
-export const SNAPSHOT_LIMITS = {
+export interface SnapshotLimits {
+  maxEntries: number
+  maxEntryBytes: number
+  maxTotalBytes: number
+  maxCompressionRatio: number
+}
+
+export const SNAPSHOT_LIMITS: SnapshotLimits = {
   maxEntries: 20_000,
   maxEntryBytes: 32 * 1024 * 1024,
   maxTotalBytes: 100 * 1024 * 1024,
@@ -238,7 +249,10 @@ function* iterateProjectEntries(
  * Validates the whole archive before returning any of it, so a rejected
  * archive never leaves a partially written project behind.
  */
-export async function parseProjectSnapshot(bytes: Uint8Array): Promise<ParsedProjectSnapshot> {
+export async function parseProjectSnapshot(
+  bytes: Uint8Array,
+  limits: SnapshotLimits = SNAPSHOT_LIMITS,
+): Promise<ParsedProjectSnapshot> {
   let zip: JSZip
   try {
     zip = await JSZip.loadAsync(bytes)
@@ -250,9 +264,9 @@ export async function parseProjectSnapshot(bytes: Uint8Array): Promise<ParsedPro
 
   const entries = Object.values(zip.files).filter((entry) => !entry.dir)
 
-  if (entries.length > SNAPSHOT_LIMITS.maxEntries) {
+  if (entries.length > limits.maxEntries) {
     throw new SnapshotArchiveError(
-      `Archive has too many files (${entries.length}, limit ${SNAPSHOT_LIMITS.maxEntries})`,
+      `Archive has too many files (${entries.length}, limit ${limits.maxEntries})`,
     )
   }
 
@@ -268,17 +282,17 @@ export async function parseProjectSnapshot(bytes: Uint8Array): Promise<ParsedPro
     const uncompressed = meta?.uncompressedSize ?? 0
     const compressed = meta?.compressedSize ?? 0
 
-    if (uncompressed > SNAPSHOT_LIMITS.maxEntryBytes) {
+    if (uncompressed > limits.maxEntryBytes) {
       throw new SnapshotArchiveError(`Archive entry is too large: ${entry.name}`)
     }
-    if (compressed > 0 && uncompressed / compressed > SNAPSHOT_LIMITS.maxCompressionRatio) {
+    if (compressed > 0 && uncompressed / compressed > limits.maxCompressionRatio) {
       throw new SnapshotArchiveError(`Archive entry has a suspicious compression ratio: ${entry.name}`)
     }
     declaredTotal += uncompressed
   }
-  if (declaredTotal > SNAPSHOT_LIMITS.maxTotalBytes) {
+  if (declaredTotal > limits.maxTotalBytes) {
     throw new SnapshotArchiveError(
-      `Archive is too large uncompressed (${declaredTotal} bytes, limit ${SNAPSHOT_LIMITS.maxTotalBytes})`,
+      `Archive is too large uncompressed (${declaredTotal} bytes, limit ${limits.maxTotalBytes})`,
     )
   }
 
@@ -299,7 +313,7 @@ export async function parseProjectSnapshot(bytes: Uint8Array): Promise<ParsedPro
     const content = await entry.async('string')
     readTotal += content.length
     // Backstop for an archive that lied about, or omitted, its declared sizes.
-    if (readTotal > SNAPSHOT_LIMITS.maxTotalBytes) {
+    if (readTotal > limits.maxTotalBytes) {
       throw new SnapshotArchiveError('Archive expanded beyond the size limit while reading')
     }
 

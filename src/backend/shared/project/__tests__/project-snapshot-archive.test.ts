@@ -19,6 +19,7 @@ import {
   parseProjectSnapshot,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_LIBRARY_DIR,
+  SNAPSHOT_LIMITS,
   SNAPSHOT_MANIFEST_PATH,
   assertSafeEntryPath,
   SnapshotArchiveError,
@@ -187,7 +188,11 @@ describe('libraries', () => {
 // --- refusing hostile archives -------------------------------------------
 
 describe('untrusted input', () => {
-  async function zipWith(entries: Record<string, string>, includeManifest = true): Promise<Uint8Array> {
+  async function zipWith(
+    entries: Record<string, string>,
+    includeManifest = true,
+    compress = false,
+  ): Promise<Uint8Array> {
     const zip = new JSZip()
     if (includeManifest) {
       zip.file(
@@ -196,7 +201,11 @@ describe('untrusted input', () => {
       )
     }
     for (const [path, content] of Object.entries(entries)) zip.file(path, content)
-    return zip.generateAsync({ type: 'uint8array' })
+    // STORE by default so a fixture's declared sizes are predictable; the
+    // ratio check needs a genuinely DEFLATEd entry to have a ratio at all.
+    return zip.generateAsync(
+      compress ? { type: 'uint8array', compression: 'DEFLATE' } : { type: 'uint8array' },
+    )
   }
 
   it.each([
@@ -277,6 +286,48 @@ describe('untrusted input', () => {
     await expect(parseProjectSnapshot(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(
       /newer editor/,
     )
+  })
+
+  it('refuses an archive with too many entries', async () => {
+    const entries: Record<string, string> = { 'project.json': '{}' }
+    for (let i = 0; i < 10; i += 1) entries[`pous/programs/P${i}.st`] = 'x'
+    const archive = await zipWith(entries)
+    await expect(
+      parseProjectSnapshot(archive, { ...SNAPSHOT_LIMITS, maxEntries: 5 }),
+    ).rejects.toThrow(/too many files/)
+  })
+
+  it('refuses an archive larger than the total limit', async () => {
+    const archive = await zipWith({ 'project.json': '{}', 'pous/programs/Big.st': 'x'.repeat(5_000) })
+    await expect(
+      parseProjectSnapshot(archive, { ...SNAPSHOT_LIMITS, maxTotalBytes: 100 }),
+    ).rejects.toThrow(/too large uncompressed|beyond the size limit/)
+  })
+
+  it('refuses a single entry larger than the per-entry limit', async () => {
+    const archive = await zipWith({ 'project.json': '{}', 'pous/programs/Big.st': 'x'.repeat(5_000) })
+    await expect(
+      parseProjectSnapshot(archive, { ...SNAPSHOT_LIMITS, maxEntryBytes: 100 }),
+    ).rejects.toThrow(/entry is too large/)
+  })
+
+  it('refuses an entry whose compression ratio looks like a bomb', async () => {
+    // Highly compressible filler stands in for the real thing: what matters is
+    // that the ratio is judged from the DECLARED sizes, before anything is
+    // decompressed, because decompressing is the part that hurts.
+    const archive = await zipWith(
+      { 'project.json': '{}', 'pous/programs/Bomb.st': 'a'.repeat(200_000) },
+      true,
+      true,
+    )
+    await expect(
+      parseProjectSnapshot(archive, { ...SNAPSHOT_LIMITS, maxCompressionRatio: 2 }),
+    ).rejects.toThrow(/compression ratio/)
+  })
+
+  it('accepts a normal project under the real limits', async () => {
+    const { archive } = await build()
+    await expect(parseProjectSnapshot(archive)).resolves.toBeDefined()
   })
 
   it('drops files it cannot place rather than guessing at a location', async () => {
