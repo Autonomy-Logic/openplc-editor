@@ -1131,6 +1131,47 @@ describe('createSharedSlice', () => {
         expect(result.ok).toBe(false)
         expect(result.message).toBe('"Pump" is already the name of a POU')
       })
+
+      /**
+       * An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares
+       * stays in the build and the list's generated struct would declare it a second time.
+       */
+      describe('with an unreadable datatypes/GVL_TYPE.dt on disk', () => {
+        const seedGhostTypeFile = () =>
+          store
+            .getState()
+            .projectActions.setUnparsedDataTypeFiles([
+              { relativePath: 'datatypes/GVL_TYPE.dt', content: 'TYPE garbage' },
+            ])
+
+        const expectedMessage = '"GVL" needs the type name "GVL_TYPE", which a data type file already uses'
+
+        it('refuses a create whose derived type name the file owns', () => {
+          seedGhostTypeFile()
+          const result = store.getState().globalVariableListActions.create('GVL')
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(expectedMessage)
+          expect(store.getState().project.data.globalVariableLists ?? []).toHaveLength(0)
+        })
+
+        it('refuses a rename whose derived type name the file owns', () => {
+          seedList('Other')
+          seedGhostTypeFile()
+          const result = store.getState().globalVariableListActions.rename('Other', 'GVL')
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(expectedMessage)
+          expect((store.getState().project.data.globalVariableLists ?? [])[0].name).toBe('Other')
+        })
+
+        it('refuses a duplicate whose derived type name the file owns', () => {
+          seedList('Other')
+          seedGhostTypeFile()
+          const result = store.getState().globalVariableListActions.duplicate('Other', 'GVL')
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(expectedMessage)
+          expect(store.getState().project.data.globalVariableLists ?? []).toHaveLength(1)
+        })
+      })
     })
   })
 

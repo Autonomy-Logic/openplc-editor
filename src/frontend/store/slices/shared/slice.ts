@@ -237,6 +237,11 @@ function elementNameCollision(
   if (lists.some((list) => nameMatches(globalVariableListTypeName(list.name), derived))) {
     return `"${name}" needs the type name "${derived}", which another global variable list already uses`
   }
+  // An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares is
+  // still in the build — the generated struct would be a second declaration of it.
+  if (!collidesWithUnparsedDataTypeFile(state, derived).ok) {
+    return `"${name}" needs the type name "${derived}", which a data type file already uses`
+  }
   return null
 }
 
