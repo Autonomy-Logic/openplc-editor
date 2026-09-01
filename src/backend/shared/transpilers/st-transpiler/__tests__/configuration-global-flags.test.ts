@@ -23,16 +23,15 @@ const global = (name: string, flag?: TranspileVariable['flag']): TranspileVariab
   ...(flag ? { flag } : {}),
 })
 
-const project = (globals: TranspileVariable[]): TranspileProject =>
-  ({
-    pous: [],
-    dataTypes: [],
-    configuration: {
-      tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 1 }],
-      instances: [],
-      globalVariables: globals,
-    },
-  }) as unknown as TranspileProject
+const project = (globals: TranspileVariable[]): TranspileProject => ({
+  pous: [],
+  dataTypes: [],
+  configuration: {
+    tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 1 }],
+    instances: [],
+    globalVariables: globals,
+  },
+})
 
 describe('configuration globals — qualifier emission', () => {
   it('emits VAR_GLOBAL RETAIN for a retained global', () => {
