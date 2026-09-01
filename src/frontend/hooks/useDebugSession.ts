@@ -76,7 +76,15 @@ export function useDebugSession(): UseDebugSessionReturn {
 
       wsActions.setDebugCContent(debugFileResult.content)
 
-      const instances = project.data.configurations.resource.instances
+      // A library-debug session runs against a generated harness program
+      // that instantiates every block in the library — it exists only in
+      // memory, so the POU list and instance list the debug tree is built
+      // from come from the session overlay, not from `project.data`.  An
+      // ordinary PLC project has no overlay and reads the project itself.
+      // See `composeLibraryDebugHarness`.
+      const harness = useOpenPLCStore.getState().workspace.debugHarness
+      const debugPous = harness ? [...project.data.pous, harness.programPou] : project.data.pous
+      const instances = harness?.instances ?? project.data.configurations.resource.instances
 
       const debugMap = parseDebugMap(debugFileResult.content)
       if (!debugMap) {
@@ -99,10 +107,10 @@ export function useDebugSession(): UseDebugSessionReturn {
       const pouTrees: Record<string, DebugTreeNode[]> = {}
       try {
         const treeResult = buildDebugVariableTreeMap(
-          project.data.pous,
+          debugPous,
           instances,
           entriesForTree,
-          project.data,
+          { ...project.data, pous: debugPous },
           useOpenPLCStore.getState().libraries.system,
         )
         treeMap = treeResult.treeMap
@@ -135,7 +143,7 @@ export function useDebugSession(): UseDebugSessionReturn {
       const indexMap = deriveVariableIndexMap(treeMap, debugMap)
 
       // Build FB instance map
-      const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
+      const fbDebugInstancesMap = buildFbInstanceMap(debugPous, instances)
 
       const fbTypesCount = fbDebugInstancesMap.size
       const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)

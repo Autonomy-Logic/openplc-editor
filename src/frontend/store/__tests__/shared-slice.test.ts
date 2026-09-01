@@ -2264,6 +2264,38 @@ describe('createSharedSlice', () => {
         }
       }
 
+      // DOPE-592
+      it('opens EMPTY and read-only when a POU is unrecoverable, and says why on the Console', () => {
+        const data = {
+          ...makeMinimalProjectResponse(),
+          fatalErrors: ['POU "main" (pous/programs/main.ld) could not be parsed'],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        // The workspace must actually OPEN. `meta.path` is what moves the app
+        // off the start screen, and on the desktop build it is the only
+        // trigger — without it the user never sees the Console below.
+        expect(state.project.meta.path).toBe('/test/path')
+        // No content: a blank canvas would look like a legitimate empty diagram.
+        expect(state.project.data.pous).toHaveLength(0)
+        // Read-only, so no save can write that emptiness over the real file.
+        expect(state.workspace.canEdit).toBe(false)
+        // And the reason is on the Console, as an error rather than a warning.
+        const errors = state.logs.filter((log) => log.level === 'error')
+        expect(errors.some((log) => log.message.includes('pous/programs/main.ld'))).toBe(true)
+        expect(errors.some((log) => log.message.includes('read-only'))).toBe(true)
+      })
+
+      it('still opens normally when the failure is only a recoverable warning', () => {
+        const data = { ...makeMinimalProjectResponse(), warnings: ['POU "main" could not be fully parsed'] }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        expect(state.project.data.pous).toHaveLength(1)
+        expect(state.workspace.canEdit).toBe(true)
+      })
+
       it('opens a minimal project with an ST main POU', () => {
         const data = makeMinimalProjectResponse()
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)

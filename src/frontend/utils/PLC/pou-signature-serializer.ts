@@ -114,7 +114,10 @@ export function serializePouSignatureToST(
  * offset to map LSP coordinates back to Monaco's body-only view.
  *
  * Computed as the line count of `${declaration}\n${variables}\n` —
- * the literal prefix the template prepends before `${body}`.
+ * the literal prefix the template prepends before `${body}`.  The
+ * template guarantees a real offset is always >= 2; `st-lsp`'s
+ * `resolveStLspContext` relies on that to tell a synced POU apart from
+ * `getBodyLineOffset`'s unknown-URI fallback of 0.
  *
  * `aliasIndex` maps a producer alias to its current IEC address; every
  * variable's `location` is resolved through it so the stub carries literal

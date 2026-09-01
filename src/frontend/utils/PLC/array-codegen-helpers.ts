@@ -86,17 +86,53 @@ const getArrayBaseTypeValue = (variable: PLCVariable): string => {
  *
  * Without `userTypeNames` the bare name is returned, which is the correct
  * answer for a function block and the historical behaviour for everything else.
+ *
+ * This is the spelling for a variable that IS the type. An element INSIDE an
+ * array is spelled differently — see `mapArrayElementTypeToIEC`.
  */
 const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>): string => {
   const upper = typeName.toUpperCase()
   return userTypeNames?.has(upper) ? `IEC_${upper}` : upper
 }
 
+/**
+ * Spell a type the way strucpp spells it as an ARRAY ELEMENT, which is not
+ * always how it spells the same type as a standalone variable.
+ *
+ * Read off the compiler's own output for a block declaring one of each:
+ *
+ *     Array2D<IEC_INT, 1, 2, 0, 2> IGRID;     // elementary: the wrapper
+ *     Array1D<IEC_STRING, 0, 1> INAMES;       // elementary: the wrapper
+ *     Array1D<MOTOR, 0, 1> IBANK;             // structure:   bare
+ *     Array1D<MODE, 0, 1> IMODES;             // enumeration: bare
+ *     IEC_MODE IMODE;                         // ...but a SCALAR enum is wrapped
+ *
+ * So an elementary type keeps its `IEC_` wrapper in both positions, and a
+ * user-defined type is bare as an element. Applying the scalar rule here
+ * instead is a silent type error for an enumeration: `using IEC_MODE =
+ * IEC_ENUM<MODE>` is a wrapper, so `IEC_MODE *` and the `MODE *` that
+ * `&IMODES[0]` actually yields are different types, and the generated C-block
+ * glue fails to compile with `cannot convert MODE* to IEC_MODE*`. A structure
+ * survived the same mistake only by luck, because `using IEC_MOTOR = MOTOR` is
+ * the identity and the two spellings name one type.
+ *
+ * Function block instances have no alias at all, so bare is their only
+ * spelling and this rule already covers them.
+ *
+ * Needs no type registry: the rule is the same whichever kind of user-defined
+ * type the name refers to, so the name alone decides.
+ */
+const mapArrayElementTypeToIEC = (baseType: string): string => {
+  const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
+  return elementary ?? baseType.toUpperCase()
+}
+
 const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>): string => {
   const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
   if (elementary) return elementary
-  // Not elementary: an array of a user-defined type, or a type the map does not
-  // know. Both go through the same spelling rule as a scalar of that type.
+  // Not elementary: a type the map does not know. It takes the scalar spelling
+  // rule. Array elements do NOT come through here — they take the element rule,
+  // which differs for an enumeration; see `mapArrayElementTypeToIEC`.
   return mapUserTypeToIEC(baseType, userTypeNames)
 }
 
@@ -107,7 +143,8 @@ const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>)
  */
 const getVariableIECType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   if (variable.type.definition === 'array' && variable.type.data) {
-    return mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
+    // Element position, not scalar position — an enumeration is spelled bare here.
+    return mapArrayElementTypeToIEC(variable.type.data.baseType.value)
   }
   if (variable.type.definition === 'base-type') {
     return mapBaseTypeToIEC(variable.type.value, userTypeNames)
@@ -147,7 +184,7 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * Rank four and beyond returns `null`: strucpp declares no alias for it, so
  * there is no type to name and no array to describe.
  */
-const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string | null => {
+const multiDimensionalContainerType = (variable: PLCVariable): string | null => {
   if (variable.type.definition !== 'array' || !variable.type.data) return null
 
   const dimensions = variable.type.data.dimensions
@@ -160,7 +197,7 @@ const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: Re
     bounds.push(range.lower, range.upper)
   }
 
-  const elementType = mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
+  const elementType = mapArrayElementTypeToIEC(variable.type.data.baseType.value)
   return `Array${dimensions.length}D<strucpp::${elementType}, ${bounds.join(', ')}>`
 }
 
@@ -188,7 +225,7 @@ const multiDimensionalContainerType = (variable: PLCVariable, userTypeNames?: Re
  */
 const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   const name = variable.name.toUpperCase()
-  const multiDimensional = multiDimensionalContainerType(variable, userTypeNames)
+  const multiDimensional = multiDimensionalContainerType(variable)
   if (multiDimensional) return `  strucpp::${multiDimensional} *${name};\n`
 
   const iecType = getVariableIECType(variable, userTypeNames)
@@ -202,6 +239,7 @@ export {
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
+  mapArrayElementTypeToIEC,
   mapBaseTypeToIEC,
   mapUserTypeToIEC,
   multiDimensionalContainerType,

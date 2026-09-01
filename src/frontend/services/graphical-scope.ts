@@ -26,19 +26,7 @@ import {
   resolveNewVariableType,
   validateVariableType,
 } from '../utils/PLC/validate-variable-type'
-import { getScopedQueryApi } from './st-lsp'
-
-/**
- * LSP `CompletionItemKind`s that denote a value symbol bindable to a box.
- * strucpp emits `Variable` (6) for in-scope variables and FUNCTION_BLOCK
- * instance members (`TON0.Q`), but `Field` (5) for STRUCT members
- * (`my_struct.field`). Both must be accepted, or struct-member access never
- * autocompletes or validates.
- */
-const LSP_KIND_VARIABLE = 6
-const LSP_KIND_FIELD = 5
-const isValueCompletionKind = (kind: number | undefined): boolean =>
-  kind === LSP_KIND_VARIABLE || kind === LSP_KIND_FIELD
+import { getScopedQueryApi, isValueCompletionKind, splitExpression } from './st-lsp'
 
 /** Max instance/struct variables to drill into when a type-filtered search has no direct hits. */
 const SCOPE_EXPAND_LIMIT = 8
@@ -68,13 +56,6 @@ export interface ScopeCompletion {
  *   - `resolved`: the expression resolves to `type`.
  */
 export type ScopeTypeResult = { status: 'unavailable' } | { status: 'unknown' } | { status: 'resolved'; type: string }
-
-/** Split `value` into the completion anchor (up to and including the last `.`) and the trailing segment. */
-function splitExpression(value: string): { anchor: string; segment: string } {
-  const lastDot = value.lastIndexOf('.')
-  if (lastDot < 0) return { anchor: '', segment: value }
-  return { anchor: value.slice(0, lastDot + 1), segment: value.slice(lastDot + 1) }
-}
 
 /**
  * Autocomplete candidates for `value` typed into a box in `pouName`'s

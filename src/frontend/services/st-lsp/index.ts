@@ -42,7 +42,6 @@ import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-seriali
 import {
   getBodyLineOffset,
   type LanguageService,
-  type LspContext,
   lspDiagnosticToMonaco,
   startLanguageService,
   suppressNoDefinitionFound,
@@ -51,6 +50,7 @@ import { parseScopedCompletionType } from './completion-type'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { getSyncedDocumentText } from './project-sync'
 import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
 import {
   DATA_TYPES_URI,
@@ -60,11 +60,9 @@ import {
   parsePouUri,
   parsePouVarsUri,
   POU_DECLARATION_LINE_COUNT,
-  pouUri,
   pouVarsUri,
   type StLspService,
   type StLspStartOptions,
-  stubUri,
 } from './types'
 
 const ST_LANGUAGE_ID = 'st'
@@ -83,41 +81,7 @@ interface LoadStlibBufferParams {
   payload: string | { type: 'buffer'; bytes: number[] }
 }
 
-/**
- * Resolve a Monaco model URI to the LSP URI + body-line offset:
- *
- *   - `pou://<name>.st` (body editor): URI passes through; offset
- *     is whatever project-sync registered (preamble line count).
- *   - `pouvars://<name>.st` (variables text view): the LSP doesn't
- *     index this URI — remap to the live document.  For ST POUs
- *     that's `pou://`; for graphical/hybrid POUs it's `stub://`.
- *     Either way the declaration is a single line at LSP index 0,
- *     so the offset is a constant 1.
- *   - `dtview://<name>.dt` (per-type code view): remap to the
- *     aggregate datatypes document. Both frames open with a `TYPE`
- *     line, so the shift is the type's span start minus that frame.
- *   - Anything else: pass through unchanged.
- */
-function resolveStLspContext(modelUri: string): LspContext {
-  const varsPou = parsePouVarsUri(modelUri)
-  if (varsPou !== null) {
-    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === varsPou)
-    const isStLanguage = pou?.body.language === 'st'
-    const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
-    return { lspUri, lineOffset: POU_DECLARATION_LINE_COUNT }
-  }
-  const dtName = parseDtViewUri(modelUri)
-  if (dtName !== null) {
-    const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
-    // A name absent from the document (unparseable `.dt` file) has no
-    // span to shift by. Pass the view's own URI through: the worker
-    // never indexed it, so every provider answers nothing rather than
-    // answering for whichever type happens to be first.
-    if (!span) return { lspUri: modelUri, lineOffset: 0 }
-    return { lspUri: DATA_TYPES_URI, lineOffset: dtViewLineOffset(span) }
-  }
-  return { lspUri: modelUri, lineOffset: getBodyLineOffset(modelUri) }
-}
+import { resolveStLspContext } from './resolve-context'
 
 /**
  * True while a `.dt` model's text still matches what the store would
@@ -176,6 +140,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     completionTriggerCharacters: ['.', ':'],
     signatureHelpTriggerCharacters: ['(', ','],
     resolveLspContext: resolveStLspContext,
+    getLspDocumentText: getSyncedDocumentText,
     definitionInterceptors: monacoApi
       ? [
           // Reroute graphical-POU stubs to the graphical editor.
@@ -542,6 +507,12 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   }
 }
 
-export { getScopedQueryApi, type ScopedCompletionItem, type ScopedQueryApi } from './scoped-query'
+export {
+  getScopedQueryApi,
+  isValueCompletionKind,
+  type ScopedCompletionItem,
+  type ScopedQueryApi,
+  splitExpression,
+} from './scoped-query'
 export type { StLspService, StLspStartOptions } from './types'
 export { parsePouUri, POU_URI_SCHEME, pouUri, stubUri } from './types'

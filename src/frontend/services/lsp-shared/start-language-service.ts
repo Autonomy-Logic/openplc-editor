@@ -112,6 +112,7 @@ export interface StartLanguageServiceOptions {
   resolveLspContext?: (modelUri: string) => LspContext
   definitionInterceptors?: DefinitionInterceptor[]
   filterFormattingEdits?: (edits: LspTextEdit[], offset: number) => LspTextEdit[]
+  getLspDocumentText?: (lspUri: string) => string | undefined
   resolveSemanticTokensViewport?: ResolveSemanticTokensViewport
 
   // Diagnostics configuration -----------------------------------------------
@@ -190,6 +191,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     resolveLspContext,
     definitionInterceptors,
     filterFormattingEdits,
+    getLspDocumentText,
     resolveSemanticTokensViewport,
     markerOwner,
     diagnosticSource,
@@ -259,6 +261,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
           ...(resolveLspContext ? { resolveLspContext } : {}),
           ...(definitionInterceptors ? { definitionInterceptors } : {}),
           ...(filterFormattingEdits ? { filterFormattingEdits } : {}),
+          ...(getLspDocumentText ? { getLspDocumentText } : {}),
         },
       })
     : null

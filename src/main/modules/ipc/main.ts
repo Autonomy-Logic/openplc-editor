@@ -14,6 +14,7 @@ import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type {
@@ -1120,7 +1121,7 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
 
-  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData | boolean>) => {
+  handleRunCompileLibrary = (event: IpcMainEvent, args: CompileLibraryIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileLibrary(args, mainProcessPort, this)
   }
