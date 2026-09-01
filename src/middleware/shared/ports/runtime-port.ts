@@ -212,18 +212,6 @@ export interface DiscoveredRuntimeDevice {
   projectTimestamp?: string
 }
 
-/** What a device reports about the project it stores, once authenticated. */
-export interface RuntimeProjectSnapshotInfo {
-  present: boolean
-  projectName?: string
-  editorVersion?: string
-  uploadedBy?: string
-  timestamp?: string
-  sizeBytes?: number
-  formatVersion?: number
-  libraries?: Array<{ name: string; version?: string; hash?: string }>
-}
-
 /** The manifest carried inside a retrieved archive. */
 export interface RuntimeProjectSnapshotMetadata {
   formatVersion: number
@@ -433,17 +421,6 @@ export interface RuntimePort {
   // --- stored source project ---
 
   /**
-   * What a device says about the source project it stores.
-   *
-   * Authenticated but not admin-gated on the device, so the UI can decide
-   * whether to offer retrieval without holding the privilege retrieval needs.
-   */
-  getProjectSnapshotInfo?(
-    /** Desktop passes the device address; web resolves it from its device context. */
-    ipAddress?: string,
-  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }>
-
-  /**
    * Retrieve the stored project and unpack it somewhere the editor can open it.
    *
    * Desktop only, and it returns a path rather than the archive on purpose:
@@ -469,12 +446,6 @@ export interface RuntimePort {
    *  whoever uploaded it. Only the username -- the password stays inside the
    *  token authority. */
   getSessionUsername?(): string | null
-
-  /** The device this session is authenticated against, or null when there is no
-   *  session. A device context alone is not one: selecting a device points the
-   *  adapter at it without signing in, so both have to hold before a caller may
-   *  skip asking for credentials. */
-  getAuthenticatedDevice?(): { agentId: string; deviceId: string } | null
 
   /**
    * Retrieve the stored project as raw archive bytes.

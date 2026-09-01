@@ -276,14 +276,6 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
 
     // --- stored source project ---
 
-    async getProjectSnapshotInfo(ipAddress: string) {
-      try {
-        return await window.bridge.runtimeProjectSnapshotInfo(ipAddress)
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
-      }
-    },
-
     async retrieveProject(ipAddress: string) {
       try {
         return await window.bridge.runtimeRetrieveProject(ipAddress)
