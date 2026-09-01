@@ -182,8 +182,9 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog } from 'electron'
 import JSZip from 'jszip'
 
-import type { PlatformOption } from '../../../middleware/shared/ports/types'
+import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
+import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -3080,6 +3081,34 @@ class CompilerModule {
       }
     }
 
+    // Persistent storage (RETAIN) settings for a runtime-v4 upload. Read from
+    // the same `devices/configuration.json` the VPP screen state comes from,
+    // because they live in the same place for the same reason: the project owns
+    // them and they must be available with no device attached.
+    //
+    // Only runtime-v4 targets have a built-in file store to configure. On
+    // baremetal the store is whatever the board's driver provides, and nothing
+    // in the project can configure it — so a retain.conf there would be a file
+    // no one reads.
+    let persistentStorage: PersistentStorageSettings | undefined
+    let targetHidesPersistentStorage = false
+    if (isRuntimeV4) {
+      const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      try {
+        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        persistentStorage = deviceConfig.persistentStorage
+      } catch {
+        // No configuration.json — a project that never configured storage, which
+        // generateRetainConf treats as "emit nothing".
+      }
+      // A VPP whose own driver keeps retained values declares this, and the
+      // editor then emits no retain.conf at all — the runtime removes its copy
+      // and the built-in store stands down, leaving the vendor's driver as the
+      // only store. Same declaration that hides the screen in the project tree.
+      const vppDevice = findVppDeviceByBoardName(new PackageManagerModule(), boardTarget)
+      targetHidesPersistentStorage = (vppDevice?.device.hidesNativeScreens ?? []).includes('persistent-storage')
+    }
+
     // For Arduino VPP targets with a modular backplane, bake the
     // per-slot module-configuration bytes into vpp_config.h (the MCU
     // has no runtime JSON to load them from). The synthetic
@@ -3119,6 +3148,8 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
+        ...(persistentStorage ? { persistentStorage } : {}),
+        targetHidesPersistentStorage,
         vendorScreenData: effectiveVendorScreenData,
         // Compared against the `minEditorVersion` a runtime publishes at
         // `/api/capabilities` (DOPE-448). Injected because the pipeline

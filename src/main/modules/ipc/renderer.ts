@@ -29,9 +29,7 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
-  RetainConfigResult,
   RuntimeUserRole,
-  UpdateRetainConfigParams,
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
@@ -539,10 +537,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
   runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
     ipcRenderer.invoke('runtime:list-users', ipAddress),
-  runtimeGetRetainConfig: (ipAddress: string): Promise<RetainConfigResult> =>
-    ipcRenderer.invoke('runtime:get-retain-config', ipAddress),
-  runtimeUpdateRetainConfig: (ipAddress: string, params: UpdateRetainConfigParams): Promise<RetainConfigResult> =>
-    ipcRenderer.invoke('runtime:update-retain-config', ipAddress, params),
   runtimeWhoAmI: (ipAddress: string): Promise<WhoAmIResult> => ipcRenderer.invoke('runtime:whoami', ipAddress),
   runtimeUpdateUser: (
     ipAddress: string,

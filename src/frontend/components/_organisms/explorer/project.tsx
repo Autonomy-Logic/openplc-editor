@@ -7,7 +7,7 @@ import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
 import { CreateEditorObjectFromTab, LIBRARY_MANIFEST_TAB_NAME } from '../../../store/slices/tabs/utils'
-import { isRetainConfigCapableRuntime, isUserManagementCapableRuntime } from '../../../utils/device'
+import { isUserManagementCapableRuntime } from '../../../utils/device'
 import { isNativeScreenAvailable } from '../../../utils/native-screens'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
@@ -86,20 +86,21 @@ const Project = () => {
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
 
-  // Persistent Storage configures the runtime's BUILT-IN retain store. Two
-  // things have to be true for it to mean anything:
+  // Persistent Storage is a PROJECT screen: the settings are saved with the
+  // project and delivered by the upload, so it is available offline and has
+  // nothing to do with whether a device is connected. Two facts about the
+  // TARGET decide whether it appears at all:
   //
-  //   • the runtime is >= 4.2.0, or there is no built-in store to configure
-  //     and the endpoints would 404;
+  //   • the target's runtime has a built-in retain store to configure. Only
+  //     runtime v4 does; on baremetal the store is whatever the board's driver
+  //     provides and nothing in the project can point it anywhere.
   //   • the target has not taken retention over. A VPP whose driver implements
   //     its own store declares `hidesNativeScreens: ['persistent-storage']`,
-  //     and then the native store is switched off (see
-  //     `useNativeScreenEnforcement`) — so showing the screen would offer
-  //     settings that are deliberately inert.
+  //     and the editor then also emits no `retain.conf` — which makes the
+  //     runtime remove its copy and the built-in store stand down. So the
+  //     screen never offers settings that are inert.
   const showPersistentStorage =
-    runtimeConnected &&
-    isRetainConfigCapableRuntime(runtimeVersion) &&
-    isNativeScreenAvailable(currentBoardInfo, 'persistent-storage')
+    targetCaps.nativeRetainStore && isNativeScreenAvailable(currentBoardInfo, 'persistent-storage')
 
   const handleCreateTab = ({ elementType, name, path, configuration: tabConfig }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }

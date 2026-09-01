@@ -106,6 +106,19 @@ export interface TargetCapabilities {
    *  Stop a silent no-op on a target where it had always worked. */
   plcStateControl: boolean
 
+  /** The target's runtime ships a BUILT-IN retain store the project can
+   *  configure — the file-backed one in runtime v4. True only there: on
+   *  baremetal the store is whatever the board's driver provides and nothing in
+   *  the project can point it anywhere, so a Persistent Storage screen would
+   *  offer settings no one reads.
+   *
+   *  This gates the SCREEN, offline and with no device attached. It is not the
+   *  same question as whether retention works at all — a VPP shipping its own
+   *  store gives a target retention while declaring
+   *  `hidesNativeScreens: ['persistent-storage']`, which removes the screen and
+   *  suppresses `retain.conf` so the vendor's driver is the only store. */
+  nativeRetainStore: boolean
+
   /** Upload happens over a local connection (USB / loopback) and
    *  doesn't require a separate "Connect" step. Arduino-CLI + the
    *  in-process Simulator. Runtime v3 / v4 require an established

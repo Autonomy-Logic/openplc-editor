@@ -1078,10 +1078,65 @@ export interface DevicePin {
   alias?: string
 }
 
+/**
+ * Bounds on the retain store's commit period, mirroring the runtime's own
+ * (`webserver/retain_config.py`), which refuses anything outside them at install
+ * time.
+ *
+ * The floor is not arbitrary: the runtime hands the blob over every scan cycle,
+ * and a sub-second period would write through at close to scan rate, which is
+ * exactly what the buffering exists to avoid. The ceiling keeps "enabled" from
+ * meaning "saved once an hour", which would look like retention and behave like
+ * none.
+ *
+ * Here rather than in the compile step because both the store and the screen
+ * need them, and `store` may not import from `backend/shared`.
+ */
+export const RETAIN_MIN_FLUSH_SECONDS = 1
+export const RETAIN_MAX_FLUSH_SECONDS = 3600
+export const DEFAULT_RETAIN_FLUSH_SECONDS = 5
+
+/**
+ * Persistent storage (RETAIN) for the runtime's built-in file store.
+ *
+ * A project property, configured offline on the Persistent Storage screen and
+ * delivered to the device as `retain.conf` inside the program upload — the same
+ * route VPP plugin config takes. Nothing here is read back from a device.
+ */
+export interface PersistentStorageSettings {
+  /** Whether the runtime's built-in file store keeps this project's retained
+   *  variables. Off by default; a project that leaves it off causes the upload
+   *  to carry no `retain.conf` at all, which is what keeps the built-in store
+   *  switched off on the device. */
+  enabled: boolean
+  /** Absolute path on the DEVICE. Empty means "use the runtime's default" —
+   *  the editor does not hardcode a device filesystem layout, so the runtime
+   *  fills this in and the field's placeholder is the only place a default
+   *  appears in the UI. */
+  path: string
+  /** How often the store commits, in seconds. Bounds the retained state a power
+   *  cut can cost against how hard the storage is worked; the runtime rejects a
+   *  value outside its accepted range at install time. */
+  flushSeconds: number
+}
+
 export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
+  /**
+   * The project's persistent-storage (RETAIN) settings, or absent when this
+   * project does not use persistent storage — which is also the signal that
+   * makes the runtime's built-in store stay off.
+   */
+  persistentStorage?: PersistentStorageSettings
+  /**
+   * Per-board archive of persistent-storage settings, mirroring the pattern
+   * `vendorScreenDataByBoard` uses. A storage path is a property of the target
+   * box, not of the program, so retargeting a project should not silently carry
+   * one device's path onto another.
+   */
+  persistentStorageByBoard?: Record<string, PersistentStorageSettings>
   /**
    * Active board's VPP vendor-screen data (backplane modules, IO mappings,
    * Modbus tables, …). This is the flat view every consumer and the compile
