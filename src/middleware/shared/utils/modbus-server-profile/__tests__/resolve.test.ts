@@ -155,9 +155,7 @@ describe('resolveModbusServerProfile', () => {
   describe('a package that has not been migrated', () => {
     // Stage-by-stage rollout means an installed VPP may still carry the single
     // pre-split screen. The screen is still the store; only the links differ.
-    const profile = resolveModbusServerProfile(
-      arduinoBoard({ vpp: { screens: { Modbus: {} } } }),
-    )
+    const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { Modbus: {} } } }))
 
     it('still resolves to the vendor-screen store', () => {
       expect(profile.store).toBe('vendor-screen')

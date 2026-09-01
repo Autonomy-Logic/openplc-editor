@@ -16,6 +16,8 @@ import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { resolveModbusServerProfile } from '../../../../../../middleware/shared/utils/modbus-server-profile'
+import { CreateEditorObjectFromTab } from '../../../../../store/slices/tabs/utils'
 import { cn } from '../../../../../utils/cn'
 import {
   isArduinoTarget as checkIsArduinoTarget,
@@ -149,6 +151,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     serverActions: { create: createServer },
     remoteDeviceActions: { create: createRemoteDevice },
     deviceAvailableOptions: { availableBoards },
+    tabsActions: { updateTabs },
+    editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
   const [isOpen, setIsOpen] = useState(false)
@@ -157,6 +161,27 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
   const isSimulator = isSimulatorTarget(currentBoardInfo)
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard, currentBoardInfo)
+
+  // A board that carries its Modbus config in a VPP screen has exactly one
+  // server, and it exists already — the "+" flow has nothing to create, so it
+  // opens the configuration instead of asking for a name and a protocol.
+  const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
+  const boardModbusScreen = modbusProfile.store === 'vendor-screen' ? modbusProfile.vppScreens.modbus : undefined
+
+  const handleOpenModbusScreen = () => {
+    if (!boardModbusScreen) return
+    const tab = {
+      name: boardModbusScreen,
+      path: `/vendor-screen/${boardModbusScreen}`,
+      elementType: { type: 'vendor-screen' as const, screenName: boardModbusScreen },
+    }
+    updateTabs(tab)
+    const model = getEditorFromEditors(tab.name) ?? CreateEditorObjectFromTab(tab)
+    addModel(model)
+    setEditor(model)
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
+  }
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     const pouWasCreated = create(data)
@@ -492,7 +517,26 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!(isRuntimeV4 || isSimulator) ? (
+                {boardModbusScreen ? (
+                  /* This board serves exactly one Modbus slave, configured on
+                   * the board itself rather than created as a project element,
+                   * so there is nothing to name and nothing to add -- only a
+                   * screen to open. */
+                  <div className='flex flex-col gap-2 py-2'>
+                    <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      This board serves its own Modbus slave. Open its configuration to enable Modbus RTU or TCP and
+                      review the address map.
+                    </p>
+                    <button
+                      type='button'
+                      aria-label='open-modbus-configuration'
+                      onClick={handleOpenModbusScreen}
+                      className='h-7 w-full rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium'
+                    >
+                      Modbus
+                    </button>
+                  </div>
+                ) : !(isRuntimeV4 || isSimulator) ? (
                   <div className='flex flex-col gap-2 py-2'>
                     <p className='text-sm text-neutral-700 dark:text-neutral-300'>
                       Server configuration is only available for OpenPLC Runtime v4 targets.

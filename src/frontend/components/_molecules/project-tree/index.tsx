@@ -99,6 +99,12 @@ type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
     | 'server'
     | 'remote-device'
   children?: ReactNode
+  /** Treat the branch as having content even when the store slice it counts is
+   *  empty. The Servers branch counts `project.data.servers`, but a baremetal
+   *  board's Modbus server is not a PLCServer -- it lives in the board's vendor
+   *  screen -- so without this the branch renders collapsed and unopenable
+   *  above a child that is right there. */
+  forceExpandable?: boolean
 }
 
 const BranchSources = {
@@ -115,7 +121,7 @@ const BranchSources = {
   server: { BranchIcon: ServerIcon, label: 'Servers' },
   'remote-device': { BranchIcon: RemoteDeviceIcon, label: 'Remote Devices' },
 }
-const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
+const ProjectTreeBranch = ({ branchTarget, children, forceExpandable = false, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
       data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
@@ -126,6 +132,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
+    forceExpandable ||
     pous.some((pou) => pou.pouType === branchTarget) ||
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||

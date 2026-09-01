@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
+import { resolveModbusServerProfile } from '../../../../middleware/shared/utils/modbus-server-profile'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
@@ -85,6 +86,13 @@ const Project = () => {
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
+
+  // A board whose Modbus config lives in a VPP screen shows that screen under
+  // Servers, alongside the Runtime v4 servers, instead of in the generic
+  // vendor-screen list. Same tab, same persistence — the difference is only
+  // where the user looks for it, and "Modbus server" is a server.
+  const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
+  const modbusUnderServers = modbusProfile.store === 'vendor-screen' ? modbusProfile.vppScreens.modbus : undefined
 
   // Persistent Storage configures the runtime's BUILT-IN retain store. Two
   // things have to be true for it to mean anything:
@@ -468,23 +476,27 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Vendor screens from VPP packages — hidden for libraries. */}
+          {/* Vendor screens from VPP packages — hidden for libraries. The
+           *  Modbus screen is re-homed under Servers below, so it is filtered
+           *  out here rather than listed twice. */}
           {projectCaps.hasVendorScreens &&
-            vendorScreens.map((screenName) => (
-              <ProjectTreeLeaf
-                key={`vendor-${screenName}`}
-                leafLang='vendorScreen'
-                leafType='vendor-screen'
-                label={screenName}
-                onClick={() =>
-                  handleCreateTab({
-                    name: screenName,
-                    path: `/vendor-screen/${screenName}`,
-                    elementType: { type: 'vendor-screen', screenName },
-                  })
-                }
-              />
-            ))}
+            vendorScreens
+              .filter((screenName) => screenName !== modbusUnderServers)
+              .map((screenName) => (
+                <ProjectTreeLeaf
+                  key={`vendor-${screenName}`}
+                  leafLang='vendorScreen'
+                  leafType='vendor-screen'
+                  label={screenName}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: screenName,
+                      path: `/vendor-screen/${screenName}`,
+                      elementType: { type: 'vendor-screen', screenName },
+                    })
+                  }
+                />
+              ))}
 
           {/* Project Servers tree branch — gated by project type only.
            *  The Servers branch must remain visible on platforms that
@@ -492,7 +504,7 @@ const Project = () => {
            *  builds), per the fix in d257e2a07; libraries still hide
            *  it via the `projectCaps.hasServers` capability check. */}
           {projectCaps.hasServers && (
-            <ProjectTreeBranch branchTarget='server'>
+            <ProjectTreeBranch branchTarget='server' forceExpandable={!!modbusUnderServers}>
               {[...(servers || [])]
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((server) => (
@@ -511,6 +523,25 @@ const Project = () => {
                     }
                   />
                 ))}
+              {/* The board's Modbus slave, opened through its vendor-screen tab
+               *  so persistence, dirty tracking and save stay exactly as they
+               *  were; only the renderer is the native server editor. */}
+              {modbusUnderServers && (
+                <ProjectTreeLeaf
+                  key={`server-modbus-${modbusUnderServers}`}
+                  leafLang='server'
+                  leafType='server'
+                  label='Modbus'
+                  highlightQuery={searchQuery}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: modbusUnderServers,
+                      path: `/vendor-screen/${modbusUnderServers}`,
+                      elementType: { type: 'vendor-screen', screenName: modbusUnderServers },
+                    })
+                  }
+                />
+              )}
             </ProjectTreeBranch>
           )}
 
