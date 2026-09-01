@@ -103,10 +103,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     control: datatypeControl,
     register: datatypeRegister,
     handleSubmit: handleSubmitDatatype,
-    /**
-     * TODO: add validation
-     */
-    // setError: datatypeSetError,
+    setError: datatypeSetError,
     formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
@@ -163,8 +160,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     if (!pouWasCreated.ok) {
       pouSetError('name', {
         type: 'already-exists',
+        message: pouWasCreated.message,
       })
-      toast({ title: 'Invalid Pou', description: "You can't create a Pou with this name.", variant: 'fail' })
+      toast({
+        title: 'Invalid Pou',
+        description: pouWasCreated.message ?? "You can't create a Pou with this name.",
+        variant: 'fail',
+      })
       return
     }
     toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
@@ -202,35 +204,43 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    if (data.derivation === 'array') {
-      const draft = {
-        name: data.name,
-        derivation: data.derivation,
-        baseType: {
-          definition: 'base-type',
-          value: 'BOOL',
-        },
-        initialValue: '',
-        dimensions: [],
-      } as PLCArrayDatatype
-      createDatatype(draft)
-    }
-    if (data.derivation === 'enumerated') {
-      const draft = {
-        name: data.name,
-        derivation: data.derivation,
-        initialValue: '',
-        values: [],
-      } as PLCEnumeratedDatatype
-      createDatatype(draft)
-    }
-    if (data.derivation === 'structure') {
-      const draft = {
-        name: data.name,
-        derivation: data.derivation,
-        variable: [],
-      } as PLCStructureDatatype
-      createDatatype(draft)
+    const draft: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype =
+      data.derivation === 'array'
+        ? {
+            name: data.name,
+            derivation: data.derivation,
+            baseType: {
+              definition: 'base-type',
+              value: 'BOOL',
+            },
+            initialValue: '',
+            dimensions: [],
+          }
+        : data.derivation === 'enumerated'
+          ? {
+              name: data.name,
+              derivation: data.derivation,
+              initialValue: '',
+              values: [],
+            }
+          : {
+              name: data.name,
+              derivation: data.derivation,
+              variable: [],
+            }
+
+    const created = createDatatype(draft)
+    if (!created.ok) {
+      // The refusal is often about a POU or a global variable list, not another data
+      // type, so the reason has to reach the user — the form used to close on failure
+      // with nothing created and nothing said.
+      datatypeSetError('name', { type: 'already-exists', message: created.message })
+      toast({
+        title: 'Invalid data type',
+        description: created.message ?? "You can't create a data type with this name.",
+        variant: 'fail',
+      })
+      return
     }
     closeContainer((prev) => !prev)
     setIsOpen(false)
@@ -330,7 +340,9 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {datatypeErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * data type name already exists
+                          {/* The store's reason when it gave one — it names the POU or list
+                              actually in the way, which the generic wording cannot. */}
+                          * {datatypeErrors.name.message ?? 'data type name already exists'}
                         </span>
                       )}
                       {!datatypeErrors.name && (
@@ -786,7 +798,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {pouErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * POU name already exists
+                          * {pouErrors.name.message ?? 'POU name already exists'}
                         </span>
                       )}
                       {pouErrors.name?.type === 'validate' && (

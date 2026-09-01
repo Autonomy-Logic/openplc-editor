@@ -117,6 +117,7 @@
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/diff": "^7.0.2",
     "@types/eslint": "^9.6.1",
     "@types/jest": "^30.0.0",

@@ -117,7 +117,7 @@ describe('createSharedSlice', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         const result = store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'il' })
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('POU already exists')
+        expect(result.message).toBe('POU name already exists')
       })
 
       it('rejects a POU name that is not a valid IEC identifier', () => {
@@ -483,7 +483,7 @@ describe('createSharedSlice', () => {
         store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
         const result = store.getState().datatypeActions.create({ name: 'motor', derivation: 'structure' })
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Data type already exists')
+        expect(result.message).toBe('Data type name already exists')
         expect(store.getState().project.data.dataTypes).toHaveLength(1)
       })
 
@@ -497,7 +497,7 @@ describe('createSharedSlice', () => {
         store.getState().datatypeActions.create({ name: 'DT1', derivation: 'array' })
         const result = store.getState().datatypeActions.create({ name: 'DT1', derivation: 'structure' })
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Data type already exists')
+        expect(result.message).toBe('Data type name already exists')
       })
 
       it('rejects a data type name that is not a valid IEC identifier', () => {
@@ -1002,6 +1002,134 @@ describe('createSharedSlice', () => {
       it('rejects duplicating to an invalid IEC identifier', () => {
         const result = store.getState().datatypeActions.duplicate('SourceDT', 'bad name')
         expect(result.ok).toBe(false)
+      })
+    })
+  })
+
+  // =========================================================================
+  // One identifier namespace across POUs, data types and global variable lists
+  // =========================================================================
+  describe('element name namespace', () => {
+    const seedPou = (name: string) => store.getState().pouActions.create({ type: 'program', name, language: 'st' })
+    const seedDatatype = (name: string) => store.getState().datatypeActions.create({ name, derivation: 'structure' })
+    const seedList = (name: string) => store.getState().globalVariableListActions.create(name)
+
+    describe('pouActions', () => {
+      it('refuses a create taking a data type name, case-insensitively', () => {
+        seedDatatype('Motor')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'motor', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"motor" is already the name of a data type')
+        expect(store.getState().project.data.pous).toHaveLength(0)
+      })
+
+      it('refuses a create taking a global variable list name', () => {
+        seedList('GVL')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'GVL', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL" is already the name of a global variable list')
+      })
+
+      it("refuses a create taking a global variable list's derived type name", () => {
+        seedList('GVL')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'GVL_TYPE', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL_TYPE" is the type name of global variable list "GVL"')
+      })
+
+      it('refuses a create differing from another POU only by case', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'pump', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('POU name already exists')
+      })
+
+      it('refuses a rename onto a data type name', () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = store.getState().pouActions.rename('Pump', 'Motor')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Motor" is already the name of a data type')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      it('refuses a case-only rename: both names are one file on a case-folding disk', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('POU name already exists')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      it('allows a rename onto the exact same name', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'Pump')
+        expect(result.ok).toBe(true)
+      })
+
+      it('refuses a duplicate taking a data type name', () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = store.getState().pouActions.duplicate('Pump', 'Motor')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Motor" is already the name of a data type')
+      })
+    })
+
+    describe('datatypeActions', () => {
+      it('refuses a create taking a POU name, case-insensitively', () => {
+        seedPou('Pump')
+        const result = store.getState().datatypeActions.create({ name: 'pump', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"pump" is already the name of a POU')
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('refuses a create taking a global variable list name', () => {
+        seedList('GVL')
+        const result = store.getState().datatypeActions.create({ name: 'GVL', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL" is already the name of a global variable list')
+      })
+
+      it("refuses a create taking a global variable list's derived type name", () => {
+        seedList('GVL')
+        const result = store.getState().datatypeActions.create({ name: 'GVL_TYPE', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL_TYPE" is the type name of global variable list "GVL"')
+      })
+
+      it('refuses a rename onto a POU name', async () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = await store.getState().datatypeActions.rename('Motor', 'Pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Pump" is already the name of a POU')
+        expect(store.getState().project.data.dataTypes[0].name).toBe('Motor')
+      })
+
+      it('refuses a duplicate taking a POU name', () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = store.getState().datatypeActions.duplicate('Motor', 'Pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Pump" is already the name of a POU')
+      })
+    })
+
+    describe('globalVariableListActions', () => {
+      it('still allows a case-only rename: a list has no file of its own', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.rename('GVL', 'gvl')
+        expect(result.ok).toBe(true)
+      })
+
+      it('refuses a duplicate taking a POU name', () => {
+        seedPou('Pump')
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.duplicate('GVL', 'Pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Pump" is already the name of a POU')
       })
     })
   })
