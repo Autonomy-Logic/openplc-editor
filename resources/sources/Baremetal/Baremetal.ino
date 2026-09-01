@@ -127,6 +127,13 @@ void setup()
     // Discover tasks and compute scheduling
     runtime_discover_tasks();
 
+    // Retained variables. init() decides whether this board has usable
+    // retention at all; load() restores what was stored. Both must follow
+    // runtime_bind_located_vars(), because a retained variable may also be
+    // located and its storage has to be bound before anything writes to it.
+    runtime_retain_init();
+    runtime_retain_load();
+
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
 

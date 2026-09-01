@@ -1907,8 +1907,16 @@ class CompilerModule {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
     if (!port) {
-      handleOutputData('No communication port specified', 'error')
-      return
+      // THROW rather than return. `uploadArduinoBoard` only awaits this call
+      // and reports `{ ok: true }` on any normal return, so bailing out here
+      // told the pipeline the board had been flashed when nothing was sent.
+      //
+      // That used to be masked: the error-level log line set the compile
+      // flow's `hasError`, which failed the build for the wrong reason. The
+      // outcome now comes from the pipeline's verdict, so a step that cannot
+      // run has to fail through the channel the verdict is built from — the
+      // catch in `uploadArduinoBoard` turns this into `{ ok: false }`.
+      throw new Error('No communication port specified — select a serial port for this board')
     }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
@@ -2434,6 +2442,46 @@ class CompilerModule {
       }
       const combinedHash = hash.digest('hex')
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
+
+      // The package signature, forwarded so the runtime can verify what it is
+      // about to compile.
+      //
+      // `vpp_plugin/` is the only content in an upload that the runtime builds
+      // with a Makefile that came from the upload itself, so the runtime
+      // requires it to be signed by a trusted key. It cannot re-derive the
+      // signature: the plugin tree it receives is a SUBSET of the package
+      // (config_template.json and requirements.txt are dropped above, and
+      // trusted_keys.c / checksum.sha256 are generated here), so only the
+      // original package's detached signature can attest to it.
+      //
+      // `pluginDir` tells the runtime which signed subtree to compare the
+      // upload against — the same relative path this function copied from.
+      //
+      // Without this the runtime refuses every VPP upload with "vpp_signature
+      // .json is missing or unreadable". The contract was written on the
+      // runtime side (webserver/vpp_package_signature.py, whose comment names
+      // this very function as its author) and never implemented here, so no
+      // VPP could be uploaded to a runtime that enforces it.
+      const packageSignaturePath = join(matchingPackagePath, 'signature.json')
+      try {
+        const signatureRaw = await readFile(packageSignaturePath, 'utf-8')
+        await writeFile(
+          join(sourceTargetFolderPath, 'vpp_signature.json'),
+          `${JSON.stringify({ package: JSON.parse(signatureRaw), pluginDir: pluginDirRelPath.split(path.sep).join('/') }, null, 2)}\n`,
+          'utf-8',
+        )
+      } catch (err) {
+        // Non-fatal HERE, and refused THERE. An unsigned package is a normal
+        // thing to have during vendor development (`build.ts --unsigned`), and
+        // failing the local build would make that workflow impossible. The
+        // runtime is the boundary that matters, and it rejects the upload with
+        // a message naming the fix — which is better than this build guessing
+        // whether the target enforces signatures.
+        handleOutputData(
+          `VPP package has no usable signature.json (${getErrorMessage(err)}); a runtime that requires signed plugins will refuse this upload`,
+          'warning',
+        )
+      }
 
       handleOutputData(
         `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
@@ -3092,8 +3140,13 @@ class CompilerModule {
     // --- Editor-specific epilogue: simulator firmware path + closePort ---
     if (isSimulator) {
       if (compileOnly) {
-        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
-        _mainProcessPort.postMessage({ closePort: true })
+        // Gated on the verdict: this line used to be unconditional, so a
+        // simulator compile-only build whose strucpp step failed printed the
+        // real error and then "Compilation successful." directly under it.
+        if (result.success) {
+          _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
+        }
+        _mainProcessPort.postMessage({ closePort: true, success: result.success })
         _mainProcessPort.close()
         return
       }
@@ -3110,15 +3163,16 @@ class CompilerModule {
           logLevel: 'info',
           message: 'Compilation successful. Loading firmware into simulator...',
         })
-        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true })
+        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true, success: true })
         _mainProcessPort.close()
         return
       }
-      // Failure path on simulator — separator + close.
+      // Failure path on simulator — separator + verdict + close.
       _mainProcessPort.postMessage({
         message:
           '-------------------------------------------------------------------------------------------------------------\n',
       })
+      _mainProcessPort.postMessage({ closePort: true, success: false })
       _mainProcessPort.close()
       return
     }
@@ -3134,6 +3188,20 @@ class CompilerModule {
       message:
         '-------------------------------------------------------------------------------------------------------------\n',
     })
+    // The build's verdict, from the layer that owns it. Every step the pipeline
+    // ran reported through a real exit code — arduino-cli's process status, or
+    // the runtime's `/api/compilation-status` exit_code by way of
+    // `deployRuntimeProgram` — and `runCompilePipeline` already reduced those to
+    // one boolean.
+    //
+    // This used to be dropped on the floor here: only the simulator branch read
+    // `result.success`, so the consumer was left to infer an outcome from
+    // whether any log line had arrived at error level. Those are different
+    // questions. A compiler writes warnings to stderr, so a build that merely
+    // warned resolved as a failure — `upload_rejected`, with a bare `^~~~`
+    // caret line as its message, on a build the device had completed and
+    // started.
+    _mainProcessPort.postMessage({ closePort: true, success: result.success })
     setTimeout(() => {
       _mainProcessPort.close()
     }, 25)

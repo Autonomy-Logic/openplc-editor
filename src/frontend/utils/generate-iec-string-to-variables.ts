@@ -3,6 +3,61 @@ import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import { DEBUG_STRING_CAP } from './variable-sizes'
 
+/**
+ * Block header with its optional IEC qualifiers, e.g. `VAR RETAIN PERSISTENT`.
+ *
+ * The qualifiers are captured as one run and split afterwards rather than
+ * enumerated in the pattern, so an unknown or repeated one produces a message
+ * naming it instead of the header silently failing to match — which is how a
+ * mistyped qualifier used to turn every declaration under it into a syntax
+ * error on the following line.
+ */
+const blockStartRegex =
+  /^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)(?<qualifiers>(?:\s+[A-Za-z_]\w*)*)\s*$/i
+
+/**
+ * Reduce a block header's qualifier run to the single flag the model carries.
+ *
+ * `NON_RETAIN` is IEC's name for the default, so it maps to no flag at all —
+ * accepted and then forgotten, which is exactly what it means. `PERSISTENT`
+ * folds into `retain`: CODESYS also keeps it across a download and this
+ * toolchain does not, so the honest mapping is the weaker guarantee both
+ * share (STruC++ treats the keyword the same way).
+ *
+ * Returns an `Error` rather than throwing so the caller can attach the line
+ * number and the offending text.
+ */
+function parseBlockFlag(qualifiers: string): PLCVariable['flag'] | Error {
+  let flag: PLCVariable['flag'] | undefined
+  let sawNonRetain = false
+
+  for (const word of qualifiers.trim().split(/\s+/).filter(Boolean)) {
+    switch (word.toUpperCase()) {
+      case 'CONSTANT':
+        if (flag === 'retain') return new Error('A variable cannot be both RETAIN and CONSTANT.')
+        flag = 'constant'
+        break
+      case 'RETAIN':
+      case 'PERSISTENT':
+        if (flag === 'constant') return new Error('A variable cannot be both RETAIN and CONSTANT.')
+        flag = 'retain'
+        break
+      case 'NON_RETAIN':
+        sawNonRetain = true
+        break
+      default:
+        return new Error(
+          `Unknown variable block qualifier "${word}". Expected CONSTANT, RETAIN, NON_RETAIN or PERSISTENT.`,
+        )
+    }
+  }
+
+  if (sawNonRetain && flag !== undefined) {
+    return new Error(`A variable cannot be both ${flag.toUpperCase()} and NON_RETAIN.`)
+  }
+  return flag
+}
+
 const varBlockToClass: Record<string, PLCVariable['class']> = {
   VAR: 'local',
   VAR_INPUT: 'input',
@@ -142,20 +197,29 @@ export const parseIecStringToVariables = (
   const variables: PLCVariable[] = []
   const lines = iecString.split(/\r?\n/)
   let currentClass: PLCVariable['class'] | null = null
+  // The block qualifier in force. IEC puts it on the block header, so every
+  // declaration under it inherits the same value until END_VAR.
+  let currentFlag: PLCVariable['flag'] | undefined
 
   lines.forEach((rawLine, idx) => {
     const lineNumber = idx + 1
     const line = rawLine.trim()
     if (line === '') return
 
-    const blockStart = line.match(/^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i)
+    const blockStart = line.match(blockStartRegex)
     if (blockStart) {
       currentClass = varBlockToClass[blockStart[1].toUpperCase()]
+      const parsedFlag = parseBlockFlag(blockStart.groups?.qualifiers ?? '')
+      if (parsedFlag instanceof Error) {
+        throw new Error(`Syntax error on line ${lineNumber}: "${line}". ${parsedFlag.message}`)
+      }
+      currentFlag = parsedFlag
       return
     }
 
     if (/^END_VAR\b/i.test(line)) {
       currentClass = null
+      currentFlag = undefined
       return
     }
 
@@ -197,6 +261,7 @@ export const parseIecStringToVariables = (
         initialValue: initialValue ? initialValue.trim() : null,
         documentation: documentation ? documentation.trim() : '',
         debug: false,
+        ...(currentFlag !== undefined ? { flag: currentFlag } : {}),
       })
       return
     }
@@ -276,6 +341,7 @@ export const parseIecStringToVariables = (
       initialValue: initialValue ? initialValue.trim() : null,
       documentation: documentation ? documentation.trim() : '',
       debug: false,
+      ...(currentFlag !== undefined ? { flag: currentFlag } : {}),
     })
   })
 

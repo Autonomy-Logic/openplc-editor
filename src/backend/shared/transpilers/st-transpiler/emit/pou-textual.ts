@@ -35,6 +35,8 @@ function formatReturnType(returnType: string | undefined): string {
 interface InterfaceEntry {
   keyword: string
   located: boolean
+  /** Block qualifier for this group; absent = plain `VAR`. */
+  flag?: TranspileVariable['flag']
   vars: TranspileVariable[]
 }
 
@@ -77,7 +79,7 @@ export function generateTextualPou(pou: TranspilePou, project: TranspileProject,
   let varNumber = 0
   for (const entry of iface) {
     const variableType = locationCategory(entry.keyword)
-    program.push([`  ${entry.keyword}`, []])
+    program.push([`  ${entry.keyword}${flagKeyword(entry.flag)}`, []])
     program.push(['\n', []])
 
     for (const v of entry.vars) {
@@ -149,29 +151,44 @@ function computeInterface(variables: TranspileVariable[]): InterfaceEntry[] {
     temp: varTypeNames.tempVars,
   }
 
-  const grouped = new Map<string, { located: TranspileVariable[]; unlocated: TranspileVariable[] }>()
+  // Keyed by class × flag: IEC puts the qualifier on the var BLOCK, not on the
+  // declaration, so two variables of the same class with different flags cannot
+  // share a block — `VAR CONSTANT` and `VAR` are separate `…END_VAR` pairs.
+  // The key keeps `keyword` first so a Map iteration still yields the class
+  // order the DOM emitter produced.
+  const grouped = new Map<
+    string,
+    { keyword: string; flag?: TranspileVariable['flag']; located: TranspileVariable[]; unlocated: TranspileVariable[] }
+  >()
   // Maintain insertion order matching the IR's variable order.
   for (const v of variables) {
     const keyword = classToKeyword[v.class ?? 'local'] ?? varTypeNames.localVars
-    let bucket = grouped.get(keyword)
+    const key = `${keyword}\u0000${v.flag ?? ''}`
+    let bucket = grouped.get(key)
     if (!bucket) {
-      bucket = { located: [], unlocated: [] }
-      grouped.set(keyword, bucket)
+      bucket = { keyword, ...(v.flag !== undefined ? { flag: v.flag } : {}), located: [], unlocated: [] }
+      grouped.set(key, bucket)
     }
     if (v.location) bucket.located.push(v)
     else bucket.unlocated.push(v)
   }
 
   const out: InterfaceEntry[] = []
-  for (const [keyword, bucket] of grouped) {
+  for (const bucket of grouped.values()) {
+    const flagPart = bucket.flag !== undefined ? { flag: bucket.flag } : {}
     if (bucket.unlocated.length > 0) {
-      out.push({ keyword, located: false, vars: bucket.unlocated })
+      out.push({ keyword: bucket.keyword, located: false, ...flagPart, vars: bucket.unlocated })
     }
     if (bucket.located.length > 0) {
-      out.push({ keyword, located: true, vars: bucket.located })
+      out.push({ keyword: bucket.keyword, located: true, ...flagPart, vars: bucket.located })
     }
   }
   return out
+}
+
+/** `CONSTANT` / `RETAIN` suffix for a var-block header; empty for a plain VAR. */
+function flagKeyword(flag: TranspileVariable['flag']): string {
+  return flag === 'constant' ? ' CONSTANT' : flag === 'retain' ? ' RETAIN' : ''
 }
 
 const ERROR_VAR_TYPES: Record<string, string> = {

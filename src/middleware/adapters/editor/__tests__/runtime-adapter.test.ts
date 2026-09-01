@@ -16,6 +16,22 @@ beforeEach(() => {
       users: [{ id: 1, username: 'admin', role: 'admin' }],
     }),
     runtimeWhoAmI: jest.fn().mockResolvedValue({ success: true, user: { id: 1, username: 'admin', role: 'admin' } }),
+    runtimeGetRetainConfig: jest.fn().mockResolvedValue({
+      success: true,
+      config: {
+        enabled: false,
+        path: '/var/lib/openplc-runtime/retain.bin',
+        flushSeconds: 5,
+        defaultPath: '/var/lib/openplc-runtime/retain.bin',
+        defaultFlushSeconds: 5,
+        minFlushSeconds: 1,
+        maxFlushSeconds: 3600,
+        backend: 'none',
+        backendDetail: '',
+        active: false,
+      },
+    }),
+    runtimeUpdateRetainConfig: jest.fn().mockResolvedValue({ success: true, config: { enabled: true } }),
     runtimeUpdateUser: jest.fn().mockResolvedValue({ success: true }),
     runtimeDeleteUser: jest.fn().mockResolvedValue({ success: true }),
     runtimeGetStatus: jest.fn().mockResolvedValue({ success: true, status: 'RUNNING' }),
@@ -151,6 +167,48 @@ describe('listUsers', () => {
     ;(window.bridge.runtimeListUsers as jest.Mock).mockRejectedValue(new Error('list failed'))
     const result = await adapter.listUsers()
     expect(result).toEqual({ success: false, error: 'list failed' })
+  })
+})
+
+describe('getRetainConfig', () => {
+  it('delegates to bridge with IP', async () => {
+    const result = await adapter.getRetainConfig()
+    expect(window.bridge.runtimeGetRetainConfig).toHaveBeenCalledWith('192.168.1.100')
+    expect(result.success).toBe(true)
+    expect(result.config?.backend).toBe('none')
+  })
+
+  it('returns error when no IP configured', async () => {
+    mockIpAddress = ''
+    const result = await adapter.getRetainConfig()
+    expect(result).toEqual({ success: false, error: 'No runtime IP address configured' })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeGetRetainConfig as jest.Mock).mockRejectedValue(new Error('read failed'))
+    const result = await adapter.getRetainConfig()
+    expect(result).toEqual({ success: false, error: 'read failed' })
+  })
+})
+
+describe('updateRetainConfig', () => {
+  it('passes the params through to the bridge', async () => {
+    const params = { enabled: true, path: '/data/retain.bin', flushSeconds: 30 }
+    const result = await adapter.updateRetainConfig(params)
+    expect(window.bridge.runtimeUpdateRetainConfig).toHaveBeenCalledWith('192.168.1.100', params)
+    expect(result.success).toBe(true)
+  })
+
+  it('returns error when no IP configured', async () => {
+    mockIpAddress = ''
+    const result = await adapter.updateRetainConfig({ enabled: true })
+    expect(result).toEqual({ success: false, error: 'No runtime IP address configured' })
+  })
+
+  it('catches bridge errors', async () => {
+    ;(window.bridge.runtimeUpdateRetainConfig as jest.Mock).mockRejectedValue(new Error('save failed'))
+    const result = await adapter.updateRetainConfig({ enabled: true })
+    expect(result).toEqual({ success: false, error: 'save failed' })
   })
 })
 

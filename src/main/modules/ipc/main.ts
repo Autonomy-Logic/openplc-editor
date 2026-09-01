@@ -40,7 +40,13 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
-import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
+import type {
+  RetainConfig,
+  RuntimeUser,
+  RuntimeUserRole,
+  UpdateRetainConfigParams,
+  UpdateUserParams,
+} from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -291,6 +297,33 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeDeleteUser = async (_event: IpcMainInvokeEvent, ipAddress: string, userId: number) => {
     const res = await this.makeRuntimeApiMutation('DELETE', ipAddress, `/api/delete-user/${userId}`)
     return res.success ? { success: true } : { success: false, error: res.error }
+  }
+
+  handleRuntimeGetRetainConfig = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    const res = await this.makeRuntimeApiRequest<RetainConfig>(
+      ipAddress,
+      '/api/retain-config',
+      (data) => JSON.parse(data) as RetainConfig,
+    )
+    return res.success ? { success: true, config: res.data } : { success: false, error: res.error }
+  }
+
+  handleRuntimeUpdateRetainConfig = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    params: UpdateRetainConfigParams,
+  ) => {
+    // Only the provided fields, so a partial edit never resets the others to
+    // whatever the client last happened to read.
+    const body: Record<string, string | number | boolean> = {}
+    if (params.enabled !== undefined) body.enabled = params.enabled
+    if (params.path !== undefined) body.path = params.path
+    if (params.flushSeconds !== undefined) body.flushSeconds = params.flushSeconds
+    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, '/api/retain-config', JSON.stringify(body))
+    if (!res.success) return { success: false, error: res.error }
+    // Re-read rather than trust the echo: the runtime normalises the path and
+    // may report a different live backend than the settings imply.
+    return this.handleRuntimeGetRetainConfig(_event, ipAddress)
   }
 
   handleRuntimeLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
@@ -808,6 +841,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
     this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
+    this.registerHandle('runtime:get-retain-config', this.handleRuntimeGetRetainConfig)
+    this.registerHandle('runtime:update-retain-config', this.handleRuntimeUpdateRetainConfig)
     this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
     this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)

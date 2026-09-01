@@ -224,7 +224,13 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
 
   reporter.progress(`${request.withUpload ? 'Building and uploading' : 'Building'} "${project.name}" for ${target}…`)
 
-  let streamedError = false
+  // Did the build get as far as talking to the device? This is what separates
+  // "the device refused it" from "it never compiled", and it replaces a check
+  // on whether any line was logged at error level — which classified an ST
+  // syntax error on an `upload` run as `upload_rejected` / exit 7, blaming a
+  // device the build never reached. Every upload path emits `stage: 'upload'`
+  // before it attempts anything (pipeline.ts: runtime v4, v3, arduino).
+  let reachedUpload = false
   const warnings: string[] = []
 
   const result = await compileProgramFlow(
@@ -242,7 +248,7 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
     },
     createCliCompileTransport(runtime),
     (event: CompileProgressEvent) => {
-      if (event.level === 'error' || event.stage === 'error') streamedError = true
+      if (event.stage === 'upload') reachedUpload = true
       if (event.level === 'warning' && event.message) warnings.push(event.message)
       if (event.message) reporter.progress(event.level === 'error' ? `error: ${event.message}` : event.message)
     },
@@ -251,10 +257,10 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
   if (!result.success) {
     return reporter.failure(
       {
-        code: request.withUpload && streamedError ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
+        code: request.withUpload && reachedUpload ? ErrorCode.UploadRejected : ErrorCode.CompileFailed,
         message: result.error ?? 'Compilation failed',
       },
-      request.withUpload && streamedError ? ExitCode.TargetError : ExitCode.CompileFailed,
+      request.withUpload && reachedUpload ? ExitCode.TargetError : ExitCode.CompileFailed,
     )
   }
 

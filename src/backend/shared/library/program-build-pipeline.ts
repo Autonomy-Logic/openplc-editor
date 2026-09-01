@@ -101,6 +101,10 @@ export interface ProgramBuildPipelineResult {
   /** Info-level "Debug map: N leaves in M arrays" summary when
    *  strucpp emitted a debug map.  `null` otherwise. */
   debugMapSummary: string | null
+  /** Bytes the retain blob occupies, or null when the program retains nothing.
+   *  Flows into `defines.h` as `OPLC_RETAIN_BLOB_SIZE` so the firmware can
+   *  refuse a program its storage cannot hold. */
+  retainBlobSize: number | null
 }
 
 /**
@@ -136,6 +140,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
       md5Hash: md5,
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     }
   }
 
@@ -225,6 +230,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
       md5Hash: md5,
       splitterFallbackMessage,
       debugMapSummary: null,
+      retainBlobSize: null,
     }
   }
 
@@ -265,12 +271,20 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     files.push({ name: 'generated_debug.cpp', content: result.debugTableCpp })
   }
   let debugMapSummary: string | null = null
+  let retainBlobSize: number | null = null
   if (result.debugMap !== undefined) {
     files.push({
       name: 'debug-map.json',
       content: JSON.stringify(result.debugMap, null, 2),
     })
     debugMapSummary = `Debug map: ${result.debugMap.leaves.length} leaves in ${result.debugMap.arrays.length} arrays`
+    if (result.debugMap.retainBlobSize !== undefined) {
+      retainBlobSize = result.debugMap.retainBlobSize
+      // Said out loud on every build that retains anything: the number is what
+      // a board's storage has to hold, and seeing it grow is how someone
+      // notices before the firmware refuses to build.
+      debugMapSummary += `; retain blob ${retainBlobSize} bytes`
+    }
   }
 
   return {
@@ -287,5 +301,6 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     md5Hash: md5,
     splitterFallbackMessage,
     debugMapSummary,
+    retainBlobSize,
   }
 }
