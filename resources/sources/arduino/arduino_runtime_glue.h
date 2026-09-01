@@ -49,6 +49,29 @@ void runtime_init_plc_state();
 void runtime_plc_cycle();
 
 // ---------------------------------------------------------------------------
+// Retain variables.
+//
+// The runtime marshals; the platform stores (see Baremetal/openplc_retain.h).
+// `runtime_plc_cycle()` already hands the current values over once per scan,
+// so the sketch only has to bring the pair below up at start.
+// ---------------------------------------------------------------------------
+
+// Decide once whether this firmware has usable retention: does the program
+// retain anything, is a backend linked, and is its capacity enough. Call from
+// setup() BEFORE runtime_retain_load().
+void runtime_retain_init();
+
+// Restore the stored values. Call from setup() after runtime_retain_init().
+// Also called internally after a program re-initialisation, so a STOP does not
+// behave as a cold start.
+void runtime_retain_load();
+
+// Discard the stored values, so the next start uses the declared initialisers.
+// Reached over the wire by MB_FC_RETAIN_RESET, which the editor sends after an
+// upload — CODESYS clears retained memory on download.
+void runtime_retain_clear();
+
+// ---------------------------------------------------------------------------
 // Run/stop control surface.
 //
 // State is derived every cycle from the mode switch (hardwareStateSwitch(),

@@ -469,6 +469,15 @@ export class ModbusRtuClient implements DeviceModbusTransport {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === ModbusDebugResponse.READ_ONLY) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -555,6 +564,15 @@ export class ModbusRtuClient implements DeviceModbusTransport {
 
       if (statusCode === (ModbusDebugResponse.ERROR_OUT_OF_MEMORY as number)) {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
+
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === ModbusDebugResponse.READ_ONLY) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
       }
 
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {

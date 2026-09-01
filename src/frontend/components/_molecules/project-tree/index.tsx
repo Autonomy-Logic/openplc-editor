@@ -470,6 +470,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'softMotionDrive'
     | 'libraryManifest'
     | 'userManagement'
+    | 'persistentStorage'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   /**
@@ -511,6 +512,7 @@ const LeafSources = {
   // into a library project, so it earns a dedicated mark.
   libraryManifest: { LeafIcon: LibraryManifestIcon },
   userManagement: { LeafIcon: UsersIcon },
+  persistentStorage: { LeafIcon: ConfigIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,
@@ -864,7 +866,10 @@ const ProjectTreeLeaf = ({
         </span>
       )}
 
-      {leafLang === 'devPin' || leafLang === 'devConfig' || leafLang === 'userManagement' ? null : (
+      {leafLang === 'devPin' ||
+      leafLang === 'devConfig' ||
+      leafLang === 'userManagement' ||
+      leafLang === 'persistentStorage' ? null : (
         <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
             disabled={isDebuggerVisible}

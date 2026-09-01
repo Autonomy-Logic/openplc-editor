@@ -811,6 +811,7 @@ async function runCompilePipelineInner(
     // `isLicensable`, and emit `OPENPLC_NO_UNIQUE_ID` for everyone else.
     isLicensable: targetCapabilities.isLicensable,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
+    ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose

@@ -112,6 +112,54 @@ export interface UpdateUserParams {
   role?: RuntimeUserRole
 }
 
+/**
+ * Persistent-storage (RETAIN) settings for the runtime's BUILT-IN file store,
+ * plus what is actually holding retained bytes right now.
+ *
+ * The two are separate on purpose. A VPP plugin that provides its own retain
+ * backend OVERRIDES the built-in store, so a device can have `enabled: true`
+ * and a `backend` of `'plugin'` at the same time — the file settings are saved
+ * and simply not in use. A screen that showed only `enabled` would tell the
+ * operator retention is going to a file that will never grow.
+ */
+export interface RetainConfig {
+  /** Whether the runtime's built-in file store is switched on. */
+  enabled: boolean
+  /** Absolute path the built-in store writes to. */
+  path: string
+  /** How often the store commits to disk. Bounds how much retained state a
+   *  power cut costs, against how hard the storage is worked. */
+  flushSeconds: number
+  /** Defaults and bounds the runtime will accept, so the UI does not have to
+   *  hard-code a copy of them and drift. */
+  defaultPath: string
+  defaultFlushSeconds: number
+  minFlushSeconds: number
+  maxFlushSeconds: number
+  /** What is holding retained bytes NOW: `'plugin'` (a VPP took over),
+   *  `'file'` (the built-in store), `'none'`, or `'unknown'` when the core
+   *  could not be reached. */
+  backend: 'none' | 'plugin' | 'file' | 'unknown' | (string & {})
+  /** The plugin's name, or the file path — whichever `backend` names. */
+  backendDetail: string
+  /** Whether the loaded program actually has retention running. False when the
+   *  program retains nothing, or no storage is configured. */
+  active: boolean
+}
+
+export interface RetainConfigResult {
+  success: boolean
+  config?: RetainConfig
+  error?: string
+}
+
+/** Fields to change. Only the provided ones are applied. */
+export interface UpdateRetainConfigParams {
+  enabled?: boolean
+  path?: string
+  flushSeconds?: number
+}
+
 export interface RuntimeStatusResult {
   success: boolean
   status?: PlcStatus | (string & {})
@@ -251,6 +299,15 @@ export interface RuntimePort {
 
   /** Delete an account by id (admin only; cannot delete your own account). */
   deleteUser(userId: number): Promise<{ success: boolean; error?: string }>
+
+  /** Read the persistent-storage settings and the live retain backend.
+   *  Runtimes older than 4.2.0 have no such endpoint — gate on
+   *  `isRetainConfigCapableRuntime` before calling. */
+  getRetainConfig(): Promise<RetainConfigResult>
+
+  /** Update the persistent-storage settings (admin only). Takes effect when
+   *  the PLC next starts: the core reads them once per program load. */
+  updateRetainConfig(params: UpdateRetainConfigParams): Promise<RetainConfigResult>
 
   /** Get current PLC runtime status with optional timing statistics. */
   getStatus(includeStats?: boolean): Promise<RuntimeStatusResult>

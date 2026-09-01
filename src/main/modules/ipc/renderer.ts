@@ -29,7 +29,9 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
+  RetainConfigResult,
   RuntimeUserRole,
+  UpdateRetainConfigParams,
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
@@ -71,6 +73,19 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** The build's verdict, carried on the `closePort` message. Sourced from
+   *  `runCompilePipeline`, which reduces every step's process exit code to one
+   *  boolean, so it — not the presence of error-level log lines — is what
+   *  decides whether a build failed.
+   *
+   *  Declared here because the seam is typed: `onmessage` currently forwards
+   *  `event.data` wholesale, so a consumer reading a `Record<string, unknown>`
+   *  sees the field regardless. A bridge refactor that reconstructs the
+   *  message field-by-field (the shape the `libraryBuildResult` path already
+   *  uses) would otherwise drop it silently, and `compileProgramFlow` would
+   *  fall back to its `hasError` heuristic — reintroducing a resolved bug with
+   *  no compile error and no failing test. */
+  success?: boolean
   /** Final structured outcome of a library build.  Set only on the
    *  close-port message emitted by `compileLibrary`; absent from
    *  intermediate log entries and from program-build / debug-build
@@ -524,6 +539,10 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
   runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
     ipcRenderer.invoke('runtime:list-users', ipAddress),
+  runtimeGetRetainConfig: (ipAddress: string): Promise<RetainConfigResult> =>
+    ipcRenderer.invoke('runtime:get-retain-config', ipAddress),
+  runtimeUpdateRetainConfig: (ipAddress: string, params: UpdateRetainConfigParams): Promise<RetainConfigResult> =>
+    ipcRenderer.invoke('runtime:update-retain-config', ipAddress, params),
   runtimeWhoAmI: (ipAddress: string): Promise<WhoAmIResult> => ipcRenderer.invoke('runtime:whoami', ipAddress),
   runtimeUpdateUser: (
     ipAddress: string,
