@@ -1312,3 +1312,60 @@ describe('runCompilePipeline — side effects', () => {
     expect(stEvents.some((e) => e.message === 'transpiler: parsed 5 POUs' && e.level === 'info')).toBe(true)
   })
 })
+
+// --- the project-snapshot capability reaches the upload ----------------------
+//
+// The runtime advertises `projectSnapshot` at `/api/capabilities` and the
+// pre-upload probe already reads it. The upload step is what acts on it, so the
+// value has to survive the trip: without this the flag is read and dropped, and
+// the editor builds an archive for a device that discards it.
+
+describe('project-snapshot capability', () => {
+  it('tells the upload step when the runtime stores source projects', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.2.0', supportsProjectSnapshot: true }),
+    })
+
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.uploadRuntimeV4).toHaveBeenCalledWith(
+      expect.objectContaining({ supportsProjectSnapshot: true }),
+      expect.anything(),
+    )
+  })
+
+  it('tells the upload step when it does not', async () => {
+    // Every runtime predating the feature. The upload step skips building the
+    // archive and says why, rather than sending one into a device that drops it.
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0', supportsProjectSnapshot: false }),
+    })
+
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.uploadRuntimeV4).toHaveBeenCalledWith(
+      expect.objectContaining({ supportsProjectSnapshot: false }),
+      expect.anything(),
+    )
+  })
+})

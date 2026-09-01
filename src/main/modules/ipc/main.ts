@@ -563,20 +563,6 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * What a device says about the source project it stores.
-   *
-   * Authenticated but not admin-gated on the device, so the UI can decide
-   * whether to offer retrieval without holding the privilege retrieval needs.
-   */
-  handleRuntimeProjectSnapshotInfo = async (
-    _event: IpcMainInvokeEvent,
-    ipAddress: string,
-  ): Promise<{ success: boolean; info?: ProjectSnapshotInfo; error?: string }> => {
-    const result = await this.runtimeApi.getProjectSnapshotInfo(ipAddress)
-    return result.success ? { success: true, info: result.info } : { success: false, error: result.error }
-  }
-
-  /**
    * Retrieve the stored project and write it to a scratch directory.
    *
    * Fetch and unpack are one IPC call because the archive should not sit in the
@@ -820,7 +806,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
-    this.registerHandle('runtime:project-snapshot-info', this.handleRuntimeProjectSnapshotInfo)
     this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
     this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
 

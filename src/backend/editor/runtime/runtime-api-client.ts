@@ -592,25 +592,6 @@ export class RuntimeApiClient {
   }
 
   /**
-   * What the device says about the source project it is storing, if any.
-   *
-   * Authenticated but not admin-gated, so the UI can decide whether to OFFER
-   * retrieval without needing the privilege that retrieval itself requires.
-   */
-  async getProjectSnapshotInfo(
-    ipAddress: string,
-  ): Promise<{ success: true; info: ProjectSnapshotInfo } | { success: false; error: string }> {
-    const result = await this.makeRuntimeApiRequest<ProjectSnapshotInfo | null>(
-      ipAddress,
-      '/api/project-snapshot/info',
-      (data) => ProjectSnapshotInfoSchema.safeParse(parseJsonOrNull(data)).data ?? null,
-    )
-    if (!result.success) return { success: false, error: result.error }
-    if (!result.data) return { success: false, error: 'The device sent an unreadable snapshot description' }
-    return { success: true, info: result.data }
-  }
-
-  /**
    * Fetch the stored source project.
    *
    * Admin only on the device: the archive is not encrypted there, so that role

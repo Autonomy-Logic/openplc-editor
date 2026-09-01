@@ -31,10 +31,6 @@ beforeEach(() => {
     onRuntimeTokenRefreshed: jest.fn().mockImplementation(() => jest.fn()),
     runtimeDiscoverDevices: jest.fn().mockResolvedValue({ success: true, devices: [] }),
     onRuntimeDeviceDiscovered: jest.fn().mockImplementation(() => jest.fn()),
-    runtimeProjectSnapshotInfo: jest.fn().mockResolvedValue({
-      success: true,
-      info: { present: true, projectName: 'Traffic Light' },
-    }),
     runtimeRetrieveProject: jest.fn().mockResolvedValue({
       success: true,
       projectName: 'Traffic Light',
@@ -639,22 +635,6 @@ describe('isReadyForDebug', () => {
 // ---------------------------------------------------------------------------
 // stored source project
 // ---------------------------------------------------------------------------
-
-describe('getProjectSnapshotInfo', () => {
-  it('delegates to bridge with the device address', async () => {
-    const result = await adapter.getProjectSnapshotInfo!('192.168.1.100')
-
-    expect(window.bridge.runtimeProjectSnapshotInfo).toHaveBeenCalledWith('192.168.1.100')
-    expect(result).toEqual({ success: true, info: { present: true, projectName: 'Traffic Light' } })
-  })
-
-  it('reports a failed IPC call rather than throwing at the caller', async () => {
-    ;(window.bridge.runtimeProjectSnapshotInfo as jest.Mock).mockRejectedValue(new Error('info failed'))
-    const result = await adapter.getProjectSnapshotInfo!('192.168.1.100')
-
-    expect(result).toEqual({ success: false, error: 'info failed' })
-  })
-})
 
 describe('retrieveProject', () => {
   it('delegates to bridge with the device address', async () => {

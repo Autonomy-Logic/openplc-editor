@@ -3,7 +3,6 @@ import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/com
 import type {
   DiscoveredRuntimeDevice,
   RuntimeLogEntry,
-  RuntimeProjectSnapshotInfo,
   RuntimeProjectSnapshotMetadata,
 } from '@root/middleware/shared/ports'
 import type {
@@ -591,11 +590,6 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
-  /** What a device says about the project it stores; `present: false` when none. */
-  runtimeProjectSnapshotInfo: (
-    ipAddress: string,
-  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }> =>
-    ipcRenderer.invoke('runtime:project-snapshot-info', ipAddress),
   /**
    * Retrieve the stored project and unpack it to a scratch directory.
    *
