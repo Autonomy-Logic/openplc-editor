@@ -364,6 +364,12 @@ export interface RuntimePort {
    *  token authority. */
   getSessionUsername?(): string | null
 
+  /** The device this session is authenticated against, or null when there is no
+   *  session. A device context alone is not one: selecting a device points the
+   *  adapter at it without signing in, so both have to hold before a caller may
+   *  skip asking for credentials. */
+  getAuthenticatedDevice?(): { agentId: string; deviceId: string } | null
+
   /**
    * Retrieve the stored project as raw archive bytes.
    *
