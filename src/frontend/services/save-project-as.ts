@@ -14,8 +14,8 @@
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../store'
-import { toast } from '../utils/toast'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
+import { toast } from '../utils/toast'
 import { buildAllProjectFileContents, flushGlobalVariableListDrafts } from './save-actions'
 
 export interface SaveProjectAsResult {
