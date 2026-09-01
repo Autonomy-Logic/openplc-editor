@@ -19,6 +19,8 @@ export type ModbusBoardInfoLike = {
   vpp?: { screens?: Record<string, unknown> } | null
   io?: Partial<Record<keyof IoSizeFields, number>>
   ioMax?: Partial<Record<keyof IoSizeFields, number>>
+  serialPorts?: string[]
+  defaultSerial?: string
 }
 
 /** Firmware buffer sizes a VPP declares per device, mirroring the `MAX_*`
@@ -49,6 +51,30 @@ const BAREMETAL_TCP_PORT = 502
 
 /** The IANA Modbus port, and the default for a new Runtime v4 server. */
 const DEFAULT_TCP_PORT = 502
+
+/** Port name assumed when a package declares no `defaultSerial`. */
+const FALLBACK_DEFAULT_SERIAL = 'Serial'
+
+/**
+ * Can this board serve Modbus RTU to anything but the editor?
+ *
+ * The default UART is the editor's link: the always-on debugger, the status
+ * and the licensing function codes all answer there, and it is the port the USB
+ * cable lands on. A second master cannot share that line, so an RTU slave has
+ * to take a different UART — and a board that has no other UART cannot serve
+ * RTU at all while remaining reachable from the editor.
+ *
+ * A board that declares no `serialPorts` is treated as capable. The picker
+ * there falls back to its static option list, which is the pre-split behaviour,
+ * and refusing RTU on a board whose UART set nobody has confirmed would remove
+ * a configuration that works today.
+ */
+function hasSerialPortForRtu(board: ModbusBoardInfoLike): boolean {
+  const ports = board.serialPorts
+  if (!ports || ports.length === 0) return true
+  const defaultSerial = board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL
+  return ports.some((port) => port !== defaultSerial)
+}
 
 /** Canonical name of the always-on serial screen a split VPP ships. */
 const SERIAL_SCREEN = 'serial'
@@ -154,13 +180,15 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     const ceilings = defaults && board.ioMax ? countsFromIoSizes({ ...board.io, ...board.ioMax }) : null
 
     const transports: ModbusServerTransport[] = []
-    if (caps.modbusRtuServer) transports.push('rtu')
+    const rtuHasPort = hasSerialPortForRtu(board)
+    if (caps.modbusRtuServer && rtuHasPort) transports.push('rtu')
     if (caps.modbusTcpServer) transports.push('tcp')
     if (transports.length === 0) return NO_SERVER
 
     return {
       store: 'vendor-screen',
       transports,
+      ...(caps.modbusRtuServer && !rtuHasPort ? { rtuUnavailable: 'no-free-serial-port' as const } : {}),
       segments: BAREMETAL_SEGMENTS,
       // Fixed at compile time by the MCU's MAX_* constants, which also size
       // the IEC pointer arrays. Phase 5 (DOPE-370) is what makes these move.

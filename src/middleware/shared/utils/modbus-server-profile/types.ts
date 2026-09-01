@@ -72,6 +72,11 @@ export interface ModbusServerProfile {
   /** Transports the target can serve, in the order the UI should offer them. */
   transports: ModbusServerTransport[]
 
+  /** Set when the target's firmware serves Modbus RTU but this board cannot:
+   *  every UART it declares is the one carrying the editor connection. The
+   *  screen says so rather than leaving the user to wonder where RTU went. */
+  rtuUnavailable?: 'no-free-serial-port'
+
   /** Segments this target actually has. Absent segments are not rendered and
    *  never appear in the address map — a `%MX` row on an Arduino is a lie. */
   segments: ModbusSegment[]

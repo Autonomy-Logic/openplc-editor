@@ -35,6 +35,9 @@ const arduinoBoard = (overrides: Record<string, unknown> = {}) => ({
   compiler: 'arduino-cli',
   vpp: { screens: { Serial: {}, Network: {}, Modbus: {} } },
   io: IO,
+  // Three UARTs, like an ESP32 WROOM: one carries the editor link, two are free.
+  serialPorts: ['Serial', 'Serial1', 'Serial2'],
+  defaultSerial: 'Serial',
   ...overrides,
 })
 
@@ -157,6 +160,38 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile(arduinoBoard({ io: undefined, ioMax: { digitalOutput: 512 } }))
     expect(profile.configurableBuffers).toBe(false)
     expect(profile.maxCounts).toBeNull()
+  })
+
+  describe('a board whose only UART carries the editor connection', () => {
+    // The default port answers the debugger, the status and the licensing
+    // function codes, and it is where the USB cable lands. A second Modbus
+    // master cannot share that line, so a single-UART board -- a NodeMCU, an
+    // Uno -- cannot serve RTU and stay reachable from the editor.
+    const profile = resolveModbusServerProfile(arduinoBoard({ serialPorts: ['Serial'] }))
+
+    it('does not offer Modbus RTU', () => {
+      expect(profile.transports).toEqual(['tcp'])
+    })
+
+    it('says why, so the missing transport is not a mystery', () => {
+      expect(profile.rtuUnavailable).toBe('no-free-serial-port')
+    })
+  })
+
+  it('offers RTU when a second UART exists, whatever the default is called', () => {
+    const profile = resolveModbusServerProfile(
+      arduinoBoard({ serialPorts: ['SerialUSB', 'Serial1'], defaultSerial: 'SerialUSB' }),
+    )
+    expect(profile.transports).toContain('rtu')
+    expect(profile.rtuUnavailable).toBeUndefined()
+  })
+
+  it('offers RTU on a board that declares no UART set at all', () => {
+    // 13 boards do not declare one, because their variants were not confirmed
+    // against hardware. Refusing RTU there would remove a configuration that
+    // works today; the picker falls back to its static list.
+    const profile = resolveModbusServerProfile(arduinoBoard({ serialPorts: undefined }))
+    expect(profile.transports).toContain('rtu')
   })
 
   it('wins over the plc-server path even when the board also reports modbusTcpServer', () => {

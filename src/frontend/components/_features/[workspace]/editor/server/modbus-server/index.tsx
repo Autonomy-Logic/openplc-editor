@@ -292,6 +292,12 @@ const ModbusServerEditor = () => {
 
       <div className='flex flex-1 flex-col gap-6 overflow-auto'>
         <Panel title='Transports'>
+          {profile.rtuUnavailable === 'no-free-serial-port' && (
+            <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+              This board has a single UART, and it carries the editor connection. Modbus RTU needs a port of its own, so
+              only Modbus TCP is available here.
+            </p>
+          )}
           {profile.transports.includes('rtu') && (
             <>
               <Row label='Modbus RTU' hint={rtu.enabled ? 'Served over a hardware serial port' : 'Not served'}>

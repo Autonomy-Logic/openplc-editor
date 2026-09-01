@@ -11,7 +11,13 @@
  * Pure — no store, no I/O.
  */
 
-export type FieldOption = string | { value: string; label: string }
+/**
+ * A `disabled` option is shown and not selectable. It exists so a picker can
+ * say WHY a choice is unavailable instead of quietly omitting it — the Modbus
+ * RTU port picker lists the board's default UART greyed out, because that line
+ * carries the editor connection.
+ */
+export type FieldOption = string | { value: string; label: string; disabled?: boolean }
 
 export interface FieldOptionSource {
   options?: FieldOption[]

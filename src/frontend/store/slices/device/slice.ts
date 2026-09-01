@@ -2,6 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
+import { migrateModbusSerialFields } from '../../../utils/vpp/migrate-modbus-serial-fields'
 import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceLicenseInfo, DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import { PURCHASE_WATCH_WINDOW_MS } from './types'
@@ -129,9 +130,33 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
       setState(
-        produce(({ deviceAvailableOptions }: DeviceSlice) => {
+        produce(({ deviceAvailableOptions, deviceDefinitions }: DeviceSlice) => {
           if (availableBoards) {
             deviceAvailableOptions.availableBoards = availableBoards
+
+            // The Modbus RTU wiring moved from the `modbus_rtu` section to
+            // `serial`, and a project saved before that still carries it under
+            // the old keys — where the Serial screen no longer looks but the
+            // compiler's fallback still does, so the screen and the firmware
+            // disagree with nothing to say so.
+            //
+            // It runs HERE rather than on project load because it has to know
+            // which installed packages ship a `serial` screen, and the project
+            // reaches the store before `getAvailableBoards` resolves. A board
+            // whose package is still unsplit keeps rendering the old screen, so
+            // migrating it would only mirror the bug.
+            const configuration = deviceDefinitions.configuration
+            const migrated = migrateModbusSerialFields(configuration.vendorScreenDataByBoard, (boardName) => {
+              const screens = availableBoards.get(boardName)?.vpp?.screens
+              return !!screens && Object.keys(screens).some((name) => name.toLowerCase() === 'serial')
+            })
+            // Identity means nothing moved: skip the write so an already-migrated
+            // project is not touched on every board refresh.
+            if (migrated !== configuration.vendorScreenDataByBoard) {
+              configuration.vendorScreenDataByBoard = migrated
+              const active = migrated?.[configuration.deviceBoard]
+              if (active) configuration.vendorScreenData = { ...active }
+            }
           }
           if (availableCommunicationPorts) {
             deviceAvailableOptions.availableCommunicationPorts = availableCommunicationPorts
