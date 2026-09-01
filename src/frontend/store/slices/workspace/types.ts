@@ -3,7 +3,9 @@ import type {
   DebugTreeNode,
   FbInstanceInfo,
   Platform,
+  PLCInstance,
   PlcLogs,
+  PLCPou,
 } from '../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
@@ -93,6 +95,24 @@ export type WorkspaceState = {
     debugExpandedNodes: Map<string, boolean>
     fbDebugInstances: Map<string, FbInstanceInfo[]>
     fbSelectedInstance: Map<string, string>
+    /**
+     * The generated program the CURRENT debug session is running,
+     * when the session runs something the project itself does not
+     * contain.
+     *
+     * Set only by the library-debug flow, which compiles a harness
+     * program (see `composeLibraryDebugHarness`) declaring one
+     * instance of every block in the library.  That program exists
+     * only for the life of the session: writing it into `project.data`
+     * would fight each editor's dirty tracking and could be persisted
+     * to disk on the next save.
+     *
+     * Consumers ADD `programPou` to the project's own POU list rather
+     * than replacing it, so a debug flag the author ticks mid-session
+     * still takes effect.  `null` for an ordinary PLC project, whose
+     * session runs the project's own programs.
+     */
+    debugHarness: { programPou: PLCPou; instances: PLCInstance[] } | null
     debugLocalMd5: string | null
     debugGraphList: string[]
     debugDataStale: boolean
@@ -190,6 +210,8 @@ export type WorkspaceActions = {
   setDebugExpandedNodes: (expandedNodes: Map<string, boolean>) => void
   toggleDebugExpandedNode: (compositeKey: string) => void
   setFbDebugInstances: (instances: Map<string, FbInstanceInfo[]>) => void
+  /** Install (or clear, with `null`) the session's harness overlay. */
+  setDebugHarness: (harness: { programPou: PLCPou; instances: PLCInstance[] } | null) => void
   setFbSelectedInstance: (fbTypeName: string, key: string) => void
   setDebugLocalMd5: (md5: string | null) => void
   setDebugGraphList: (list: string[]) => void

@@ -49,6 +49,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugExpandedNodes: new Map(),
     fbDebugInstances: new Map(),
     fbSelectedInstance: new Map(),
+    debugHarness: null,
     debugLocalMd5: null,
     debugGraphList: [],
     debugDataStale: false,
@@ -173,6 +174,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugExpandedNodes = new Map()
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
+          workspace.debugHarness = null
           workspace.debugLocalMd5 = null
           workspace.debugGraphList = []
           workspace.debugDataStale = false
@@ -341,6 +343,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugHarness: (harness) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugHarness = harness
+        }),
+      )
+    },
     setFbSelectedInstance: (fbTypeName: string, key: string) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -398,6 +407,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugExpandedNodes = new Map()
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
+          workspace.debugHarness = null
           workspace.debugLocalMd5 = null
           workspace.debugGraphList = []
           workspace.debugDataStale = false
