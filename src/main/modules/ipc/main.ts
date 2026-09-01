@@ -1,5 +1,12 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
+import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
+import {
+  materializeRetrievedProject,
+  pruneRetrievedProjects,
+  RETAINED_RETRIEVALS,
+} from '@root/backend/editor/project/materialize-retrieved-project'
+import type { ProjectSnapshotInfo } from '@root/backend/editor/runtime/runtime-api-client'
 import type {
   DebugBoardIdResult,
   DebugStatusResult,
@@ -9,6 +16,7 @@ import type {
 } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
+import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
@@ -32,7 +40,13 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
-import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
+import type {
+  RetainConfig,
+  RuntimeUser,
+  RuntimeUserRole,
+  UpdateRetainConfigParams,
+  UpdateUserParams,
+} from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -285,6 +299,33 @@ class MainProcessBridge implements MainIpcModule {
     return res.success ? { success: true } : { success: false, error: res.error }
   }
 
+  handleRuntimeGetRetainConfig = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
+    const res = await this.makeRuntimeApiRequest<RetainConfig>(
+      ipAddress,
+      '/api/retain-config',
+      (data) => JSON.parse(data) as RetainConfig,
+    )
+    return res.success ? { success: true, config: res.data } : { success: false, error: res.error }
+  }
+
+  handleRuntimeUpdateRetainConfig = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    params: UpdateRetainConfigParams,
+  ) => {
+    // Only the provided fields, so a partial edit never resets the others to
+    // whatever the client last happened to read.
+    const body: Record<string, string | number | boolean> = {}
+    if (params.enabled !== undefined) body.enabled = params.enabled
+    if (params.path !== undefined) body.path = params.path
+    if (params.flushSeconds !== undefined) body.flushSeconds = params.flushSeconds
+    const res = await this.makeRuntimeApiMutation('PUT', ipAddress, '/api/retain-config', JSON.stringify(body))
+    if (!res.success) return { success: false, error: res.error }
+    // Re-read rather than trust the echo: the runtime normalises the path and
+    // may report a different live backend than the settings imply.
+    return this.handleRuntimeGetRetainConfig(_event, ipAddress)
+  }
+
   handleRuntimeLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
     // The client adopts the session so it can transparently re-authenticate
     // against this device when the token expires.
@@ -516,9 +557,143 @@ class MainProcessBridge implements MainIpcModule {
     filename: string
     contentType: string
     cleanBuild: boolean
+    snapshotBuffer?: Buffer
+    snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }): Promise<{ success: true; data: string } | { success: false; error: string }> =>
     this.runtimeApi.makeRuntimeApiUpload(opts)
+
+  /** Username of the live runtime session, so an uploaded project can record
+   *  who stored it. Only the username crosses this boundary. */
+  getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
+
+  /**
+   * Install the libraries a retrieved project brought with it.
+   *
+   * The archives are re-read from the project's own archive rather than kept
+   * in memory between calls, so installing is always installing what that
+   * project actually carries. Each goes through the same strucpp validation as
+   * a library the user picked by hand -- an archive off a device earns no extra
+   * trust.
+   */
+  handleInstallRetrievedLibraries = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> => {
+    const archives = this.retrievedLibraries.get(projectPath) ?? []
+    const manager = new LibraryManagerModule()
+    const installed: string[] = []
+    const failed: Array<{ name: string; error: string }> = []
+
+    for (const library of archives) {
+      if (!names.includes(library.name)) continue
+      const result = await manager.installFromText(library.archive)
+      if (result.success) installed.push(library.name)
+      else failed.push({ name: library.name, error: result.error ?? 'Install failed' })
+    }
+    return { success: failed.length === 0, installed, failed }
+  }
+
+  /**
+   * What a device says about the source project it stores.
+   *
+   * Authenticated but not admin-gated on the device, so the UI can decide
+   * whether to offer retrieval without holding the privilege retrieval needs.
+   */
+  handleRuntimeProjectSnapshotInfo = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: ProjectSnapshotInfo; error?: string }> => {
+    const result = await this.runtimeApi.getProjectSnapshotInfo(ipAddress)
+    return result.success ? { success: true, info: result.info } : { success: false, error: result.error }
+  }
+
+  /**
+   * Retrieve the stored project and write it to a scratch directory.
+   *
+   * Fetch and unpack are one IPC call because the archive should not sit in the
+   * renderer at all: it is untrusted bytes from a device, and every check that
+   * decides whether it is safe to write lives next to the write. The renderer
+   * gets back a path and a description, never the archive.
+   *
+   * The scratch location is why this works at all -- see
+   * `materialize-retrieved-project` for what depends on the project having a
+   * real path from the moment it is opened.
+   */
+  /**
+   * Bundled library archives from the most recent retrievals, keyed by the
+   * project they came with.
+   *
+   * Kept here rather than sent to the renderer so the bytes never leave the
+   * process that validates them, and keyed by project path so installing
+   * always installs what THAT project carried rather than whatever was
+   * retrieved most recently.
+   */
+  private retrievedLibraries = new Map<string, Array<{ name: string; archive: string }>>()
+
+  /**
+   * Drop every retrieved project's libraries except the one just retrieved.
+   *
+   * The map exists so installing installs what THAT project carried, which only
+   * needs the project currently open. Keeping the rest held the full text of
+   * every library of every retrieval for the life of the session.
+   */
+  private forgetRetrievedLibrariesExcept(keep: string): void {
+    for (const path of [...this.retrievedLibraries.keys()]) {
+      if (path !== keep) this.retrievedLibraries.delete(path)
+    }
+  }
+
+  handleRuntimeRetrieveProject = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: SnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => {
+    const fetched = await this.runtimeApi.retrieveProjectSnapshot(ipAddress)
+    if (!fetched.success) return { success: false, error: fetched.error }
+
+    try {
+      const scratchRoot = join(app.getPath('userData'), 'retrieved-projects')
+      // Old retrievals go before the new one is written. A retrieved project
+      // deliberately stays in scratch until the user runs Save As, so without
+      // this an engineer who retrieves a project just to look at it leaves a
+      // full copy of its source on disk permanently -- unencrypted, in
+      // userData, accumulating one folder per retrieval.
+      await pruneRetrievedProjects(scratchRoot, RETAINED_RETRIEVALS)
+
+      const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
+        scratchRoot,
+      })
+      // Same for the in-memory copy: this map holds the full text of every
+      // library each retrieval carried, and it only ever grew.
+      this.forgetRetrievedLibrariesExcept(materialized.projectPath)
+      this.retrievedLibraries.set(
+        materialized.projectPath,
+        materialized.libraries.map(({ name, archive }) => ({ name, archive })),
+      )
+      return {
+        success: true,
+        projectPath: materialized.projectPath,
+        projectName: materialized.projectName,
+        metadata: materialized.metadata,
+        // Status, not archives. The renderer decides what to offer; the bytes
+        // stay in the main process where the library manager can write them,
+        // and are re-read from the same archive when the user says yes.
+        libraries: await describeRetrievedLibraries(materialized.libraries, (name) =>
+          new LibraryManagerModule().readArchiveText(name),
+        ),
+      }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
 
   private makeRuntimeApiMutation = (
     method: 'POST' | 'PUT' | 'DELETE',
@@ -666,6 +841,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
     this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
     this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
+    this.registerHandle('runtime:get-retain-config', this.handleRuntimeGetRetainConfig)
+    this.registerHandle('runtime:update-retain-config', this.handleRuntimeUpdateRetainConfig)
     this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
     this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
@@ -678,6 +855,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
+    this.registerHandle('runtime:project-snapshot-info', this.handleRuntimeProjectSnapshotInfo)
+    this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
+    this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)

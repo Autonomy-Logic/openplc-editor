@@ -132,6 +132,11 @@ const CreateUserManagementEditor = (name = 'User Management'): EditorModel => ({
   meta: { name },
 })
 
+const CreatePersistentStorageEditor = (name = 'Persistent Storage'): EditorModel => ({
+  type: 'plc-persistent-storage',
+  meta: { name },
+})
+
 /** Canonical tab name + factory for the Library Project's manifest
  *  editor.  Display label (also the file-slice key the dirty
  *  tracker + save flow look up under); intentionally NOT the on-
@@ -205,6 +210,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateLibraryManifestEditor(name)
     case 'user-management':
       return CreateUserManagementEditor(name)
+    case 'persistent-storage':
+      return CreatePersistentStorageEditor(name)
     case 'diff-viewer':
       return CreateDiffViewerEditor(name, elementType.filePath)
   }
@@ -220,6 +227,7 @@ export {
   CreateLibraryManagerEditor,
   CreateLibraryManifestEditor,
   CreatePackageManagerEditor,
+  CreatePersistentStorageEditor,
   CreatePLCGraphicalObject,
   CreatePLCTextualObject,
   CreateRemoteDeviceEditor,

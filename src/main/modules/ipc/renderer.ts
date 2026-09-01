@@ -1,6 +1,11 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
-import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type {
+  DiscoveredRuntimeDevice,
+  RuntimeLogEntry,
+  RuntimeProjectSnapshotInfo,
+  RuntimeProjectSnapshotMetadata,
+} from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
   DeviceLicenseReport,
@@ -25,7 +30,9 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
+  RetainConfigResult,
   RuntimeUserRole,
+  UpdateRetainConfigParams,
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
@@ -67,6 +74,19 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** The build's verdict, carried on the `closePort` message. Sourced from
+   *  `runCompilePipeline`, which reduces every step's process exit code to one
+   *  boolean, so it — not the presence of error-level log lines — is what
+   *  decides whether a build failed.
+   *
+   *  Declared here because the seam is typed: `onmessage` currently forwards
+   *  `event.data` wholesale, so a consumer reading a `Record<string, unknown>`
+   *  sees the field regardless. A bridge refactor that reconstructs the
+   *  message field-by-field (the shape the `libraryBuildResult` path already
+   *  uses) would otherwise drop it silently, and `compileProgramFlow` would
+   *  fall back to its `hasError` heuristic — reintroducing a resolved bug with
+   *  no compile error and no failing test. */
+  success?: boolean
   /** Final structured outcome of a library build.  Set only on the
    *  close-port message emitted by `compileLibrary`; absent from
    *  intermediate log entries and from program-build / debug-build
@@ -117,6 +137,7 @@ const rendererProcessBridge = {
   writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
+  saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
 
@@ -519,6 +540,10 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
   runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
     ipcRenderer.invoke('runtime:list-users', ipAddress),
+  runtimeGetRetainConfig: (ipAddress: string): Promise<RetainConfigResult> =>
+    ipcRenderer.invoke('runtime:get-retain-config', ipAddress),
+  runtimeUpdateRetainConfig: (ipAddress: string, params: UpdateRetainConfigParams): Promise<RetainConfigResult> =>
+    ipcRenderer.invoke('runtime:update-retain-config', ipAddress, params),
   runtimeWhoAmI: (ipAddress: string): Promise<WhoAmIResult> => ipcRenderer.invoke('runtime:whoami', ipAddress),
   runtimeUpdateUser: (
     ipAddress: string,
@@ -585,6 +610,34 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
+  /** What a device says about the project it stores; `present: false` when none. */
+  runtimeProjectSnapshotInfo: (
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }> =>
+    ipcRenderer.invoke('runtime:project-snapshot-info', ipAddress),
+  /**
+   * Retrieve the stored project and unpack it to a scratch directory.
+   *
+   * Returns a path, never the archive: those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write lives beside the
+   * write in the main process.
+   */
+  runtimeRetrieveProject: (
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => ipcRenderer.invoke('runtime:retrieve-project', ipAddress),
+  /** Install libraries a retrieved project brought with it, by name. */
+  runtimeInstallRetrievedLibraries: (
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> =>
+    ipcRenderer.invoke('runtime:install-retrieved-libraries', projectPath, names),
   onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
     ipcRenderer.on('runtime:device-discovered', callback)
     return () => ipcRenderer.removeListener('runtime:device-discovered', callback)

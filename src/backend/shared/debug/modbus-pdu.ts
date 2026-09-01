@@ -105,6 +105,14 @@ function readU32BE(buf: Uint8Array, offset: number): number {
 function statusError(code: number): string {
   if (code === ModbusDebugResponse.ERROR_OUT_OF_BOUNDS) return 'ERROR_OUT_OF_BOUNDS'
   if (code === ModbusDebugResponse.ERROR_OUT_OF_MEMORY) return 'ERROR_OUT_OF_MEMORY'
+  // A CONSTANT is refused by the target, not by us: it is emitted as a `const`
+  // C++ member and the debug table reaches it through a cast that strips the
+  // qualifier, so the runtime's own gate is what holds — which is what keeps an
+  // OPC-UA client or an older editor from writing through to it. Decoded here
+  // so the user reads the reason instead of "Unknown error code: 0x87".
+  if (code === ModbusDebugResponse.READ_ONLY) {
+    return 'This variable is declared CONSTANT and cannot be written or forced'
+  }
   return `Unknown error code: 0x${code.toString(16)}`
 }
 

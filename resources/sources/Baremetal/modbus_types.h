@@ -94,6 +94,7 @@ enum {
     MB_FC_DEBUG_WRITE_LICENSE = 0x49, // Debug write license blob to on-device storage
     MB_FC_DEBUG_READ_LICENSE  = 0x4A, // Debug read license blob from on-device storage
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
+    MB_FC_RETAIN_RESET        = 0x4C, // Discard stored retained values (cold reset)
 };
 
 //Exception Codes
