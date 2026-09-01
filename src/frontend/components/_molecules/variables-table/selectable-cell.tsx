@@ -536,11 +536,17 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
  * Radix rejects an empty string as a `SelectItem` value (it reserves "" for
  * "nothing selected"), so the blank option carries a sentinel that is mapped
  * back to `undefined` on the way into the store.
+ *
+ * Its label is genuinely empty rather than a dash: a dash on every unflagged
+ * variable is noise on the overwhelmingly common row. The dropdown ITEM still
+ * renders a non-breaking space, because an empty `ItemText` collapses the row
+ * to a few pixels and leaves nothing to aim at — so the trigger reads blank
+ * while the option stays a full-height, clickable row.
  */
 const NO_FLAG = '__none__'
 
 const VARIABLE_FLAGS: Array<{ value: string; label: string }> = [
-  { value: NO_FLAG, label: '—' },
+  { value: NO_FLAG, label: '' },
   { value: 'constant', label: 'Constant' },
   { value: 'retain', label: 'Retain' },
 ]
@@ -580,7 +586,7 @@ const SelectableFlagCell = ({
   return (
     <Select value={cellValue} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>
       <SelectTrigger
-        placeholder={VARIABLE_FLAGS.find((f) => f.value === cellValue)?.label ?? '—'}
+        placeholder={VARIABLE_FLAGS.find((f) => f.value === cellValue)?.label ?? ''}
         className={cn(
           'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
           {
@@ -602,7 +608,10 @@ const SelectableFlagCell = ({
             className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
           >
             <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-              {flag.label}
+              {/* NBSP for the blank option: an empty ItemText gives the row no
+                  height, so the one option a user needs to clear a flag would
+                  be a few pixels tall and effectively unclickable. */}
+              {flag.label || '\u00A0'}
             </span>
           </SelectItem>
         ))}
