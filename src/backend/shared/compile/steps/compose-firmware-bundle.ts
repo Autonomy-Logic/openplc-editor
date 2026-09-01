@@ -69,6 +69,12 @@ export interface ComposeFirmwareBundleInput {
    *  skeleton ships a placeholder stub so naive `#include "vpp_config.h"`
    *  in shared HAL code still compiles on non-VPP boards. */
   vppConfigH?: string
+  /** Pre-authored `io_sizes.h` content — the generated override for the
+   *  firmware's `MAX_*` I/O buffer sizes.  Absent when the project asked for
+   *  the board defaults, in which case no file is written and `openplc.h`'s
+   *  own `#ifndef`-guarded values stand.  Lands beside `openplc.h` in `src/`
+   *  because that is the header that includes it. */
+  ioSizesH?: string
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -124,6 +130,7 @@ export function buildCBlocksFromPous(
  *  - `src/arduino.cpp`                               — from skeleton (HAL adapter, simulator-specific)
  *  - `src/c_blocks.h`                                — written verbatim from `cBlocks.header`
  *  - `src/defines.h`                                 — written verbatim from `definesH`
+ *  - `src/io_sizes.h`                                — written when `ioSizesH` is present
  *  - `src/<strucpp-emitted-file>`                    — every key from `strucppFiles`
  *  - `src/<strucpp-runtime-header>.hpp`              — from skeleton (strucpp runtime headers)
  *  - other skeleton entries                          — passed through verbatim
@@ -136,7 +143,7 @@ export function buildCBlocksFromPous(
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton } = input
+  const { strucppFiles, cBlocks, definesH, vppConfigH, ioSizesH, firmwareSkeleton } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -194,6 +201,14 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // every board, the per-define content varies.
   if (vppConfigH !== undefined) {
     files['src/vpp_config.h'] = vppConfigH
+  }
+
+  // io_sizes.h sits beside openplc.h, which is what includes it (guarded by
+  // `__has_include`, so its absence is not an error).  Written only when the
+  // project raised a count above the board default — a project that never
+  // touched the setting produces no file and compiles exactly as before.
+  if (ioSizesH !== undefined) {
+    files['src/io_sizes.h'] = ioSizesH
   }
 
   // OpenPLCUserLib.h stub — Baremetal.ino unconditionally

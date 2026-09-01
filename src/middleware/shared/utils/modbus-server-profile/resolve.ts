@@ -18,6 +18,7 @@ export type ModbusBoardInfoLike = {
   capabilities?: Record<string, unknown>
   vpp?: { screens?: Record<string, unknown> } | null
   io?: Partial<Record<keyof IoSizeFields, number>>
+  ioMax?: Partial<Record<keyof IoSizeFields, number>>
 }
 
 /** Firmware buffer sizes a VPP declares per device, mirroring the `MAX_*`
@@ -116,6 +117,8 @@ const NO_SERVER: ModbusServerProfile = {
   configurableBindAddress: false,
   fixedPort: DEFAULT_TCP_PORT,
   derivedCounts: null,
+  minCounts: null,
+  maxCounts: null,
   vppScreens: {},
 }
 
@@ -146,6 +149,10 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
   const modbusScreen = findScreen(screens, MODBUS_SCREEN)
 
   if (modbusScreen) {
+    const defaults = board.io ? countsFromIoSizes(board.io) : null
+    // A ceiling is only meaningful alongside the defaults it raises.
+    const ceilings = defaults && board.ioMax ? countsFromIoSizes({ ...board.io, ...board.ioMax }) : null
+
     const transports: ModbusServerTransport[] = []
     if (caps.modbusRtuServer) transports.push('rtu')
     if (caps.modbusTcpServer) transports.push('tcp')
@@ -157,11 +164,20 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
       segments: BAREMETAL_SEGMENTS,
       // Fixed at compile time by the MCU's MAX_* constants, which also size
       // the IEC pointer arrays. Phase 5 (DOPE-370) is what makes these move.
-      configurableBuffers: false,
+      // Raisable only when the package states both what the firmware compiles
+      // and how far the board can be pushed. A package that declares neither
+      // -- or only the defaults -- leaves nothing for the user to change, and
+      // an input that cannot move is worse than a number.
+      configurableBuffers: !!defaults && !!ceilings,
       configurablePort: false,
       configurableBindAddress: false,
       fixedPort: BAREMETAL_TCP_PORT,
-      derivedCounts: board.io ? countsFromIoSizes(board.io) : null,
+      derivedCounts: defaults,
+      // Never below the firmware default: these counts dimension the IEC
+      // pointer arrays too, and mapEmptyBuffers() aliases %MW/%MD/%ML into the
+      // Modbus banks, so shrinking a segment drops I/O silently.
+      minCounts: defaults,
+      maxCounts: ceilings,
       vppScreens: {
         serial: findScreen(screens, SERIAL_SCREEN),
         network: findScreen(screens, NETWORK_SCREEN),
@@ -181,6 +197,8 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     configurableBindAddress: true,
     fixedPort: DEFAULT_TCP_PORT,
     derivedCounts: null,
+    minCounts: null,
+    maxCounts: null,
     vppScreens: {},
   }
 }

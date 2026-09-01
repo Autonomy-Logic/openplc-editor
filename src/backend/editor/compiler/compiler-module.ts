@@ -12,6 +12,7 @@ import { LibraryManagerModule } from '@root/backend/editor/library-manager/libra
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
+import type { IoSizes } from '@root/backend/shared/compile/steps/generate-io-sizes'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
@@ -3080,6 +3081,22 @@ class CompilerModule {
       }
     }
 
+    // I/O buffer sizing. `boardEntry.io` is what openplc.h compiles for this
+    // board's MCU family; `boardEntry.ioMax` is how far the package says the
+    // board can be pushed. The project's request lives beside the rest of the
+    // board's screen state, under `io_sizes`. All three are optional: a board
+    // whose package declares no sizes gets the firmware defaults and no
+    // io_sizes.h, exactly as before.
+    let boardIoSizes: { defaults: IoSizes; ceilings?: Partial<IoSizes> } | undefined
+    let requestedIoSizes: Partial<IoSizes> | undefined
+    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler' && boardEntry.io) {
+      boardIoSizes = {
+        defaults: boardEntry.io as IoSizes,
+        ...(boardEntry.ioMax ? { ceilings: boardEntry.ioMax } : {}),
+      }
+      requestedIoSizes = (vendorScreenData?.['io_sizes'] ?? undefined) as Partial<IoSizes> | undefined
+    }
+
     // For Arduino VPP targets with a modular backplane, bake the
     // per-slot module-configuration bytes into vpp_config.h (the MCU
     // has no runtime JSON to load them from). The synthetic
@@ -3119,6 +3136,8 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
+        ...(boardIoSizes ? { boardIoSizes } : {}),
+        ...(requestedIoSizes ? { requestedIoSizes } : {}),
         vendorScreenData: effectiveVendorScreenData,
         // Compared against the `minEditorVersion` a runtime publishes at
         // `/api/capabilities` (DOPE-448). Injected because the pipeline

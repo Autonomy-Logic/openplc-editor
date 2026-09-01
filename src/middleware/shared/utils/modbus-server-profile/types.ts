@@ -76,9 +76,22 @@ export interface ModbusServerProfile {
    *  never appear in the address map — a `%MX` row on an Arduino is a lie. */
   segments: ModbusSegment[]
 
-  /** The user sizes the buffers. False where the sizes are compile-time
-   *  constants of the firmware; the screen then shows them read-only. */
+  /** The user sizes the buffers. On a `plc-server` target this is always true.
+   *  On a baremetal target it is true only when the board's package declares
+   *  BOTH its firmware defaults and a ceiling to raise them to -- otherwise
+   *  there is nothing the user could change and the screen shows the counts
+   *  read-only. */
   configurableBuffers: boolean
+
+  /** Lowest value each segment may take. On a baremetal target this is the
+   *  firmware default, because these counts also dimension the IEC pointer
+   *  arrays and shrinking one drops I/O with no diagnostic; growth is the only
+   *  direction offered. `null` where there is no floor. */
+  minCounts: ModbusSegmentCounts | null
+
+  /** Highest value each segment may take, from the board's declared ceilings.
+   *  `null` where the target imposes none. */
+  maxCounts: ModbusSegmentCounts | null
 
   /** The user picks the TCP listen port. False where the firmware hard-codes
    *  it (baremetal listens on 502 in three places in `modbus_tcp.cpp`). */

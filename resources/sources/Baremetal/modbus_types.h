@@ -56,21 +56,31 @@ protocol, transport, register and debug layers agree on the same contracts.
 // exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
 #define MB_PLC_CTRL_REFUSED_SWITCH       0x86
 
-//Modbus registers struct
+// Modbus registers struct.
+//
+// The *_size fields are uint16_t, not uint8_t. They hold IEC value counts --
+// coils_size counts BITS, holding_size counts REGISTERS -- and MAX_* now comes
+// from a generated io_sizes.h rather than a fixed per-family constant, so a
+// board with room can serve more than 255 of anything. At uint8_t, asking for
+// 256 coils wrapped to 0 and the bounds checks in readCoils/readRegisters then
+// rejected every address, which is the shape of the P1AM-200 report.
+//
+// uint16_t is also the natural ceiling: Modbus addresses are 16-bit, so a
+// count that does not fit here could not be addressed on the wire anyway.
 struct MBinfo {
     uint8_t slaveid;
     uint16_t *holding;
-    uint8_t holding_size;
+    uint16_t holding_size;
     uint32_t *dint_memory;
-    uint8_t dint_memory_size;
+    uint16_t dint_memory_size;
     uint64_t *lint_memory;
-    uint8_t lint_memory_size;
+    uint16_t lint_memory_size;
     uint8_t *coils;
-    uint8_t coils_size;
+    uint16_t coils_size;
     uint16_t *input_regs;
-    uint8_t input_regs_size;
+    uint16_t input_regs_size;
     uint8_t *input_status;
-    uint8_t input_status_size;
+    uint16_t input_status_size;
 };
 
 //Function Codes

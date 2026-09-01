@@ -237,14 +237,16 @@ const ModbusServerEditor = () => {
       const meta = SEGMENT_META[segment]
       const raw = countText[segment]
       if (raw === undefined) return
+      const floor = profile.minCounts?.[segment] ?? 0
+      const ceiling = profile.maxCounts?.[segment] ?? meta.max
       const parsed = Number.parseInt(raw, 10)
-      if (Number.isNaN(parsed) || parsed < 0 || parsed > meta.max) {
+      if (Number.isNaN(parsed) || parsed < floor || parsed > ceiling) {
         setCountText((prev) => ({ ...prev, [segment]: undefined }))
         return
       }
-      if (parsed !== buffers[segment]) actions.setBufferCount(meta.group, meta.field, parsed)
+      if (parsed !== buffers[segment]) actions.setBufferCount(segment, meta.group, meta.field, parsed)
     },
-    [countText, buffers, actions],
+    [countText, buffers, actions, profile],
   )
 
   if (protocol !== 'modbus-tcp') {
@@ -461,7 +463,7 @@ const ModbusServerEditor = () => {
                         value={countText[segment] ?? String(buffers[segment])}
                         onChange={(value) => setCountText((prev) => ({ ...prev, [segment]: value }))}
                         onBlur={() => commitCount(segment)}
-                        max={meta.max}
+                        max={profile.maxCounts?.[segment] ?? meta.max}
                         description={meta.description}
                         readOnly={!profile.configurableBuffers}
                       />

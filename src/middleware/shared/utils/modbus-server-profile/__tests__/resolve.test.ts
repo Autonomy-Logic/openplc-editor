@@ -98,6 +98,8 @@ describe('resolveModbusServerProfile', () => {
     })
 
     it('keeps buffers, port and bind address out of the user hands', () => {
+      // No `ioMax` on this fixture: the package states what the firmware
+      // compiles but not how far the board can be pushed, so nothing moves.
       expect(profile.configurableBuffers).toBe(false)
       expect(profile.configurablePort).toBe(false)
       expect(profile.configurableBindAddress).toBe(false)
@@ -125,6 +127,36 @@ describe('resolveModbusServerProfile', () => {
     it('links out to the serial and network screens the package ships', () => {
       expect(profile.vppScreens).toEqual({ serial: 'Serial', network: 'Network', modbus: 'Modbus' })
     })
+  })
+
+  describe('a board whose package declares headroom', () => {
+    const profile = resolveModbusServerProfile(arduinoBoard({ ioMax: { ...IO, digitalOutput: 512, memoryWord: 256 } }))
+
+    it('lets the user raise the counts', () => {
+      expect(profile.configurableBuffers).toBe(true)
+    })
+
+    it('floors every segment at the firmware default', () => {
+      // These counts also dimension the IEC pointer arrays, and
+      // mapEmptyBuffers() aliases %MW/%MD/%ML into the Modbus banks, so a
+      // segment shrunk below what a compiled program addresses would drop I/O
+      // with no diagnostic. Growth is the only direction offered.
+      expect(profile.minCounts).toEqual(profile.derivedCounts)
+    })
+
+    it('caps each segment at the declared ceiling', () => {
+      expect(profile.maxCounts?.QX).toBe(512)
+      expect(profile.maxCounts?.MW).toBe(256)
+      // A field the package did not raise stays pinned to its default.
+      expect(profile.maxCounts?.IX).toBe(56)
+    })
+  })
+
+  it('stays read-only when a board declares a ceiling but no defaults to raise', () => {
+    // A ceiling with nothing under it says nothing about what compiles today.
+    const profile = resolveModbusServerProfile(arduinoBoard({ io: undefined, ioMax: { digitalOutput: 512 } }))
+    expect(profile.configurableBuffers).toBe(false)
+    expect(profile.maxCounts).toBeNull()
   })
 
   it('wins over the plc-server path even when the board also reports modbusTcpServer', () => {

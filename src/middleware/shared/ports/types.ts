@@ -977,6 +977,18 @@ export interface PackageManifest {
       memoryDword?: number
       memoryLword?: number
     }
+    /** Per-field ceilings for `io`, declared where the MCU has SRAM to spare.
+     *  Surfaced onto `BoardInfo.ioMax`. A field with no ceiling cannot be
+     *  raised above its `io` value. */
+    ioMax?: {
+      digitalInput?: number
+      digitalOutput?: number
+      analogInput?: number
+      analogOutput?: number
+      memoryWord?: number
+      memoryDword?: number
+      memoryLword?: number
+    }
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the

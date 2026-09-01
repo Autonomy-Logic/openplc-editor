@@ -21,7 +21,12 @@
 import { useCallback, useMemo } from 'react'
 
 import type { ModbusBufferMapping } from '../../middleware/shared/ports/types'
-import type { ModbusSegmentCounts, ModbusServerProfile } from '../../middleware/shared/utils/modbus-server-profile'
+import type {
+  IoSizeFields,
+  ModbusSegment,
+  ModbusSegmentCounts,
+  ModbusServerProfile,
+} from '../../middleware/shared/utils/modbus-server-profile'
 import { resolveModbusServerProfile } from '../../middleware/shared/utils/modbus-server-profile'
 import { useOpenPLCStore } from '../store'
 import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-config'
@@ -31,6 +36,24 @@ import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-co
 const RTU_SECTION = 'modbus_rtu'
 const TCP_SECTION = 'modbus_tcp'
 const NETWORK_SECTION = 'network'
+/** Where a project's raised I/O buffer sizes live. Board-scoped like every
+ *  other vendor-screen section, which is right: how much room a board has is a
+ *  property of the board, not of the project. */
+const IO_SIZES_SECTION = 'io_sizes'
+
+/** Which `io_sizes` field backs each IEC segment. Mirrors the mapping
+ *  `init_mbregs` implies -- see the profile resolver. */
+const IO_FIELD_BY_SEGMENT: Record<ModbusSegment, keyof IoSizeFields | null> = {
+  QW: 'analogOutput',
+  MW: 'memoryWord',
+  MD: 'memoryDword',
+  ML: 'memoryLword',
+  QX: 'digitalOutput',
+  // Baremetal has no %MX bank at all, so no field backs it.
+  MX: null,
+  IX: 'digitalInput',
+  IW: 'analogInput',
+}
 
 /** Field ids within those sections. */
 const FIELD_ENABLED = 'enabled'
@@ -58,7 +81,10 @@ export interface ModbusServerActions {
   setSlaveId: (slaveId: number) => void
   setPort: (port: number) => void
   setBindAddress: (address: string) => void
-  setBufferCount: (group: keyof ModbusBufferMapping, field: string, value: number) => void
+  /** `segment` routes the write on a baremetal target, where the count is an
+   *  `io_sizes` field rather than a `bufferMapping` entry; `group` and `field`
+   *  address the persisted `PLCServer` shape on a Runtime v4 one. */
+  setBufferCount: (segment: ModbusSegment, group: keyof ModbusBufferMapping, field: string, value: number) => void
 }
 
 function asBoolean(value: unknown): boolean {
@@ -136,7 +162,22 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     if (profile.store === 'vendor-screen') {
       const rtu = readSection(RTU_SECTION)
       const tcp = readSection(TCP_SECTION)
-      const counts = profile.derivedCounts ?? UNKNOWN_COUNTS
+      const requested = readSection(IO_SIZES_SECTION)
+      // The firmware defaults are the floor; the project may only have raised
+      // things. `generate-io-sizes.ts` clamps the same way at build time, so
+      // what the screen shows is what gets compiled.
+      const counts = { ...(profile.derivedCounts ?? UNKNOWN_COUNTS) }
+      if (profile.derivedCounts) {
+        for (const segment of profile.segments) {
+          const field = IO_FIELD_BY_SEGMENT[segment]
+          if (!field) continue
+          const want = requested[field]
+          if (typeof want !== 'number' || !Number.isFinite(want)) continue
+          const floor = profile.minCounts?.[segment] ?? profile.derivedCounts[segment]
+          const ceiling = profile.maxCounts?.[segment] ?? floor
+          counts[segment] = Math.min(Math.max(Math.trunc(want), floor), ceiling)
+        }
+      }
       return {
         profile,
         rtu: {
@@ -228,12 +269,18 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
   )
 
   const setBufferCount = useCallback(
-    (group: keyof ModbusBufferMapping, field: string, value: number) => {
+    (segment: ModbusSegment, group: keyof ModbusBufferMapping, field: string, value: number) => {
       if (!profile.configurableBuffers) return
+      if (profile.store === 'vendor-screen') {
+        const ioField = IO_FIELD_BY_SEGMENT[segment]
+        if (!ioField) return
+        patchSection(IO_SIZES_SECTION, { [ioField]: value })
+        return
+      }
       updateServerConfig(serverName, { bufferMapping: { [group]: { [field]: value } } })
       markDirty()
     },
-    [profile.configurableBuffers, serverName, updateServerConfig, markDirty],
+    [profile.configurableBuffers, profile.store, patchSection, serverName, updateServerConfig, markDirty],
   )
 
   return {

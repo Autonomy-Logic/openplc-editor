@@ -14,7 +14,7 @@ lives in modbus_frame.* because its slave id is shared by every build.
 
 #include "modbus_frame.h"
 
-bool init_mbregs(uint8_t size_holding, uint8_t size_dint_memory, uint8_t size_lint_memory, uint8_t size_coils, uint8_t size_inputregs, uint8_t size_inputstatus);
+bool init_mbregs(uint16_t size_holding, uint16_t size_dint_memory, uint16_t size_lint_memory, uint16_t size_coils, uint16_t size_inputregs, uint16_t size_inputstatus);
 bool get_discrete(uint16_t addr, bool regtype);
 void write_discrete(uint16_t addr, bool regtype, bool value);
 
