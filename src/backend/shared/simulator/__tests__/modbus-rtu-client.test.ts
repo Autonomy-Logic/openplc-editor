@@ -739,7 +739,7 @@ describe('ModbusRtuClient', () => {
       )
       const result = await client.getDeviceId()
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Incomplete board-id data')
+      expect(result.error).toContain('Incomplete device-id data')
     })
 
     it('returns error on too-short response', async () => {

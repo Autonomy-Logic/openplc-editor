@@ -307,6 +307,12 @@ export interface DeviceModbusTransport
   extends Omit<DebugTransport, 'getVariablesList' | 'setVariable'>,
     DeviceChannelTransport {
   getDeviceId(): Promise<DebugDeviceIdResult>
+  /** Never on this medium. Declared rather than merely absent so the XOR in
+   *  `LicenseChannel` (main.ts) can be a type-level guarantee instead of a
+   *  comment: baremetal answers 0x48 with a derived id, and a Modbus client
+   *  that grew a `getAnchor` would be reporting a raw serial the editor would
+   *  then hash a second time. */
+  getAnchor?: never
   getStatus(): Promise<DebugStatusResult>
   setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
   readLicense(): Promise<DebugLicenseReadResult>

@@ -22,14 +22,6 @@ typedef enum {
     LIC_GATE_UNSUPPORTED = 3,   /* no license-core linked (weak default) -> unenforced */
 } lic_gate_state_t;
 
-/*
- * Length of the identity `license_gate_device_id` reports: the first 16 bytes
- * of sha256(LIC_DEVICE_DOMAIN || anchor), which is exactly the `device_id`
- * field of the licence blob the verifier memcmp's against. Fixed by the blob
- * contract, so it is a constant and not a negotiated length.
- */
-#define LIC_DEVICE_ID_SIZE 16u
-
 /* 2 hours (product decision 2026-08-18; was 15 minutes). Overridable at build
  * (-DLIC_GATE_DEMO_MS=...) for bench tests that must watch the demo expire in
  * seconds; production keeps the default. */
@@ -101,7 +93,8 @@ int license_gate_outputs_permitted(void);
  * Report THIS board's licensing identity: `device_id`, not the anchor.
  *
  * Writes LIC_DEVICE_ID_SIZE bytes into `out` and returns that count, or returns
- * 0 when this board has no identity a licence can be bound to.
+ * 0 when this board has no identity a licence can be bound to. The constant is
+ * declared in license_blob.h, next to the field it has to match.
  *
  * REPORTING, NEVER ENFORCEMENT. Nothing about actuation consults this, and the
  * verifier does not either: `license_core_verify` re-reads the silicon through

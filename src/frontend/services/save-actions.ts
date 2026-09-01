@@ -1039,8 +1039,8 @@ async function saveLibraryManagerOnly(
  * the tab opened) — callers fall through to a no-op.
  */
 function vendorScreenOwnedKeysFor(state: ReturnType<typeof openPLCStoreBase.getState>, screenName: string): string[] {
-  const deviceId = state.deviceDefinitions.configuration.deviceBoard
-  const boardInfo = state.deviceAvailableOptions.availableBoards.get(deviceId)
+  const boardId = state.deviceDefinitions.configuration.deviceBoard
+  const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
   const screen = boardInfo?.vpp?.screens?.[screenName]
   return collectScreenPersistenceKeys(screen)
 }
@@ -1115,12 +1115,12 @@ async function saveVendorScreenOnly(
   // we just patched, leaving every other board's bucket on disk untouched.
   // Without this, a later load would restore a stale bucket over the keys we
   // surgically saved (the archive is authoritative on load).
-  const deviceId = state.deviceDefinitions.configuration.deviceBoard
+  const boardId = state.deviceDefinitions.configuration.deviceBoard
   const diskByBoard =
     onDisk.vendorScreenDataByBoard && typeof onDisk.vendorScreenDataByBoard === 'object'
       ? ({ ...(onDisk.vendorScreenDataByBoard as Record<string, unknown>) } as Record<string, unknown>)
       : ({} as Record<string, unknown>)
-  diskByBoard[deviceId] = diskVendor
+  diskByBoard[boardId] = diskVendor
   onDisk.vendorScreenDataByBoard = diskByBoard
 
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))

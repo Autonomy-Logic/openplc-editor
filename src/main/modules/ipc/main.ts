@@ -95,18 +95,33 @@ interface ChannelUnavailable {
  *
  * The identity read is EITHER `getDeviceId` (baremetal, an id derived inside the
  * closed core) OR `getAnchor` (runtime-v4, the raw device-tree serial), never
- * both, so the union carries which one this channel has and the flow cannot
- * treat one as the other (DOPE-589).
+ * both, and the union is an XOR so the compiler enforces the "never both" half
+ * rather than only asserting it in prose.
+ *
+ * Be clear about what that does and does not buy, because this exact bug got
+ * through review once: the XOR stops a transport from declaring BOTH reads. It
+ * does NOT protect `isLicenseChannel`, which inspects a `DeviceDebugChannel` at
+ * RUNTIME with `typeof`, where both methods are legitimately optional. That
+ * guard demanded `getDeviceId` after the WebSocket transport had been renamed
+ * to `getAnchor`, cutting off licensing on every runtime-v4 board with `tsc`
+ * perfectly clean. What catches that class of mistake is the handler test
+ * driving the REST branch through a double that has `getAnchor` and no
+ * `getDeviceId` — see device-license.handler.test.ts.
  */
-type LicenseChannel = LicenseReadWritable & {
-  getDeviceId?(): Promise<DebugDeviceIdResult>
-  getAnchor?(): Promise<DebugAnchorResult>
-}
+type LicenseChannel = LicenseReadWritable &
+  (
+    | { getDeviceId(): Promise<DebugDeviceIdResult>; getAnchor?: never }
+    | { getAnchor(): Promise<DebugAnchorResult>; getDeviceId?: never }
+  )
 
 /**
- * Whether a debug channel can carry the licensing flow. The three methods are
- * optional on `DeviceDebugChannel` because not every medium implements them; the
- * runtime-v4 WebSocket implements all three. Narrows the client ITSELF rather
+ * Whether a debug channel can carry the licensing flow: the two licence FCs plus
+ * ONE of the two identity reads. The methods are optional on
+ * `DeviceDebugChannel` because not every medium implements them; the runtime-v4
+ * WebSocket implements `getAnchor`, `readLicense` and `writeLicense`, and a
+ * Modbus client implements `getDeviceId` instead. Demanding `getDeviceId` here
+ * is what made runtime-v4 licensing unreachable before this was fixed, so the
+ * check accepts either half deliberately. Narrows the client ITSELF rather
  * than wrapping it, so the flow talks to the same object every other caller
  * holds — and the transport's own send mutex (the Modbus clients'
  * sendRequestMutex; the debug WebSocket's, since review 2026-08-20) keeps
@@ -114,7 +129,7 @@ type LicenseChannel = LicenseReadWritable & {
  */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
-    typeof client.getDeviceId === 'function' &&
+    (typeof client.getDeviceId === 'function' || typeof client.getAnchor === 'function') &&
     typeof client.readLicense === 'function' &&
     typeof client.writeLicense === 'function'
   )

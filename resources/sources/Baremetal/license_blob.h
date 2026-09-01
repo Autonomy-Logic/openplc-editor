@@ -52,6 +52,12 @@ typedef struct __attribute__((packed)) {
 #define LIC_MAGIC_LE      0x434C504Fu   /* bytes 4F 50 4C 43 */
 #define LIC_BLOB_SIZE     98u
 #define LIC_PAYLOAD_SIZE  30u
+/* Width of the `device_id` field, and therefore of the identity anything
+ * reports for this board (`license_gate_device_id`). It lives here, with the
+ * layout, because it is a property of the BLOB: the verifier memcmp's exactly
+ * this many bytes at LIC_OFF_DEVICE_ID. The static assert at the bottom binds
+ * the two so they cannot drift. */
+#define LIC_DEVICE_ID_SIZE 16u
 
 // Portable compile-time assert. Every Baremetal .cpp includes this header, so it
 // is compiled as C++, where static_assert is a keyword. _Static_assert is C-only
@@ -65,6 +71,8 @@ typedef struct __attribute__((packed)) {
 
 LIC_STATIC_ASSERT(sizeof(lic_payload_t) == 30, "lic_payload_t must be 30 bytes");
 LIC_STATIC_ASSERT(sizeof(lic_blob_t)    == 98, "lic_blob_t must be 98 bytes");
+LIC_STATIC_ASSERT(sizeof(((lic_payload_t *)0)->device_id) == LIC_DEVICE_ID_SIZE,
+                  "device_id width must match the blob layout");
 
 // CRC-32/ISO-HDLC (a.k.a. CRC-32, zlib/PKZIP).
 //   poly 0xEDB88320 (reflected) · init 0xFFFFFFFF · refin/refout true · xorout 0xFFFFFFFF
