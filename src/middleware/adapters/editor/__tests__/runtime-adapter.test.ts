@@ -674,7 +674,9 @@ describe('retrieveProject', () => {
 
 describe('installRetrievedLibraries', () => {
   it('delegates to bridge with the project path and the names to install', async () => {
-    const result = await adapter.installRetrievedLibraries!('/projects/demo', ['oscat-basic'])
+    const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
+      'oscat-basic',
+    ])
 
     expect(window.bridge.runtimeInstallRetrievedLibraries).toHaveBeenCalledWith('/projects/demo', ['oscat-basic'])
     expect(result).toEqual({ success: true, installed: ['oscat-basic'], failed: [] })
@@ -684,12 +686,172 @@ describe('installRetrievedLibraries', () => {
     // The caller lists failures per library, so a whole-call failure still has
     // to arrive as one -- an empty name with the reason attached.
     ;(window.bridge.runtimeInstallRetrievedLibraries as jest.Mock).mockRejectedValue(new Error('install failed'))
-    const result = await adapter.installRetrievedLibraries!('/projects/demo', ['oscat-basic'])
+    const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
+      'oscat-basic',
+    ])
 
     expect(result).toEqual({
       success: false,
       installed: [],
       failed: [{ name: '', error: 'install failed' }],
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// the shared retrieve picker's desktop half
+// ---------------------------------------------------------------------------
+//
+// The picker is one component for both platforms. What these translate is the
+// desktop's answer to "which devices, and how do I address them": a LAN scan,
+// keyed by address.
+
+describe('listRetrievableDevices', () => {
+  it('maps LAN replies into the shape the picker reads', async () => {
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
+      success: true,
+      devices: [
+        {
+          ipAddress: '192.168.1.50',
+          hostname: 'plc-1',
+          projectName: 'Traffic Light',
+          projectTimestamp: '2026-08-31T12:00:00Z',
+        },
+      ],
+    })
+
+    const result = await adapter.listRetrievableDevices!()
+
+    expect(result.success).toBe(true)
+    expect(result.success && result.devices).toEqual([
+      {
+        key: '192.168.1.50',
+        name: '192.168.1.50',
+        location: 'plc-1',
+        answeredScan: true,
+        projectName: 'Traffic Light',
+        projectTimestamp: '2026-08-31T12:00:00Z',
+      },
+    ])
+  })
+
+  it('marks every listed device as having answered', async () => {
+    // On this platform a device is only in the list because it replied to the
+    // scan, so "stores nothing" is always a real answer here -- unlike web,
+    // where the device list and the scan are separate facts.
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
+      success: true,
+      devices: [{ ipAddress: '192.168.1.51', hostname: '' }],
+    })
+
+    const result = await adapter.listRetrievableDevices!()
+    const [device] = result.success ? result.devices : []
+
+    expect(device.answeredScan).toBe(true)
+    expect(device.projectName).toBeUndefined()
+    expect(device.location).toBeUndefined()
+  })
+
+  it('reports a failed scan rather than an empty network', async () => {
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
+      success: false,
+      error: 'no interface',
+    })
+
+    const result = await adapter.listRetrievableDevices!()
+
+    expect(result).toEqual({ success: false, error: 'no interface' })
+  })
+})
+
+describe('connectedRetrievableDeviceKey', () => {
+  it('is empty until a session actually exists', async () => {
+    // A configured address is not a session. Without this the picker would skip
+    // asking for credentials for a device nobody has signed in to.
+    expect(adapter.connectedRetrievableDeviceKey!()).toBe('')
+
+    await adapter.login({ username: 'admin', password: 'secret' })
+
+    expect(adapter.connectedRetrievableDeviceKey!()).toBe('192.168.1.100')
+  })
+})
+
+describe('fetchRetrievableProject', () => {
+  const device = { key: '192.168.1.50', name: '192.168.1.50', answeredScan: true }
+
+  it('carries the scratch directory through as the payload', async () => {
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockResolvedValue({
+      success: true,
+      projectPath: '/scratch/retrieved/Demo-123',
+      projectName: 'Demo',
+      libraries: [{ name: 'oscat-basic', version: '3.3.4', status: 'missing' }],
+    })
+
+    const result = await adapter.fetchRetrievableProject!(device)
+
+    expect(window.bridge.runtimeRetrieveProject).toHaveBeenCalledWith('192.168.1.50')
+    expect(result).toEqual({
+      success: true,
+      project: {
+        projectName: 'Demo',
+        payload: '/scratch/retrieved/Demo-123',
+        libraries: [{ name: 'oscat-basic', version: '3.3.4', status: 'missing' }],
+      },
+    })
+  })
+
+  it('reports a device that returned nothing', async () => {
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockResolvedValue({
+      success: false,
+      error: 'That device is not storing a project.',
+    })
+
+    const result = await adapter.fetchRetrievableProject!(device)
+
+    expect(result).toEqual({ success: false, error: 'That device is not storing a project.' })
+  })
+})
+
+describe('onRetrievableDeviceFound', () => {
+  it('translates each streamed reply as it arrives', () => {
+    // The LAN scan answers progressively, so rows appear while it is still
+    // running rather than all at once when it ends.
+    let emit: ((event: unknown, device: unknown) => void) | undefined
+    const unsubscribe = jest.fn()
+    ;(window.bridge.onRuntimeDeviceDiscovered as jest.Mock).mockImplementation((handler) => {
+      emit = handler as (event: unknown, device: unknown) => void
+      return unsubscribe
+    })
+
+    const seen: Array<{ key: string; projectName?: string }> = []
+    const stop = adapter.onRetrievableDeviceFound!((device) => seen.push(device))
+
+    emit?.({}, { ipAddress: '192.168.1.60', hostname: 'plc-9', projectName: 'Bottling' })
+
+    expect(seen).toEqual([
+      {
+        key: '192.168.1.60',
+        name: '192.168.1.60',
+        location: 'plc-9',
+        answeredScan: true,
+        projectName: 'Bottling',
+        projectTimestamp: undefined,
+      },
+    ])
+
+    stop()
+    expect(unsubscribe).toHaveBeenCalled()
+  })
+})
+
+describe('selectRetrievableDevice', () => {
+  it('moves the target address the adapter authenticates against', async () => {
+    // This has to happen before the login, not with it: the adapter reads its
+    // target from the store to know which device to sign in to.
+    const { openPLCStoreBase } = await import('../../../../frontend/store')
+
+    adapter.selectRetrievableDevice!({ key: '192.168.1.77', name: '192.168.1.77', answeredScan: true })
+
+    expect(openPLCStoreBase.getState().deviceDefinitions.configuration.runtimeIpAddress).toBe('192.168.1.77')
   })
 })

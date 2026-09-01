@@ -27,6 +27,10 @@
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
+  describeSnapshotUploadWarning,
+  readSnapshotUploadWarning,
+} from '@root/backend/shared/project/upload-snapshot-warning'
+import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
@@ -406,6 +410,12 @@ export function createEditorCompilerPlatformPort(
               snapshotBuffer: snapshot?.archive,
               snapshotMetadata: snapshot?.metadata,
               onUploadAccepted: (responseBody) => {
+                // The device may have accepted the program and refused the
+                // project beside it. Saying so here is the difference between
+                // "not retrievable" being found out now and being found out by
+                // whoever needed the project back.
+                const warning = readSnapshotUploadWarning(responseBody)
+                if (warning) log(describeSnapshotUploadWarning(warning), 'warning')
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   log(`Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`, 'info')
@@ -510,6 +520,12 @@ export function createEditorCompilerPlatformPort(
               fileBuffer,
               cleanBuild: context.cleanBuild,
               onUploadAccepted: (responseBody) => {
+                // The device may have accepted the program and refused the
+                // project beside it. Saying so here is the difference between
+                // "not retrievable" being found out now and being found out by
+                // whoever needed the project back.
+                const warning = readSnapshotUploadWarning(responseBody)
+                if (warning) log(describeSnapshotUploadWarning(warning), 'warning')
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   log(`Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`, 'info')
