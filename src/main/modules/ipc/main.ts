@@ -6,7 +6,6 @@ import {
   pruneRetrievedProjects,
   RETAINED_RETRIEVALS,
 } from '@root/backend/editor/project/materialize-retrieved-project'
-import type { ProjectSnapshotInfo } from '@root/backend/editor/runtime/runtime-api-client'
 import type {
   DebugBoardIdResult,
   DebugStatusResult,

@@ -63,34 +63,6 @@ const PlcStatusResponseSchema = z.object({
   switchPosition: z.string().optional(),
 })
 
-/**
- * What a device reports about the source project it stores.
- *
- * Every field but `present` is optional because a device with nothing stored
- * answers `{present: false}` alone, and because these values come from whoever
- * uploaded -- the runtime never opens the archive to check them.
- */
-const ProjectSnapshotInfoSchema = z.object({
-  present: z.boolean(),
-  projectName: z.string().optional(),
-  editorVersion: z.string().optional(),
-  uploadedBy: z.string().optional(),
-  timestamp: z.string().optional(),
-  sizeBytes: z.number().optional(),
-  formatVersion: z.number().optional(),
-  libraries: z
-    .array(
-      z.object({
-        name: z.string(),
-        version: z.string().optional(),
-        hash: z.string().optional(),
-      }),
-    )
-    .optional(),
-})
-
-export type ProjectSnapshotInfo = z.infer<typeof ProjectSnapshotInfoSchema>
-
 const ProjectSnapshotBodySchema = z.object({
   projectName: z.string(),
   contentBase64: z.string(),
