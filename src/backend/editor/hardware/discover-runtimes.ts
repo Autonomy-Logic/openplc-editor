@@ -114,9 +114,7 @@ export function parseAdvertisement(payload: string, sourceAddress: string): Disc
     // Absent keys mean the device stores no project, so these stay undefined
     // rather than becoming empty strings -- the picker distinguishes "no
     // project" from "a project with no name".
-    ...(typeof record.project_name === 'string' && record.project_name
-      ? { projectName: record.project_name }
-      : {}),
+    ...(typeof record.project_name === 'string' && record.project_name ? { projectName: record.project_name } : {}),
     ...(typeof record.project_timestamp === 'string' && record.project_timestamp
       ? { projectTimestamp: record.project_timestamp }
       : {}),

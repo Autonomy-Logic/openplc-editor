@@ -71,9 +71,7 @@ describe('materializeRetrievedProject', () => {
     expect(result.projectPath).toBe(join(scratchRoot, 'proj'))
     expect(result.projectName).toBe('Traffic Light')
     expect(readFileSync(join(result.projectPath, 'project.json'), 'utf-8')).toContain('Traffic Light')
-    expect(readFileSync(join(result.projectPath, 'pous/programs/MAIN.st'), 'utf-8')).toBe(
-      'PROGRAM MAIN END_PROGRAM',
-    )
+    expect(readFileSync(join(result.projectPath, 'pous/programs/MAIN.st'), 'utf-8')).toBe('PROGRAM MAIN END_PROGRAM')
   })
 
   it('never writes into the caller directory itself', async () => {
@@ -90,9 +88,7 @@ describe('materializeRetrievedProject', () => {
       projectName: 'P',
       editorVersion: '4.2.0',
       uploadedBy: 'op',
-      libraries: [
-        { name: 'Motion', version: '1.2.0', hash: await hashText(archiveText), archive: archiveText },
-      ],
+      libraries: [{ name: 'Motion', version: '1.2.0', hash: await hashText(archiveText), archive: archiveText }],
     })
 
     const result = await materializeRetrievedProject(built.archive, { scratchRoot, folderName: 'p' })
@@ -122,9 +118,9 @@ describe('untrusted archives', () => {
   it('writes nothing at all when the archive is rejected', async () => {
     // A partially written project is worse than none: it looks openable.
     const notAZip = new TextEncoder().encode('definitely not a zip')
-    await expect(
-      materializeRetrievedProject(notAZip, { scratchRoot, folderName: 'proj' }),
-    ).rejects.toThrow(SnapshotArchiveError)
+    await expect(materializeRetrievedProject(notAZip, { scratchRoot, folderName: 'proj' })).rejects.toThrow(
+      SnapshotArchiveError,
+    )
     expect(existsSync(join(scratchRoot, 'proj'))).toBe(false)
   })
 

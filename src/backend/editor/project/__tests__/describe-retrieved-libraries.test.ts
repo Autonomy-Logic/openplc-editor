@@ -53,10 +53,7 @@ it('classifies each library independently', async () => {
     Present: present.archive,
     Changed: (await library('Changed', '1', 'mine')).archive,
   }
-  const described = await describeRetrievedLibraries(
-    [present, absent, changed],
-    (name) => local[name] ?? null,
-  )
+  const described = await describeRetrievedLibraries([present, absent, changed], (name) => local[name] ?? null)
   expect(described.map((entry) => entry.status)).toEqual(['installed', 'missing', 'differs'])
 })
 

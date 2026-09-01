@@ -13,11 +13,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 
 import { parseProjectSnapshot } from '../../../shared/project/project-snapshot-archive'
-import {
-  buildUploadSnapshot,
-  readProjectDirectory,
-  referencedLibraryNames,
-} from '../build-upload-snapshot'
+import { buildUploadSnapshot, readProjectDirectory, referencedLibraryNames } from '../build-upload-snapshot'
 
 let projectPath: string
 

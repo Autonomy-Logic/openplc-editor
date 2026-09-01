@@ -649,9 +649,7 @@ describe('getProjectSnapshotInfo', () => {
   })
 
   it('reports a failed IPC call rather than throwing at the caller', async () => {
-    ;(window.bridge.runtimeProjectSnapshotInfo as jest.Mock).mockRejectedValue(
-      new Error('info failed'),
-    )
+    ;(window.bridge.runtimeProjectSnapshotInfo as jest.Mock).mockRejectedValue(new Error('info failed'))
     const result = await adapter.getProjectSnapshotInfo!('192.168.1.100')
 
     expect(result).toEqual({ success: false, error: 'info failed' })
@@ -667,9 +665,7 @@ describe('retrieveProject', () => {
   })
 
   it('reports a failed IPC call rather than throwing at the caller', async () => {
-    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockRejectedValue(
-      new Error('retrieve failed'),
-    )
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockRejectedValue(new Error('retrieve failed'))
     const result = await adapter.retrieveProject!('192.168.1.100')
 
     expect(result).toEqual({ success: false, error: 'retrieve failed' })
@@ -680,18 +676,14 @@ describe('installRetrievedLibraries', () => {
   it('delegates to bridge with the project path and the names to install', async () => {
     const result = await adapter.installRetrievedLibraries!('/projects/demo', ['oscat-basic'])
 
-    expect(window.bridge.runtimeInstallRetrievedLibraries).toHaveBeenCalledWith('/projects/demo', [
-      'oscat-basic',
-    ])
+    expect(window.bridge.runtimeInstallRetrievedLibraries).toHaveBeenCalledWith('/projects/demo', ['oscat-basic'])
     expect(result).toEqual({ success: true, installed: ['oscat-basic'], failed: [] })
   })
 
   it('reports the failure in the shape the caller renders, not as a thrown error', async () => {
     // The caller lists failures per library, so a whole-call failure still has
     // to arrive as one -- an empty name with the reason attached.
-    ;(window.bridge.runtimeInstallRetrievedLibraries as jest.Mock).mockRejectedValue(
-      new Error('install failed'),
-    )
+    ;(window.bridge.runtimeInstallRetrievedLibraries as jest.Mock).mockRejectedValue(new Error('install failed'))
     const result = await adapter.installRetrievedLibraries!('/projects/demo', ['oscat-basic'])
 
     expect(result).toEqual({
