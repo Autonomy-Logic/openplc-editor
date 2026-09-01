@@ -545,10 +545,17 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
  */
 const NO_FLAG = '__none__'
 
-const VARIABLE_FLAGS: Array<{ value: string; label: string }> = [
-  { value: NO_FLAG, label: '' },
-  { value: 'constant', label: 'Constant' },
-  { value: 'retain', label: 'Retain' },
+/** `label` is what the cell shows; `a11yLabel` is what it is called.
+ *
+ *  They differ for exactly one option. The blank choice has to LOOK blank — a
+ *  dash on every unflagged variable was the noise this replaced — but "blank" is
+ *  not a name, and a screen reader announcing nothing for the flag cell of the
+ *  overwhelmingly common row is worse than the dash was. So the visible text
+ *  stays empty and the accessible name says what the option means. */
+const VARIABLE_FLAGS: Array<{ value: string; label: string; a11yLabel: string }> = [
+  { value: NO_FLAG, label: '', a11yLabel: 'No flag' },
+  { value: 'constant', label: 'Constant', a11yLabel: 'Constant' },
+  { value: 'retain', label: 'Retain', a11yLabel: 'Retain' },
 ]
 
 const SelectableFlagCell = ({
@@ -586,6 +593,7 @@ const SelectableFlagCell = ({
   return (
     <Select value={cellValue} onValueChange={(value) => onValueChange(value)} disabled={isDebuggerVisible}>
       <SelectTrigger
+        aria-label={`Flag: ${VARIABLE_FLAGS.find((f) => f.value === cellValue)?.a11yLabel ?? 'No flag'}`}
         placeholder={VARIABLE_FLAGS.find((f) => f.value === cellValue)?.label ?? ''}
         className={cn(
           'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
@@ -610,8 +618,11 @@ const SelectableFlagCell = ({
             <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
               {/* NBSP for the blank option: an empty ItemText gives the row no
                   height, so the one option a user needs to clear a flag would
-                  be a few pixels tall and effectively unclickable. */}
+                  be a few pixels tall and effectively unclickable. The NBSP is
+                  what makes it clickable; the sr-only span is what makes it
+                  nameable, since a non-breaking space is not a name. */}
               {flag.label || '\u00A0'}
+              {flag.label === '' && <span className='sr-only'>{flag.a11yLabel}</span>}
             </span>
           </SelectItem>
         ))}

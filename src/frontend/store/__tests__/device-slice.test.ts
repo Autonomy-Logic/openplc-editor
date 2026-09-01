@@ -436,6 +436,55 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
 
+    it("a board change swaps in the new board's persistent storage, never the old board's path", () => {
+      // The bug this pins: the per-board archive was written on every edit and
+      // never read back, so switching board left the FLAT `persistentStorage`
+      // holding the previous board's values. The compile path reads the flat
+      // view, so the retain.conf that shipped to the new device carried the old
+      // device's file path — the exact outcome the archive exists to prevent.
+      const store = makeStore()
+
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/pi.bin' })
+
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage?.path).toBe('/data/pi.bin')
+
+      // Back again: the first board's settings are still there, not lost.
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage?.path).toBe('/data/esp.bin')
+    })
+
+    it("a board never configured gets NO settings, rather than inheriting the previous board's", () => {
+      // `undefined`, deliberately, not an empty record: absent settings are what
+      // make generateRetainConf emit no retain.conf, which is the right default
+      // for a board nobody has configured. An empty record would be a claim that
+      // storage was considered and switched off.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toBeUndefined()
+    })
+
+    it("keeps each board's settings in its own archive bucket", () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+      store.getState().deviceActions.setPersistentStorage({ enabled: false, path: '/data/pi.bin' })
+
+      const archive = store.getState().deviceDefinitions.configuration.persistentStorageByBoard
+      expect(archive?.['ESP8266 NodeMCU']?.path).toBe('/data/esp.bin')
+      expect(archive?.['Raspberry Pi 4']?.path).toBe('/data/pi.bin')
+      expect(archive?.['ESP8266 NodeMCU']?.enabled).toBe(true)
+      expect(archive?.['Raspberry Pi 4']?.enabled).toBe(false)
+    })
+
     it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
       // The device screen re-sets the board on several paths; only an actual
       // change invalidates the licence — or ends a running purchase watch.

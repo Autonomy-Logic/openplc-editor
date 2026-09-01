@@ -38,7 +38,13 @@ const PersistentStorageEditor = () => {
   const path = settings?.path ?? ''
   const flushSeconds = settings?.flushSeconds ?? DEFAULT_RETAIN_FLUSH_SECONDS
 
-  const flushOutOfRange = flushSeconds < RETAIN_MIN_FLUSH_SECONDS || flushSeconds > RETAIN_MAX_FLUSH_SECONDS
+  // Whole seconds only. The emitter rounds (`Math.round`), so accepting 1.5 here
+  // meant showing the user a value the device would never use — the field said
+  // valid and the upload silently applied 2.
+  const flushInvalid =
+    !Number.isInteger(flushSeconds) ||
+    flushSeconds < RETAIN_MIN_FLUSH_SECONDS ||
+    flushSeconds > RETAIN_MAX_FLUSH_SECONDS
 
   return (
     <div className='flex h-full w-full select-none flex-col overflow-auto p-8'>
@@ -105,17 +111,17 @@ const PersistentStorageEditor = () => {
               onChange={(e) => setPersistentStorage({ flushSeconds: Number(e.target.value) })}
               className={cn(
                 'h-9 w-28 rounded-md border px-3 text-sm disabled:opacity-50 dark:bg-neutral-900 dark:text-white',
-                flushOutOfRange ? 'border-red-500 dark:border-red-500' : 'border-neutral-300 dark:border-neutral-700',
+                flushInvalid ? 'border-red-500 dark:border-red-500' : 'border-neutral-300 dark:border-neutral-700',
               )}
-              aria-invalid={flushOutOfRange}
+              aria-invalid={flushInvalid}
               aria-describedby='retain-flush-help'
             />
             <span className='text-sm text-neutral-600 dark:text-neutral-400'>seconds</span>
           </div>
-          {flushOutOfRange && (
+          {flushInvalid && (
             <p className='text-xs text-red-600 dark:text-red-400' role='alert'>
-              Use a whole number between {RETAIN_MIN_FLUSH_SECONDS} and {RETAIN_MAX_FLUSH_SECONDS} seconds. The runtime
-              refuses anything outside that range when the project is uploaded.
+              Use a whole number of seconds between {RETAIN_MIN_FLUSH_SECONDS} and {RETAIN_MAX_FLUSH_SECONDS}. A
+              fraction would be rounded on upload, and the runtime refuses anything outside that range.
             </p>
           )}
           <p id='retain-flush-help' className='text-xs text-neutral-500 dark:text-neutral-400'>

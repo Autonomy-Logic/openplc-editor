@@ -185,6 +185,7 @@ import JSZip from 'jszip'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
+import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -3096,7 +3097,26 @@ class CompilerModule {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
       try {
         const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
-        persistentStorage = deviceConfig.persistentStorage
+        // Validated, not trusted. `readJSONFile` is `JSON.parse(...) as T`, so a
+        // hand-edited project file with `"path": null` reached
+        // `generateRetainConf` and threw on `.trim()` — a stack trace where a
+        // controlled message belongs. The schema already exists; this is just
+        // applying it at the boundary the guidelines name.
+        const parsedStorage = persistentStorageSchema.safeParse(deviceConfig.persistentStorage)
+        if (parsedStorage.success) {
+          persistentStorage = parsedStorage.data
+        } else if (deviceConfig.persistentStorage !== undefined) {
+          // Emit nothing rather than guess: a malformed stanza is not evidence
+          // the user wanted storage off, but it is evidence we cannot say what
+          // they wanted, and shipping a half-read path is worse than shipping
+          // none. The runtime then removes any copy the device has.
+          _mainProcessPort.postMessage({
+            logLevel: 'warning',
+            message:
+              'Persistent storage settings in devices/configuration.json could not be read; ' +
+              'no retain.conf will be sent. Re-save the setting on the Persistent Storage screen.',
+          })
+        }
       } catch {
         // No configuration.json — a project that never configured storage, which
         // generateRetainConf treats as "emit nothing".

@@ -467,6 +467,18 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             const cfg = deviceDefinitions.configuration
             syncActiveBoardVendorBucket(cfg)
             cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
+            // Persistent storage is board-specific for a sharper reason than the
+            // rest: the value is a PATH ON A PARTICULAR BOX. Carried across a
+            // switch it does not merely become meaningless, it ships the new
+            // device a location belonging to the old one — and the compile path
+            // reads this flat view, so that path is what lands in retain.conf.
+            //
+            // Deliberately `undefined`, not `{}`, when the incoming board has no
+            // bucket: absent settings are what make `generateRetainConf` emit no
+            // file, which is the right default for a board nobody has configured
+            // and is not the same as inheriting a path.
+            syncActiveBoardPersistentStorage(cfg)
+            cfg.persistentStorage = cfg.persistentStorageByBoard?.[deviceBoard]
             // A licence report is board-specific for the same reason all of the
             // above is: it was verified against the PREVIOUS board's `deviceId`
             // and its VPP's `productId`. Carried across a switch, the badge

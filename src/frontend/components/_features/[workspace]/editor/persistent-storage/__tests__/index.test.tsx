@@ -12,6 +12,18 @@ import { DEFAULT_RETAIN_FLUSH_SECONDS, RETAIN_MAX_FLUSH_SECONDS } from '@root/mi
 
 import { PersistentStorageEditor } from '../index'
 
+/** Narrow, don't assert.
+ *
+ *  CLAUDE.md forbids type assertions, and the reason applies here: `as
+ *  HTMLInputElement` on a query that starts returning a wrapper would read
+ *  `.disabled` as `undefined` and quietly pass. `instanceof` fails loudly. */
+function input(el: HTMLElement): HTMLInputElement {
+  if (!(el instanceof HTMLInputElement)) {
+    throw new Error(`expected an <input>, got <${el.tagName.toLowerCase()}>`)
+  }
+  return el
+}
+
 function settings() {
   return useOpenPLCStore.getState().deviceDefinitions.configuration.persistentStorage
 }
@@ -44,8 +56,8 @@ describe('PersistentStorageEditor', () => {
   it('shows storage off for a project that never configured it', () => {
     render(<PersistentStorageEditor />)
 
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false)
-    expect((screen.getByLabelText(/file location/i) as HTMLInputElement).disabled).toBe(true)
+    expect(input(screen.getByRole('checkbox')).checked).toBe(false)
+    expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
   })
 
   it('writes the toggle into the project, materialising the record on first edit', () => {
@@ -85,13 +97,24 @@ describe('PersistentStorageEditor', () => {
     setSettings({ enabled: true, path: '', flushSeconds: 5 })
     render(<PersistentStorageEditor />)
 
-    const path = screen.getByLabelText(/file location/i) as HTMLInputElement
+    const path = input(screen.getByLabelText(/file location/i))
     expect(path.value).toBe('')
     expect(path.placeholder).toMatch(/runtime default/i)
   })
 
   it('flags a period the runtime would refuse at upload', () => {
     setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: RETAIN_MAX_FLUSH_SECONDS + 1 })
+    render(<PersistentStorageEditor />)
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByLabelText(/save every/i).getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('flags a fractional period, which the upload would silently round', () => {
+    // The field said valid and the emitter applied something else: it rounds, so
+    // 1.5 shipped as 2. A UI that accepts a value the device will not use is
+    // worse than one that refuses it.
+    setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 1.5 })
     render(<PersistentStorageEditor />)
 
     expect(screen.getByRole('alert')).toBeTruthy()
@@ -109,8 +132,8 @@ describe('PersistentStorageEditor', () => {
     setSettings({ enabled: false, path: '/data/retain.bin', flushSeconds: 5 })
     render(<PersistentStorageEditor />)
 
-    expect((screen.getByLabelText(/file location/i) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByLabelText(/save every/i) as HTMLInputElement).disabled).toBe(true)
+    expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
+    expect(input(screen.getByLabelText(/save every/i)).disabled).toBe(true)
   })
 
   it('says the settings travel with the project', () => {
