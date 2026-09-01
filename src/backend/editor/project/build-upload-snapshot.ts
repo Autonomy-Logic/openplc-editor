@@ -112,9 +112,7 @@ export function referencedLibraryNames(projectJson: string): string[] {
  * skipped rather than failing the build: the project is still worth storing,
  * and the opening client warns about what is missing.
  */
-export async function buildUploadSnapshot(
-  options: BuildUploadSnapshotOptions,
-): Promise<UploadSnapshot> {
+export async function buildUploadSnapshot(options: BuildUploadSnapshotOptions): Promise<UploadSnapshot> {
   const files = await readProjectDirectory(options.projectPath)
 
   const projectJson = files.get('project.json') ?? ''

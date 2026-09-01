@@ -89,7 +89,11 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={handleRetrieveProject}>
+          <MenuPrimitive.Item
+            className={ITEM}
+            data-testid='menu-retrieve-project'
+            onClick={handleRetrieveProject}
+          >
             <span>{i18n.t('menu:file.submenu.retrieveProject')}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />

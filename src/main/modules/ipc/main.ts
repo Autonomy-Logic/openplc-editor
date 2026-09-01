@@ -1,7 +1,11 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
-import { materializeRetrievedProject } from '@root/backend/editor/project/materialize-retrieved-project'
+import {
+  materializeRetrievedProject,
+  pruneRetrievedProjects,
+  RETAINED_RETRIEVALS,
+} from '@root/backend/editor/project/materialize-retrieved-project'
 import type { ProjectSnapshotInfo } from '@root/backend/editor/runtime/runtime-api-client'
 import type {
   DebugBoardIdResult,
@@ -595,6 +599,19 @@ class MainProcessBridge implements MainIpcModule {
    */
   private retrievedLibraries = new Map<string, Array<{ name: string; archive: string }>>()
 
+  /**
+   * Drop every retrieved project's libraries except the one just retrieved.
+   *
+   * The map exists so installing installs what THAT project carried, which only
+   * needs the project currently open. Keeping the rest held the full text of
+   * every library of every retrieval for the life of the session.
+   */
+  private forgetRetrievedLibrariesExcept(keep: string): void {
+    for (const path of [...this.retrievedLibraries.keys()]) {
+      if (path !== keep) this.retrievedLibraries.delete(path)
+    }
+  }
+
   handleRuntimeRetrieveProject = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -610,9 +627,20 @@ class MainProcessBridge implements MainIpcModule {
     if (!fetched.success) return { success: false, error: fetched.error }
 
     try {
+      const scratchRoot = join(app.getPath('userData'), 'retrieved-projects')
+      // Old retrievals go before the new one is written. A retrieved project
+      // deliberately stays in scratch until the user runs Save As, so without
+      // this an engineer who retrieves a project just to look at it leaves a
+      // full copy of its source on disk permanently -- unencrypted, in
+      // userData, accumulating one folder per retrieval.
+      await pruneRetrievedProjects(scratchRoot, RETAINED_RETRIEVALS)
+
       const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
-        scratchRoot: join(app.getPath('userData'), 'retrieved-projects'),
+        scratchRoot,
       })
+      // Same for the in-memory copy: this map holds the full text of every
+      // library each retrieval carried, and it only ever grew.
+      this.forgetRetrievedLibrariesExcept(materialized.projectPath)
       this.retrievedLibraries.set(
         materialized.projectPath,
         materialized.libraries.map(({ name, archive }) => ({ name, archive })),

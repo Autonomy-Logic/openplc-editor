@@ -197,9 +197,7 @@ export function assertSafeEntryPath(rawPath: string): void {
  * libraries ride alongside so a retrieved project can still compile on a
  * machine whose library pool has never seen them.
  */
-export async function buildProjectSnapshot(
-  options: BuildProjectSnapshotOptions,
-): Promise<BuiltProjectSnapshot> {
+export async function buildProjectSnapshot(options: BuildProjectSnapshotOptions): Promise<BuiltProjectSnapshot> {
   const { files, projectName, editorVersion, uploadedBy } = options
   const libraries = options.libraries ?? []
   const timestamp = options.timestamp ?? new Date().toISOString()
@@ -286,9 +284,7 @@ export async function parseProjectSnapshot(
   const entries = Object.values(zip.files).filter((entry) => !entry.dir)
 
   if (entries.length > limits.maxEntries) {
-    throw new SnapshotArchiveError(
-      `Archive has too many files (${entries.length}, limit ${limits.maxEntries})`,
-    )
+    throw new SnapshotArchiveError(`Archive has too many files (${entries.length}, limit ${limits.maxEntries})`)
   }
 
   // Check declared sizes before reading anything: the point of a zip bomb is
@@ -332,7 +328,12 @@ export async function parseProjectSnapshot(
     if (path === SNAPSHOT_MANIFEST_PATH) continue
 
     const content = await entry.async('string')
-    readTotal += content.length
+    // Bytes, not code units. `String.length` counts UTF-16 units, so text that
+    // is mostly 3-byte UTF-8 -- CJK, and to a lesser degree accented Latin --
+    // would count as roughly a third of its real size and let this backstop
+    // admit ~3x the limit. That matters precisely because this is the guard for
+    // archives whose declared sizes are absent or lying.
+    readTotal += utf8ByteLength(content)
     // Backstop for an archive that lied about, or omitted, its declared sizes.
     if (readTotal > limits.maxTotalBytes) {
       throw new SnapshotArchiveError('Archive expanded beyond the size limit while reading')
@@ -364,14 +365,23 @@ export async function parseProjectSnapshot(
  * silently would turn a malformed archive into a project that compiles against
  * a library the user was never told about.
  */
+/**
+ * How many bytes this text occupies as UTF-8.
+ *
+ * `TextEncoder` is present in both hosts this file runs in (Electron's main
+ * process and the browser), and measuring is what the size guards are actually
+ * trying to do -- `String.length` answers a different question.
+ */
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length
+}
+
 function matchLibraryMetadata(
   metadata: SnapshotMetadata,
   path: string,
 ): { name: string; version: string; hash: string } {
   const fileName = path.slice(`${SNAPSHOT_LIBRARY_DIR}/`.length)
-  const match = metadata.libraries.find(
-    (library) => libraryFileName({ ...library, archive: '' }) === fileName,
-  )
+  const match = metadata.libraries.find((library) => libraryFileName({ ...library, archive: '' }) === fileName)
   return match ?? { name: fileName.replace(/\.stlib$/, ''), version: '', hash: '' }
 }
 
@@ -433,10 +443,7 @@ function parseManifest(text: string): SnapshotMetadata {
  * at, because a file the writer cannot place is a file the next save would
  * lose anyway.
  */
-export function toWriteProjectFiles(
-  parsed: ParsedProjectSnapshot,
-  projectPath: string,
-): WriteProjectFiles {
+export function toWriteProjectFiles(parsed: ParsedProjectSnapshot, projectPath: string): WriteProjectFiles {
   const pouFiles: RawProjectFile[] = []
   const serverFiles: RawProjectFile[] = []
   const remoteDeviceFiles: RawProjectFile[] = []

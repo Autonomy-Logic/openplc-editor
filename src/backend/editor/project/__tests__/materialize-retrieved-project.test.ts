@@ -12,6 +12,7 @@
  */
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs'
+import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -24,7 +25,12 @@ import {
   buildProjectSnapshot,
   hashText,
 } from '../../../shared/project/project-snapshot-archive'
-import { materializeRetrievedProject, safeFolderName } from '../materialize-retrieved-project'
+import {
+  materializeRetrievedProject,
+  pruneRetrievedProjects,
+  RETAINED_RETRIEVALS,
+  safeFolderName,
+} from '../materialize-retrieved-project'
 
 let scratchRoot: string
 
@@ -182,5 +188,60 @@ describe('safeFolderName', () => {
 
   it('bounds the length so a hostile name cannot blow the path limit', () => {
     expect(safeFolderName('x'.repeat(500)).length).toBe(80)
+  })
+})
+
+// --- keeping the scratch root from growing forever ---------------------------
+//
+// A retrieved project stays in scratch until the user runs Save As, so these
+// folders are unencrypted copies of project source in userData. Nothing removed
+// them, so retrieving a project just to look at it left one behind permanently.
+
+describe('pruneRetrievedProjects', () => {
+  const makeRetrieval = async (root: string, name: string, modifiedAt: number) => {
+    const dir = join(root, name)
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(join(dir, 'project.json'), '{}', 'utf-8')
+    await fs.utimes(dir, new Date(modifiedAt), new Date(modifiedAt))
+    return dir
+  }
+
+  it('keeps the newest retrievals and removes the rest', async () => {
+    const root = await fs.mkdtemp(join(tmpdir(), 'prune-'))
+    await makeRetrieval(root, 'oldest', 1_000)
+    await makeRetrieval(root, 'middle', 2_000)
+    await makeRetrieval(root, 'newest', 3_000)
+
+    await pruneRetrievedProjects(root, 2)
+
+    expect((await fs.readdir(root)).sort()).toEqual(['middle', 'newest'])
+  })
+
+  it('leaves everything alone when there is nothing to spare', async () => {
+    const root = await fs.mkdtemp(join(tmpdir(), 'prune-'))
+    await makeRetrieval(root, 'only', 1_000)
+
+    await pruneRetrievedProjects(root, RETAINED_RETRIEVALS)
+
+    expect(await fs.readdir(root)).toEqual(['only'])
+  })
+
+  it('treats a scratch root that does not exist yet as nothing to do', async () => {
+    // The normal state before the first retrieval.
+    const root = join(tmpdir(), `prune-missing-${Date.now()}`)
+    await expect(pruneRetrievedProjects(root, 2)).resolves.toBeUndefined()
+  })
+
+  it('never fails the retrieval it is tidying up for', async () => {
+    // Worst case is the disk usage this avoids; that is not worth turning into
+    // a failed feature.
+    const root = await fs.mkdtemp(join(tmpdir(), 'prune-'))
+    await makeRetrieval(root, 'a', 1_000)
+    await makeRetrieval(root, 'b', 2_000)
+    const rm = jest.spyOn(fs, 'rm').mockRejectedValue(new Error('held open by another window'))
+
+    await expect(pruneRetrievedProjects(root, 1)).resolves.toBeUndefined()
+
+    rm.mockRestore()
   })
 })

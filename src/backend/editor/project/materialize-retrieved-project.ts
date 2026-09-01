@@ -125,3 +125,57 @@ export async function materializeRetrievedProject(
     libraries: parsed.libraries,
   }
 }
+
+/**
+ * How many past retrievals to keep on disk.
+ *
+ * Not zero: a retrieved project lives in scratch until the user runs Save As,
+ * so the one currently open has to survive, and keeping a couple more means
+ * retrieving a second project to compare against the first still works.
+ */
+export const RETAINED_RETRIEVALS = 3
+
+/**
+ * Remove all but the newest `keep` retrievals from the scratch root.
+ *
+ * These folders are unencrypted copies of project source in `userData`, one per
+ * retrieval, and nothing else ever removed them: an engineer who retrieves a
+ * project to look at it left a full copy behind permanently.
+ *
+ * Never throws. Failing to tidy up must not fail the retrieval the user asked
+ * for -- the worst case is the disk usage this is trying to avoid, which is not
+ * worth turning into a failed feature.
+ */
+export async function pruneRetrievedProjects(scratchRoot: string, keep: number): Promise<void> {
+  let entries: Array<{ name: string; isDirectory: () => boolean }>
+  try {
+    entries = await fs.readdir(scratchRoot, { withFileTypes: true })
+  } catch {
+    // No scratch root yet is the normal state before the first retrieval.
+    return
+  }
+
+  const directories = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  if (directories.length <= keep) return
+
+  const dated = await Promise.all(
+    directories.map(async (name) => {
+      try {
+        const stats = await fs.stat(join(scratchRoot, name))
+        return { name, modifiedAt: stats.mtimeMs }
+      } catch {
+        // Unreadable: treat as oldest so it is the first to go.
+        return { name, modifiedAt: 0 }
+      }
+    }),
+  )
+
+  dated.sort((a, b) => b.modifiedAt - a.modifiedAt)
+  for (const { name } of dated.slice(keep)) {
+    try {
+      await fs.rm(join(scratchRoot, name), { recursive: true, force: true })
+    } catch {
+      // Another window may hold it open. The next retrieval tries again.
+    }
+  }
+}

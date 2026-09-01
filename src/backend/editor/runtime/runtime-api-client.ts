@@ -106,12 +106,15 @@ type ProjectSnapshotBody = z.infer<typeof ProjectSnapshotBodySchema>
  * broken connection sends people looking for a network problem that is not
  * there.
  */
-function describeSnapshotFetchFailure(raw: string): string {
-  const lower = raw.toLowerCase()
-  if (lower.includes('admin privileges required')) {
+function describeSnapshotFetchFailure(raw: string, statusCode?: number): string {
+  // Status codes, not the runtime's English. Matching on the body text meant any
+  // rewording on the device -- including the translation this product will
+  // eventually want -- silently degraded both of these back to raw transport
+  // text, with nothing failing to say so.
+  if (statusCode === 403) {
     return 'This account is not an administrator on that device. Only administrators can retrieve a stored project.'
   }
-  if (lower.includes('no project is stored')) {
+  if (statusCode === 404) {
     return 'That device is not storing a project.'
   }
   return raw
@@ -388,7 +391,7 @@ export class RuntimeApiClient {
     ipAddress: string,
     endpoint: string,
     responseParser?: (data: string) => T,
-  ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
+  ): Promise<{ success: true; data?: T } | { success: false; error: string; statusCode?: number }> {
     // The token authority owns the live token + refresh.
     type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
     const url = this.runtimeUrl(ipAddress, endpoint)
@@ -404,7 +407,10 @@ export class RuntimeApiClient {
       },
       (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
     )
-    return result.success ? result : { success: false, error: result.error }
+    // The status code travels with the failure: callers that need to tell a
+    // real answer (403, 404) from a broken connection cannot do it from the
+    // body text without matching the runtime's English.
+    return result.success ? result : { success: false, error: result.error, statusCode: result.statusCode }
   }
 
   /**
@@ -582,9 +588,7 @@ export class RuntimeApiClient {
    */
   async retrieveProjectSnapshot(
     ipAddress: string,
-  ): Promise<
-    { success: true; archive: Buffer; projectName: string } | { success: false; error: string }
-  > {
+  ): Promise<{ success: true; archive: Buffer; projectName: string } | { success: false; error: string }> {
     const result = await this.makeRuntimeApiRequest<ProjectSnapshotBody | null>(
       ipAddress,
       '/api/project-snapshot',
@@ -592,18 +596,18 @@ export class RuntimeApiClient {
     )
 
     if (!result.success) {
-      return { success: false, error: describeSnapshotFetchFailure(result.error) }
+      return { success: false, error: describeSnapshotFetchFailure(result.error, result.statusCode) }
     }
     if (!result.data) {
       return { success: false, error: 'The device sent an unreadable project archive' }
     }
 
-    let archive: Buffer
-    try {
-      archive = Buffer.from(result.data.contentBase64, 'base64')
-    } catch {
-      return { success: false, error: 'The device sent a project archive that is not valid base64' }
-    }
+    // No try/catch here: `Buffer.from(x, 'base64')` does not throw. It drops
+    // characters outside the alphabet and returns whatever decodes, so a catch
+    // documented a check that was not happening. A corrupt or truncated archive
+    // is caught where it can actually be recognised -- `parseProjectSnapshot`,
+    // which fails on it as an unreadable archive.
+    const archive = Buffer.from(result.data.contentBase64, 'base64')
 
     return { success: true, archive, projectName: result.data.projectName }
   }
@@ -674,12 +678,7 @@ export class RuntimeApiClient {
     // types differ). A zero-copy view over the same memory satisfies the
     // signature honestly — the previous `as unknown as` hid the mismatch, and
     // copying a firmware bundle to appease a type would be worse than both.
-    const reqBody = Buffer.concat([
-      asBytes(header),
-      asBytes(opts.fileBuffer),
-      ...snapshotParts,
-      asBytes(footer),
-    ])
+    const reqBody = Buffer.concat([asBytes(header), asBytes(opts.fileBuffer), ...snapshotParts, asBytes(footer)])
     const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
 
     const doRequest = (token: string): Promise<UploadResult> =>

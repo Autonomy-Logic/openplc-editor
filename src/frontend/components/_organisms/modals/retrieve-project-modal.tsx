@@ -43,9 +43,7 @@ const RetrieveProjectModal = () => {
   } = useOpenPLCStore()
   const runtime = useRuntime()
   const projectPort = useProject()
-  const runtimeIpAddress = useOpenPLCStore(
-    (state) => state.deviceDefinitions.configuration.runtimeIpAddress || '',
-  )
+  const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
 
   const isOpen = modals['retrieve-project']?.open || false
 
@@ -105,9 +103,7 @@ const RetrieveProjectModal = () => {
     // Subscribe before scanning so the first replies are not dropped.
     const unsubscribe = runtime.onDeviceDiscovered((device) => {
       setDevices((previous) =>
-        previous.some((existing) => existing.ipAddress === device.ipAddress)
-          ? previous
-          : [...previous, device],
+        previous.some((existing) => existing.ipAddress === device.ipAddress) ? previous : [...previous, device],
       )
     })
     void runScan()
@@ -136,7 +132,18 @@ const RetrieveProjectModal = () => {
       setBusyMessage('Opening the project...')
       // Close the current project first so its unsaved-changes prompt runs
       // before anything is replaced, exactly as File -> Close Project does.
-      closeProject()
+      //
+      // And honour the answer. Opening the prompt was not enough on its own:
+      // the open that followed cleared it again, so the user saw a flicker and
+      // lost the work anyway. When there is something to confirm, this stops
+      // and lets them decide -- retrieving again afterwards costs one click.
+      const { pendingConfirmation } = closeProject()
+      if (pendingConfirmation) {
+        setError('Save or discard your changes first, then retrieve again.')
+        setBusyMessage('')
+        setStep('pick')
+        return
+      }
 
       const opened = await projectPort.openProjectByPath(retrieved.projectPath)
       if (!opened.success) {
@@ -238,8 +245,7 @@ const RetrieveProjectModal = () => {
         {step === 'pick' && (
           <>
             <p className='mb-4 text-sm text-neutral-600 dark:text-neutral-400'>
-              Choose a device to retrieve its stored project. Devices that are not storing one cannot be
-              selected.
+              Choose a device to retrieve its stored project. Devices that are not storing one cannot be selected.
             </p>
 
             <div className='mb-3 flex items-center justify-between'>
@@ -317,8 +323,8 @@ const RetrieveProjectModal = () => {
         {step === 'credentials' && selected && (
           <div className='flex flex-1 flex-col justify-center gap-3 text-sm'>
             <p className='text-neutral-600 dark:text-neutral-400'>
-              Sign in to <strong>{selected.hostname || selected.ipAddress}</strong>. Retrieving a project
-              requires an administrator account on that device.
+              Sign in to <strong>{selected.hostname || selected.ipAddress}</strong>. Retrieving a project requires an
+              administrator account on that device.
             </p>
             <input
               autoFocus

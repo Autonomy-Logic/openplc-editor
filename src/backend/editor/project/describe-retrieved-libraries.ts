@@ -42,11 +42,17 @@ export async function describeRetrievedLibraries(
       described.push({ name: library.name, version: library.version, status: 'missing' })
       continue
     }
+    // Hashed from the archive that actually arrived, not from the hash the
+    // device's manifest claims for it. The manifest is device-supplied data, so
+    // trusting it would let an archive whose content had been changed present
+    // the hash of the local library and be reported as `installed` -- which is
+    // the one status that tells the user there is nothing to look at.
     const localHash = await hashLibraryArchive(local)
+    const retrievedHash = await hashLibraryArchive(library.archive)
     described.push({
       name: library.name,
       version: library.version,
-      status: localHash === library.hash ? 'installed' : 'differs',
+      status: localHash === retrievedHash ? 'installed' : 'differs',
     })
   }
 

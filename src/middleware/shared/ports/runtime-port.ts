@@ -382,6 +382,21 @@ export interface RuntimePort {
     { success: true; archive: Uint8Array; projectName: string } | { success: false; error: string }
   >
 
+  /**
+   * Open a retrieved archive as the workspace's project.
+   *
+   * The sibling of `retrieveProjectArchive`, and the reason both exist as port
+   * methods rather than as a direct call: the picker is a shared component, and
+   * how an archive becomes an open project is exactly the part that differs per
+   * platform -- web parses it into the workspace, desktop unpacks it to a
+   * scratch directory first. Reaching into a platform's adapter from the
+   * component would tie the shared picker to one of them.
+   *
+   * Throws on a bad archive, so the caller can report it without replacing the
+   * workspace: the parser validates everything before yielding a single file.
+   */
+  importRetrievedProject?(archive: Uint8Array): Promise<{ projectName: string }>
+
   /** Install libraries a retrieved project brought with it, by name. */
   installRetrievedLibraries?(
     projectPath: string,
