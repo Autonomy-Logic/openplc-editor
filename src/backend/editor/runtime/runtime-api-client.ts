@@ -31,6 +31,7 @@ import https from 'node:https'
 
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import type { PlcControlResult } from '@root/backend/shared/debug/types'
+import { SNAPSHOT_LIMITS } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import {
@@ -106,6 +107,17 @@ type ProjectSnapshotBody = z.infer<typeof ProjectSnapshotBodySchema>
  * broken connection sends people looking for a network problem that is not
  * there.
  */
+/**
+ * The largest stored-project response this editor will read.
+ *
+ * The device caps the archive it stores at `SNAPSHOT_LIMITS.maxTotalBytes` and
+ * hands it back as base64 inside JSON, which is 4 bytes on the wire for every 3
+ * stored. This is that, plus room for the surrounding document -- enough for
+ * any archive a runtime should have accepted, and a bound on one that returns
+ * more than it should.
+ */
+const MAX_SNAPSHOT_RESPONSE_BYTES = Math.ceil(SNAPSHOT_LIMITS.maxTotalBytes * (4 / 3)) + 1024 * 1024
+
 function describeSnapshotFetchFailure(raw: string, statusCode?: number): string {
   // Status codes, not the runtime's English. Matching on the body text meant any
   // rewording on the device -- including the translation this product will
@@ -287,6 +299,9 @@ export class RuntimeApiClient {
     body?: string
     headers?: Record<string, string>
     timeoutMs?: number
+    /** Refuse a response larger than this, in bytes. Omitted means unbounded,
+     *  which is fine for the small JSON every other endpoint returns. */
+    maxResponseBytes?: number
   }): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
     return new Promise((resolve, reject) => {
       const parsedUrl = new URL(options.url)
@@ -309,10 +324,26 @@ export class RuntimeApiClient {
 
       const req = https.request(reqOptions as https.RequestOptions, (res: IncomingMessage) => {
         let data = ''
+        let received = 0
+        let refused = false
         res.on('data', (chunk: Buffer) => {
+          if (refused) return
+          received += chunk.length
+          // Stop reading rather than buffering whatever the device sends. The
+          // stored-project endpoint can legitimately return a hundred megabytes
+          // of base64, and a device that returns more than it should -- broken,
+          // or not the device we think it is -- would otherwise be allowed to
+          // grow this string until the editor runs out of memory.
+          if (options.maxResponseBytes !== undefined && received > options.maxResponseBytes) {
+            refused = true
+            req.destroy()
+            reject(new Error(`The device sent more than this request allows (over ${options.maxResponseBytes} bytes).`))
+            return
+          }
           data += chunk.toString()
         })
         res.on('end', () => {
+          if (refused) return
           resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
         })
       })
@@ -391,6 +422,7 @@ export class RuntimeApiClient {
     ipAddress: string,
     endpoint: string,
     responseParser?: (data: string) => T,
+    maxResponseBytes?: number,
   ): Promise<{ success: true; data?: T } | { success: false; error: string; statusCode?: number }> {
     // The token authority owns the live token + refresh.
     type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
@@ -398,7 +430,12 @@ export class RuntimeApiClient {
     const result = await this.tokens.withAuth<Raw>(
       async (token) => {
         try {
-          const res = await this.httpRequest({ method: 'GET', url, headers: { Authorization: `Bearer ${token}` } })
+          const res = await this.httpRequest({
+            method: 'GET',
+            url,
+            headers: { Authorization: `Bearer ${token}` },
+            maxResponseBytes,
+          })
           if (res.statusCode === 200) return this.parseApiResponse(res.data, responseParser)
           return { success: false, error: res.data, statusCode: res.statusCode }
         } catch (error) {
@@ -593,6 +630,7 @@ export class RuntimeApiClient {
       ipAddress,
       '/api/project-snapshot',
       (data) => ProjectSnapshotBodySchema.safeParse(parseJsonOrNull(data)).data ?? null,
+      MAX_SNAPSHOT_RESPONSE_BYTES,
     )
 
     if (!result.success) {
