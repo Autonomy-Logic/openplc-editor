@@ -312,7 +312,7 @@ function serializeProjectFile(
  * still gets written, and the text returns in the code view to be corrected.
  * Refusing the save is what would lose the user's work.
  */
-function flushGlobalVariableListDrafts(): void {
+export function flushGlobalVariableListDrafts(): void {
   const state = openPLCStoreBase.getState()
   for (const list of state.project.data.globalVariableLists ?? []) {
     state.projectActions.reconcileGlobalVariableListText(list.name)

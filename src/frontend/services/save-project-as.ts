@@ -15,7 +15,8 @@ import type { PlatformCapabilities } from '../../middleware/shared/ports/platfor
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../store'
 import { toast } from '../utils/toast'
-import { buildAllProjectFileContents } from './save-actions'
+import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
+import { buildAllProjectFileContents, flushGlobalVariableListDrafts } from './save-actions'
 
 export interface SaveProjectAsResult {
   success: boolean
@@ -58,6 +59,15 @@ export async function executeSaveProjectAs(
     return { success: false, cancelled: true }
   }
 
+  // Flush pending editor buffers before reading the project, exactly as the
+  // ordinary save does. `buildAllProjectFileContents` reads the store as it
+  // stands, so without this a graphical edit still inside its debounce window,
+  // or a global variable list still in its text buffer, would be written out in
+  // its pre-edit state -- and Save As would then adopt the destination and
+  // report success for content the user can see is not what they have.
+  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
+  flushGlobalVariableListDrafts()
+
   const state = openPLCStoreBase.getState()
   const contents = buildAllProjectFileContents()
 
@@ -74,6 +84,18 @@ export async function executeSaveProjectAs(
     // Nothing to delete: this is a fresh destination, and carrying deletions
     // from the old location would remove files there that were never copied.
     deletions: [],
+  }
+
+  if (staleFlows.length > 0) {
+    // Same rule the ordinary save applies: a flow that failed validation keeps
+    // its pre-edit body, so writing it and calling the project saved would be a
+    // lie about work the user can see on screen.
+    toast({
+      title: 'Some diagrams could not be saved',
+      description: 'Fix the reported diagram errors, then try Save As again.',
+      variant: 'fail',
+    })
+    return { success: false }
   }
 
   const written = await projectPort.saveProject(files)
