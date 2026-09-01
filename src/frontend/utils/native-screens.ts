@@ -33,9 +33,6 @@ export function hiddenNativeScreens(board: BoardWithVpp | null | undefined): Rea
  * screen shows, which is the correct default: the runtime provides the feature
  * unless a vendor has taken it over.
  */
-export function isNativeScreenAvailable(
-  board: BoardWithVpp | null | undefined,
-  screen: NativeScreenId,
-): boolean {
+export function isNativeScreenAvailable(board: BoardWithVpp | null | undefined, screen: NativeScreenId): boolean {
   return !hiddenNativeScreens(board).has(screen)
 }

@@ -525,7 +525,6 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   )
 }
 
-
 /**
  * The **Flags** column: the IEC block qualifier a variable is declared under.
  *

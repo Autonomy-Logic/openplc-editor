@@ -28,8 +28,7 @@ jest.mock('../../../middleware/shared/providers', () => ({
 import { useNativeScreenEnforcement } from '../use-native-screen-enforcement'
 
 /** A board whose VPP declares that it replaces the persistent-storage screen. */
-const hidingBoard = () =>
-  new Map([['SLM-RP4', { vpp: { hidesNativeScreens: ['persistent-storage'] } }]]) as never
+const hidingBoard = () => new Map([['SLM-RP4', { vpp: { hidesNativeScreens: ['persistent-storage'] } }]]) as never
 
 const plainBoard = () => new Map([['SLM-RP4', { vpp: {} }]]) as never
 

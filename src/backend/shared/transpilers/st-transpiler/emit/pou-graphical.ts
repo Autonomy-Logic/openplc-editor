@@ -265,12 +265,7 @@ function computeInterface(variables: TranspileVariable[], syntheticVars: Synthet
     })
     const last = out[out.length - 1]
     // python reuses the trailing block only when it is a plain unlocated VAR (DIV-16)
-    if (
-      last !== undefined &&
-      last.keyword === varTypeNames.localVars &&
-      !last.located &&
-      last.flag === undefined
-    ) {
+    if (last !== undefined && last.keyword === varTypeNames.localVars && !last.located && last.flag === undefined) {
       last.vars.push(...synth)
     } else {
       out.push({ keyword: varTypeNames.localVars, vars: synth })

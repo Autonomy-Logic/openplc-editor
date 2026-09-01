@@ -56,10 +56,7 @@ describe('PersistentStorageEditor', () => {
   it('loads the settings on mount', async () => {
     render(<PersistentStorageEditor />)
     await waitFor(() => expect(runtime.getRetainConfig).toHaveBeenCalled())
-    expect((await screen.findByLabelText(/file location/i)) as HTMLInputElement).toHaveProperty(
-      'value',
-      CONFIG.path,
-    )
+    expect((await screen.findByLabelText(/file location/i)) as HTMLInputElement).toHaveProperty('value', CONFIG.path)
   })
 
   it('surfaces a read failure instead of rendering empty fields', async () => {

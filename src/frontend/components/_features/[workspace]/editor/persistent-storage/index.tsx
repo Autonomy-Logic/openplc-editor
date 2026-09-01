@@ -102,8 +102,7 @@ const PersistentStorageEditor = () => {
       <div className='flex h-full w-full select-none flex-col items-center justify-center gap-2 p-8 text-center'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-white'>Persistent Storage</h2>
         <p className='text-sm text-neutral-500 dark:text-neutral-400'>
-          You are not connected to a runtime. Connect to the device to configure where it keeps retained
-          variables.
+          You are not connected to a runtime. Connect to the device to configure where it keeps retained variables.
         </p>
       </div>
     )
@@ -115,8 +114,8 @@ const PersistentStorageEditor = () => {
         <div>
           <h2 className='text-xl font-semibold text-neutral-1000 dark:text-white'>Persistent Storage</h2>
           <p className='mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400'>
-            Where this device keeps the values of <span className='font-medium'>RETAIN</span> variables so they
-            survive a restart. With storage off, retained variables start at their initial values every time.
+            Where this device keeps the values of <span className='font-medium'>RETAIN</span> variables so they survive
+            a restart. With storage off, retained variables start at their initial values every time.
           </p>
         </div>
         <button
@@ -151,12 +150,8 @@ const PersistentStorageEditor = () => {
               <span className='text-sm font-medium text-neutral-1000 dark:text-white'>
                 Keep retained variables on this device
               </span>
-              <span
-                id='retain-enabled-help'
-                className='mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400'
-              >
-                Off by default. Turning it on makes the runtime write to the storage below at the interval you
-                choose.
+              <span id='retain-enabled-help' className='mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400'>
+                Off by default. Turning it on makes the runtime write to the storage below at the interval you choose.
               </span>
             </span>
           </label>
@@ -197,8 +192,8 @@ const PersistentStorageEditor = () => {
               <span className='text-sm text-neutral-600 dark:text-neutral-400'>seconds</span>
             </div>
             <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-              How much recent change a power cut can cost. Saving more often keeps less at risk and works the
-              storage harder — on an SD card or flash, that shortens its life.
+              How much recent change a power cut can cost. Saving more often keeps less at risk and works the storage
+              harder — on an SD card or flash, that shortens its life.
             </p>
           </div>
 

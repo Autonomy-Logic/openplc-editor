@@ -65,7 +65,6 @@ const Project = () => {
   const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
 
-
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
   // Data Types plus the manifest tab; Programs / Resource / Devices /

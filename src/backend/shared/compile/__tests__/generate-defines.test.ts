@@ -486,9 +486,7 @@ describe('generateDefinesContent — retain blob size', () => {
     // Boards that never touch retain must see byte-identical defines.h to
     // before this existed, or every one of them rebuilds for no reason.
     expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
-    expect(generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 0 })).not.toContain(
-      'OPLC_RETAIN_BLOB_SIZE',
-    )
+    expect(generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 0 })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
 })
 

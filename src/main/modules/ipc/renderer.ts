@@ -542,10 +542,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:list-users', ipAddress),
   runtimeGetRetainConfig: (ipAddress: string): Promise<RetainConfigResult> =>
     ipcRenderer.invoke('runtime:get-retain-config', ipAddress),
-  runtimeUpdateRetainConfig: (
-    ipAddress: string,
-    params: UpdateRetainConfigParams,
-  ): Promise<RetainConfigResult> => ipcRenderer.invoke('runtime:update-retain-config', ipAddress, params),
+  runtimeUpdateRetainConfig: (ipAddress: string, params: UpdateRetainConfigParams): Promise<RetainConfigResult> =>
+    ipcRenderer.invoke('runtime:update-retain-config', ipAddress, params),
   runtimeWhoAmI: (ipAddress: string): Promise<WhoAmIResult> => ipcRenderer.invoke('runtime:whoami', ipAddress),
   runtimeUpdateUser: (
     ipAddress: string,
