@@ -427,4 +427,102 @@ describe('createEditorCompilerPlatformPort', () => {
     expect(result).toEqual({ ok: true, version: null, minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('probe blew up'), 'warning')
   })
+
+  // ---- uploadRuntimeV4: the project-snapshot capability --------------------
+  //
+  // The capability is read by the pre-upload probe and acted on here. These pin
+  // the behaviour rather than the plumbing: whether the archive gets built at
+  // all. Building one for a runtime that discards it costs the user upload time
+  // and leaves them a device they cannot retrieve from; not building one for a
+  // runtime that would have kept it silently loses the feature.
+
+  describe('uploadRuntimeV4 — project-snapshot capability', () => {
+    const deviceContext = { kind: 'editor-https' as const, ip: '10.0.0.1', jwt: 'token' }
+
+    function makeUploadContext(overrides?: Partial<EditorCompilerPlatformPortContext>) {
+      return makeContext({
+        compressSourceFolder: jest.fn().mockResolvedValue(Buffer.from('program')),
+        mainProcessBridge: {
+          makeRuntimeApiRequest: jest.fn(),
+          makeRuntimeApiUpload: jest.fn().mockResolvedValue({ success: true, data: '{}' }),
+        },
+        ...overrides,
+      })
+    }
+
+    it('builds and sends the project when the runtime stores them', async () => {
+      const buildUploadSnapshot = jest.fn().mockResolvedValue({
+        archive: Buffer.from('zip'),
+        metadata: '{"projectName":"Demo"}',
+        missingLibraries: [],
+      })
+      const context = makeUploadContext({ buildUploadSnapshot })
+      const port = createEditorCompilerPlatformPort(makeHandlers(), context)
+
+      await port.uploadRuntimeV4({ bundle: {}, context: deviceContext, supportsProjectSnapshot: true }, () => undefined)
+
+      expect(buildUploadSnapshot).toHaveBeenCalled()
+      const upload = (context.mainProcessBridge.makeRuntimeApiUpload as jest.Mock).mock.calls[0][0] as {
+        snapshotBuffer?: Buffer
+        snapshotMetadata?: string
+      }
+      expect(upload.snapshotBuffer).toEqual(Buffer.from('zip'))
+      expect(upload.snapshotMetadata).toBe('{"projectName":"Demo"}')
+    })
+
+    it('does not build one for a runtime that would discard it', async () => {
+      const buildUploadSnapshot = jest.fn()
+      const context = makeUploadContext({ buildUploadSnapshot })
+      const port = createEditorCompilerPlatformPort(makeHandlers(), context)
+
+      await port.uploadRuntimeV4(
+        { bundle: {}, context: deviceContext, supportsProjectSnapshot: false },
+        () => undefined,
+      )
+
+      expect(buildUploadSnapshot).not.toHaveBeenCalled()
+      const upload = (context.mainProcessBridge.makeRuntimeApiUpload as jest.Mock).mock.calls[0][0] as {
+        snapshotBuffer?: Buffer
+        snapshotMetadata?: string
+      }
+      expect(upload.snapshotBuffer).toBeUndefined()
+      expect(upload.snapshotMetadata).toBeUndefined()
+    })
+
+    it('tells the user the project will not be retrievable from that device', async () => {
+      // The skip is silent otherwise, and "I uploaded it, why can I not get it
+      // back?" is the question this exists to pre-empt.
+      const log = jest.fn()
+      const port = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeUploadContext({ buildUploadSnapshot: jest.fn() }),
+      )
+
+      await port.uploadRuntimeV4({ bundle: {}, context: deviceContext, supportsProjectSnapshot: false }, log)
+
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('does not store source projects'), 'warning')
+    })
+
+    it('still uploads the program when the project cannot be prepared', async () => {
+      // The project is the optional half. A failure preparing it must never cost
+      // the user the program upload itself.
+      const context = makeUploadContext({
+        buildUploadSnapshot: jest.fn().mockRejectedValue(new Error('disk full')),
+      })
+      const log = jest.fn()
+      const port = createEditorCompilerPlatformPort(makeHandlers(), context)
+
+      await port.uploadRuntimeV4({ bundle: {}, context: deviceContext, supportsProjectSnapshot: true }, log)
+
+      // The program still goes, just without the project beside it. (The
+      // overall result is not asserted: the deploy flow polls the device for
+      // build status afterwards, which this harness does not stand up.)
+      expect(context.mainProcessBridge.makeRuntimeApiUpload).toHaveBeenCalled()
+      const upload = (context.mainProcessBridge.makeRuntimeApiUpload as jest.Mock).mock.calls[0][0] as {
+        snapshotBuffer?: Buffer
+      }
+      expect(upload.snapshotBuffer).toBeUndefined()
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('Could not prepare the project'), 'warning')
+    })
+  })
 })
