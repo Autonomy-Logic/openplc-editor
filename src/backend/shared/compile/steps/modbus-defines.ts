@@ -33,7 +33,9 @@ export interface VppModbusScreenState {
   serial?: {
     baud_rate?: string
   }
-  /** Phase 2 Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp. */
+  /** Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp by the
+   *  screen split. Its `enabled` gates the TCP transport: a project that
+   *  declares this section and explicitly turns it off emits no MBTCP. */
   network?: {
     enabled?: boolean
     interface?: 'Ethernet' | 'Wi-Fi'
@@ -213,7 +215,18 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
   const tcp = state.modbus_tcp ?? {}
   const net = state.network ?? {}
   const rtuOn = rtu.enabled === true
-  const tcpOn = tcp.enabled === true
+  // Modbus TCP needs a network, and after the screen split the network is a
+  // section of its own with its own switch. Serving TCP over a network the
+  // project says to leave down produced firmware that compiled MBTCP, called
+  // mbconfig_ethernet_iface, and never linked — a healthy board that answers
+  // nothing, which reads as broken hardware.
+  //
+  // Only an EXPLICIT `false` blocks. The form layout persists just the fields
+  // the user touched, so a project where someone typed an SSID and never
+  // touched the toggle has no `enabled` at all; refusing to build that would
+  // trade one silent failure for another. A pre-split project has no `network`
+  // section whatsoever and keeps building exactly as it did.
+  const tcpOn = tcp.enabled === true && net.enabled !== false
 
   if (!rtuOn && !tcpOn) return ''
 

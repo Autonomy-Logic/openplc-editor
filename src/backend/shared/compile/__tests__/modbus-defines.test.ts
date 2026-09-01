@@ -192,6 +192,43 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBTCP_WIFI')
   })
 
+  it('emits no MBTCP when the network section is explicitly disabled', () => {
+    // Modbus TCP cannot come up without a network. Emitting MBTCP anyway
+    // produced firmware that called mbconfig_ethernet_iface and never linked —
+    // a healthy board that answers nothing, which reads as broken hardware.
+    const out = generateModbusDefines({
+      network: { enabled: false, interface: 'Wi-Fi', wifi_ssid: 'MyNet' },
+      modbus_tcp: { enabled: true },
+    })
+    expect(out).not.toContain('#define MBTCP')
+    expect(out).not.toContain('MBTCP_WIFI')
+    expect(out).toBe('')
+  })
+
+  it('still emits MBSERIAL when the network is off but RTU is on', () => {
+    // The network gate is TCP's alone; RTU has nothing to do with it.
+    const out = generateModbusDefines({
+      network: { enabled: false },
+      modbus_rtu: { enabled: true },
+      modbus_tcp: { enabled: true },
+    })
+    expect(out).toContain('#define MBSERIAL')
+    expect(out).toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('#define MBTCP')
+  })
+
+  it('builds TCP when the network section exists but its toggle was never touched', () => {
+    // The form layout persists only fields the user edited, so someone who
+    // typed an SSID without touching "Enable Network" has no `enabled` key.
+    // Only an explicit `false` blocks; absence must not.
+    const out = generateModbusDefines({
+      network: { wifi_ssid: 'MyNet', interface: 'Wi-Fi' },
+      modbus_tcp: { enabled: true },
+    })
+    expect(out).toContain('#define MBTCP')
+    expect(out).toContain('#define MBTCP_SSID "MyNet"')
+  })
+
   it('applies RTU schema defaults when only `enabled: true` is persisted (form-layout writes only touched fields)', () => {
     // Real-world scenario: user toggles "Enable Modbus RTU" without
     // editing baud/interface/slave — form-layout writes only the field
