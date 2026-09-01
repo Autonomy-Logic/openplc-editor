@@ -54,8 +54,15 @@ export interface HeadlessCompileBridge {
     filename: string
     contentType: string
     cleanBuild: boolean
+    snapshotBuffer?: Buffer
+    snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }) => Promise<{ success: true; data: string } | { success: false; error: string }>
+  /** Username of the live runtime session, so an uploaded project records who
+   *  stored it. Without this the CLI would store projects attributed to nobody
+   *  while the GUI attributed them correctly -- the kind of difference between
+   *  the two front ends this bridge exists to prevent. */
+  getRuntimeUsername: () => string | null
   loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
 }
 
@@ -86,6 +93,8 @@ export function createHeadlessCompileBridge(runtime: RuntimeApiClient | null): H
       if (!runtime) return Promise.resolve(noRuntime())
       return runtime.makeRuntimeApiUpload(opts)
     },
+
+    getRuntimeUsername: () => runtime?.tokens.getUsername() ?? null,
 
     loadEnabledArchives: (enabledNames) => libraries.loadEnabledArchives(enabledNames),
   }

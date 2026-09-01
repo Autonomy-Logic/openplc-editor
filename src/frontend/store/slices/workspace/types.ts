@@ -143,6 +143,20 @@ export type WorkspaceState = {
      * on project close.
      */
     canEdit: boolean
+    /**
+     * Whether the open project was retrieved from a device and has no location
+     * the user chose yet.
+     *
+     * It lives in a scratch directory, so `meta.path` is a real writable
+     * directory and everything that derives a path from it keeps working --
+     * including the pre-build flush, which is why a retrieved project can still
+     * be compiled and uploaded. What this gates is the USER-initiated save:
+     * writing to scratch and calling it saved would tell someone their work is
+     * safe when it is somewhere temporary. Save As clears the flag.
+     *
+     * Reset to `false` on project close and on any normally opened project.
+     */
+    isEphemeralProject: boolean
   }
 }
 
@@ -211,6 +225,7 @@ export type WorkspaceActions = {
   setProjectLoading: (isLoading: boolean, message?: string) => void
   // Persist-permission flag (backend write access on the open project)
   setCanEdit: (value: boolean) => void
+  setIsEphemeralProject: (value: boolean) => void
 }
 
 export type WorkspaceSlice = WorkspaceState & {

@@ -8,6 +8,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
+import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
@@ -2579,8 +2581,14 @@ class CompilerModule {
         filename: string
         contentType: string
         cleanBuild: boolean
+        snapshotBuffer?: Buffer
+        snapshotMetadata?: string
         onUploadAccepted?: (responseBody: string) => void
       }) => Promise<{ success: true; data: string } | { success: false; error: string }>
+      /** Username of the live runtime session, for attributing the stored
+       *  project to whoever uploaded it. Only the username -- the password
+       *  never leaves the token authority. */
+      getRuntimeUsername?: () => string | null
       /**
        * Resolve a list of project-enabled library names to parsed
        * `.stlib` archives.  Bundled libraries are always-on and
@@ -2964,6 +2972,19 @@ class CompilerModule {
         cleanBuild: cleanBuild ?? false,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
+        // The source project stored on the device beside the artifacts.
+        // Constructed per call for the same reason as getVppRuntimeFloor: the
+        // library pool is read off disk and may have changed since the last
+        // compile.
+        buildUploadSnapshot: async () => {
+          const libraryManager = new LibraryManagerModule()
+          return buildUploadSnapshot({
+            projectPath: normalizedProjectPath,
+            editorVersion: APP_VERSION,
+            uploadedBy: mainProcessBridge.getRuntimeUsername?.() ?? '',
+            readLibraryArchive: (name) => libraryManager.readArchiveText(name),
+          })
+        },
         // VPP runtime floor (DOPE-448). Constructed per call rather than
         // held on the class because the registry is read off disk and may
         // have changed since the last compile (a package installed or

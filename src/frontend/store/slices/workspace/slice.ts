@@ -60,6 +60,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectLoadingMessage: '',
     // Persist-permission flag (backend write access on the open project)
     canEdit: true,
+    isEphemeralProject: false,
   },
 
   workspaceActions: {
@@ -155,6 +156,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     clearWorkspace: () => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
+          // A retrieved project's ephemeral marker belongs to the project, not
+          // to the session. Leaving it set would make the NEXT project opened
+          // refuse to save for a reason that no longer applies.
+          workspace.isEphemeralProject = false
           workspace.editingState = 'initial-state'
           workspace.selectedProjectTreeLeaf = { label: '', type: null }
           workspace.isDebuggerVisible = false
@@ -443,6 +448,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.canEdit = value
+        }),
+      )
+    },
+    setIsEphemeralProject: (value: boolean) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isEphemeralProject = value
         }),
       )
     },
