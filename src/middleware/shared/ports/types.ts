@@ -707,6 +707,34 @@ export interface BoardInfo {
    *  `Serial`. */
   defaultSerial?: string
   /**
+   * TCP carriers this board can actually bring up, mirrored from the manifest
+   * device's `networkInterfaces`. Read by the Network screen's interface
+   * picker via `optionsRef: 'board.networkInterfaces'`. Absent → both Ethernet
+   * and Wi-Fi stay on offer, which is right for any board that takes a W5x00
+   * shield; it is declared only to REMOVE a carrier the firmware can't serve.
+   */
+  networkInterfaces?: string[]
+  /**
+   * Firmware I/O buffer sizes this board compiles with, mirroring the `MAX_*`
+   * constants in `resources/sources/arduino/openplc.h`. The editor cannot
+   * derive them — they are chosen per MCU family inside a header the build
+   * never reports back — so a VPP declares them.
+   *
+   * Consumed by the Modbus server screen to render the address map for a
+   * baremetal target, where the counts are not the user's to set. Partial
+   * blocks are ignored rather than filled in: a map whose later segments start
+   * at the wrong offset is worse than no map.
+   */
+  io?: {
+    digitalInput?: number
+    digitalOutput?: number
+    analogInput?: number
+    analogOutput?: number
+    memoryWord?: number
+    memoryDword?: number
+    memoryLword?: number
+  }
+  /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
    * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.
@@ -931,6 +959,24 @@ export interface PackageManifest {
     /** Name of the default serial port (usually the USB CDC port). Surfaced onto
      *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
     defaultSerial?: string
+    /** TCP carriers this device can bring up. Surfaced onto
+     *  `BoardInfo.networkInterfaces` and consumed by the Network screen via
+     *  `optionsRef: 'board.networkInterfaces'`. Declared only to REMOVE a
+     *  carrier the firmware can't serve. */
+    networkInterfaces?: string[]
+    /** Firmware I/O buffer sizes this device compiles with, mirroring the
+     *  `MAX_*` constants in `resources/sources/arduino/openplc.h`. Surfaced
+     *  onto `BoardInfo.io` and used to render the Modbus address map for a
+     *  target whose buffer sizes are not the user's to set. */
+    io?: {
+      digitalInput?: number
+      digitalOutput?: number
+      analogInput?: number
+      analogOutput?: number
+      memoryWord?: number
+      memoryDword?: number
+      memoryLword?: number
+    }
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the
