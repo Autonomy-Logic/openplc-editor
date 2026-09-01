@@ -612,12 +612,26 @@ const ProjectTreeLeaf = ({
     // No-op: user blurred or hit Enter without changing anything.
     if (newLabel === label) return
 
+    // Snapping the label back is not an explanation: element names share one
+    // namespace, so a refusal usually names a POU, data type or list the user
+    // cannot see from here. A cancelled data type rename is the user's own
+    // choice and reports nothing.
+    const reportFailedRename = (res: { message?: string; cancelled?: boolean }) => {
+      setNewLabel(label || '')
+      if (res.cancelled) return
+      toast({
+        title: 'Rename failed',
+        description: res.message ?? `"${label}" could not be renamed.`,
+        variant: 'fail',
+      })
+    }
+
     // Renames are soft, unsaved changes: renameElement flags the workspace
     // dirty and queues the old path in `pendingDeletions`. Nothing is written
     // to disk until the user saves — identical on web and desktop.
     if (isAPou) {
       const res = renamePou(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
@@ -625,34 +639,34 @@ const ProjectTreeLeaf = ({
       // Async: a referenced type awaits the impact modal before renaming.
       void renameDatatype(label, newLabel)
         .then((res) => {
-          if (!res.ok) setNewLabel(label || '')
+          if (!res.ok) reportFailedRename(res)
         })
-        .catch(() => setNewLabel(label || ''))
+        .catch(() => reportFailedRename({}))
       return
     }
 
     if (isGlobalVariableList) {
       const res = renameGlobalVariableList(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
     if (isServer) {
       const res = renameServer(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
     if (isRemoteDevice) {
       const res = renameRemoteDevice(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
     if (isEthercatDevice && busName && deviceId) {
       const res = renameEthercatDevice(busName, deviceId, newLabel)
       if (!res.ok) {
-        setNewLabel(label || '')
+        reportFailedRename(res)
       }
       // Ethercat device lives inside its parent bus file — the parent will
       // be re-serialized on the next regular save. Skipping auto-save here
