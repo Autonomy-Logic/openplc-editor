@@ -192,6 +192,68 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBTCP_WIFI')
   })
 
+  it('takes the RTU port, its baud and the RS485 pin from the serial section', () => {
+    // These four moved out of `modbus_rtu` when the unified server screen took
+    // that section over: the native screen renders modbus_rtu itself, so a
+    // field left there had nowhere to appear -- the user could not pick a UART
+    // or enable the driver pin at all.
+    const out = generateModbusDefines({
+      serial: {
+        baud_rate: '9600',
+        modbus_port: 'Serial2',
+        modbus_baud_rate: '19200',
+        enable_rs485_en_pin: true,
+        rs485_en_pin: '4',
+      },
+      modbus_rtu: { enabled: true, rtu_slave_id: 7 },
+    })
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_TXPIN 4')
+    // A secondary UART means the debugger keeps the default port to itself.
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  })
+
+  it('shares the default port baud when the RTU stays on it', () => {
+    const out = generateModbusDefines({
+      serial: { baud_rate: '9600', modbus_port: 'Serial', modbus_baud_rate: '19200' },
+      modbus_rtu: { enabled: true },
+    })
+    // modbus_baud_rate belongs to the SECONDARY port; on the default one the
+    // debugger and the RTU are the same line and share one speed.
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('still reads a project saved with the fields in modbus_rtu', () => {
+    // The first split shipped these under modbus_rtu.serial_port / .baud_rate.
+    const out = generateModbusDefines({
+      serial: { baud_rate: '9600' },
+      modbus_rtu: {
+        enabled: true,
+        serial_port: 'Serial1',
+        baud_rate: '38400',
+        enable_rs485_en_pin: true,
+        rtu_rs485_en_pin: '2',
+      },
+    })
+    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
+    expect(out).toContain('#define MBSERIAL_BAUD 38400')
+    expect(out).toContain('#define MBSERIAL_TXPIN 2')
+  })
+
+  it('resolves the debug baud against the serial section port, not the RTU one', () => {
+    // The debugger always sits on the default port. When the RTU takes another
+    // UART, nothing states the default port's speed except the serial section.
+    expect(
+      resolveDebugBaud({
+        serial: { baud_rate: '9600', modbus_port: 'Serial2' },
+        modbus_rtu: { enabled: true },
+      }),
+    ).toBe('9600')
+  })
+
   it('emits no MBTCP when the network section is explicitly disabled', () => {
     // Modbus TCP cannot come up without a network. Emitting MBTCP anyway
     // produced firmware that called mbconfig_ethernet_iface and never linked —

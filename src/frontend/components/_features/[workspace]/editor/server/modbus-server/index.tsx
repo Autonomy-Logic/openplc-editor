@@ -180,6 +180,7 @@ const ModbusServerEditor = () => {
   const addModel = useOpenPLCStore((s) => s.editorActions.addModel)
   const setEditor = useOpenPLCStore((s) => s.editorActions.setEditor)
   const getEditorFromEditors = useOpenPLCStore((s) => s.editorActions.getEditorFromEditors)
+  const setSelectedTab = useOpenPLCStore((s) => s.tabsActions.setSelectedTab)
 
   // In the `plc-server` store the tab names the server being edited. In the
   // vendor-screen store the board has exactly one Modbus configuration and
@@ -210,8 +211,12 @@ const ModbusServerEditor = () => {
       const model = getEditorFromEditors(screenName) ?? CreateEditorObjectFromTab(tab)
       addModel(model)
       setEditor(model)
+      // `setEditor` swaps what renders; `setSelectedTab` moves the highlight in
+      // the tab strip. Doing only the first leaves the strip pointing at the
+      // tab you just left, which reads as "the button did nothing".
+      setSelectedTab(screenName)
     },
-    [updateTabs, getEditorFromEditors, addModel, setEditor],
+    [updateTabs, getEditorFromEditors, addModel, setEditor, setSelectedTab],
   )
 
   const commitSlaveId = useCallback(() => {
@@ -397,11 +402,11 @@ const ModbusServerEditor = () => {
          *  belongs to the vendor package that knows the hardware, and it is
          *  edited on the pages that package ships. Duplicating those fields
          *  here would give the same value two owners. */}
-        {(profile.vppScreens.serial || profile.vppScreens.network || profile.vppScreens.modbus) && (
+        {(profile.vppScreens.serial || profile.vppScreens.network) && (
           <Panel title='Hardware Settings'>
             <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-              Serial speed, RS-485 wiring and network credentials are properties of the board. They are configured on
-              the pages its vendor package provides.
+              Which UART Modbus RTU uses, how fast it runs, the RS-485 driver-enable pin and the network credentials are
+              properties of the board. They are configured on the pages its vendor package provides.
             </p>
             <div className='flex flex-wrap gap-2'>
               {profile.vppScreens.serial && (
@@ -420,15 +425,6 @@ const ModbusServerEditor = () => {
                   className='h-8 rounded-md border border-neutral-300 px-3 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand dark:border-neutral-700 dark:text-neutral-200'
                 >
                   Network settings
-                </button>
-              )}
-              {profile.vppScreens.modbus && (
-                <button
-                  type='button'
-                  onClick={() => openVppScreen(profile.vppScreens.modbus as string)}
-                  className='h-8 rounded-md border border-neutral-300 px-3 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand dark:border-neutral-700 dark:text-neutral-200'
-                >
-                  Serial port &amp; RS-485
                 </button>
               )}
             </div>

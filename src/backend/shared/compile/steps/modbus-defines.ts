@@ -28,10 +28,21 @@
  * VPP screen field set evolves.
  */
 export interface VppModbusScreenState {
-  /** Phase 2 Serial section — always-on serial baud (debugger + RTU on the
-   *  default port). */
+  /** Serial-port section. Owns everything about the physical line: the
+   *  default port's speed (the debugger's, and Modbus RTU's when they share
+   *  it), which UART Modbus RTU answers on, that UART's own speed, and the
+   *  RS485 driver-enable pin.
+   *
+   *  These four moved here from `modbus_rtu` when the unified Modbus server
+   *  screen took that section over: the native screen renders `modbus_rtu`
+   *  itself, so any field left in it had nowhere to appear. The old spellings
+   *  are still read as a fallback -- see the `modbus_rtu` members below. */
   serial?: {
     baud_rate?: string
+    modbus_port?: string
+    modbus_baud_rate?: string
+    enable_rs485_en_pin?: boolean
+    rs485_en_pin?: string
   }
   /** Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp by the
    *  screen split. Its `enabled` gates the TCP transport: a project that
@@ -50,14 +61,15 @@ export interface VppModbusScreenState {
   }
   modbus_rtu?: {
     enabled?: boolean
-    /** Phase 2: chosen serial port. Legacy projects use `rtu_interface`. */
+    rtu_slave_id?: number
+    /* The rest are FALLBACKS for projects saved before the serial-port fields
+     * moved to the `serial` section. `serial_port` / `baud_rate` are the
+     * short-lived first split; `rtu_interface` / `rtu_baud_rate` are the
+     * original single-screen shape. Read, never written. */
     serial_port?: string
     rtu_interface?: string
-    /** Phase 2: baud for RTU on a secondary port. On the default port the
-     *  Serial section's baud is used. Legacy projects use `rtu_baud_rate`. */
     baud_rate?: string
     rtu_baud_rate?: string
-    rtu_slave_id?: number
     enable_rs485_en_pin?: boolean
     rtu_rs485_en_pin?: string
   }
@@ -114,7 +126,7 @@ export function resolveDebugBaud(state: VppModbusScreenState, defaultSerial: str
   // An enabled RTU on its own UART takes its baud with it; the debugger is then
   // on a port whose speed the project never mentions.
   if (rtu.enabled === true) {
-    const iface = rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
+    const iface = state.serial?.modbus_port ?? rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
     if (iface !== defaultSerial) return DEFAULT_DEBUG_BAUD
   }
 
@@ -238,11 +250,11 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
     // `rtu_interface`. On the default port the RTU shares the always-on Serial
     // baud; on a secondary port it uses its own (`baud_rate`), with the legacy
     // `rtu_baud_rate` as a fallback for pre-migration projects.
-    const iface = rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
+    const iface = state.serial?.modbus_port ?? rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
     const onDefaultPort = iface === defaultSerial
     const baud = onDefaultPort
       ? (state.serial?.baud_rate ?? rtu.rtu_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
-      : (rtu.baud_rate ?? rtu.rtu_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
+      : (state.serial?.modbus_baud_rate ?? rtu.baud_rate ?? rtu.rtu_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
     const slave = typeof rtu.rtu_slave_id === 'number' ? rtu.rtu_slave_id : RTU_DEFAULTS.rtu_slave_id
     lines.push(`#define MBSERIAL_IFACE ${iface}`)
     lines.push(`#define MBSERIAL_BAUD ${baud}`)
@@ -256,8 +268,10 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
     } else {
       lines.push('#define MBSERIAL_ON_SECONDARY')
     }
-    if (rtu.enable_rs485_en_pin === true && rtu.rtu_rs485_en_pin) {
-      lines.push(`#define MBSERIAL_TXPIN ${rtu.rtu_rs485_en_pin}`)
+    const rs485On = state.serial?.enable_rs485_en_pin ?? rtu.enable_rs485_en_pin
+    const rs485Pin = state.serial?.rs485_en_pin ?? rtu.rtu_rs485_en_pin
+    if (rs485On === true && rs485Pin) {
+      lines.push(`#define MBSERIAL_TXPIN ${rs485Pin}`)
     }
     lines.push('#define MBSERIAL')
   }
