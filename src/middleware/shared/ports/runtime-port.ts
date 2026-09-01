@@ -200,6 +200,38 @@ export interface DiscoveredRuntimeDevice {
   hostname: string
   runtimeVersion: string
   apiPort: number
+  /** Name of the source project the device is storing, when it has one.
+   *
+   *  Carried on the unauthenticated discovery reply so the retrieve picker can
+   *  be populated without logging in to every device on the network. Display
+   *  only: it is whatever the uploading client said, the device never opened
+   *  the archive to check, and the authoritative name comes from the archive
+   *  itself once retrieved. Absent means the device stores no project. */
+  projectName?: string
+  /** When that project was stored, ISO 8601. Absent alongside `projectName`. */
+  projectTimestamp?: string
+}
+
+/** What a device reports about the project it stores, once authenticated. */
+export interface RuntimeProjectSnapshotInfo {
+  present: boolean
+  projectName?: string
+  editorVersion?: string
+  uploadedBy?: string
+  timestamp?: string
+  sizeBytes?: number
+  formatVersion?: number
+  libraries?: Array<{ name: string; version?: string; hash?: string }>
+}
+
+/** The manifest carried inside a retrieved archive. */
+export interface RuntimeProjectSnapshotMetadata {
+  formatVersion: number
+  projectName: string
+  editorVersion: string
+  uploadedBy: string
+  timestamp: string
+  libraries: Array<{ name: string; version: string; hash: string }>
 }
 
 export interface DiscoverDevicesOptions {
@@ -211,6 +243,48 @@ export interface DiscoverDevicesResult {
   success: boolean
   devices?: DiscoveredRuntimeDevice[]
   error?: string
+}
+
+/**
+ * A device the retrieve picker can offer, however the platform found it.
+ *
+ * The desktop finds these by scanning its LAN; web asks each orchestrator's
+ * agent. Both end up describing the same thing, which is why the picker does
+ * not need to know which happened.
+ */
+export interface RetrievableDevice {
+  /**
+   * Stable identity, defined by whichever platform produced it -- an address on
+   * the desktop, orchestrator and device id on web. Compared, never parsed.
+   */
+  key: string
+  /** The device's own name: an address, or a device name under an orchestrator. */
+  name: string
+  /** Where it lives, when that is a separate fact: an orchestrator's name, a hostname. */
+  location?: string
+  /**
+   * Whether this device answered discovery at all.
+   *
+   * The distinction the picker depends on: a device that answered and named no
+   * project genuinely stores none, while one that never answered has said
+   * nothing. Only the first may be greyed out.
+   */
+  answeredScan: boolean
+  projectName?: string
+  projectTimestamp?: string
+}
+
+/**
+ * A project fetched from a device but not yet opened.
+ *
+ * `payload` is deliberately opaque: a scratch directory on the desktop, archive
+ * bytes on web. It goes back to the same platform that produced it and nothing
+ * in between looks inside.
+ */
+export interface FetchedProject {
+  projectName: string
+  payload: unknown
+  libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
 }
 
 export interface RuntimePort {
@@ -286,7 +360,20 @@ export interface RuntimePort {
    * Web adapter: sends zip as base64.
    * Editor adapter: sends via file path or streamed content.
    */
-  uploadProgram?(programData: string | ArrayBuffer): Promise<{ success: boolean; error?: string }>
+  uploadProgram?(
+    programData: string | ArrayBuffer,
+    /** The source project to store on the device alongside the program, so it
+     *  can be retrieved later. Optional: a runtime without snapshot support
+     *  ignores it, and an upload is complete without one. */
+    snapshot?: { archiveBase64: string; metadata: string },
+  ): Promise<{
+    success: boolean
+    error?: string
+    /** Set when the device took the program but refused the project beside it.
+     *  The upload succeeded; the caller should say so in the build log, because
+     *  the alternative is a device that silently cannot be retrieved from. */
+    snapshotWarning?: string
+  }>
 
   /**
    * Subscribe to token refresh events (e.g., JWT auto-renewal).
@@ -342,4 +429,150 @@ export interface RuntimePort {
 
   /** Get EtherCAT runtime status (plugin state, slave status, cycle metrics). */
   getEthercatRuntimeStatus?(): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }>
+
+  // --- stored source project ---
+
+  /**
+   * What a device says about the source project it stores.
+   *
+   * Authenticated but not admin-gated on the device, so the UI can decide
+   * whether to offer retrieval without holding the privilege retrieval needs.
+   */
+  getProjectSnapshotInfo?(
+    /** Desktop passes the device address; web resolves it from its device context. */
+    ipAddress?: string,
+  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }>
+
+  /**
+   * Retrieve the stored project and unpack it somewhere the editor can open it.
+   *
+   * Desktop only, and it returns a path rather than the archive on purpose:
+   * those are untrusted bytes from a device, and every check deciding whether
+   * they are safe to WRITE belongs beside the write, in the main process,
+   * rather than in the renderer.
+   *
+   * Web implements `retrieveProjectArchive` instead. The split is real rather
+   * than cosmetic: web has no filesystem to unpack onto and imports the project
+   * into its workspace, so forcing both onto one shape would mean one of them
+   * returning a path that does not exist.
+   */
+  retrieveProject?(ipAddress: string): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }>
+
+  /** Username of the live runtime session, for attributing a stored project to
+   *  whoever uploaded it. Only the username -- the password stays inside the
+   *  token authority. */
+  getSessionUsername?(): string | null
+
+  /** The device this session is authenticated against, or null when there is no
+   *  session. A device context alone is not one: selecting a device points the
+   *  adapter at it without signing in, so both have to hold before a caller may
+   *  skip asking for credentials. */
+  getAuthenticatedDevice?(): { agentId: string; deviceId: string } | null
+
+  /**
+   * Retrieve the stored project as raw archive bytes.
+   *
+   * Web's counterpart to `retrieveProject`: there is no filesystem to unpack
+   * onto, so the archive is parsed in the browser and imported into the
+   * workspace. The bytes are still untrusted -- the shared parser validates
+   * before yielding any of them.
+   */
+  retrieveProjectArchive?(): Promise<
+    { success: true; archive: Uint8Array; projectName: string } | { success: false; error: string }
+  >
+
+  // --- Retrieve Project from PLC ---------------------------------------
+  //
+  // These exist so the picker itself can be one shared component. What differs
+  // between the two platforms is not the flow -- pick a device, get a session,
+  // fetch, open -- but where the devices come from and what "open" means: the
+  // desktop scans a LAN and unpacks to a scratch directory, web asks an
+  // orchestrator and parses into the workspace. Those are the only differences,
+  // so those are the only things behind the port.
+
+  /**
+   * The devices this platform can offer, already merged with whatever it knows
+   * about what they are storing.
+   *
+   * A platform that discovers progressively can also push rows through
+   * `onRetrievableDeviceFound`; this resolves when its sweep is done.
+   */
+  listRetrievableDevices?(): Promise<
+    { success: true; devices: RetrievableDevice[] } | { success: false; error: string }
+  >
+
+  /**
+   * Rows arriving one at a time, for a platform whose discovery streams.
+   *
+   * Optional: a platform that can only answer all at once simply does not
+   * implement it, and the picker fills in when `listRetrievableDevices`
+   * resolves. Subscribe before scanning or the first replies are lost.
+   */
+  onRetrievableDeviceFound?(callback: (device: RetrievableDevice) => void): Unsubscribe
+
+  /**
+   * The device a live session is held for, or '' when there is none.
+   *
+   * A device context alone is not a session: pointing the adapter at a device
+   * does not sign in, so this must stay empty until a login has succeeded.
+   * Compared against `RetrievableDevice.key`, never parsed.
+   */
+  connectedRetrievableDeviceKey?(): string
+
+  /**
+   * Point this platform at `device` for the calls that follow.
+   *
+   * Separate from fetching because the desktop's adapter reads its target from
+   * the store before authenticating, so the target has to move before the
+   * login, not with it.
+   */
+  selectRetrievableDevice?(device: RetrievableDevice): void
+
+  /**
+   * Fetch the stored project, without opening it.
+   *
+   * Split from `openFetchedProject` so the shared picker can run the
+   * unsaved-changes prompt in between -- after the fetch has succeeded, so a
+   * device that turns out to have nothing does not cost the user their project,
+   * and before anything is replaced.
+   */
+  fetchRetrievableProject?(
+    device: RetrievableDevice,
+  ): Promise<{ success: true; project: FetchedProject } | { success: false; error: string }>
+
+  /** Make a fetched project the open one. */
+  openFetchedProject?(project: FetchedProject): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Open a retrieved archive as the workspace's project.
+   *
+   * The sibling of `retrieveProjectArchive`, and the reason both exist as port
+   * methods rather than as a direct call: the picker is a shared component, and
+   * how an archive becomes an open project is exactly the part that differs per
+   * platform -- web parses it into the workspace, desktop unpacks it to a
+   * scratch directory first. Reaching into a platform's adapter from the
+   * component would tie the shared picker to one of them.
+   *
+   * Throws on a bad archive, so the caller can report it without replacing the
+   * workspace: the parser validates everything before yielding a single file.
+   */
+  importRetrievedProject?(archive: Uint8Array): Promise<{ projectName: string }>
+
+  /**
+   * Install libraries a retrieved project brought with it, by name.
+   *
+   * Takes the fetched project rather than a path so the shared picker does not
+   * have to know that one platform has a filesystem and the other does not.
+   */
+  installRetrievedLibraries?(
+    project: FetchedProject,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }>
 }

@@ -1,11 +1,11 @@
 /**
  * @jest-environment jsdom
  */
-import type { Diagnostic } from 'vscode-languageserver-protocol'
+import type { Diagnostic, DocumentSymbol as LspDocumentSymbol } from 'vscode-languageserver-protocol'
 
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
 import { monacoPositionToLsp } from '../../lsp-shared/converters'
-import { lspLineInWindow } from '../../lsp-shared/internal/line-window'
+import { clipSymbolsToWindow, lspLineInWindow } from '../../lsp-shared/internal/line-window'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from '../dtview-context'
 
 const enumType = (name: string): PLCDataType => ({
@@ -120,5 +120,35 @@ describe('dt view request window', () => {
 
   it('rejects both frame lines of the first entry, whose offset is zero', () => {
     expect(reach('Colors', [1, 2, 3])).toEqual([false, true, false])
+  })
+})
+
+describe('dt view outline', () => {
+  // strucpp answers the aggregate document with one top-level symbol per
+  // type, its fields as children.
+  const symbol = (
+    name: string,
+    startLine: number,
+    endLine: number,
+    children?: LspDocumentSymbol[],
+  ): LspDocumentSymbol => {
+    const range = { start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 } }
+    return { name, kind: 13, range, selectionRange: range, children }
+  }
+  const AGGREGATE_SYMBOLS = [symbol('Colors', 1, 1), symbol('Motor', 2, 4, [symbol('speed', 3, 3)])]
+
+  const outline = (dtName: string) => {
+    const span = dtViewSpan(DATA_TYPES, dtName)
+    if (!span) throw new Error(`no span for ${dtName}`)
+    return clipSymbolsToWindow(AGGREGATE_SYMBOLS, dtViewWindow(span))
+  }
+
+  it('shows only the entry the view renders', () => {
+    expect(outline('Motor').map((s) => s.name)).toEqual(['Motor'])
+    expect(outline('Colors').map((s) => s.name)).toEqual(['Colors'])
+  })
+
+  it('keeps the entry fields', () => {
+    expect(outline('Motor')[0].children?.map((s) => s.name)).toEqual(['speed'])
   })
 })

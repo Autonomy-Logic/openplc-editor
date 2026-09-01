@@ -577,6 +577,13 @@ export interface ProjectCapabilities {
   hasProgramBuild: boolean
   /** Show the Library-specific build button (produces `.stlib`). */
   hasLibraryBuild: boolean
+  /** Show the Library-specific debug button.  Compiles a synthetic
+   *  harness program that instantiates every block in the library
+   *  once, runs it on the in-process simulator, and attaches the
+   *  debugger so the author can force inputs and watch outputs.
+   *  Distinct from `hasProgramBuild`: a library has no program of its
+   *  own to build or upload, only blocks to exercise. */
+  hasLibraryDebug: boolean
   /** Show the version-control affordance. */
   hasVersionControl: boolean
   /** Show the debugger panel + watch list. */
@@ -601,6 +608,7 @@ export function projectCapabilities(
       hasVendorScreens: false,
       hasProgramBuild: false,
       hasLibraryBuild: true,
+      hasLibraryDebug: true,
       hasVersionControl: false,
       hasDebugger: false,
       hasRuntimeControls: false,
@@ -616,6 +624,7 @@ export function projectCapabilities(
     hasVendorScreens: true,
     hasProgramBuild: true,
     hasLibraryBuild: false,
+    hasLibraryDebug: false,
     hasVersionControl: true,
     hasDebugger: true,
     hasRuntimeControls: true,
@@ -1314,12 +1323,14 @@ export interface DebugCompileResult {
  * shape of `CompileResult` (success / error) plus the artefact path
  * the console surfaces so the user can find the produced archive.
  *
- * The verification step (Phase 8 — running the synthetic project
- * through avr-gcc on the simulator target) reports its outcome
- * through `verification`: missing means the step hasn't been wired
- * yet; `success: true` means it ran clean; `success: false` does NOT
- * fail the build, the warning surfaces to the console instead (a
- * legitimate target may have more memory than the AVR simulator).
+ * There is deliberately no verification field.  The build used to run
+ * the library through avr-gcc against the simulator target and report
+ * the outcome here, which judged every library by whether it links on
+ * an ATmega2560 — a target most libraries never run on.  Executing a
+ * library is now its own action: the debug harness
+ * (`composeLibraryDebugHarness`) instantiates every block and runs it
+ * on the simulator when the author asks for it.  strucpp's
+ * `compileStlib` remains the build's correctness gate.
  */
 export interface CompileLibraryResult {
   success: boolean
@@ -1328,10 +1339,6 @@ export interface CompileLibraryResult {
   /** Manifest name extracted from `library.json`. */
   libraryName?: string
   error?: string
-  verification?: {
-    success: boolean
-    message?: string
-  }
 }
 
 // ---------------------------------------------------------------------------

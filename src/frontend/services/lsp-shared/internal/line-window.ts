@@ -6,7 +6,7 @@
  * the model owns the whole document, as every body editor does.
  */
 
-import type { TextEdit as LspTextEdit } from 'vscode-languageserver-protocol'
+import type { DocumentSymbol as LspDocumentSymbol, TextEdit as LspTextEdit } from 'vscode-languageserver-protocol'
 
 export interface LspLineWindow {
   startLine: number
@@ -47,6 +47,28 @@ export function clipEditsToWindow(edits: LspTextEdit[], lineWindow?: LspLineWind
     }
   }
   return clipped
+}
+
+/**
+ * Symbols the window actually shows. A symbol starting inside it is kept
+ * whole — its children sit within its own range. A symbol that merely
+ * encloses the window (the POU wrapping the VAR blocks a `pouvars://`
+ * view renders) is not itself in view, so its matching children are
+ * lifted in its place.
+ */
+export function clipSymbolsToWindow(symbols: LspDocumentSymbol[], lineWindow?: LspLineWindow): LspDocumentSymbol[] {
+  if (!lineWindow) return symbols
+  const kept: LspDocumentSymbol[] = []
+  for (const sym of symbols) {
+    if (sym.range.start.line >= lineWindow.endLineExclusive) continue
+    if (sym.range.end.line < lineWindow.startLine) continue
+    if (lspLineInWindow(sym.range.start.line, lineWindow)) {
+      kept.push(sym)
+      continue
+    }
+    kept.push(...clipSymbolsToWindow(sym.children ?? [], lineWindow))
+  }
+  return kept
 }
 
 /**

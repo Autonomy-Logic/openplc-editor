@@ -1,5 +1,11 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
-import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
+import type {
+  DiscoveredRuntimeDevice,
+  RuntimeLogEntry,
+  RuntimeProjectSnapshotInfo,
+  RuntimeProjectSnapshotMetadata,
+} from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
   DeviceLicenseReport,
@@ -131,6 +137,7 @@ const rendererProcessBridge = {
   writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
+  saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
 
@@ -281,21 +288,11 @@ const rendererProcessBridge = {
   },
 
   /** Build the open Library Project into a `.stlib` archive.  Same
-   *  MessageChannel pattern as `runCompileProgram`.  Args:
-   *    [0] projectPath
-   *    [1] projectData preprocessed with `isSimulator: false` (full
-   *        Python-as-ST), used for the library build proper.
-   *    [2] projectData preprocessed with `isSimulator: true` (Python
-   *        as no-op stubs), used as input to the simulator-target
-   *        verification compile so it doesn't try to link Python
-   *        loader externs the AVR simulator runtime doesn't ship.
-   *    [3] cleanBuild flag (skips the verification cache).
-   *  Callback receives a stream of log messages and a final
-   *  `libraryBuildResult`. */
-  runCompileLibrary: (
-    compileArgs: Array<string | PLCProjectData | boolean>,
-    callback: (args: CompilerPortMessage) => void,
-  ) => {
+   *  MessageChannel pattern as `runCompileProgram`; the tuple shape
+   *  is `CompileLibraryIpcArgs`, declared next to the adapter that
+   *  fills it.  Callback receives a stream of log messages and a
+   *  final `libraryBuildResult`. */
+  runCompileLibrary: (compileArgs: CompileLibraryIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
@@ -615,6 +612,34 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
+  /** What a device says about the project it stores; `present: false` when none. */
+  runtimeProjectSnapshotInfo: (
+    ipAddress: string,
+  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }> =>
+    ipcRenderer.invoke('runtime:project-snapshot-info', ipAddress),
+  /**
+   * Retrieve the stored project and unpack it to a scratch directory.
+   *
+   * Returns a path, never the archive: those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write lives beside the
+   * write in the main process.
+   */
+  runtimeRetrieveProject: (
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => ipcRenderer.invoke('runtime:retrieve-project', ipAddress),
+  /** Install libraries a retrieved project brought with it, by name. */
+  runtimeInstallRetrievedLibraries: (
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> =>
+    ipcRenderer.invoke('runtime:install-retrieved-libraries', projectPath, names),
   onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
     ipcRenderer.on('runtime:device-discovered', callback)
     return () => ipcRenderer.removeListener('runtime:device-discovered', callback)

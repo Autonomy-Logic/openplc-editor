@@ -6,6 +6,7 @@ import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { executeExportPlcopen } from '../../../../services/export-actions'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
+import { executeSaveProjectAs } from '../../../../services/save-project-as'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
 
@@ -47,12 +48,25 @@ export const FileMenu = () => {
     }
   }
 
+  const handleSaveProjectAs = () => {
+    if (!isSaving) {
+      void executeSaveProjectAs(projectPort, capabilities)
+    }
+  }
+
   const handleCloseTab = () => {
     handleRemoveTab(selectedTab)
   }
 
   const handleCloseProject = () => {
     closeProject()
+  }
+
+  // Reachable whether or not a device is connected: the modal owns the
+  // connection handling, including the case where retrieving means
+  // disconnecting from the device currently in use.
+  const handleRetrieveProject = () => {
+    openModal('retrieve-project', null)
   }
 
   return (
@@ -68,10 +82,17 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.saveProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
           </MenuPrimitive.Item>
+          <MenuPrimitive.Item className={ITEM} onClick={handleSaveProjectAs} disabled={isSaving}>
+            <span>{i18n.t('menu:file.submenu.saveAs')}</span>
+          </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={handleCloseTab}>
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
           </MenuPrimitive.Item>
+          <MenuPrimitive.Item className={ITEM} data-testid='menu-retrieve-project' onClick={handleRetrieveProject}>
+            <span>{i18n.t('menu:file.submenu.retrieveProject')}</span>
+          </MenuPrimitive.Item>
+          <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
             <span>{i18n.t('menu:file.submenu.closeProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>

@@ -88,7 +88,16 @@ const WorkspaceScreen = () => {
   // tab switches — no dispose churn, no view-state loss.
   const editors = useOpenPLCStore(useCallback((s) => s.editors, []))
   const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
-  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  const projectPous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  // A library-debug session runs a generated harness program declaring one
+  // instance of every block in the library (see `composeLibraryDebugHarness`).
+  // It is not part of the project, so it joins the POU list here — added, not
+  // substituted, so a debug flag ticked mid-session still takes effect.
+  const debugHarness = useOpenPLCStore(useCallback((s) => s.workspace.debugHarness, []))
+  const pous = useMemo(
+    () => (debugHarness ? [...projectPous, debugHarness.programPou] : projectPous),
+    [projectPous, debugHarness],
+  )
   const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
   const projectType = useOpenPLCStore(useCallback((s) => s.project.meta.type, []))
   // Project-type capability matrix.  Combines with `capabilities`
