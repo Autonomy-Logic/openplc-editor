@@ -1,21 +1,13 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import * as Popover from '@radix-ui/react-popover'
-
-import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
-import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
-import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
-import { CreatePouSources, PouLanguageSources } from '../../../../../data/sources/POU'
-import { useOpenPLCStore } from '../../../../../store'
-import { InputWithRef } from '../../../../_atoms/input'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
-
-type PLCArrayDatatype = Extract<PLCDataType, { derivation: 'array' }>
-type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>
-type PLCStructureDatatype = Extract<PLCDataType, { derivation: 'structure' }>
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
+import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
+import { CreatePouSources, PouLanguageSources } from '../../../../../data/sources/POU'
+import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import {
   isArduinoTarget as checkIsArduinoTarget,
@@ -23,6 +15,8 @@ import {
   isSimulatorTarget,
 } from '../../../../../utils/device'
 import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
+import { InputWithRef } from '../../../../_atoms/input'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 import { useToast } from '../../../[app]/toast/use-toast'
 import { validatePouOrDataTypeName } from '../hooks/use-name-validation'
 
@@ -204,32 +198,9 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    const draft: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype =
-      data.derivation === 'array'
-        ? {
-            name: data.name,
-            derivation: data.derivation,
-            baseType: {
-              definition: 'base-type',
-              value: 'BOOL',
-            },
-            initialValue: '',
-            dimensions: [],
-          }
-        : data.derivation === 'enumerated'
-          ? {
-              name: data.name,
-              derivation: data.derivation,
-              initialValue: '',
-              values: [],
-            }
-          : {
-              name: data.name,
-              derivation: data.derivation,
-              variable: [],
-            }
-
-    const created = createDatatype(draft)
+    // Name and derivation only: `datatypeActions.create` builds the datatype itself
+    // through `createDatatypeObject`, so any seed passed here would be discarded.
+    const created = createDatatype({ name: data.name, derivation: data.derivation })
     if (!created.ok) {
       // The refusal is often about a POU or a global variable list, not another data
       // type, so the reason has to reach the user — the form used to close on failure

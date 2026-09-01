@@ -234,6 +234,11 @@ function elementNameCollision(
   if (pous.some((pou) => nameMatches(pou.name, derived))) {
     return `"${name}" needs the type name "${derived}", which a POU already uses`
   }
+  // Against the other lists' own names as well as their derived ones: the pair
+  // `GVL` / `GVL_TYPE` collides whichever of the two is created first.
+  if (lists.some((list) => nameMatches(list.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a global variable list already uses`
+  }
   if (lists.some((list) => nameMatches(globalVariableListTypeName(list.name), derived))) {
     return `"${name}" needs the type name "${derived}", which another global variable list already uses`
   }
@@ -418,6 +423,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) => {
       const state = getState()
+      // `updatePouName` queues the old path for deletion unconditionally, so letting a
+      // no-op rename through would mark the POU's own file deleted on the next save.
+      if (oldName === newName) return { ok: true }
+
       const collision = elementNameCollision(state, newName, 'pou', oldName)
       if (collision) return { ok: false, message: collision }
 

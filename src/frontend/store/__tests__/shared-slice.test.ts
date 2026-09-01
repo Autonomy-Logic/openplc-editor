@@ -1061,10 +1061,15 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.pous[0].name).toBe('Pump')
       })
 
-      it('allows a rename onto the exact same name', () => {
+      /**
+       * `updatePouName` queues the old path for deletion unconditionally, so a no-op
+       * rename that reached it would mark the POU's own file deleted on the next save.
+       */
+      it('treats a rename onto the exact same name as a no-op', () => {
         seedPou('Pump')
         const result = store.getState().pouActions.rename('Pump', 'Pump')
         expect(result.ok).toBe(true)
+        expect(store.getState().pendingDeletions).toEqual([])
       })
 
       it('refuses a duplicate taking a data type name', () => {
@@ -1118,6 +1123,25 @@ describe('createSharedSlice', () => {
     })
 
     describe('globalVariableListActions', () => {
+      /**
+       * The pair collides whichever half exists first: `GVL`'s generated struct takes
+       * `GVL_TYPE`, which is already the instance name of the other list.
+       */
+      it('refuses a create whose derived type name another list already holds', () => {
+        seedList('GVL_TYPE')
+        const result = store.getState().globalVariableListActions.create('GVL')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL" needs the type name "GVL_TYPE", which a global variable list already uses')
+        expect(store.getState().project.data.globalVariableLists ?? []).toHaveLength(1)
+      })
+
+      it('refuses the same pair in the opposite order', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.create('GVL_TYPE')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL_TYPE" is the type name of global variable list "GVL"')
+      })
+
       it('still allows a case-only rename: a list has no file of its own', () => {
         seedList('GVL')
         const result = store.getState().globalVariableListActions.rename('GVL', 'gvl')
