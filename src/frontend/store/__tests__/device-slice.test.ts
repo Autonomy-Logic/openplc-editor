@@ -477,6 +477,100 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceAvailableOptions.availableBoards.get('Arduino Uno')).toBeDefined()
     })
 
+    it('folds pre-split Modbus RTU wiring into the serial section', () => {
+      // The end-to-end path, not the pure helper: a project saved before the
+      // wiring moved reaches the store first, and the migration can only run
+      // once the board list lands and says which packages ship a Serial screen.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'ESP32 WROOM',
+          communicationPort: '',
+          selectedPlatformOptions: {},
+          vendorScreenData: {
+            modbus_rtu: {
+              enabled: true,
+              rtu_slave_id: 7,
+              rtu_interface: 'Serial2',
+              rtu_baud_rate: '19200',
+              enable_rs485_en_pin: true,
+              rtu_rs485_en_pin: '4',
+            },
+          },
+        },
+      })
+
+      const boards = new Map<string, BoardInfo>([
+        [
+          'ESP32 WROOM',
+          {
+            compiler: 'arduino-cli',
+            core: 'esp32',
+            preview: '',
+            specs: {},
+            vpp: {
+              packageId: 'com.openplc.espressif',
+              vendor: 'Espressif',
+              deviceId: 'esp32-wroom',
+              packagePath: '/fake',
+              screens: { Serial: {}, Network: {}, Modbus: {} },
+              moduleSystem: null,
+            },
+          },
+        ],
+      ])
+      store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
+
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.vendorScreenData?.serial).toEqual({
+        modbus_port: 'Serial2',
+        modbus_baud_rate: '19200',
+        enable_rs485_en_pin: true,
+        rs485_en_pin: '4',
+      })
+      // The two the native screen renders stay, and every stale key is gone --
+      // leaving one would let the compiler's fallback resurrect it later.
+      expect(cfg.vendorScreenData?.modbus_rtu).toEqual({ enabled: true, rtu_slave_id: 7 })
+      expect(cfg.vendorScreenDataByBoard?.['ESP32 WROOM']).toEqual(cfg.vendorScreenData)
+    })
+
+    it('leaves the wiring alone for a board whose package has not been split', () => {
+      // That board still renders the old Modbus screen, which reads
+      // modbus_rtu.rtu_interface directly; migrating would mirror the bug.
+      const store = makeStore()
+      const legacy = { modbus_rtu: { enabled: true, rtu_interface: 'Serial2' } }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'Old Board',
+          communicationPort: '',
+          selectedPlatformOptions: {},
+          vendorScreenData: legacy,
+        },
+      })
+      const boards = new Map<string, BoardInfo>([
+        [
+          'Old Board',
+          {
+            compiler: 'arduino-cli',
+            core: 'esp32',
+            preview: '',
+            specs: {},
+            vpp: {
+              packageId: 'com.openplc.legacy',
+              vendor: 'v',
+              deviceId: 'd',
+              packagePath: '/fake',
+              screens: { Modbus: {} },
+              moduleSystem: null,
+            },
+          },
+        ],
+      ])
+      store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
+
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(legacy)
+    })
+
     it('sets available communication ports', () => {
       const store = makeStore()
       const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
