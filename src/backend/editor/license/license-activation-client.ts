@@ -173,6 +173,10 @@ function postJson(url: string, body: unknown): Promise<unknown> {
           try {
             resolve(JSON.parse(responseBody))
           } catch (err) {
+            // The parse error is worth having when someone reports this, and
+            // worth keeping OUT of the dialog: the user can act on "the server
+            // sent something unreadable", never on a parser's column number.
+            console.warn('[license] activation response was not valid JSON:', err)
             reject(new Error('The licence server sent a reply the editor could not read.'))
           }
         })
