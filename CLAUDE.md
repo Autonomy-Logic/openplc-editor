@@ -231,11 +231,20 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs
 - **Framework:** Jest + jsdom
 - **Test files:** `*.test.ts(x)`, `*.spec.ts(x)`, or `__tests__/` directories
 - **E2E:** Playwright (`/e2e`), Chromium only
-- **Coverage thresholds** (100% functions/lines/statements required):
-  - `src/frontend/store/slices/`
-  - `src/frontend/utils/`
-  - `src/backend/shared/`
-  - `src/middleware/adapters/editor/`
+- **Coverage thresholds** — per-directory and aggregate, enforced by
+  `jest.config.json`. Branch coverage is not gated anywhere (`branches: 0`);
+  read the config for the current numbers rather than trusting this table:
+
+  | Directory | statements | lines | functions |
+  |---|---|---|---|
+  | `src/frontend/store/slices/` | 97 | 98 | 98 |
+  | `src/frontend/utils/` | 95 | 95 | 97 |
+  | `src/backend/shared/` | 75 | 77 | 76 |
+  | `src/middleware/adapters/editor/` | 85 | 85 | 87 |
+
+  They are floors for the directory as a whole, not a per-file rule, so a new
+  file is not obliged to reach 100% on its own — but it must not drag the
+  directory below the floor.
 - **Mocks:** `configs/mocks/` for file stubs; `identity-obj-proxy` for CSS modules
 
 When adding new code to covered directories, you must add corresponding tests to maintain 100% coverage.
