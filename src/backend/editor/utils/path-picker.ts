@@ -136,4 +136,28 @@ const getPlcopenExportSavePath = async (serviceManager: GetProjectPathProps, def
   }
 }
 
-export { getOpenProjectPath, getPlcopenExportSavePath, getPlcopenImportFilePath, getProjectPath }
+const getPdfExportSavePath = async (serviceManager: GetProjectPathProps, defaultFileName: string, bytes: Uint8Array) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(serviceManager, {
+    title: 'Export PDF',
+    defaultPath: defaultFileName,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  })
+  if (canceled || !filePath) {
+    return { success: false, canceled: true }
+  }
+
+  try {
+    await promises.writeFile(filePath, bytes)
+    return { success: true }
+  } catch {
+    return {
+      success: false,
+      error: {
+        title: 'Error writing file',
+        description: 'Failed to write the PDF file.',
+      },
+    }
+  }
+}
+
+export { getOpenProjectPath, getPdfExportSavePath, getPlcopenExportSavePath, getPlcopenImportFilePath, getProjectPath }

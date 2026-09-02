@@ -155,6 +155,14 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('edit:redo-request')
   }
 
+  handlePrint() {
+    this.mainWindow.webContents.send('project:print-accelerator')
+  }
+
+  handlePageSetup() {
+    this.mainWindow.webContents.send('project:page-setup-accelerator')
+  }
+
   /**
    * --------------------------------------------------------------------------------------------
    */
@@ -264,17 +272,17 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
           accelerator: 'Cmd+Option+P',
-          enabled: false,
+          click: () => this.handlePageSetup(),
         },
         {
           label: i18n.t('menu:file.submenu.preview'),
           accelerator: 'Cmd+Shift+P',
-          enabled: false,
+          click: () => this.handlePrint(),
         },
         {
           label: i18n.t('menu:file.submenu.print'),
           accelerator: 'Cmd+P',
-          enabled: false,
+          click: () => this.handlePrint(),
         },
         { type: 'separator' },
         {
@@ -538,18 +546,18 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.pageSetup'),
-            enabled: false,
             accelerator: 'Ctrl+Alt+P',
+            click: () => this.handlePageSetup(),
           },
           {
             label: i18n.t('menu:file.submenu.preview'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+P',
+            click: () => this.handlePrint(),
           },
           {
             label: i18n.t('menu:file.submenu.print'),
             accelerator: 'Ctrl+P',
-            enabled: false,
+            click: () => this.handlePrint(),
           },
           { type: 'separator' },
           {

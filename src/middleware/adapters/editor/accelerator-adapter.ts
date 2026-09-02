@@ -27,6 +27,8 @@
  *   edit:redo-request
  *   workspace:switch-perspective-accelerator
  *   about:open-accelerator
+ *   project:print-accelerator
+ *   project:page-setup-accelerator
  */
 
 import type { AcceleratorPort } from '../../shared/ports/accelerator-port'
@@ -64,6 +66,14 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
 
     onExportProject(callback: () => void): Unsubscribe {
       return window.bridge.exportProjectRequest(() => callback())
+    },
+
+    onPrint(callback: () => void): Unsubscribe {
+      return window.bridge.printAccelerator(() => callback())
+    },
+
+    onPageSetup(callback: () => void): Unsubscribe {
+      return window.bridge.pageSetupAccelerator(() => callback())
     },
 
     onCloseTab(callback: () => void): Unsubscribe {

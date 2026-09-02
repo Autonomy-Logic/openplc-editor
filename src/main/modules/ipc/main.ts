@@ -81,6 +81,7 @@ import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-cl
 import { logger } from '../../../backend/editor/services'
 import {
   getOpenProjectPath,
+  getPdfExportSavePath,
   getPlcopenExportSavePath,
   getPlcopenImportFilePath,
   getProjectPath,
@@ -743,6 +744,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:read-files', this.handleReadProjectFiles)
     this.registerHandle('project:pick-plcopen-import-file', this.handlePickPlcopenImportFile)
     this.registerHandle('project:export-plcopen-file', this.handleExportPlcopenFile)
+    this.registerHandle('project:export-pdf-file', this.handleExportPdfFile)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -1012,6 +1014,21 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
     } catch (error) {
       logger.error('Error exporting PLCopen file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
+    }
+  }
+
+  handleExportPdfFile = async (_event: IpcMainInvokeEvent, defaultFileName: string, bytes: Uint8Array) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPdfExportSavePath(windowManager, defaultFileName, bytes)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error exporting PDF file: ' + getErrorMessage(error))
       return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
     }
   }

@@ -378,4 +378,16 @@ export interface ProjectPort {
    * Web: triggers a browser download of the blob.
    */
   exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Persist a rendered PDF as a file the user can access.
+   * Editor: native save-file dialog, writes to disk.
+   * Web: triggers a browser download of the blob.
+   * `canceled` distinguishes a dismissed save dialog from a real write
+   * failure, so callers can skip the error toast on cancel.
+   */
+  exportPdfFile(
+    defaultFileName: string,
+    bytes: Uint8Array,
+  ): Promise<{ success: boolean; canceled?: boolean; error?: string }>
 }

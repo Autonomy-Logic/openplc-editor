@@ -365,6 +365,20 @@ export function createEditorProjectAdapter(): ProjectPort {
       }
       return { success: true }
     },
+
+    async exportPdfFile(
+      defaultFileName: string,
+      bytes: Uint8Array,
+    ): Promise<{ success: boolean; canceled?: boolean; error?: string }> {
+      const response = await window.bridge.exportPdfFile(defaultFileName, bytes)
+      if (response.canceled) {
+        return { success: false, canceled: true }
+      }
+      if (!response.success) {
+        return { success: false, error: response.error?.description }
+      }
+      return { success: true }
+    },
   }
 }
 

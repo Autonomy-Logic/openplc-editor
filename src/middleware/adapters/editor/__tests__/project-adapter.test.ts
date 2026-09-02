@@ -124,6 +124,7 @@ beforeEach(() => {
     }),
     pickPlcopenImportFile: jest.fn().mockResolvedValue({ success: true, content: '<project/>' }),
     exportPlcopenFile: jest.fn().mockResolvedValue({ success: true }),
+    exportPdfFile: jest.fn().mockResolvedValue({ success: true }),
   } as unknown as typeof window.bridge
 })
 
@@ -636,6 +637,43 @@ describe('createEditorProjectAdapter', () => {
       ;(window.bridge.exportPlcopenFile as jest.Mock).mockResolvedValue({ success: false })
 
       const result = await adapter.exportPlcopenFile('my-project.xml', '<project/>')
+
+      expect(result).toEqual({ success: false, error: undefined })
+    })
+  })
+
+  describe('exportPdfFile', () => {
+    it('delegates to window.bridge.exportPdfFile with the file name and bytes', async () => {
+      const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])
+      const result = await adapter.exportPdfFile('my-project.pdf', bytes)
+
+      expect(window.bridge.exportPdfFile).toHaveBeenCalledWith('my-project.pdf', bytes)
+      expect(result).toEqual({ success: true })
+    })
+
+    it('reports canceled without an error when the user dismisses the save dialog', async () => {
+      ;(window.bridge.exportPdfFile as jest.Mock).mockResolvedValue({ success: false, canceled: true })
+
+      const result = await adapter.exportPdfFile('my-project.pdf', new Uint8Array())
+
+      expect(result).toEqual({ success: false, canceled: true })
+    })
+
+    it('flattens the error object to a string on a genuine write failure', async () => {
+      ;(window.bridge.exportPdfFile as jest.Mock).mockResolvedValue({
+        success: false,
+        error: { title: 'Error writing file', description: 'Failed to write the PDF file.' },
+      })
+
+      const result = await adapter.exportPdfFile('my-project.pdf', new Uint8Array())
+
+      expect(result).toEqual({ success: false, error: 'Failed to write the PDF file.' })
+    })
+
+    it('returns undefined error when the bridge reports failure without an error object', async () => {
+      ;(window.bridge.exportPdfFile as jest.Mock).mockResolvedValue({ success: false })
+
+      const result = await adapter.exportPdfFile('my-project.pdf', new Uint8Array())
 
       expect(result).toEqual({ success: false, error: undefined })
     })
