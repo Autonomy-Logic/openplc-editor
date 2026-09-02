@@ -17,6 +17,7 @@ import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-ad
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
+import { editorEdgeAccountPort } from './adapters/editor/edge-account-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
@@ -86,5 +87,11 @@ export const editorPorts: PlatformPorts = {
   navigation: createEditorNavigationAdapter(),
   library: createEditorLibraryAdapter(),
   stlibSource: createEditorStlibSourceAdapter(),
+  /**
+   * The Edge account. `EDITOR_CAPABILITIES` pairs it with `requiresEdgeAccount: false`,
+   * so the account control appears in the same slot as it does on the web while
+   * signing in stays optional here.
+   */
+  edgeAccount: editorEdgeAccountPort,
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }

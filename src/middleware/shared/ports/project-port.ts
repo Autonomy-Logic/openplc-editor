@@ -215,6 +215,19 @@ export interface RawProjectFiles {
      * "not pending" case (normal project, has `project.json`).
      */
     pendingPlcopenSource?: string
+    /**
+     * The file bytes exactly as the source handed them over, keyed by relative path.
+     *
+     * Present for a reader that has a notion of "as loaded" separate from the parsed
+     * result — a cloud project, whose bytes came off the wire. Absent for the filesystem
+     * reader, where the files on disk ARE the loaded state, and the sync point treats
+     * absent the same as nothing to echo.
+     *
+     * The save flow uses it to upload unedited files unchanged instead of re-serialising
+     * them, which is what keeps a save from rewriting every file in the editor's own
+     * formatting and reporting the whole project as modified.
+     */
+    rawLoadedFiles?: Record<string, string>
   }
   /**
    * `status` carries the HTTP status when the platform had one, for the same
@@ -225,7 +238,101 @@ export interface RawProjectFiles {
   error?: { title: string; description: string; status?: number }
 }
 
+/**
+ * The outcome of asking for the account's cloud projects.
+ *
+ * NOT just an array, and the distinction is the whole point: an empty list would
+ * collapse "you are not signed in", "you have no projects yet" and "we could not
+ * reach Edge" into one value, and the three call for completely different words on
+ * screen. Telling someone to sign in when they are already signed in and simply
+ * offline is the same class of bug `EdgeUserRead.unknown` exists to prevent.
+ */
+export type CloudProjectsResult =
+  | { status: 'ok'; projects: CloudProjectSummary[] }
+  /** The server answered, and there is no usable session. */
+  | { status: 'signed-out' }
+  /** The question could not be asked — offline, DNS, a dropped connection. */
+  | { status: 'unreachable' }
+  /** This build has no channel for cloud projects at all. */
+  | { status: 'unavailable' }
+
+/** A project on the user's Autonomy Edge account, as a list needs to show it. */
+export interface CloudProjectSummary {
+  id: string
+  name: string
+  /** IEC language slug, e.g. `st` / `ld`. Absent on projects that never set one. */
+  language?: string | null
+  /** ISO timestamp of the last change, which is what "recent" is ordered by. */
+  updatedAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Publishing a local project to Autonomy Edge
+// ---------------------------------------------------------------------------
+
+/** A destination the user can publish into. Flattened, with `depth` to read as a tree. */
+export interface CloudFolder {
+  id: string
+  /** Display-ready. The account's root folder is named after the user id on the wire. */
+  name: string
+  depth: number
+}
+
+export type CloudFoldersResult =
+  | { status: 'ok'; folders: CloudFolder[] }
+  | { status: 'signed-out' }
+  | { status: 'unreachable' }
+
+/**
+ * Why publishing did not happen, as data.
+ *
+ * Each case exists because the user's next move differs. "This folder is not an OpenPLC
+ * project" is a different problem from "your project is too big" and from "the connection
+ * dropped, so check Edge before trying again" — and the last one matters most: the upload
+ * is not idempotent, so an unanswered request may well have created the project.
+ */
+export type UploadProjectFailure =
+  | { reason: 'no-manifest' }
+  | { reason: 'empty' }
+  | { reason: 'too-many-files'; count: number }
+  | { reason: 'too-deep' }
+  | { reason: 'file-too-large'; relativePath: string; bytes: number }
+  | { reason: 'too-large'; bytes: number }
+  | { reason: 'unreadable'; message: string }
+  | { reason: 'signed-out' }
+  | { reason: 'unreachable'; message: string }
+  | { reason: 'rejected'; status: number; message: string }
+
+export type UploadProjectResult =
+  | { status: 'ok'; projectId: string | null; uploadedFiles: number }
+  | { status: 'failed'; failure: UploadProjectFailure }
+
+export interface UploadProjectParams {
+  /** Absolute path of the project directory on this machine. */
+  projectPath: string
+  parentFolderId: string
+  /** Overrides the name inside `project.json`. */
+  projectName?: string
+  visibility: 'public' | 'private'
+}
+
 export interface ProjectPort {
+  /**
+   * Folders on Autonomy Edge the signed-in account can publish into.
+   *
+   * Optional: only a platform that can hold local projects AND reach Edge has anything to
+   * publish. Absent everywhere else, including the web build, where a project is already
+   * on Edge by definition.
+   */
+  listCloudFolders?(): Promise<CloudFoldersResult>
+
+  /**
+   * Archive a project on this machine and import it into Edge.
+   *
+   * Optional for the same reason as `listCloudFolders`.
+   */
+  uploadProjectToCloud?(params: UploadProjectParams): Promise<UploadProjectResult>
+
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
 
@@ -282,6 +389,23 @@ export interface ProjectPort {
 
   /** Get list of recently opened projects. */
   getRecentProjects(): Promise<RecentProject[]>
+
+  /**
+   * The most recently changed projects on the signed-in Autonomy Edge account.
+   *
+   * OPTIONAL, because not every platform lists cloud projects. The desktop editor does:
+   * it is the only place that shows local and cloud side by side, and reaching one from
+   * the other is the point. The web editor does not — it is always opened on a specific
+   * project, and Edge's own SPA is where a person browses them.
+   *
+   * Ordering is the server's (`updatedAt` descending). Sorting a truncated page here
+   * would be wrong: the five newest of ten fetched rows are not the five newest overall.
+   *
+   * Resolves a DISCRIMINATED result rather than a list, so the caller can tell being
+   * signed out from having no projects from being offline. Signing in is optional, so
+   * none of those is an error — but they are not the same thing to say.
+   */
+  listRecentCloudProjects?(limit: number): Promise<CloudProjectsResult>
 
   /**
    * Drop a project entry from the recent-projects list without

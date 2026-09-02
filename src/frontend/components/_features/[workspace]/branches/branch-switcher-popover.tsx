@@ -14,7 +14,11 @@ type BranchSwitcherPopoverProps = {
   onClose: () => void
   onSelect: (branch: Branch) => void
   onDelete: (branch: Branch) => void
-  onMerge: (branch: Branch) => void
+  /**
+   * Absent on a build with no merge screen, and the entry is then not rendered at all.
+   * Rendering it disabled would still be a promise this platform cannot keep.
+   */
+  onMerge?: (branch: Branch) => void
 }
 
 export function BranchSwitcherPopover({
@@ -210,37 +214,39 @@ export function BranchSwitcherPopover({
                         onCloseAutoFocus={(e) => e.preventDefault()}
                         className='z-[60] min-w-[140px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900'
                       >
-                        <DropdownMenu.Item
-                          disabled={isActive}
-                          onSelect={(e) => {
-                            e.preventDefault()
-                            if (isActive) return
-                            onMerge(branch)
-                            handleClose()
-                          }}
-                          title={isActive ? 'Cannot merge a branch into itself' : undefined}
-                          className={cn(
-                            'flex select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
-                            isActive
-                              ? 'cursor-not-allowed text-neutral-400 dark:text-neutral-600'
-                              : 'cursor-pointer text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
-                          )}
-                        >
-                          <svg
+                        {onMerge && (
+                          <DropdownMenu.Item
+                            disabled={isActive}
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              if (isActive) return
+                              onMerge(branch)
+                              handleClose()
+                            }}
+                            title={isActive ? 'Cannot merge a branch into itself' : undefined}
                             className={cn(
-                              'h-3.5 w-3.5',
-                              isActive ? 'text-neutral-400 dark:text-neutral-600' : 'text-blue-500',
+                              'flex select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                              isActive
+                                ? 'cursor-not-allowed text-neutral-400 dark:text-neutral-600'
+                                : 'cursor-pointer text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
                             )}
-                            viewBox='0 0 16 16'
-                            fill='currentColor'
                           >
-                            <path d='M5 3.254V3.25v.005a.75.75 0 1 1 0-.005v.004zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5zm-8.5 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z' />
-                          </svg>
-                          <span>
-                            Merge <span className='font-mono'>{branch.name}</span> into{' '}
-                            <span className='font-mono'>{currentBranchName}</span>
-                          </span>
-                        </DropdownMenu.Item>
+                            <svg
+                              className={cn(
+                                'h-3.5 w-3.5',
+                                isActive ? 'text-neutral-400 dark:text-neutral-600' : 'text-blue-500',
+                              )}
+                              viewBox='0 0 16 16'
+                              fill='currentColor'
+                            >
+                              <path d='M5 3.254V3.25v.005a.75.75 0 1 1 0-.005v.004zm.45 1.9a2.25 2.25 0 1 0-1.95.218v5.256a2.25 2.25 0 1 0 1.5 0V7.123A5.735 5.735 0 0 0 9.25 9h1.378a2.251 2.251 0 1 0 0-1.5H9.25a4.25 4.25 0 0 1-3.8-2.346zM12.75 9a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5zm-8.5 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z' />
+                            </svg>
+                            <span>
+                              Merge <span className='font-mono'>{branch.name}</span> into{' '}
+                              <span className='font-mono'>{currentBranchName}</span>
+                            </span>
+                          </DropdownMenu.Item>
+                        )}
                         <DropdownMenu.Item
                           disabled={branch.isDefault}
                           onSelect={(e) => {

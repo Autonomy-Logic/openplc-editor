@@ -36,6 +36,15 @@ type SignInValues = z.infer<typeof signInSchema>
 
 interface EdgeSignInModalProps {
   open: boolean
+  /**
+   * Requests a close, on a build where this dialog is dismissible.
+   *
+   * Absent where an account is required: there the dialog IS the screen, and letting
+   * it close would leave the user looking at an editor with no project in it and no
+   * way back. Present where signing in is optional, because a dialog the user opened
+   * has to be one they can also close.
+   */
+  onOpenChange?: (open: boolean) => void
   onSignedIn: () => void
   /**
    * The platform's Edge account port: signing in, the provider list and where
@@ -98,7 +107,7 @@ type FormState = { kind: 'idle' } | { kind: 'error'; message: string } | { kind:
 const FIELD_CLASSES =
   'w-full rounded-lg border border-neutral-300 bg-transparent py-2 pr-9 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-brand dark:border-neutral-700 dark:text-neutral-100'
 
-const EdgeSignInModal = ({ open, onSignedIn, account, reason = 'signed-out' }: EdgeSignInModalProps) => {
+const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'signed-out' }: EdgeSignInModalProps) => {
   const copy = REASON_COPY[reason]
   const [formState, setFormState] = useState<FormState>({ kind: 'idle' })
   const [submitting, setSubmitting] = useState(false)
@@ -156,7 +165,7 @@ const EdgeSignInModal = ({ open, onSignedIn, account, reason = 'signed-out' }: E
   }
 
   return (
-    <Modal open={open}>
+    <Modal open={open} onOpenChange={onOpenChange}>
       {/* `h-fit`, not `h-auto`: ModalContent hardcodes `h-[500px]` (so the provider
           row rendered outside the dialog's border) AND positions itself with
           `fixed inset-0 m-auto` — under which `height: auto` means "stretch from

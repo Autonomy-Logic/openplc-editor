@@ -185,6 +185,18 @@ export type OpenProjectResponseData = {
    *  raw so the save flow echoes them back verbatim. */
   unparsedDataTypeFiles?: RawProjectFile[]
   /**
+   * Every file's bytes as the reader handed them over, keyed by relative path.
+   *
+   * The same idea as `unparsedDataTypeFiles` one line up, generalised: the save flow echoes
+   * these back for files the user did not edit, rather than re-serialising them. Without it
+   * a save rewrites every file in the editor's own formatting — same meaning, different
+   * bytes — so the project grows and git reports the whole thing as modified.
+   *
+   * Absent for a reader with no separate notion of "as loaded", which is the filesystem:
+   * there the files on disk are the loaded state.
+   */
+  rawLoadedFiles?: Record<string, string>
+  /**
    * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
    * `false` puts the workspace in read-only mode; `true` / `undefined`
    * keep it fully editable.  Absent ⇒ desktop editor or dev-local; both

@@ -8,6 +8,7 @@
 import { DiffEditor } from '@monaco-editor/react'
 
 import { GraphicalDiffViewer, isGraphicalFile } from './graphical-diff-viewer'
+import { useDiffEditorTeardown, useDiffModelPaths } from './use-diff-editor-teardown'
 
 export { isGraphicalFile }
 
@@ -66,6 +67,10 @@ type FileDiffViewProps = {
 }
 
 export function FileDiffView({ filePath, original, current, isDark }: FileDiffViewProps) {
+  const editorRef = useDiffEditorTeardown()
+
+  const modelPaths = useDiffModelPaths()
+
   if (isGraphicalFile(filePath)) {
     return (
       <GraphicalDiffViewer originalContent={original} currentContent={current} filePath={filePath} isDark={isDark} />
@@ -78,6 +83,13 @@ export function FileDiffView({ filePath, original, current, isDark }: FileDiffVi
       modified={formatContentForDisplay(filePath, current)}
       language={getLanguageFromPath(filePath)}
       theme={isDark ? 'vs-dark' : 'vs'}
+      originalModelPath={modelPaths.original}
+      modifiedModelPath={modelPaths.modified}
+      keepCurrentOriginalModel
+      keepCurrentModifiedModel
+      onMount={(editor) => {
+        editorRef.current = editor
+      }}
       options={{
         readOnly: true,
         minimap: { enabled: false },

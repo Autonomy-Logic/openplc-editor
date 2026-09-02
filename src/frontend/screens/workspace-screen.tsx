@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
 
-import { projectCapabilities } from '../../middleware/shared/ports/types'
+import { isRemoteProjectPath, projectCapabilities } from '../../middleware/shared/ports/types'
 import {
   useCapabilities,
   useChatPanel,
@@ -15,6 +15,8 @@ import {
 import { ExitIcon } from '../assets/icons/interface/Exit'
 import { ClearConsoleButton } from '../components/_atoms/buttons/console/clear-console'
 import { BranchStatusBar } from '../components/_features/[workspace]/branches'
+import { BranchMergeView } from '../components/_features/[workspace]/branches/branch-merge-view'
+import { CommitHistoryView } from '../components/_features/[workspace]/commit-history'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
@@ -59,6 +61,7 @@ import { useDevicePlcState } from '../hooks/use-device-plc-state'
 import { useNativeScreenEnforcement } from '../hooks/use-native-screen-enforcement'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
+import { buildAllProjectFileContentsPure } from '../services/save-actions'
 import { useOpenPLCStore } from '../store'
 import { cn } from '../utils/cn'
 import { buildGlobalCompositeKey, GLOBAL_CONFIG_NAME } from '../utils/debug-variable-finder'
@@ -142,13 +145,18 @@ const WorkspaceScreen = () => {
   )
 
   // Version control state
-  const { activePanel, pendingChangesCount } = useOpenPLCStore(
+  const { activePanel, pendingChangesCount, historyView, mergeView, rawLoadedContent } = useOpenPLCStore(
     useShallow((s) => ({
       activePanel: s.versionControl.activePanel,
       pendingChangesCount: s.versionControl.pendingChangesCount,
+      historyView: s.versionControl.historyView,
+      mergeView: s.versionControl.mergeView,
+      rawLoadedContent: s.versionControl.rawLoadedContent,
     })),
   )
-  const { setActivePanel } = useOpenPLCStore(useCallback((s) => s.versionControlActions, []))
+  const { setActivePanel, closeHistoryView, closeMergeView } = useOpenPLCStore(
+    useCallback((s) => s.versionControlActions, []),
+  )
   const sharedWorkspaceActions = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
 
   const isDebuggerVisible = useIsDebuggerVisible()
@@ -156,12 +164,62 @@ const WorkspaceScreen = () => {
   const debugNonBoolValues = useDebugNonBoolValuesMap()
   const debugForcedVariables = useDebugForcedVariablesMap()
 
-  // Version control is an intersection: the host must support it
-  // (web edition has its own VC adapter; desktop has git) AND the
-  // project type must allow it.  Library projects ship without VC
-  // for now — git-on-library is plausible but out of scope and
-  // would re-introduce the same UI churn we just removed.
-  const hasVersionControl = capabilities.hasVersionControl && projectCaps.hasVersionControl
+  // Version control is an intersection of three things: the host must support
+  // it, the project type must allow it, and the project must actually live on
+  // the server.  Library projects ship without VC for now — git-on-library is
+  // plausible but out of scope and would re-introduce the same UI churn we
+  // just removed.
+  //
+  // The third term is what keeps the desktop honest.  The repository sits
+  // beside the project on Edge, so a project opened from disk has no history
+  // to show; offering branches for it would be offering a button that cannot
+  // work.  On the web every project is an Edge project, so the term is always
+  // true there and nothing changes.
+  const hasVersionControl =
+    capabilities.hasVersionControl && projectCaps.hasVersionControl && isRemoteProjectPath(projectPath)
+
+  /**
+   * Establish the version-control sync point for the project that just loaded.
+   *
+   * `pickContentForSave` needs two things per path: the serialization taken at load time,
+   * and the bytes as they arrived. Given both, a file whose fresh serialization still equals
+   * the load-time one is echoed back unchanged; given neither, every file is re-serialised on
+   * every save. That is what made a save rewrite an entire project in the editor's own
+   * formatting — 62KB to 147KB on a real one — and report every file as modified against
+   * HEAD.
+   *
+   * KEYED ON THE RAW MAP'S IDENTITY, not on `projectPath`. A branch switch, restore, discard
+   * or stash reloads the same project: the path does not change, but the loaded bytes do, and
+   * the sync point has to follow them. The store replaces the map on every load, so its
+   * identity is the signal that one happened.
+   *
+   * SKIPPED WHERE SOMETHING ALREADY DID IT. The web establishes this in its router page
+   * before the workspace mounts, so `loadedSerialized` is already populated by the time this
+   * runs there and it leaves it alone. The condition is about state, not about which product
+   * this is — a platform that starts doing it earlier gets the same treatment for free.
+   */
+  useEffect(() => {
+    if (!projectPath) {
+      return
+    }
+
+    const state = useOpenPLCStore.getState()
+
+    if (Object.keys(state.versionControl.loadedSerialized).length > 0) {
+      return
+    }
+
+    // Serialised from the state that was just loaded, which is what makes it a baseline:
+    // anything differing from it later is a real edit.
+    const baselineContent = buildAllProjectFileContentsPure()
+
+    state.versionControlActions.initBaseline({
+      initialPending: [],
+      baselineContent,
+      rawLoadedContent: state.versionControl.rawLoadedContent,
+      loadedSerialized: baselineContent,
+    })
+  }, [projectPath, rawLoadedContent])
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
@@ -310,23 +368,39 @@ const WorkspaceScreen = () => {
   )
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
+  /**
+   * Re-read the open project from its source.
+   *
+   * Both a branch switch and a commit restore rewrite the working tree on the server,
+   * which leaves everything in memory stale. `whenStale` is the caller's own wording for
+   * the half-done case — the operation succeeded and the reload did not, and telling
+   * someone their branch switch failed when it did not is its own bug.
+   */
+  const reloadOpenProject = useCallback(
+    async (whenStale: string): Promise<boolean> => {
+      if (!projectPath) return false
+      const result = await project.openProjectByPath(projectPath)
+
+      if (result.success && result.data) {
+        sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        return true
+      }
+
+      toast({ title: 'Failed to reload project', description: whenStale, variant: 'fail' })
+      return false
+    },
+    [projectPath, project, sharedWorkspaceActions],
+  )
+
   const handleBranchSwitch = useCallback(
     async (branchName: string) => {
       if (!projectPath) return
       try {
-        const result = await project.openProjectByPath(projectPath)
-        if (result.success && result.data) {
-          sharedWorkspaceActions.handleOpenProjectResponse(result.data)
+        if (await reloadOpenProject('The branch was switched but the project could not be reloaded.')) {
           toast({
             title: 'Branch switched',
             description: `Now on branch: ${branchName}`,
             variant: 'default',
-          })
-        } else {
-          toast({
-            title: 'Failed to reload project',
-            description: 'The branch was switched but the project could not be reloaded.',
-            variant: 'fail',
           })
         }
       } catch (error) {
@@ -338,7 +412,7 @@ const WorkspaceScreen = () => {
         })
       }
     },
-    [projectPath, project, sharedWorkspaceActions],
+    [projectPath, reloadOpenProject],
   )
 
   type PanelMethods = {
@@ -921,6 +995,53 @@ const WorkspaceScreen = () => {
       </div>
       {hasVersionControl && projectPath && (
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
+      )}
+
+      {/* The commit's full-file view, laid over the workspace.
+       *
+       * Set only by a platform whose navigation adapter has nowhere else to put it — the
+       * desktop, which has no router. The web's adapter navigates to `/history` in a new
+       * tab instead, leaving this null and this branch dead there, so the two products
+       * render the same screen from the same component without the web losing its tab.
+       *
+       * `inset-0` over the whole workspace rather than a modal: it is a screen, not a
+       * dialog, and the graphical diff of a ladder program needs the room. */}
+      {hasVersionControl && projectPath && historyView && (
+        <div className='absolute inset-0 z-50'>
+          <CommitHistoryView
+            projectId={projectPath}
+            commitHash={historyView.commitHash}
+            initialFile={historyView.file}
+            onBack={closeHistoryView}
+            onRestored={() => {
+              closeHistoryView()
+              void reloadOpenProject('The project was restored but could not be reloaded.')
+            }}
+          />
+        </div>
+      )}
+
+      {/* The branch merge screen, laid over the workspace.
+       *
+       * Same arrangement as the commit view above, and set the same way: only a platform
+       * whose navigation adapter has nowhere else to put it — the desktop, with no router.
+       * The web navigates to `/merge` instead and leaves this null.
+       *
+       * Closing on a completed merge reloads the project, because the merge moved the
+       * branch on the server and everything in memory is now behind it. */}
+      {hasVersionControl && projectPath && mergeView && (
+        <div className='absolute inset-0 z-50'>
+          <BranchMergeView
+            projectId={projectPath}
+            sourceBranch={mergeView.sourceBranch}
+            targetParam={mergeView.targetBranch}
+            onBack={closeMergeView}
+            onMerged={() => {
+              closeMergeView()
+              void reloadOpenProject('The merge completed but the project could not be reloaded.')
+            }}
+          />
+        </div>
       )}
     </div>
   )

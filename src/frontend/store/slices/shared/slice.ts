@@ -1180,6 +1180,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Raw .dt files that failed to parse — stashed so saves echo
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
+      // The bytes as loaded, for the save flow to echo back for files the user does not
+      // touch. Always set, for the same reason as the line above: a reopen must not inherit
+      // the previous project's map. Empty for a reader with no separate notion of "as
+      // loaded" — a project on disk — which reads the same as nothing to echo.
+      getState().versionControlActions.setRawLoadedContent(data.rawLoadedFiles ?? {})
 
       // Unreadable files have no PLCDataType, so no tree leaf to click.
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {

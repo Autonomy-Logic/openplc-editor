@@ -51,6 +51,22 @@ export const store = new Store<TStoreType>({
         },
       },
     },
+    /**
+     * The Edge session. Declared so `electron-store` validates what it writes, but
+     * deliberately absent from `defaults`: no key at all is the signed-out state, and
+     * a default would make "never signed in" indistinguishable from "signed out".
+     *
+     * The value is a base64 `safeStorage` ciphertext, not the token itself.
+     */
+    edge_session: {
+      type: 'object',
+      properties: {
+        refreshToken: {
+          type: 'string',
+        },
+      },
+      required: ['refreshToken'],
+    },
   },
   defaults: {
     last_projects: [],
