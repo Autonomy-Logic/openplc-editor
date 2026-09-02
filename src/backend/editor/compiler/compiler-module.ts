@@ -3095,6 +3095,9 @@ class CompilerModule {
     let targetHidesPersistentStorage = false
     if (isRuntimeV4) {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      // Tracked out here, not acted on inside the `try`, so the catch below
+      // cannot swallow the refusal along with the missing-file case it is for.
+      let storageStanzaInvalid = false
       try {
         const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         // Validated, not trusted. `readJSONFile` is `JSON.parse(...) as T`, so a
@@ -3106,20 +3109,38 @@ class CompilerModule {
         if (parsedStorage.success) {
           persistentStorage = parsedStorage.data
         } else if (deviceConfig.persistentStorage !== undefined) {
-          // Emit nothing rather than guess: a malformed stanza is not evidence
-          // the user wanted storage off, but it is evidence we cannot say what
-          // they wanted, and shipping a half-read path is worse than shipping
-          // none. The runtime then removes any copy the device has.
-          _mainProcessPort.postMessage({
-            logLevel: 'warning',
-            message:
-              'Persistent storage settings in devices/configuration.json could not be read; ' +
-              'no retain.conf will be sent. Re-save the setting on the Persistent Storage screen.',
-          })
+          storageStanzaInvalid = true
         }
       } catch {
         // No configuration.json — a project that never configured storage, which
         // generateRetainConf treats as "emit nothing".
+      }
+
+      // REFUSE THE BUILD rather than carry on without the settings.
+      //
+      // Warning and continuing looked like the cautious choice and was the
+      // opposite: absent settings are not a neutral state here. `retain.conf`
+      // missing from an upload is the signal that switches the built-in store
+      // OFF, and the runtime acts on it by deleting the device's copy — so a
+      // typo in a project file would have turned retention off on the machine
+      // while the compile reported success, with one console line as the only
+      // evidence. That is exactly the silent-loss failure the rest of this
+      // design goes out of its way to make unrepresentable.
+      //
+      // Stopping here costs the user a build they have to fix. Continuing costs
+      // them retained values on a running machine, discovered after a power cut.
+      if (storageStanzaInvalid) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message:
+            'Persistent storage settings in devices/configuration.json could not be read.\n' +
+            'Refusing to build: uploading without them would switch persistent storage OFF on ' +
+            'the device, and retained variables would stop being kept.\n' +
+            'Open the Persistent Storage screen and re-save the setting, then build again.\n' +
+            'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
       }
       // A VPP whose own driver keeps retained values declares this, and the
       // editor then emits no retain.conf at all — the runtime removes its copy
