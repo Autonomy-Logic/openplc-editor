@@ -1,142 +1,146 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+/**
+ * The Persistent Storage screen is a PROJECT form. What is worth pinning down is
+ * that it behaves like one — no device, no connection, edits landing in the
+ * store — because the previous version of this screen read and wrote a
+ * connected runtime, and the whole point of the change is that it no longer can.
+ */
 
-const mockToast = vi.fn()
-vi.mock('@root/frontend/components/_features/[app]/toast/use-toast', () => ({
-  toast: (...args: unknown[]) => mockToast(...args),
-}))
-
-const runtime = {
-  getRetainConfig: vi.fn(),
-  updateRetainConfig: vi.fn(),
-}
-vi.mock('@root/middleware/shared/providers', () => ({
-  useRuntime: () => runtime,
-}))
+import { fireEvent, render, screen } from '@testing-library/react'
 
 import { useOpenPLCStore } from '@root/frontend/store'
-import type { RetainConfig } from '@root/middleware/shared/ports/runtime-port'
+import { DEFAULT_RETAIN_FLUSH_SECONDS, RETAIN_MAX_FLUSH_SECONDS } from '@root/middleware/shared/ports/types'
 
 import { PersistentStorageEditor } from '../index'
 
-const CONFIG: RetainConfig = {
-  enabled: false,
-  path: '/var/lib/openplc-runtime/retain.bin',
-  flushSeconds: 5,
-  defaultPath: '/var/lib/openplc-runtime/retain.bin',
-  defaultFlushSeconds: 5,
-  minFlushSeconds: 1,
-  maxFlushSeconds: 3600,
-  backend: 'none',
-  backendDetail: '',
-  active: false,
+/** Narrow, don't assert.
+ *
+ *  CLAUDE.md forbids type assertions, and the reason applies here: `as
+ *  HTMLInputElement` on a query that starts returning a wrapper would read
+ *  `.disabled` as `undefined` and quietly pass. `instanceof` fails loudly. */
+function input(el: HTMLElement): HTMLInputElement {
+  if (!(el instanceof HTMLInputElement)) {
+    throw new Error(`expected an <input>, got <${el.tagName.toLowerCase()}>`)
+  }
+  return el
 }
 
-function connect(status: 'connected' | 'disconnected') {
+function settings() {
+  return useOpenPLCStore.getState().deviceDefinitions.configuration.persistentStorage
+}
+
+function setSettings(value: { enabled: boolean; path: string; flushSeconds: number } | undefined) {
   useOpenPLCStore.setState((s) => ({
     ...s,
-    runtimeConnection: { ...s.runtimeConnection, connectionStatus: status },
+    deviceDefinitions: {
+      ...s.deviceDefinitions,
+      configuration: { ...s.deviceDefinitions.configuration, persistentStorage: value },
+    },
   }))
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  runtime.getRetainConfig.mockResolvedValue({ success: true, config: CONFIG })
-  runtime.updateRetainConfig.mockResolvedValue({ success: true, config: { ...CONFIG, enabled: true } })
-  connect('connected')
+  setSettings(undefined)
 })
 
 describe('PersistentStorageEditor', () => {
-  it('tells the user to connect rather than showing settings it cannot read', () => {
-    connect('disconnected')
+  it('renders with no device attached', () => {
+    // The predecessor showed "you are not connected" here. There is nothing to
+    // connect to now: the settings are part of the project.
     render(<PersistentStorageEditor />)
-    expect(screen.getByText(/not connected to a runtime/i)).toBeTruthy()
-    expect(runtime.getRetainConfig).not.toHaveBeenCalled()
+
+    expect(screen.getByRole('heading', { name: /persistent storage/i })).toBeTruthy()
+    expect(screen.getByLabelText(/file location/i)).toBeTruthy()
+    expect(screen.queryByText(/not connected/i)).toBeNull()
   })
 
-  it('loads the settings on mount', async () => {
+  it('shows storage off for a project that never configured it', () => {
     render(<PersistentStorageEditor />)
-    await waitFor(() => expect(runtime.getRetainConfig).toHaveBeenCalled())
-    expect((await screen.findByLabelText(/file location/i)) as HTMLInputElement).toHaveProperty('value', CONFIG.path)
+
+    expect(input(screen.getByRole('checkbox')).checked).toBe(false)
+    expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
   })
 
-  it('surfaces a read failure instead of rendering empty fields', async () => {
-    runtime.getRetainConfig.mockResolvedValue({ success: false, error: 'device unreachable' })
+  it('writes the toggle into the project, materialising the record on first edit', () => {
     render(<PersistentStorageEditor />)
-    expect((await screen.findByRole('alert')).textContent).toContain('device unreachable')
-  })
 
-  it('keeps Save disabled until something actually changes', async () => {
-    render(<PersistentStorageEditor />)
-    const save = await screen.findByRole('button', { name: /^save$/i })
-    expect((save as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getByRole('checkbox'))
-    expect((save as HTMLButtonElement).disabled).toBe(false)
+
+    expect(settings()).toEqual({
+      enabled: true,
+      path: '',
+      flushSeconds: DEFAULT_RETAIN_FLUSH_SECONDS,
+    })
   })
 
-  it('sends the edited settings', async () => {
+  it('writes the path into the project', () => {
+    setSettings({ enabled: true, path: '', flushSeconds: 5 })
     render(<PersistentStorageEditor />)
-    await screen.findByLabelText(/file location/i)
-    fireEvent.click(screen.getByRole('checkbox'))
+
+    fireEvent.change(screen.getByLabelText(/file location/i), { target: { value: '/data/retain.bin' } })
+
+    expect(settings()?.path).toBe('/data/retain.bin')
+  })
+
+  it('writes the commit period into the project', () => {
+    setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 5 })
+    render(<PersistentStorageEditor />)
+
     fireEvent.change(screen.getByLabelText(/save every/i), { target: { value: '30' } })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await waitFor(() =>
-      expect(runtime.updateRetainConfig).toHaveBeenCalledWith({
-        enabled: true,
-        path: CONFIG.path,
-        flushSeconds: 30,
-      }),
-    )
+
+    expect(settings()?.flushSeconds).toBe(30)
   })
 
-  it('refuses an out-of-range interval before troubling the runtime', async () => {
+  it('leaves an empty path empty rather than inventing a device default', () => {
+    // The editor does not know the device's filesystem layout, so the runtime
+    // fills this in. Showing a made-up path here would be a claim about a box
+    // the editor has never talked to.
+    setSettings({ enabled: true, path: '', flushSeconds: 5 })
     render(<PersistentStorageEditor />)
-    await screen.findByLabelText(/file location/i)
-    fireEvent.click(screen.getByRole('checkbox'))
-    fireEvent.change(screen.getByLabelText(/save every/i), { target: { value: '99999' } })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await waitFor(() => expect(mockToast).toHaveBeenCalled())
-    expect(runtime.updateRetainConfig).not.toHaveBeenCalled()
+
+    const path = input(screen.getByLabelText(/file location/i))
+    expect(path.value).toBe('')
+    expect(path.placeholder).toMatch(/runtime default/i)
   })
 
-  it("shows the runtime's own words when it refuses the settings", async () => {
-    runtime.updateRetainConfig.mockResolvedValue({
-      success: false,
-      error: 'The directory /nope does not exist, so nothing could be written there.',
-    })
+  it('flags a period the runtime would refuse at upload', () => {
+    setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: RETAIN_MAX_FLUSH_SECONDS + 1 })
     render(<PersistentStorageEditor />)
-    await screen.findByLabelText(/file location/i)
-    fireEvent.click(screen.getByRole('checkbox'))
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await waitFor(() =>
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ description: expect.stringContaining('/nope does not exist') }),
-      ),
-    )
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByLabelText(/save every/i).getAttribute('aria-invalid')).toBe('true')
   })
 
-  it('never renders a notice about a driver takeover', async () => {
-    // The screen is not shown at all for a target whose driver handles
-    // retention — see `isNativeScreenAvailable` and the enforcement hook. A
-    // banner explaining that the settings are inert would mean the screen was
-    // reachable in a state where it does nothing, which is the state this
-    // design removes.
-    runtime.getRetainConfig.mockResolvedValue({
-      success: true,
-      config: { ...CONFIG, enabled: true, backend: 'plugin', backendDetail: 'synergy', active: true },
-    })
+  it('flags a fractional period, which the upload would silently round', () => {
+    // The field said valid and the emitter applied something else: it rounds, so
+    // 1.5 shipped as 2. A UI that accepts a value the device will not use is
+    // worse than one that refuses it.
+    setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 1.5 })
     render(<PersistentStorageEditor />)
-    await screen.findByLabelText(/file location/i)
-    expect(screen.queryByRole('status')).toBeNull()
-    expect(screen.queryByText(/synergy/i)).toBeNull()
+
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByLabelText(/save every/i).getAttribute('aria-invalid')).toBe('true')
   })
 
-  it('Cancel puts the loaded settings back', async () => {
+  it('does not flag a period inside the accepted range', () => {
+    setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 5 })
     render(<PersistentStorageEditor />)
-    const pathField = await screen.findByLabelText(/file location/i)
-    fireEvent.click(screen.getByRole('checkbox'))
-    fireEvent.change(pathField, { target: { value: '/tmp/elsewhere.bin' } })
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    expect((pathField as HTMLInputElement).value).toBe(CONFIG.path)
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false)
+
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('disables the fields while storage is off, so nothing is edited into a disabled stanza', () => {
+    setSettings({ enabled: false, path: '/data/retain.bin', flushSeconds: 5 })
+    render(<PersistentStorageEditor />)
+
+    expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
+    expect(input(screen.getByLabelText(/save every/i)).disabled).toBe(true)
+  })
+
+  it('says the settings travel with the project', () => {
+    // A user needs to know an upload is what applies these, not a Save button
+    // talking to a device.
+    render(<PersistentStorageEditor />)
+
+    expect(screen.getByText(/saved with the project and applied when you upload/i)).toBeTruthy()
   })
 })

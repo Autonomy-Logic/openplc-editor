@@ -31,6 +31,7 @@ import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
+import { isRetainConfigCapableRuntime, MIN_RETAIN_CONFIG_RUNTIME_VERSION } from '../firmware/runtime-version-gate'
 import {
   describeEditorTooOldForRuntime,
   describeIncompatibleRuntime,
@@ -49,6 +50,7 @@ import type { PLCProjectData } from '../types/PLC/open-plc'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
+import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
@@ -243,6 +245,19 @@ export interface RunCompilePipelineArgs {
    *  Arduino targets.  Web passes `undefined` until the VPP
    *  Modbus screen lands on the web build. */
   vppModbusState?: import('./steps/modbus-defines').VppModbusScreenState
+  /** The project's persistent-storage (RETAIN) settings, from
+   *  `DeviceConfiguration.persistentStorage`.  Emitted into the
+   *  runtime-v4 bundle as `retain.conf`, which the upload installs
+   *  on the device.  Absent for a project that never configured
+   *  storage — see `generateRetainConf`, where absence is a
+   *  meaningful answer rather than a missing input. */
+  persistentStorage?: import('../../../middleware/shared/ports/types').PersistentStorageSettings
+  /** True when the selected target's VPP declares that its own driver
+   *  handles retention (`hidesNativeScreens` includes
+   *  `'persistent-storage'`).  Suppresses `retain.conf` entirely, which
+   *  is what makes the runtime remove any copy the device still has and
+   *  leaves the vendor's driver as the only store. */
+  targetHidesPersistentStorage?: boolean
   /** User-authored configuration-screen data from
    *  `DeviceConfiguration.vendorScreenData`.  The platform adapter
    *  reads `devices/configuration.json` (editor) or the store (web)
@@ -376,6 +391,8 @@ async function runCompilePipelineInner(
     communicationPort,
     cacheDebugData,
     vppModbusState,
+    persistentStorage,
+    targetHidesPersistentStorage,
     vendorScreenData,
     editorVersion,
   } = args
@@ -588,6 +605,29 @@ async function runCompilePipelineInner(
       })
     }
 
+    // Persistent storage (RETAIN) settings travel with the program, exactly as
+    // the VPP plugin config above does: the project owns them, the upload
+    // installs them, and the runtime removes its copy when nothing arrives.
+    //
+    // That absent case is why this is a conditional rather than an always-write.
+    // `generateRetainConf` answers null when the project has storage off, or
+    // when the target's VPP handles retention itself — and the runtime reads a
+    // missing retain.conf as "delete the one you have", which is what switches
+    // the built-in file store off and leaves the vendor's driver as the only
+    // store on the box.
+    const retainConf = generateRetainConf({
+      settings: persistentStorage,
+      targetHidesPersistentStorage: targetHidesPersistentStorage ?? false,
+    })
+    if (retainConf !== null) {
+      bundle['retain.conf'] = retainConf
+      emit({
+        stage: 'runtime-v4-bundle',
+        message: 'Generated retain.conf (persistent storage on)',
+        level: 'info',
+      })
+    }
+
     // Write the bundle out BEFORE the compile-only branch, so `compile` and
     // `upload` leave the same artifacts on disk. Until this existed, the bundle
     // only ever reached disk as a side effect of the upload, and a compile-only
@@ -678,6 +718,24 @@ async function runCompilePipelineInner(
           deviceLabel: deviceContext.kind === 'editor-https' ? deviceContext.ip : undefined,
         }),
       )
+    }
+
+    // Persistent storage was configured, but this runtime has no built-in store
+    // to configure. The upload still succeeds and retain.conf still installs —
+    // an older core simply never reads it, so retention is quietly off. A
+    // warning rather than a refusal: the program is fine, and the user asked
+    // for the upload. Quiet is the one thing this must not be, because the
+    // symptom only appears after a power cycle on a machine already installed.
+    if (bundle['retain.conf'] !== undefined && !isRetainConfigCapableRuntime(versionCheck.version)) {
+      emit({
+        stage: 'runtime-version',
+        message:
+          `This project turns on persistent storage, but the runtime on this device is ` +
+          `${versionCheck.version || 'older than'} — the built-in retain store arrived in ` +
+          `${MIN_RETAIN_CONFIG_RUNTIME_VERSION}. The program will run, but RETAIN variables ` +
+          `will start at their initial values after every restart until the runtime is updated.`,
+        level: 'warning',
+      })
     }
 
     emit({ stage: 'upload', message: 'Uploading Runtime v4 bundle...', level: 'info' })

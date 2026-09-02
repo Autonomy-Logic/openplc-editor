@@ -182,8 +182,10 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog } from 'electron'
 import JSZip from 'jszip'
 
-import type { PlatformOption } from '../../../middleware/shared/ports/types'
+import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
+import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
+import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -3080,6 +3082,74 @@ class CompilerModule {
       }
     }
 
+    // Persistent storage (RETAIN) settings for a runtime-v4 upload. Read from
+    // the same `devices/configuration.json` the VPP screen state comes from,
+    // because they live in the same place for the same reason: the project owns
+    // them and they must be available with no device attached.
+    //
+    // Only runtime-v4 targets have a built-in file store to configure. On
+    // baremetal the store is whatever the board's driver provides, and nothing
+    // in the project can configure it — so a retain.conf there would be a file
+    // no one reads.
+    let persistentStorage: PersistentStorageSettings | undefined
+    let targetHidesPersistentStorage = false
+    if (isRuntimeV4) {
+      const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      // Tracked out here, not acted on inside the `try`, so the catch below
+      // cannot swallow the refusal along with the missing-file case it is for.
+      let storageStanzaInvalid = false
+      try {
+        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        // Validated, not trusted. `readJSONFile` is `JSON.parse(...) as T`, so a
+        // hand-edited project file with `"path": null` reached
+        // `generateRetainConf` and threw on `.trim()` — a stack trace where a
+        // controlled message belongs. The schema already exists; this is just
+        // applying it at the boundary the guidelines name.
+        const parsedStorage = persistentStorageSchema.safeParse(deviceConfig.persistentStorage)
+        if (parsedStorage.success) {
+          persistentStorage = parsedStorage.data
+        } else if (deviceConfig.persistentStorage !== undefined) {
+          storageStanzaInvalid = true
+        }
+      } catch {
+        // No configuration.json — a project that never configured storage, which
+        // generateRetainConf treats as "emit nothing".
+      }
+
+      // REFUSE THE BUILD rather than carry on without the settings.
+      //
+      // Warning and continuing looked like the cautious choice and was the
+      // opposite: absent settings are not a neutral state here. `retain.conf`
+      // missing from an upload is the signal that switches the built-in store
+      // OFF, and the runtime acts on it by deleting the device's copy — so a
+      // typo in a project file would have turned retention off on the machine
+      // while the compile reported success, with one console line as the only
+      // evidence. That is exactly the silent-loss failure the rest of this
+      // design goes out of its way to make unrepresentable.
+      //
+      // Stopping here costs the user a build they have to fix. Continuing costs
+      // them retained values on a running machine, discovered after a power cut.
+      if (storageStanzaInvalid) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message:
+            'Persistent storage settings in devices/configuration.json could not be read.\n' +
+            'Refusing to build: uploading without them would switch persistent storage OFF on ' +
+            'the device, and retained variables would stop being kept.\n' +
+            'Open the Persistent Storage screen and re-save the setting, then build again.\n' +
+            'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+      // A VPP whose own driver keeps retained values declares this, and the
+      // editor then emits no retain.conf at all — the runtime removes its copy
+      // and the built-in store stands down, leaving the vendor's driver as the
+      // only store. Same declaration that hides the screen in the project tree.
+      const vppDevice = findVppDeviceByBoardName(new PackageManagerModule(), boardTarget)
+      targetHidesPersistentStorage = (vppDevice?.device.hidesNativeScreens ?? []).includes('persistent-storage')
+    }
+
     // For Arduino VPP targets with a modular backplane, bake the
     // per-slot module-configuration bytes into vpp_config.h (the MCU
     // has no runtime JSON to load them from). The synthetic
@@ -3119,6 +3189,8 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
+        ...(persistentStorage ? { persistentStorage } : {}),
+        targetHidesPersistentStorage,
         vendorScreenData: effectiveVendorScreenData,
         // Compared against the `minEditorVersion` a runtime publishes at
         // `/api/capabilities` (DOPE-448). Injected because the pipeline
