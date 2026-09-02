@@ -294,4 +294,74 @@ describe('resolveBoardSelection', () => {
       expect(result.boardEntry.boardManagerUrl).toBe(boardManagerUrl)
     }
   })
+  it('carries device.io and device.ioMax through to boardEntry', () => {
+    // Verified the hard way: the adapter dropped both, so `boardEntry.io` was
+    // undefined, the pipeline skipped io_sizes.h entirely, and a project that
+    // had raised its counts compiled at the board defaults with nothing to say
+    // so. The compile succeeded and the RAM figure did not move -- the failure
+    // was invisible from the outside, exactly like the boardManagerUrl one
+    // above.
+    const io = {
+      digitalInput: 56,
+      digitalOutput: 56,
+      analogInput: 32,
+      analogOutput: 32,
+      memoryWord: 20,
+      memoryDword: 20,
+      memoryLword: 20,
+    }
+    const ioMax = { ...io, digitalOutput: 512, memoryWord: 256 }
+    const pkg: InstalledPackage = {
+      packageId: 'com.openplc.espressif',
+      version: '1.1.1',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      path: '/fake/packages/espressif',
+      devices: ['esp32-wroom'],
+    }
+    const manifest: PackageManifest = {
+      formatVersion: '1.0',
+      package: {
+        id: 'com.openplc.espressif',
+        name: 'Espressif boards',
+        version: '1.1.1',
+        vendor: { name: 'Espressif', logo: 'l.png' },
+        description: 'd',
+      },
+      devices: [
+        {
+          id: 'esp32-wroom',
+          name: 'ESP32 WROOM',
+          preview: 'p.png',
+          target: { type: 'arduino-cli', core: 'esp32:esp32', platform: 'esp32:esp32:esp32' },
+          hal: { type: 'arduino-hal', source: 'hal/arduino/esp32.cpp', define: 'BOARD_ESP32' },
+          io,
+          ioMax,
+        },
+      ],
+    }
+    const packageManager: PackageManagerPort = {
+      listInstalled: () => [pkg],
+      getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
+    }
+    const resolver = makeResolver({}, { packageManager })
+
+    const result = resolveBoardSelection(resolver, 'ESP32 WROOM')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.boardEntry.io).toEqual(io)
+      expect(result.boardEntry.ioMax).toEqual(ioMax)
+    }
+  })
+
+  it('leaves io absent for a board whose package declares none', () => {
+    // Absence is the signal the pipeline reads to skip io_sizes.h, so an empty
+    // object here would be a different statement from "not declared".
+    const resolver = makeResolver({ 'OpenPLC Simulator': { compiler: 'simulator' } })
+    const result = resolveBoardSelection(resolver, 'OpenPLC Simulator')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.boardEntry.io).toBeUndefined()
+      expect(result.boardEntry.ioMax).toBeUndefined()
+    }
+  })
 })

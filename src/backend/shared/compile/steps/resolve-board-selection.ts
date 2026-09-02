@@ -73,6 +73,14 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       // manifest's `target.boardManagerUrl` (or hals.json `board_manager_url`);
       // dropping it here is what made every VPP-declared index dead data.
       ...(boardInfo.boardManagerUrl ? { boardManagerUrl: boardInfo.boardManagerUrl } : {}),
+      // Firmware I/O buffer sizes and their ceilings, from the VPP manifest's
+      // `device.io` / `device.ioMax`. Dropping them here is silent: the
+      // pipeline skips `io_sizes.h` entirely when `boardEntry.io` is absent, so
+      // a project that raised its counts compiles at the board defaults and
+      // nothing says otherwise — the same way the board-manager URL above was
+      // dead data until it was forwarded.
+      ...(boardInfo.io ? { io: boardInfo.io } : {}),
+      ...(boardInfo.ioMax ? { ioMax: boardInfo.ioMax } : {}),
       // Capability resolution inputs.  `resolveTargetCapabilities`
       // reads `compiler` + `vpp` + `capabilities` on whatever board
       // shape it's handed — without forwarding all three the
