@@ -2053,7 +2053,10 @@ class MainProcessBridge implements MainIpcModule {
 
     // Neither: a programming error rather than a device condition, so it says so
     // instead of deriving an identity from nothing.
-    return { error: 'this channel carries no identity read (neither 0x48 form)' }
+    // Permanent: a channel either implements an identity read or it never will.
+    // The comment below calls it a programming error, and a retry button on a
+    // programming error is a loop with a friendly label.
+    return { error: 'this connection cannot read the device identity licensing needs', retryable: false }
   }
 
   /**
@@ -2069,6 +2072,10 @@ class MainProcessBridge implements MainIpcModule {
     run: (client: LicenseChannel) => Promise<DeviceLicenseReport>,
   ): Promise<DeviceLicenseReport> {
     const checkFailed = (error: string): DeviceLicenseReport => ({ outcome: { state: 'check-failed', error } })
+    /** Same, for a cause that cannot change by asking again — the UI drops the retry. */
+    const checkFailedTerminal = (error: string): DeviceLicenseReport => ({
+      outcome: { state: 'check-failed', error, retryable: false },
+    })
 
     const control = this.deviceClient()
     if (control) {
@@ -2086,7 +2093,8 @@ class MainProcessBridge implements MainIpcModule {
       what,
       async (client) => {
         if (!isLicenseChannel(client)) {
-          return checkFailed('this connection cannot carry the license protocol')
+          // Permanent for this kind of session, so no retry.
+          return checkFailedTerminal('this connection cannot carry the licensing protocol')
         }
         return run(client)
       },

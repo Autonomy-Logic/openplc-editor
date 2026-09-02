@@ -108,7 +108,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         type: 'warning',
         title: 'No Licence Stored on This Device',
         message: `This device is not holding a valid licence for this VPP. It may simply not have been activated yet.\n\n${DEMO_EXPLANATION}`,
-        buttons: retry ? ['Check For Licence', 'Continue in Demo Mode'] : ['OK'],
+        buttons: retry ? ['Check for Licence', 'Continue in Demo Mode'] : ['OK'],
         onResponse: (buttonIndex: number) => {
           if (retry && buttonIndex === 0) void retry()
         },
@@ -137,9 +137,16 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       return true
 
     case 'check-failed':
-      if (quietCheckFailed) {
+      if (quietCheckFailed && outcome.retryable !== false) {
         // The badge already renders the check-failed state with its own
         // recheck affordance; the automatic flow adds no modal on top.
+        //
+        // Only for a RETRYABLE failure, though. A terminal one has no recheck
+        // button in the panel any more (that is the point), so silencing the
+        // modal too would leave the automatic flow with no surface at all: no
+        // dialog, no action, and a popover the user has no reason to open. The
+        // loud case this quieting exists for -- a runtime predating the licence
+        // FCs on every connect -- is retryable, so it stays quiet.
         return false
       }
       {

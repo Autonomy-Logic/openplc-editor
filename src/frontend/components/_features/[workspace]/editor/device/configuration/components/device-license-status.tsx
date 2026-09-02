@@ -281,32 +281,36 @@ export function DeviceLicenseStatus({
             </p>
           ) : null}
 
-          <div className='flex items-center gap-3'>
-            {offerRecheck ? (
-              <button
-                type='button'
-                disabled={isChecking}
-                onClick={onRecheck}
-                className='font-caption text-cp-xs text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400'
-              >
-                Check again
-              </button>
-            ) : null}
-            {offerPurchase ? (
-              <button type='button' onClick={onBuy} className='font-caption text-cp-xs text-brand hover:underline'>
-                Buy licence
-              </button>
-            ) : null}
-            {awaitingPurchase ? (
-              <button
-                type='button'
-                onClick={onCancelPurchaseWatch}
-                className='font-caption text-cp-xs text-neutral-600 hover:underline dark:text-neutral-400'
-              >
-                Stop waiting
-              </button>
-            ) : null}
-          </div>
+          {/* Skipped entirely when nothing is offered: an empty flex row still
+              costs the popover's 12px gap, which reads as a missing control. */}
+          {offerRecheck || offerPurchase || awaitingPurchase ? (
+            <div className='flex items-center gap-3'>
+              {offerRecheck ? (
+                <button
+                  type='button'
+                  disabled={isChecking}
+                  onClick={onRecheck}
+                  className='font-caption text-cp-xs text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400'
+                >
+                  Check again
+                </button>
+              ) : null}
+              {offerPurchase ? (
+                <button type='button' onClick={onBuy} className='font-caption text-cp-xs text-brand hover:underline'>
+                  Buy licence
+                </button>
+              ) : null}
+              {awaitingPurchase ? (
+                <button
+                  type='button'
+                  onClick={onCancelPurchaseWatch}
+                  className='font-caption text-cp-xs text-neutral-600 hover:underline dark:text-neutral-400'
+                >
+                  Stop waiting
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

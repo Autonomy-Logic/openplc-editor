@@ -131,7 +131,7 @@ export type DeviceLicenseState =
    * Absent means retryable: a dropped connection, a timeout and a backend blip
    * are the common case, and they must keep their retry.
    */
-  | { state: 'check-failed'; error: string; retryable?: boolean }
+  | { state: 'check-failed'; error: string; retryable?: false }
 
 /** Result of a licensing operation over the held link. */
 export interface DeviceLicenseReport {

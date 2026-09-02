@@ -84,7 +84,7 @@ describe('explainLicenseOutcome', () => {
 
       explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: false }), { openModal, buy, retry })
 
-      expect(opened[0].buttons).toEqual(['Check For Licence', 'Continue in Demo Mode'])
+      expect(opened[0].buttons).toEqual(['Check for Licence', 'Continue in Demo Mode'])
       expect(opened[0].buttons).not.toContain('Buy Licence')
       opened[0].onResponse(0)
       expect(retry).toHaveBeenCalledTimes(1)
@@ -179,6 +179,40 @@ describe('explainLicenseOutcome', () => {
       expect(opened[0].buttons).toEqual(['Try Again', 'Continue'])
       opened[0].onResponse(0)
       expect(retry).toHaveBeenCalledTimes(1)
+    })
+
+    it('stays quiet on the automatic flow for a RETRYABLE failure', () => {
+      // The loud case this exists for: a runtime predating the licence FCs would
+      // otherwise open "Licence Check Failed" on every single connect.
+      const { opened, openModal, buy } = harness()
+
+      const shown = explainLicenseOutcome(report({ state: 'check-failed', error: 'No response from runtime' }), {
+        openModal,
+        buy,
+        retry: jest.fn(),
+        quietCheckFailed: true,
+      })
+
+      expect(shown).toBe(false)
+      expect(opened).toHaveLength(0)
+    })
+
+    it('speaks up on the automatic flow when the failure is TERMINAL', () => {
+      // A terminal failure has no recheck button in the badge panel any more —
+      // that is deliberate. Silencing the modal too would leave the automatic
+      // flow with no surface at all: no dialog, no action, and a popover the
+      // user has no reason to open.
+      const { opened, openModal, buy } = harness()
+
+      const shown = explainLicenseOutcome(
+        report({ state: 'check-failed', error: 'this hardware cannot hold a licence', retryable: false }),
+        { openModal, buy, retry: jest.fn(), quietCheckFailed: true },
+      )
+
+      expect(shown).toBe(true)
+      expect(opened).toHaveLength(1)
+      expect(opened[0].buttons).toEqual(['OK'])
+      expect(opened[0].message).toContain('this hardware cannot hold a licence')
     })
 
     it('never labels the failure as "not licensed"', () => {

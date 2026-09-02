@@ -111,7 +111,7 @@ export function verifyStoredLicenseBlob(
   if (!blob || blob.length !== LIC_BLOB_SIZE) {
     // A 0x7E with no (or a short) blob is itself off-contract: the parser only
     // fills `blob` when the device sent all `len` bytes. Treat as unverified.
-    return { ok: false, reason: `stored license is ${blob?.length ?? 0} bytes, expected ${LIC_BLOB_SIZE}` }
+    return { ok: false, reason: 'the stored licence is not a complete licence record' }
   }
 
   const parsed = deserializeLicenseBlob(blob)
@@ -128,14 +128,14 @@ export function verifyStoredLicenseBlob(
   const blobDeviceId = bytesToHex(parsed.deviceId)
   if (blobDeviceId !== deviceIdHex) {
     // The clone case: valid bytes, wrong board. The gate answers DEVICE_MISMATCH.
-    return { ok: false, reason: `stored license is bound to device ${blobDeviceId}, not ${deviceIdHex}` }
+    return { ok: false, reason: 'the stored licence was issued for a different device' }
   }
 
   if (packageId) {
     const expectedProductId = deriveVppId(packageId)
     const blobProductId = bytesToHex(parsed.productId)
     if (blobProductId !== expectedProductId) {
-      return { ok: false, reason: `stored license is for product ${blobProductId}, not ${expectedProductId}` }
+      return { ok: false, reason: 'the stored licence was issued for a different VPP' }
     }
   }
 
@@ -376,7 +376,7 @@ async function recoverLicense(
       deviceId,
       outcome: {
         state: 'check-failed',
-        error: `the license was written but could not be confirmed: the read-back failed (${readBack.error ?? 'no reply'})`,
+        error: `the licence was written but could not be confirmed: reading it back failed (${readBack.error ?? 'no reply'})`,
       },
     }
   }
@@ -392,7 +392,7 @@ async function recoverLicense(
     deviceId,
     outcome: {
       state: 'check-failed',
-      error: `the license was written but could not be confirmed on the device: ${verdict.reason}`,
+      error: `the licence was written but could not be confirmed on the device: ${verdict.reason}`,
     },
   }
 }

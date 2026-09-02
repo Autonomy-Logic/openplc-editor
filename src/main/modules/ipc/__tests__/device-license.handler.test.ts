@@ -384,7 +384,9 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     expect(result.outcome).toEqual({
       state: 'check-failed',
-      error: 'this connection cannot carry the license protocol',
+      error: 'this connection cannot carry the licensing protocol',
+      // Permanent for this kind of session, so the UI must not offer a retry.
+      retryable: false,
     })
     expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
     expect(release).toHaveBeenCalledWith(expect.stringMatching(/^read license#\d+$/))

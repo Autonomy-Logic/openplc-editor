@@ -94,14 +94,16 @@ describe('verifyStoredLicenseBlob', () => {
     const other = deriveDeviceId(Uint8Array.from([9, 9, 9, 9]))
     const verdict = verifyStoredLicenseBlob(blobFor({ deviceId: other }), DEVICE_ID, PACKAGE_ID)
 
-    expect(verdict).toEqual({ ok: false, reason: `stored license is bound to device ${other}, not ${DEVICE_ID}` })
+    // The reason reaches the user verbatim, so it must not carry the two 32-hex
+    // ids — it says WHICH device, not which bytes.
+    expect(verdict).toEqual({ ok: false, reason: 'the stored licence was issued for a different device' })
   })
 
   it('rejects a blob issued for another VPP', () => {
     const verdict = verifyStoredLicenseBlob(blobFor({ packageId: 'com.openplc.other-licensed' }), DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(verdict.reason).toMatch(/stored license is for product/)
+    if (!verdict.ok) expect(verdict.reason).toBe('the stored licence was issued for a different VPP')
   })
 
   it('rejects a blob whose crc32 does not cover its bytes (tampered or truncated in place)', () => {
@@ -128,11 +130,11 @@ describe('verifyStoredLicenseBlob', () => {
   it('rejects a short or absent blob rather than parsing past the end', () => {
     expect(verifyStoredLicenseBlob(undefined, DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
-      reason: 'stored license is 0 bytes, expected 98',
+      reason: 'the stored licence is not a complete licence record',
     })
     expect(verifyStoredLicenseBlob(blobFor().subarray(0, 40), DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
-      reason: 'stored license is 40 bytes, expected 98',
+      reason: 'the stored licence is not a complete licence record',
     })
   })
 
@@ -396,7 +398,7 @@ describe('resolveDeviceLicense', () => {
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/the read-back failed/)
+      expect(result.outcome.error).toMatch(/reading it back failed/)
     }
   })
 
