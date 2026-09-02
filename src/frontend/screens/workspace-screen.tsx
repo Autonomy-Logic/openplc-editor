@@ -56,7 +56,6 @@ import {
 } from '../hooks/use-debug-value'
 import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
-import { useNativeScreenEnforcement } from '../hooks/use-native-screen-enforcement'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { useOpenPLCStore } from '../store'
@@ -169,9 +168,6 @@ const WorkspaceScreen = () => {
   // existing liveness tick (no timer of its own).
   useDevicePlcState()
   useDeviceConnectionMonitor()
-  // A target that replaces a native screen must also have the native feature
-  // switched off on the device — hiding a screen is not cosmetic.
-  useNativeScreenEnforcement()
 
   // Build debug variables from POUs with debug=true
   const allDebugVariables = useMemo(() => {

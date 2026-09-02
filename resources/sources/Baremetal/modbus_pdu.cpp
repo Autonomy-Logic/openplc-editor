@@ -49,8 +49,6 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
             return 6 + (int32_t)(((uint16_t)f[2] << 8) | f[3]);
         case MB_FC_PLC_SET_STATE:
             return 5;                                   // [id][fc][state:1][crc:2]
-        case MB_FC_RETAIN_RESET:
-            return 4;                                   // [id][fc][crc:2] — no payload
         default:
             return -1;                                  // not one of our function codes
     }
@@ -73,7 +71,6 @@ bool mb_pdu_skips_crc(uint8_t fc)
         case MB_FC_DEBUG_GET_DEVICE_ID:
         case MB_FC_DEBUG_WRITE_LICENSE:
         case MB_FC_DEBUG_READ_LICENSE:
-        case MB_FC_RETAIN_RESET:
             return true;
         default:
             return false;
@@ -207,15 +204,6 @@ void process_mbpacket()
             // PDU: [FC:1][state:u8]  (0 = STOP, 1 = RUN)
             plcSetState(mb_frame[2]);
         break;
-
-        case MB_FC_RETAIN_RESET:
-            // PDU: [FC:1] — no payload. Discards stored retained values so the
-            // next start uses the declared initialisers. The editor sends this
-            // after an upload: CODESYS clears retained memory on download, and
-            // a new program's values have no business surviving into it.
-            plcRetainReset();
-        break;
-
 
         default:
             exceptionResponse(fcode, MB_EX_ILLEGAL_FUNCTION);

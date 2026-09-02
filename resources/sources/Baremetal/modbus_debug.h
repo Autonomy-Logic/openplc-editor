@@ -32,9 +32,4 @@ void debugReadLicense(void);                                // 0x4A
 // back through debugGetStatus (FC 0x46), which reports it.
 void plcSetState(uint8_t desired);
 
-/* FC 0x4C — discard stored retained values (cold reset). Sent by the editor
- * after a program upload, matching CODESYS, where a download clears retained
- * memory. */
-void plcRetainReset(void);
-
 #endif

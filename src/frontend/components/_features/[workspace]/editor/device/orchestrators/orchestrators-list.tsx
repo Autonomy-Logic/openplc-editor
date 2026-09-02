@@ -238,8 +238,8 @@ const OrchestratorsList = () => {
       // This is the web editor's only connect path, and it was discarding the version
       // `getUsersInfo` returns. The desktop path stores it in `board.tsx`, so the gates
       // worked there and never here: with the version left null,
-      // `isUserManagementCapableRuntime` and `isRetainConfigCapableRuntime` both answer
-      // false, and their tree leaves could not appear on any runtime, however new.
+      // `isUserManagementCapableRuntime` answers false and its tree leaf could not
+      // appear on any runtime, however new.
       deviceActions.setRuntimeVersion(usersInfo.runtimeVersion ?? null)
 
       // Open the appropriate modal based on whether users exist

@@ -11,16 +11,12 @@
  * cleaner "does this target support <feature>?".
  */
 
-import {
-  isRetainConfigCapableRuntime,
-  isUserManagementCapableRuntime,
-  parseRuntimeVersion,
-} from '@root/backend/shared/firmware/runtime-version-gate'
+import { isUserManagementCapableRuntime, parseRuntimeVersion } from '@root/backend/shared/firmware/runtime-version-gate'
 import { type BoardInfoLike, resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 // Re-exported so component/store layers (which may not import backend-shared
 // directly) can gate UI on runtime capability through the utils layer.
-export { isRetainConfigCapableRuntime, isUserManagementCapableRuntime }
+export { isUserManagementCapableRuntime }
 
 /**
  * Minimal board info shape used by device utility functions.

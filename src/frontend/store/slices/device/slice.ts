@@ -2,6 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
+import { DEFAULT_RETAIN_FLUSH_SECONDS } from '../../../../middleware/shared/ports/types'
 import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceLicenseInfo, DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import { PURCHASE_WATCH_WINDOW_MS } from './types'
@@ -466,6 +467,18 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             const cfg = deviceDefinitions.configuration
             syncActiveBoardVendorBucket(cfg)
             cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
+            // Persistent storage is board-specific for a sharper reason than the
+            // rest: the value is a PATH ON A PARTICULAR BOX. Carried across a
+            // switch it does not merely become meaningless, it ships the new
+            // device a location belonging to the old one — and the compile path
+            // reads this flat view, so that path is what lands in retain.conf.
+            //
+            // Deliberately `undefined`, not `{}`, when the incoming board has no
+            // bucket: absent settings are what make `generateRetainConf` emit no
+            // file, which is the right default for a board nobody has configured
+            // and is not the same as inheriting a path.
+            syncActiveBoardPersistentStorage(cfg)
+            cfg.persistentStorage = cfg.persistentStorageByBoard?.[deviceBoard]
             // A licence report is board-specific for the same reason all of the
             // above is: it was verified against the PREVIOUS board's `deviceId`
             // and its VPP's `productId`. Carried across a switch, the badge
@@ -677,6 +690,25 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setPersistentStorage: (patch): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          const cfg = deviceDefinitions.configuration
+          // Absent means "this project does not use persistent storage", so the
+          // first edit materialises the object from the same defaults the schema
+          // declares rather than half of one.
+          cfg.persistentStorage = {
+            enabled: false,
+            path: '',
+            flushSeconds: DEFAULT_RETAIN_FLUSH_SECONDS,
+            ...cfg.persistentStorage,
+            ...patch,
+          }
+          syncActiveBoardPersistentStorage(cfg)
+        }),
+      )
+    },
     setVendorScreenData: (persistenceKey, data): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
@@ -719,6 +751,21 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
   },
 })
+
+/**
+ * Keep the active board's bucket in `persistentStorageByBoard` in lock-step with
+ * the flat `persistentStorage` view, exactly as the vendor-screen sibling below
+ * does. A storage path names a location on one particular box, so retargeting a
+ * project must not carry it onto another.
+ */
+function syncActiveBoardPersistentStorage(configuration: DeviceConfiguration): void {
+  if (!configuration.persistentStorageByBoard) {
+    configuration.persistentStorageByBoard = {}
+  }
+  if (configuration.persistentStorage) {
+    configuration.persistentStorageByBoard[configuration.deviceBoard] = { ...configuration.persistentStorage }
+  }
+}
 
 /**
  * Keep the active board's bucket in `vendorScreenDataByBoard` in lock-step
