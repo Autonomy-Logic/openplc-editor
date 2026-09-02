@@ -24,13 +24,13 @@ import { io, type Socket } from 'socket.io-client'
 
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import {
-  buildGetBoardIdRequest,
+  buildGetDeviceIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
   buildReadLicenseRequest,
   buildSetVariableRequest,
   buildWriteLicenseRequest,
-  parseGetBoardIdResponse,
+  parseGetAnchorResponse,
   parseGetListResponse,
   parseGetMd5Response,
   parseReadLicenseResponse,
@@ -38,7 +38,7 @@ import {
   parseWriteLicenseResponse,
 } from './modbus-pdu'
 import type {
-  DebugBoardIdResult,
+  DebugAnchorResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugSetResult,
@@ -200,7 +200,7 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
   // ONE transport-agnostic contract, so the licensing flow has a single shape on
   // every target instead of a network-specific branch.
   //
-  // `getBoardId` (0x48) is the licensing ANCHOR read here, not the readiness
+  // `getAnchor` (0x48) is the licensing ANCHOR read here, not the readiness
   // probe it doubles as on baremetal — readiness on a runtime target is a REST
   // question. The runtime answers 0x48 with the hardware anchor the licensed
   // plugin derives its device id from (`/proc/device-tree/serial-number`,
@@ -219,23 +219,28 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
   // clients must never do it (a baremetal unique-id is raw binary, and a MAC
   // genuinely ending in one of these bytes keeps it in its identity).
 
-  async getBoardId(): Promise<DebugBoardIdResult> {
+  // Named `getAnchor`, not `getDeviceId`, and the difference is the point
+  // (DOPE-589): on THIS medium 0x48 answers the raw device-tree serial and the
+  // editor derives the device_id from it, whereas a bare-metal board answers an
+  // id already derived inside its closed core. Same frame, same function code,
+  // different value - so the method and the result type say which one.
+  async getAnchor(): Promise<DebugAnchorResult> {
     if (!this.socket) return { success: false, error: 'Not connected to target' }
 
     const result = await this.sendCommand(
-      buildGetBoardIdRequest(),
-      (bytes) => parseGetBoardIdResponse(bytes),
+      buildGetDeviceIdRequest(),
+      (bytes) => parseGetAnchorResponse(bytes),
       'resolve',
       (error) => ({ success: false, error }),
     )
-    if (!result.success || !result.boardId) return result
+    if (!result.success || !result.anchor) return result
 
-    const anchor = stripAnchorTail(result.boardId)
-    if (anchor.length === result.boardId.length) return result
+    const anchor = stripAnchorTail(result.anchor)
+    if (anchor.length === result.anchor.length) return result
     return {
       ...result,
-      boardId: anchor,
-      boardIdHex: Array.from(anchor, (b) => b.toString(16).padStart(2, '0')).join(''),
+      anchor,
+      anchorHex: Array.from(anchor, (b) => b.toString(16).padStart(2, '0')).join(''),
     }
   }
 
@@ -272,7 +277,7 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
    * no listeners at all. That stopped being theoretical the moment the license
    * FCs joined the variables poll on this socket (review 2026-08-20): a badge
    * "Check again" mid-debug-session handed the poll's FC-0x41 frame to
-   * `parseGetBoardIdResponse` and the licence check failed on a healthy device.
+   * `parseGetAnchorResponse` and the licence check failed on a healthy device.
    */
   private sendRequestMutex: Promise<void> = Promise.resolve()
 
@@ -292,7 +297,7 @@ export class WebSocketDebugTransport implements DebugTransport, DeviceDebugChann
     T extends
       | DebugTransportResult
       | DebugSetResult
-      | DebugBoardIdResult
+      | DebugAnchorResult
       | DebugLicenseReadResult
       | DebugLicenseWriteResult,
   >(pdu: Uint8Array, parse: (bytes: Uint8Array) => T, errorMode: 'resolve', onFailure: (error: string) => T): Promise<T>

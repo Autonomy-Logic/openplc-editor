@@ -131,7 +131,9 @@ export function useDeviceLicense(
         // A platform that holds no device link (the port declares both optional).
         // Reported rather than ignored: silence here reads as "no license".
         const report: DeviceLicenseReport = {
-          outcome: { state: 'check-failed', error: 'This platform cannot check device licenses.' },
+          // Permanent for this platform: the port declares both calls optional and
+          // this build published neither. Asking again cannot change that.
+          outcome: { state: 'check-failed', error: 'This platform cannot check device licences.', retryable: false },
         }
         setReport(report)
         return report

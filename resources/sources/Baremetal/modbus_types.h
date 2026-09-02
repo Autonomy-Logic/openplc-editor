@@ -90,7 +90,7 @@ enum {
     MB_FC_DEBUG_GET_MD5    = 0x45, // Debug get current program MD5
     MB_FC_DEBUG_GET_STATUS = 0x46, // Debug get PLC status (running, scan tick, uptime)
     MB_FC_DEBUG_GET_VERSION = 0x47, // Debug get runtime firmware version
-    MB_FC_DEBUG_GET_BOARD_ID = 0x48, // Debug get unique hardware board ID
+    MB_FC_DEBUG_GET_DEVICE_ID = 0x48, // Debug get this board's licensing device_id
     MB_FC_DEBUG_WRITE_LICENSE = 0x49, // Debug write license blob to on-device storage
     MB_FC_DEBUG_READ_LICENSE  = 0x4A, // Debug read license blob from on-device storage
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
