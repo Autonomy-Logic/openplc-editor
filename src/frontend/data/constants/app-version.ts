@@ -11,8 +11,10 @@
  * Consumers:
  *  - the About modal renders this directly (both apps);
  *  - the web build writes it into `version.json` (`version` field);
- *  - the editor's electron-builder reads `package.json.version`, kept equal
- *    to this value by `release.yml`.
+ *  - the editor's electron-builder reads `release/app/package.json`
+ *    (`electron-builder.json` sets `directories.app`), which `release.yml`
+ *    keeps equal to the tag — NOT this constant. Keep the tag equal to this
+ *    value, or the installer and the About dialog disagree.
  *
  * NOTE: this is the human-facing semver only. The web "force update" check
  * compares a per-deploy `BUILD_ID` (git commit SHA), not this version, so a
