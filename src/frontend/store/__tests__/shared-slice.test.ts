@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCProjectData, PLCVariable } from '../../../middleware/shared/ports/types'
 import { createAISlice } from '../slices/ai'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
@@ -1328,36 +1328,22 @@ describe('createSharedSlice', () => {
        * and the offending element can still be renamed out of the collision.
        */
       it('still opens a project that already carries a colliding name', () => {
-        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
-          meta: { name: 'TestProject', type: 'plc-project' as const, path: '/test/path' },
-          projectData: {
-            dataTypes: [] as ReturnType<typeof store.getState>['project']['data']['dataTypes'],
-            pous: [
-              {
-                name: 'MATRIX',
-                pouType: 'program' as const,
-                interface: { variables: [] },
-                body: { language: 'st' as const, value: '' as unknown },
-                documentation: '',
-              },
-            ] as ReturnType<typeof store.getState>['project']['data']['pous'],
-            configurations: {
-              resource: {
-                tasks: [] as ReturnType<
-                  typeof store.getState
-                >['project']['data']['configurations']['resource']['tasks'],
-                instances: [] as ReturnType<
-                  typeof store.getState
-                >['project']['data']['configurations']['resource']['instances'],
-                globalVariables: [] as ReturnType<
-                  typeof store.getState
-                >['project']['data']['configurations']['resource']['globalVariables'],
-              },
+        const projectData: PLCProjectData = {
+          dataTypes: [],
+          pous: [
+            {
+              name: 'MATRIX',
+              pouType: 'program',
+              interface: { variables: [] },
+              body: { language: 'st', value: '' },
+              documentation: '',
             },
-            debugVariables: undefined as ReturnType<typeof store.getState>['project']['data']['debugVariables'],
-            servers: undefined as ReturnType<typeof store.getState>['project']['data']['servers'],
-            remoteDevices: undefined as ReturnType<typeof store.getState>['project']['data']['remoteDevices'],
-          },
+          ],
+          configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
+          meta: { name: 'TestProject', type: 'plc-project', path: '/test/path' },
+          projectData,
         })
 
         expect(store.getState().project.data.pous.map((pou) => pou.name)).toEqual(['MATRIX'])
