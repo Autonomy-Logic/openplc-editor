@@ -117,12 +117,12 @@ export function verifyStoredLicenseBlob(
   const parsed = deserializeLicenseBlob(blob)
 
   if (parsed.magic !== LIC_MAGIC_LE) {
-    return { ok: false, reason: 'stored license has no OPLC magic' }
+    return { ok: false, reason: 'the stored licence has no OPLC magic' }
   }
 
   const expectedCrc = crc32IsoHdlc(blob.subarray(0, LIC_CRC_COVERAGE))
   if (parsed.crc32 !== expectedCrc) {
-    return { ok: false, reason: 'stored license fails its crc32 (truncated or corrupted)' }
+    return { ok: false, reason: 'the stored licence fails its checksum (truncated or corrupted)' }
   }
 
   const blobDeviceId = bytesToHex(parsed.deviceId)
@@ -349,7 +349,7 @@ async function recoverLicense(
     // could not confirm rather than claiming either state.
     return {
       deviceId,
-      outcome: { state: 'check-failed', error: 'the backend reported a license but returned no blob to write' },
+      outcome: { state: 'check-failed', error: 'the licence server reported a licence but returned nothing to write' },
     }
   }
 
@@ -359,7 +359,7 @@ async function recoverLicense(
     return { deviceId, outcome: { state: 'unsupported' } }
   }
   if (!write.success) {
-    return { deviceId, outcome: { state: 'check-failed', error: write.error ?? 'the license write failed' } }
+    return { deviceId, outcome: { state: 'check-failed', error: write.error ?? 'the licence could not be written to the device' } }
   }
 
   // RE-READ; do not trust the write. 0x49 only STORES bytes: no target checks

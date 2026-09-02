@@ -111,7 +111,7 @@ describe('verifyStoredLicenseBlob', () => {
     const verdict = verifyStoredLicenseBlob(tampered, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(verdict.reason).toMatch(/crc32/)
+    if (!verdict.ok) expect(verdict.reason).toMatch(/checksum/)
   })
 
   it('rejects a blob with no OPLC magic', () => {
@@ -441,7 +441,7 @@ describe('resolveDeviceLicense', () => {
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/no blob to write/)
+      expect(result.outcome.error).toMatch(/returned nothing to write/)
     }
     expect(link.writes).toHaveLength(0)
   })

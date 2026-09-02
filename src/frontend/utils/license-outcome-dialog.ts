@@ -93,7 +93,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         const reason = outcome.backendReason ? `\n\nThe licence server said: ${outcome.backendReason}` : ''
         openModal('debugger-message', {
           type: 'warning',
-          title: 'No Licence For This Device',
+          title: 'No Licence for This Device',
           message: `This VPP is a paid product and no licence is registered for this device.${reason}\n\n${DEMO_EXPLANATION}`,
           buttons: ['Buy Licence', 'Continue in Demo Mode'],
           onResponse: (buttonIndex: number) => {
@@ -106,7 +106,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       // Nobody asked the backend. Offer a check, NOT a purchase.
       openModal('debugger-message', {
         type: 'warning',
-        title: 'No Licence Stored On This Device',
+        title: 'No Licence Stored on This Device',
         message: `This device is not holding a valid licence for this VPP. It may simply not have been activated yet.\n\n${DEMO_EXPLANATION}`,
         buttons: retry ? ['Check For Licence', 'Continue in Demo Mode'] : ['OK'],
         onResponse: (buttonIndex: number) => {
@@ -124,7 +124,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       // stores licences perfectly well.
       openModal('debugger-message', {
         type: 'warning',
-        title: 'Licence Storage Missing From This Firmware',
+        title: 'Licence Storage Missing from This Firmware',
         message:
           'The firmware on this device reports no licence storage, so a licence cannot be ' +
           'written to it.\n\nThis hardware supports it: every licensed VPP targets hardware that ' +
