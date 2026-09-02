@@ -290,11 +290,18 @@ The About modal renders it directly; the web build writes it into `version.json`
 **Bump `APP_VERSION` — never `package.json` alone.** Make the identical one-line
 edit in BOTH repos, and set `package.json.version` to the same value in both so
 they can't drift. Roles: `APP_VERSION` is what the user sees in the About dialog;
-`package.json.version` is what electron-builder stamps on the desktop binary and
-what the release tag `vX.Y.Z` must match. Bumping only `package.json` leaves the
-About dialog stuck on the old version — **this mistake shipped 4.2.7 and 4.2.8
-with About still showing 4.2.6.** If the two ever disagree, `APP_VERSION` is
-authoritative; fix it to match.
+the release tag `vX.Y.Z` is what the release workflow builds from. Bumping only
+`package.json` leaves the About dialog stuck on the old version — **this mistake
+shipped 4.2.7 and 4.2.8 with About still showing 4.2.6.** If the two ever
+disagree, `APP_VERSION` is authoritative; fix it to match.
+
+In the editor, electron-builder reads **`release/app/package.json`**, not the root
+one — `electron-builder.json` sets `directories.app` to `release/app`. The release
+workflow runs `npm version <tag>` at the root AND in `release/app`, so a tagged
+release is always correct; a LOCAL package build is not, and takes whatever
+`release/app/package.json` happens to say. Use `npm version <v> --no-git-tag-version
+--allow-same-version` in both places rather than editing by hand: it updates each
+lockfile too, which hand edits miss (see DOPE-601).
 
 Release order: bump `APP_VERSION` + `package.json` (both repos, same value) → PR
 to `development` → merge → promote `development`→`main` on both → tag `vX.Y.Z` on
