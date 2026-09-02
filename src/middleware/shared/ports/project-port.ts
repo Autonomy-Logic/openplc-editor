@@ -29,6 +29,7 @@
  *   - Project state in Zustand store
  */
 
+import type { PrintRequest } from './print-types'
 import type { DeviceConfiguration, DevicePin, PLCProjectData, ProjectMeta, RecentProject, Unsubscribe } from './types'
 
 export interface CreateProjectParams {
@@ -390,4 +391,17 @@ export interface ProjectPort {
     defaultFileName: string,
     bytes: Uint8Array,
   ): Promise<{ success: boolean; canceled?: boolean; error?: string }>
+
+  /**
+   * Render a print/export-to-PDF request to bytes, using the shared
+   * platform-agnostic engine (`backend/shared/print`).
+   * Web: runs it in a Worker (Vite bundles the in-repo `.worker.ts` natively).
+   * Editor: runs it on the renderer's main thread — the same in-repo-worker
+   * approach would need `import.meta.url`, which this repo's single,
+   * CommonJS-targeted tsconfig (shared with the Electron main process) can't
+   * compile; a render normally completes well under a second, so a second
+   * build target just for this was judged disproportionate.
+   * Rejects on render failure; callers catch and toast.
+   */
+  renderPdf(request: PrintRequest): Promise<Uint8Array>
 }

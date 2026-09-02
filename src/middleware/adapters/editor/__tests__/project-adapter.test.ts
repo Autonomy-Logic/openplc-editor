@@ -1,6 +1,16 @@
 import type { ProjectPort } from '../../../shared/ports/project-port'
 import { createEditorProjectAdapter, mapIpcPouToPortPou, mapPortPouToIpcPou } from '../project-adapter'
 
+const mockRenderProjectToPdf = jest.fn()
+jest.mock('../../../../backend/shared/print', () => ({
+  renderProjectToPdf: (...args: unknown[]) => mockRenderProjectToPdf(...args),
+}))
+
+const mockFontSet = { sans: new Uint8Array(), sansBold: new Uint8Array(), mono: new Uint8Array(), monoBold: new Uint8Array() }
+jest.mock('../services/pdf-export/fonts/embedded-font-set', () => ({
+  getEmbeddedFontSet: () => mockFontSet,
+}))
+
 const mockIpcProjectResponse = {
   success: true,
   data: {
@@ -676,6 +686,29 @@ describe('createEditorProjectAdapter', () => {
       const result = await adapter.exportPdfFile('my-project.pdf', new Uint8Array())
 
       expect(result).toEqual({ success: false, error: undefined })
+    })
+  })
+
+  describe('renderPdf', () => {
+    it('renders on the renderer main thread via the shared engine, using the embedded font set', async () => {
+      const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])
+      mockRenderProjectToPdf.mockResolvedValue(bytes)
+      const request = {
+        projectName: 'TestProject',
+        mode: 'normal' as const,
+        pagePolicy: 'new-page-per-pou' as const,
+        page: {
+          size: 'a4' as const,
+          orientation: 'portrait' as const,
+          marginsPt: { top: 36, right: 36, bottom: 36, left: 36 },
+        },
+        pous: [],
+      }
+
+      const result = await adapter.renderPdf(request)
+
+      expect(mockRenderProjectToPdf).toHaveBeenCalledWith(request, mockFontSet)
+      expect(result).toBe(bytes)
     })
   })
 

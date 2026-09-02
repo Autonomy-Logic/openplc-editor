@@ -10,7 +10,9 @@
  *   - Editor uses `configuration` (singular), port uses `configurations` (plural)
  */
 
+import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import type { PrintRequest } from '../../shared/ports/print-types'
 import type {
   CreatePouParams,
   CreateProjectParams,
@@ -32,6 +34,7 @@ import type {
   RecentProject,
   Unsubscribe,
 } from '../../shared/ports/types'
+import { getEmbeddedFontSet } from './services/pdf-export/fonts/embedded-font-set'
 
 /** Editor IPC POU shape (discriminated union). */
 interface IpcPou {
@@ -378,6 +381,17 @@ export function createEditorProjectAdapter(): ProjectPort {
         return { success: false, error: response.error?.description }
       }
       return { success: true }
+    },
+
+    async renderPdf(request: PrintRequest): Promise<Uint8Array> {
+      // Runs on the renderer's main thread — unlike web, which offloads this
+      // to a Worker (Vite bundles an in-repo `.worker.ts` natively). Doing the
+      // same here would need `import.meta.url`, which this repo's single,
+      // CommonJS-targeted tsconfig.json (shared with the Electron main
+      // process) can't compile; standing up a second build target just for
+      // one worker file was judged disproportionate to a render that
+      // normally completes in well under a second.
+      return renderProjectToPdf(request, getEmbeddedFontSet())
     },
   }
 }

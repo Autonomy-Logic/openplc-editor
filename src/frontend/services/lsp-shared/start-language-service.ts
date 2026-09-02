@@ -29,7 +29,9 @@ import {
   InitializeRequest,
   type InitializeResult,
   type MessageConnection,
+  type SemanticTokens,
   SemanticTokensRefreshRequest,
+  SemanticTokensRequest,
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge, type DiagnosticsMirror } from './diagnostics'
@@ -92,6 +94,19 @@ export interface LanguageService {
    * therefore triggers no re-query of its own.
    */
   refreshSemanticTokens(): void
+  /**
+   * The legend (token-type / modifier names) the server advertised on
+   * `initialize`, or null if it never advertised semantic-tokens support.
+   * Needed to decode the raw `data` array `requestSemanticTokens` returns.
+   */
+  getSemanticTokensLegend(): monaco.languages.SemanticTokensLegend | null
+  /**
+   * Raw `textDocument/semanticTokens/full` request, in the worker's
+   * full-document coordinates (no viewport clipping/rebasing — that's the
+   * live-editor provider's job). For a document the LSP doesn't know about,
+   * or once disposed, resolves null rather than rejecting.
+   */
+  requestSemanticTokens(uri: string): Promise<SemanticTokens | null>
   /** Tear down providers + transport. */
   dispose(): void
 }
@@ -243,6 +258,8 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
       changeDocument: () => undefined,
       closeDocument: () => undefined,
       refreshSemanticTokens: () => undefined,
+      getSemanticTokensLegend: () => null,
+      requestSemanticTokens: () => Promise.resolve(null),
       dispose: () => undefined,
     }
   }
@@ -279,6 +296,7 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
   // `initialize` result, so it can't be registered synchronously
   // alongside the others.  Filled in inside the ready promise below.
   let semanticTokensRegistration: SemanticTokensRegistration | null = null
+  let semanticTokensLegend: monaco.languages.SemanticTokensLegend | null = null
 
   // Handler for `workspace/semanticTokens/refresh` — servers send
   // this when their background analysis catches up to docs that
@@ -314,18 +332,21 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     // registration so the language still renders, with the other
     // providers unaffected.
     const provider = initResult.capabilities.semanticTokensProvider
-    if (monacoApi && provider && 'legend' in provider && provider.legend) {
-      semanticTokensRegistration = registerLspSemanticTokens({
-        connection,
-        monacoApi,
-        languageId,
-        legend: {
-          tokenTypes: [...provider.legend.tokenTypes],
-          tokenModifiers: [...provider.legend.tokenModifiers],
-        },
-        ...(resolveLspContext ? { resolveLspContext } : {}),
-        ...(resolveSemanticTokensViewport ? { resolveViewport: resolveSemanticTokensViewport } : {}),
-      })
+    if (provider && 'legend' in provider && provider.legend) {
+      semanticTokensLegend = {
+        tokenTypes: [...provider.legend.tokenTypes],
+        tokenModifiers: [...provider.legend.tokenModifiers],
+      }
+      if (monacoApi) {
+        semanticTokensRegistration = registerLspSemanticTokens({
+          connection,
+          monacoApi,
+          languageId,
+          legend: semanticTokensLegend,
+          ...(resolveLspContext ? { resolveLspContext } : {}),
+          ...(resolveSemanticTokensViewport ? { resolveViewport: resolveSemanticTokensViewport } : {}),
+        })
+      }
     }
 
     if (postInitialize) {
@@ -347,6 +368,18 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
 
     refreshSemanticTokens() {
       semanticTokensRegistration?.refresh()
+    },
+
+    getSemanticTokensLegend() {
+      return semanticTokensLegend
+    },
+
+    async requestSemanticTokens(uri) {
+      if (disposed) return null
+      const result: SemanticTokens | null = await connection.sendRequest(SemanticTokensRequest.type, {
+        textDocument: { uri },
+      })
+      return result
     },
 
     openDocument(uri, content) {

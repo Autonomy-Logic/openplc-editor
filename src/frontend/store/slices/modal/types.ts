@@ -52,6 +52,13 @@ export type ModalTypes =
    *  carries the pin type, the suggested values and an `onConfirm`
    *  the caller uses to create + bind the variable. */
   | 'create-graphical-variable'
+  /** File > Print / Preview wizard: select POUs, choose render mode
+   *  and page policy, preview, export. Preview is an alias into this
+   *  same modal, not a separate flow. */
+  | 'export-pdf'
+  /** Standalone File > Page Setup entry — same fields as the export
+   *  wizard's options step, reachable without starting an export. */
+  | 'page-setup'
 
 /**
  * Payload of the `create-graphical-variable` modal. Lives here so the graphical

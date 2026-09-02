@@ -12,6 +12,7 @@ import { executeSaveActiveFile, executeSaveProject } from '../../services/save-a
 import { executeSaveProjectAs } from '../../services/save-project-as'
 import { openPLCStoreBase, useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
+import { canExportPdf } from '../../utils/print-availability'
 import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
@@ -275,6 +276,27 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [accelerator, projectPort, capabilities])
+
+  /**
+   * Print (Ctrl+P) / Preview (Ctrl+Shift+P) — both open the export-to-PDF wizard.
+   */
+  useEffect(() => {
+    const unsub = accelerator.onPrint(() => {
+      if (!canExportPdf(project.data.pous)) return
+      openModal('export-pdf', null)
+    })
+    return unsub
+  }, [accelerator, project.data.pous, openModal])
+
+  /**
+   * Page Setup (Ctrl+Alt+P)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onPageSetup(() => {
+      openModal('page-setup', null)
+    })
+    return unsub
+  }, [accelerator, openModal])
 
   /**
    * Find in project (Cmd+Shift+F)

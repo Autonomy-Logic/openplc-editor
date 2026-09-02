@@ -24,7 +24,9 @@ import { CreateGraphicalVariableModal } from '../_organisms/modals/create-graphi
 import { DebuggerIpInputModal } from '../_organisms/modals/debugger-ip-input-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
+import { ExportPdfModal } from '../_organisms/modals/export-pdf-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
+import { PageSetupModal } from '../_organisms/modals/page-setup-modal'
 import { ProjectReadmeModal } from '../_organisms/modals/project-readme-modal'
 import { PublicCatalogBrowserModal } from '../_organisms/modals/public-catalog-browser-modal'
 import { QuitApplicationModal } from '../_organisms/modals/quit-application-modal'
@@ -168,6 +170,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
           {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}
           {modals?.['retrieve-project']?.open === true && <RetrieveProjectModal />}
+          {modals?.['export-pdf']?.open === true && <ExportPdfModal />}
+          {modals?.['page-setup']?.open === true && <PageSetupModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AboutModal />
           <AcceleratorHandler />
