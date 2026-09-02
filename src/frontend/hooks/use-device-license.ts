@@ -133,7 +133,7 @@ export function useDeviceLicense(
         const report: DeviceLicenseReport = {
           // Permanent for this platform: the port declares both calls optional and
           // this build published neither. Asking again cannot change that.
-          outcome: { state: 'check-failed', error: 'this platform cannot check device licences.', retryable: false },
+          outcome: { state: 'check-failed', error: 'This platform cannot check device licences.', retryable: false },
         }
         setReport(report)
         return report

@@ -267,7 +267,7 @@ describe('device:refresh-license', () => {
 
     expect(second.outcome).toEqual({
       state: 'check-failed',
-      error: 'A license check is already running on this device.',
+      error: 'A licence check is already running on this device.',
     })
     expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledTimes(1)
 
@@ -384,7 +384,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     expect(result.outcome).toEqual({
       state: 'check-failed',
-      error: 'this connection cannot carry the licensing protocol',
+      error: 'This connection cannot carry the licensing protocol.',
       // Permanent for this kind of session, so the UI must not offer a retry.
       retryable: false,
     })

@@ -2220,7 +2220,7 @@ class MainProcessBridge implements MainIpcModule {
     // Permanent: a channel either implements an identity read or it never will.
     // The comment below calls it a programming error, and a retry button on a
     // programming error is a loop with a friendly label.
-    return { error: 'this connection cannot read the device identity licensing needs', retryable: false }
+    return { error: 'This connection cannot read the device identity that licensing needs.', retryable: false }
   }
 
   /**
@@ -2258,7 +2258,7 @@ class MainProcessBridge implements MainIpcModule {
       async (client) => {
         if (!isLicenseChannel(client)) {
           // Permanent for this kind of session, so no retry.
-          return checkFailedTerminal('this connection cannot carry the licensing protocol')
+          return checkFailedTerminal('This connection cannot carry the licensing protocol.')
         }
         return run(client)
       },
@@ -2306,7 +2306,7 @@ class MainProcessBridge implements MainIpcModule {
         // Reported rather than queued: the caller is a button or a connect, and a
         // second answer arriving later for a question already being answered is
         // noise at best and a contradictory badge at worst.
-        return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
+        return { outcome: { state: 'check-failed', error: 'A licence check is already running on this device.' } }
       }
       this.deviceLicenseSequenceInFlight = true
 

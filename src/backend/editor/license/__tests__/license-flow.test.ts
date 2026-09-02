@@ -96,14 +96,17 @@ describe('verifyStoredLicenseBlob', () => {
 
     // The reason reaches the user verbatim, so it must not carry the two 32-hex
     // ids — it says WHICH device, not which bytes.
-    expect(verdict).toEqual({ ok: false, reason: 'the stored licence was issued for a different device' })
+    expect(verdict).toEqual({
+      ok: false,
+      reason: 'The licence stored on this device was issued for a different device.',
+    })
   })
 
   it('rejects a blob issued for another VPP', () => {
     const verdict = verifyStoredLicenseBlob(blobFor({ packageId: 'com.openplc.other-licensed' }), DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(verdict.reason).toBe('the stored licence was issued for a different VPP')
+    if (!verdict.ok) expect(verdict.reason).toBe('The licence stored on this device was issued for a different VPP.')
   })
 
   it('rejects a blob whose crc32 does not cover its bytes (tampered or truncated in place)', () => {
@@ -113,28 +116,30 @@ describe('verifyStoredLicenseBlob', () => {
     const verdict = verifyStoredLicenseBlob(tampered, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(verdict.reason).toMatch(/checksum/)
+    if (!verdict.ok) expect(verdict.reason).toBe('The licence stored on this device is damaged.')
   })
 
-  it('rejects a blob with no OPLC magic', () => {
+  it('rejects a blob that is not a licence at all (no magic)', () => {
     const noMagic = blobFor()
     noMagic[0] = 0x00
 
     const verdict = verifyStoredLicenseBlob(noMagic, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    // Magic is checked before crc32, so the message names the real problem.
-    if (!verdict.ok) expect(verdict.reason).toMatch(/no OPLC magic/)
+    // Magic is checked before the checksum, so the message names the real
+    // problem. And the reason reaches the user, so it names the CONDITION
+    // rather than the field that failed.
+    if (!verdict.ok) expect(verdict.reason).toBe('The data stored on this device is not a licence.')
   })
 
   it('rejects a short or absent blob rather than parsing past the end', () => {
     expect(verifyStoredLicenseBlob(undefined, DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
-      reason: 'the stored licence is not a complete licence record',
+      reason: 'The licence stored on this device is incomplete.',
     })
     expect(verifyStoredLicenseBlob(blobFor().subarray(0, 40), DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
-      reason: 'the stored licence is not a complete licence record',
+      reason: 'The licence stored on this device is incomplete.',
     })
   })
 
@@ -398,7 +403,7 @@ describe('resolveDeviceLicense', () => {
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/reading it back failed/)
+      expect(result.outcome.error).toMatch(/Reading it back from the device failed/)
     }
   })
 
@@ -443,7 +448,7 @@ describe('resolveDeviceLicense', () => {
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/returned nothing to write/)
+      expect(result.outcome.error).toMatch(/sent no licence data/)
     }
     expect(link.writes).toHaveLength(0)
   })
