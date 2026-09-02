@@ -18,6 +18,8 @@
 #include "openplc.h"
 #include "generated.hpp"
 #include "debug_dispatch.hpp"
+#include "iec_retain.hpp"
+#include "openplc_retain.h"
 
 // Placement new, used by runtime_reinit_program() to re-run the program's
 // initializers over storage that already exists. Available on every target the
@@ -362,7 +364,142 @@ static void runtime_reinit_program()
 
     runtime_zero_output_image();
     runtime_bind_located_vars();   // idempotent, allocation-free
+    // The placement-new above re-ran every declared initialiser, wiping the
+    // retained values with it. Restore them, or entering STOP would silently
+    // become a cold start — the transition users hit most often.
+    runtime_retain_load();
     scan_counter = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Retain variables.
+//
+// The runtime MARSHALS and the platform STORES. `strucpp::retain` turns the
+// retained leaves into a blob and back; `openplc_retain_*` puts those bytes
+// somewhere that survives power loss. Neither knows anything about the other's
+// half, which is what lets one board keep values in FRAM and the next in an
+// EEPROM it may only write every ten seconds.
+//
+// The buffer is a file-scope array, sized once at start. Not a stack local: it
+// is written from the scan path, and a few hundred bytes of stack per cycle is
+// not affordable on a 2 KB-SRAM part. Not malloc'd either — the firmware
+// allocates nothing after setup.
+// ---------------------------------------------------------------------------
+
+// Cap on the retain blob this firmware will handle. Sized for the boards the
+// editor targets, and deliberately a fixed allocation: this buffer is filled
+// from inside the scan cycle, so it cannot come from the heap.
+#define RETAIN_BUFFER_MAX 512
+
+// A program that outgrows the buffer FAILS THE BUILD.
+//
+// The editor emits OPLC_RETAIN_BLOB_SIZE into defines.h whenever a program
+// retains anything, and the check has to happen here because there is nowhere
+// else for it to happen: a microcontroller has no console to report on, so the
+// alternative is firmware that links, runs, quietly decides the blob will not
+// fit and behaves as NON_RETAIN — on a machine somebody has already installed,
+// with the fault only visible after a power cycle.
+//
+// Retained state adds up faster than it looks. A retained TON is 36 bytes
+// (four interface leaves plus the four internal ones that make it a timer),
+// so this cap is reached at around fourteen of them.
+#ifdef OPLC_RETAIN_BLOB_SIZE
+static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
+              "This program's retained variables need more storage than this "
+              "board's retain buffer holds (RETAIN_BUFFER_MAX). Retain fewer "
+              "variables, or mark some of them NON_RETAIN. Remember that a "
+              "retained function block instance retains all of its internal "
+              "state, not only its inputs and outputs.");
+#endif
+
+static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
+static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
+static bool     retain_available  = false;
+
+static uint16_t retain_read_leaf(uint8_t arr, uint16_t elem, uint8_t* dest) {
+    return strucpp::debug::handle_read(arr, elem, dest);
+}
+
+// A PLAIN write, never a force. Restoring a retained value must not pin it: the
+// program has to be able to move it on the very next scan, and an operator's
+// force has to stay authoritative over whatever was stored.
+static uint8_t retain_write_leaf(uint8_t arr, uint16_t elem, const uint8_t* bytes, uint16_t len) {
+    return strucpp::debug::handle_write(arr, elem, bytes, len);
+}
+
+static uint16_t retain_size_leaf(uint8_t arr, uint16_t elem) {
+    return strucpp::debug::handle_size(arr, elem);
+}
+
+// ---------------------------------------------------------------------------
+// Decide once, at start, whether this firmware has usable retention. Checking
+// per cycle would mean asking the same three questions 50 times a second for
+// the life of the program.
+// ---------------------------------------------------------------------------
+void runtime_retain_init()
+{
+    retain_available = false;
+    retain_blob_len  = 0;
+
+    const size_t needed = strucpp::retain::blob_size(retain_size_leaf);
+    if (needed == 0) return;           // the program retains nothing
+    // Unreachable when the editor supplied OPLC_RETAIN_BLOB_SIZE — the
+    // static_assert above already refused the build. Kept for firmware built
+    // by other means, where silently degrading still beats overrunning.
+    if (needed > RETAIN_BUFFER_MAX) return;
+
+    const uint16_t capacity = openplc_retain_capacity();
+    if (capacity == 0) return;         // no backend — retain degrades to NON_RETAIN
+    if (capacity < needed) return;     // storage too small for this program
+
+    retain_blob_len  = (uint16_t)needed;
+    retain_available = true;
+}
+
+// ---------------------------------------------------------------------------
+// Restore. Call after the IEC variables exist and before the first scan — AND
+// after any re-initialisation, because that re-runs every declared initialiser
+// and would otherwise make a STOP behave as a cold start.
+//
+// Anything the runtime cannot trust (bad magic, wrong format, failed crc, a
+// layout from a different program) leaves every variable at its initial value.
+// That is the correct outcome: a machine starting from its declared defaults is
+// recoverable, one starting from plausible-looking garbage is not.
+// ---------------------------------------------------------------------------
+void runtime_retain_load()
+{
+    if (!retain_available) return;
+
+    uint16_t got = 0;
+    if (openplc_retain_read(retain_buffer, retain_blob_len, &got) != OPLC_RETAIN_OK) return;
+    if (got == 0) return;
+
+    strucpp::retain::unpack(retain_buffer, got, retain_write_leaf, retain_size_leaf);
+}
+
+// ---------------------------------------------------------------------------
+// Save. Called once per scan cycle, unconditionally, in every PLC state.
+//
+// No dirty check and no rate limit here on purpose: whether these bytes are
+// worth committing, and how often, is the platform's decision, and it is the
+// only layer that knows what its storage costs. See openplc_retain.h.
+// ---------------------------------------------------------------------------
+void runtime_retain_save()
+{
+    if (!retain_available) return;
+
+    const size_t n = strucpp::retain::pack(
+        retain_buffer, sizeof(retain_buffer), retain_read_leaf, retain_size_leaf);
+    if (n == 0) return;
+
+    openplc_retain_write(retain_buffer, (uint16_t)n);
+}
+
+// Cold reset: discard stored values so the next start uses the declared
+// initialisers. The editor sends this after an upload, matching CODESYS.
+void runtime_retain_clear()
+{
+    openplc_retain_clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +569,13 @@ void runtime_plc_cycle()
     if (plc_state == PLC_STATE_RUNNING) {
         strucpp::__CURRENT_TIME_NS += (int64_t)base_tick_ns;
     }
+
+    // 5. Hand the retained values to the platform. Every cycle, in every state
+    //    — a value that changed in the last scan before power loss is exactly
+    //    the one worth keeping, and a STOPPED PLC still holds the values it
+    //    stopped with. Whether this is actually committed to storage now is the
+    //    driver's call; the default is a no-op.
+    runtime_retain_save();
 }
 
 // ---------------------------------------------------------------------------

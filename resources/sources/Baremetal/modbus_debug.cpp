@@ -399,6 +399,21 @@ void plcSetState(uint8_t desired)
 }
 
 // PDU request:  [FC]
+// PDU response: [FC, STATUS]
+//
+// Always reports success: "discard what is stored" is satisfied by a board that
+// stores nothing, and the weak default answers OK for exactly that reason. A
+// board WITH a backend that genuinely failed to erase is the only case worth
+// reporting, and openplc_retain_clear() is what decides that.
+void plcRetainReset(void)
+{
+    runtime_retain_clear();
+    mb_frame[1] = MB_FC_RETAIN_RESET;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame_len = 3;
+}
+
+// PDU request:  [FC]
 // PDU response: [FC, STATUS, version_ascii...]  (no NUL terminator)
 //
 // Reports OPENPLC_RUNTIME_VERSION (defined in openplc_version.h). The editor

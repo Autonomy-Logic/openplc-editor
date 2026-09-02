@@ -152,6 +152,7 @@ beforeEach(() => {
     md5Hash: 'a'.repeat(32),
     splitterFallbackMessage: null,
     debugMapSummary: null,
+    retainBlobSize: null,
   })
   // Default-mock: version gate returns compatible.
   mockedVersionGate.mockReturnValue(true)
@@ -198,6 +199,41 @@ describe('runCompilePipeline — simulator path', () => {
     expect(callArgs.files['examples/Baremetal/Baremetal.ino']).toBe('INO')
     expect(callArgs.files['src/defines.h']).toContain('PROGRAM_MD5')
     expect(callArgs.argv).toEqual(['compile', '-b', 'arduino:avr:mega'])
+  })
+
+  it('forwards a positive retainBlobSize into defines.h', async () => {
+    // The pipeline branch that carries the size was only ever exercised with
+    // `null`. `generate-defines` was covered directly, so the define itself was
+    // tested — but nothing proved the pipeline actually hands the number over,
+    // and a program that retains something needs it or the firmware's
+    // static_assert has nothing to check against.
+    mockedStrucpp.mockReturnValue({
+      success: true,
+      files: [{ name: 'debug-map.json', content: '{}' }],
+      errors: [],
+      warnings: [],
+      md5Hash: 'a'.repeat(32),
+      splitterFallbackMessage: null,
+      debugMapSummary: 'Debug map: 3 leaves in 1 arrays; retain blob 148 bytes',
+      retainBlobSize: 148,
+    })
+
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({}), port, emit)
+
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+  })
+
+  it('omits the define when nothing is retained', async () => {
+    // Boards that never touch retain must see byte-identical defines.h, or
+    // every one of them rebuilds for no reason.
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({}), port, emit)
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
 
   // Regression: the board's `boardManagerUrl` (VPP `target.boardManagerUrl`)
@@ -914,6 +950,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: 'Falling back to monolithic compile (POU offsets unavailable).',
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -932,6 +969,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: 'Debug map: 42 leaves in 3 arrays',
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -951,6 +989,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -973,6 +1012,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -1048,6 +1088,7 @@ describe('runCompilePipeline — failure propagation', () => {
       md5Hash: '',
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { emit } = captureEvents()
@@ -1147,6 +1188,7 @@ describe('runCompilePipeline — failure propagation', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     mockedConfs.mockImplementationOnce(() => {
       throw new Error('EtherCAT validator: vendor id missing on slave #0')
@@ -1310,5 +1352,62 @@ describe('runCompilePipeline — side effects', () => {
     const stEvents = events.filter((e) => e.stage === 'st')
     expect(stEvents.some((e) => e.message === 'transpiler started' && e.level === 'info')).toBe(true)
     expect(stEvents.some((e) => e.message === 'transpiler: parsed 5 POUs' && e.level === 'info')).toBe(true)
+  })
+})
+
+// --- the project-snapshot capability reaches the upload ----------------------
+//
+// The runtime advertises `projectSnapshot` at `/api/capabilities` and the
+// pre-upload probe already reads it. The upload step is what acts on it, so the
+// value has to survive the trip: without this the flag is read and dropped, and
+// the editor builds an archive for a device that discards it.
+
+describe('project-snapshot capability', () => {
+  it('tells the upload step when the runtime stores source projects', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.2.0', supportsProjectSnapshot: true }),
+    })
+
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.uploadRuntimeV4).toHaveBeenCalledWith(
+      expect.objectContaining({ supportsProjectSnapshot: true }),
+      expect.anything(),
+    )
+  })
+
+  it('tells the upload step when it does not', async () => {
+    // Every runtime predating the feature. The upload step skips building the
+    // archive and says why, rather than sending one into a device that drops it.
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0', supportsProjectSnapshot: false }),
+    })
+
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.uploadRuntimeV4).toHaveBeenCalledWith(
+      expect.objectContaining({ supportsProjectSnapshot: false }),
+      expect.anything(),
+    )
   })
 })

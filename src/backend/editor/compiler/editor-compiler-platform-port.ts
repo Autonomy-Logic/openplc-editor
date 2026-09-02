@@ -27,6 +27,10 @@
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
+  describeSnapshotUploadWarning,
+  readSnapshotUploadWarning,
+} from '@root/backend/shared/project/upload-snapshot-warning'
+import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
@@ -111,6 +115,8 @@ export interface EditorCompilerPlatformPortContext {
       filename: string
       contentType: string
       cleanBuild: boolean
+      snapshotBuffer?: Buffer
+      snapshotMetadata?: string
       onUploadAccepted?: (responseBody: string) => void
     }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   }
@@ -119,6 +125,18 @@ export interface EditorCompilerPlatformPortContext {
    *  in the `archiver`-dependent compressSourceFolder method (which
    *  has its own private state on CompilerModule). */
   compressSourceFolder: (folderPath: string) => Promise<Buffer>
+  /** Build the source-project archive stored on the device so the project can
+   *  be retrieved later. Injected for the same reason as
+   *  `compressSourceFolder`: it reaches the Electron-bound library manager, and
+   *  this adapter has to stay importable outside a real Electron process.
+   *
+   *  Optional so a caller predating it stays valid — absent simply means the
+   *  upload carries no snapshot, which is what an older editor does anyway. */
+  buildUploadSnapshot?: () => Promise<{
+    archive: Buffer
+    metadata: string
+    missingLibraries: string[]
+  } | null>
   /**
    * `package.minRuntimeVersion` of the VPP providing a given board, or
    * null when the board isn't from a VPP / declares no floor
@@ -359,6 +377,37 @@ export function createEditorCompilerPlatformPort(
         // produced no artifacts.
         const fileBuffer = await context.compressSourceFolder(context.sourceTargetFolderPath)
 
+        // The source project, stored on the device beside the artifacts so it
+        // can be retrieved later. Never fatal: the device runs the new program
+        // either way, and failing an upload over the optional half of it would
+        // be a worse outcome than losing retrievability.
+        let snapshot: { archive: Buffer; metadata: string; missingLibraries: string[] } | null = null
+        if (!args.supportsProjectSnapshot) {
+          // Asked and answered by the pre-upload capability check. Building one
+          // anyway would spend the user's time compressing a project this
+          // device discards on arrival, and leave them a device they cannot
+          // retrieve from with nothing said about why.
+          log(
+            'This runtime does not store source projects, so the project will not be sent with the program and cannot be retrieved from this device later.',
+            'warning',
+          )
+        } else {
+          try {
+            snapshot = (await context.buildUploadSnapshot?.()) ?? null
+            if (snapshot && snapshot.missingLibraries.length > 0) {
+              log(
+                `Stored project will not include these libraries, which are not installed here: ${snapshot.missingLibraries.join(', ')}`,
+                'warning',
+              )
+            }
+          } catch (error) {
+            log(
+              `Could not prepare the project for storage on the device: ${error instanceof Error ? error.message : String(error)}`,
+              'warning',
+            )
+          }
+        }
+
         const deployOutcome = await deployRuntimeProgram({
           uploadProgram: () =>
             context.mainProcessBridge.makeRuntimeApiUpload({
@@ -367,7 +416,15 @@ export function createEditorCompilerPlatformPort(
               contentType: 'application/zip',
               fileBuffer,
               cleanBuild: context.cleanBuild,
+              snapshotBuffer: snapshot?.archive,
+              snapshotMetadata: snapshot?.metadata,
               onUploadAccepted: (responseBody) => {
+                // The device may have accepted the program and refused the
+                // project beside it. Saying so here is the difference between
+                // "not retrievable" being found out now and being found out by
+                // whoever needed the project back.
+                const warning = readSnapshotUploadWarning(responseBody)
+                if (warning) log(describeSnapshotUploadWarning(warning), 'warning')
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   log(`Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`, 'info')
@@ -472,6 +529,12 @@ export function createEditorCompilerPlatformPort(
               fileBuffer,
               cleanBuild: context.cleanBuild,
               onUploadAccepted: (responseBody) => {
+                // The device may have accepted the program and refused the
+                // project beside it. Saying so here is the difference between
+                // "not retrievable" being found out now and being found out by
+                // whoever needed the project back.
+                const warning = readSnapshotUploadWarning(responseBody)
+                if (warning) log(describeSnapshotUploadWarning(warning), 'warning')
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   log(`Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`, 'info')
@@ -548,12 +611,12 @@ export function createEditorCompilerPlatformPort(
         if (!result.success) return { success: false as const, error: result.error }
         return { success: true as const, body: result.data }
       }
-      const { version, minEditorVersion } = await probeRuntimeVersion({
+      const { version, minEditorVersion, supportsProjectSnapshot } = await probeRuntimeVersion({
         fetchCapabilities: () => getJson('/api/capabilities'),
         fetchVersion: () => getJson('/api/version'),
         log,
       })
-      return { ok: true, version, minEditorVersion }
+      return { ok: true, version, minEditorVersion, supportsProjectSnapshot }
     },
 
     /**

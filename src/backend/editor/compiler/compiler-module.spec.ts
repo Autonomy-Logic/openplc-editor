@@ -99,6 +99,38 @@ describe('CompilerModule', () => {
     expect(compilerModule).toBeInstanceOf(CompilerModule)
   })
 
+  describe('handleUploadProgram (no serial port)', () => {
+    /**
+     * A step that cannot run must FAIL, not return quietly.
+     *
+     * `uploadArduinoBoard` only awaits this method and reports `{ ok: true }` on
+     * any normal return, and the build's outcome now comes from the pipeline's
+     * verdict rather than from whether an error was logged. So a silent bail
+     * here told the user their board had been flashed when nothing was sent —
+     * red "No communication port specified", then "Arduino upload complete.",
+     * then success.
+     */
+    it('throws when no port is passed and none is persisted', async () => {
+      const logged: Array<{ message: string; level?: string }> = []
+
+      await expect(
+        compilerModule.handleUploadProgram({
+          // A directory with no devices/configuration.json, so the disk
+          // fallback finds nothing either.
+          projectPath: join(tmpdir(), 'openplc-no-such-project'),
+          arduinoPlatform: 'arduino:avr:uno',
+          compilationPath: join(tmpdir(), 'openplc-no-such-build'),
+          handleOutputData: (chunk, level) => {
+            logged.push({ message: typeof chunk === 'string' ? chunk : chunk.toString(), ...(level ? { level } : {}) })
+          },
+        }),
+      ).rejects.toThrow(/No communication port specified/)
+
+      // It must not have announced anything that reads like progress.
+      expect(logged.some((entry) => /upload complete/i.test(entry.message))).toBe(false)
+    })
+  })
+
   it('should have expected static properties', () => {
     expect(typeof CompilerModule.HOST_PLATFORM).toBe('string')
     expect(['x64', 'arm64', 'ia32', 'arm']).toContain(CompilerModule.HOST_ARCHITECTURE)

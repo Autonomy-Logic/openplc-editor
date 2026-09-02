@@ -78,10 +78,10 @@ function validateElementName(name: string): { ok: true } | { ok: false; message:
 }
 
 /**
- * Data type names are compared case-insensitively: each one becomes a
- * `datatypes/<Name>.dt` path, and macOS/Windows fold filename case, so
- * `Foo` and `foo` would silently overwrite each other on save. IEC
- * identifiers are case-insensitive anyway.
+ * Element names are compared case-insensitively: a data type becomes a
+ * `datatypes/<Name>.dt` path and a POU a `pous/<folder>/<Name><ext>` one,
+ * and macOS/Windows fold filename case, so `Foo` and `foo` would silently
+ * overwrite each other on save. IEC identifiers are case-insensitive anyway.
  */
 const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
@@ -156,52 +156,96 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
   }
 }
 
+type NamedElementKind = 'pou' | 'data-type' | 'global-variable-list'
+
+const SAME_KIND_TAKEN: Record<NamedElementKind, string> = {
+  pou: 'POU name already exists',
+  'data-type': 'Data type name already exists',
+  'global-variable-list': 'Global variable list name already exists',
+}
+
 /**
- * Why a Global Variable List may not be called `name`, or `null` when it may.
+ * Why an element of `kind` may not be called `name`, or `null` when it may.
  *
- * A list occupies TWO symbols, not one: the instance keeps the user's name, and the
- * struct backing it takes `<name>_TYPE`. Both land in the same global namespace as
- * every POU and data type — IEC gives types and variables one namespace — so a list
- * called after a POU, or one whose derived type name is already a data type, is a
- * duplicate symbol the compiler reports against a name the user never typed. Checking
- * only against other lists covered one half of a rule with two.
+ * POUs, data types and Global Variable Lists share ONE identifier namespace — IEC gives
+ * types and variables the same one — and a list occupies TWO symbols in it: the instance
+ * keeps the user's name, the struct backing it takes `<name>_TYPE`. Checking each
+ * collection only against itself covered a third of a rule with three parts.
  *
- * `ignoring` is the list being renamed: a rename onto its own name, or a case-only
- * change, must not collide with itself.
+ * The workspace makes a collision worse than the duplicate symbol the compiler would
+ * report: `files[name]`, tabs, editor models and `undoRedo[name]` are keyed by raw
+ * element name, so one entry ends up serving two elements and edits land on the wrong one.
+ *
+ * `ignoring` is the element being renamed, so it does not collide with itself. It is
+ * matched EXACTLY for POUs and data types: each owns a file path
+ * (`pous/<folder>/<Name><ext>`, `datatypes/<Name>.dt`) and macOS/Windows fold filename
+ * case, so a case-only rename writes the new file over the old one. Refusing that means
+ * the element's own entry has to stay eligible to collide. A list has no file of its
+ * own, so it matches case-insensitively and a case-only rename remains a no-op.
  */
-function globalVariableListNameCollision(state: SharedRootState, name: string, ignoring?: string): string | null {
-  if (ignoring !== undefined && nameMatches(name, ignoring)) return null
+function elementNameCollision(
+  state: SharedRootState,
+  name: string,
+  kind: NamedElementKind,
+  ignoring?: string,
+): string | null {
+  const renamedOntoItself = kind === 'global-variable-list' ? nameMatches(name, ignoring ?? '') : name === ignoring
+  if (ignoring !== undefined && renamedOntoItself) return null
 
-  const derived = globalVariableListTypeName(name)
-  const lists = state.project.data.globalVariableLists ?? []
+  const { pous, dataTypes } = state.project.data
+  const allLists = state.project.data.globalVariableLists ?? []
+  const lists =
+    kind === 'global-variable-list' ? allLists.filter((list) => !nameMatches(list.name, ignoring ?? '')) : allLists
 
-  if (lists.some((list) => !nameMatches(list.name, ignoring ?? '') && nameMatches(list.name, name))) {
-    return 'Global variable list name already exists'
-  }
-  if (state.project.data.pous.some((pou) => nameMatches(pou.name, name))) {
+  const takenBySameKind =
+    kind === 'pou'
+      ? pous.some((pou) => nameMatches(pou.name, name))
+      : kind === 'data-type'
+        ? dataTypes.some((dataType) => nameMatches(dataType.name, name))
+        : lists.some((list) => nameMatches(list.name, name))
+  if (takenBySameKind) return SAME_KIND_TAKEN[kind]
+
+  if (kind !== 'pou' && pous.some((pou) => nameMatches(pou.name, name))) {
     return `"${name}" is already the name of a POU`
   }
-  if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, name))) {
+  if (kind !== 'data-type' && dataTypes.some((dataType) => nameMatches(dataType.name, name))) {
     return `"${name}" is already the name of a data type`
   }
+  if (kind !== 'global-variable-list' && lists.some((list) => nameMatches(list.name, name))) {
+    return `"${name}" is already the name of a global variable list`
+  }
   // A `.dt` that failed to parse still owns its `files[name]` entry — the registry is
-  // keyed by raw name across every kind — so a list taking the same name would share
-  // that entry and misroute its save. `datatypeActions` gates on this for the same
-  // reason; the check belongs here too.
+  // keyed by raw name across every kind — so any element taking that name would share
+  // the entry and misroute its save.
   const unparsedCollision = collidesWithUnparsedDataTypeFile(state, name)
   if (!unparsedCollision.ok) return unparsedCollision.message ?? `"${name}" is already taken by a data type file`
-  if (state.project.data.dataTypes.some((dataType) => nameMatches(dataType.name, derived))) {
+
+  const listOwningTheName = lists.find((list) => nameMatches(globalVariableListTypeName(list.name), name))
+  if (listOwningTheName) {
+    return `"${name}" is the type name of global variable list "${listOwningTheName.name}"`
+  }
+
+  if (kind !== 'global-variable-list') return null
+
+  const derived = globalVariableListTypeName(name)
+  if (dataTypes.some((dataType) => nameMatches(dataType.name, derived))) {
     return `"${name}" needs the type name "${derived}", which a data type already uses`
   }
-  if (state.project.data.pous.some((pou) => nameMatches(pou.name, derived))) {
+  if (pous.some((pou) => nameMatches(pou.name, derived))) {
     return `"${name}" needs the type name "${derived}", which a POU already uses`
   }
-  if (
-    lists.some(
-      (list) => !nameMatches(list.name, ignoring ?? '') && nameMatches(globalVariableListTypeName(list.name), derived),
-    )
-  ) {
+  // Against the other lists' own names as well as their derived ones: the pair
+  // `GVL` / `GVL_TYPE` collides whichever of the two is created first.
+  if (lists.some((list) => nameMatches(list.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a global variable list already uses`
+  }
+  if (lists.some((list) => nameMatches(globalVariableListTypeName(list.name), derived))) {
     return `"${name}" needs the type name "${derived}", which another global variable list already uses`
+  }
+  // An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares is
+  // still in the build — the generated struct would be a second declaration of it.
+  if (!collidesWithUnparsedDataTypeFile(state, derived).ok) {
+    return `"${name}" needs the type name "${derived}", which a data type file already uses`
   }
   return null
 }
@@ -322,8 +366,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   pouActions: {
     create: ({ type, name, language }) => {
       const state = getState()
-      const existing = state.project.data.pous.find((p) => p.name === name)
-      if (existing) return { ok: false, message: 'POU already exists' }
+      const collision = elementNameCollision(state, name, 'pou')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
@@ -379,8 +423,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) => {
       const state = getState()
-      const existing = state.project.data.pous.find((p) => p.name === newName)
-      if (existing) return { ok: false, message: 'POU name already exists' }
+      // `updatePouName` queues the old path for deletion unconditionally, so letting a
+      // no-op rename through would mark the POU's own file deleted on the next save.
+      if (oldName === newName) return { ok: true }
+
+      const collision = elementNameCollision(state, newName, 'pou', oldName)
+      if (collision) return { ok: false, message: collision }
 
       return renameElement(
         state,
@@ -398,8 +446,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const sourcePou = state.project.data.pous.find((p) => p.name === sourceName)
       if (!sourcePou) return { ok: false, message: 'Source POU not found' }
 
-      const existing = state.project.data.pous.find((p) => p.name === newName)
-      if (existing) return { ok: false, message: 'POU name already exists' }
+      const collision = elementNameCollision(state, newName, 'pou')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
@@ -458,7 +506,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const state = getState()
       // Collision before validation, matching `datatypeActions` above: the more
       // specific message is the more useful one when a name fails both.
-      const collision = globalVariableListNameCollision(state, name)
+      const collision = elementNameCollision(state, name, 'global-variable-list')
       if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(name)
@@ -498,7 +546,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
      */
     rename: (oldName, newName) => {
       const state = getState()
-      const collision = globalVariableListNameCollision(state, newName, oldName)
+      const collision = elementNameCollision(state, newName, 'global-variable-list', oldName)
       if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
@@ -567,7 +615,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const source = (state.project.data.globalVariableLists ?? []).find((l) => nameMatches(l.name, sourceName))
       if (!source) return { ok: false, message: 'Global variable list not found' }
 
-      const collision = globalVariableListNameCollision(state, newName)
+      const collision = elementNameCollision(state, newName, 'global-variable-list')
       if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
@@ -599,11 +647,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   datatypeActions: {
     create: ({ name, derivation }) => {
       const state = getState()
-      const existing = state.project.data.dataTypes.find((d) => nameMatches(d.name, name))
-      if (existing) return { ok: false, message: 'Data type already exists' }
-
-      const fileCollision = collidesWithUnparsedDataTypeFile(state, name)
-      if (!fileCollision.ok) return fileCollision
+      const collision = elementNameCollision(state, name, 'data-type')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
@@ -638,14 +683,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: async (oldName, newName) => {
       const state = getState()
-      // Includes the type being renamed: a case-only change writes the
-      // new file and then deletes the old path — the same file where
-      // the filesystem folds case.
-      const collides = newName !== oldName && state.project.data.dataTypes.some((d) => nameMatches(d.name, newName))
-      if (collides) return { ok: false, message: 'Data type name already exists' }
-
-      const fileCollision = collidesWithUnparsedDataTypeFile(state, newName)
-      if (!fileCollision.ok) return fileCollision
+      const collision = elementNameCollision(state, newName, 'data-type', oldName)
+      if (collision) return { ok: false, message: collision }
 
       const datatype = state.project.data.dataTypes.find((d) => d.name === oldName)
       if (!datatype) return { ok: false, message: 'Data type not found' }
@@ -707,11 +746,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const source = state.project.data.dataTypes.find((d) => d.name === sourceName)
       if (!source) return { ok: false, message: 'Data type not found' }
 
-      const existing = state.project.data.dataTypes.find((d) => nameMatches(d.name, newName))
-      if (existing) return { ok: false, message: 'Data type name already exists' }
-
-      const fileCollision = collidesWithUnparsedDataTypeFile(state, newName)
-      if (!fileCollision.ok) return fileCollision
+      const collision = elementNameCollision(state, newName, 'data-type')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck

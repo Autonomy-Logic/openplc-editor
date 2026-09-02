@@ -33,6 +33,15 @@ export enum ModbusDebugResponse {
   /** PLC_SET_STATE only: a RUN request was refused because the hardware mode
    *  switch reads STOP. */
   REFUSED_BY_SWITCH = 0x86,
+  /** DEBUG_SET only: the target refused to write or force this variable because
+   *  it is an IEC `CONSTANT`.
+   *
+   *  Mirrors `STATUS_READ_ONLY` in STruC++'s `debug_dispatch.hpp`. A constant is
+   *  emitted as a `const` C++ member and the debug table reaches it through a
+   *  cast that strips the qualifier, so the runtime is what refuses — which is
+   *  what keeps an older editor build, or an OPC-UA client, from writing
+   *  through to it. */
+  READ_ONLY = 0x87,
 }
 
 /** Runtime states reported by DEBUG_GET_STATUS and PLC_SET_STATE (and by

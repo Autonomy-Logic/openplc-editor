@@ -35,6 +35,16 @@ export interface DiscoveredRuntime {
   hostname: string
   runtimeVersion: string
   apiPort: number
+  /** Name of the source project the device stores, when it has one.
+   *
+   *  Display only. It is whatever the uploading client said -- the device never
+   *  opens the archive to check -- and it rides an unauthenticated broadcast,
+   *  so nothing may depend on it being true. It exists so the retrieve picker
+   *  can be populated without logging in to every device on the network; the
+   *  authoritative name comes from the archive once retrieved. */
+  projectName?: string
+  /** When that project was stored, ISO 8601. Absent alongside `projectName`. */
+  projectTimestamp?: string
 }
 
 export interface DiscoverRuntimesOptions {
@@ -101,6 +111,13 @@ export function parseAdvertisement(payload: string, sourceAddress: string): Disc
     hostname: typeof record.hostname === 'string' ? record.hostname : '',
     runtimeVersion: typeof record.runtime_version === 'string' ? record.runtime_version : '',
     apiPort: typeof record.api_port === 'number' ? record.api_port : RUNTIME_API_PORT,
+    // Absent keys mean the device stores no project, so these stay undefined
+    // rather than becoming empty strings -- the picker distinguishes "no
+    // project" from "a project with no name".
+    ...(typeof record.project_name === 'string' && record.project_name ? { projectName: record.project_name } : {}),
+    ...(typeof record.project_timestamp === 'string' && record.project_timestamp
+      ? { projectTimestamp: record.project_timestamp }
+      : {}),
   }
 }
 

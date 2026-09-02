@@ -681,7 +681,17 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'upload', message: 'Uploading Runtime v4 bundle...', level: 'info' })
-    const uploadResult = await port.uploadRuntimeV4({ bundle, context: deviceContext }, makePlatformLog(emit, 'upload'))
+    const uploadResult = await port.uploadRuntimeV4(
+      {
+        bundle,
+        context: deviceContext,
+        // Answered by the capability probe above, so the upload step does not
+        // have to ask the device a second time -- and does not build a project
+        // archive for a runtime that will discard it.
+        supportsProjectSnapshot: versionCheck.supportsProjectSnapshot,
+      },
+      makePlatformLog(emit, 'upload'),
+    )
     if (!uploadResult.ok) {
       return bailError(emit, 'upload', 'Failed to upload to runtime.', uploadResult.errors)
     }
@@ -797,6 +807,7 @@ async function runCompilePipelineInner(
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
+    ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose
