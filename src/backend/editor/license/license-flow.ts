@@ -231,9 +231,15 @@ function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | Device
     return {
       outcome: {
         state: 'check-failed',
+        // Since the packages gate refuses `isLicensable` on silicon the
+        // license-core cannot read, a licensable board answering nothing is a
+        // FIRMWARE that was built without licensing support — which a rebuild
+        // does fix. Says that, instead of naming license-core at a user who has
+        // no way to act on the word.
         error:
-          'this board reports no licensing identity, so no license can be bound to it. ' +
-          'A licensed VPP requires a board whose license-core can identify it.',
+          'this board did not report an identity a licence can be issued for. ' +
+          'Its firmware was built without licensing support — rebuild and upload the program to this board.',
+        retryable: false,
       },
     }
   }
@@ -247,9 +253,17 @@ function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | Device
       return {
         outcome: {
           state: 'check-failed',
+          // The width belongs in the trace, not on the user's screen: "a 6-byte
+          // device id, expected 16" states an internal contract nobody outside
+          // this codebase can act on, and it is the FIRST thing a user sees when
+          // connecting a board flashed by an older editor. What they can act on
+          // is the rebuild. Fail-closed either way: an identity of the wrong
+          // width is a DIFFERENT identity, never a weaker one, and buying a
+          // licence for it would bind money to an id no device reproduces.
           error:
-            `the board reported a ${identity.deviceId.length}-byte device id, expected ${DEVICE_ID_BYTES}. ` +
-            'Its firmware and its license-core disagree about the identity format.',
+            "this board's firmware reports its identity in a format this editor does not recognise. " +
+            'Rebuild and upload the program to bring the firmware up to date.',
+          retryable: false,
         },
       }
     }

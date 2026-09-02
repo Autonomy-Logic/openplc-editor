@@ -119,8 +119,19 @@ export type DeviceLicenseState =
    * which is why this variant carries no detail to vary the message with.
    */
   | { state: 'unsupported' }
-  /** Possession could not be determined. Never render as "not licensed". */
-  | { state: 'check-failed'; error: string }
+  /**
+   * Possession could not be determined. Never render as "not licensed".
+   *
+   * `retryable: false` marks the causes that cannot change by asking again —
+   * a board whose architecture has no identity to bind a licence to, a firmware
+   * answering an identity format this editor does not speak, a transport that
+   * carries no licensing at all. Offering "Try Again" for those is a button
+   * guaranteed to reproduce the same error, which reads as a flaky link and
+   * sends the user retrying instead of doing the thing that would fix it.
+   * Absent means retryable: a dropped connection, a timeout and a backend blip
+   * are the common case, and they must keep their retry.
+   */
+  | { state: 'check-failed'; error: string; retryable?: boolean }
 
 /** Result of a licensing operation over the held link. */
 export interface DeviceLicenseReport {

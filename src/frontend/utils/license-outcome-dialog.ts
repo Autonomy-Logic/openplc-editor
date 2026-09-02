@@ -142,17 +142,24 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         // recheck affordance; the automatic flow adds no modal on top.
         return false
       }
-      openModal('debugger-message', {
-        type: 'error',
-        title: 'Licence Check Failed',
-        message:
-          `The editor could not determine whether this device holds a licence.\n\n${outcome.error}\n\n` +
-          'This is NOT the same as having no licence. Nothing has changed on the device.',
-        buttons: retry ? ['Try Again', 'Continue'] : ['OK'],
-        onResponse: (buttonIndex: number) => {
-          if (retry && buttonIndex === 0) void retry()
-        },
-      })
+      {
+        // A cause the flow marked terminal cannot change by asking again, so
+        // the retry is withheld: a button guaranteed to reproduce the same
+        // error reads as a flaky link and keeps the user pressing it instead of
+        // doing the thing that would fix it (which those messages name).
+        const canRetry = retry !== undefined && outcome.retryable !== false
+        openModal('debugger-message', {
+          type: 'error',
+          title: 'Licence Check Failed',
+          message:
+            `The editor could not determine whether this device holds a licence.\n\n${outcome.error}\n\n` +
+            'This is NOT the same as having no licence. Nothing has changed on the device.',
+          buttons: canRetry ? ['Try Again', 'Continue'] : ['OK'],
+          onResponse: (buttonIndex: number) => {
+            if (canRetry && buttonIndex === 0) void retry()
+          },
+        })
+      }
       return true
   }
 }

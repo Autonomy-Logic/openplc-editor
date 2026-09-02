@@ -400,9 +400,14 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
   })
 
-  it('maps an anchor-less target (0x85 on 0x48) to the terminal unsupported outcome', async () => {
-    // The target itself said "no hardware anchor to license against" — that is
-    // a property of the device, not a transient failure, so no retry nag.
+  it('maps an anchor-less target (0x85 on 0x48) to a terminal, non-retryable check-failed', async () => {
+    // The target itself said "no hardware anchor to license against" — a
+    // property of the device, not a transient failure, so no retry nag.
+    //
+    // It is NOT the 'unsupported' outcome, which means "this firmware has no
+    // licence STORAGE" and whose entire message is "this hardware supports it,
+    // rebuild and upload". Routing an identity-less host there told the user
+    // their x86 box would work if they rebuilt — false, and unactionable.
     const bridge = createBridge()
     const wsClient = anchorClient({
       getAnchor: jest.fn(() => Promise.resolve({ success: false, unsupported: true, error: 'LIC_UNSUPPORTED' })),
@@ -411,7 +416,13 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     const result = await bridge.handleDeviceReadLicense({} as never, REQUEST)
 
-    expect(result.outcome).toEqual({ state: 'unsupported' })
+    expect(result.outcome.state).toBe('check-failed')
+    if (result.outcome.state === 'check-failed') {
+      expect(result.outcome.retryable).toBe(false)
+      expect(result.outcome.error).toMatch(/no hardware identity a licence can be issued for/)
+      // The storage wording must not follow this condition anywhere.
+      expect(result.outcome.error).not.toMatch(/storage|rebuild/i)
+    }
     expect(licenseFlow.inspectDeviceLicense).not.toHaveBeenCalled()
   })
 

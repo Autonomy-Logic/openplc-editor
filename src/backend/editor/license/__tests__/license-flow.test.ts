@@ -264,7 +264,13 @@ describe('resolveDeviceLicense', () => {
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/no licensing identity/)
+      expect(result.outcome.error).toMatch(/did not report an identity a licence can be issued for/)
+      // Terminal: re-asking cannot change it, so the UI must not offer a retry.
+      expect(result.outcome.retryable).toBe(false)
+      // The message names the ACTION (rebuild), not the internals. "license-core"
+      // is a component the user cannot act on.
+      expect(result.outcome.error).toMatch(/rebuild and upload/i)
+      expect(result.outcome.error).not.toMatch(/license-core/i)
     }
     expect(link.readCount()).toBe(0)
     expect(checkDeviceActivation).not.toHaveBeenCalled()
@@ -302,7 +308,13 @@ describe('resolveDeviceLicense', () => {
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/no licensing identity/)
+      expect(result.outcome.error).toMatch(/did not report an identity a licence can be issued for/)
+      // Terminal: re-asking cannot change it, so the UI must not offer a retry.
+      expect(result.outcome.retryable).toBe(false)
+      // The message names the ACTION (rebuild), not the internals. "license-core"
+      // is a component the user cannot act on.
+      expect(result.outcome.error).toMatch(/rebuild and upload/i)
+      expect(result.outcome.error).not.toMatch(/license-core/i)
     }
     expect(link.readCount()).toBe(0)
     expect(checkDeviceActivation).not.toHaveBeenCalled()
@@ -322,7 +334,12 @@ describe('resolveDeviceLicense', () => {
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/9-byte device id, expected 16/)
+      // The width is an internal contract; it used to be the FIRST thing a user
+      // saw when connecting a board flashed by an older editor.
+      expect(result.outcome.error).toMatch(/format this editor does not recognise/)
+      expect(result.outcome.error).toMatch(/rebuild and upload/i)
+      expect(result.outcome.error).not.toMatch(/\d+-byte|expected 16/)
+      expect(result.outcome.retryable).toBe(false)
     }
     expect(link.readCount()).toBe(0)
     expect(checkDeviceActivation).not.toHaveBeenCalled()

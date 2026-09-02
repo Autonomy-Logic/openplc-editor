@@ -188,6 +188,15 @@ export function DeviceLicenseStatus({
   const offerPurchase =
     !!buyUrl && !awaitingPurchase && report.outcome.state === 'unlicensed' && report.outcome.entitlementChecked === true
 
+  // "Check again" is the panel's default affordance, and rightly so: almost
+  // every state gets better by asking again. The exception is a check-failed
+  // the flow marked terminal — a board with no identity to bind a licence to, a
+  // firmware speaking an identity format this editor does not know. Re-asking
+  // reproduces the same error verbatim, so the button turns a legible message
+  // into a loop. The modal already withholds it for these; the panel used to
+  // offer it anyway, which is the same disagreement rendered in two places.
+  const offerRecheck = !(report.outcome.state === 'check-failed' && report.outcome.retryable === false)
+
   return (
     // Radix Popover, PORTALLED. The details used to be a conditional <div> in the
     // flow, which is what broke the layout: opening it pushed "Specs" and the
@@ -273,14 +282,16 @@ export function DeviceLicenseStatus({
           ) : null}
 
           <div className='flex items-center gap-3'>
-            <button
-              type='button'
-              disabled={isChecking}
-              onClick={onRecheck}
-              className='font-caption text-cp-xs text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400'
-            >
-              Check again
-            </button>
+            {offerRecheck ? (
+              <button
+                type='button'
+                disabled={isChecking}
+                onClick={onRecheck}
+                className='font-caption text-cp-xs text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400'
+              >
+                Check again
+              </button>
+            ) : null}
             {offerPurchase ? (
               <button type='button' onClick={onBuy} className='font-caption text-cp-xs text-brand hover:underline'>
                 Buy licence

@@ -136,6 +136,22 @@ function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChan
   )
 }
 
+/**
+ * Turn a failed identity read into a `check-failed` outcome, carrying the
+ * `retryable` flag when the cause set one.
+ *
+ * `retryable` is only ever written as `false` — absent means retryable, so the
+ * common causes (a dropped link, a timeout) keep the retry they have always
+ * had. Written as one helper because both handlers must agree: a "Try Again"
+ * offered by read-license and withheld by refresh-license for the same board
+ * would be worse than either choice.
+ */
+function checkFailedOutcome(identity: { error: string; retryable?: boolean }): DeviceLicenseReport['outcome'] {
+  return identity.retryable === false
+    ? { state: 'check-failed', error: identity.error, retryable: false }
+    : { state: 'check-failed', error: identity.error }
+}
+
 /** Program-identity comparison, case-insensitively — targets report either case. */
 function matchesMd5(targetMd5: string, expectedMd5: string): boolean {
   return targetMd5.toLowerCase() === expectedMd5.toLowerCase()
@@ -1986,15 +2002,28 @@ class MainProcessBridge implements MainIpcModule {
    */
   private async readLicenseIdentity(
     client: LicenseChannel,
-  ): Promise<{ identity: DeviceIdentity } | { error: string } | { unsupported: true }> {
+  ): Promise<{ identity: DeviceIdentity } | { error: string; retryable?: boolean }> {
     // The device-condition half of the reply is identical for both forms, so it
     // is checked once; only the NAME of the bytes differs, and that is the whole
     // reason the two are separate methods.
     const settle = (read: { success: boolean; unsupported?: boolean; error?: string }) => {
       // The target itself said "no identity to license against" (0x85 on 0x48 —
-      // a runtime-v4 host without a device-tree serial). Terminal, not
-      // retryable: surface it as the 'unsupported' outcome, never check-failed.
-      if (read.unsupported) return { unsupported: true } as const
+      // a runtime-v4 host without a device-tree serial). Terminal, so it must
+      // not offer a retry — but it is NOT the 'unsupported' outcome, which
+      // means "this firmware has no licence STORAGE" and whose whole message is
+      // "this hardware supports it, rebuild and upload". Routing an
+      // identity-less host there told the user their x86 box would work if they
+      // rebuilt, which is false and unactionable. It is a check that could not
+      // conclude, with a cause that will not change: check-failed, retryable
+      // false.
+      if (read.unsupported) {
+        return {
+          error:
+            'this device has no hardware identity a licence can be issued for. ' +
+            'Licensed VPPs require hardware that reports a unique identifier.',
+          retryable: false,
+        } as const
+      }
       if (!read.success) return { error: read.error ?? 'the device did not answer the identity read' } as const
       // Liveness evidence for the CONTROL link's poll. On a REST session this
       // frame rode the debug WebSocket instead — crediting it here is a no-op,
@@ -2079,8 +2108,7 @@ class MainProcessBridge implements MainIpcModule {
     return await this.withLicenseChannel('read license', async (client) => {
       try {
         const identity = await this.readLicenseIdentity(client)
-        if ('unsupported' in identity) return { outcome: { state: 'unsupported' } }
-        if ('error' in identity) return { outcome: { state: 'check-failed', error: identity.error } }
+        if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
         return await inspectDeviceLicense(client, { ...request, identity: identity.identity })
       } catch (error) {
@@ -2112,8 +2140,7 @@ class MainProcessBridge implements MainIpcModule {
 
       try {
         const identity = await this.readLicenseIdentity(client)
-        if ('unsupported' in identity) return { outcome: { state: 'unsupported' } }
-        if ('error' in identity) return { outcome: { state: 'check-failed', error: identity.error } }
+        if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
         const report = await resolveDeviceLicense(client, { ...request, identity: identity.identity })
         // The license FCs are device traffic like any other: without noting them the

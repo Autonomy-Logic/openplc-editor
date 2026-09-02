@@ -148,6 +148,39 @@ describe('explainLicenseOutcome', () => {
       expect(buy).not.toHaveBeenCalled()
     })
 
+    it('withholds the retry when the flow marked the failure terminal', () => {
+      // A cause that cannot change by asking again: offering "Try Again" reads
+      // as a flaky link and keeps the user pressing it instead of doing the
+      // thing the message names (which is usually a rebuild).
+      const { opened, openModal, buy } = harness()
+      const retry = jest.fn()
+
+      explainLicenseOutcome(report({ state: 'check-failed', error: 'firmware is out of date', retryable: false }), {
+        openModal,
+        buy,
+        retry,
+      })
+
+      expect(opened[0].buttons).toEqual(['OK'])
+      opened[0].onResponse(0)
+      expect(retry).not.toHaveBeenCalled()
+      // The explanation still gets through — only the action is withheld.
+      expect(opened[0].message).toContain('firmware is out of date')
+    })
+
+    it('keeps the retry when retryable is absent (the common case)', () => {
+      // Absent means retryable: a dropped link, a timeout and a backend blip
+      // must not lose the retry they have always had.
+      const { opened, openModal, buy } = harness()
+      const retry = jest.fn()
+
+      explainLicenseOutcome(report({ state: 'check-failed', error: 'Request timeout' }), { openModal, buy, retry })
+
+      expect(opened[0].buttons).toEqual(['Try Again', 'Continue'])
+      opened[0].onResponse(0)
+      expect(retry).toHaveBeenCalledTimes(1)
+    })
+
     it('never labels the failure as "not licensed"', () => {
       const { opened, openModal, buy } = harness()
 
