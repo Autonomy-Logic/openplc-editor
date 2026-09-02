@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { parseAddress, slotRangesOverlap } from '../../../../../middleware/shared/utils/iec-address/registry'
 import { DISALLOWED_LOCATION_CLASSES } from '../../../../utils/generate-iec-string-to-variables'
 import {
   BOOL_LOCATION_REGEX,
@@ -8,6 +9,7 @@ import {
   PLC_ADDRESS_PREFIX,
   WORD_LOCATION_REGEX,
 } from '../../../../utils/PLC/address-constants/types'
+import { getArrayTotalElements, isArrayVariable } from '../../../../utils/PLC/array-codegen-helpers'
 import type { ProjectResponse } from '../types'
 
 /**
@@ -35,16 +37,47 @@ const checkIfGlobalVariableExists = (variables: PLCVariable[], name: string) => 
 }
 
 /**
- * This is a validation to check if the value of the location is unique.
+ * How many consecutive slots a variable claims from its location.
  *
- * `exclude` lets the update path skip the variable currently being
- * mutated — re-setting a variable's location to its current value
- * (e.g. to re-resolve a renamed alias) must not collide with itself.
- * Reference-equality is enough since `variables` is the live array
- * and the caller passes the same object reference.
+ * A scalar claims one. An ARRAY claims one per element, laid out from the
+ * declared address — `AT %MW60 : ARRAY [0..66] OF WORD` runs through `%MW126`
+ * (openplc-editor#565). `getArrayTotalElements` already computes the product
+ * of the dimensions and answers `0` for a shape it cannot read, which
+ * `slotRangesOverlap` floors back to 1: an unreadable array must not silently
+ * claim nothing.
  */
-const checkIfLocationExists = (variables: PLCVariable[], location: string, exclude?: PLCVariable) => {
-  return variables.some((variable) => variable !== exclude && variable.location === location)
+const slotsClaimedBy = (variable: PLCVariable): number =>
+  isArrayVariable(variable) ? getArrayTotalElements(variable) : 1
+
+/**
+ * Does `location` collide with a location another variable already holds?
+ *
+ * Two literal `%…` addresses collide when their SLOT RANGES overlap, not when
+ * the strings match. An array is a contiguous area, so `arr AT %QX0.0 :
+ * ARRAY [0..9] OF BOOL` covers `%QX0.0`–`%QX1.1` and conflicts with a plain
+ * `flag AT %QX0.6` — two different strings, one piece of storage. Comparing
+ * for string equality (all that was needed while every variable took one slot)
+ * let the editor build a project the compiler then rejected.
+ *
+ * A location that is NOT a literal address is an alias name, and there the
+ * test stays exact equality: an alias resolves to one producer channel, so two
+ * variables naming the same alias collide and two different names never do.
+ *
+ * `exclude` skips the variable being updated so re-setting its own location
+ * doesn't trip the check against itself.
+ */
+const checkIfLocationExists = (variables: PLCVariable[], location: string, slots: number, exclude?: PLCVariable) => {
+  const parsed = parseAddress(location)
+
+  return variables.some((variable) => {
+    if (variable === exclude) return false
+    if (parsed === null) return variable.location === location
+
+    const otherParsed = parseAddress(variable.location)
+    if (otherParsed === null) return false
+
+    return slotRangesOverlap(parsed, slots, otherParsed, slotsClaimedBy(variable))
+  })
 }
 
 /**
@@ -118,6 +151,26 @@ const arrayValidation = ({ value }: { value: string }) => {
 }
 
 /**
+ * The type that has to match the address class, given a variable's declared
+ * type.
+ *
+ * For an array this is the ELEMENT type: `ARRAY [0..66] OF WORD AT %MW60`
+ * occupies 67 consecutive WORD slots, so what has to fit `%MW` is WORD, not
+ * the array (openplc-editor#565). Locating an array used to be rejected
+ * outright — a limitation of the MatIEC-era toolchain that left with MatIEC.
+ *
+ * Returns the type's own name for every other definition, which lands
+ * `user-data-type` and `derived` on the `default` branch below, where they
+ * belong: a STRUCT has no single address class.
+ */
+const addressClassTypeOf = (variableType: PLCVariable['type']): string =>
+  // `data` is optional on the port-side type; an array without it is a
+  // half-built row from the array modal, and falling back to `value` (the
+  // "ARRAY [...] OF T" text) lands it on the `default` branch — rejected with
+  // a message, which is the right answer for a type that isn't finished.
+  variableType.definition === 'array' && variableType.data ? variableType.data.baseType.value : variableType.value
+
+/**
  * Validate a variable's `location`. Single-field model: `location` is either
  * an alias name, a literal IEC address, or empty.
  *   - Empty → unlocated, valid.
@@ -178,7 +231,11 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
     case 'LWORD':
       return 'Valid locations: %QL0, %IL0, %ML0 (change the number to the desired location)'
     default:
-      return ''
+      // Reached by a structure or an enum — types with no single address
+      // class. This used to return an empty string, so the dialog showed
+      // "Please make sure that the location is valid." and nothing else: a
+      // refusal with no reason and nothing to act on.
+      return `A variable of type "${variableType}" cannot have a physical location: only the elementary types (BOOL, BYTE, INT, WORD, DINT, REAL, ...) and arrays of them map onto an IEC address.`
   }
 }
 
@@ -331,20 +388,31 @@ const createVariableValidation = (
     response.name = `${variableNameWithoutNumber}${number}`
   }
 
-  if (checkIfLocationExists(variables, variableLocation) && variableLocation !== '') {
+  const slots = slotsClaimedBy(variable)
+
+  if (variableLocation !== '' && checkIfLocationExists(variables, variableLocation, slots)) {
     // Scan forward through the address space until we find a slot
     // that no other variable in this table holds.  Single-increment
     // wasn't enough: when the user kept clicking "+" through a row
     // of contiguous variables, the increment would eventually land
     // ON another already-bound row and silently produce a duplicate-
     // location collision that only the compiler caught (forum
-    // thread, v4.2.0 follow-up).  An `inUse` set keeps the inner
-    // check O(1) so the loop is linear in the number of variables.
-    const inUse = new Set(variables.map((v) => v.location))
+    // thread, v4.2.0 follow-up).
+    //
+    // The test is range overlap rather than set membership because an
+    // ARRAY occupies a contiguous area: a candidate has to clear every
+    // slot the new variable would claim, and has to clear the whole
+    // span of any array already sitting there — landing one slot inside
+    // a neighbouring array is the same collision as landing on its
+    // first address (openplc-editor#565).
     let candidate = variableLocation
     let iterations = 0
-    while (inUse.has(candidate) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
-      const next = incrementLocationByOne(candidate, variable.type.value)
+    while (checkIfLocationExists(variables, candidate, slots) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
+      // Step by the ELEMENT type: `incrementLocationByOne` switches on a base
+      // type name, and an array's own `type.value` is the whole
+      // "ARRAY [0..9] OF BOOL" text, which matches nothing and would bail the
+      // loop on its first pass.
+      const next = incrementLocationByOne(candidate, addressClassTypeOf(variable.type))
       if (!next || next === candidate) break // unknown type / no progress — bail
       candidate = next
       iterations += 1
@@ -427,7 +495,12 @@ const updateVariableValidation = (
     // Exclude the variable being updated so re-setting its own
     // location (e.g. re-picking the same address to refresh a
     // renamed alias) doesn't trip the uniqueness check on itself.
-    if (checkIfLocationExists(variables, location, variableToUpdate)) {
+    //
+    // The span comes from the type the variable will HAVE after this update:
+    // switching a scalar to an array in the same edit widens what it claims,
+    // and checking the old span would let it land on top of a neighbour.
+    const effectiveSlots = slotsClaimedBy({ ...variableToUpdate, ...dataToBeUpdated })
+    if (checkIfLocationExists(variables, location, effectiveSlots, variableToUpdate)) {
       response = {
         ok: false,
         title: 'Location already exists',
@@ -436,18 +509,18 @@ const updateVariableValidation = (
       return response
     }
 
-    if (!variableLocationValidation(location, variableToUpdate.type.value)) {
+    if (!variableLocationValidation(location, addressClassTypeOf(variableToUpdate.type))) {
       response = {
         ok: false,
         title: 'Location is invalid.',
-        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(variableToUpdate.type.value)}`,
+        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClassTypeOf(variableToUpdate.type))}`,
       }
       return response
     }
   }
 
   if (dataToBeUpdated.type) {
-    if (!variableLocationValidation(variableToUpdate.location, dataToBeUpdated.type.value)) {
+    if (!variableLocationValidation(variableToUpdate.location, addressClassTypeOf(dataToBeUpdated.type))) {
       response.data = { ...(response.data ? response.data : {}), location: '' }
     }
     if (dataToBeUpdated.type.definition === 'derived') {

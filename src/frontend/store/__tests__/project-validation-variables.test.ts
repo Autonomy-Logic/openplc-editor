@@ -29,6 +29,30 @@ function makeVariable(
   }
 }
 
+/**
+ * A located ARRAY variable. `data.dimensions` is what `getArrayTotalElements`
+ * reads to work out how many slots the declaration claims.
+ */
+function makeArrayVariable(
+  name: string,
+  baseType: string,
+  location: string,
+  dimension: string,
+  cls: PLCVariable['class'] = 'local',
+): PLCVariable {
+  return {
+    name,
+    class: cls,
+    type: {
+      definition: 'array',
+      value: `ARRAY [${dimension}] OF ${baseType}`,
+      data: { baseType: { definition: 'base-type', value: baseType }, dimensions: [{ dimension }] },
+    },
+    location,
+    documentation: '',
+  } as PLCVariable
+}
+
 // ===========================================================================
 // extractNumberAtEnd
 // ===========================================================================
@@ -765,5 +789,103 @@ describe('updateGlobalVariableValidation', () => {
   it('allows same name with different case (case-sensitive check)', () => {
     const result = updateGlobalVariableValidation(existingGlobals, { name: 'gvar1' })
     expect(result.ok).toBe(true)
+  })
+})
+
+// ===========================================================================
+// Located arrays: a contiguous area, not one address
+// ===========================================================================
+
+describe('located arrays — collision by range', () => {
+  // An ARRAY at a physical address occupies one slot per element. Before
+  // openplc-editor#565 the editor compared locations for string equality, so
+  // it happily accepted two variables sharing storage and only the compiler
+  // caught it.
+
+  it('accepts an array at a location whose element type fits the address', () => {
+    const variable = makeArrayVariable('HR_myData', 'WORD', '%MW60', '0..66', 'global')
+    const result = updateVariableValidation([variable], { location: '%MW60' }, variable)
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects a scalar that lands inside an existing array', () => {
+    // ARRAY [0..9] OF BOOL at %QX0.0 covers %QX0.0-%QX1.1, so %QX0.6 is inside.
+    const existing = [makeArrayVariable('arr', 'BOOL', '%QX0.0', '0..9')]
+    const flag = makeVariable('flag', 'BOOL', '', 'local')
+    const result = updateVariableValidation(existing, { location: '%QX0.6' }, flag)
+    expect(result.ok).toBe(false)
+    expect(result.title).toBe('Location already exists')
+  })
+
+  it('rejects an array that swallows an existing scalar', () => {
+    const existing = [makeVariable('flag', 'BOOL', '%QX0.6')]
+    const arr = makeArrayVariable('arr', 'BOOL', '', '0..9')
+    const result = updateVariableValidation(existing, { location: '%QX0.0' }, arr)
+    expect(result.ok).toBe(false)
+  })
+
+  it('accepts a scalar immediately past the end of an array', () => {
+    // ARRAY [0..3] OF WORD at %MW0 ends at %MW3.
+    const existing = [makeArrayVariable('arr', 'WORD', '%MW0', '0..3')]
+    const other = makeVariable('other', 'WORD', '', 'local')
+    expect(updateVariableValidation(existing, { location: '%MW3' }, other).ok).toBe(false)
+    expect(updateVariableValidation(existing, { location: '%MW4' }, other).ok).toBe(true)
+  })
+
+  it('does not collide across size classes', () => {
+    // %MW0 and %MD0 index different runtime arrays.
+    const existing = [makeArrayVariable('words', 'WORD', '%MW0', '0..7')]
+    const dword = makeVariable('dw', 'DINT', '', 'local')
+    expect(updateVariableValidation(existing, { location: '%MD0' }, dword).ok).toBe(true)
+  })
+
+  it('still catches two variables bound to the same alias', () => {
+    // A non-`%` location is an alias name, where the test stays exact
+    // equality — an alias resolves to one producer channel.
+    const existing = [makeVariable('a', 'BOOL', 'MotorStart')]
+    const b = makeVariable('b', 'BOOL', '', 'local')
+    expect(updateVariableValidation(existing, { location: 'MotorStart' }, b).ok).toBe(false)
+    expect(updateVariableValidation(existing, { location: 'MotorStop' }, b).ok).toBe(true)
+  })
+
+  it('ignores an alias-bound variable when checking a literal address', () => {
+    // The other side has no address to compare against — its location is an
+    // alias name, resolved to a real address only at compile time.
+    const existing = [makeVariable('aliased', 'WORD', 'TankLevel')]
+    const other = makeVariable('other', 'WORD', '', 'local')
+    expect(updateVariableValidation(existing, { location: '%MW0' }, other).ok).toBe(true)
+  })
+
+  it('widens the span when the same edit turns a scalar into an array', () => {
+    // The check has to use the type the variable will HAVE, not the one it had.
+    const existing = [makeVariable('neighbour', 'WORD', '%MW3')]
+    const scalar = makeVariable('grow', 'WORD', '', 'local')
+    const asArray = makeArrayVariable('grow', 'WORD', '', '0..3').type
+    expect(updateVariableValidation(existing, { location: '%MW0' }, scalar).ok).toBe(true)
+    expect(updateVariableValidation(existing, { location: '%MW0', type: asArray }, scalar).ok).toBe(false)
+  })
+})
+
+describe('createVariableValidation — auto-increment past occupied ranges', () => {
+  it('skips the whole span of an existing array', () => {
+    // %MW0-%MW3 taken by the array, so the next free word is %MW4. Landing on
+    // %MW1 (the old exact-match behaviour would have) is the same collision.
+    const existing = [makeArrayVariable('arr', 'WORD', '%MW0', '0..3')]
+    const result = createVariableValidation(existing, makeVariable('NewVar', 'WORD', '%MW0'))
+    expect(result.location).toBe('%MW4')
+  })
+
+  it('moves a new array clear of an existing scalar', () => {
+    // The candidate has to clear every slot the ARRAY would claim: at %MW0 it
+    // would cover %MW0-%MW3 and swallow the scalar at %MW2.
+    const existing = [makeVariable('taken', 'WORD', '%MW2')]
+    const result = createVariableValidation(existing, makeArrayVariable('arr', 'WORD', '%MW0', '0..3'))
+    expect(result.location).toBe('%MW3')
+  })
+
+  it('leaves a location alone when nothing overlaps', () => {
+    const existing = [makeArrayVariable('arr', 'WORD', '%MW10', '0..3')]
+    const result = createVariableValidation(existing, makeVariable('NewVar', 'WORD', '%MW0'))
+    expect(result.location).toBe('%MW0')
   })
 })
