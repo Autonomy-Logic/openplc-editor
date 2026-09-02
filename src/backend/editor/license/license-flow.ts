@@ -359,7 +359,10 @@ async function recoverLicense(
     return { deviceId, outcome: { state: 'unsupported' } }
   }
   if (!write.success) {
-    return { deviceId, outcome: { state: 'check-failed', error: write.error ?? 'the licence could not be written to the device' } }
+    return {
+      deviceId,
+      outcome: { state: 'check-failed', error: write.error ?? 'the licence could not be written to the device' },
+    }
   }
 
   // RE-READ; do not trust the write. 0x49 only STORES bytes: no target checks
