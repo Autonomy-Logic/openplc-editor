@@ -1197,6 +1197,173 @@ describe('createSharedSlice', () => {
         })
       })
     })
+
+    /**
+     * The bundled archives are always in the build, so their symbols are taken before
+     * the user creates anything: reusing one emits a duplicate declaration that only
+     * surfaces as a C++ error in a generated file.
+     */
+    describe('against library symbols', () => {
+      const librarySymbol = (name: string, type: 'function' | 'function-block') => ({
+        name,
+        type,
+        language: 'st' as const,
+        variables: [],
+        body: '',
+        documentation: '',
+      })
+
+      const seedLibraries = () =>
+        store.getState().libraryActions.setSystemLibraries([
+          {
+            name: 'oscat-basic',
+            author: 'OSCAT',
+            version: '3.3.4',
+            stPath: '',
+            cPath: '',
+            pous: [librarySymbol('MATRIX', 'function-block'), librarySymbol('LIMITS_TYPE', 'function-block')],
+          },
+          {
+            name: 'iec-std-functions',
+            author: 'IEC',
+            version: '1.0.0',
+            stPath: '',
+            cPath: '',
+            pous: [librarySymbol('SIN', 'function')],
+          },
+        ])
+
+      beforeEach(() => {
+        seedLibraries()
+      })
+
+      it('refuses a POU create, naming the library and the symbol kind', () => {
+        const result = store.getState().pouActions.create({ type: 'program', name: 'Matrix', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Matrix" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous).toHaveLength(0)
+      })
+
+      it('refuses a data type create, case-insensitively', () => {
+        const result = store.getState().datatypeActions.create({ name: 'matrix', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"matrix" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('names a library function as a function', () => {
+        const result = store.getState().pouActions.create({ type: 'function', name: 'Sin', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Sin" is a function in the iec-std-functions library')
+      })
+
+      it('refuses a global variable list create', () => {
+        const result = store.getState().globalVariableListActions.create('MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('refuses a global variable list whose derived type name a library symbol owns', () => {
+        const result = store.getState().globalVariableListActions.create('Limits')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe(
+          '"Limits" needs the type name "Limits_TYPE", which is a function block in the oscat-basic library',
+        )
+      })
+
+      it('refuses a POU rename onto a library symbol', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      it('refuses a data type rename onto a library symbol', async () => {
+        seedDatatype('Motor')
+        const result = await store.getState().datatypeActions.rename('Motor', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes[0].name).toBe('Motor')
+      })
+
+      it('refuses a global variable list rename onto a library symbol', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.rename('GVL', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('refuses a POU duplicate onto a library symbol', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.duplicate('Pump', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous).toHaveLength(1)
+      })
+
+      it('refuses a data type duplicate onto a library symbol', () => {
+        seedDatatype('Motor')
+        const result = store.getState().datatypeActions.duplicate('Motor', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes).toHaveLength(1)
+      })
+
+      it('refuses a global variable list duplicate onto a library symbol', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.duplicate('GVL', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('allows a name no library symbol owns', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'Matrices', language: 'st' })).toEqual({
+          ok: true,
+        })
+      })
+
+      /**
+       * The gate is entry-point only: a project saved before it existed still opens,
+       * and the offending element can still be renamed out of the collision.
+       */
+      it('still opens a project that already carries a colliding name', () => {
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
+          meta: { name: 'TestProject', type: 'plc-project' as const, path: '/test/path' },
+          projectData: {
+            dataTypes: [] as ReturnType<typeof store.getState>['project']['data']['dataTypes'],
+            pous: [
+              {
+                name: 'MATRIX',
+                pouType: 'program' as const,
+                interface: { variables: [] },
+                body: { language: 'st' as const, value: '' as unknown },
+                documentation: '',
+              },
+            ] as ReturnType<typeof store.getState>['project']['data']['pous'],
+            configurations: {
+              resource: {
+                tasks: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['tasks'],
+                instances: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['instances'],
+                globalVariables: [] as ReturnType<
+                  typeof store.getState
+                >['project']['data']['configurations']['resource']['globalVariables'],
+              },
+            },
+            debugVariables: undefined as ReturnType<typeof store.getState>['project']['data']['debugVariables'],
+            servers: undefined as ReturnType<typeof store.getState>['project']['data']['servers'],
+            remoteDevices: undefined as ReturnType<typeof store.getState>['project']['data']['remoteDevices'],
+          },
+        })
+
+        expect(store.getState().project.data.pous.map((pou) => pou.name)).toEqual(['MATRIX'])
+        expect(store.getState().pouActions.rename('MATRIX', 'Matrices')).toEqual({ ok: true })
+      })
+    })
   })
 
   // =========================================================================
