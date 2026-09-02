@@ -1439,9 +1439,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     deleteDatatype: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
-          // Harmless while the file doesn't exist yet (flag off): the
-          // editor's deletion pass is existence-checked, the web's
-          // relies on delete-by-omission.
+          // Harmless when the file was never written (a type created and
+          // deleted before any save): the editor's deletion pass is
+          // existence-checked, the web's relies on delete-by-omission.
           slice.pendingDeletions.push(`datatypes/${name}.dt`)
           slice.project.data.dataTypes = slice.project.data.dataTypes.filter((d) => d.name !== name)
         }),
