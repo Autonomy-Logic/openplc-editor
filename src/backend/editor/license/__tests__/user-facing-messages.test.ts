@@ -78,13 +78,25 @@ function messageLiterals(source: string, scope?: RegExp): { text: string; line: 
       j += 1
       blob += ' ' + lines[j].trim()
     }
-    // A value that is a bare identifier or a nested read (`error: read.error`)
-    // carries no text of its own.
-    if (!/^['"`]/.test(blob)) continue
+    // Do NOT skip a value that starts with an identifier: a fallback literal
+    // after an expression is still text the user reads. `error: write.error ??
+    // 'The licence could not be written.'` renders that fallback whenever the
+    // transport gave no message of its own, and the first version of this guard
+    // skipped it — leaving one message below the convention it exists to pin.
+    // `pieces` decides instead: no literals in the expression, nothing to check.
 
+    // `(error: string)` in a function signature matches the key regex too; the
+    // value there is a TYPE, never text.
+    if (/^(?:string|unknown|any|number|boolean)\b/.test(blob)) continue
     const pieces = blob.match(/(['"`])(?:\\.|(?!\1)[\s\S])*\1/g)
     if (!pieces) continue
-    const text = pieces.map((p) => p.slice(1, -1)).join('')
+    // Values of the outcome union are not messages: they appear alongside a
+    // message on the same line (`{ state: 'check-failed', error: '...' }`).
+    const STATES = new Set(['licensed', 'unlicensed', 'unsupported', 'check-failed', 'settled'])
+    const text = pieces
+      .map((piece) => piece.slice(1, -1))
+      .filter((piece) => !STATES.has(piece))
+      .join('')
     if (text.trim().length === 0) continue
     out.push({ text, line: i + 1 })
   }

@@ -153,7 +153,7 @@ describe('explainLicenseOutcome', () => {
       // as a flaky link and keeps the user pressing it instead of doing the
       // thing the message names (which is usually a rebuild).
       const { opened, openModal, buy } = harness()
-      const retry = jest.fn()
+      const retry = jest.fn(() => Promise.resolve())
 
       explainLicenseOutcome(report({ state: 'check-failed', error: 'firmware is out of date', retryable: false }), {
         openModal,
@@ -172,7 +172,7 @@ describe('explainLicenseOutcome', () => {
       // Absent means retryable: a dropped link, a timeout and a backend blip
       // must not lose the retry they have always had.
       const { opened, openModal, buy } = harness()
-      const retry = jest.fn()
+      const retry = jest.fn(() => Promise.resolve())
 
       explainLicenseOutcome(report({ state: 'check-failed', error: 'Request timeout' }), { openModal, buy, retry })
 
@@ -189,7 +189,7 @@ describe('explainLicenseOutcome', () => {
       const shown = explainLicenseOutcome(report({ state: 'check-failed', error: 'No response from runtime' }), {
         openModal,
         buy,
-        retry: jest.fn(),
+        retry: jest.fn(() => Promise.resolve()),
         quietCheckFailed: true,
       })
 
@@ -206,7 +206,7 @@ describe('explainLicenseOutcome', () => {
 
       const shown = explainLicenseOutcome(
         report({ state: 'check-failed', error: 'this hardware cannot hold a licence', retryable: false }),
-        { openModal, buy, retry: jest.fn(), quietCheckFailed: true },
+        { openModal, buy, retry: jest.fn(() => Promise.resolve()), quietCheckFailed: true },
       )
 
       expect(shown).toBe(true)

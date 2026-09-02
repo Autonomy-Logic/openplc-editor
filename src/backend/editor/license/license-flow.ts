@@ -295,7 +295,10 @@ async function readAndVerify(
   if (!stored.success) {
     return {
       kind: 'settled',
-      outcome: { state: 'check-failed', error: stored.error ?? 'the device did not answer 0x4A' },
+      outcome: {
+        state: 'check-failed',
+        error: stored.error ?? 'The device did not answer when asked for its stored licence.',
+      },
     }
   }
 
@@ -361,7 +364,7 @@ async function recoverLicense(
   if (!write.success) {
     return {
       deviceId,
-      outcome: { state: 'check-failed', error: write.error ?? 'the licence could not be written to the device' },
+      outcome: { state: 'check-failed', error: write.error ?? 'The licence could not be written to the device.' },
     }
   }
 

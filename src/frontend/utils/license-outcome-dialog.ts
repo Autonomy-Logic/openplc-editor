@@ -163,7 +163,12 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
             'This is NOT the same as having no licence. Nothing has changed on the device.',
           buttons: canRetry ? ['Try Again', 'Continue'] : ['OK'],
           onResponse: (buttonIndex: number) => {
-            if (canRetry && buttonIndex === 0) void retry()
+            // `retry` re-runs the whole licensing flow, which reaches the
+            // network. `void` would turn a rejection into an unhandled one and
+            // the user would see the modal close with nothing happening.
+            if (canRetry && buttonIndex === 0) {
+              retry().catch((error: unknown) => console.error('[license] retry failed', error))
+            }
           },
         })
       }
