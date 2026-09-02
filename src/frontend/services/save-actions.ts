@@ -403,6 +403,37 @@ export function buildAllProjectFileContents(): Record<string, string> {
  */
 export type SaveReason = 'user' | 'pre-build'
 
+/**
+ * A session that ended with no way back, and what to say about it.
+ *
+ * Both the resume queue and the "sign in again" message assume a sign-in exists
+ * to wait for. Where the build has no account surface they are worse than
+ * useless: a partner-integration launch authenticates its visitor by an
+ * ephemeral session, that person has no Autonomy account and no sign-in is on
+ * screen, so `onRestored` can never fire. The save would sit in the queue
+ * forever while the toast named an action that does not exist, and they would
+ * keep typing into a tab where nothing more is ever written.
+ *
+ * `hasEdgeAccount` is the right question because it is exactly "is there an
+ * account surface here". It stays true on the desktop editor, so this branch is
+ * dead there and the queue keeps working for a real signed-out user.
+ */
+function endedSessionCanBeRestored(capabilities: PlatformCapabilities): boolean {
+  return capabilities.hasEdgeAccount
+}
+
+/**
+ * Deliberately the same words as the `/unauthorized` panel for the same
+ * situation: someone who meets both should not have to work out that they are
+ * being told one thing. It promises nothing about unsaved work surviving,
+ * because reopening starts a new session from the last save.
+ */
+const ENDED_SESSION_NO_RETURN = {
+  title: 'Your editing session has ended',
+  description:
+    'Editing sessions are temporary and this one has run out, so nothing further can be saved from this tab. Open the project again from the application you came from to carry on.',
+} as const
+
 export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
@@ -607,6 +638,12 @@ export async function executeSaveProject(
       // happened, say the work is safe, and queue the save so signing in finishes
       // it — the user should not have to remember to press save a second time.
       setEditingState('unsaved')
+
+      if (!endedSessionCanBeRestored(capabilities)) {
+        toast({ ...ENDED_SESSION_NO_RETURN, variant: 'fail' })
+        return { success: false }
+      }
+
       resumeSaveAfterEdgeSignIn(() => executeSaveProject(projectPort, capabilities))
       toast({
         title: 'Not saved — your session ended',
@@ -702,6 +739,11 @@ export async function executeSaveFile(
     // the reader. Queue the save so signing in completes it rather than leaving the
     // file dirty and the user unaware.
     if (isSaveBlockedByEndedSession()) {
+      if (!endedSessionCanBeRestored(capabilities)) {
+        toast({ ...ENDED_SESSION_NO_RETURN, variant: 'fail' })
+        return { success: false }
+      }
+
       resumeSaveAfterEdgeSignIn(() => executeSaveFile(fileName, projectPort, capabilities), {
         scope: 'file',
         fileName,
