@@ -108,7 +108,7 @@ describe('checkDeviceActivation', () => {
     const result = await checkDeviceActivation(INPUT)
 
     expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/Unexpected activation response shape/)
+    expect(result.error).toMatch(/could not read/)
   })
 
   it('rejects licensed:true with no license field', async () => {
@@ -117,7 +117,7 @@ describe('checkDeviceActivation', () => {
     const result = await checkDeviceActivation(INPUT)
 
     expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/missing license blob/)
+    expect(result.error).toMatch(/sent no licence data/)
   })
 
   it('rejects a blob that does not decode to exactly 98 bytes', async () => {
@@ -131,7 +131,9 @@ describe('checkDeviceActivation', () => {
     const result = await checkDeviceActivation(INPUT)
 
     expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/40 bytes, expected 98/)
+    // The length is the diagnosis, not the message: the user is told the server
+    // sent something unusable, and the byte count stays out of the dialog.
+    expect(result.error).toMatch(/could not use/)
     expect(result.license).toBeUndefined()
   })
 
@@ -141,7 +143,7 @@ describe('checkDeviceActivation', () => {
     const result = await checkDeviceActivation(INPUT)
 
     expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/expected 98/)
+    expect(result.error).toMatch(/could not use/)
   })
 
   it('accepts a response that is not wrapped in the { statusCode, data } envelope', async () => {

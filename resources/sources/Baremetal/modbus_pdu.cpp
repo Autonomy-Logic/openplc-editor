@@ -39,7 +39,7 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
             return 8;                                   // [id][fc][endian:2][00:2][crc:2]
         case MB_FC_DEBUG_GET_STATUS:
         case MB_FC_DEBUG_GET_VERSION:
-        case MB_FC_DEBUG_GET_BOARD_ID:
+        case MB_FC_DEBUG_GET_DEVICE_ID:
         case MB_FC_DEBUG_READ_LICENSE:
             return 4;                                   // [id][fc][crc:2]
         case MB_FC_DEBUG_WRITE_LICENSE:
@@ -68,7 +68,7 @@ bool mb_pdu_skips_crc(uint8_t fc)
         case MB_FC_DEBUG_GET_MD5:
         case MB_FC_DEBUG_GET_STATUS:
         case MB_FC_DEBUG_GET_VERSION:
-        case MB_FC_DEBUG_GET_BOARD_ID:
+        case MB_FC_DEBUG_GET_DEVICE_ID:
         case MB_FC_DEBUG_WRITE_LICENSE:
         case MB_FC_DEBUG_READ_LICENSE:
             return true;
@@ -182,8 +182,8 @@ void process_mbpacket()
             debugGetVersion();
         break;
 
-        case MB_FC_DEBUG_GET_BOARD_ID:
-            debugGetBoardId();
+        case MB_FC_DEBUG_GET_DEVICE_ID:
+            debugGetDeviceId();
         break;
 
         case MB_FC_DEBUG_WRITE_LICENSE:

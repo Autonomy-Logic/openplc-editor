@@ -1,17 +1,17 @@
-import type { DebugBoardIdResult } from '@root/backend/shared/debug/types'
+import type { DebugDeviceIdResult } from '@root/backend/shared/debug/types'
 
-import { classifyDeviceLink, FALLBACK_BAUD_RATES, planBaudAttempts, readBoardIdWithRetries } from '../device-probe'
+import { classifyDeviceLink, FALLBACK_BAUD_RATES, planBaudAttempts, readDeviceIdWithRetries } from '../device-probe'
 
 /**
  * A channel that answers the board-id read (FC 0x48) according to a script, so
  * the classification can be tested without a board.
  */
-function fakeChannel(script: DebugBoardIdResult[]) {
+function fakeChannel(script: DebugDeviceIdResult[]) {
   const calls: number[] = []
   let index = 0
   return {
     calls,
-    getBoardId: (): Promise<DebugBoardIdResult> => {
+    getDeviceId: (): Promise<DebugDeviceIdResult> => {
       calls.push(index)
       const answer = script[Math.min(index, script.length - 1)]
       index += 1
@@ -20,11 +20,12 @@ function fakeChannel(script: DebugBoardIdResult[]) {
   }
 }
 
-const ANSWERED: DebugBoardIdResult = { success: true, boardId: Uint8Array.from([1, 2, 3, 4]) }
+const ANSWERED: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([1, 2, 3, 4]) }
 /** Opened, but nothing spoke the debug protocol — a blank board, or a wrong baud. */
-const SILENT: DebugBoardIdResult = { success: false }
-/** Answered the frame but reported no unique id (a core without ArduinoUniqueID). */
-const EMPTY_ID: DebugBoardIdResult = { success: true, boardId: Uint8Array.from([]) }
+const SILENT: DebugDeviceIdResult = { success: false }
+/** Answered the frame but reported no identity (no license-core linked, or an
+ *  architecture the closed reader refuses: AVR, RP2040). */
+const EMPTY_ID: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([]) }
 
 describe('planBaudAttempts', () => {
   it('leads with the configured rate, then sweeps the rest', () => {
@@ -62,10 +63,10 @@ describe('planBaudAttempts', () => {
   })
 })
 
-describe('readBoardIdWithRetries', () => {
+describe('readDeviceIdWithRetries', () => {
   it('stops at the first answer', async () => {
     const channel = fakeChannel([ANSWERED])
-    const result = await readBoardIdWithRetries(channel, { attempts: 6, backoffMs: 0 })
+    const result = await readDeviceIdWithRetries(channel, { attempts: 6, backoffMs: 0 })
 
     expect(result.success).toBe(true)
     expect(channel.calls).toHaveLength(1)
@@ -73,7 +74,7 @@ describe('readBoardIdWithRetries', () => {
 
   it('retries a silent port up to the budget — a board can still be booting', async () => {
     const channel = fakeChannel([SILENT, SILENT, ANSWERED])
-    const result = await readBoardIdWithRetries(channel, { attempts: 3, backoffMs: 0 })
+    const result = await readDeviceIdWithRetries(channel, { attempts: 3, backoffMs: 0 })
 
     expect(result.success).toBe(true)
     expect(channel.calls).toHaveLength(3)
@@ -81,7 +82,7 @@ describe('readBoardIdWithRetries', () => {
 
   it('spends no more than the budget allows', async () => {
     const channel = fakeChannel([SILENT])
-    const result = await readBoardIdWithRetries(channel, { attempts: 2, backoffMs: 0 })
+    const result = await readDeviceIdWithRetries(channel, { attempts: 2, backoffMs: 0 })
 
     expect(result.success).toBe(false)
     expect(channel.calls).toHaveLength(2)
@@ -90,7 +91,7 @@ describe('readBoardIdWithRetries', () => {
 
 describe('classifyDeviceLink', () => {
   it('keeps a channel a firmware answered on', async () => {
-    const result = await classifyDeviceLink(fakeChannel([ANSWERED]), { boardIdProbe: { attempts: 1, backoffMs: 0 } })
+    const result = await classifyDeviceLink(fakeChannel([ANSWERED]), { deviceIdProbe: { attempts: 1, backoffMs: 0 } })
 
     expect(result).toEqual({ status: 'connected-with-firmware' })
   })
@@ -99,32 +100,33 @@ describe('classifyDeviceLink', () => {
   // transport is fine, and nothing decoded. Reporting it as `no-firmware` is what
   // lets the caller fall through to the next rate instead of keeping a dead link.
   it('reports no-firmware when the channel opens but nothing answers', async () => {
-    const result = await classifyDeviceLink(fakeChannel([SILENT]), { boardIdProbe: { attempts: 1, backoffMs: 0 } })
+    const result = await classifyDeviceLink(fakeChannel([SILENT]), { deviceIdProbe: { attempts: 1, backoffMs: 0 } })
 
     expect(result).toEqual({ status: 'no-firmware' })
   })
 
-  // Cores without ArduinoUniqueID, and boards opting out via
-  // OPENPLC_NO_UNIQUE_ID, answer FC 0x48 with `id_len = 0` on purpose rather than
-  // failing to compile. That is a firmware replying, not a blank board — treating
-  // the empty id as "no firmware" told those users to reflash a working device.
+  // A board with no license-core linked, and one whose architecture the closed
+  // reader refuses, answer FC 0x48 with `id_len = 0` on purpose: they have no
+  // identity a licence could be bound to. That is a firmware replying, not a
+  // blank board — treating the empty id as "no firmware" told those users to
+  // reflash a working device.
   it('keeps a firmware that answers with no unique id at all', async () => {
-    const result = await classifyDeviceLink(fakeChannel([EMPTY_ID]), { boardIdProbe: { attempts: 1, backoffMs: 0 } })
+    const result = await classifyDeviceLink(fakeChannel([EMPTY_ID]), { deviceIdProbe: { attempts: 1, backoffMs: 0 } })
 
     expect(result).toEqual({ status: 'connected-with-firmware' })
   })
 
   it('does not burn retries once a firmware has answered, empty id or not', async () => {
     const channel = fakeChannel([EMPTY_ID])
-    await classifyDeviceLink(channel, { boardIdProbe: { attempts: 6, backoffMs: 0 } })
+    await classifyDeviceLink(channel, { deviceIdProbe: { attempts: 6, backoffMs: 0 } })
 
     expect(channel.calls).toHaveLength(1)
   })
 
   it('never throws — a transport that blows up resolves to an error status', async () => {
     const result = await classifyDeviceLink(
-      { getBoardId: () => Promise.reject(new Error('port disappeared')) },
-      { boardIdProbe: { attempts: 1, backoffMs: 0 } },
+      { getDeviceId: () => Promise.reject(new Error('port disappeared')) },
+      { deviceIdProbe: { attempts: 1, backoffMs: 0 } },
     )
 
     expect(result).toEqual({ status: 'error', error: 'port disappeared' })

@@ -33,12 +33,16 @@ describe('deriveDeviceId', () => {
   })
 
   it('hashes the anchor bytes RAW — trailing NUL/LF/CR/space are part of the identity', () => {
-    // The normalization contract (see deriveDeviceId's docstring): bare metal
-    // answers 0x48 with the raw ArduinoUniqueID bytes and the closed core reads
-    // the SAME bytes raw, so a MAC that genuinely ends in one of these bytes
-    // keeps it in its identity. A trim here would derive a deviceId the device
-    // can never reproduce — the purchased license would never verify. If this
-    // test starts failing because someone added a trim, that trim is the bug.
+    // The normalization contract (see deriveDeviceId's docstring). Since
+    // DOPE-589 this function serves the runtime-v4 path only: baremetal reports
+    // an id already derived inside its closed core, so nothing here touches it.
+    // What arrives here is the device-tree serial, and the closed core's
+    // __linux__ branch strips the same trailing set on read, in the same place
+    // the identity is decided — the transport re-normalizes, this function does
+    // NOT. Hashing raw is what keeps the two sides equal: a trim here would
+    // derive a deviceId the device can never reproduce and the purchased
+    // license would never verify. If this test starts failing because someone
+    // added a trim, that trim is the bug.
     const anchor = Uint8Array.from([0, 177, 140, 237])
     for (const trailing of [0x00, 0x0a, 0x0d, 0x20]) {
       const padded = Uint8Array.from([...anchor, trailing])

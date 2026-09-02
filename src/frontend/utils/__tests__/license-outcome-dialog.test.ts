@@ -84,7 +84,7 @@ describe('explainLicenseOutcome', () => {
 
       explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: false }), { openModal, buy, retry })
 
-      expect(opened[0].buttons).toEqual(['Check For Licence', 'Continue in Demo Mode'])
+      expect(opened[0].buttons).toEqual(['Check for Licence', 'Continue in Demo Mode'])
       expect(opened[0].buttons).not.toContain('Buy Licence')
       opened[0].onResponse(0)
       expect(retry).toHaveBeenCalledTimes(1)
@@ -146,6 +146,73 @@ describe('explainLicenseOutcome', () => {
       expect(retry).toHaveBeenCalledTimes(1)
       // Never a purchase: we do not know that a purchase is what is missing.
       expect(buy).not.toHaveBeenCalled()
+    })
+
+    it('withholds the retry when the flow marked the failure terminal', () => {
+      // A cause that cannot change by asking again: offering "Try Again" reads
+      // as a flaky link and keeps the user pressing it instead of doing the
+      // thing the message names (which is usually a rebuild).
+      const { opened, openModal, buy } = harness()
+      const retry = jest.fn(() => Promise.resolve())
+
+      explainLicenseOutcome(report({ state: 'check-failed', error: 'firmware is out of date', retryable: false }), {
+        openModal,
+        buy,
+        retry,
+      })
+
+      expect(opened[0].buttons).toEqual(['OK'])
+      opened[0].onResponse(0)
+      expect(retry).not.toHaveBeenCalled()
+      // The explanation still gets through — only the action is withheld.
+      expect(opened[0].message).toContain('firmware is out of date')
+    })
+
+    it('keeps the retry when retryable is absent (the common case)', () => {
+      // Absent means retryable: a dropped link, a timeout and a backend blip
+      // must not lose the retry they have always had.
+      const { opened, openModal, buy } = harness()
+      const retry = jest.fn(() => Promise.resolve())
+
+      explainLicenseOutcome(report({ state: 'check-failed', error: 'Request timeout' }), { openModal, buy, retry })
+
+      expect(opened[0].buttons).toEqual(['Try Again', 'Continue'])
+      opened[0].onResponse(0)
+      expect(retry).toHaveBeenCalledTimes(1)
+    })
+
+    it('stays quiet on the automatic flow for a RETRYABLE failure', () => {
+      // The loud case this exists for: a runtime predating the licence FCs would
+      // otherwise open "Licence Check Failed" on every single connect.
+      const { opened, openModal, buy } = harness()
+
+      const shown = explainLicenseOutcome(report({ state: 'check-failed', error: 'No response from runtime' }), {
+        openModal,
+        buy,
+        retry: jest.fn(() => Promise.resolve()),
+        quietCheckFailed: true,
+      })
+
+      expect(shown).toBe(false)
+      expect(opened).toHaveLength(0)
+    })
+
+    it('speaks up on the automatic flow when the failure is TERMINAL', () => {
+      // A terminal failure has no recheck button in the badge panel any more —
+      // that is deliberate. Silencing the modal too would leave the automatic
+      // flow with no surface at all: no dialog, no action, and a popover the
+      // user has no reason to open.
+      const { opened, openModal, buy } = harness()
+
+      const shown = explainLicenseOutcome(
+        report({ state: 'check-failed', error: 'this hardware cannot hold a licence', retryable: false }),
+        { openModal, buy, retry: jest.fn(() => Promise.resolve()), quietCheckFailed: true },
+      )
+
+      expect(shown).toBe(true)
+      expect(opened).toHaveLength(1)
+      expect(opened[0].buttons).toEqual(['OK'])
+      expect(opened[0].message).toContain('this hardware cannot hold a licence')
     })
 
     it('never labels the failure as "not licensed"', () => {

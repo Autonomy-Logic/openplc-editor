@@ -93,7 +93,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         const reason = outcome.backendReason ? `\n\nThe licence server said: ${outcome.backendReason}` : ''
         openModal('debugger-message', {
           type: 'warning',
-          title: 'No Licence For This Device',
+          title: 'No Licence for This Device',
           message: `This VPP is a paid product and no licence is registered for this device.${reason}\n\n${DEMO_EXPLANATION}`,
           buttons: ['Buy Licence', 'Continue in Demo Mode'],
           onResponse: (buttonIndex: number) => {
@@ -106,9 +106,9 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       // Nobody asked the backend. Offer a check, NOT a purchase.
       openModal('debugger-message', {
         type: 'warning',
-        title: 'No Licence Stored On This Device',
+        title: 'No Licence Stored on This Device',
         message: `This device is not holding a valid licence for this VPP. It may simply not have been activated yet.\n\n${DEMO_EXPLANATION}`,
-        buttons: retry ? ['Check For Licence', 'Continue in Demo Mode'] : ['OK'],
+        buttons: retry ? ['Check for Licence', 'Continue in Demo Mode'] : ['OK'],
         onResponse: (buttonIndex: number) => {
           if (retry && buttonIndex === 0) void retry()
         },
@@ -124,7 +124,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       // stores licences perfectly well.
       openModal('debugger-message', {
         type: 'warning',
-        title: 'Licence Storage Missing From This Firmware',
+        title: 'Licence Storage Missing from This Firmware',
         message:
           'The firmware on this device reports no licence storage, so a licence cannot be ' +
           'written to it.\n\nThis hardware supports it: every licensed VPP targets hardware that ' +
@@ -137,22 +137,41 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       return true
 
     case 'check-failed':
-      if (quietCheckFailed) {
+      if (quietCheckFailed && outcome.retryable !== false) {
         // The badge already renders the check-failed state with its own
         // recheck affordance; the automatic flow adds no modal on top.
+        //
+        // Only for a RETRYABLE failure, though. A terminal one has no recheck
+        // button in the panel any more (that is the point), so silencing the
+        // modal too would leave the automatic flow with no surface at all: no
+        // dialog, no action, and a popover the user has no reason to open. The
+        // loud case this quieting exists for -- a runtime predating the licence
+        // FCs on every connect -- is retryable, so it stays quiet.
         return false
       }
-      openModal('debugger-message', {
-        type: 'error',
-        title: 'Licence Check Failed',
-        message:
-          `The editor could not determine whether this device holds a licence.\n\n${outcome.error}\n\n` +
-          'This is NOT the same as having no licence. Nothing has changed on the device.',
-        buttons: retry ? ['Try Again', 'Continue'] : ['OK'],
-        onResponse: (buttonIndex: number) => {
-          if (retry && buttonIndex === 0) void retry()
-        },
-      })
+      {
+        // A cause the flow marked terminal cannot change by asking again, so
+        // the retry is withheld: a button guaranteed to reproduce the same
+        // error reads as a flaky link and keeps the user pressing it instead of
+        // doing the thing that would fix it (which those messages name).
+        const canRetry = retry !== undefined && outcome.retryable !== false
+        openModal('debugger-message', {
+          type: 'error',
+          title: 'Licence Check Failed',
+          message:
+            `The editor could not determine whether this device holds a licence.\n\n${outcome.error}\n\n` +
+            'This is NOT the same as having no licence. Nothing has changed on the device.',
+          buttons: canRetry ? ['Try Again', 'Continue'] : ['OK'],
+          onResponse: (buttonIndex: number) => {
+            // `retry` re-runs the whole licensing flow, which reaches the
+            // network. `void` would turn a rejection into an unhandled one and
+            // the user would see the modal close with nothing happening.
+            if (canRetry && buttonIndex === 0) {
+              retry().catch((error: unknown) => console.error('[license] retry failed', error))
+            }
+          },
+        })
+      }
       return true
   }
 }
