@@ -401,7 +401,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.setSelectedTab(name)
       state.editorActions.setEditor(editorModel)
 
-      state.libraryActions.addLibrary(name, type === 'program' ? 'function' : type)
+      // Programs are instantiated by the Resource, never called from another
+      // POU, so they are not library blocks. Registering them as `function`
+      // put them in the block pickers, and project load drops them again
+      // (see the hydration below), so a placed one referenced a library entry
+      // that no longer existed after a reopen (DOPE-606).
+      if (type !== 'program') {
+        state.libraryActions.addLibrary(name, type)
+      }
 
       // Mark project as unsaved
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
@@ -489,6 +496,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const editorModel = createEditorObjectForPou(newName, sourcePou.pouType, language)
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
+
+      // Register the copy as a user library, exactly as the create path does.
+      // `libraries.user` is what backs the "User-defined POUs" explorer tree,
+      // the FBD/LD block pickers and Monaco's completion list, so a duplicate
+      // that skips this exists in the project but cannot be placed in a
+      // diagram or completed in ST (DOPE-606). Programs are excluded for the
+      // same reason as on the create path.
+      if (sourcePou.pouType !== 'program') {
+        state.libraryActions.addLibrary(newName, sourcePou.pouType)
+      }
 
       // Persist only on save: flag the new POU dirty instead of auto-saving.
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
