@@ -25,20 +25,9 @@ export const extractNumberAtEnd = (str: string): { number: number; string: strin
 
 /**
  * This is a validation to check if the variable name already exists.
- *
- * `exclude` lets the update path skip the variable currently being
- * renamed, mirroring {@link checkIfLocationExists}: a variable can never
- * be a duplicate of itself, so it does not belong in its own comparison.
- * Without it, renaming a row to any name that still matches its own --
- * `ABCD` -> `ABCd` -- is refused as a duplicate, and the user has to
- * detour through a third name to get there (DOPE-606).
- * Reference-equality is enough since `variables` is the live array and
- * the caller passes the same object reference.
  **/
-const checkIfVariableExists = (variables: PLCVariable[], name: string, exclude?: PLCVariable) => {
-  const nameAlreadyInUse = variables.some(
-    (variable) => variable !== exclude && variable.name.toLowerCase() === name.toLowerCase(),
-  )
+const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
+  const nameAlreadyInUse = variables.some((variable) => variable.name.toLowerCase() === name.toLowerCase())
   return nameAlreadyInUse
 }
 const checkIfGlobalVariableExists = (variables: PLCVariable[], name: string) => {
@@ -399,7 +388,7 @@ const updateVariableValidation = (
       return response
     }
 
-    if (checkIfVariableExists(variables, name, variableToUpdate)) {
+    if (checkIfVariableExists(variables, name)) {
       response = {
         ok: false,
         title: 'Variable already exists',

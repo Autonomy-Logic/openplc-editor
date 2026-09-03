@@ -363,14 +363,26 @@ describe('pouActions.duplicate', () => {
     expect(useOpenPLCStore.getState().libraries.user.find((l) => l.name === 'Scale_copy')?.type).toBe('function')
   })
 
-  it('registers a duplicated program as a function, matching the create path', () => {
-    // Programs are not callable blocks, but the create path maps them to 'function'
-    // when registering; the duplicate path has to agree or the two disagree about
-    // what a program is.
+  it('does not register a duplicated program as a library block', () => {
+    // A program is instantiated by the Resource, never called from another POU,
+    // so it is not a library block. Registering it put programs in the block
+    // pickers, and project load drops them again, so a placed one referenced a
+    // library entry that no longer existed after a reopen.
     useOpenPLCStore.getState().pouActions.create({ type: 'program', name: 'main', language: 'st' })
     useOpenPLCStore.getState().pouActions.duplicate('main', 'main_copy')
 
-    expect(useOpenPLCStore.getState().libraries.user.find((l) => l.name === 'main_copy')?.type).toBe('function')
+    const names = useOpenPLCStore.getState().libraries.user.map((l) => l.name)
+    expect(names).not.toContain('main_copy')
+    // The create path agrees, so a reopen cannot disagree with either.
+    expect(names).not.toContain('main')
+  })
+
+  it('still copies a duplicated program into the project', () => {
+    // Excluding it from the library must not stop the duplicate itself.
+    useOpenPLCStore.getState().pouActions.create({ type: 'program', name: 'main', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('main', 'main_copy')
+
+    expect(useOpenPLCStore.getState().project.data.pous.map((p) => p.name)).toContain('main_copy')
   })
 
   it('registers the copy so it can be opened and saved', () => {

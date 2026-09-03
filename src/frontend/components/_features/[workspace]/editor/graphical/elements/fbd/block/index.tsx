@@ -102,22 +102,23 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const isFormValid = Object.values(formState).every((value) => value !== '')
   const isBlockDifferent = selectedNode !== node
 
-  // The form values this dialog opened with. `useRef` keeps the first
-  // render's object for the life of the dialog, and the modal is mounted
+  // The execution order this dialog opened with. `useRef` keeps the first
+  // render's value for the life of the dialog, and the modal is mounted
   // conditionally, so reopening it recaptures a fresh baseline.
-  const initialFormState = useRef(formState)
+  const initialExecutionOrder = useRef(formState.executionOrder)
 
-  // Whether the user has actually changed anything. Gating OK on
-  // `isBlockDifferent` alone compared node identity, which only changes when
-  // a different block type is picked from the library tree -- so editing the
-  // name, input count, execution order or execution control left OK disabled
-  // and the edit could not be applied at all (DOPE-606). Execution order was
-  // the visible casualty: the field accepted input that could never be saved.
-  const isFormDirty =
-    formState.name !== initialFormState.current.name ||
-    formState.inputs !== initialFormState.current.inputs ||
-    formState.executionOrder !== initialFormState.current.executionOrder ||
-    formState.executionControl !== initialFormState.current.executionControl
+  // Execution order is the ONE field `isBlockDifferent` cannot see. Every
+  // other control in this dialog also calls `setNode` -- input count, the
+  // execution-control switch, and a name that resolves to a library block --
+  // which replaces `node` and so already enabled OK. The arrows and the
+  // execution-order field call `setFormState` alone, so the value could be
+  // typed but never applied (DOPE-606).
+  //
+  // Deliberately NOT keyed on `formState.name`: `handleBlockSubmit` builds the
+  // new node from `blockVariant`, never from the typed name, so enabling OK
+  // for a name that resolves to nothing would rebuild the node and discard
+  // what was typed without saying so.
+  const isExecutionOrderDirty = formState.executionOrder !== initialExecutionOrder.current
 
   useEffect(() => {
     if (!selectedFileKey) return
@@ -369,7 +370,13 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     // also break the promise the project-open warning makes ("nothing is
     // changed until you do"), so refuse and point at the update badge, the way
     // the update path itself refuses an ambiguous in-out feed.
-    if (hasLegacyInOutOutputHandle(node)) {
+    //
+    // `selectedNode` FIRST, and not `node` alone: picking a replacement variant
+    // rebuilds `node` under current rules, which clears the legacy pin from the
+    // copy while the diagram edges being remapped below are still the original
+    // node's. Checking only the rebuilt copy let the swap path walk straight
+    // past this guard.
+    if (hasLegacyInOutOutputHandle(selectedNode) || hasLegacyInOutOutputHandle(node)) {
       toast({
         title: 'Update this block first',
         description:
@@ -606,7 +613,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             className={
               'h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             }
-            disabled={!isFormValid || (!isFormDirty && !isBlockDifferent)}
+            disabled={!isFormValid || (!isExecutionOrderDirty && !isBlockDifferent)}
             onClick={handleBlockSubmit}
           >
             Ok
