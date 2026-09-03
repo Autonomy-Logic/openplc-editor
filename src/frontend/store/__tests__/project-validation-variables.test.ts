@@ -33,6 +33,29 @@ function makeVariable(
  * A located ARRAY variable. `data.dimensions` is what `getArrayTotalElements`
  * reads to work out how many slots the declaration claims.
  */
+/** A located ARRAY with an arbitrary number of dimensions. */
+function makeMultiDimArrayVariable(
+  name: string,
+  baseType: string,
+  location: string,
+  dimensions: string[],
+): PLCVariable {
+  return {
+    name,
+    class: 'local',
+    type: {
+      definition: 'array',
+      value: `ARRAY [${dimensions.join(', ')}] OF ${baseType}`,
+      data: {
+        baseType: { definition: 'base-type', value: baseType },
+        dimensions: dimensions.map((dimension) => ({ dimension })),
+      },
+    },
+    location,
+    documentation: '',
+  }
+}
+
 function makeArrayVariable(
   name: string,
   baseType: string,
@@ -879,6 +902,32 @@ describe('located arrays — collision by range', () => {
     expect(updateVariableValidation(existing, { location: '%MW0' }, other).ok).toBe(true)
   })
 
+  it('refuses a multi-dimensional array at a location, as the compiler does', () => {
+    // ARRAY [0..3, 0..3] has no single run of consecutive addresses to sit on.
+    // getArrayTotalElements answers 16 for it, so without an explicit refusal
+    // the editor would place it and the build would fail later.
+    const md = makeMultiDimArrayVariable('md', 'WORD', '', ['0..3', '0..3'])
+    const result = updateVariableValidation([md], { location: '%MW0' }, md)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('multi-dimensional array cannot have a physical location')
+  })
+
+  it('refuses a type-only edit that turns a located 1-D array into a 2-D one', () => {
+    // The array modal dispatches a type-only patch, so this is the path a user
+    // actually takes to get here.
+    const arr = makeArrayVariable('arr', 'WORD', '%MW0', '0..3')
+    const twoD = makeMultiDimArrayVariable('arr', 'WORD', '%MW0', ['0..3', '0..3']).type
+    const result = updateVariableValidation([arr], { type: twoD }, arr)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('multi-dimensional array cannot have a physical location')
+  })
+
+  it('leaves an unlocated multi-dimensional array alone', () => {
+    // The restriction is about the location, not the shape.
+    const md = makeMultiDimArrayVariable('md', 'WORD', '', ['0..3', '0..3'])
+    expect(updateVariableValidation([md], { documentation: 'note' }, md).ok).toBe(true)
+  })
+
   it('catches a TYPE-ONLY edit that widens an already-located variable', () => {
     // No location in the patch: the variable stays at %MW0 and only its type
     // changes, so it silently grows over %MW1-%MW3 and swallows the neighbour.
@@ -936,6 +985,14 @@ describe('createVariableValidation — auto-increment past occupied ranges', () 
     const existing = [makeVariable('taken', 'WORD', '%MW2')]
     const result = createVariableValidation(existing, makeArrayVariable('arr', 'WORD', '%MW0', '0..3'))
     expect(result.location).toBe('%MW3')
+  })
+
+  it('walks past a long occupied run without rescanning per step', () => {
+    // The spans are parsed once outside the loop; this pins the SEMANTICS of
+    // that change — 40 contiguous words taken, so a new one lands at %MW40.
+    const existing = Array.from({ length: 40 }, (_, i) => makeVariable(`v${i}`, 'WORD', `%MW${i}`))
+    const result = createVariableValidation(existing, makeVariable('NewVar', 'WORD', '%MW0'))
+    expect(result.location).toBe('%MW40')
   })
 
   it('leaves a location alone when nothing overlaps', () => {

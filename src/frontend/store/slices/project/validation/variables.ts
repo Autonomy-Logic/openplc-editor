@@ -2,6 +2,7 @@ import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import {
   formatAddress,
   parseAddress,
+  type ParsedAddress,
   slotRangesOverlap,
 } from '../../../../../middleware/shared/utils/iec-address/registry'
 import { DISALLOWED_LOCATION_CLASSES } from '../../../../utils/generate-iec-string-to-variables'
@@ -51,6 +52,28 @@ const checkIfGlobalVariableExists = (variables: PLCVariable[], name: string) => 
  */
 const slotsClaimedBy = (variable: PLCVariable): number =>
   isArrayVariable(variable) ? getArrayTotalElements(variable) : 1
+
+/**
+ * A multi-dimensional array cannot be located.
+ *
+ * `AT %MW0 : ARRAY [0..3, 0..3] OF WORD` has no single linear run of addresses
+ * to occupy, and the compiler says exactly that:
+ *
+ *   Located variable 'MD' at %MW0 cannot be placed: a 2-dimensional array has
+ *   no single linear run of addresses to occupy.
+ *
+ * The editor has to refuse it too. `getArrayTotalElements` happily returns the
+ * product of every dimension (16 here), so without this the editor would place
+ * it, reserve 16 slots, and let the user discover the problem at build time —
+ * the same accept-here/reject-there divergence this whole change exists to
+ * close.
+ */
+const hasUnlocatableShape = (variableType: PLCVariable['type']): boolean =>
+  variableType.definition === 'array' && (variableType.data?.dimensions.length ?? 0) > 1
+
+/** Wording shared by both places that refuse a multi-dimensional located array. */
+const UNLOCATABLE_SHAPE_MESSAGE =
+  'A multi-dimensional array cannot have a physical location: it has no single run of consecutive addresses to occupy. Use a one-dimensional array, or leave it unlocated.'
 
 /**
  * Does `location` collide with a location another variable already holds?
@@ -360,9 +383,27 @@ const createVariableValidation = (
     // span of any array already sitting there — landing one slot inside
     // a neighbouring array is the same collision as landing on its
     // first address (openplc-editor#565).
+    //
+    // The occupied spans are parsed ONCE, outside the loop. Calling
+    // `checkIfLocationExists` per iteration would re-scan every variable and
+    // re-run its address regex on each, and the walk steps one element slot at
+    // a time — placing an `ARRAY [0..999]` on a taken address would be ~1000
+    // iterations x N variables x 2 regexes, synchronously inside the store's
+    // `produce`. Parsing up front makes each step a plain interval comparison.
+    const occupied: Array<{ parsed: ParsedAddress; slots: number }> = []
+    for (const other of variables) {
+      const parsed = parseAddress(other.location)
+      if (parsed) occupied.push({ parsed, slots: slotsClaimedBy(other) })
+    }
+    const collides = (address: string): boolean => {
+      const parsed = parseAddress(address)
+      if (!parsed) return false
+      return occupied.some((o) => slotRangesOverlap(parsed, slots, o.parsed, o.slots))
+    }
+
     let candidate = variableLocation
     let iterations = 0
-    while (checkIfLocationExists(variables, candidate, slots) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
+    while (collides(candidate) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
       const next = incrementLocationByOne(candidate)
       if (!next || next === candidate) break // unknown type / no progress — bail
       candidate = next
@@ -451,6 +492,15 @@ const updateVariableValidation = (
       return response
     }
 
+    if (hasUnlocatableShape(effectiveType)) {
+      response = {
+        ok: false,
+        title: 'Location is not allowed.',
+        message: UNLOCATABLE_SHAPE_MESSAGE,
+      }
+      return response
+    }
+
     // Exclude the variable being updated so re-setting its own
     // location (e.g. re-picking the same address to refresh a
     // renamed alias) doesn't trip the uniqueness check on itself.
@@ -474,6 +524,13 @@ const updateVariableValidation = (
   }
 
   if (dataToBeUpdated.type) {
+    if (variableToUpdate.location !== '' && hasUnlocatableShape(effectiveType)) {
+      // Reached from the array modal, which dispatches a type-only patch: the
+      // user turns a located 1-D array into a 2-D one and it stops having a
+      // linear run of addresses to sit on.
+      response = { ok: false, title: 'Location is not allowed.', message: UNLOCATABLE_SHAPE_MESSAGE }
+      return response
+    }
     if (!variableLocationValidation(variableToUpdate.location, effectiveAddressClass)) {
       response.data = { ...(response.data ? response.data : {}), location: '' }
     } else if (
