@@ -1,4 +1,11 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+} from '../../../backend/editor/runtime/bootloader-api-client'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import type {
   DiscoveredRuntimeDevice,
@@ -582,6 +589,36 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
+
+  // ===================== BOOTLOADER (RTOP-283) =====================
+  // The bootloader is a separate service on port 8445 with its own session.
+  // Results are the client's discriminated union, so a caller checks `success`
+  // and shows `error` verbatim -- its messages are written for a person.
+  bootloaderGetCapabilities: (ipAddress: string): Promise<BootloaderApiResult<BootloaderCapabilities>> =>
+    ipcRenderer.invoke('bootloader:get-capabilities', ipAddress),
+  bootloaderLogin: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<BootloaderApiResult<{ role?: string }>> =>
+    ipcRenderer.invoke('bootloader:login', ipAddress, username, password),
+  bootloaderGetStatus: (ipAddress: string): Promise<BootloaderApiResult<BootloaderStatus>> =>
+    ipcRenderer.invoke('bootloader:get-status', ipAddress),
+  bootloaderGetRuntimeLogs: (ipAddress: string, tail?: number): Promise<BootloaderApiResult<BootloaderLogs>> =>
+    ipcRenderer.invoke('bootloader:get-runtime-logs', ipAddress, tail),
+  bootloaderStartUpdate: (
+    ipAddress: string,
+    version: string,
+  ): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:start-update', ipAddress, version),
+  bootloaderGetUpdateProgress: (ipAddress: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:get-update-progress', ipAddress),
+  bootloaderRestartRuntime: (
+    ipAddress: string,
+  ): Promise<BootloaderApiResult<{ state?: string; reason?: string }>> =>
+    ipcRenderer.invoke('bootloader:restart-runtime', ipAddress),
+  bootloaderClearSession: (ipAddress?: string): Promise<{ success: true }> =>
+    ipcRenderer.invoke('bootloader:clear-session', ipAddress),
   runtimeGetCompilationStatus: (
     ipAddress: string,
   ): Promise<{

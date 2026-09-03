@@ -49,6 +49,13 @@ import type {
   NetworkInterface,
 } from './ethercat-types'
 import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+} from '@root/backend/editor/runtime/bootloader-api-client'
 
 export interface LoginParams {
   username: string
@@ -227,7 +234,60 @@ export interface FetchedProject {
   libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
 }
 
+/**
+ * The runtime bootloader (RTOP-283): a second service on the device that
+ * starts the runtime container and stays reachable when the runtime will not
+ * run, so a version can be changed or repaired without SSH.
+ *
+ * Every method returns the client's discriminated union. `error` strings are
+ * written for a person and are meant to be shown as they are.
+ */
+export interface BootloaderPort {
+  /**
+   * Is a bootloader answering on this device?
+   *
+   * Answerable before login, because the editor uses it to decide whether to
+   * offer a version change at all. A failure here is the ordinary case for a
+   * native install or an orchestrator-managed vPLC, not an error to surface.
+   */
+  getCapabilities(): Promise<BootloaderApiResult<BootloaderCapabilities>>
+
+  /**
+   * Sign in to the bootloader.
+   *
+   * Its credentials are the runtime's own -- the two services read one user
+   * database -- so the editor can reuse what the operator already entered.
+   * They do NOT share a session, so this is a separate login.
+   */
+  login(username: string, password: string): Promise<BootloaderApiResult<{ role?: string }>>
+
+  /** Supervisor state: healthy, starting, updating or recovery, and why. */
+  getStatus(): Promise<BootloaderApiResult<BootloaderStatus>>
+
+  /** The runtime container's recent output, for diagnosing a failed start. */
+  getRuntimeLogs(tail?: number): Promise<BootloaderApiResult<BootloaderLogs>>
+
+  /**
+   * Change the runtime version. Returns once the work is under way; poll
+   * `getUpdateProgress`, because a pull can run for many minutes.
+   *
+   * Upgrade and downgrade are the same call: no direction, no version floor.
+   */
+  startUpdate(version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>>
+
+  getUpdateProgress(): Promise<BootloaderApiResult<BootloaderUpdateProgress>>
+
+  /** Stop and start the runtime container, health-gated on the way back. */
+  restartRuntime(): Promise<BootloaderApiResult<{ state?: string; reason?: string }>>
+
+  /** Forget the bootloader session for this device. */
+  clearSession(): Promise<void>
+}
+
 export interface RuntimePort {
+  /** The bootloader on this device, when one is present. */
+  bootloader: BootloaderPort
+
   /** Set the target device for subsequent API calls. */
   setDeviceContext?(context: { agentId: string; deviceId: string } | null): void
 
