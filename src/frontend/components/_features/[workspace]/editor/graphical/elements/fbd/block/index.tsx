@@ -475,29 +475,60 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
 
-    edges.source?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        source: newNode.id,
-        // Backstop. The legacy-in-out refusal above covers the only shape
-        // that reaches here with a missing connector today (an output-less
-        // variant can only be the source of a wire via that stale pin), but a
-        // hard crash here aborts the submit mid-way and silently loses the
-        // edit, so fall back to the handle the edge already has.
-        sourceHandle: newNode.data.outputConnector?.id ?? edge.sourceHandle,
+    // Re-point this node's edges onto the rebuilt node BY PIN NAME.
+    //
+    // Every edge used to be forced onto `inputConnector` / `outputConnector`,
+    // which are just the FIRST pin on each side -- so a block with two or more
+    // inputs had all of its input wires collapsed onto IN1 and the wires to
+    // IN2, IN3 ... were lost. Two wires on one pin transpile as a parallel
+    // combination, so `SUB(acc, 3)` came out as `SUB(IN1 := 3 OR acc)` and
+    // failed to compile; with same-typed pins it would have changed the logic
+    // and still built (DOPE-611).
+    //
+    // A pin that still exists on the rebuilt node keeps its wire. That covers
+    // the whole same-variant case -- an execution-order edit rebuilds the node
+    // with an identical pin set, so nothing moves at all -- and it also
+    // preserves the matching pins when the variant is swapped for one that
+    // shares names. A wire whose pin is genuinely gone cannot be re-pointed
+    // anywhere honest, so it is dropped and reported rather than silently
+    // piled onto the first pin.
+    const newNodeData = newNode.data as {
+      inputHandles?: { id?: string }[]
+      outputHandles?: { id?: string }[]
+    }
+    const survivingPins = (handles: { id?: string }[] | undefined): Set<string> =>
+      new Set((handles ?? []).map((handle) => handle.id).filter((id): id is string => !!id))
+    const newInputPins = survivingPins(newNodeData.inputHandles)
+    const newOutputPins = survivingPins(newNodeData.outputHandles)
+
+    let droppedWires = 0
+    const rewire = (
+      edge: (typeof newEdges)[number],
+      side: 'source' | 'target',
+      pins: Set<string>,
+    ): void => {
+      const handle = side === 'source' ? edge.sourceHandle : edge.targetHandle
+      if (handle && pins.has(handle)) {
+        const moved = { ...edge, id: edge.id.replace(node.id, newNode.id), [side]: newNode.id }
+        newEdges = newEdges.map((e) => (e.id === edge.id ? moved : e))
+        return
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
-    edges.target?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        target: newNode.id,
-        targetHandle: newNode.data.inputConnector?.id ?? edge.targetHandle,
-      }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
+      droppedWires += 1
+      newEdges = newEdges.filter((e) => e.id !== edge.id)
+    }
+
+    edges.source?.forEach((edge) => rewire(edge, 'source', newOutputPins))
+    edges.target?.forEach((edge) => rewire(edge, 'target', newInputPins))
+
+    if (droppedWires > 0) {
+      toast({
+        title: `${droppedWires} connection${droppedWires === 1 ? '' : 's'} removed`,
+        description:
+          `The replacement block has no matching pin for ${droppedWires === 1 ? 'it' : 'them'}. ` +
+          'Reconnect to the pins you want.',
+        variant: 'fail',
+      })
+    }
 
     setNodes({
       editorName: pouName,

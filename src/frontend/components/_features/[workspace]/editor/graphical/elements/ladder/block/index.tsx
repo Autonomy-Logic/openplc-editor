@@ -451,29 +451,74 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     // Remap main connector edges (inputConnector/outputConnector) to new block ID.
     // Branch edges are already remapped by reconcileBranches (their IDs changed,
     // so the old edge.id won't match in newEdges).
-    edges.source?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        source: newNode.id,
-        // Backstop. The legacy-in-out refusal above covers the only shape
-        // that reaches here with a missing connector today (an output-less
-        // variant can only be the source of a wire via that stale pin), but a
-        // hard crash here aborts the submit mid-way and silently loses the
-        // edit, so fall back to the handle the edge already has.
-        sourceHandle: newNode.data.outputConnector?.id ?? edge.sourceHandle,
+    // Re-point this node's edges onto the rebuilt node BY PIN NAME, with one
+    // ladder-specific exception.
+    //
+    // Every edge used to be forced onto `inputConnector` / `outputConnector`,
+    // which are just the FIRST pin on each side. That is right for the RUNG
+    // CHAIN -- in ladder the wire entering and leaving a block is power flow,
+    // and it belongs on the connectors -- but it is wrong for the block's data
+    // pins, which were all collapsed onto the first one, losing the wires to
+    // IN2, IN3 ... (DOPE-611).
+    //
+    // So: a pin that still exists on the rebuilt node keeps its wire, which
+    // covers the whole same-variant case and the matching pins of a swap; the
+    // rung chain follows the connectors as before; anything else is dropped
+    // and reported rather than piled onto the first pin.
+    const newNodeData = newNode.data as {
+      inputHandles?: { id?: string }[]
+      outputHandles?: { id?: string }[]
+      inputConnector?: { id?: string }
+      outputConnector?: { id?: string }
+    }
+    const oldNodeData = node.data as { inputConnector?: { id?: string }; outputConnector?: { id?: string } }
+    const survivingPins = (handles: { id?: string }[] | undefined): Set<string> =>
+      new Set((handles ?? []).map((handle) => handle.id).filter((id): id is string => !!id))
+    const newInputPins = survivingPins(newNodeData.inputHandles)
+    const newOutputPins = survivingPins(newNodeData.outputHandles)
+
+    let droppedWires = 0
+    const rewire = (
+      edge: (typeof newEdges)[number],
+      side: 'source' | 'target',
+      pins: Set<string>,
+      oldConnector: string | undefined,
+      newConnector: string | undefined,
+    ): void => {
+      const handleKey = side === 'source' ? 'sourceHandle' : 'targetHandle'
+      const handle = side === 'source' ? edge.sourceHandle : edge.targetHandle
+      const base = { ...edge, id: edge.id.replace(node.id, newNode.id), [side]: newNode.id }
+
+      if (handle && pins.has(handle)) {
+        newEdges = newEdges.map((e) => (e.id === edge.id ? base : e))
+        return
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
-    edges.target?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        target: newNode.id,
-        targetHandle: newNode.data.inputConnector?.id ?? edge.targetHandle,
+      // The rung chain: it rode the old connector, so it rides the new one.
+      if (handle && oldConnector && handle === oldConnector && newConnector) {
+        const moved = { ...base, [handleKey]: newConnector }
+        newEdges = newEdges.map((e) => (e.id === edge.id ? moved : e))
+        return
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
+      droppedWires += 1
+      newEdges = newEdges.filter((e) => e.id !== edge.id)
+    }
+
+    edges.source?.forEach((edge) =>
+      rewire(edge, 'source', newOutputPins, oldNodeData.outputConnector?.id, newNodeData.outputConnector?.id),
+    )
+    edges.target?.forEach((edge) =>
+      rewire(edge, 'target', newInputPins, oldNodeData.inputConnector?.id, newNodeData.inputConnector?.id),
+    )
+
+    if (droppedWires > 0) {
+      toast({
+        title: `${droppedWires} connection${droppedWires === 1 ? '' : 's'} removed`,
+        description:
+          `The replacement block has no matching pin for ${droppedWires === 1 ? 'it' : 'them'}. ` +
+          'Reconnect to the pins you want.',
+        variant: 'fail',
+      })
+    }
 
     const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
       {
