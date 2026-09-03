@@ -947,6 +947,30 @@ describe('data type file hydration', () => {
     expect(result.projectData.dataTypes).toEqual([])
   })
 
+  // `data.dataTypes[].name` is external input that the save flow turns into a
+  // path segment, so a crafted project must not be able to escape `datatypes/`.
+  describe('legacy data type names are validated', () => {
+    it.each([
+      ['../../../../tmp/pwned', 'parent traversal'],
+      ['/etc/passwd', 'absolute path'],
+      ['sub/dir', 'forward slash'],
+      ['sub\\dir', 'backslash'],
+      ['has space', 'space'],
+      ['1leading-digit', 'leading digit'],
+    ])('drops a legacy type named %j (%s) with a warning', (name) => {
+      const result = parse([], [{ ...legacyEnum, name }])
+      expect(result.projectData.dataTypes).toEqual([])
+      expect(result.warnings?.some((w) => w.includes('invalid name'))).toBe(true)
+      expect(result.dataTypesNeedMigration).toBeUndefined()
+    })
+
+    it('keeps an ordinary identifier', () => {
+      const result = parse([], [{ ...legacyEnum, name: 'Valid_Name1' }])
+      expect(result.projectData.dataTypes.map((d) => d.name)).toEqual(['Valid_Name1'])
+      expect(result.warnings).toBeUndefined()
+    })
+  })
+
   describe('dataTypesNeedMigration', () => {
     it('is set for a pre-.dt project that still carries its types inline', () => {
       expect(parse([], [legacyEnum]).dataTypesNeedMigration).toBe(true)

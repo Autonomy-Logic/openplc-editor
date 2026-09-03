@@ -291,9 +291,21 @@ describe('save-actions', () => {
         expect(paths[paths.length - 1].endsWith('project.json')).toBe(true)
         const lastCall = vi.mocked(projectPort.saveFile).mock.calls.at(-1)
         const projectJson: string = typeof lastCall?.[1] === 'string' ? lastCall[1] : '{}'
-        const parsed = JSON.parse(projectJson) as { data: { dataTypes: unknown[] } }
-        expect(parsed.data.dataTypes).toEqual([])
+        expect(JSON.parse(projectJson)).toMatchObject({ data: { dataTypes: [] } })
         expect(openPLCStoreBase.getState().dataTypesNeedMigration).toBe(false)
+      })
+
+      // `recordSavedFiles` tracks what is now on disk. Recording only the edited
+      // type would leave the other migrated files looking dirty forever.
+      it('records every migrated file with version control, not just the edited one', async () => {
+        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
+
+        await executeSaveFile('MigEdited', makeProjectPort(), capabilities)
+
+        const recorded = Object.keys(openPLCStoreBase.getState().versionControl.rawLoadedContent)
+        expect(recorded).toEqual(
+          expect.arrayContaining(['datatypes/MigEdited.dt', 'datatypes/MigUntouched.dt', 'project.json']),
+        )
       })
 
       it('writes only the edited .dt once the project has already migrated', async () => {
@@ -332,10 +344,8 @@ describe('save-actions', () => {
 
       expect(result.success).toBe(false)
       expect(projectPort.saveFile).not.toHaveBeenCalled()
-      expect(lastToast()).toMatchObject({
-        description: expect.stringContaining('could not be parsed') as unknown as string,
-        variant: 'fail',
-      })
+      expect(lastToast()?.description).toContain('could not be parsed')
+      expect(lastToast()?.variant).toBe('fail')
     })
 
     it('refuses to write the stale body of a failing flow', async () => {

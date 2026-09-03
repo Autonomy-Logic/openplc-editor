@@ -721,13 +721,22 @@ async function migrateDataTypesToFiles(
   projectPath: string,
   projectPort: ProjectPort,
   state: StoreState,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; written: ProjectFileSpec[] }> {
+  const written: ProjectFileSpec[] = []
   for (const dt of state.project.data.dataTypes) {
     const spec = buildDataTypeSpec(dt)
     const res = await projectPort.saveFile(joinPath(projectPath, ...spec.path.split('/')), spec.content)
-    if (!res.success) return res
+    if (!res.success) return { ...res, written }
+    written.push(spec)
   }
-  return projectPort.saveFile(joinPath(projectPath, 'project.json'), buildProjectJsonContent(state))
+  const indexSpec: ProjectFileSpec = {
+    path: 'project.json',
+    content: buildProjectJsonContent(state),
+    category: 'project-json',
+  }
+  const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), indexSpec.content)
+  if (res.success) written.push(indexSpec)
+  return { ...res, written }
 }
 
 export async function executeSaveFile(
@@ -819,6 +828,9 @@ export async function executeSaveFile(
     // is a one-shot lookup; the special `device` type returns two specs
     // (configuration + pin-mapping).
     const specs = serializeProjectFile(fileName, file, state)
+    // What the version-control slice is told was written. Normally the specs
+    // this save serialised; a `.dt` migration replaces it with its own set.
+    let recordedSpecs: ProjectFileSpec[] = specs
     if (specs.length === 0) {
       // Some categories (e.g. ethercat-device) need handling that doesn't
       // map to a single fileName lookup, so fall through to the legacy path.
@@ -908,11 +920,17 @@ export async function executeSaveFile(
       // this one `.dt` on its own would leave the two halves disagreeing, and
       // the loader would then have to reconcile them on every open. Migrate the
       // whole set in one go instead — once per project, on the first save.
-      const res = state.dataTypesNeedMigration
-        ? await migrateDataTypesToFiles(projectPath, projectPort, state)
-        : await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
-      if (state.dataTypesNeedMigration) state.projectActions.setDataTypesNeedMigration(false)
+      if (state.dataTypesNeedMigration) {
+        const migration = await migrateDataTypesToFiles(projectPath, projectPort, state)
+        // Report every file that landed, even on a failure: the version-control
+        // slice's `changedPaths` would otherwise still list them as dirty.
+        recordedSpecs = migration.written
+        if (!migration.success) return failedWrite(migration.error ?? 'Save failed')
+        state.projectActions.setDataTypesNeedMigration(false)
+      } else {
+        const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
+        if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      }
     } else {
       // resource: lives in project.json (legacy whole-file write) —
       // cross-contamination accepted until it is migrated to its own
@@ -925,9 +943,9 @@ export async function executeSaveFile(
 
     // Tell the version-control slice exactly which paths/content were just
     // sent. The slice diffs against baseline to add or remove from changedPaths.
-    if (specs.length > 0) {
+    if (recordedSpecs.length > 0) {
       state.versionControlActions.recordSavedFiles({
-        saved: specs.map((spec) => ({ path: spec.path, content: spec.content })),
+        saved: recordedSpecs.map((spec) => ({ path: spec.path, content: spec.content })),
         deleted: [],
       })
     }

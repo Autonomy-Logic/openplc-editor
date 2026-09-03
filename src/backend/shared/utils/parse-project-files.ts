@@ -172,6 +172,9 @@ function getBaseNameFromPath(relativePath: string): string {
   )
 }
 
+/** A plain IEC 61131-3 identifier — the only shape safe to use as a file name. */
+const iecIdentifierRegex = /^[A-Za-z_]\w*$/
+
 /**
  * Fold the legacy inline `project.json` data type list in behind the
  * `datatypes/*.dt` files.
@@ -687,6 +690,22 @@ export function parseProjectFiles(
   /* istanbul ignore next -- defensive guard, same rationale as above */
   if (!configuration.resource.globalVariables) configuration.resource.globalVariables = []
 
+  // `data.dataTypes[].name` is unvalidated external input that the save flow
+  // turns into a path segment (`datatypes/<name>.dt`). A name carrying `..` or
+  // a separator would escape the project directory on the next save, so reject
+  // anything that is not a plain IEC identifier at the boundary — the rule
+  // CLAUDE.md states for every external payload. A type sourced from a `.dt`
+  // file cannot reach here: its name comes from the file name and has already
+  // been through the text parser's own identifier check.
+  const legacyDataTypes: PLCDataType[] = []
+  for (const dt of (data.dataTypes as PLCDataType[]) ?? []) {
+    if (iecIdentifierRegex.test(dt.name)) {
+      legacyDataTypes.push(dt)
+      continue
+    }
+    warnings.push(`Data type "${dt.name}" in project.json has an invalid name and was skipped.`)
+  }
+
   return {
     meta,
     projectData: {
@@ -696,7 +715,7 @@ export function parseProjectFiles(
       // HALF-migrated project safe: a build that wrote one `.dt` and left the
       // inline list alone — or a save that failed part-way through writing
       // them — would otherwise drop every type that had no file yet.
-      dataTypes: mergeDataTypes(dataTypesFromFiles, (data.dataTypes as PLCDataType[]) ?? [], dataTypeFiles),
+      dataTypes: mergeDataTypes(dataTypesFromFiles, legacyDataTypes, dataTypeFiles),
       // Global Variable Lists ride along from project.json. Assembling `projectData`
       // field by field means anything not named here is dropped on load, however well
       // the schema validates it — which is how a list survived every unit test and then
@@ -725,8 +744,6 @@ export function parseProjectFiles(
     warnings: warnings.length > 0 ? warnings : undefined,
     fatalErrors: fatalErrors.length > 0 ? fatalErrors : undefined,
     ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
-    ...(dataTypeFiles.length === 0 && ((data.dataTypes as PLCDataType[]) ?? []).length > 0
-      ? { dataTypesNeedMigration: true }
-      : {}),
+    ...(dataTypeFiles.length === 0 && legacyDataTypes.length > 0 ? { dataTypesNeedMigration: true } : {}),
   }
 }
