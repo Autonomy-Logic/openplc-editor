@@ -25,13 +25,18 @@ export const extractNumberAtEnd = (str: string): { number: number; string: strin
 
 /**
  * This is a validation to check if the variable name already exists.
+ * IEC 61131-3 identifiers are case-insensitive: `Motor` and `motor` are one
+ * variable declared twice.
+ *
+ * `exclude` lets an update skip the variable being renamed so a case-only
+ * rename onto itself is not read as a collision. Reference-equality is enough
+ * since `variables` is the live array and the caller passes the same object.
  **/
-const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
-  const nameAlreadyInUse = variables.some((variable) => variable.name.toLowerCase() === name.toLowerCase())
+const checkIfVariableExists = (variables: PLCVariable[], name: string, exclude?: PLCVariable) => {
+  const nameAlreadyInUse = variables.some(
+    (variable) => variable !== exclude && variable.name.toLowerCase() === name.toLowerCase(),
+  )
   return nameAlreadyInUse
-}
-const checkIfGlobalVariableExists = (variables: PLCVariable[], name: string) => {
-  return variables.some((variable) => variable.name === name)
 }
 
 /**
@@ -388,7 +393,7 @@ const updateVariableValidation = (
       return response
     }
 
-    if (checkIfVariableExists(variables, name)) {
+    if (checkIfVariableExists(variables, name, variableToUpdate)) {
       response = {
         ok: false,
         title: 'Variable already exists',
@@ -458,7 +463,11 @@ const updateVariableValidation = (
   return response
 }
 
-const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Partial<PLCVariable>) => {
+const updateGlobalVariableValidation = (
+  variables: PLCVariable[],
+  dataToBeUpdated: Partial<PLCVariable>,
+  variableToUpdate?: PLCVariable,
+) => {
   let response: ProjectResponse = { ok: true }
 
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
@@ -472,7 +481,7 @@ const updateGlobalVariableValidation = (variables: PLCVariable[], dataToBeUpdate
       return response
     }
 
-    if (checkIfGlobalVariableExists(variables, name)) {
+    if (checkIfVariableExists(variables, name, variableToUpdate)) {
       response = {
         ok: false,
         title: 'Global Variable already exists',
