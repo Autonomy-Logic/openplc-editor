@@ -564,13 +564,9 @@ export async function executeSaveProject(
     // treat `Motor.dt` and `motor.dt` as one file, so a case-only rename would
     // otherwise write the new name and unlink it under the old one.
     const writtenPaths = new Set(
-      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) =>
-        f.relativePath.toLowerCase(),
-      ),
+      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) => f.relativePath.toLowerCase()),
     )
-    const deletionsBeforeSave = [...new Set(pendingDeletions)].filter(
-      (path) => !writtenPaths.has(path.toLowerCase()),
-    )
+    const deletionsBeforeSave = [...new Set(pendingDeletions)].filter((path) => !writtenPaths.has(path.toLowerCase()))
 
     const files: WriteProjectFiles = {
       projectPath: project.meta.path,
