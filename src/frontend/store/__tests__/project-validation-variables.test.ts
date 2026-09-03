@@ -50,7 +50,7 @@ function makeArrayVariable(
     },
     location,
     documentation: '',
-  } as PLCVariable
+  }
 }
 
 // ===========================================================================
@@ -361,12 +361,35 @@ describe('createVariableValidation', () => {
   })
 
   // -- Default case (unknown type) --
-  it('does not change location for unknown type', () => {
+  it('still walks when the type has no address class, as long as the address parses', () => {
+    // Behaviour change: the walk used to key off the variable's TYPE and gave
+    // up on anything its switch did not list, leaving a known duplicate in
+    // place. It now keys off the ADDRESS, which already states its size class,
+    // so a colliding %MD0 moves on regardless of the type sitting at it.
     const existing = [makeVariable('Var1', 'STRING', '%MD0')]
     const variable = makeVariable('NewVar', 'STRING', '%MD0')
-    const result = createVariableValidation(existing, variable)
-    // default case is a no-op, location stays as found
-    expect(result.location).toBe('%MD0')
+    expect(createVariableValidation(existing, variable).location).toBe('%MD1')
+  })
+
+  it('leaves an alias-bound location alone — there is nothing to increment', () => {
+    // A location that is not a literal address cannot be stepped, so the walk
+    // bails on the first pass and the duplicate stands. That is the honest
+    // answer: resolving an alias collision means picking a different alias,
+    // not inventing an address.
+    const existing = [makeVariable('Var1', 'BOOL', 'MotorStart')]
+    const variable = makeVariable('NewVar', 'BOOL', 'MotorStart')
+    expect(createVariableValidation(existing, variable).location).toBe('MotorStart')
+  })
+
+  it('walks byte and memory-bit addresses, which the old switch could not', () => {
+    // %IB had no case at all (the walk gave up), and %MX fell through the BOOL
+    // case with its prefix unstripped, producing "%IXNaN.NaN".
+    expect(
+      createVariableValidation([makeVariable('a', 'BYTE', '%IB0')], makeVariable('b', 'BYTE', '%IB0')).location,
+    ).toBe('%IB1')
+    expect(
+      createVariableValidation([makeVariable('a', 'BOOL', '%MX0.7')], makeVariable('b', 'BOOL', '%MX0.7')).location,
+    ).toBe('%MX1.0')
   })
 
   // -- Multi-collision walk (regression for forum bug: contiguous "+" clicks
@@ -854,6 +877,38 @@ describe('located arrays — collision by range', () => {
     const existing = [makeVariable('aliased', 'WORD', 'TankLevel')]
     const other = makeVariable('other', 'WORD', '', 'local')
     expect(updateVariableValidation(existing, { location: '%MW0' }, other).ok).toBe(true)
+  })
+
+  it('catches a TYPE-ONLY edit that widens an already-located variable', () => {
+    // No location in the patch: the variable stays at %MW0 and only its type
+    // changes, so it silently grows over %MW1-%MW3 and swallows the neighbour.
+    // The location block never runs for this edit, which is how it slipped by.
+    const neighbour = makeVariable('neighbour', 'WORD', '%MW2')
+    const grow = makeVariable('grow', 'WORD', '%MW0')
+    const asArray = makeArrayVariable('grow', 'WORD', '%MW0', '0..3').type
+    const result = updateVariableValidation([neighbour, grow], { type: asArray }, grow)
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('would now cover 4 addresses')
+  })
+
+  it('allows a type-only widening that still fits', () => {
+    const neighbour = makeVariable('neighbour', 'WORD', '%MW9')
+    const grow = makeVariable('grow', 'WORD', '%MW0')
+    const asArray = makeArrayVariable('grow', 'WORD', '%MW0', '0..3').type
+    expect(updateVariableValidation([neighbour, grow], { type: asArray }, grow).ok).toBe(true)
+  })
+
+  it('validates a joint location+type edit against the NEW type', () => {
+    // %MW0 is a word address. Changing the type to BOOL in the same edit makes
+    // it invalid, and checking against the old WORD type would have passed it.
+    const v = makeVariable('v', 'WORD', '%MW0')
+    const result = updateVariableValidation(
+      [v],
+      { location: '%MW0', type: { definition: 'base-type', value: 'BOOL' } },
+      v,
+    )
+    expect(result.ok).toBe(false)
+    expect(result.title).toBe('Location is invalid.')
   })
 
   it('widens the span when the same edit turns a scalar into an array', () => {

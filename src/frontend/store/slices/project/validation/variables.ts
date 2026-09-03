@@ -1,12 +1,15 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
-import { parseAddress, slotRangesOverlap } from '../../../../../middleware/shared/utils/iec-address/registry'
+import {
+  formatAddress,
+  parseAddress,
+  slotRangesOverlap,
+} from '../../../../../middleware/shared/utils/iec-address/registry'
 import { DISALLOWED_LOCATION_CLASSES } from '../../../../utils/generate-iec-string-to-variables'
 import {
   BOOL_LOCATION_REGEX,
   BYTE_LOCATION_REGEX,
   DWORD_LOCATION_REGEX,
   LWORD_LOCATION_REGEX,
-  PLC_ADDRESS_PREFIX,
   WORD_LOCATION_REGEX,
 } from '../../../../utils/PLC/address-constants/types'
 import { getArrayTotalElements, isArrayVariable } from '../../../../utils/PLC/array-codegen-helpers'
@@ -297,69 +300,21 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
  * currently holds, so an unknown future IEC type can't produce an
  * infinite loop here.
  */
-const incrementLocationByOne = (location: string, typeValue: string): string | null => {
-  switch (typeValue.toUpperCase()) {
-    case 'BOOL': {
-      const stringWithNoPrefix = location
-        .replace(PLC_ADDRESS_PREFIX.BOOL_OUTPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.BOOL_INPUT, '')
-      const position = parseInt(stringWithNoPrefix.split('.')[0])
-      const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
-      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.BOOL_OUTPUT)
-        ? PLC_ADDRESS_PREFIX.BOOL_OUTPUT
-        : PLC_ADDRESS_PREFIX.BOOL_INPUT
-      return `${prefix}${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
-    }
-    case 'INT':
-    case 'UINT':
-    case 'WORD': {
-      const stringWithNoPrefix = location
-        .replace(PLC_ADDRESS_PREFIX.WORD_OUTPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.WORD_INPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.WORD_MEMORY, '')
-      const position = parseInt(stringWithNoPrefix)
-      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.WORD_OUTPUT)
-        ? PLC_ADDRESS_PREFIX.WORD_OUTPUT
-        : location.startsWith(PLC_ADDRESS_PREFIX.WORD_INPUT)
-          ? PLC_ADDRESS_PREFIX.WORD_INPUT
-          : PLC_ADDRESS_PREFIX.WORD_MEMORY
-      return `${prefix}${position + 1}`
-    }
-    case 'DINT':
-    case 'UDINT':
-    case 'REAL':
-    case 'DWORD': {
-      const stringWithNoPrefix = location
-        .replace(PLC_ADDRESS_PREFIX.DWORD_OUTPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.DWORD_INPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.DWORD_MEMORY, '')
-      const position = parseInt(stringWithNoPrefix)
-      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.DWORD_OUTPUT)
-        ? PLC_ADDRESS_PREFIX.DWORD_OUTPUT
-        : location.startsWith(PLC_ADDRESS_PREFIX.DWORD_INPUT)
-          ? PLC_ADDRESS_PREFIX.DWORD_INPUT
-          : PLC_ADDRESS_PREFIX.DWORD_MEMORY
-      return `${prefix}${position + 1}`
-    }
-    case 'LINT':
-    case 'ULINT':
-    case 'LREAL':
-    case 'LWORD': {
-      const stringWithNoPrefix = location
-        .replace(PLC_ADDRESS_PREFIX.LWORD_OUTPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.LWORD_INPUT, '')
-        .replace(PLC_ADDRESS_PREFIX.LWORD_MEMORY, '')
-      const position = parseInt(stringWithNoPrefix)
-      const prefix = location.startsWith(PLC_ADDRESS_PREFIX.LWORD_OUTPUT)
-        ? PLC_ADDRESS_PREFIX.LWORD_OUTPUT
-        : location.startsWith(PLC_ADDRESS_PREFIX.LWORD_INPUT)
-          ? PLC_ADDRESS_PREFIX.LWORD_INPUT
-          : PLC_ADDRESS_PREFIX.LWORD_MEMORY
-      return `${prefix}${position + 1}`
-    }
-    default:
-      return null
-  }
+const incrementLocationByOne = (location: string): string | null => {
+  // Derived from the ADDRESS, not from the variable's type. The address
+  // already states its size class (`%QX` bit, `%IB` byte, `%MW` word, ...),
+  // and every class advances the same way once linearised — `parseAddress`
+  // maps a bit address to `byte*8 + bit`, so `%QX0.7` steps to `%QX1.0`
+  // without the carry needing to be spelled out per class.
+  //
+  // This replaced a per-type switch that had two holes: it had no case for
+  // BYTE / SINT / USINT (so `%IB` / `%QB` / `%MB` returned null and the
+  // caller's search gave up, keeping a colliding location), and its BOOL case
+  // stripped only the `%QX` and `%IX` prefixes, so a memory bit `%MX0.0` fell
+  // through with its prefix intact and `parseInt` produced `%IXNaN.NaN`.
+  const parsed = parseAddress(location)
+  if (!parsed) return null
+  return formatAddress(parsed.cls, parsed.linear + 1)
 }
 
 /** Safety bound on the auto-increment loop in `createVariableValidation`.
@@ -408,11 +363,7 @@ const createVariableValidation = (
     let candidate = variableLocation
     let iterations = 0
     while (checkIfLocationExists(variables, candidate, slots) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
-      // Step by the ELEMENT type: `incrementLocationByOne` switches on a base
-      // type name, and an array's own `type.value` is the whole
-      // "ARRAY [0..9] OF BOOL" text, which matches nothing and would bail the
-      // loop on its first pass.
-      const next = incrementLocationByOne(candidate, addressClassTypeOf(variable.type))
+      const next = incrementLocationByOne(candidate)
       if (!next || next === candidate) break // unknown type / no progress — bail
       candidate = next
       iterations += 1
@@ -475,6 +426,14 @@ const updateVariableValidation = (
     }
   }
 
+  // Both location checks below reason about the variable as it will be AFTER
+  // this update, not as it is now. A single edit can change the location, the
+  // type, or both, and validating a new location against the old type (or a
+  // new type against the old span) is how a joint edit slips through.
+  const effectiveType = dataToBeUpdated.type ?? variableToUpdate.type
+  const effectiveAddressClass = addressClassTypeOf(effectiveType)
+  const effectiveSlots = slotsClaimedBy({ ...variableToUpdate, ...dataToBeUpdated })
+
   if (dataToBeUpdated.location) {
     const { location } = dataToBeUpdated
 
@@ -495,11 +454,6 @@ const updateVariableValidation = (
     // Exclude the variable being updated so re-setting its own
     // location (e.g. re-picking the same address to refresh a
     // renamed alias) doesn't trip the uniqueness check on itself.
-    //
-    // The span comes from the type the variable will HAVE after this update:
-    // switching a scalar to an array in the same edit widens what it claims,
-    // and checking the old span would let it land on top of a neighbour.
-    const effectiveSlots = slotsClaimedBy({ ...variableToUpdate, ...dataToBeUpdated })
     if (checkIfLocationExists(variables, location, effectiveSlots, variableToUpdate)) {
       response = {
         ok: false,
@@ -509,19 +463,33 @@ const updateVariableValidation = (
       return response
     }
 
-    if (!variableLocationValidation(location, addressClassTypeOf(variableToUpdate.type))) {
+    if (!variableLocationValidation(location, effectiveAddressClass)) {
       response = {
         ok: false,
         title: 'Location is invalid.',
-        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClassTypeOf(variableToUpdate.type))}`,
+        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(effectiveAddressClass)}`,
       }
       return response
     }
   }
 
   if (dataToBeUpdated.type) {
-    if (!variableLocationValidation(variableToUpdate.location, addressClassTypeOf(dataToBeUpdated.type))) {
+    if (!variableLocationValidation(variableToUpdate.location, effectiveAddressClass)) {
       response.data = { ...(response.data ? response.data : {}), location: '' }
+    } else if (
+      // A type-only edit can widen what an already-located variable claims:
+      // turning a scalar at %MW0 into an ARRAY [0..3] makes it swallow %MW1-3
+      // and whatever sits there. The block above only runs when the LOCATION
+      // is part of the edit, so without this the widening lands unchecked.
+      variableToUpdate.location !== '' &&
+      checkIfLocationExists(variables, variableToUpdate.location, effectiveSlots, variableToUpdate)
+    ) {
+      response = {
+        ok: false,
+        title: 'Location already exists',
+        message: `"${variableToUpdate.name}" at ${variableToUpdate.location} would now cover ${effectiveSlots} addresses, overlapping another variable. Move it, or shorten the array.`,
+      }
+      return response
     }
     if (dataToBeUpdated.type.definition === 'derived') {
       response.data = { ...(response.data ? response.data : {}), location: '', initialValue: '', class: 'local' }
