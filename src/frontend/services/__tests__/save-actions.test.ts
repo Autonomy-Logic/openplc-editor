@@ -15,7 +15,13 @@ import type { LadderFlowType } from '../../store/slices/ladder'
 import { getMemoryState } from '../../utils/toast'
 import { buildAllProjectFileContentsPure, executeSaveFile, executeSaveProject } from '../save-actions'
 
-const capabilities = { isNativeApplication: true } as PlatformCapabilities
+/**
+ * `hasEdgeAccount` is declared, not left off. The shared save path asks it to
+ * decide whether a session that ended can be signed back into, and the desktop
+ * always has an account surface. Nothing here exercises that branch today, but a
+ * fixture that omits the field would send a future case down the wrong one.
+ */
+const capabilities = { isNativeApplication: true, hasEdgeAccount: true } as PlatformCapabilities
 
 const lastToast = () => getMemoryState().toasts[0]
 
