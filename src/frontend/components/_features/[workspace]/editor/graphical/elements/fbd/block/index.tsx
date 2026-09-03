@@ -81,6 +81,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
 
+  const [isExecutionOrderFocused, setIsExecutionOrderFocused] = useState(false)
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
   const [documentation, setDocumentation] = useState<string | null>(getBlockDocumentation(blockVariant))
@@ -318,14 +319,45 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     }))
   }
 
+  // Execution order is stored as a plain number, where 0 means "not ordered":
+  // the transpiler buckets anything > 0 ahead of everything else and sorts the
+  // rest by layout position, so 0 is the absence of an order rather than the
+  // lowest one. Showing a bare "0" read as "runs first" and meant the opposite,
+  // so the field renders it as None (DOPE-606).
+  const NO_EXECUTION_ORDER = '0'
+  const isNoExecutionOrder = (value: string) => value === '' || Number(value) === 0
+  const executionOrderDisplay = isExecutionOrderFocused
+    ? formState.executionOrder === NO_EXECUTION_ORDER
+      ? ''
+      : formState.executionOrder
+    : isNoExecutionOrder(formState.executionOrder)
+      ? 'None'
+      : formState.executionOrder
+
+  /** Digits only — a leading `-` is dropped rather than rejected on submit. */
+  const handleExecutionOrderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = event.target.value.replace(/[^0-9]/g, '')
+    setFormState((prevState) => ({
+      ...prevState,
+      executionOrder: digits === '' ? NO_EXECUTION_ORDER : String(Number(digits)),
+    }))
+  }
+
+  // Blank the field while it has focus so the user types over "None" rather
+  // than around it; restore the label on the way out.
+  const handleExecutionOrderFocus = () => setIsExecutionOrderFocused(true)
+  const handleExecutionOrderBlur = () => setIsExecutionOrderFocused(false)
+
   const handleExecutionOrderIncrement = () => {
     setFormState((prevState) => ({
       ...prevState,
-      executionOrder: String(Math.min(Number(prevState.executionOrder) + 1, maxInputs)),
+      executionOrder: String(Number(prevState.executionOrder) + 1),
     }))
   }
 
   const handleExecutionOrderDecrement = () => {
+    // Floors at 0, which is None. There is no upper clamp: execution order is
+    // an ordering key, not a count, and the old ceiling reused `maxInputs`.
     setFormState((prevState) => ({
       ...prevState,
       executionOrder: String(Math.max(Number(prevState.executionOrder) - 1, 0)),
@@ -557,9 +589,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 id='executionOrder'
                 className={inputStyle}
                 placeholder=''
-                type='number'
-                value={formState.executionOrder}
-                onChange={handleInputChange}
+                type='text'
+                inputMode='numeric'
+                value={executionOrderDisplay}
+                onChange={handleExecutionOrderChange}
+                onFocus={handleExecutionOrderFocus}
+                onBlur={handleExecutionOrderBlur}
               />
               <ArrowButtonGroup
                 onIncrement={() => handleExecutionOrderIncrement()}

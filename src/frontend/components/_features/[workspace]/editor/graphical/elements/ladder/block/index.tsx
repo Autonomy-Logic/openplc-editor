@@ -97,30 +97,20 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       LadderBlockVariant?.variables
         .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
         .length.toString() || '0',
-    executionOrder: selectedNode.data.executionOrder.toString(),
+    // Ladder has no execution order: rung position IS the order. Any value a
+    // project already carries is dropped on the next edit rather than kept
+    // alive by this dialog (DOPE-606).
+    executionOrder: '0',
     executionControl: selectedNode.data.executionControl,
   })
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
   const isBlockDifferent = selectedNode !== node
 
-  // The execution order this dialog opened with. `useRef` keeps the first
-  // render's value for the life of the dialog, and the modal is mounted
-  // conditionally, so reopening it recaptures a fresh baseline.
-  const initialExecutionOrder = useRef(formState.executionOrder)
-
-  // Execution order is the ONE field `isBlockDifferent` cannot see. Every
-  // other control in this dialog also calls `setNode` -- input count, the
-  // execution-control switch, and a name that resolves to a library block --
-  // which replaces `node` and so already enabled OK. The arrows and the
-  // execution-order field call `setFormState` alone, so the value could be
-  // typed but never applied (DOPE-606).
-  //
-  // Deliberately NOT keyed on `formState.name`: `handleBlockSubmit` builds the
-  // new node from `blockVariant`, never from the typed name, so enabling OK
-  // for a name that resolves to nothing would rebuild the node and discard
-  // what was typed without saying so.
-  const isExecutionOrderDirty = formState.executionOrder !== initialExecutionOrder.current
+  // No execution-order dirty check here, unlike the FBD dialog: a ladder block
+  // has no execution order to edit (see below), so every control that remains
+  // -- input count, the execution-control switch, a resolvable name -- calls
+  // `setNode` and is already covered by `isBlockDifferent`.
 
   useEffect(() => {
     if (!selectedFileKey) return
@@ -190,7 +180,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         ...newNode,
         data: {
           ...newNode.data,
-          executionOrder: Number(formState.executionOrder),
+          executionOrder: 0,
           variable: selectedNode.data.variable,
         },
       })
@@ -326,20 +316,6 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     }))
   }
 
-  const handleExecutionOrderIncrement = () => {
-    setFormState((prevState) => ({
-      ...prevState,
-      executionOrder: String(Math.min(Number(prevState.executionOrder) + 1, maxInputs)),
-    }))
-  }
-
-  const handleExecutionOrderDecrement = () => {
-    setFormState((prevState) => ({
-      ...prevState,
-      executionOrder: String(Math.max(Number(prevState.executionOrder) - 1, 0)),
-    }))
-  }
-
   const handleExecutionControlChange = (checked: boolean) => {
     if (lockExecutionControl) return
 
@@ -408,7 +384,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     })
     newNode.data = {
       ...newNode.data,
-      executionOrder: Number(formState.executionOrder),
+      // Always 0 in ladder: the walker buckets anything > 0 ahead of everything
+      // else GLOBALLY across rungs, so a stale number here would hoist this
+      // block above earlier rungs and silently break rung-order semantics.
+      executionOrder: 0,
     }
 
     const { ladderFlows } = useOpenPLCStore.getState()
@@ -597,24 +576,6 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 </div>
               </>
             )}
-            <label htmlFor='executionOrder' className={labelStyle}>
-              Execution Order:
-            </label>
-            <div className='flex items-center gap-1'>
-              <InputWithRef
-                id='executionOrder'
-                className={inputStyle}
-                placeholder=''
-                type='number'
-                value={formState.executionOrder}
-                onChange={handleInputChange}
-              />
-              <ArrowButtonGroup
-                onIncrement={() => handleExecutionOrderIncrement()}
-                onDecrement={() => handleExecutionOrderDecrement()}
-              />
-            </div>
-
             <div className='flex items-center gap-2'>
               <label htmlFor='executionControlSwitch' className={labelStyle}>
                 Execution Control:
@@ -663,7 +624,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             className={
               'h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             }
-            disabled={!isFormValid || (!isExecutionOrderDirty && !isBlockDifferent)}
+            disabled={!isFormValid || !isBlockDifferent}
             onClick={handleBlockSubmit}
           >
             Ok
