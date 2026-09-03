@@ -1,11 +1,4 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
-import type {
-  BootloaderApiResult,
-  BootloaderCapabilities,
-  BootloaderLogs,
-  BootloaderStatus,
-  BootloaderUpdateProgress,
-} from '../../../backend/editor/runtime/bootloader-api-client'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import type {
   DiscoveredRuntimeDevice,
@@ -45,6 +38,15 @@ import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
+
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+} from '../../../backend/editor/runtime/bootloader-api-client'
+import type { RuntimeApiResult, RuntimeDeviceInfo } from '../../../backend/editor/runtime/runtime-api-client'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
@@ -589,6 +591,9 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
+
+  runtimeGetDeviceInfo: (ipAddress: string): Promise<RuntimeApiResult<RuntimeDeviceInfo>> =>
+    ipcRenderer.invoke('runtime:get-device-info', ipAddress),
 
   // ===================== BOOTLOADER (RTOP-283) =====================
   // The bootloader is a separate service on port 8445 with its own session.

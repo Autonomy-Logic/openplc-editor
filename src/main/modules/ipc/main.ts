@@ -322,6 +322,9 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
 
+  handleRuntimeGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.runtimeApi.getDeviceInfo(ipAddress)
+
   handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -876,6 +879,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
     this.registerHandle('runtime:login', this.handleRuntimeLogin)
+    this.registerHandle('runtime:get-device-info', this.handleRuntimeGetDeviceInfo)
     this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
     this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.registerHandle('runtime:stop-plc', this.handleRuntimeStopPlc)

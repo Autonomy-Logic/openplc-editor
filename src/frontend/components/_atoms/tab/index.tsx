@@ -86,6 +86,7 @@ const Tab = (props: ITabProps) => {
     | 'configuration'
     | 'pin-mapping'
     | 'orchestrators'
+    | 'runtime-status'
     | 'remote-device'
     | 'server'
     | 'vendor-screen'

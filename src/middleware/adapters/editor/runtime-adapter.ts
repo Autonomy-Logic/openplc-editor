@@ -142,6 +142,14 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       }
     },
 
+    async getDeviceInfo() {
+      try {
+        return await window.bridge.runtimeGetDeviceInfo(requireIp())
+      } catch (err) {
+        return { success: false as const, error: getErrorMessage(err) }
+      }
+    },
+
     async getUsersInfo(): Promise<UsersInfoResult> {
       try {
         const ip = requireIp()

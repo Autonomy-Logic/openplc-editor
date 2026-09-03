@@ -57,6 +57,22 @@ export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false
  */
 const LoginResponseSchema = z.object({ access_token: z.string() })
 
+/**
+ * `/api/device-info` (RTOP-283). Every field optional: it is served by newer
+ * runtimes only, and an older one answers 404 rather than a partial body --
+ * but a future one may add fields, and a strict shape would reject it.
+ */
+const DeviceInfoSchema = z.object({
+  hostname: z.string().optional(),
+  architecture: z.string().optional(),
+  kernel: z.string().optional(),
+  system: z.string().optional(),
+  containerized: z.boolean().optional(),
+  updatePolicy: z.string().optional(),
+  bootloaderPort: z.number().nullable().optional(),
+})
+export type RuntimeDeviceInfo = z.infer<typeof DeviceInfoSchema>
+
 /** Both `/api/status`-shaped endpoints; every field optional, as the runtime sends them. */
 const PlcStatusResponseSchema = z.object({
   status: z.string().optional(),
@@ -168,6 +184,21 @@ export class RuntimeApiClient {
       return { success: result.success, token: result.accessToken, error: result.error }
     },
   })
+
+  /**
+   * Host facts for the Runtime Status header.
+   *
+   * Authenticated, unlike /api/capabilities: the update policy has to be
+   * readable before login, but kernel and architecture are only shown to
+   * somebody already looking at a device they can sign in to. A 404 means an
+   * older runtime that does not serve this, which is not an error worth
+   * showing -- the caller simply has less to display.
+   */
+  async getDeviceInfo(ipAddress: string): Promise<RuntimeApiResult<RuntimeDeviceInfo>> {
+    return this.makeRuntimeApiRequest<RuntimeDeviceInfo>(ipAddress, '/api/device-info', (data) =>
+      DeviceInfoSchema.parse(JSON.parse(data)),
+    )
+  }
 
   /** The address the token authority will re-authenticate against. */
   setAddress(ipAddress: string): void {

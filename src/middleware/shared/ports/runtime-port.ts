@@ -38,6 +38,15 @@
  */
 
 import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+} from '@root/backend/editor/runtime/bootloader-api-client'
+import type { RuntimeApiResult, RuntimeDeviceInfo } from '@root/backend/editor/runtime/runtime-api-client'
+
+import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
@@ -49,13 +58,6 @@ import type {
   NetworkInterface,
 } from './ethercat-types'
 import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
-import type {
-  BootloaderApiResult,
-  BootloaderCapabilities,
-  BootloaderLogs,
-  BootloaderStatus,
-  BootloaderUpdateProgress,
-} from '@root/backend/editor/runtime/bootloader-api-client'
 
 export interface LoginParams {
   username: string
@@ -296,6 +298,12 @@ export interface RuntimePort {
 
   /** Create a new user on the runtime (first-time setup). */
   createUser(params: CreateUserParams): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Host facts for the Runtime Status header (RTOP-283). Older runtimes do not
+   * serve this and answer 404, so a failure means "less to show", not a fault.
+   */
+  getDeviceInfo(): Promise<RuntimeApiResult<RuntimeDeviceInfo>>
 
   /** Check if the runtime has users and get its version. */
   getUsersInfo(): Promise<UsersInfoResult>
