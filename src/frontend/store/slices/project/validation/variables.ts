@@ -311,34 +311,6 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
  * This is a validation to check if it is needed changing the name of a variable at creation.
  * If the variable exists change the variable name.
  **/
-/**
- * Increment an IEC 61131-3 address by one slot, respecting the
- * width of the variable's underlying type.  For BOOL addresses
- * (`%IX/%QX<byte>.<bit>`) the bit field wraps from .7 back to .0
- * with the byte index bumping by one; for word / dword / lword
- * forms the numeric index after the prefix increments by one.
- *
- * Returns `null` when the type isn't recognised — the caller stops
- * the auto-increment loop and falls back to whatever location it
- * currently holds, so an unknown future IEC type can't produce an
- * infinite loop here.
- */
-const incrementLocationByOne = (location: string): string | null => {
-  // Derived from the ADDRESS, not from the variable's type. The address
-  // already states its size class (`%QX` bit, `%IB` byte, `%MW` word, ...),
-  // and every class advances the same way once linearised — `parseAddress`
-  // maps a bit address to `byte*8 + bit`, so `%QX0.7` steps to `%QX1.0`
-  // without the carry needing to be spelled out per class.
-  //
-  // This replaced a per-type switch that had two holes: it had no case for
-  // BYTE / SINT / USINT (so `%IB` / `%QB` / `%MB` returned null and the
-  // caller's search gave up, keeping a colliding location), and its BOOL case
-  // stripped only the `%QX` and `%IX` prefixes, so a memory bit `%MX0.0` fell
-  // through with its prefix intact and `parseInt` produced `%IXNaN.NaN`.
-  const parsed = parseAddress(location)
-  if (!parsed) return null
-  return formatAddress(parsed.cls, parsed.linear + 1)
-}
 
 /** Safety bound on the auto-increment loop in `createVariableValidation`.
  *  Picked well above any realistic project size (8 bits × N bytes =
@@ -395,21 +367,28 @@ const createVariableValidation = (
       const parsed = parseAddress(other.location)
       if (parsed) occupied.push({ parsed, slots: slotsClaimedBy(other) })
     }
-    const collides = (address: string): boolean => {
-      const parsed = parseAddress(address)
-      if (!parsed) return false
-      return occupied.some((o) => slotRangesOverlap(parsed, slots, o.parsed, o.slots))
-    }
+    // Walking the LINEAR index rather than re-formatting and re-parsing an
+    // address each step: every size class advances the same way once
+    // linearised, so `%QX0.7 -> %QX1.0` and `%IB0 -> %IB1` are one `+ 1` and
+    // the carry never has to be spelled out per class.
+    //
+    // A location that does not parse is an alias name. There is nothing to
+    // step, and inventing an address would be the wrong answer — resolving an
+    // alias collision means picking a different alias — so the location is
+    // left as it stands.
+    const start = parseAddress(variableLocation)
+    if (start) {
+      let linear = start.linear
+      let iterations = 0
+      const collidesAt = (at: number): boolean =>
+        occupied.some((o) => slotRangesOverlap({ cls: start.cls, linear: at }, slots, o.parsed, o.slots))
 
-    let candidate = variableLocation
-    let iterations = 0
-    while (collides(candidate) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
-      const next = incrementLocationByOne(candidate)
-      if (!next || next === candidate) break // unknown type / no progress — bail
-      candidate = next
-      iterations += 1
+      while (collidesAt(linear) && iterations < MAX_AUTO_INCREMENT_ITERATIONS) {
+        linear += 1
+        iterations += 1
+      }
+      response.location = formatAddress(start.cls, linear)
     }
-    response.location = candidate
   }
   return response
 }
