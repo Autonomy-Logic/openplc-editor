@@ -809,6 +809,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
   },
   pendingDeletions: [],
   unparsedDataTypeFiles: [],
+  dataTypesNeedMigration: false,
   iecAliasMemory: {},
 
   projectActions: {
@@ -845,6 +846,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           }
           slice.pendingDeletions = []
           slice.unparsedDataTypeFiles = []
+          slice.dataTypesNeedMigration = false
           // Session alias-memory is per-project; drop it on a fresh slate so
           // one project's remembered aliases can't leak into the next.
           slice.iecAliasMemory = {}
@@ -1534,6 +1536,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           slice.unparsedDataTypeFiles = files
+        }),
+      )
+    },
+    setDataTypesNeedMigration: (needsMigration) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.dataTypesNeedMigration = needsMigration
         }),
       )
     },

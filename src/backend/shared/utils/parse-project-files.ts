@@ -119,6 +119,12 @@ export interface ParsedProjectData {
    *  can echo them back verbatim — an unreadable file must never be
    *  silently dropped from disk. */
   unparsedDataTypeFiles?: RawProjectFile[]
+  /** True when the project still carries its data types inline in
+   *  `project.json` and has no `datatypes/*.dt` on disk — i.e. it predates
+   *  DOPE-385 and has never been saved by a `.dt`-writing build. The save
+   *  flow reads this to migrate the whole set at once rather than leaving a
+   *  half-migrated project behind (see `executeSaveFile`). */
+  dataTypesNeedMigration?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +170,31 @@ function getBaseNameFromPath(relativePath: string): string {
       .pop()
       ?.replace(/\.\w+$/, '') ?? 'unknown'
   )
+}
+
+/**
+ * Fold the legacy inline `project.json` data type list in behind the
+ * `datatypes/*.dt` files.
+ *
+ * A `.dt` file is always authoritative for the type it declares. Anything left
+ * only in the inline list is appended, so a project that is HALF migrated — one
+ * `.dt` written by a single-file save, or a batch that failed part-way — keeps
+ * every type instead of losing the ones that have no file yet. Once a project
+ * is fully migrated its inline list is `[]` and this returns the files verbatim.
+ *
+ * A name owned by an UNPARSED `.dt` is excluded as well: the file is the newer
+ * truth even though it cannot be read, and the save flow echoes it back
+ * verbatim, so resurrecting the stale inline copy beside it would show the user
+ * a version that no longer exists on disk.
+ */
+function mergeDataTypes(
+  fromFiles: PLCDataType[],
+  fromProjectJson: PLCDataType[],
+  dataTypeFiles: RawProjectFile[],
+): PLCDataType[] {
+  if (dataTypeFiles.length === 0) return fromProjectJson
+  const ownedByAFile = new Set(dataTypeFiles.map((file) => getBaseNameFromPath(file.relativePath).toLowerCase()))
+  return [...fromFiles, ...fromProjectJson.filter((dt) => !ownedByAFile.has(dt.name.toLowerCase()))]
 }
 
 // ---------------------------------------------------------------------------
@@ -659,10 +690,13 @@ export function parseProjectFiles(
   return {
     meta,
     projectData: {
-      // Migration rule: any .dt file present ⇒ the files are the
-      // source of truth; the legacy JSON field is only the fallback
-      // for projects that predate the format.
-      dataTypes: dataTypeFiles.length > 0 ? dataTypesFromFiles : ((data.dataTypes as PLCDataType[]) ?? []),
+      // Migration rule: a `.dt` file always wins for the type it declares,
+      // and any type still only in the legacy `project.json` list rides along
+      // beside it. Merging rather than replacing wholesale is what makes a
+      // HALF-migrated project safe: a build that wrote one `.dt` and left the
+      // inline list alone — or a save that failed part-way through writing
+      // them — would otherwise drop every type that had no file yet.
+      dataTypes: mergeDataTypes(dataTypesFromFiles, (data.dataTypes as PLCDataType[]) ?? [], dataTypeFiles),
       // Global Variable Lists ride along from project.json. Assembling `projectData`
       // field by field means anything not named here is dropped on load, however well
       // the schema validates it — which is how a list survived every unit test and then
@@ -691,5 +725,8 @@ export function parseProjectFiles(
     warnings: warnings.length > 0 ? warnings : undefined,
     fatalErrors: fatalErrors.length > 0 ? fatalErrors : undefined,
     ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
+    ...(dataTypeFiles.length === 0 && ((data.dataTypes as PLCDataType[]) ?? []).length > 0
+      ? { dataTypesNeedMigration: true }
+      : {}),
   }
 }

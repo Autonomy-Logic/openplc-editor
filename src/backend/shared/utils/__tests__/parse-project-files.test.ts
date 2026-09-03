@@ -893,21 +893,48 @@ describe('data type file hydration', () => {
       dataTypeFiles,
     )
 
-  it('parses .dt files into dataTypes (files win over legacy JSON)', () => {
-    const result = parse(
-      [{ relativePath: 'datatypes/Mode.dt', content: 'TYPE\n  Mode : (Auto, Manual);\nEND_TYPE\n' }],
-      [legacyEnum],
-    )
-    expect(result.projectData.dataTypes).toEqual([
-      {
-        name: 'Mode',
-        derivation: 'enumerated',
-        values: [{ description: 'Auto' }, { description: 'Manual' }],
-        initialValue: '',
-      },
-    ])
+  const modeFile = { relativePath: 'datatypes/Mode.dt', content: 'TYPE\n  Mode : (Auto, Manual);\nEND_TYPE\n' }
+  const parsedMode = {
+    name: 'Mode',
+    derivation: 'enumerated',
+    values: [{ description: 'Auto' }, { description: 'Manual' }],
+    initialValue: '',
+  }
+
+  it('parses .dt files into dataTypes', () => {
+    const result = parse([modeFile])
+    expect(result.projectData.dataTypes).toEqual([parsedMode])
     expect(result.warnings).toBeUndefined()
     expect(result.unparsedDataTypeFiles).toBeUndefined()
+  })
+
+  // A half-migrated project — one `.dt` written while project.json still holds
+  // the rest — must keep every type. The all-or-nothing rule this replaces
+  // dropped the ones that had no file yet.
+  it('keeps a legacy JSON type that has no .dt file beside it', () => {
+    const result = parse([modeFile], [legacyEnum])
+    expect(result.projectData.dataTypes).toEqual([parsedMode, legacyEnum])
+  })
+
+  it('lets a .dt file override the legacy JSON entry of the same name', () => {
+    const stale = { ...legacyEnum, name: 'Mode', values: [{ description: 'Stale' }] }
+    const result = parse([modeFile], [stale])
+    expect(result.projectData.dataTypes).toEqual([parsedMode])
+  })
+
+  it('matches the overridden name case-insensitively', () => {
+    const stale = { ...legacyEnum, name: 'mODe', values: [{ description: 'Stale' }] }
+    const result = parse([modeFile], [stale])
+    expect(result.projectData.dataTypes).toEqual([parsedMode])
+  })
+
+  // The file is the newer truth even when it cannot be read, so the stale
+  // inline copy must not reappear beside the raw file the save echoes back.
+  it('does not resurrect a legacy entry shadowed by an unparseable .dt', () => {
+    const broken = { relativePath: 'datatypes/Color.dt', content: 'TYPE\n  Color : ???;\nEND_TYPE\n' }
+    const result = parse([broken], [legacyEnum])
+    expect(result.projectData.dataTypes).toEqual([])
+    expect(result.unparsedDataTypeFiles).toEqual([broken])
   })
 
   it('falls back to legacy project.json dataTypes when no .dt files exist', () => {
@@ -918,6 +945,20 @@ describe('data type file hydration', () => {
   it('yields an empty list when neither files nor legacy JSON carry types', () => {
     const result = parse([], [])
     expect(result.projectData.dataTypes).toEqual([])
+  })
+
+  describe('dataTypesNeedMigration', () => {
+    it('is set for a pre-.dt project that still carries its types inline', () => {
+      expect(parse([], [legacyEnum]).dataTypesNeedMigration).toBe(true)
+    })
+
+    it('is unset once any .dt file exists', () => {
+      expect(parse([modeFile], [legacyEnum]).dataTypesNeedMigration).toBeUndefined()
+    })
+
+    it('is unset for a project with no data types at all', () => {
+      expect(parse([], []).dataTypesNeedMigration).toBeUndefined()
+    })
   })
 
   it('preserves unparseable .dt files raw with a warning instead of dropping them', () => {

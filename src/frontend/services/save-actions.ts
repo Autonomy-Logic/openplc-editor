@@ -546,16 +546,31 @@ export async function executeSaveProject(
       }
     }
 
-    // A path this very save is writing must never also be deleted. Both
-    // platforms apply deletions AFTER the writes, and creating an element
-    // never clears the entry a previous delete queued — so a
-    // create → delete → create cycle would unlink the file it just wrote.
-    // Filtering against the payload fixes it for every element type at once
-    // (data types, POUs, servers, remote devices).
+    // A path this very save is writing must never also be deleted, because
+    // creating an element never clears the entry a previous delete queued — so
+    // a create → delete → create cycle would name the same path in both lists.
+    //
+    // The two platforms get there differently. The desktop editor applies
+    // `deletions` AFTER the writes, so an unfiltered list unlinks the file it
+    // just wrote — a real data-loss bug. The web build never sends deletions
+    // that the Edge API acts on: `SaveProjectFilesJsonDto` carries no such
+    // field, and deletion is BY OMISSION — anything absent from the uploaded
+    // envelope is dropped from the bucket — applied before the uploads. There
+    // the guard is a no-op, since a path being written is in the envelope by
+    // definition. Filtering covers every element type at once (data types,
+    // POUs, servers, remote devices).
+    //
+    // Compared case-insensitively: the desktop's macOS and Windows targets
+    // treat `Motor.dt` and `motor.dt` as one file, so a case-only rename would
+    // otherwise write the new name and unlink it under the old one.
     const writtenPaths = new Set(
-      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) => f.relativePath),
+      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) =>
+        f.relativePath.toLowerCase(),
+      ),
     )
-    const deletionsBeforeSave = [...new Set(pendingDeletions)].filter((path) => !writtenPaths.has(path))
+    const deletionsBeforeSave = [...new Set(pendingDeletions)].filter(
+      (path) => !writtenPaths.has(path.toLowerCase()),
+    )
 
     const files: WriteProjectFiles = {
       projectPath: project.meta.path,
@@ -594,6 +609,9 @@ export async function executeSaveProject(
       const isStale = new Set(staleFlows)
 
       state.projectActions.clearPendingDeletions()
+      // Every `.dt` just went out alongside a `project.json` carrying
+      // `dataTypes: []`, so the legacy inline list is gone from disk.
+      state.projectActions.setDataTypesNeedMigration(false)
       setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
       setAllToSaved()
       markAllSaved(staleFlows)
@@ -680,6 +698,42 @@ export async function executeSaveProject(
  * For device/data-type/resource/server/remote-device: writes appropriate JSON files.
  * Also updates project.json when debug variables may have changed.
  */
+/** Basename of a project-relative path, minus its extension. Splits on both
+ *  separators because the desktop reader builds paths with `path.join`. */
+function getBaseNameFromRelativePath(relativePath: string): string {
+  return (
+    relativePath
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.\w+$/, '') ?? ''
+  )
+}
+
+/**
+ * Move a pre-DOPE-385 project onto `datatypes/*.dt` in one operation.
+ *
+ * Writes EVERY data type's file and then rewrites `project.json` with
+ * `dataTypes: []`. Both halves are required: writing one `.dt` while the inline
+ * list survives leaves the project half-migrated, and clearing the inline list
+ * while only one file exists would drop every other type outright.
+ *
+ * `project.json` goes last, exactly as the full-project save orders it — if a
+ * `.dt` write fails, the inline list is still on disk and the loader's merge
+ * keeps the types that have no file yet, so a failed migration costs nothing.
+ */
+async function migrateDataTypesToFiles(
+  projectPath: string,
+  projectPort: ProjectPort,
+  state: StoreState,
+): Promise<{ success: boolean; error?: string }> {
+  for (const dt of state.project.data.dataTypes) {
+    const spec = buildDataTypeSpec(dt)
+    const res = await projectPort.saveFile(joinPath(projectPath, ...spec.path.split('/')), spec.content)
+    if (!res.success) return res
+  }
+  return projectPort.saveFile(joinPath(projectPath, 'project.json'), buildProjectJsonContent(state))
+}
+
 export async function executeSaveFile(
   fileName: string,
   projectPort: ProjectPort,
@@ -840,9 +894,29 @@ export async function executeSaveFile(
       if (!res.success) return failedWrite(res.error ?? 'Save failed')
     } else if (file.type === 'data-type') {
       const spec = specs[0]
-      if (!spec) return fail(`Data type "${fileName}" not found.`)
-      const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
+      if (!spec) {
+        // A `.dt` that failed to parse on load has a tab and a code view but no
+        // entry in `project.data.dataTypes`, so there is nothing to serialize.
+        // Saying "not found" pointed the user at the wrong problem — the file
+        // is on disk, it just cannot be read yet.
+        const unreadable = state.unparsedDataTypeFiles.some(
+          (f) => getBaseNameFromRelativePath(f.relativePath).toLowerCase() === fileName.toLowerCase(),
+        )
+        return fail(
+          unreadable
+            ? `"${fileName}.dt" could not be parsed, so it can't be saved yet. Fix the declaration text first.`
+            : `Data type "${fileName}" not found.`,
+        )
+      }
+      // While the project still keeps its types inline in project.json, writing
+      // this one `.dt` on its own would leave the two halves disagreeing, and
+      // the loader would then have to reconcile them on every open. Migrate the
+      // whole set in one go instead — once per project, on the first save.
+      const res = state.dataTypesNeedMigration
+        ? await migrateDataTypesToFiles(projectPath, projectPort, state)
+        : await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
       if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (state.dataTypesNeedMigration) state.projectActions.setDataTypesNeedMigration(false)
     } else {
       // resource: lives in project.json (legacy whole-file write) —
       // cross-contamination accepted until it is migrated to its own

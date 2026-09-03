@@ -208,6 +208,39 @@ describe('save-actions', () => {
         expect(JSON.parse(savedFiles(projectPort).projectJson).data.dataTypes).toEqual([])
       })
 
+      // The filter is deliberately generalised beyond data types, so pin the
+      // element type that has carried the same exposure the longest.
+      it('does not delete a POU file this same save is writing', async () => {
+        const { pouActions } = openPLCStoreBase.getState()
+        pouActions.create({ type: 'program', name: 'Recreated', language: 'st' })
+        openPLCStoreBase.getState().pouActions.delete('Recreated')
+        openPLCStoreBase.getState().pouActions.create({ type: 'program', name: 'Recreated', language: 'st' })
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(projectPort, capabilities)
+
+        const written: string[] = savedFiles(projectPort).pouFiles.map((f: { relativePath: string }) => f.relativePath)
+        const deletions: string[] = savedFiles(projectPort).deletions
+        expect(written.some((path) => path.endsWith('Recreated.st'))).toBe(true)
+        expect(deletions.filter((path) => path.endsWith('Recreated.st'))).toEqual([])
+      })
+
+      // macOS and Windows treat these as one file, so an exact-string filter
+      // would write the new name and then unlink it under the old one.
+      it('does not delete a path that differs from a written one only by case', async () => {
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'Recased', derivation: 'structure' })
+        openPLCStoreBase.getState().datatypeActions.delete('Recased')
+        openPLCStoreBase.getState().datatypeActions.create({ name: 'recased', derivation: 'structure' })
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(projectPort, capabilities)
+
+        expect(savedFiles(projectPort).deletions).not.toContain('datatypes/Recased.dt')
+        expect(savedFiles(projectPort).dataTypeFiles).toEqual(
+          expect.arrayContaining([expect.objectContaining({ relativePath: 'datatypes/recased.dt' })]),
+        )
+      })
+
       it('does not delete a .dt file this same save is writing', async () => {
         // `createDatatype` does not clear the entry `deleteDatatype` queued, and
         // both platforms apply deletions after the writes — so without the
@@ -228,6 +261,83 @@ describe('save-actions', () => {
   })
 
   describe('executeSaveFile', () => {
+    // A single-file save that writes one `.dt` while project.json still carries
+    // the inline list leaves the two halves disagreeing. Migrate the whole set.
+    describe('.dt migration of a pre-DOPE-385 project', () => {
+      const savedPaths = (port: ProjectPort) => vi.mocked(port.saveFile).mock.calls.map((c) => c[0])
+
+      beforeEach(() => {
+        const state = openPLCStoreBase.getState()
+        state.datatypeActions.create({ name: 'MigEdited', derivation: 'structure' })
+        state.datatypeActions.create({ name: 'MigUntouched', derivation: 'enumerated' })
+        // The single-file save resolves its target through the file registry,
+        // which the project tree populates in the running app.
+        state.fileActions.addFile({ name: 'MigEdited', type: 'data-type', filePath: 'MigEdited' })
+      })
+
+      it('writes every .dt and rewrites project.json when the project still owes a migration', async () => {
+        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
+
+        const projectPort = makeProjectPort()
+        const result = await executeSaveFile('MigEdited', projectPort, capabilities)
+
+        expect(result.success).toBe(true)
+        const paths: string[] = savedPaths(projectPort)
+        expect(paths.some((p) => p.endsWith('MigEdited.dt'))).toBe(true)
+        // The type the user did NOT save still has to reach disk, or reopening
+        // the project would drop it.
+        expect(paths.some((p) => p.endsWith('MigUntouched.dt'))).toBe(true)
+        // project.json goes last so a failed .dt write leaves the inline list intact.
+        expect(paths[paths.length - 1].endsWith('project.json')).toBe(true)
+        const lastCall = vi.mocked(projectPort.saveFile).mock.calls.at(-1)
+        const projectJson: string = typeof lastCall?.[1] === 'string' ? lastCall[1] : '{}'
+        const parsed = JSON.parse(projectJson) as { data: { dataTypes: unknown[] } }
+        expect(parsed.data.dataTypes).toEqual([])
+        expect(openPLCStoreBase.getState().dataTypesNeedMigration).toBe(false)
+      })
+
+      it('writes only the edited .dt once the project has already migrated', async () => {
+        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(false)
+
+        const projectPort = makeProjectPort()
+        await executeSaveFile('MigEdited', projectPort, capabilities)
+
+        const paths: string[] = savedPaths(projectPort)
+        expect(paths).toHaveLength(1)
+        expect(paths[0].endsWith('MigEdited.dt')).toBe(true)
+      })
+
+      it('leaves the migration owed when a .dt write fails', async () => {
+        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
+
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, error: 'disk full' })
+        const result = await executeSaveFile('MigEdited', projectPort, capabilities)
+
+        expect(result.success).toBe(false)
+        expect(openPLCStoreBase.getState().dataTypesNeedMigration).toBe(true)
+      })
+    })
+
+    // An unreadable .dt still gets a tab and a code view, so Ctrl+S on it is a
+    // realistic action now that every project carries .dt files.
+    it('names the real problem when an unparseable .dt cannot be saved', async () => {
+      openPLCStoreBase
+        .getState()
+        .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Broken.dt', content: 'TYPE bad' }])
+      openPLCStoreBase.getState().fileActions.addFile({ name: 'Broken', type: 'data-type', filePath: 'Broken' })
+
+      const projectPort = makeProjectPort()
+      const result = await executeSaveFile('Broken', projectPort, capabilities)
+
+      expect(result.success).toBe(false)
+      expect(projectPort.saveFile).not.toHaveBeenCalled()
+      expect(lastToast()).toMatchObject({
+        description: expect.stringContaining('could not be parsed') as unknown as string,
+        variant: 'fail',
+      })
+    })
+
     it('refuses to write the stale body of a failing flow', async () => {
       createLadderPou('BrokenFile')
       corruptFlow('BrokenFile')
