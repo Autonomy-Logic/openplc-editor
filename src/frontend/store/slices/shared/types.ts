@@ -184,6 +184,10 @@ export type OpenProjectResponseData = {
   /** `datatypes/*.dt` files that failed to parse on load, preserved
    *  raw so the save flow echoes them back verbatim. */
   unparsedDataTypeFiles?: RawProjectFile[]
+  /** True when the project still carries its data types inline in
+   *  `project.json` with no `datatypes/*.dt` on disk — it predates DOPE-385
+   *  and still owes a migration. */
+  dataTypesNeedMigration?: boolean
   /**
    * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
    * `false` puts the workspace in read-only mode; `true` / `undefined`

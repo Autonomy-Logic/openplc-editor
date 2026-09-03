@@ -1180,6 +1180,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Raw .dt files that failed to parse — stashed so saves echo
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
+      // A pre-DOPE-385 project owes a migration to `datatypes/*.dt`. Always set,
+      // so reopening a project that has since migrated clears the flag.
+      getState().projectActions.setDataTypesNeedMigration(data.dataTypesNeedMigration ?? false)
 
       // Unreadable files have no PLCDataType, so no tree leaf to click.
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {
