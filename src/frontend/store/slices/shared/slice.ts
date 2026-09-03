@@ -490,6 +490,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
 
+      // Register the copy as a user library, exactly as the create path does.
+      // `libraries.user` is what backs the "User-defined POUs" explorer tree,
+      // the FBD/LD block pickers and Monaco's completion list, so a duplicate
+      // that skips this exists in the project but cannot be placed in a
+      // diagram or completed in ST (DOPE-606).
+      state.libraryActions.addLibrary(newName, sourcePou.pouType === 'program' ? 'function' : sourcePou.pouType)
+
       // Persist only on save: flag the new POU dirty instead of auto-saving.
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
 

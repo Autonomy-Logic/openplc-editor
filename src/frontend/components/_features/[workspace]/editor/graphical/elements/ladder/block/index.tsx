@@ -1,7 +1,9 @@
 import * as Switch from '@radix-ui/react-switch'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { LibraryState } from '@root/frontend/store/slices/library'
 import { cn } from '@root/frontend/utils/cn'
+import { hasLegacyInOutOutputHandle } from '@root/frontend/utils/graphical/in-out-pin-rules'
 import {
   assembleVariables,
   buildNextExtensibleInput,
@@ -101,6 +103,23 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
   const isBlockDifferent = selectedNode !== node
+
+  // The form values this dialog opened with. `useRef` keeps the first
+  // render's object for the life of the dialog, and the modal is mounted
+  // conditionally, so reopening it recaptures a fresh baseline.
+  const initialFormState = useRef(formState)
+
+  // Whether the user has actually changed anything. Gating OK on
+  // `isBlockDifferent` alone compared node identity, which only changes when
+  // a different block type is picked from the library tree -- so editing the
+  // name, input count, execution order or execution control left OK disabled
+  // and the edit could not be applied at all (DOPE-606). Execution order was
+  // the visible casualty: the field accepted input that could never be saved.
+  const isFormDirty =
+    formState.name !== initialFormState.current.name ||
+    formState.inputs !== initialFormState.current.inputs ||
+    formState.executionOrder !== initialFormState.current.executionOrder ||
+    formState.executionControl !== initialFormState.current.executionControl
 
   useEffect(() => {
     if (!selectedFileKey) return
@@ -353,6 +372,24 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleBlockSubmit = () => {
+    // A block still drawn with a VAR_IN_OUT pin on BOTH sides has not been
+    // converted yet, and rebuilding it here drops that output-side pin -- so
+    // any wire reading the pin would be left pointing at a handle the new node
+    // does not have. Converting it as a side effect of an unrelated edit would
+    // also break the promise the project-open warning makes ("nothing is
+    // changed until you do"), so refuse and point at the update badge, the way
+    // the update path itself refuses an ambiguous in-out feed.
+    if (hasLegacyInOutOutputHandle(node)) {
+      toast({
+        title: 'Update this block first',
+        description:
+          'It is still drawn with a VAR_IN_OUT pin on both sides. Hover the block and click its ' +
+          'update badge to convert it, then reapply this change.',
+        variant: 'fail',
+      })
+      return
+    }
+
     const newNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
       posX: selectedNode.position.x,
@@ -433,7 +470,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         ...edge,
         id: edge.id.replace(node.id, newNode.id),
         source: newNode.id,
-        sourceHandle: newNode.data.outputConnector.id,
+        // Backstop. The legacy-in-out refusal above covers the only shape
+        // that reaches here with a missing connector today (an output-less
+        // variant can only be the source of a wire via that stale pin), but a
+        // hard crash here aborts the submit mid-way and silently loses the
+        // edit, so fall back to the handle the edge already has.
+        sourceHandle: newNode.data.outputConnector?.id ?? edge.sourceHandle,
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
@@ -442,7 +484,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         ...edge,
         id: edge.id.replace(node.id, newNode.id),
         target: newNode.id,
-        targetHandle: newNode.data.inputConnector.id,
+        targetHandle: newNode.data.inputConnector?.id ?? edge.targetHandle,
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
@@ -614,7 +656,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             className={
               'h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             }
-            disabled={!isFormValid || !isBlockDifferent}
+            disabled={!isFormValid || (!isFormDirty && !isBlockDifferent)}
             onClick={handleBlockSubmit}
           >
             Ok
