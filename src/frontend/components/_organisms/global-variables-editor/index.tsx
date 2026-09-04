@@ -10,7 +10,11 @@ import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
 import { cn } from '../../../utils/cn'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -335,6 +339,8 @@ const GlobalVariablesEditor = () => {
       pushToHistory(editor.meta.name)
 
       const newVariables = parseIecStringToVariables(editorCode)
+      const duplicate = findDuplicateVariableName(newVariables)
+      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
 
       const response = setGlobalVariables({
         variables: newVariables,
