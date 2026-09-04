@@ -164,7 +164,7 @@ export type EditorModel = EditorModelBase &
         type: 'plc-device'
         meta: {
           name: string
-          derivation: 'configuration' | 'pin-mapping' | 'orchestrators'
+          derivation: 'configuration' | 'pin-mapping' | 'orchestrators' | 'runtime-status'
         }
       }
     | {

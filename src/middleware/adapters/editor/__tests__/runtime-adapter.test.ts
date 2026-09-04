@@ -28,6 +28,20 @@ beforeEach(() => {
       data: { status: 'SUCCESS', logs: [], exit_code: 0 },
     }),
     runtimeClearCredentials: jest.fn().mockResolvedValue({ success: true }),
+    // The bootloader surface (RTOP-283). A separate service on the device
+    // with its own session, reached over the same IPC bridge.
+    bootloaderGetCapabilities: jest.fn().mockResolvedValue({
+      success: true,
+      data: { service: 'openplc-bootloader', state: 'healthy', recovery: false },
+    }),
+    bootloaderLogin: jest.fn().mockResolvedValue({ success: true, data: { role: 'admin' } }),
+    bootloaderGetStatus: jest.fn().mockResolvedValue({ success: true, data: { state: 'healthy' } }),
+    bootloaderGetDeviceInfo: jest.fn().mockResolvedValue({ success: true, data: { hostname: 'slm-rp4' } }),
+    bootloaderGetRuntimeLogs: jest.fn().mockResolvedValue({ success: true, data: { logs: '', available: true } }),
+    bootloaderStartUpdate: jest.fn().mockResolvedValue({ success: true, data: { state: 'pulling' } }),
+    bootloaderGetUpdateProgress: jest.fn().mockResolvedValue({ success: true, data: { state: 'success' } }),
+    bootloaderRestartRuntime: jest.fn().mockResolvedValue({ success: true, data: { state: 'starting' } }),
+    bootloaderClearSession: jest.fn().mockResolvedValue(undefined),
     onRuntimeTokenRefreshed: jest.fn().mockImplementation(() => jest.fn()),
     runtimeDiscoverDevices: jest.fn().mockResolvedValue({ success: true, devices: [] }),
     onRuntimeDeviceDiscovered: jest.fn().mockImplementation(() => jest.fn()),
@@ -833,5 +847,61 @@ describe('selectRetrievableDevice', () => {
     adapter.selectRetrievableDevice!({ key: '192.168.1.77', name: '192.168.1.77', answeredScan: true })
 
     expect(openPLCStoreBase.getState().deviceDefinitions.configuration.runtimeIpAddress).toBe('192.168.1.77')
+  })
+})
+
+describe('the bootloader surface', () => {
+  // Every method is a thin pass-through to the IPC bridge, so what is worth
+  // pinning is that each one reaches the right channel with the device address
+  // the adapter was given -- and that a thrown bridge error becomes the
+  // port's failure union rather than escaping to the caller.
+
+  it('reaches the bridge for each call, with the selected device address', async () => {
+    await adapter.bootloader.getCapabilities()
+    expect(window.bridge.bootloaderGetCapabilities).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.login('op', 'op')
+    expect(window.bridge.bootloaderLogin).toHaveBeenCalledWith(mockIpAddress, 'op', 'op')
+
+    await adapter.bootloader.getStatus()
+    expect(window.bridge.bootloaderGetStatus).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.getDeviceInfo()
+    expect(window.bridge.bootloaderGetDeviceInfo).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.getRuntimeLogs(50)
+    expect(window.bridge.bootloaderGetRuntimeLogs).toHaveBeenCalledWith(mockIpAddress, 50)
+
+    await adapter.bootloader.startUpdate('v4.1.10')
+    expect(window.bridge.bootloaderStartUpdate).toHaveBeenCalledWith(mockIpAddress, 'v4.1.10')
+
+    await adapter.bootloader.getUpdateProgress()
+    expect(window.bridge.bootloaderGetUpdateProgress).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.restartRuntime()
+    expect(window.bridge.bootloaderRestartRuntime).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.clearSession()
+    expect(window.bridge.bootloaderClearSession).toHaveBeenCalledWith(mockIpAddress)
+  })
+
+  it('returns what the bridge returns', async () => {
+    const result = await adapter.bootloader.getDeviceInfo()
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.hostname).toBe('slm-rp4')
+  })
+
+  it('turns a bridge failure into the port failure union', async () => {
+    // A dead IPC channel must not throw past the adapter: every caller in the
+    // Runtime Status screen branches on `success`, and an exception there
+    // would take the screen down instead of showing "no bootloader".
+    ;(window.bridge.bootloaderGetCapabilities as jest.Mock).mockRejectedValue(new Error('ipc gone'))
+
+    const result = await adapter.bootloader.getCapabilities()
+
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error).toMatch(/ipc gone/)
   })
 })

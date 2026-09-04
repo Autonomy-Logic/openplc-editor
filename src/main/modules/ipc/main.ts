@@ -77,6 +77,7 @@ import {
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
+import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -226,6 +227,13 @@ class MainProcessBridge implements MainIpcModule {
    * channel), so this one goes.
    */
   private runtimeApi = new RuntimeApiClient()
+
+  /**
+   * The runtime bootloader (RTOP-283), on its own port with its own session.
+   * Separate from runtimeApi because the two services share a credential
+   * database, not a token.
+   */
+  private bootloaderApi = new BootloaderApiClient()
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   // Current project root path used to validate file-watcher IPC calls
@@ -275,6 +283,38 @@ class MainProcessBridge implements MainIpcModule {
       // R1/E2). Channels opened per call already read the manager at create().
       this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
+  }
+
+  // ===================== BOOTLOADER HANDLERS =====================
+  // Thin pass-throughs: the client owns validation and message wording, and
+  // its errors are written to be shown to a person as they are.
+
+  handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getCapabilities(ipAddress)
+
+  handleBootloaderLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
+    this.bootloaderApi.login(ipAddress, username, password)
+
+  handleBootloaderGetStatus = (_event: IpcMainInvokeEvent, ipAddress: string) => this.bootloaderApi.getStatus(ipAddress)
+
+  handleBootloaderGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getDeviceInfo(ipAddress)
+
+  handleBootloaderGetRuntimeLogs = (_event: IpcMainInvokeEvent, ipAddress: string, tail?: number) =>
+    this.bootloaderApi.getRuntimeLogs(ipAddress, tail)
+
+  handleBootloaderStartUpdate = (_event: IpcMainInvokeEvent, ipAddress: string, version: string) =>
+    this.bootloaderApi.startUpdate(ipAddress, version)
+
+  handleBootloaderGetUpdateProgress = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getUpdateProgress(ipAddress)
+
+  handleBootloaderRestartRuntime = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.restartRuntime(ipAddress)
+
+  handleBootloaderClearSession = (_event: IpcMainInvokeEvent, ipAddress?: string) => {
+    this.bootloaderApi.clearSession(ipAddress)
+    return { success: true as const }
   }
 
   // ===================== RUNTIME API HANDLERS =====================
@@ -478,6 +518,10 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
     this.tokens.clear()
     this.runtimeApi.clearSession()
+    // The bootloader keeps its own session, so clearing only the runtime's
+    // left the previous user's bootloader token usable -- and that token can
+    // change the runtime version. Signing out has to mean both.
+    this.bootloaderApi.clearSession()
     return { success: true }
   }
 
@@ -850,6 +894,17 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
     this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
     this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
+
+    // ===================== BOOTLOADER =====================
+    this.registerHandle('bootloader:get-capabilities', this.handleBootloaderGetCapabilities)
+    this.registerHandle('bootloader:login', this.handleBootloaderLogin)
+    this.registerHandle('bootloader:get-status', this.handleBootloaderGetStatus)
+    this.registerHandle('bootloader:get-device-info', this.handleBootloaderGetDeviceInfo)
+    this.registerHandle('bootloader:get-runtime-logs', this.handleBootloaderGetRuntimeLogs)
+    this.registerHandle('bootloader:start-update', this.handleBootloaderStartUpdate)
+    this.registerHandle('bootloader:get-update-progress', this.handleBootloaderGetUpdateProgress)
+    this.registerHandle('bootloader:restart-runtime', this.handleBootloaderRestartRuntime)
+    this.registerHandle('bootloader:clear-session', this.handleBootloaderClearSession)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
