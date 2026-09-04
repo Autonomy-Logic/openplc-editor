@@ -494,7 +494,17 @@ export default class MenuBuilder {
     const templateDefault: MenuItemConstructorOptions[] = [
       {
         label: i18n.t('menu:file.label'),
-        visible: false,
+        // Hidden on Windows ONLY, where the in-app React menubar renders its own
+        // File menu and a native one beside it would be a duplicate. Linux gets
+        // no in-app menubar (`app-layout.tsx` draws no title bar there), so this
+        // menu is the only File menu it has and must stay visible.
+        //
+        // It was a bare `visible: false` before, which read as "Windows and Linux
+        // both hide this" — but Linux shows the menu regardless, so the flag was
+        // describing an intent the platform never applied. Spelling the platform
+        // out keeps the behaviour Linux already has if Electron ever starts
+        // honouring the flag there.
+        visible: process.platform !== 'win32',
         submenu: [
           {
             label: i18n.t('menu:file.submenu.newProject'),
