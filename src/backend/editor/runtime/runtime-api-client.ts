@@ -62,15 +62,31 @@ const LoginResponseSchema = z.object({ access_token: z.string() })
  * runtimes only, and an older one answers 404 rather than a partial body --
  * but a future one may add fields, and a strict shape would reject it.
  */
-const DeviceInfoSchema = z.object({
-  hostname: z.string().optional(),
-  architecture: z.string().optional(),
-  kernel: z.string().optional(),
-  system: z.string().optional(),
-  containerized: z.boolean().optional(),
-  updatePolicy: z.string().optional(),
-  bootloaderPort: z.number().nullable().optional(),
-})
+/**
+ * Host facts from `/api/device-info`.
+ *
+ * Every field is optional because a runtime may report a subset -- but the
+ * object as a whole is NOT optional, and that distinction is load-bearing. A
+ * runtime older than this endpoint does not answer 404 as one would hope: it
+ * answers HTTP 200 with its catch-all body, `{"error":"Unknown argument"}`.
+ * An all-optional schema accepts that as an empty device-info, and the screen
+ * then renders "Native" for a device it knows nothing about -- a false claim
+ * about every runtime currently in the field. So the payload has to carry at
+ * least one field this endpoint actually returns.
+ */
+const DeviceInfoSchema = z
+  .object({
+    hostname: z.string().optional(),
+    architecture: z.string().optional(),
+    kernel: z.string().optional(),
+    system: z.string().optional(),
+    containerized: z.boolean().optional(),
+    updatePolicy: z.string().optional(),
+    bootloaderPort: z.number().nullable().optional(),
+  })
+  .refine((info) => Object.values(info).some((value) => value !== undefined), {
+    message: 'the runtime does not serve device information',
+  })
 export type RuntimeDeviceInfo = z.infer<typeof DeviceInfoSchema>
 
 /** Both `/api/status`-shaped endpoints; every field optional, as the runtime sends them. */

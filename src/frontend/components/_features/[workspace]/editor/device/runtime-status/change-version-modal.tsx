@@ -11,7 +11,14 @@
  * legitimate thing to want, and the bootloader stays reachable either way.
  */
 
+import * as Select from '@radix-ui/react-select'
+import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
+import {
+  clearRuntimeVersionsCache,
+  listRuntimeVersions,
+  type RuntimeVersion,
+} from '@root/middleware/shared/utils/runtime-versions'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
@@ -47,6 +54,14 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
   const [progress, setProgress] = useState<UpdateProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+
+  // The installable versions, and whether they could be read at all. A device
+  // on a workbench with no internet still needs to be able to install a
+  // version it already holds, so a failed listing falls back to typing rather
+  // than blocking the action.
+  const [versions, setVersions] = useState<RuntimeVersion[] | null>(null)
+  const [versionsError, setVersionsError] = useState<string | null>(null)
+  const [loadingVersions, setLoadingVersions] = useState(false)
 
   // Kept in a ref so the poll loop can stop itself without being re-created
   // on every tick, which would restart the interval each time.
@@ -105,6 +120,31 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
     }, POLL_INTERVAL_MS)
   }, [runtime, version, poll, stopPolling])
 
+  const loadVersions = useCallback(async (signal?: AbortSignal) => {
+    setLoadingVersions(true)
+    const result = await listRuntimeVersions(signal)
+    if (signal?.aborted) return
+    setLoadingVersions(false)
+    if (result.ok) {
+      setVersions(result.versions)
+      setVersionsError(null)
+      return
+    }
+    if (result.error === 'cancelled') return
+    setVersions(null)
+    setVersionsError(result.error)
+  }, [])
+
+  // Fetched when the dialog opens rather than on mount: the list is only
+  // needed here, and a screen that merely displays runtime status should not
+  // reach out to the network on its own.
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    void loadVersions(controller.signal)
+    return () => controller.abort()
+  }, [open, loadVersions])
+
   // Adopt an update that is already running.
   //
   // Opening this modal while the device is mid-update -- because another
@@ -153,22 +193,76 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
             supported.
           </p>
 
-          <label className='flex flex-col gap-1'>
+          <div className='flex flex-col gap-1'>
             <span className='text-xs font-medium text-neutral-600 dark:text-neutral-400'>Version</span>
-            <input
-              aria-label='Runtime version to install'
-              className='rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
-              disabled={busy}
-              onChange={(event) => setVersion(event.target.value)}
-              placeholder={currentVersion ?? 'v4.2.1'}
-              value={version}
-            />
+
+            {versions !== null ? (
+              <Select.Root disabled={busy} onValueChange={setVersion} value={version}>
+                <Select.Trigger
+                  aria-label='Runtime version to install'
+                  className='flex h-9 w-full items-center justify-between rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
+                >
+                  <span>{version === '' ? 'Select a version' : describeChoice(version, currentVersion)}</span>
+                  <ArrowIcon direction='down' className='stroke-brand' />
+                </Select.Trigger>
+
+                <Select.Content
+                  align='center'
+                  className='z-[999999] max-h-64 w-[--radix-select-trigger-width] overflow-y-auto rounded-md border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900'
+                  position='popper'
+                  side='bottom'
+                  sideOffset={1}
+                >
+                  <Select.Viewport>
+                    {versions.map((entry) => (
+                      <Select.Item
+                        className='w-full cursor-pointer rounded-sm px-3 py-1.5 text-sm text-neutral-900 outline-none hover:bg-neutral-100 dark:text-white dark:hover:bg-neutral-850'
+                        key={entry.tag}
+                        value={entry.tag}
+                      >
+                        <Select.ItemText>{describeChoice(entry.tag, currentVersion)}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select.Root>
+            ) : (
+              // No list. Typing is the only way left to reach a version, and
+              // it is a real one on an offline device holding a side-loaded
+              // image -- so the field stays usable and says why it is here.
+              <input
+                aria-label='Runtime version to install'
+                className='h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
+                disabled={busy || loadingVersions}
+                onChange={(event) => setVersion(event.target.value)}
+                placeholder={loadingVersions ? 'Loading versions…' : (currentVersion ?? 'v4.2.1')}
+                value={version}
+              />
+            )}
+
+            {versionsError !== null && (
+              <span className='flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400'>
+                {versionsError} Type a version instead.
+                <button
+                  className='underline disabled:opacity-50'
+                  disabled={loadingVersions}
+                  onClick={() => {
+                    clearRuntimeVersionsCache()
+                    void loadVersions()
+                  }}
+                  type='button'
+                >
+                  Retry
+                </button>
+              </span>
+            )}
+
             {currentVersion && (
               <span className='text-xs text-neutral-500 dark:text-neutral-400'>
                 Currently running {currentVersion}
               </span>
             )}
-          </label>
+          </div>
 
           {progress && (
             <div aria-live='polite' className='flex flex-col gap-2'>
@@ -226,7 +320,7 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
           {!succeeded && (
             <button
               className='rounded-md bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-50'
-              disabled={busy || !version.trim()}
+              disabled={busy || !version.trim() || version === currentVersion}
               onClick={() => void startUpdate()}
               type='button'
             >
@@ -238,6 +332,16 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
     </Modal>
   )
 }
+
+/**
+ * How one version reads in the list.
+ *
+ * The running version is marked rather than hidden: seeing it in place is what
+ * tells someone the list is the right list, and a gap where they expected it
+ * would read as a missing release.
+ */
+const describeChoice = (tag: string, currentVersion: string | null): string =>
+  tag === currentVersion ? `${tag} (installed)` : tag
 
 /** Plain wording for a state, so the UI never shows a bare enum. */
 const describeState = (progress: UpdateProgress): string => {

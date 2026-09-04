@@ -185,7 +185,11 @@ const RuntimeStatusEditor = () => {
           <InfoField label='Host' value={deviceInfo?.hostname} />
           <InfoField
             label='Deployment'
-            value={deviceInfo ? (deviceInfo.containerized ? 'Container' : 'Native') : undefined}
+            // An absent flag is not a claim of "Native". Belt and braces with
+            // the schema guard: a runtime may report a subset of these fields,
+            // and the one thing this must never do is assert a deployment
+            // shape it was not told about.
+            value={describeDeployment(deviceInfo?.containerized)}
           />
           <InfoField label='Updates' value={describePolicy(deviceInfo?.updatePolicy)} />
           {bootloader.present && <InfoField label='Bootloader' value={bootloader.version} />}
@@ -240,6 +244,13 @@ const describePolicy = (policy?: string): string | undefined => {
     default:
       return undefined
   }
+}
+
+
+/** Only says what the device reported; silence stays silence. */
+const describeDeployment = (containerized: boolean | undefined): string | undefined => {
+  if (containerized === undefined) return undefined
+  return containerized ? 'Container' : 'Native'
 }
 
 export { RuntimeStatusEditor }

@@ -166,3 +166,29 @@ describe('Runtime Status', () => {
     expect(actions.setIncludeEthercatStatsInPolling).toHaveBeenCalledWith(false)
   })
 })
+
+describe('Runtime Status header honesty', () => {
+  it('says nothing about deployment when the runtime did not report it', async () => {
+    // Every runtime released before this endpoint answers HTTP 200 with its
+    // catch-all body rather than a 404. Read as device info, that produced
+    // "Native" for a container -- a false claim about the entire installed
+    // base, and one nobody would think to check.
+    getDeviceInfo.mockResolvedValue({ success: true, data: { hostname: 'slm-rp4' } })
+    getCapabilities.mockResolvedValue({
+      success: true,
+      data: { service: 'openplc-bootloader', state: 'healthy', recovery: false },
+    })
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(screen.getByText('slm-rp4')).toBeTruthy())
+    expect(screen.queryByText('Native')).toBeNull()
+    expect(screen.queryByText('Container')).toBeNull()
+  })
+
+  it('still reports a native install when the runtime says so', async () => {
+    getDeviceInfo.mockResolvedValue({ success: true, data: { containerized: false } })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(screen.getByText('Native')).toBeTruthy())
+  })
+})
