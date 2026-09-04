@@ -292,6 +292,21 @@ export interface ProjectPort {
   removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
 
   /**
+   * Record `projectPath` in the recent-projects list.
+   *
+   * Opening a project tracks it as a side effect of reading it, which covers
+   * every project that has a location. Save As is the one flow that produces a
+   * location without a read: it writes a project the user has open to a folder
+   * they just picked. That matters for a retrieved project, which is
+   * deliberately NOT tracked while it sits in scratch — Save As is what makes
+   * it a project they keep, so it is also what puts it on the list.
+   *
+   * Optional: a platform whose recent list is not a list of paths simply does
+   * not implement it.
+   */
+  trackRecentProject?(projectPath: string): Promise<void>
+
+  /**
    * Recursively delete a project directory and drop its entry from
    * the recent list. Destructive — the editor surfaces a confirmation
    * modal before invoking this. Implementations gate the recursive
