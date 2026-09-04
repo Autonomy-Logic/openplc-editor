@@ -10,6 +10,10 @@ const POLL_INTERVAL_MS = 2000
 // Number of consecutive poll failures before showing connection lost modal
 const MAX_CONSECUTIVE_FAILURES = 5
 
+// Bootloader update states that mean the device is still working. Kept in step
+// with the dialog's own list; anything else is terminal.
+const UPDATE_IN_FLIGHT = new Set(['pulling', 'swapping', 'verifying'])
+
 /**
  * Custom hook that handles runtime status and logs polling.
  * Uses the RuntimePort abstraction so the same hook works on both
@@ -51,7 +55,15 @@ export const useRuntimePolling = () => {
     const { workspaceActions } = useOpenPLCStore.getState()
     workspaceActions.setPlcLogsVisible(false)
     workspaceActions.clearPlcLogs()
-    openModal('runtime-connection-lost', null)
+    // Name the device. Passing null here fell through to the literal
+    // "Unknown", so every message from this path read "The connection to
+    // Unknown has been lost".
+    const { runtimeConnection } = useOpenPLCStore.getState()
+    const endpoint = runtimeConnection.selectedDevice?.deviceName ?? runtimeConnection.ipAddress ?? 'the runtime'
+    openModal('runtime-connection-lost', {
+      label: endpoint,
+      body: `The connection to ${endpoint} was lost after several failed attempts. Check that the runtime is running and reachable, then connect again.`,
+    })
   }, [clearConnectionState, openModal])
 
   const poll = useCallback(async () => {
@@ -70,6 +82,28 @@ export const useRuntimePolling = () => {
     } = currentState
 
     if (curStatus !== 'connected' || !curToken) return
+
+    // A version change stops the runtime on purpose and replaces its
+    // container. Polling through that window would count the gap as failures
+    // and tear down a connection that is about to come back on its own -- so
+    // stand down entirely, and forget the failures already counted so the
+    // first poll after the swap starts from zero.
+    if (currentState.runtimeConnection.runtimeUpdateInProgress) {
+      consecutiveFailuresRef.current = 0
+      // Ask the device whether it is still working, and lower the flag when it
+      // is not.
+      //
+      // The dialog raises the flag and used to lower it on unmount -- which
+      // happened mid-swap if the operator navigated away, re-arming the
+      // "connection lost" modal the flag prevents. It now leaves the flag up,
+      // so the clearing has to happen here: this hook runs for as long as the
+      // device is connected, whatever screen is open.
+      const update = await runtime.bootloader?.getUpdateProgress?.()
+      if (update?.success === true && !UPDATE_IN_FLIGHT.has(update.data.state)) {
+        useOpenPLCStore.getState().deviceActions.setRuntimeUpdateInProgress(false)
+      }
+      return
+    }
 
     isPollingRef.current = true
 
