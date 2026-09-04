@@ -211,6 +211,17 @@ export type SharedWorkspaceActions = {
    * (e.g. host navigation) until the modal resolves.
    */
   closeProject: () => { pendingConfirmation: boolean }
+  /**
+   * Whether closing the project right now would lose work.
+   *
+   * The rule `closeProject` applies, exposed on its own for a caller that has
+   * to REPLACE the project rather than merely close it — retrieving from a
+   * device — and so needs its own save-changes context to come back to. Asking
+   * this instead of re-deriving the condition is what keeps the two in step: a
+   * caller that spelled the rule out again would silently start discarding work
+   * the day the rule changes.
+   */
+  hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
   /**

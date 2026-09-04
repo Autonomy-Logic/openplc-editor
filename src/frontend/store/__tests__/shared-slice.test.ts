@@ -2492,6 +2492,47 @@ describe('createSharedSlice', () => {
     })
 
     // -----------------------------------------------------------------------
+    // hasUnsavedChanges
+    // -----------------------------------------------------------------------
+    describe('hasUnsavedChanges', () => {
+      // The rule `closeProject` applies, asked on its own by a caller that has
+      // to replace the project rather than close it -- retrieving from a
+      // device. The point of sharing it is that the two cannot drift: a caller
+      // that re-derived the condition would start discarding work silently the
+      // day the rule changed.
+      it('is true while the editing state is unsaved', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is true while any file is unsaved, whatever the editing state says', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: false })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is false once everything is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(false)
+      })
+
+      it('agrees with what closeProject does about it', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        const dirty = store.getState().sharedWorkspaceActions.hasUnsavedChanges()
+        const { pendingConfirmation } = store.getState().sharedWorkspaceActions.closeProject()
+
+        expect(pendingConfirmation).toBe(dirty)
+      })
+    })
+
+    // -----------------------------------------------------------------------
     // closeProject
     // -----------------------------------------------------------------------
     describe('closeProject', () => {

@@ -1116,11 +1116,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       return { success: true }
     },
 
-    closeProject: () => {
+    hasUnsavedChanges: () => {
       const editingState = getState().workspace.editingState
       const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved()
+      return !isFilesSaved || editingState === 'unsaved'
+    },
 
-      if (!isFilesSaved || editingState === 'unsaved') {
+    closeProject: () => {
+      if (getState().sharedWorkspaceActions.hasUnsavedChanges()) {
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })

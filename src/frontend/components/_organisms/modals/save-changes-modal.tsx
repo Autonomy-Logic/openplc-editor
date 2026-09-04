@@ -15,6 +15,8 @@ import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
  * - 'open-recent-project': Close current, then open a recent project (editor)
  * - 'open-project-by-path': Close current, then open project at path (editor)
  * - 'close-app': Save before quitting the application (editor)
+ * - 'retrieve-project': Close current, then open the project fetched from a
+ *   device (both platforms)
  */
 export type ValidationContext =
   | 'create-project'
@@ -23,6 +25,7 @@ export type ValidationContext =
   | 'open-project-by-path'
   | 'close-project'
   | 'close-app'
+  | 'retrieve-project'
 
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
@@ -73,6 +76,12 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
       }
       case 'open-recent-project':
       case 'open-project-by-path':
+      // Retrieving replaces the open project with one fetched from a device.
+      // It belongs with these rather than with 'close-project': the deferred
+      // action opens something, so closing is a step on the way and not the
+      // outcome. Under 'close-project' both buttons ended at the start screen
+      // with the fetched project abandoned -- the retrieve was never resumed.
+      case 'retrieve-project':
         // Execute the deferred action (e.g., re-open the recent project)
         onAfterAction?.()
         return
