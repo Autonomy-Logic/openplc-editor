@@ -983,6 +983,42 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('')
     })
+
+    it('renames a global variable to a different case of its own name', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('test_global', 'global') })
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'test_global',
+        data: { name: 'TEST_GLOBAL' },
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].name).toBe('TEST_GLOBAL')
+    })
+
+    it('refuses to rename a global variable onto another global that differs only by case', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('Motor', 'global') })
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('Pump', 'global') })
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'Pump',
+        data: { name: 'motor' },
+      })
+      expect(result.ok).toBe(false)
+      expect(result.title).toContain('already exists')
+      expect(store.getState().project.data.configurations.resource.globalVariables[1].name).toBe('Pump')
+    })
+
+    it('renames a local variable to a different case of its own name', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('counter')]))
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'counter',
+        data: { name: 'Counter' },
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous[0].interface?.variables[0].name).toBe('Counter')
+    })
   })
 
   describe('getVariable', () => {
