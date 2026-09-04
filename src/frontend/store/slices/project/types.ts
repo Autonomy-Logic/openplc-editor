@@ -273,6 +273,7 @@ export type ProjectActions = {
   /** Stash raw `.dt` files that failed to parse on load so saves echo
    *  them back verbatim (no silent data loss). */
   setUnparsedDataTypeFiles: (files: RawProjectFile[]) => void
+  setDataTypesNeedMigration: (needsMigration: boolean) => void
   /** Drop a preserved raw file once its text parses and becomes a real type. */
   removeUnparsedDataTypeFile: (relativePath: string) => void
 
@@ -384,6 +385,11 @@ export type ProjectSlice = {
    *  back verbatim by the save flow until they parse — an unreadable
    *  file must never be silently dropped from disk. */
   unparsedDataTypeFiles: RawProjectFile[]
+  /** True while the project still carries its data types inline in
+   *  `project.json` with no `datatypes/*.dt` on disk. A single-file save of one
+   *  data type migrates the whole set while this is set, so the project is
+   *  never left half in one format and half in the other. */
+  dataTypesNeedMigration: boolean
   /**
    * Session-scoped IEC alias memory: `memoryKey -> alias`, where `memoryKey`
    * is a channel's stable semantic identity (`vpp:moduleId:slot:channel`,

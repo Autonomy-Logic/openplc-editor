@@ -80,43 +80,4 @@ describe('mergeStrucppRuntimeIntoSkeleton', () => {
     })
     expect(input).toEqual(before)
   })
-
-  // --- vendor-facing contract headers ------------------------------------
-  //
-  // The HAL lands at `src/arduino.cpp` while the firmware's own headers stay
-  // under `examples/Baremetal/`, so without this mirroring a HAL cannot
-  // `#include "openplc_retain.h"` at all — the two directories never see each
-  // other, and a vendor implementing retain has to restate the ABI by hand.
-
-  it('mirrors openplc_retain.h into src/ so the HAL can include it', () => {
-    const merged = mergeStrucppRuntimeIntoSkeleton({
-      firmwareSkeleton: { 'examples/Baremetal/openplc_retain.h': '/* contract */' },
-      strucppRuntimeHeaders: {},
-      boardHalContent: '#include "openplc_retain.h"',
-    })
-    expect(merged['src/openplc_retain.h']).toBe('/* contract */')
-    // Copied, not moved: the Baremetal build still compiles its own copy.
-    expect(merged['examples/Baremetal/openplc_retain.h']).toBe('/* contract */')
-  })
-
-  it('mirrors nothing when there is no HAL to include it', () => {
-    // No HAL means no `src/` at all; putting a lone header there would give
-    // arduino-cli a library directory with nothing in it.
-    const merged = mergeStrucppRuntimeIntoSkeleton({
-      firmwareSkeleton: { 'examples/Baremetal/openplc_retain.h': '/* contract */' },
-      strucppRuntimeHeaders: {},
-    })
-    expect(merged['src/openplc_retain.h']).toBeUndefined()
-  })
-
-  it('skips a contract header the skeleton does not carry', () => {
-    // A skeleton assembled before the header existed must still merge, rather
-    // than writing `undefined` into src/ and failing the build later.
-    const merged = mergeStrucppRuntimeIntoSkeleton({
-      firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': '/* sketch */' },
-      strucppRuntimeHeaders: {},
-      boardHalContent: 'hal',
-    })
-    expect('src/openplc_retain.h' in merged).toBe(false)
-  })
 })

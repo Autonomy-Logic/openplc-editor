@@ -380,23 +380,32 @@ export function createEditorCompilerPlatformPort(
         // The source project, stored on the device beside the artifacts so it
         // can be retrieved later. Never fatal: the device runs the new program
         // either way, and failing an upload over the optional half of it would
-        // be a worse outcome than losing retrievability. A runtime without
-        // snapshot support ignores the extra parts, so there is nothing to
-        // probe for first.
+        // be a worse outcome than losing retrievability.
         let snapshot: { archive: Buffer; metadata: string; missingLibraries: string[] } | null = null
-        try {
-          snapshot = (await context.buildUploadSnapshot?.()) ?? null
-          if (snapshot && snapshot.missingLibraries.length > 0) {
+        if (!args.supportsProjectSnapshot) {
+          // Asked and answered by the pre-upload capability check. Building one
+          // anyway would spend the user's time compressing a project this
+          // device discards on arrival, and leave them a device they cannot
+          // retrieve from with nothing said about why.
+          log(
+            'This runtime does not store source projects, so the project will not be sent with the program and cannot be retrieved from this device later.',
+            'warning',
+          )
+        } else {
+          try {
+            snapshot = (await context.buildUploadSnapshot?.()) ?? null
+            if (snapshot && snapshot.missingLibraries.length > 0) {
+              log(
+                `Stored project will not include these libraries, which are not installed here: ${snapshot.missingLibraries.join(', ')}`,
+                'warning',
+              )
+            }
+          } catch (error) {
             log(
-              `Stored project will not include these libraries, which are not installed here: ${snapshot.missingLibraries.join(', ')}`,
+              `Could not prepare the project for storage on the device: ${error instanceof Error ? error.message : String(error)}`,
               'warning',
             )
           }
-        } catch (error) {
-          log(
-            `Could not prepare the project for storage on the device: ${error instanceof Error ? error.message : String(error)}`,
-            'warning',
-          )
         }
 
         const deployOutcome = await deployRuntimeProgram({
@@ -602,12 +611,12 @@ export function createEditorCompilerPlatformPort(
         if (!result.success) return { success: false as const, error: result.error }
         return { success: true as const, body: result.data }
       }
-      const { version, minEditorVersion } = await probeRuntimeVersion({
+      const { version, minEditorVersion, supportsProjectSnapshot } = await probeRuntimeVersion({
         fetchCapabilities: () => getJson('/api/capabilities'),
         fetchVersion: () => getJson('/api/version'),
         log,
       })
-      return { ok: true, version, minEditorVersion }
+      return { ok: true, version, minEditorVersion, supportsProjectSnapshot }
     },
 
     /**

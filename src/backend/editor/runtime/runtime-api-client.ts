@@ -63,34 +63,6 @@ const PlcStatusResponseSchema = z.object({
   switchPosition: z.string().optional(),
 })
 
-/**
- * What a device reports about the source project it stores.
- *
- * Every field but `present` is optional because a device with nothing stored
- * answers `{present: false}` alone, and because these values come from whoever
- * uploaded -- the runtime never opens the archive to check them.
- */
-const ProjectSnapshotInfoSchema = z.object({
-  present: z.boolean(),
-  projectName: z.string().optional(),
-  editorVersion: z.string().optional(),
-  uploadedBy: z.string().optional(),
-  timestamp: z.string().optional(),
-  sizeBytes: z.number().optional(),
-  formatVersion: z.number().optional(),
-  libraries: z
-    .array(
-      z.object({
-        name: z.string(),
-        version: z.string().optional(),
-        hash: z.string().optional(),
-      }),
-    )
-    .optional(),
-})
-
-export type ProjectSnapshotInfo = z.infer<typeof ProjectSnapshotInfoSchema>
-
 const ProjectSnapshotBodySchema = z.object({
   projectName: z.string(),
   contentBase64: z.string(),
@@ -589,25 +561,6 @@ export class RuntimeApiClient {
         (r) => !r.success && r.statusCode === 401,
       )
       .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
-  }
-
-  /**
-   * What the device says about the source project it is storing, if any.
-   *
-   * Authenticated but not admin-gated, so the UI can decide whether to OFFER
-   * retrieval without needing the privilege that retrieval itself requires.
-   */
-  async getProjectSnapshotInfo(
-    ipAddress: string,
-  ): Promise<{ success: true; info: ProjectSnapshotInfo } | { success: false; error: string }> {
-    const result = await this.makeRuntimeApiRequest<ProjectSnapshotInfo | null>(
-      ipAddress,
-      '/api/project-snapshot/info',
-      (data) => ProjectSnapshotInfoSchema.safeParse(parseJsonOrNull(data)).data ?? null,
-    )
-    if (!result.success) return { success: false, error: result.error }
-    if (!result.data) return { success: false, error: 'The device sent an unreadable snapshot description' }
-    return { success: true, info: result.data }
   }
 
   /**

@@ -23,7 +23,7 @@ void debugGetMd5(void *endianness);
 // Always-on debugger extras — served even without full Modbus (DEBUGGER_ENABLED).
 void debugGetStatus(void);
 void debugGetVersion(void);
-void debugGetBoardId(void);
+void debugGetDeviceId(void);
 // On-device license storage (0x49/0x4A). `len` is the BIG-ENDIAN wire length
 // (already unpacked by the dispatcher); the blob CONTENT is little-endian.
 void debugWriteLicense(uint16_t len, const uint8_t *blob);  // 0x49
@@ -31,10 +31,5 @@ void debugReadLicense(void);                                // 0x4A
 // FC 0x4B -- set the runtime run/stop state. Command only; the state is read
 // back through debugGetStatus (FC 0x46), which reports it.
 void plcSetState(uint8_t desired);
-
-/* FC 0x4C — discard stored retained values (cold reset). Sent by the editor
- * after a program upload, matching CODESYS, where a download clears retained
- * memory. */
-void plcRetainReset(void);
 
 #endif

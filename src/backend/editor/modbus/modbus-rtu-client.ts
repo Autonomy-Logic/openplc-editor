@@ -1,19 +1,19 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
 import {
-  buildGetBoardIdRequest,
+  buildGetDeviceIdRequest,
   buildGetStatusRequest,
   buildPlcSetStateRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
-  parseGetBoardIdResponse,
+  parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
-  DebugBoardIdResult,
+  DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
@@ -652,19 +652,19 @@ export class ModbusRtuClient implements DeviceModbusTransport {
   }
 
   /**
-   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). Response offsets
+   * FC 0x48 DEBUG_GET_DEVICE_ID. Bare `[FC]` PDU (no payload). Response offsets
    * account for the 6-byte TCP-compat padding sendRequestImpl prepends, so the
    * pure PDU `[FC][status][id_len:u8][id_bytes...]` starts at offset 7 — hand it
-   * to the shared parseGetBoardIdResponse rather than parsing inline.
+   * to the shared parseGetDeviceIdResponse rather than parsing inline.
    */
-  async getBoardId(): Promise<DebugBoardIdResult> {
+  async getDeviceId(): Promise<DebugDeviceIdResult> {
     try {
-      // buildGetBoardIdRequest() returns the [FC] PDU; assembleRequest writes
+      // buildGetDeviceIdRequest() returns the [FC] PDU; assembleRequest writes
       // the function code + slaveId itself and expects only the trailing payload
-      // (empty for board-id), so strip the leading FC byte.
-      const pdu = buildGetBoardIdRequest()
+      // (empty for device-id), so strip the leading FC byte.
+      const pdu = buildGetDeviceIdRequest()
       const payload = Buffer.from(pdu.subarray(1))
-      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload)
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_DEVICE_ID, payload)
       const response = await this.sendRequest(request)
 
       if (response.length < 9) {
@@ -672,7 +672,7 @@ export class ModbusRtuClient implements DeviceModbusTransport {
       }
 
       const pduResponse = Uint8Array.prototype.slice.call(response, 7)
-      return parseGetBoardIdResponse(pduResponse)
+      return parseGetDeviceIdResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

@@ -13,17 +13,9 @@ Same mechanism, and the same reasoning, as license_store_weak.cpp.
 */
 #include "openplc_retain.h"
 
-__attribute__((weak)) uint16_t openplc_retain_capacity(void)
-{
-    return 0;
-}
-
-__attribute__((weak)) openplc_retain_status_t openplc_retain_write(const uint8_t *, uint16_t)
-{
-    return OPLC_RETAIN_UNSUPPORTED;
-}
-
-__attribute__((weak)) openplc_retain_status_t openplc_retain_read(uint8_t *, uint16_t, uint16_t *out_len)
+__attribute__((weak)) openplc_retain_status_t openplc_retain_read(const char *, uint16_t,
+                                                                 uint8_t *, uint16_t,
+                                                                 uint16_t *out_len)
 {
     // Zero the length even on the unsupported path: a caller that ignores the
     // status and reads `out_len` would otherwise act on an uninitialised
@@ -33,10 +25,16 @@ __attribute__((weak)) openplc_retain_status_t openplc_retain_read(uint8_t *, uin
     return OPLC_RETAIN_UNSUPPORTED;
 }
 
-__attribute__((weak)) openplc_retain_status_t openplc_retain_clear(void)
+__attribute__((weak)) openplc_retain_status_t openplc_retain_write(const uint8_t *, uint16_t)
 {
-    // OK rather than UNSUPPORTED: "discard what is stored" is satisfied by a
-    // backend that stores nothing. Reporting failure here would make the
-    // editor's post-upload reset look broken on every board without retention.
+    return OPLC_RETAIN_UNSUPPORTED;
+}
+
+__attribute__((weak)) openplc_retain_status_t openplc_retain_flush(void)
+{
+    // OK rather than UNSUPPORTED: "commit anything you are holding" is
+    // satisfied by a backend that holds nothing. The runtime does not act on
+    // the result, and reporting failure here would put a misleading line in
+    // the log of every board without retention, on every stop.
     return OPLC_RETAIN_OK;
 }

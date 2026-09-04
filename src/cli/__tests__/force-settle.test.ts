@@ -105,6 +105,19 @@ describe('force read-back', () => {
     expect(response.ok).toBe(true)
   })
 
+  it('reports a confirmed force as [FORCED] in its own response', async () => {
+    // The value is decoded by the read-back BEFORE the force is registered, so
+    // its own `forced` flag is stale. Without correcting it on the way out,
+    // `debug force` answered `forced: false` for a force that had just landed
+    // and the very next `debug read` answered `forced: true` — observed on a
+    // P1AM-100 over RTU.
+    const response = await makeCore().handle({ id: 1, kind: 'force', name: 'main:flag', value: 'TRUE' })
+
+    if (!response.ok) throw new Error('expected the force to succeed')
+    if (response.data?.kind !== 'force') throw new Error(`expected a force payload, got ${String(response.data?.kind)}`)
+    expect(response.data.value.forced).toBe(true)
+  })
+
   it('does not mark a refused force as [FORCED] in later reads', async () => {
     // `setVariable` succeeding only means the request was QUEUED on runtime v4;
     // the .so's refusal of a CONSTANT leaf lands later at the dispatcher's drain

@@ -6,7 +6,7 @@ export enum ModbusFunctionCode {
   DEBUG_GET_MD5 = 0x45,
   DEBUG_GET_STATUS = 0x46,
   DEBUG_GET_VERSION = 0x47,
-  DEBUG_GET_BOARD_ID = 0x48,
+  DEBUG_GET_DEVICE_ID = 0x48,
   /** Store a license blob on the device (VPP licensing). Write-only: the read
    *  back is DEBUG_READ_LICENSE, and it is a SEPARATE round trip on purpose —
    *  0x49 only stores bytes, it validates nothing. */

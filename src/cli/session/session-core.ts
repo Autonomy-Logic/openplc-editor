@@ -317,7 +317,15 @@ export class SessionCore {
     const readBack = await this.readBackAfterWrite(variable, input)
     if ('error' in readBack) return this.fail(id, readBack.code, readBack.error)
     this.forced.add(variable.name)
-    return { id, ok: true, data: { kind: 'force', value: readBack.value } }
+    // `forced: true` on the way out, because `readBack.value` was decoded BEFORE
+    // the line above registered the force, so its own flag is stale.
+    //
+    // Only the confirmed path reaches here — a refused force returned at the
+    // `'error' in readBack` guard — so this cannot label a refusal as forced,
+    // which is the failure the delayed registration exists to prevent. Without
+    // it, `debug force` answered `forced: false` for a force that had just
+    // succeeded, and the very next `debug read` said `forced: true`.
+    return { id, ok: true, data: { kind: 'force', value: { ...readBack.value, forced: true } } }
   }
 
   /**

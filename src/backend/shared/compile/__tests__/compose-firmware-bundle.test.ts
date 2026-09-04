@@ -129,6 +129,7 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       firmwareSkeleton: {
         'examples/Baremetal/Baremetal.ino': 'BAREMETAL_INO',
         'examples/Baremetal/c_blocks_code.cpp': 'STATIC_BASELINE',
+        'examples/Baremetal/openplc_retain.h': 'RETAIN_CONTRACT',
         'src/arduino.cpp': 'ARDUINO_HAL',
         'src/iec_std_lib.hpp': 'STRUCPP_RUNTIME_HEADER',
       },
@@ -146,6 +147,8 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       // The skeleton's static baseline survives alongside the generated unit:
       // it defines no symbols and pulls in no strucpp header.
       'examples/Baremetal/c_blocks_code.cpp': 'STATIC_BASELINE',
+      'examples/Baremetal/openplc_retain.h': 'RETAIN_CONTRACT',
+      'src/openplc_retain.h': 'RETAIN_CONTRACT',
       'src/c_blocks_code.cpp': 'CBLOCKS_CODE_WITH_USER',
       'src/arduino.cpp': 'ARDUINO_HAL',
       'src/iec_std_lib.hpp': 'STRUCPP_RUNTIME_HEADER',
@@ -183,6 +186,23 @@ describe('composeFirmwareBundle — full layout snapshot', () => {
       'src/defines.h': 'DEFINES_H',
       'src/OpenPLCUserLib.h': expect.stringContaining('#pragma once') as unknown as string,
     })
+  })
+})
+
+describe('composeFirmwareBundle — vendor-facing contract headers', () => {
+  // The web skeleton never passes through mergeStrucppRuntimeIntoSkeleton, so the mirror cannot depend on a HAL.
+  it('mirrors openplc_retain.h into src/ even when the skeleton carries no HAL', () => {
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      firmwareSkeleton: { 'examples/Baremetal/openplc_retain.h': '/* contract */' },
+    })
+    expect(out['src/openplc_retain.h']).toBe('/* contract */')
+    expect(out['examples/Baremetal/openplc_retain.h']).toBe('/* contract */')
+  })
+
+  it('writes nothing under src/ when the skeleton lacks the header', () => {
+    const out = composeFirmwareBundle({ ...baseInput, firmwareSkeleton: {} })
+    expect('src/openplc_retain.h' in out).toBe(false)
   })
 })
 

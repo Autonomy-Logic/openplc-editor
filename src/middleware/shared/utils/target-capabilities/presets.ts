@@ -58,6 +58,7 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: true,
+  nativeRetainStore: false,
   plcStateControl: false,
   directUsbUpload: true,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -86,6 +87,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   // (v3: Modbus TCP, v4: WebSocket). The main process already routes the
   // command over REST for both, so the only thing that ever stopped v3
   // was this flag.
+  nativeRetainStore: false,
   plcStateControl: true,
   directUsbUpload: false,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -113,6 +115,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: true,
   isInProcessSimulator: false,
+  nativeRetainStore: true,
   plcStateControl: true,
   directUsbUpload: false,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -147,6 +150,7 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  nativeRetainStore: false,
   plcStateControl: true,
   directUsbUpload: true,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is

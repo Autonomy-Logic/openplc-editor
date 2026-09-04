@@ -386,7 +386,7 @@ describe('useDeviceConnect', () => {
       await result.current.connect()
 
       const [, props] = mockOpenModal.mock.calls[0]
-      expect(props).toMatchObject({ title: 'No Licence For This Device' })
+      expect(props).toMatchObject({ title: 'No Licence for This Device' })
       expect((props as { buttons: string[] }).buttons).toEqual(['Buy Licence', 'Continue in Demo Mode'])
 
       // Buying opens the device-BOUND purchase page: the id derived main-side is

@@ -7,6 +7,7 @@ import type {
   DeviceConfiguration,
   DeviceLinkTransport,
   DevicePin,
+  PersistentStorageSettings,
   PlcStatus,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
@@ -286,6 +287,15 @@ export type DeviceActions = {
   setAwaitingPurchase: (awaiting: boolean) => void
   /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
   clearDeviceLicense: () => void
+  /**
+   * Update the project's persistent-storage (RETAIN) settings.
+   *
+   * A project property: the values travel with the project, are editable with
+   * no device attached, and reach the runtime as `retain.conf` in the upload.
+   * Partial by design so the screen can change one field at a time without
+   * re-sending the other two.
+   */
+  setPersistentStorage: (patch: Partial<PersistentStorageSettings>) => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

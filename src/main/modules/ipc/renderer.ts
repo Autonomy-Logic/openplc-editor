@@ -3,7 +3,6 @@ import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/com
 import type {
   DiscoveredRuntimeDevice,
   RuntimeLogEntry,
-  RuntimeProjectSnapshotInfo,
   RuntimeProjectSnapshotMetadata,
 } from '@root/middleware/shared/ports'
 import type {
@@ -30,9 +29,7 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
-  RetainConfigResult,
   RuntimeUserRole,
-  UpdateRetainConfigParams,
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
@@ -540,10 +537,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:create-user', ipAddress, username, password, role),
   runtimeListUsers: (ipAddress: string): Promise<ListUsersResult> =>
     ipcRenderer.invoke('runtime:list-users', ipAddress),
-  runtimeGetRetainConfig: (ipAddress: string): Promise<RetainConfigResult> =>
-    ipcRenderer.invoke('runtime:get-retain-config', ipAddress),
-  runtimeUpdateRetainConfig: (ipAddress: string, params: UpdateRetainConfigParams): Promise<RetainConfigResult> =>
-    ipcRenderer.invoke('runtime:update-retain-config', ipAddress, params),
   runtimeWhoAmI: (ipAddress: string): Promise<WhoAmIResult> => ipcRenderer.invoke('runtime:whoami', ipAddress),
   runtimeUpdateUser: (
     ipAddress: string,
@@ -610,11 +603,6 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
-  /** What a device says about the project it stores; `present: false` when none. */
-  runtimeProjectSnapshotInfo: (
-    ipAddress: string,
-  ): Promise<{ success: boolean; info?: RuntimeProjectSnapshotInfo; error?: string }> =>
-    ipcRenderer.invoke('runtime:project-snapshot-info', ipAddress),
   /**
    * Retrieve the stored project and unpack it to a scratch directory.
    *

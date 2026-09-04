@@ -152,6 +152,17 @@ export interface UploadRuntimeV4Args {
   bundle: Record<string, string>
   /** Discriminated device context; see `PlatformDeviceContext`. */
   context: PlatformDeviceContext
+  /**
+   * Whether this runtime stores the source project sent beside a program, as
+   * declared at `GET /api/capabilities` and read by the pre-upload version
+   * check.
+   *
+   * `false` means do not build one: a runtime that does not support snapshots
+   * discards the extra parts silently, so sending one costs the user upload
+   * time for an archive that is thrown away, and leaves them a device they
+   * cannot retrieve from with nothing said about why.
+   */
+  supportsProjectSnapshot: boolean
 }
 
 export interface UploadResult {
@@ -246,6 +257,13 @@ export interface CheckRuntimeVersionResult {
    *  when the runtime is unreachable or doesn't expose the
    *  endpoint (very old v3 runtimes). */
   version: string | null
+  /**
+   * Whether this runtime stores the source project an upload carries, from
+   * `projectSnapshot` at `GET /api/capabilities`. `false` for every runtime
+   * predating the feature or the endpoint, which is the honest default: one
+   * that stores snapshots says so.
+   */
+  supportsProjectSnapshot: boolean
   /**
    * Oldest editor this runtime accepts programs from, declared at
    * `GET /api/capabilities` (DOPE-448).  `null` means the runtime

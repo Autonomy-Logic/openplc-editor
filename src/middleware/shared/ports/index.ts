@@ -159,7 +159,6 @@ export type {
   LoginParams,
   LoginResult,
   RuntimeLogsResult,
-  RuntimeProjectSnapshotInfo,
   RuntimeProjectSnapshotMetadata,
   RuntimeStatusResult,
   UsersInfoResult,

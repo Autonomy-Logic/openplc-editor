@@ -4,7 +4,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "ModbusSlave.h"
-// The debugger handlers (and their arduino_runtime_glue.h / ArduinoUniqueID
+// The debugger handlers (and their arduino_runtime_glue.h / license_gate.h
 // dependencies) moved to modbus_debug.cpp.
 
 // Global Modbus vars — modbus / mb_frame / mb_frame_len moved to modbus_frame.cpp;
@@ -36,7 +36,7 @@ void mbtask()
 // Register store + operation FCs (readRegisters..writeMultipleCoils) moved to modbus_registers.cpp.
 
 // Debugger FCs (debugInfo/debugSetTrace/debugGetTrace/debugGetTraceList/debugGetMd5/
-// debugGetStatus/debugGetVersion/debugGetBoardId) moved to modbus_debug.cpp.
+// debugGetStatus/debugGetVersion/debugGetDeviceId) moved to modbus_debug.cpp.
 
 // calcCrc() and the CRC lookup tables moved to modbus_crc.cpp.
 

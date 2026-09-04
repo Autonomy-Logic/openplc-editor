@@ -57,16 +57,6 @@ export interface MergeStrucppRuntimeArgs {
  * (web's simulator HAL is dropped in favour of the editor's
  * per-board variant when both are present).
  */
-/**
- * Firmware headers a board HAL is expected to be able to include.
- *
- * Deliberately a short, explicit list rather than "every header in
- * examples/Baremetal": these are the ones that describe a contract a VENDOR
- * implements, and copying the whole firmware into `src/` would put two copies
- * of every translation unit in front of arduino-cli.
- */
-const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
-
 export function mergeStrucppRuntimeIntoSkeleton(args: MergeStrucppRuntimeArgs): Record<string, string> {
   const merged: Record<string, string> = { ...args.firmwareSkeleton }
   for (const [v4Key, content] of Object.entries(args.strucppRuntimeHeaders)) {
@@ -76,23 +66,6 @@ export function mergeStrucppRuntimeIntoSkeleton(args: MergeStrucppRuntimeArgs): 
   }
   if (typeof args.boardHalContent === 'string' && args.boardHalContent.length > 0) {
     merged['src/arduino.cpp'] = args.boardHalContent
-
-    // Vendor-facing runtime contracts, mirrored into `src/` beside the HAL.
-    //
-    // The HAL lands at `src/arduino.cpp` while the firmware's own headers stay
-    // under `examples/Baremetal/`, so a HAL that implements one of these
-    // contracts could not `#include` it — the two directories never see each
-    // other. A vendor writing a retain backend hits this immediately: the
-    // include fails, and the only workaround is to restate the contract by
-    // hand in the HAL, which is how two copies of an ABI start drifting.
-    //
-    // Copied rather than moved: the Baremetal build still compiles its own
-    // copy, and arduino-cli's `--library src` pass is what makes this one
-    // visible to the HAL.
-    for (const contract of VENDOR_FACING_CONTRACT_HEADERS) {
-      const header = merged[`examples/Baremetal/${contract}`]
-      if (typeof header === 'string') merged[`src/${contract}`] = header
-    }
   }
   return merged
 }

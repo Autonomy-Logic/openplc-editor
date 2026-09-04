@@ -58,7 +58,8 @@
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
 import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from '../simulator/types'
 import type {
-  DebugBoardIdResult,
+  DebugAnchorResult,
+  DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugSetResult,
@@ -183,9 +184,9 @@ export function buildGetVersionRequest(): Uint8Array {
   return buf
 }
 
-export function buildGetBoardIdRequest(): Uint8Array {
+export function buildGetDeviceIdRequest(): Uint8Array {
   const buf = alloc(1)
-  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_BOARD_ID)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_DEVICE_ID)
   return buf
 }
 
@@ -396,49 +397,80 @@ export function parseGetVersionResponse(data: Uint8Array): DebugVersionResult {
 }
 
 /**
- * Parse a board-id response (FC 0x48).
- * Layout: `[FC][status][id_len:u8][id_bytes...]`. `id_len === 0` means the
- * target has no unique-id support — success with an empty id.
+ * Parse the FC 0x48 identity frame: `[FC][status][id_len:u8][id_bytes...]`.
+ *
+ * The FRAME is medium-independent, the MEANING is not (DOPE-589): bare metal
+ * answers the derived device_id, runtime-v4 answers its raw device-tree anchor.
+ * So the byte-level parse lives here once and the two typed wrappers below give
+ * the bytes the name they actually have. `id_len === 0` is a valid SUCCESS
+ * reply: the board has no identity a licence can be bound to.
  */
-export function parseGetBoardIdResponse(data: Uint8Array): DebugBoardIdResult {
+function parseIdentityFrame(data: Uint8Array): { bytes: Uint8Array } | { error: string; unsupported?: boolean } {
   if (data.length < 2) {
-    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+    return { error: `Invalid response: too short (${data.length} bytes)` }
   }
 
   const fc = readU8(data, 0)
   const status = readU8(data, 1)
 
-  if (fc !== ModbusFunctionCode.DEBUG_GET_BOARD_ID) {
-    return { success: false, error: 'Function code mismatch' }
+  if (fc !== ModbusFunctionCode.DEBUG_GET_DEVICE_ID) {
+    return { error: 'Function code mismatch' }
   }
 
-  // LIC_UNSUPPORTED on the ANCHOR read: the target says it has no hardware
-  // anchor to license against (runtime-v4 host without a device-tree serial).
-  // Kept distinguishable so the flow lands on the terminal 'unsupported'
-  // outcome instead of a retryable check-failed (review 2026-08-20, R2/E5).
+  // LIC_UNSUPPORTED: the target says it has no identity to license against
+  // (a runtime-v4 host with no device-tree serial). Kept distinguishable so the
+  // flow lands on the terminal 'unsupported' outcome instead of a retryable
+  // check-failed (review 2026-08-20, R2/E5).
   if (status === ModbusDebugResponse.LIC_UNSUPPORTED) {
-    return { success: false, unsupported: true, error: statusError(status) }
+    return { error: statusError(status), unsupported: true }
   }
 
   if (status !== ModbusDebugResponse.SUCCESS) {
-    return { success: false, error: statusError(status) }
+    return { error: statusError(status) }
   }
 
   if (data.length < 3) {
-    return { success: false, error: `Incomplete board-id response (${data.length} bytes, expected at least 3)` }
+    return { error: `Incomplete identity response (${data.length} bytes, expected at least 3)` }
   }
 
   const idLen = readU8(data, 2)
   if (data.length < 3 + idLen) {
-    return {
-      success: false,
-      error: `Incomplete board-id data (expected ${idLen} bytes, got ${data.length - 3})`,
-    }
+    return { error: `Incomplete identity data (expected ${idLen} bytes, got ${data.length - 3})` }
   }
 
-  const boardId = data.slice(3, 3 + idLen)
-  const boardIdHex = Array.from(boardId, (b) => b.toString(16).padStart(2, '0')).join('')
-  return { success: true, boardId, boardIdHex }
+  return { bytes: data.slice(3, 3 + idLen) }
+}
+
+const toHex = (bytes: Uint8Array): string => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+
+/**
+ * BARE METAL. The bytes are the DERIVED device_id, produced inside the closed
+ * license-core (`license_gate_device_id`), so nothing here hashes them again.
+ * An empty id means this board cannot hold a licence.
+ */
+export function parseGetDeviceIdResponse(data: Uint8Array): DebugDeviceIdResult {
+  const parsed = parseIdentityFrame(data)
+  if ('error' in parsed) {
+    return parsed.unsupported
+      ? { success: false, unsupported: true, error: parsed.error }
+      : { success: false, error: parsed.error }
+  }
+  return { success: true, deviceId: parsed.bytes, deviceIdHex: toHex(parsed.bytes) }
+}
+
+/**
+ * RUNTIME-V4. The bytes are the RAW device-tree anchor; the editor still derives
+ * the device_id from them (`deriveDeviceId`). The caller re-normalizes the
+ * trailing bytes: see websocket-debug-transport.
+ */
+export function parseGetAnchorResponse(data: Uint8Array): DebugAnchorResult {
+  const parsed = parseIdentityFrame(data)
+  if ('error' in parsed) {
+    return parsed.unsupported
+      ? { success: false, unsupported: true, error: parsed.error }
+      : { success: false, error: parsed.error }
+  }
+  return { success: true, anchor: parsed.bytes, anchorHex: toHex(parsed.bytes) }
 }
 
 /**

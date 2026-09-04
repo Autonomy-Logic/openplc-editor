@@ -113,13 +113,12 @@ describeIfHex('Phase 4 debugger end-to-end (avr8js + ModbusRtuClient)', () => {
     expect(result.version).toMatch(/^\d+\.\d+\.\d+/)
   }, 30000)
 
-  it('FC 0x48 DEBUG_GET_BOARD_ID answers a well-formed reply with no id', async () => {
-    const result = await client.getBoardId()
-    // ArduinoUniqueID would work on AVR — it reports 9 bytes on an
-    // ATmega2560 — but the simulator is not licensable, so the build defines
-    // OPENPLC_NO_UNIQUE_ID and the library never enters the firmware. A
-    // unique id exists only to bind a paid VPP licence to a board, and a
-    // simulated board cannot hold one.
+  it('FC 0x48 DEBUG_GET_DEVICE_ID answers a well-formed reply with no id', async () => {
+    const result = await client.getDeviceId()
+    // The simulator links no license-core, so `license_gate_device_id` resolves
+    // to the weak default in license_gate_weak.cpp and answers 0. That is the
+    // truthful reply rather than a gap: an identity exists only to bind a paid
+    // VPP licence to a board, and a simulated board cannot hold one.
     //
     // What matters is that the FRAME is still valid: SUCCESS status, id_len
     // 0, no trailing bytes. `device-probe` reads the successful reply (not
@@ -127,7 +126,7 @@ describeIfHex('Phase 4 debugger end-to-end (avr8js + ModbusRtuClient)', () => {
     // a protocol error.
     expect(result.success).toBe(true)
     expect(result.error).toBeUndefined()
-    expect(result.boardId).toHaveLength(0)
-    expect(result.boardIdHex).toBe('')
+    expect(result.deviceId).toHaveLength(0)
+    expect(result.deviceIdHex).toBe('')
   }, 30000)
 })

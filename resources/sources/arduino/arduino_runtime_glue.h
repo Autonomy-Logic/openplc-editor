@@ -56,20 +56,27 @@ void runtime_plc_cycle();
 // so the sketch only has to bring the pair below up at start.
 // ---------------------------------------------------------------------------
 
-// Decide once whether this firmware has usable retention: does the program
-// retain anything, is a backend linked, and is its capacity enough. Call from
+// Decide once what this runtime can do about retention: does the program retain
+// anything, and does its blob fit the buffer this firmware allocated. Call from
 // setup() BEFORE runtime_retain_load().
-void runtime_retain_init();
+//
+// `program_md5` is PROGRAM_MD5 from the generated defines.h — 32 hex characters
+// identifying the program. It is passed in rather than read here because
+// defines.h has no include guard and must reach a translation unit through
+// exactly one path (modbus_config.h), which the glue is not on. The driver uses
+// it to tell whether the values it holds belong to the program now running; see
+// Baremetal/openplc_retain.h.
+void runtime_retain_init(const char *program_md5);
 
 // Restore the stored values. Call from setup() after runtime_retain_init().
-// Also called internally after a program re-initialisation, so a STOP does not
-// behave as a cold start.
+// Also called internally on the transition into RUN and after a program
+// re-initialisation, so a STOP does not behave as a cold start. Idempotent.
 void runtime_retain_load();
 
-// Discard the stored values, so the next start uses the declared initialisers.
-// Reached over the wire by MB_FC_RETAIN_RESET, which the editor sends after an
-// upload — CODESYS clears retained memory on download.
-void runtime_retain_clear();
+// Ask the driver to commit anything it is still holding. Called internally on
+// the transition into STOP. A hint, not the durability mechanism — that is the
+// per-scan write. See Baremetal/openplc_retain.h.
+void runtime_retain_flush();
 
 // ---------------------------------------------------------------------------
 // Run/stop control surface.
