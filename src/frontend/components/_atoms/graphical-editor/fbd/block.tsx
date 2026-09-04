@@ -357,6 +357,21 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
+/**
+ * Where the execution-order badge's centre sits, measured in from the block's
+ * bottom-right corner.
+ *
+ * The badge is meant to be quartered by the two borders -- a quarter inside the
+ * block, three quarters out. Centring it on the mathematical corner does that
+ * on paper, but `rounded-md` (6px) means the drawn border has already curved
+ * away by the time it reaches that point, so the circle reads as hanging low
+ * and outside. The straight run of each border ends one radius short of the
+ * corner, so the midpoint between the two -- half the radius -- is where the
+ * borders visually cut the circle in half.
+ */
+const BLOCK_CORNER_RADIUS = 6
+const EXECUTION_ORDER_BADGE_INSET = BLOCK_CORNER_RADIUS / 2
+
 const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
   const pouName = useBoundPou()
@@ -801,6 +816,12 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
   }
 
+  // 0 means "not ordered", so only a positive, finite order renders a badge.
+  // `Number.isFinite` still earns its place: a project file can carry anything,
+  // and a non-finite value must not reach the badge as "Infinity".
+  const executionOrderBadge =
+    Number.isFinite(data.executionOrder) && data.executionOrder > 0 ? Math.trunc(data.executionOrder) : null
+
   return (
     <div
       className={cn('relative', {
@@ -809,6 +830,31 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       onMouseEnter={() => setHoveringBlock(true)}
       onMouseLeave={() => setHoveringBlock(false)}
     >
+      {/* Execution-order badge. Only when the block carries an order (> 0 --
+          0 means "unordered", see the Block Properties dialog), so an ordinary
+          diagram stays uncluttered and a numbered one shows its sequence
+          without opening a dialog per block (DOPE-606).
+
+          Anchored to the block's own width/height rather than the wrapper's
+          edges: the wrapper is a few pixels taller than the drawn block, so
+          `bottom-0` sat below the border. Centring on the corner leaves the
+          badge a quarter inside the block and three quarters outside, and it
+          holds for a two-digit number because the translate is relative to the
+          badge's own size. */}
+      {executionOrderBadge !== null && (
+        <div
+          className='pointer-events-none absolute z-10 flex h-5 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-brand px-1 font-caption text-[10px] font-medium leading-none text-white shadow-sm ring-2 ring-white dark:ring-neutral-950'
+          style={{
+            left: (width ?? DEFAULT_BLOCK_WIDTH) - EXECUTION_ORDER_BADGE_INSET,
+            top: (height ?? DEFAULT_BLOCK_HEIGHT) - EXECUTION_ORDER_BADGE_INSET,
+          }}
+          aria-label={`Execution order ${executionOrderBadge}`}
+          title={`Execution order: ${executionOrderBadge}`}
+        >
+          {executionOrderBadge}
+        </div>
+      )}
+
       {data.hasDivergence && hoveringBlock && (
         <div
           className='pointer absolute right-[-12px] top-[-12px] z-10 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 shadow-sm'

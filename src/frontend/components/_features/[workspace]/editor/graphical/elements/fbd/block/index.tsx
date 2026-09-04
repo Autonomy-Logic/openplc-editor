@@ -1,7 +1,9 @@
 import * as Switch from '@radix-ui/react-switch'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { LibraryState } from '@root/frontend/store/slices/library'
 import { cn } from '@root/frontend/utils/cn'
+import { hasLegacyInOutOutputHandle } from '@root/frontend/utils/graphical/in-out-pin-rules'
 import {
   assembleVariables,
   buildNextExtensibleInput,
@@ -79,6 +81,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
 
+  const [isExecutionOrderFocused, setIsExecutionOrderFocused] = useState(false)
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
   const [documentation, setDocumentation] = useState<string | null>(getBlockDocumentation(blockVariant))
@@ -99,6 +102,24 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
   const isBlockDifferent = selectedNode !== node
+
+  // The execution order this dialog opened with. `useRef` keeps the first
+  // render's value for the life of the dialog, and the modal is mounted
+  // conditionally, so reopening it recaptures a fresh baseline.
+  const initialExecutionOrder = useRef(formState.executionOrder)
+
+  // Execution order is the ONE field `isBlockDifferent` cannot see. Every
+  // other control in this dialog also calls `setNode` -- input count, the
+  // execution-control switch, and a name that resolves to a library block --
+  // which replaces `node` and so already enabled OK. The arrows and the
+  // execution-order field call `setFormState` alone, so the value could be
+  // typed but never applied (DOPE-606).
+  //
+  // Deliberately NOT keyed on `formState.name`: `handleBlockSubmit` builds the
+  // new node from `blockVariant`, never from the typed name, so enabling OK
+  // for a name that resolves to nothing would rebuild the node and discard
+  // what was typed without saying so.
+  const isExecutionOrderDirty = formState.executionOrder !== initialExecutionOrder.current
 
   useEffect(() => {
     if (!selectedFileKey) return
@@ -298,14 +319,45 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     }))
   }
 
+  // Execution order is stored as a plain number, where 0 means "not ordered":
+  // the transpiler buckets anything > 0 ahead of everything else and sorts the
+  // rest by layout position, so 0 is the absence of an order rather than the
+  // lowest one. Showing a bare "0" read as "runs first" and meant the opposite,
+  // so the field renders it as None (DOPE-606).
+  const NO_EXECUTION_ORDER = '0'
+  const isNoExecutionOrder = (value: string) => value === '' || Number(value) === 0
+  const executionOrderDisplay = isExecutionOrderFocused
+    ? formState.executionOrder === NO_EXECUTION_ORDER
+      ? ''
+      : formState.executionOrder
+    : isNoExecutionOrder(formState.executionOrder)
+      ? 'None'
+      : formState.executionOrder
+
+  /** Digits only — a leading `-` is dropped rather than rejected on submit. */
+  const handleExecutionOrderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = event.target.value.replace(/[^0-9]/g, '')
+    setFormState((prevState) => ({
+      ...prevState,
+      executionOrder: digits === '' ? NO_EXECUTION_ORDER : String(Number(digits)),
+    }))
+  }
+
+  // Blank the field while it has focus so the user types over "None" rather
+  // than around it; restore the label on the way out.
+  const handleExecutionOrderFocus = () => setIsExecutionOrderFocused(true)
+  const handleExecutionOrderBlur = () => setIsExecutionOrderFocused(false)
+
   const handleExecutionOrderIncrement = () => {
     setFormState((prevState) => ({
       ...prevState,
-      executionOrder: String(Math.min(Number(prevState.executionOrder) + 1, maxInputs)),
+      executionOrder: String(Number(prevState.executionOrder) + 1),
     }))
   }
 
   const handleExecutionOrderDecrement = () => {
+    // Floors at 0, which is None. There is no upper clamp: execution order is
+    // an ordering key, not a count, and the old ceiling reused `maxInputs`.
     setFormState((prevState) => ({
       ...prevState,
       executionOrder: String(Math.max(Number(prevState.executionOrder) - 1, 0)),
@@ -343,6 +395,30 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleBlockSubmit = () => {
+    // A block still drawn with a VAR_IN_OUT pin on BOTH sides has not been
+    // converted yet, and rebuilding it here drops that output-side pin -- so
+    // any wire reading the pin would be left pointing at a handle the new node
+    // does not have. Converting it as a side effect of an unrelated edit would
+    // also break the promise the project-open warning makes ("nothing is
+    // changed until you do"), so refuse and point at the update badge, the way
+    // the update path itself refuses an ambiguous in-out feed.
+    //
+    // `selectedNode` FIRST, and not `node` alone: picking a replacement variant
+    // rebuilds `node` under current rules, which clears the legacy pin from the
+    // copy while the diagram edges being remapped below are still the original
+    // node's. Checking only the rebuilt copy let the swap path walk straight
+    // past this guard.
+    if (hasLegacyInOutOutputHandle(selectedNode) || hasLegacyInOutOutputHandle(node)) {
+      toast({
+        title: 'Update this block first',
+        description:
+          'It is still drawn with a VAR_IN_OUT pin on both sides. Hover the block and click its ' +
+          'update badge to convert it, then reapply this change.',
+        variant: 'fail',
+      })
+      return
+    }
+
     const newNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
       position: {
@@ -399,24 +475,76 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
 
-    edges.source?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        source: newNode.id,
-        sourceHandle: newNode.data.outputConnector.id,
+    // Re-point this node's edges onto the rebuilt node BY PIN NAME.
+    //
+    // Every edge used to be forced onto `inputConnector` / `outputConnector`,
+    // which are just the FIRST pin on each side -- so a block with two or more
+    // inputs had all of its input wires collapsed onto IN1 and the wires to
+    // IN2, IN3 ... were lost. Two wires on one pin transpile as a parallel
+    // combination, so `SUB(acc, 3)` came out as `SUB(IN1 := 3 OR acc)` and
+    // failed to compile; with same-typed pins it would have changed the logic
+    // and still built (DOPE-611).
+    //
+    // A pin that still exists on the rebuilt node keeps its wire. That covers
+    // the whole same-variant case -- an execution-order edit rebuilds the node
+    // with an identical pin set, so nothing moves at all -- and it also
+    // preserves the matching pins when the variant is swapped for one that
+    // shares names. A wire whose pin is genuinely gone cannot be re-pointed
+    // anywhere honest, so it is dropped and reported rather than silently
+    // piled onto the first pin.
+    // Handle type taken from the node itself, so this cannot drift from the
+    // builder and needs neither an import nor an assertion.
+    const pinIds = (handles: typeof newNode.data.inputHandles): Set<string> =>
+      new Set((handles ?? []).map((handle) => handle.id).filter((id): id is string => !!id))
+    const newInputPins = pinIds(newNode.data.inputHandles)
+    const newOutputPins = pinIds(newNode.data.outputHandles)
+
+    // One pass over the affected edges, keyed by id, so an edge that is BOTH a
+    // source and a target of this block -- a self-loop, which the canvas allows
+    // -- has both endpoints resolved together. Two passes rewrote the id on the
+    // first and then failed to find the edge on the second, leaving the other
+    // endpoint pointing at a node that no longer exists.
+    const affected = new Map<string, (typeof newEdges)[number]>()
+    for (const edge of [...(edges.source ?? []), ...(edges.target ?? [])]) affected.set(edge.id, edge)
+
+    const replacements = new Map<string, (typeof newEdges)[number] | null>()
+    for (const edge of affected.values()) {
+      let next = { ...edge, id: edge.id.replace(node.id, newNode.id) }
+      let drop = false
+
+      if (edge.source === selectedNode.id) {
+        if (edge.sourceHandle && newOutputPins.has(edge.sourceHandle)) next = { ...next, source: newNode.id }
+        else drop = true
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
-    edges.target?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        target: newNode.id,
-        targetHandle: newNode.data.inputConnector.id,
+      if (!drop && edge.target === selectedNode.id) {
+        if (edge.targetHandle && newInputPins.has(edge.targetHandle)) next = { ...next, target: newNode.id }
+        else drop = true
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+      replacements.set(edge.id, drop ? null : next)
+    }
+
+    // Replace IN PLACE, never append: an id from `edges` that is no longer in
+    // `newEdges` must stay gone rather than being resurrected alongside it.
+    let droppedWires = 0
+    newEdges = newEdges.flatMap((edge) => {
+      if (!replacements.has(edge.id)) return [edge]
+      const replacement = replacements.get(edge.id) ?? null
+      if (replacement === null) {
+        droppedWires += 1
+        return []
+      }
+      return [replacement]
     })
+
+    if (droppedWires > 0) {
+      toast({
+        title: `${droppedWires} connection${droppedWires === 1 ? '' : 's'} removed`,
+        description:
+          `The replacement block has no matching pin for ${droppedWires === 1 ? 'it' : 'them'}. ` +
+          'Reconnect to the pins you want.',
+        variant: 'fail',
+      })
+    }
 
     setNodes({
       editorName: pouName,
@@ -508,9 +636,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 id='executionOrder'
                 className={inputStyle}
                 placeholder=''
-                type='number'
-                value={formState.executionOrder}
-                onChange={handleInputChange}
+                type='text'
+                inputMode='numeric'
+                value={executionOrderDisplay}
+                onChange={handleExecutionOrderChange}
+                onFocus={handleExecutionOrderFocus}
+                onBlur={handleExecutionOrderBlur}
               />
               <ArrowButtonGroup
                 onIncrement={() => handleExecutionOrderIncrement()}
@@ -564,7 +695,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             className={
               'h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             }
-            disabled={!isFormValid || !isBlockDifferent}
+            disabled={!isFormValid || (!isExecutionOrderDirty && !isBlockDifferent)}
             onClick={handleBlockSubmit}
           >
             Ok

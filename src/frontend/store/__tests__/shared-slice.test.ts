@@ -88,11 +88,11 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('Main')
         expect(state.selectedTab).toBe('Main')
 
-        // Library slice: user library added
-        expect(state.libraries.user).toHaveLength(1)
-        expect(state.libraries.user[0].name).toBe('Main')
-        // program maps to 'function' library type
-        expect(state.libraries.user[0].type).toBe('function')
+        // Library slice: a program is NOT a library block. It is instantiated by
+        // the Resource, never called from another POU, and project load excludes
+        // programs when rebuilding `libraries.user` -- so registering one here
+        // would put it in the block pickers until the next reopen (DOPE-606).
+        expect(state.libraries.user).toHaveLength(0)
       })
 
       it('creates an LD function-block', () => {
@@ -135,7 +135,8 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous).toHaveLength(3)
         expect(state.tabs).toHaveLength(3)
         expect(Object.keys(state.files)).toHaveLength(3)
-        expect(state.libraries.user).toHaveLength(3)
+        // Two, not three: the program is excluded from the library.
+        expect(state.libraries.user.map((library) => library.name)).toEqual(['Func1', 'FB1'])
       })
 
       it('seeds ladderFlows when creating an LD POU', () => {
@@ -233,7 +234,8 @@ describe('createSharedSlice', () => {
         expect(state.files['NewName']).toBeDefined()
         expect(state.files['OldName']).toBeUndefined()
         expect(state.tabs[0].name).toBe('NewName')
-        expect(state.libraries.user[0].name).toBe('NewName')
+        // The POU here is a program, so it never entered `libraries.user`.
+        expect(state.libraries.user).toHaveLength(0)
       })
 
       it('flags the workspace dirty after rename (persist only on save)', () => {

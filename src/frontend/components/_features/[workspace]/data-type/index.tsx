@@ -8,7 +8,6 @@ import { dtViewUri } from '../../../../services/st-lsp/types'
 import { useOpenPLCStore } from '../../../../store'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import { cn } from '../../../../utils/cn'
-import { isDataTypeFilesEnabled } from '../../../../utils/feature-flags'
 import { getErrorMessage } from '../../../../utils/get-error-message'
 import { serializeDataTypeToText } from '../../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../../utils/PLC/data-type-text-parser'
@@ -46,8 +45,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   // this type's own model — never from the active `editor`.
   const model = editor.meta.name === dataTypeName ? editor : editors.find((e) => e.meta.name === dataTypeName)
   const modelStructure = model?.type === 'plc-datatype' ? model.structure : undefined
-  const codeViewEnabled = isDataTypeFilesEnabled()
-  const display = codeViewEnabled && modelStructure?.display === 'code' ? 'code' : 'table'
+  const display = modelStructure?.display === 'code' ? 'code' : 'table'
   const modelCode = modelStructure?.display === 'code' ? modelStructure.code : undefined
 
   // An unparseable file has no entry in `dataTypes` — raw text is all there is.
@@ -309,33 +307,31 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             )}
           </div>
         </div>
-        {codeViewEnabled && (
-          <div
-            aria-label='Data type visualization switch container'
-            className='ml-auto flex h-fit w-fit items-center justify-center rounded-md'
-          >
-            <TableIcon
-              aria-label='Data type table visualization'
-              onClick={() => handleVisualizationTypeChange('table')}
-              size='md'
-              currentVisible={display === 'table'}
-              className={cn(
-                display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-              )}
-            />
-            <CodeIcon
-              aria-label='Data type code visualization'
-              onClick={() => handleVisualizationTypeChange('code')}
-              size='md'
-              currentVisible={display === 'code'}
-              className={cn(
-                display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-              )}
-            />
-          </div>
-        )}
+        <div
+          aria-label='Data type visualization switch container'
+          className='ml-auto flex h-fit w-fit items-center justify-center rounded-md'
+        >
+          <TableIcon
+            aria-label='Data type table visualization'
+            onClick={() => handleVisualizationTypeChange('table')}
+            size='md'
+            currentVisible={display === 'table'}
+            className={cn(
+              display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+              'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
+            )}
+          />
+          <CodeIcon
+            aria-label='Data type code visualization'
+            onClick={() => handleVisualizationTypeChange('code')}
+            size='md'
+            currentVisible={display === 'code'}
+            className={cn(
+              display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+              'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
+            )}
+          />
+        </div>
       </div>
       <div aria-label='Data type content container' className='flex h-full w-full flex-col overflow-hidden'>
         {display === 'table' ? (
