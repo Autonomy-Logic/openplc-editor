@@ -42,6 +42,7 @@ import {
   getBodyLineOffset,
   type LanguageService,
   lspDiagnosticToMonaco,
+  shiftSemanticTokensToBody,
   startLanguageService,
   suppressNoDefinitionFound,
 } from '../lsp-shared'
@@ -49,6 +50,7 @@ import { parseScopedCompletionType } from './completion-type'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { type PrintSemanticTokens, registerPrintSemanticTokensApi } from './print-tokens-api'
 import { getSyncedDocumentText } from './project-sync'
 import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
 import {
@@ -59,6 +61,7 @@ import {
   parsePouUri,
   parsePouVarsUri,
   POU_DECLARATION_LINE_COUNT,
+  pouUri,
   pouVarsUri,
   type StLspService,
   type StLspStartOptions,
@@ -433,6 +436,21 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   registerScopedQueryApi({ completeInScope })
   void warmUpScopeWorker()
 
+  // ---------------------------------------------------------------------------
+  // Print export — body-relative ST semantic tokens for an arbitrary POU.
+  // See print-tokens-api.ts for why this registry exists.
+  // ---------------------------------------------------------------------------
+  async function requestBodySemanticTokens(pouName: string): Promise<PrintSemanticTokens | null> {
+    const legend = sharedService.getSemanticTokensLegend()
+    if (!legend) return null
+    const uri = pouUri(pouName)
+    const result = await sharedService.requestSemanticTokens(uri)
+    if (!result) return null
+    const lineOffset = getBodyLineOffset(uri)
+    return { legend, data: shiftSemanticTokensToBody(result.data, lineOffset) }
+  }
+  registerPrintSemanticTokensApi({ requestBodySemanticTokens })
+
   async function pushAllStlibs(connection: MessageConnection): Promise<void> {
     const sources = await stlibSource.listStlibs()
     // Honor the project's enabled-library set, plus the always-on
@@ -498,6 +516,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 
     dispose() {
       registerScopedQueryApi(null)
+      registerPrintSemanticTokensApi(null)
       for (const off of dtViewSyncDisposables) off()
       dtViewSyncDisposables.length = 0
       lastDataTypeDiagnostics = []
@@ -506,6 +525,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   }
 }
 
+export { getPrintSemanticTokensApi, type PrintSemanticTokens, type PrintSemanticTokensApi } from './print-tokens-api'
 export {
   getScopedQueryApi,
   isValueCompletionKind,
