@@ -357,10 +357,12 @@ describe('pouActions.duplicate', () => {
   })
 
   it('registers a duplicated function as a function', () => {
-    useOpenPLCStore.getState().pouActions.create({ type: 'function', name: 'Scale', language: 'st' })
-    useOpenPLCStore.getState().pouActions.duplicate('Scale', 'Scale_copy')
+    // Not `Scale`: the test harness seeds the real bundled libraries, and SCALE is a
+    // function in oscat-basic and plcopen-softmotion, so the create is refused.
+    useOpenPLCStore.getState().pouActions.create({ type: 'function', name: 'Scaler', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('Scaler', 'Scaler_copy')
 
-    expect(useOpenPLCStore.getState().libraries.user.find((l) => l.name === 'Scale_copy')?.type).toBe('function')
+    expect(useOpenPLCStore.getState().libraries.user.find((l) => l.name === 'Scaler_copy')?.type).toBe('function')
   })
 
   it('does not register a duplicated program as a library block', () => {
