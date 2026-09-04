@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import type { LibraryPouType } from '../../../../middleware/shared/ports/library-types'
 import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
@@ -156,6 +157,28 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
   }
 }
 
+const LIBRARY_SYMBOL_KIND: Record<LibraryPouType, string> = {
+  function: 'function',
+  'function-block': 'function block',
+}
+
+/**
+ * The library symbol, if any, that already owns `name`.
+ *
+ * Library functions and function blocks are declared in the same generated namespace as
+ * the project's own elements, and the bundled archives are in every build regardless of
+ * the project's `libraries` list — so no setting makes such a name safe. The whole
+ * installed pool counts, not just the bundled set: enabling a library later must not
+ * turn a project that compiles into one that does not.
+ */
+function librarySymbolOwning(state: SharedRootState, name: string): { library: string; kind: string } | null {
+  for (const library of state.libraries.system) {
+    const symbol = library.pous.find((pou) => nameMatches(pou.name, name))
+    if (symbol) return { library: library.name, kind: LIBRARY_SYMBOL_KIND[symbol.type] }
+  }
+  return null
+}
+
 type NamedElementKind = 'pou' | 'data-type' | 'global-variable-list'
 
 const SAME_KIND_TAKEN: Record<NamedElementKind, string> = {
@@ -170,7 +193,8 @@ const SAME_KIND_TAKEN: Record<NamedElementKind, string> = {
  * POUs, data types and Global Variable Lists share ONE identifier namespace — IEC gives
  * types and variables the same one — and a list occupies TWO symbols in it: the instance
  * keeps the user's name, the struct backing it takes `<name>_TYPE`. Checking each
- * collection only against itself covered a third of a rule with three parts.
+ * collection only against itself covered a third of a rule with three parts. Library
+ * functions and function blocks occupy that same namespace — see `librarySymbolOwning`.
  *
  * The workspace makes a collision worse than the duplicate symbol the compiler would
  * report: `files[name]`, tabs, editor models and `undoRedo[name]` are keyed by raw
@@ -225,6 +249,11 @@ function elementNameCollision(
     return `"${name}" is the type name of global variable list "${listOwningTheName.name}"`
   }
 
+  const librarySymbol = librarySymbolOwning(state, name)
+  if (librarySymbol) {
+    return `"${name}" is a ${librarySymbol.kind} in the ${librarySymbol.library} library`
+  }
+
   if (kind !== 'global-variable-list') return null
 
   const derived = globalVariableListTypeName(name)
@@ -246,6 +275,10 @@ function elementNameCollision(
   // still in the build — the generated struct would be a second declaration of it.
   if (!collidesWithUnparsedDataTypeFile(state, derived).ok) {
     return `"${name}" needs the type name "${derived}", which a data type file already uses`
+  }
+  const derivedLibrarySymbol = librarySymbolOwning(state, derived)
+  if (derivedLibrarySymbol) {
+    return `"${name}" needs the type name "${derived}", which is a ${derivedLibrarySymbol.kind} in the ${derivedLibrarySymbol.library} library`
   }
   return null
 }
@@ -401,7 +434,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.setSelectedTab(name)
       state.editorActions.setEditor(editorModel)
 
-      state.libraryActions.addLibrary(name, type === 'program' ? 'function' : type)
+      // Programs are instantiated by the Resource, never called from another
+      // POU, so they are not library blocks. Registering them as `function`
+      // put them in the block pickers, and project load drops them again
+      // (see the hydration below), so a placed one referenced a library entry
+      // that no longer existed after a reopen (DOPE-606).
+      if (type !== 'program') {
+        state.libraryActions.addLibrary(name, type)
+      }
 
       // Mark project as unsaved
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
@@ -489,6 +529,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const editorModel = createEditorObjectForPou(newName, sourcePou.pouType, language)
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
+
+      // Register the copy as a user library, exactly as the create path does.
+      // `libraries.user` is what backs the "User-defined POUs" explorer tree,
+      // the FBD/LD block pickers and Monaco's completion list, so a duplicate
+      // that skips this exists in the project but cannot be placed in a
+      // diagram or completed in ST (DOPE-606). Programs are excluded for the
+      // same reason as on the create path.
+      if (sourcePou.pouType !== 'program') {
+        state.libraryActions.addLibrary(newName, sourcePou.pouType)
+      }
 
       // Persist only on save: flag the new POU dirty instead of auto-saving.
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
@@ -1180,6 +1230,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Raw .dt files that failed to parse — stashed so saves echo
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
+      // A pre-DOPE-385 project owes a migration to `datatypes/*.dt`. Always set,
+      // so reopening a project that has since migrated clears the flag.
+      getState().projectActions.setDataTypesNeedMigration(data.dataTypesNeedMigration ?? false)
 
       // Unreadable files have no PLCDataType, so no tree leaf to click.
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {

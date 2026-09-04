@@ -17,7 +17,6 @@ import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
 import type { LadderFlowType } from '../store/slices/ladder'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
-import { isDataTypeFilesEnabled } from '../utils/feature-flags'
 import { parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
@@ -76,9 +75,11 @@ function buildProjectJsonContent(state: StoreState): string {
     {
       meta: { name: project.meta.name, type: metaType },
       data: {
-        // With .dt persistence on, types live in their own files and
-        // project.json stops carrying them (same shape as `pous`).
-        dataTypes: isDataTypeFilesEnabled() ? [] : project.data.dataTypes,
+        // Types live in their own `datatypes/<Name>.dt` files, so project.json
+        // stops carrying them (same shape as `pous`). Emitting the empty array
+        // rather than dropping the field is what clears the inline copy when a
+        // pre-`.dt` project is saved for the first time.
+        dataTypes: [],
         // Global Variable Lists have no file of their own — project.json IS
         // their persistence, so anything omitted from this object is dropped
         // from the saved project however well it lives in the store. There is
@@ -130,8 +131,9 @@ function buildDataTypeSpec(dt: PLCDataType): ProjectFileSpec {
  *   - The library manifest (`library.json` at the project root).
  *   - A lean `project.json` (no resource / server / remote-device
  *     because those don't exist for a library; the `data.libraries`
- *     and `data.dataTypes` fields are still emitted via the same
- *     serialiser the PLC path uses).
+ *     field is still emitted via the same serialiser the PLC path
+ *     uses, and `data.dataTypes` is emitted empty because the types
+ *     live in `datatypes/<Name>.dt`).
  *
  * Configuration / pin-mapping / server / remote-device files are
  * skipped entirely for libraries — there are no runtime targets to
@@ -145,18 +147,16 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     yield buildPouSpec(pou, state)
   }
 
-  if (isDataTypeFilesEnabled()) {
-    for (const dt of project.data.dataTypes) {
-      yield buildDataTypeSpec(dt)
-    }
-    // Raw .dt files that failed to parse on load — echoed verbatim
-    // so an unreadable file is never silently dropped from disk.
-    // A parsed type claiming the same path wins: guards non-UI entry
-    // points (e.g. XML import) from yielding duplicate paths.
-    for (const f of state.unparsedDataTypeFiles) {
-      if (project.data.dataTypes.some((dt) => `datatypes/${dt.name}.dt` === f.relativePath)) continue
-      yield { path: f.relativePath, content: f.content, category: 'data-type' }
-    }
+  for (const dt of project.data.dataTypes) {
+    yield buildDataTypeSpec(dt)
+  }
+  // Raw .dt files that failed to parse on load — echoed verbatim
+  // so an unreadable file is never silently dropped from disk.
+  // A parsed type claiming the same path wins: guards non-UI entry
+  // points (e.g. XML import) from yielding duplicate paths.
+  for (const f of state.unparsedDataTypeFiles) {
+    if (project.data.dataTypes.some((dt) => `datatypes/${dt.name}.dt` === f.relativePath)) continue
+    yield { path: f.relativePath, content: f.content, category: 'data-type' }
   }
 
   if (!isLibrary) {
@@ -289,12 +289,12 @@ function serializeProjectFile(
     return [{ path: 'library.json', content, category: 'library-manifest' }]
   }
 
-  if (file.type === 'data-type' && isDataTypeFilesEnabled()) {
+  if (file.type === 'data-type') {
     const dt = project.data.dataTypes.find((d) => d.name === fileName)
     return dt ? [buildDataTypeSpec(dt)] : []
   }
 
-  // resource (and data-type while the .dt flag is off): live in project.json
+  // resource: lives in project.json
   return [{ path: 'project.json', content: buildProjectJsonContent(state), category: 'project-json' }]
 }
 
@@ -403,6 +403,37 @@ export function buildAllProjectFileContents(): Record<string, string> {
  */
 export type SaveReason = 'user' | 'pre-build'
 
+/**
+ * A session that ended with no way back, and what to say about it.
+ *
+ * Both the resume queue and the "sign in again" message assume a sign-in exists
+ * to wait for. Where the build has no account surface they are worse than
+ * useless: a partner-integration launch authenticates its visitor by an
+ * ephemeral session, that person has no Autonomy account and no sign-in is on
+ * screen, so `onRestored` can never fire. The save would sit in the queue
+ * forever while the toast named an action that does not exist, and they would
+ * keep typing into a tab where nothing more is ever written.
+ *
+ * `hasEdgeAccount` is the right question because it is exactly "is there an
+ * account surface here". It stays true on the desktop editor, so this branch is
+ * dead there and the queue keeps working for a real signed-out user.
+ */
+function endedSessionCanBeRestored(capabilities: PlatformCapabilities): boolean {
+  return capabilities.hasEdgeAccount
+}
+
+/**
+ * Deliberately the same words as the `/unauthorized` panel for the same
+ * situation: someone who meets both should not have to work out that they are
+ * being told one thing. It promises nothing about unsaved work surviving,
+ * because reopening starts a new session from the last save.
+ */
+const ENDED_SESSION_NO_RETURN = {
+  title: 'Your editing session has ended',
+  description:
+    'Editing sessions are temporary and this one has run out, so nothing further can be saved from this tab. Open the project again from the application you came from to carry on.',
+} as const
+
 export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
@@ -448,20 +479,6 @@ export async function executeSaveProject(
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved, updateFile } = state.fileActions
   const { markAllSaved } = state.snapshotActions
-
-  // With the write side off, project.json is the source of truth again — but
-  // the `.dt` files stay on disk unless we say otherwise, and hydration
-  // prefers them whenever they exist. Leaving them behind would let a
-  // pre-rollback copy silently outrank these edits the next time the flag is
-  // on. Web already drops them by omission; this makes desktop agree.
-  const legacyDataTypeCleanup = isDataTypeFilesEnabled()
-    ? []
-    : [
-        ...project.data.dataTypes.map((dt) => `datatypes/${dt.name}.dt`),
-        ...state.unparsedDataTypeFiles.map((f) => f.relativePath),
-      ]
-
-  const deletionsBeforeSave = [...new Set([...pendingDeletions, ...legacyDataTypeCleanup])]
 
   setEditingState('save-request')
   // Same capability-gate as the success toast below: on desktop the
@@ -529,6 +546,28 @@ export async function executeSaveProject(
       }
     }
 
+    // A path this very save is writing must never also be deleted, because
+    // creating an element never clears the entry a previous delete queued — so
+    // a create → delete → create cycle would name the same path in both lists.
+    //
+    // The two platforms get there differently. The desktop editor applies
+    // `deletions` AFTER the writes, so an unfiltered list unlinks the file it
+    // just wrote — a real data-loss bug. The web build never sends deletions
+    // that the Edge API acts on: `SaveProjectFilesJsonDto` carries no such
+    // field, and deletion is BY OMISSION — anything absent from the uploaded
+    // envelope is dropped from the bucket — applied before the uploads. There
+    // the guard is a no-op, since a path being written is in the envelope by
+    // definition. Filtering covers every element type at once (data types,
+    // POUs, servers, remote devices).
+    //
+    // Compared case-insensitively: the desktop's macOS and Windows targets
+    // treat `Motor.dt` and `motor.dt` as one file, so a case-only rename would
+    // otherwise write the new name and unlink it under the old one.
+    const writtenPaths = new Set(
+      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) => f.relativePath.toLowerCase()),
+    )
+    const deletionsBeforeSave = [...new Set(pendingDeletions)].filter((path) => !writtenPaths.has(path.toLowerCase()))
+
     const files: WriteProjectFiles = {
       projectPath: project.meta.path,
       projectJson,
@@ -566,6 +605,9 @@ export async function executeSaveProject(
       const isStale = new Set(staleFlows)
 
       state.projectActions.clearPendingDeletions()
+      // Every `.dt` just went out alongside a `project.json` carrying
+      // `dataTypes: []`, so the legacy inline list is gone from disk.
+      state.projectActions.setDataTypesNeedMigration(false)
       setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
       setAllToSaved()
       markAllSaved(staleFlows)
@@ -607,6 +649,12 @@ export async function executeSaveProject(
       // happened, say the work is safe, and queue the save so signing in finishes
       // it — the user should not have to remember to press save a second time.
       setEditingState('unsaved')
+
+      if (!endedSessionCanBeRestored(capabilities)) {
+        toast({ ...ENDED_SESSION_NO_RETURN, variant: 'fail' })
+        return { success: false }
+      }
+
       resumeSaveAfterEdgeSignIn(() => executeSaveProject(projectPort, capabilities))
       toast({
         title: 'Not saved — your session ended',
@@ -646,6 +694,51 @@ export async function executeSaveProject(
  * For device/data-type/resource/server/remote-device: writes appropriate JSON files.
  * Also updates project.json when debug variables may have changed.
  */
+/** Basename of a project-relative path, minus its extension. Splits on both
+ *  separators because the desktop reader builds paths with `path.join`. */
+function getBaseNameFromRelativePath(relativePath: string): string {
+  return (
+    relativePath
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.\w+$/, '') ?? ''
+  )
+}
+
+/**
+ * Move a pre-DOPE-385 project onto `datatypes/*.dt` in one operation.
+ *
+ * Writes EVERY data type's file and then rewrites `project.json` with
+ * `dataTypes: []`. Both halves are required: writing one `.dt` while the inline
+ * list survives leaves the project half-migrated, and clearing the inline list
+ * while only one file exists would drop every other type outright.
+ *
+ * `project.json` goes last, exactly as the full-project save orders it — if a
+ * `.dt` write fails, the inline list is still on disk and the loader's merge
+ * keeps the types that have no file yet, so a failed migration costs nothing.
+ */
+async function migrateDataTypesToFiles(
+  projectPath: string,
+  projectPort: ProjectPort,
+  state: StoreState,
+): Promise<{ success: boolean; error?: string; written: ProjectFileSpec[] }> {
+  const written: ProjectFileSpec[] = []
+  for (const dt of state.project.data.dataTypes) {
+    const spec = buildDataTypeSpec(dt)
+    const res = await projectPort.saveFile(joinPath(projectPath, ...spec.path.split('/')), spec.content)
+    if (!res.success) return { ...res, written }
+    written.push(spec)
+  }
+  const indexSpec: ProjectFileSpec = {
+    path: 'project.json',
+    content: buildProjectJsonContent(state),
+    category: 'project-json',
+  }
+  const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), indexSpec.content)
+  if (res.success) written.push(indexSpec)
+  return { ...res, written }
+}
+
 export async function executeSaveFile(
   fileName: string,
   projectPort: ProjectPort,
@@ -702,6 +795,11 @@ export async function executeSaveFile(
     // the reader. Queue the save so signing in completes it rather than leaving the
     // file dirty and the user unaware.
     if (isSaveBlockedByEndedSession()) {
+      if (!endedSessionCanBeRestored(capabilities)) {
+        toast({ ...ENDED_SESSION_NO_RETURN, variant: 'fail' })
+        return { success: false }
+      }
+
       resumeSaveAfterEdgeSignIn(() => executeSaveFile(fileName, projectPort, capabilities), {
         scope: 'file',
         fileName,
@@ -730,6 +828,9 @@ export async function executeSaveFile(
     // is a one-shot lookup; the special `device` type returns two specs
     // (configuration + pin-mapping).
     const specs = serializeProjectFile(fileName, file, state)
+    // What the version-control slice is told was written. Normally the specs
+    // this save serialised; a `.dt` migration replaces it with its own set.
+    let recordedSpecs: ProjectFileSpec[] = specs
     if (specs.length === 0) {
       // Some categories (e.g. ethercat-device) need handling that doesn't
       // map to a single fileName lookup, so fall through to the legacy path.
@@ -799,15 +900,41 @@ export async function executeSaveFile(
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'library.json'), spec.content)
       if (!res.success) return failedWrite(res.error ?? 'Save failed')
-    } else if (file.type === 'data-type' && isDataTypeFilesEnabled()) {
+    } else if (file.type === 'data-type') {
       const spec = specs[0]
-      if (!spec) return fail(`Data type "${fileName}" not found.`)
-      const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!spec) {
+        // A `.dt` that failed to parse on load has a tab and a code view but no
+        // entry in `project.data.dataTypes`, so there is nothing to serialize.
+        // Saying "not found" pointed the user at the wrong problem — the file
+        // is on disk, it just cannot be read yet.
+        const unreadable = state.unparsedDataTypeFiles.some(
+          (f) => getBaseNameFromRelativePath(f.relativePath).toLowerCase() === fileName.toLowerCase(),
+        )
+        return fail(
+          unreadable
+            ? `"${fileName}.dt" could not be parsed, so it can't be saved yet. Fix the declaration text first.`
+            : `Data type "${fileName}" not found.`,
+        )
+      }
+      // While the project still keeps its types inline in project.json, writing
+      // this one `.dt` on its own would leave the two halves disagreeing, and
+      // the loader would then have to reconcile them on every open. Migrate the
+      // whole set in one go instead — once per project, on the first save.
+      if (state.dataTypesNeedMigration) {
+        const migration = await migrateDataTypesToFiles(projectPath, projectPort, state)
+        // Report every file that landed, even on a failure: the version-control
+        // slice's `changedPaths` would otherwise still list them as dirty.
+        recordedSpecs = migration.written
+        if (!migration.success) return failedWrite(migration.error ?? 'Save failed')
+        state.projectActions.setDataTypesNeedMigration(false)
+      } else {
+        const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
+        if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      }
     } else {
-      // resource (and data-type while the .dt flag is off): live in
-      // project.json (legacy whole-file write) — cross-contamination
-      // accepted until each is migrated to its own branch.
+      // resource: lives in project.json (legacy whole-file write) —
+      // cross-contamination accepted until it is migrated to its own
+      // branch.
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
@@ -816,9 +943,9 @@ export async function executeSaveFile(
 
     // Tell the version-control slice exactly which paths/content were just
     // sent. The slice diffs against baseline to add or remove from changedPaths.
-    if (specs.length > 0) {
+    if (recordedSpecs.length > 0) {
       state.versionControlActions.recordSavedFiles({
-        saved: specs.map((spec) => ({ path: spec.path, content: spec.content })),
+        saved: recordedSpecs.map((spec) => ({ path: spec.path, content: spec.content })),
         deleted: [],
       })
     }
@@ -1281,7 +1408,7 @@ export async function reloadFileFromDisk(fileName: string, projectPort: ProjectP
   if (file.type === 'library-manifest') {
     return reloadLibraryManifestFromCleanState(fileName)
   }
-  if (file.type === 'data-type' && isDataTypeFilesEnabled()) {
+  if (file.type === 'data-type') {
     return reloadDataTypeFromDisk(fileName, projectPort)
   }
   // Everything else routes through the POU-specific reload.  Non-POU
