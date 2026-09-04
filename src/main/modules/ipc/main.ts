@@ -294,8 +294,7 @@ class MainProcessBridge implements MainIpcModule {
   handleBootloaderLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
     this.bootloaderApi.login(ipAddress, username, password)
 
-  handleBootloaderGetStatus = (_event: IpcMainInvokeEvent, ipAddress: string) =>
-    this.bootloaderApi.getStatus(ipAddress)
+  handleBootloaderGetStatus = (_event: IpcMainInvokeEvent, ipAddress: string) => this.bootloaderApi.getStatus(ipAddress)
 
   handleBootloaderGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
     this.bootloaderApi.getDeviceInfo(ipAddress)

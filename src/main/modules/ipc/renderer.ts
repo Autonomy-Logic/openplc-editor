@@ -610,16 +610,11 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('bootloader:get-device-info', ipAddress),
   bootloaderGetRuntimeLogs: (ipAddress: string, tail?: number): Promise<BootloaderApiResult<BootloaderLogs>> =>
     ipcRenderer.invoke('bootloader:get-runtime-logs', ipAddress, tail),
-  bootloaderStartUpdate: (
-    ipAddress: string,
-    version: string,
-  ): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+  bootloaderStartUpdate: (ipAddress: string, version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
     ipcRenderer.invoke('bootloader:start-update', ipAddress, version),
   bootloaderGetUpdateProgress: (ipAddress: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
     ipcRenderer.invoke('bootloader:get-update-progress', ipAddress),
-  bootloaderRestartRuntime: (
-    ipAddress: string,
-  ): Promise<BootloaderApiResult<{ state?: string; reason?: string }>> =>
+  bootloaderRestartRuntime: (ipAddress: string): Promise<BootloaderApiResult<{ state?: string; reason?: string }>> =>
     ipcRenderer.invoke('bootloader:restart-runtime', ipAddress),
   bootloaderClearSession: (ipAddress?: string): Promise<{ success: true }> =>
     ipcRenderer.invoke('bootloader:clear-session', ipAddress),

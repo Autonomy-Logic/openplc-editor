@@ -57,7 +57,6 @@ export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false
  */
 const LoginResponseSchema = z.object({ access_token: z.string() })
 
-
 /** Both `/api/status`-shaped endpoints; every field optional, as the runtime sends them. */
 const PlcStatusResponseSchema = z.object({
   status: z.string().optional(),
