@@ -524,6 +524,22 @@ describe('updateVariableValidation', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('allows a case-only rename of a variable onto itself', () => {
+    const result = updateVariableValidation(existingVars, { name: 'VAR1' }, existingVars[0])
+    expect(result.ok).toBe(true)
+  })
+
+  it('allows re-setting a variable to the name it already has', () => {
+    const result = updateVariableValidation(existingVars, { name: 'Var1' }, existingVars[0])
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects a rename onto another variable that differs only by case', () => {
+    const result = updateVariableValidation(existingVars, { name: 'var2' }, existingVars[0])
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('already exists')
+  })
+
   // -- Location validation --
   it('rejects a location on an interface-class variable (issue #904)', () => {
     const outputVar = makeVariable('OutVar', 'BOOL', '', 'output')
@@ -821,7 +837,7 @@ describe('updateGlobalVariableValidation', () => {
     expect(result.title).toContain('empty')
   })
 
-  it('returns error when global variable name already exists (case-sensitive)', () => {
+  it('returns error when global variable name already exists', () => {
     const result = updateGlobalVariableValidation(existingGlobals, { name: 'GVar1' })
     expect(result.ok).toBe(false)
     expect(result.title).toContain('already exists')
@@ -832,9 +848,30 @@ describe('updateGlobalVariableValidation', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('allows same name with different case (case-sensitive check)', () => {
+  it('rejects a name that differs from an existing global only by case', () => {
     const result = updateGlobalVariableValidation(existingGlobals, { name: 'gvar1' })
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('already exists')
+  })
+
+  it('rejects a mixed-case collision in either direction', () => {
+    expect(updateGlobalVariableValidation([makeVariable('motor')], { name: 'Motor' }).ok).toBe(false)
+    expect(updateGlobalVariableValidation([makeVariable('Motor')], { name: 'MOTOR' }).ok).toBe(false)
+  })
+
+  it('allows a case-only rename of a global onto itself', () => {
+    const target = makeVariable('GVar1')
+    const globals = [target, makeVariable('GVar2')]
+    const result = updateGlobalVariableValidation(globals, { name: 'gvar1' }, target)
     expect(result.ok).toBe(true)
+  })
+
+  it('still rejects renaming a global onto another global regardless of case', () => {
+    const target = makeVariable('GVar1')
+    const globals = [target, makeVariable('GVar2')]
+    const result = updateGlobalVariableValidation(globals, { name: 'gvar2' }, target)
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('already exists')
   })
 })
 
