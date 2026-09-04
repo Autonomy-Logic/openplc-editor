@@ -27,8 +27,6 @@ import { z } from 'zod'
 /** The bootloader's HTTPS control port. Odd, alongside the runtime's 8443. */
 export const BOOTLOADER_API_PORT = 8445
 
-
-
 /**
  * What the bootloader advertises without authentication, so the editor can
  * tell what it reached -- and whether the device is in recovery -- before it
@@ -51,7 +49,6 @@ const CapabilitiesSchema = z.object({
   recovery: z.boolean(),
 })
 
-
 const LoginSchema = z.object({
   access_token: z.string(),
   role: z.string().optional(),
@@ -69,7 +66,6 @@ const StatusSchema = z.object({
   runtimeVersion: z.string().optional(),
   recovery: z.boolean().optional(),
 })
-
 
 /**
  * Host facts for the Runtime Status header.
@@ -93,14 +89,12 @@ const DeviceInfoSchema = z.object({
   dockerVersion: z.string().optional(),
 })
 
-
 const LogsSchema = z.object({
   logs: z.string(),
   available: z.boolean(),
   reason: z.string().optional(),
   tail: z.number().optional(),
 })
-
 
 /**
  * Update progress. `percent` is absent while the daemon has reported no size
@@ -188,6 +182,26 @@ type RequestOptions = {
    */
   treatConflictAsSuccess?: boolean
 }
+
+/**
+ * Is this a bare host the editor is willing to dial?
+ *
+ * The address arrives from the renderer and is handed to https.request, so
+ * anything that is not a plain hostname or IP literal is refused: an embedded
+ * port, credentials, a path, a scheme, whitespace. Without this a compromised
+ * renderer could shape the value into a request at a target of its choosing.
+ *
+ * This narrows the value; it does not authorize the destination. Restricting
+ * requests to the device the operator actually selected needs main-process
+ * device state, which does not exist today and would apply to every runtime
+ * handler as much as to these -- a change worth making on its own rather
+ * than half-making here.
+ */
+const BARE_HOST =
+  /^(?:\[[0-9a-fA-F:]+\]|[0-9a-fA-F:]+|[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$/
+
+const isDialableHost = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 253 && BARE_HOST.test(value)
 
 export class BootloaderApiClient {
   private readonly port = BOOTLOADER_API_PORT
@@ -369,6 +383,14 @@ export class BootloaderApiClient {
   }
 
   private request(ipAddress: string, options: RequestOptions): Promise<BootloaderApiResult<string>> {
+    // Every call, authenticated or not, passes through here -- the single
+    // place the address can reach https.request.
+    if (!isDialableHost(ipAddress)) {
+      return Promise.resolve({
+        success: false,
+        error: 'That is not a device address this editor will connect to',
+      })
+    }
     return new Promise((resolve) => {
       const timeout = options.timeoutMs ?? this.DEFAULT_TIMEOUT_MS
       const headers: Record<string, string> = { Accept: 'application/json' }
