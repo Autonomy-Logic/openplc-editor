@@ -838,17 +838,18 @@ const Board = memo(function () {
         </div>
       </div>
       {(() => {
-        // Only draw the divider when there's actually content below it.
-        // Pin mapping renders for any non-simulator target that declares
-        // the pinMapping capability (Arduino boards, and runtime-v4 GPIO
-        // VPP boards like the Raspberry Pi). Runtime targets also render
-        // stats once connected — the two can coexist (a Pi shows the pin
-        // table always and the stats panels when connected).
+        // Only draw the divider when there's actually content below it, which
+        // now means the pin mapping table and nothing else. Pin mapping renders
+        // for any non-simulator target that declares the pinMapping capability
+        // (Arduino boards, and runtime-v4 GPIO VPP boards like the Raspberry Pi).
+        //
+        // A connected runtime target used to draw the divider too, for the stats
+        // panels that sat below it. Those moved to the Runtime Status screen (see
+        // the polling comment above) and the condition stayed, so connecting to a
+        // runtime target with no pin mapping drew a rule across the screen with
+        // nothing underneath it.
         const isSim = isSimulatorTarget(currentBoardInfo)
-        const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
-        const showStats = isRuntime && connectionStatus === 'connected'
-        const showPinMapping = !isSim && pinMappingEnabled
-        const showDivider = showStats || showPinMapping
+        const showDivider = !isSim && pinMappingEnabled
         return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
       })()}
       {!isSimulatorTarget(currentBoardInfo) && pinMappingEnabled && (
