@@ -502,11 +502,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     const newOutputPins = survivingPins(newNodeData.outputHandles)
 
     let droppedWires = 0
-    const rewire = (
-      edge: (typeof newEdges)[number],
-      side: 'source' | 'target',
-      pins: Set<string>,
-    ): void => {
+    const rewire = (edge: (typeof newEdges)[number], side: 'source' | 'target', pins: Set<string>): void => {
       const handle = side === 'source' ? edge.sourceHandle : edge.targetHandle
       if (handle && pins.has(handle)) {
         const moved = { ...edge, id: edge.id.replace(node.id, newNode.id), [side]: newNode.id }
