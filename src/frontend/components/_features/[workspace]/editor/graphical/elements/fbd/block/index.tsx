@@ -492,29 +492,49 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     // shares names. A wire whose pin is genuinely gone cannot be re-pointed
     // anywhere honest, so it is dropped and reported rather than silently
     // piled onto the first pin.
-    const newNodeData = newNode.data as {
-      inputHandles?: { id?: string }[]
-      outputHandles?: { id?: string }[]
-    }
-    const survivingPins = (handles: { id?: string }[] | undefined): Set<string> =>
+    // Handle type taken from the node itself, so this cannot drift from the
+    // builder and needs neither an import nor an assertion.
+    const pinIds = (handles: typeof newNode.data.inputHandles): Set<string> =>
       new Set((handles ?? []).map((handle) => handle.id).filter((id): id is string => !!id))
-    const newInputPins = survivingPins(newNodeData.inputHandles)
-    const newOutputPins = survivingPins(newNodeData.outputHandles)
+    const newInputPins = pinIds(newNode.data.inputHandles)
+    const newOutputPins = pinIds(newNode.data.outputHandles)
 
-    let droppedWires = 0
-    const rewire = (edge: (typeof newEdges)[number], side: 'source' | 'target', pins: Set<string>): void => {
-      const handle = side === 'source' ? edge.sourceHandle : edge.targetHandle
-      if (handle && pins.has(handle)) {
-        const moved = { ...edge, id: edge.id.replace(node.id, newNode.id), [side]: newNode.id }
-        newEdges = newEdges.map((e) => (e.id === edge.id ? moved : e))
-        return
+    // One pass over the affected edges, keyed by id, so an edge that is BOTH a
+    // source and a target of this block -- a self-loop, which the canvas allows
+    // -- has both endpoints resolved together. Two passes rewrote the id on the
+    // first and then failed to find the edge on the second, leaving the other
+    // endpoint pointing at a node that no longer exists.
+    const affected = new Map<string, (typeof newEdges)[number]>()
+    for (const edge of [...(edges.source ?? []), ...(edges.target ?? [])]) affected.set(edge.id, edge)
+
+    const replacements = new Map<string, (typeof newEdges)[number] | null>()
+    for (const edge of affected.values()) {
+      let next = { ...edge, id: edge.id.replace(node.id, newNode.id) }
+      let drop = false
+
+      if (edge.source === selectedNode.id) {
+        if (edge.sourceHandle && newOutputPins.has(edge.sourceHandle)) next = { ...next, source: newNode.id }
+        else drop = true
       }
-      droppedWires += 1
-      newEdges = newEdges.filter((e) => e.id !== edge.id)
+      if (!drop && edge.target === selectedNode.id) {
+        if (edge.targetHandle && newInputPins.has(edge.targetHandle)) next = { ...next, target: newNode.id }
+        else drop = true
+      }
+      replacements.set(edge.id, drop ? null : next)
     }
 
-    edges.source?.forEach((edge) => rewire(edge, 'source', newOutputPins))
-    edges.target?.forEach((edge) => rewire(edge, 'target', newInputPins))
+    // Replace IN PLACE, never append: an id from `edges` that is no longer in
+    // `newEdges` must stay gone rather than being resurrected alongside it.
+    let droppedWires = 0
+    newEdges = newEdges.flatMap((edge) => {
+      if (!replacements.has(edge.id)) return [edge]
+      const replacement = replacements.get(edge.id) ?? null
+      if (replacement === null) {
+        droppedWires += 1
+        return []
+      }
+      return [replacement]
+    })
 
     if (droppedWires > 0) {
       toast({

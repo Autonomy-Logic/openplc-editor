@@ -816,11 +816,11 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
   }
 
-  // `executionOrder` is optional on older nodes and 0 means "not ordered", so
-  // anything not a positive integer renders no badge at all.
-  const rawExecutionOrder = Number((data as { executionOrder?: unknown }).executionOrder ?? 0)
+  // 0 means "not ordered", so only a positive, finite order renders a badge.
+  // `Number.isFinite` still earns its place: a project file can carry anything,
+  // and a non-finite value must not reach the badge as "Infinity".
   const executionOrderBadge =
-    Number.isFinite(rawExecutionOrder) && rawExecutionOrder > 0 ? Math.trunc(rawExecutionOrder) : null
+    Number.isFinite(data.executionOrder) && data.executionOrder > 0 ? Math.trunc(data.executionOrder) : null
 
   return (
     <div

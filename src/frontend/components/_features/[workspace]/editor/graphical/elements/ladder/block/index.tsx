@@ -373,6 +373,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       return
     }
 
+    // The rung is boolean power flow, so it can only land on BOOL pins. A block
+    // whose top input or top output is not BOOL therefore has to carry EN/ENO.
+    // That rule is NOT re-implemented here: ladder's own
+    // `getBlockVariantAndExecutionControl` already forces execution control on
+    // in exactly that case (and sets `lockExecutionControl`), and
+    // `buildBlockNode` runs it for every block placed on a rung. Passing the
+    // form's value through means the rebuilt block obeys the same rule as a
+    // freshly placed one, with one implementation to drift from.
     const newNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
       posX: selectedNode.position.x,
@@ -465,50 +473,81 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     // covers the whole same-variant case and the matching pins of a swap; the
     // rung chain follows the connectors as before; anything else is dropped
     // and reported rather than piled onto the first pin.
-    const newNodeData = newNode.data as {
-      inputHandles?: { id?: string }[]
-      outputHandles?: { id?: string }[]
-      inputConnector?: { id?: string }
-      outputConnector?: { id?: string }
-    }
-    const oldNodeData = node.data as { inputConnector?: { id?: string }; outputConnector?: { id?: string } }
-    const survivingPins = (handles: { id?: string }[] | undefined): Set<string> =>
+    // Handle type taken from the node itself, so this cannot drift from the
+    // builder and needs neither an import nor an assertion.
+    const pinIds = (handles: typeof newNode.data.inputHandles): Set<string> =>
       new Set((handles ?? []).map((handle) => handle.id).filter((id): id is string => !!id))
-    const newInputPins = survivingPins(newNodeData.inputHandles)
-    const newOutputPins = survivingPins(newNodeData.outputHandles)
+    const newInputPins = pinIds(newNode.data.inputHandles)
+    const newOutputPins = pinIds(newNode.data.outputHandles)
 
-    let droppedWires = 0
-    const rewire = (
-      edge: (typeof newEdges)[number],
-      side: 'source' | 'target',
+    // The connectors the EXISTING edges ride, read from `selectedNode` and not
+    // from `node`: picking a replacement variant rebuilds `node` with the
+    // REPLACEMENT's connector ids, while the edges being remapped here belong
+    // to `selectedNode.id`. Comparing against the rebuilt copy made the rung
+    // chain unrecognisable on a swap, and it was dropped instead of moved.
+    const oldInputConnector = selectedNode.data.inputConnector?.id
+    const oldOutputConnector = selectedNode.data.outputConnector?.id
+    const newInputConnector = newNode.data.inputConnector?.id
+    const newOutputConnector = newNode.data.outputConnector?.id
+
+    /** The handle this endpoint should ride on the rebuilt node, or false to drop it. */
+    const resolveHandle = (
+      handle: string | null | undefined,
       pins: Set<string>,
       oldConnector: string | undefined,
       newConnector: string | undefined,
-    ): void => {
-      const handleKey = side === 'source' ? 'sourceHandle' : 'targetHandle'
-      const handle = side === 'source' ? edge.sourceHandle : edge.targetHandle
-      const base = { ...edge, id: edge.id.replace(node.id, newNode.id), [side]: newNode.id }
-
-      if (handle && pins.has(handle)) {
-        newEdges = newEdges.map((e) => (e.id === edge.id ? base : e))
-        return
-      }
-      // The rung chain: it rode the old connector, so it rides the new one.
-      if (handle && oldConnector && handle === oldConnector && newConnector) {
-        const moved = { ...base, [handleKey]: newConnector }
-        newEdges = newEdges.map((e) => (e.id === edge.id ? moved : e))
-        return
-      }
-      droppedWires += 1
-      newEdges = newEdges.filter((e) => e.id !== edge.id)
+    ): string | null | undefined | false => {
+      // The RUNG CHAIN first, before any pin-name match. An edge riding the old
+      // connector is power flow, and it has to follow the new connector even
+      // when the old connector's NAME survives on the replacement as an
+      // ordinary data pin -- `AND`'s `IN1` connector becoming `ADD`'s `IN1`
+      // data pin, say, where keeping the rung on `IN1` leaves it sharing a pin
+      // with the branch `reconcileBranches` just rebuilt there.
+      if (handle && oldConnector && handle === oldConnector && newConnector) return newConnector
+      if (handle && pins.has(handle)) return handle
+      return false
     }
 
-    edges.source?.forEach((edge) =>
-      rewire(edge, 'source', newOutputPins, oldNodeData.outputConnector?.id, newNodeData.outputConnector?.id),
-    )
-    edges.target?.forEach((edge) =>
-      rewire(edge, 'target', newInputPins, oldNodeData.inputConnector?.id, newNodeData.inputConnector?.id),
-    )
+    // One pass over the affected edges, keyed by id, so an edge that is BOTH a
+    // source and a target of this block -- a self-loop, which the canvas allows
+    // -- has both endpoints resolved together. Two passes rewrote the id on the
+    // first and then failed to find the edge on the second, leaving the other
+    // endpoint pointing at a node that no longer exists.
+    const affected = new Map<string, (typeof newEdges)[number]>()
+    for (const edge of [...(edges.source ?? []), ...(edges.target ?? [])]) affected.set(edge.id, edge)
+
+    const replacements = new Map<string, (typeof newEdges)[number] | null>()
+    for (const edge of affected.values()) {
+      let next = { ...edge, id: edge.id.replace(node.id, newNode.id) }
+      let drop = false
+
+      if (edge.source === selectedNode.id) {
+        const resolved = resolveHandle(edge.sourceHandle, newOutputPins, oldOutputConnector, newOutputConnector)
+        if (resolved === false) drop = true
+        else next = { ...next, source: newNode.id, sourceHandle: resolved }
+      }
+      if (!drop && edge.target === selectedNode.id) {
+        const resolved = resolveHandle(edge.targetHandle, newInputPins, oldInputConnector, newInputConnector)
+        if (resolved === false) drop = true
+        else next = { ...next, target: newNode.id, targetHandle: resolved }
+      }
+      replacements.set(edge.id, drop ? null : next)
+    }
+
+    // Replace IN PLACE, never append. `reconcileBranches` above has already
+    // rewritten the branch edges and changed their ids, so an id from `edges`
+    // may no longer be in `newEdges` -- appending it back would resurrect a
+    // stale edge alongside the reconciled one and leave two wires on one pin.
+    let droppedWires = 0
+    newEdges = newEdges.flatMap((edge) => {
+      if (!replacements.has(edge.id)) return [edge]
+      const replacement = replacements.get(edge.id) ?? null
+      if (replacement === null) {
+        droppedWires += 1
+        return []
+      }
+      return [replacement]
+    })
 
     if (droppedWires > 0) {
       toast({
