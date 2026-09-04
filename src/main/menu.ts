@@ -255,10 +255,6 @@ export default class MenuBuilder {
           click: () => this.handleCloseTab(),
         },
         {
-          label: i18n.t('menu:file.submenu.retrieveProject'),
-          click: () => this.handleRetrieveProject(),
-        },
-        {
           label: i18n.t('menu:file.submenu.closeProject'),
           accelerator: 'Cmd+Shift+W',
           click: () => this.handleCloseProject(),
@@ -271,6 +267,13 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.exportToCodesysXml'),
           click: () => this.handleExportProjectRequest('codesys'),
+        },
+        { type: 'separator' },
+        // Its own group: retrieving is not a save, a close, or an export, and
+        // sitting inside any of those groups reads as a variant of them.
+        {
+          label: i18n.t('menu:file.submenu.retrieveProject'),
+          click: () => this.handleRetrieveProject(),
         },
         { type: 'separator' },
         {
@@ -540,10 +543,6 @@ export default class MenuBuilder {
             click: () => this.handleCloseTab(),
           },
           {
-            label: i18n.t('menu:file.submenu.retrieveProject'),
-            click: () => this.handleRetrieveProject(),
-          },
-          {
             label: i18n.t('menu:file.submenu.closeProject'),
             accelerator: 'Ctrl+Shift+W',
             click: () => this.handleCloseProject(),
@@ -558,6 +557,15 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.exportToCodesysXml'),
             click: () => this.handleExportProjectRequest('codesys'),
+          },
+          {
+            type: 'separator',
+          },
+          // Its own group: retrieving is not a save, a close, or an export, and
+          // sitting inside any of those groups reads as a variant of them.
+          {
+            label: i18n.t('menu:file.submenu.retrieveProject'),
+            click: () => this.handleRetrieveProject(),
           },
           {
             type: 'separator',
