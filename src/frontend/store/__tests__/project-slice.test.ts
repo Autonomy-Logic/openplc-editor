@@ -824,28 +824,14 @@ describe('createProjectSlice', () => {
   })
 
   describe('setPouVariables', () => {
-    it('refuses a list that declares the same name twice and leaves the table untouched', () => {
-      seedPou(store, makePou('Main', 'program', [makeVariable('old')]))
-      const result = store.getState().projectActions.setPouVariables({
-        pouName: 'Main',
-        variables: [makeVariable('Motor'), makeVariable('Speed'), makeVariable('Motor')],
-      })
-      expect(result.ok).toBe(false)
-      expect(result.title).toBe('Variable already exists')
-      expect(result.message).toContain('"Motor"')
-      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['old'])
-    })
-
-    it('treats a case-only duplicate as the same name (IEC identifiers are case-insensitive)', () => {
+    it('replaces the list as-is, even with a duplicate name: undo/redo and reclassification restore through here', () => {
       seedPou(store, makePou('Main', 'program', [makeVariable('old')]))
       const result = store.getState().projectActions.setPouVariables({
         pouName: 'Main',
         variables: [makeVariable('Motor'), makeVariable('motor')],
       })
-      expect(result.ok).toBe(false)
-      expect(result.title).toBe('Variable already exists')
-      expect(result.message).toContain('"motor"')
-      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['old'])
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['Motor', 'motor'])
     })
 
     it('replaces all variables on a POU', () => {
@@ -865,14 +851,12 @@ describe('createProjectSlice', () => {
   })
 
   describe('setGlobalVariables', () => {
-    it('refuses a duplicate name and keeps the current globals', () => {
-      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('old', 'global') })
+    it('replaces the list as-is, even with a duplicate name (restore paths rely on it)', () => {
       const result = store.getState().projectActions.setGlobalVariables({
         variables: [makeVariable('Line', 'global'), makeVariable('line', 'global')],
       })
-      expect(result.ok).toBe(false)
-      expect(result.title).toBe('Variable already exists')
-      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual(['old'])
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables).toHaveLength(2)
     })
 
     it('replaces global variables', () => {
