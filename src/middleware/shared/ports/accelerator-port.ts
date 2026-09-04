@@ -45,6 +45,10 @@ export interface AcceleratorPort {
    *  unsubscribe like its other accelerators. */
   onSaveProjectAs(callback: () => void): Unsubscribe
   onSaveFile(callback: () => void): Unsubscribe
+  /** Retrieve Project from PLC. Desktop only in practice: the web build reaches
+   *  the same modal from its own File menu, which it always renders, so its
+   *  adapter returns a no-op unsubscribe like the other accelerators. */
+  onRetrieveProject(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe
   onExportProject(callback: () => void): Unsubscribe
 

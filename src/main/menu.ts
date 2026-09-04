@@ -90,6 +90,14 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-as-accelerator')
   }
 
+  /**
+   * Retrieve Project from PLC. The main process only forwards the request —
+   * the renderer owns the modal, the runtime connection and everything after.
+   */
+  handleRetrieveProject() {
+    this.mainWindow.webContents.send('project:retrieve-accelerator')
+  }
+
   handleSaveFile() {
     this.mainWindow.webContents.send('project:save-file-accelerator')
   }
@@ -245,6 +253,10 @@ export default class MenuBuilder {
           label: i18n.t('menu:file.submenu.closeTab'),
           accelerator: 'Cmd+W',
           click: () => this.handleCloseTab(),
+        },
+        {
+          label: i18n.t('menu:file.submenu.retrieveProject'),
+          click: () => this.handleRetrieveProject(),
         },
         {
           label: i18n.t('menu:file.submenu.closeProject'),
@@ -516,6 +528,10 @@ export default class MenuBuilder {
             label: i18n.t('menu:file.submenu.closeTab'),
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
+          },
+          {
+            label: i18n.t('menu:file.submenu.retrieveProject'),
+            click: () => this.handleRetrieveProject(),
           },
           {
             label: i18n.t('menu:file.submenu.closeProject'),

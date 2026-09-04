@@ -221,6 +221,21 @@ const AcceleratorHandler = () => {
   }, [accelerator, capabilities, projectPort])
 
   /**
+   * Retrieve Project from PLC
+   *
+   * The native application menu is the only File menu on macOS and Linux — the
+   * in-app menubar renders on Windows alone — so the item there has to reach the
+   * same modal the React menu opens. Reachable whether or not a device is
+   * connected: the modal owns the connection handling.
+   */
+  useEffect(() => {
+    const unsub = accelerator.onRetrieveProject(() => {
+      openModal('retrieve-project', null)
+    })
+    return unsub
+  }, [accelerator, openModal])
+
+  /**
    * Delete file
    */
   useEffect(() => {

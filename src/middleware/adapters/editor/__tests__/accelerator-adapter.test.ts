@@ -45,6 +45,8 @@ beforeEach(() => {
     handleOpenProjectRequest: register('openProject'),
     openRecentAccelerator: register('openRecent'),
     saveProjectAccelerator: register('saveProject'),
+    saveProjectAsAccelerator: register('saveProjectAs'),
+    retrieveProjectAccelerator: register('retrieveProject'),
     saveFileAccelerator: register('saveFile'),
     closeProjectAccelerator: register('closeProject'),
     exportProjectRequest: register('exportProject'),
@@ -100,6 +102,8 @@ function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, 
 testAccelerator('onCreateProject', 'createProject', 'createProjectAccelerator')
 testAccelerator('onOpenProject', 'openProject', 'handleOpenProjectRequest')
 testAccelerator('onSaveProject', 'saveProject', 'saveProjectAccelerator')
+testAccelerator('onSaveProjectAs', 'saveProjectAs', 'saveProjectAsAccelerator')
+testAccelerator('onRetrieveProject', 'retrieveProject', 'retrieveProjectAccelerator')
 testAccelerator('onSaveFile', 'saveFile', 'saveFileAccelerator')
 testAccelerator('onCloseProject', 'closeProject', 'closeProjectAccelerator')
 testAccelerator('onExportProject', 'exportProject', 'exportProjectRequest')
