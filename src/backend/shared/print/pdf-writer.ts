@@ -63,6 +63,10 @@ export async function createPdfLibBackend(fonts: EmbeddedFontSet): Promise<PdfBa
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
 
+  // Known limitation: Noto Sans's embedded coverage is Latin — a POU or
+  // variable name using CJK, emoji, or other glyphs outside it renders those
+  // characters blank rather than throwing (verified in index.test.ts). No
+  // fallback font is bundled; widening coverage is a real feature, not a bug.
   const embedded: Record<PrintFontKey, PDFFont> = {
     sans: await doc.embedFont(fonts.sans, { subset: true }),
     sansBold: await doc.embedFont(fonts.sansBold, { subset: true }),

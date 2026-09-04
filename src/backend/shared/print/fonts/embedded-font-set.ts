@@ -1,5 +1,4 @@
-import type { EmbeddedFontSet } from '@root/backend/shared/print'
-
+import type { EmbeddedFontSet } from '../types'
 import { NOTO_SANS_BOLD_BASE64 } from './noto-sans-bold'
 import { NOTO_SANS_MONO_BOLD_BASE64 } from './noto-sans-mono-bold'
 import { NOTO_SANS_MONO_REGULAR_BASE64 } from './noto-sans-mono-regular'

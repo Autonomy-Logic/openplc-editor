@@ -1,9 +1,13 @@
 /**
- * pdf.js 6.x calls several very recent JS platform APIs (TC39 proposals that
- * shipped in V8 well after Electron 35's bundled Chromium 124) directly from
- * its main API layer (`pdf.mjs`) and, since `ProjectPort.preparePdfPreviewWorker`
- * runs pdf.js's worker code in-process too, from `pdf.worker.min.mjs` as well.
- * Each is guarded so a future Electron upgrade with native support is a no-op.
+ * pdf.js 6.3.289 (pinned in package.json — see below) calls several very
+ * recent JS platform APIs (TC39 proposals that shipped in V8 well after
+ * Electron 35's bundled Chromium 124) directly from its main API layer
+ * (`pdf.mjs`) and, since `ProjectPort.preparePdfPreviewWorker` runs pdf.js's
+ * worker code in-process too, from `pdf.worker.min.mjs` as well. Each is
+ * guarded so a future Electron upgrade with native support is a no-op, but
+ * this list was hand-verified against 6.3.289's source only — a version bump
+ * needs the same check (grep the new pdf.mjs/pdf.worker.min.mjs for the
+ * method names below) before it's safe to move off the exact pin.
  */
 function applyPdfJsEnginePolyfills(): void {
   if (typeof Uint8Array.prototype.toHex !== 'function') {

@@ -36,7 +36,6 @@ import type {
   RecentProject,
   Unsubscribe,
 } from '../../shared/ports/types'
-import { getEmbeddedFontSet } from './services/pdf-export/fonts/embedded-font-set'
 import { applyPdfJsEnginePolyfills } from './services/pdf-export/pdfjs-engine-polyfills'
 
 /** Editor IPC POU shape (discriminated union). */
@@ -388,6 +387,11 @@ export function createEditorProjectAdapter(): ProjectPort {
       // process) can't compile; standing up a second build target just for
       // one worker file was judged disproportionate to a render that
       // normally completes in well under a second.
+      //
+      // The embedded fonts (~464KB of base64) are imported dynamically here
+      // rather than at module load, so they never land in the startup bundle
+      // for a session that never opens the export wizard.
+      const { getEmbeddedFontSet } = await import('../../../backend/shared/print/fonts/embedded-font-set')
       return renderProjectToPdf(request, getEmbeddedFontSet())
     },
 

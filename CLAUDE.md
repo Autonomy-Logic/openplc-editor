@@ -160,6 +160,7 @@ const createPou = useOpenPLCStore((s) => s.projectActions.createPou)
 | `console` | Log output |
 | `library` | System + user function block libraries |
 | `file` | File save states (dirty tracking) |
+| `print` | Print/export-to-PDF selection, render mode, page policy, page setup |
 | `ai`, `history`, `modal`, `readme`, `search`, `shared`, `version-control`, `webrtc` | Supporting features |
 
 **Conventions:**
@@ -278,6 +279,7 @@ When adding new code to covered directories, you must add corresponding tests to
 - **Socket.io** for real-time communication
 - **Winston** for structured logging (main process)
 - **serialport** for serial communication
+- **pdf-lib** + **@pdf-lib/fontkit** for PDF export (print/export-to-PDF)
 
 ## Important Patterns
 

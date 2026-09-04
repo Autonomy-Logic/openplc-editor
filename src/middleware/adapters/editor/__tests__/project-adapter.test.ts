@@ -12,7 +12,7 @@ const mockFontSet = {
   mono: new Uint8Array(),
   monoBold: new Uint8Array(),
 }
-jest.mock('../services/pdf-export/fonts/embedded-font-set', () => ({
+jest.mock('../../../../backend/shared/print/fonts/embedded-font-set', () => ({
   getEmbeddedFontSet: () => mockFontSet,
 }))
 
