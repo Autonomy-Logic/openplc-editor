@@ -9,10 +9,7 @@ import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
-import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
-import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
-import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
@@ -305,26 +302,10 @@ const OrchestratorsList = () => {
     deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
   }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions, handleDisconnect])
 
-  // Enable timing stats in global polling when this screen is visible
-  useEffect(() => {
-    // Set the flag to include timing stats in the global status polling
-    deviceActions.setIncludeTimingStatsInPolling(true)
-
-    // Clear the flag when leaving this screen
-    return () => {
-      deviceActions.setIncludeTimingStatsInPolling(false)
-    }
-  }, [deviceActions])
-
-  // Same pattern for EtherCAT runtime status. Only fetched while this screen
-  // is mounted, so non-EtherCAT setups don't pay for the extra round-trip on
-  // every poll.
-  useEffect(() => {
-    deviceActions.setIncludeEthercatStatsInPolling(true)
-    return () => {
-      deviceActions.setIncludeEthercatStatsInPolling(false)
-    }
-  }, [deviceActions])
+  // Timing and EtherCAT stats polling moved to the Runtime Status screen
+  // (RTOP-283) along with the panels that display them. Polling here would
+  // fetch data nobody is looking at, and would leave Runtime Status with
+  // nothing to show when opened on its own.
 
   // Handle device switch confirmation
   const handleConfirmDeviceSwitch = useCallback(async () => {
@@ -606,16 +587,6 @@ const OrchestratorsList = () => {
        *  Web builds (orchestrator-driven) and Electron builds (board-
        *  screen-driven) thus render identical stats regardless of how
        *  the user navigated to the device. */}
-      {runtimeConnection.connectionStatus === 'connected' && (
-        <div
-          id='scan-cycle-stats-panel'
-          className='flex w-full shrink-0 flex-col gap-6 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
-        >
-          {runtimeConnection.timingStats && <ScanCycleStats timingStats={runtimeConnection.timingStats} />}
-          <EtherCATStats />
-          <PluginStatsPanel pluginStats={runtimeConnection.timingStats?.plugin_stats} />
-        </div>
-      )}
     </div>
   )
 }

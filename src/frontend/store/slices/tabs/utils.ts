@@ -82,7 +82,7 @@ const CreateResourceEditor = (name = 'Resource'): EditorModel => ({
 
 const CreateDeviceEditor = (
   name = 'device',
-  derivation: 'configuration' | 'pin-mapping' | 'orchestrators',
+  derivation: 'configuration' | 'pin-mapping' | 'orchestrators' | 'runtime-status',
 ): EditorModel => {
   if (!derivation) throw new Error('Invalid derivation value')
   return {
