@@ -43,8 +43,8 @@ import type {
   BootloaderLogs,
   BootloaderStatus,
   BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
 } from '@root/backend/editor/runtime/bootloader-api-client'
-import type { RuntimeApiResult, RuntimeDeviceInfo } from '@root/backend/editor/runtime/runtime-api-client'
 
 import type {
   EtherCATRuntimeStatusResponse,
@@ -263,6 +263,16 @@ export interface BootloaderPort {
    */
   login(username: string, password: string): Promise<BootloaderApiResult<{ role?: string }>>
 
+  /**
+   * Host facts for the Runtime Status header.
+   *
+   * Served by the bootloader rather than the runtime, because the bootloader
+   * is present on every device this feature can act on whatever runtime
+   * version is installed -- and because it reads them from the Docker daemon,
+   * which runs on the host and answers for it.
+   */
+  getDeviceInfo(): Promise<BootloaderApiResult<RuntimeDeviceInfo>>
+
   /** Supervisor state: healthy, starting, updating or recovery, and why. */
   getStatus(): Promise<BootloaderApiResult<BootloaderStatus>>
 
@@ -298,12 +308,6 @@ export interface RuntimePort {
 
   /** Create a new user on the runtime (first-time setup). */
   createUser(params: CreateUserParams): Promise<{ success: boolean; error?: string }>
-
-  /**
-   * Host facts for the Runtime Status header (RTOP-283). Older runtimes do not
-   * serve this and answer 404, so a failure means "less to show", not a fault.
-   */
-  getDeviceInfo(): Promise<RuntimeApiResult<RuntimeDeviceInfo>>
 
   /** Check if the runtime has users and get its version. */
   getUsersInfo(): Promise<UsersInfoResult>

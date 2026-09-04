@@ -45,8 +45,8 @@ import type {
   BootloaderLogs,
   BootloaderStatus,
   BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
 } from '../../../backend/editor/runtime/bootloader-api-client'
-import type { RuntimeApiResult, RuntimeDeviceInfo } from '../../../backend/editor/runtime/runtime-api-client'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
@@ -592,9 +592,6 @@ const rendererProcessBridge = {
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
 
-  runtimeGetDeviceInfo: (ipAddress: string): Promise<RuntimeApiResult<RuntimeDeviceInfo>> =>
-    ipcRenderer.invoke('runtime:get-device-info', ipAddress),
-
   // ===================== BOOTLOADER (RTOP-283) =====================
   // The bootloader is a separate service on port 8445 with its own session.
   // Results are the client's discriminated union, so a caller checks `success`
@@ -609,6 +606,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('bootloader:login', ipAddress, username, password),
   bootloaderGetStatus: (ipAddress: string): Promise<BootloaderApiResult<BootloaderStatus>> =>
     ipcRenderer.invoke('bootloader:get-status', ipAddress),
+  bootloaderGetDeviceInfo: (ipAddress: string): Promise<BootloaderApiResult<RuntimeDeviceInfo>> =>
+    ipcRenderer.invoke('bootloader:get-device-info', ipAddress),
   bootloaderGetRuntimeLogs: (ipAddress: string, tail?: number): Promise<BootloaderApiResult<BootloaderLogs>> =>
     ipcRenderer.invoke('bootloader:get-runtime-logs', ipAddress, tail),
   bootloaderStartUpdate: (

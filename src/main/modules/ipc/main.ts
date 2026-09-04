@@ -297,6 +297,9 @@ class MainProcessBridge implements MainIpcModule {
   handleBootloaderGetStatus = (_event: IpcMainInvokeEvent, ipAddress: string) =>
     this.bootloaderApi.getStatus(ipAddress)
 
+  handleBootloaderGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getDeviceInfo(ipAddress)
+
   handleBootloaderGetRuntimeLogs = (_event: IpcMainInvokeEvent, ipAddress: string, tail?: number) =>
     this.bootloaderApi.getRuntimeLogs(ipAddress, tail)
 
@@ -321,9 +324,6 @@ class MainProcessBridge implements MainIpcModule {
   // because one of them was the `8443` this work claimed to have unified.
 
   handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
-
-  handleRuntimeGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
-    this.runtimeApi.getDeviceInfo(ipAddress)
 
   handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
@@ -879,7 +879,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:update-user', this.handleRuntimeUpdateUser)
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
     this.registerHandle('runtime:login', this.handleRuntimeLogin)
-    this.registerHandle('runtime:get-device-info', this.handleRuntimeGetDeviceInfo)
     this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
     this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.registerHandle('runtime:stop-plc', this.handleRuntimeStopPlc)
@@ -895,6 +894,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('bootloader:get-capabilities', this.handleBootloaderGetCapabilities)
     this.registerHandle('bootloader:login', this.handleBootloaderLogin)
     this.registerHandle('bootloader:get-status', this.handleBootloaderGetStatus)
+    this.registerHandle('bootloader:get-device-info', this.handleBootloaderGetDeviceInfo)
     this.registerHandle('bootloader:get-runtime-logs', this.handleBootloaderGetRuntimeLogs)
     this.registerHandle('bootloader:start-update', this.handleBootloaderStartUpdate)
     this.registerHandle('bootloader:get-update-progress', this.handleBootloaderGetUpdateProgress)

@@ -62,6 +62,29 @@ const StatusSchema = z.object({
 })
 export type BootloaderStatus = z.infer<typeof StatusSchema>
 
+/**
+ * Host facts for the Runtime Status header.
+ *
+ * Served here rather than by the runtime because the bootloader is present on
+ * every device this feature can act on, whatever runtime version it happens to
+ * be running -- and because it reads these from the Docker daemon, which runs
+ * on the host and answers for it, rather than from inside a container's own
+ * namespace.
+ *
+ * Every field is optional: the daemon may be unreachable, in which case the
+ * bootloader still reports the deployment facts it knows for itself.
+ */
+const DeviceInfoSchema = z.object({
+  hostname: z.string().optional(),
+  architecture: z.string().optional(),
+  kernel: z.string().optional(),
+  system: z.string().optional(),
+  cpus: z.number().optional(),
+  memoryBytes: z.number().optional(),
+  dockerVersion: z.string().optional(),
+})
+export type RuntimeDeviceInfo = z.infer<typeof DeviceInfoSchema>
+
 const LogsSchema = z.object({
   logs: z.string(),
   available: z.boolean(),
@@ -178,6 +201,12 @@ export class BootloaderApiClient {
     const result = await this.authenticated(ipAddress, { method: 'GET', path: '/api/bootloader/status' })
     if (!result.success) return result
     return this.parse(StatusSchema, result.data)
+  }
+
+  async getDeviceInfo(ipAddress: string): Promise<BootloaderApiResult<RuntimeDeviceInfo>> {
+    const result = await this.authenticated(ipAddress, { method: 'GET', path: '/api/bootloader/device-info' })
+    if (!result.success) return result
+    return this.parse(DeviceInfoSchema, result.data)
   }
 
   /**

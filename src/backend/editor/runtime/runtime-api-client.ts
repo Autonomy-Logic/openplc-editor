@@ -57,37 +57,6 @@ export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false
  */
 const LoginResponseSchema = z.object({ access_token: z.string() })
 
-/**
- * `/api/device-info` (RTOP-283). Every field optional: it is served by newer
- * runtimes only, and an older one answers 404 rather than a partial body --
- * but a future one may add fields, and a strict shape would reject it.
- */
-/**
- * Host facts from `/api/device-info`.
- *
- * Every field is optional because a runtime may report a subset -- but the
- * object as a whole is NOT optional, and that distinction is load-bearing. A
- * runtime older than this endpoint does not answer 404 as one would hope: it
- * answers HTTP 200 with its catch-all body, `{"error":"Unknown argument"}`.
- * An all-optional schema accepts that as an empty device-info, and the screen
- * then renders "Native" for a device it knows nothing about -- a false claim
- * about every runtime currently in the field. So the payload has to carry at
- * least one field this endpoint actually returns.
- */
-const DeviceInfoSchema = z
-  .object({
-    hostname: z.string().optional(),
-    architecture: z.string().optional(),
-    kernel: z.string().optional(),
-    system: z.string().optional(),
-    containerized: z.boolean().optional(),
-    updatePolicy: z.string().optional(),
-    bootloaderPort: z.number().nullable().optional(),
-  })
-  .refine((info) => Object.values(info).some((value) => value !== undefined), {
-    message: 'the runtime does not serve device information',
-  })
-export type RuntimeDeviceInfo = z.infer<typeof DeviceInfoSchema>
 
 /** Both `/api/status`-shaped endpoints; every field optional, as the runtime sends them. */
 const PlcStatusResponseSchema = z.object({
@@ -200,21 +169,6 @@ export class RuntimeApiClient {
       return { success: result.success, token: result.accessToken, error: result.error }
     },
   })
-
-  /**
-   * Host facts for the Runtime Status header.
-   *
-   * Authenticated, unlike /api/capabilities: the update policy has to be
-   * readable before login, but kernel and architecture are only shown to
-   * somebody already looking at a device they can sign in to. A 404 means an
-   * older runtime that does not serve this, which is not an error worth
-   * showing -- the caller simply has less to display.
-   */
-  async getDeviceInfo(ipAddress: string): Promise<RuntimeApiResult<RuntimeDeviceInfo>> {
-    return this.makeRuntimeApiRequest<RuntimeDeviceInfo>(ipAddress, '/api/device-info', (data) =>
-      DeviceInfoSchema.parse(JSON.parse(data)),
-    )
-  }
 
   /** The address the token authority will re-authenticate against. */
   setAddress(ipAddress: string): void {

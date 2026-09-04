@@ -23,13 +23,15 @@ import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { ChangeVersionModal } from './change-version-modal'
 
+/** What the bootloader reports about the machine; every field may be absent. */
 type DeviceInfo = {
   hostname?: string
   architecture?: string
   kernel?: string
   system?: string
-  containerized?: boolean
-  updatePolicy?: string
+  cpus?: number
+  memoryBytes?: number
+  dockerVersion?: string
 }
 
 type BootloaderInfo = {
@@ -46,6 +48,7 @@ const RuntimeStatusEditor = () => {
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const runtimeVersion = useOpenPLCStore((state) => state.runtimeConnection.runtimeVersion)
   const ipAddress = useOpenPLCStore((state) => state.runtimeConnection.ipAddress)
+  const selectedDevice = useOpenPLCStore((state) => state.runtimeConnection.selectedDevice)
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
   const storedCredentials = useOpenPLCStore((state) => state.runtimeConnection.storedCredentials)
   const setIncludeTimingStatsInPolling = useOpenPLCStore(
@@ -64,20 +67,25 @@ const RuntimeStatusEditor = () => {
   /**
    * Ask the device about itself.
    *
-   * The bootloader probe is expected to fail on most devices, so a failure is
-   * recorded as "no bootloader" rather than surfaced as an error. Signing in
-   * reuses the credentials the operator already gave the runtime: the two
-   * services read one user database, so there is nothing more to ask for.
+   * Everything here comes from the bootloader, which is the only component
+   * present on every device this screen can act on. The runtime was the
+   * obvious place to ask and the wrong one: a device running any released
+   * runtime has no endpoint to answer, so the header stayed empty on precisely
+   * the devices an operator opens this screen to look at.
+   *
+   * The probe is expected to fail on most devices -- a native install or an
+   * orchestrator-managed vPLC has no bootloader -- so a failure is recorded as
+   * "no bootloader" rather than surfaced as an error. Signing in reuses the
+   * credentials the operator already gave the runtime: the two services read
+   * one user database, so there is nothing more to ask for.
    */
   const refresh = useCallback(async () => {
     if (!connected) return
 
-    const info = await runtime.getDeviceInfo()
-    setDeviceInfo(info.success ? (info.data ?? null) : null)
-
     const capabilities = await runtime.bootloader.getCapabilities()
     if (!capabilities.success) {
       setBootloader({ present: false })
+      setDeviceInfo(null)
       return
     }
 
@@ -91,12 +99,16 @@ const RuntimeStatusEditor = () => {
     if (storedCredentials) {
       const signIn = await runtime.bootloader.login(storedCredentials.username, storedCredentials.password)
       if (signIn.success) {
-        const status = await runtime.bootloader.getStatus()
+        const [status, info] = await Promise.all([
+          runtime.bootloader.getStatus(),
+          runtime.bootloader.getDeviceInfo(),
+        ])
         if (status.success) {
           next.state = status.data.state
           next.recovery = status.data.recovery ?? next.recovery
           next.reason = status.data.reason
         }
+        setDeviceInfo(info.success ? (info.data ?? null) : null)
       }
     }
     setBootloader(next)
@@ -144,8 +156,7 @@ const RuntimeStatusEditor = () => {
           <div className='flex flex-col gap-1'>
             <h2 className='select-none text-lg font-medium text-neutral-950 dark:text-white'>Runtime Status</h2>
             <p className='text-sm text-neutral-500 dark:text-neutral-400'>
-              {deviceInfo?.hostname ? `${deviceInfo.hostname} · ` : ''}
-              {ipAddress ?? 'unknown address'}
+              {describeDevice(deviceInfo?.hostname, selectedDevice?.deviceName, ipAddress)}
             </p>
           </div>
 
@@ -180,19 +191,16 @@ const RuntimeStatusEditor = () => {
 
         <dl className='grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3'>
           <InfoField label='Runtime version' value={runtimeVersion} />
-          <InfoField label='Architecture' value={deviceInfo?.architecture} />
-          <InfoField label='Kernel' value={deviceInfo?.kernel} />
-          <InfoField label='Host' value={deviceInfo?.hostname} />
-          <InfoField
-            label='Deployment'
-            // An absent flag is not a claim of "Native". Belt and braces with
-            // the schema guard: a runtime may report a subset of these fields,
-            // and the one thing this must never do is assert a deployment
-            // shape it was not told about.
-            value={describeDeployment(deviceInfo?.containerized)}
-          />
-          <InfoField label='Updates' value={describePolicy(deviceInfo?.updatePolicy)} />
           {bootloader.present && <InfoField label='Bootloader' value={bootloader.version} />}
+          <InfoField label='Host' value={deviceInfo?.hostname} />
+          <InfoField label='Operating system' value={deviceInfo?.system} />
+          <InfoField label='Kernel' value={deviceInfo?.kernel} />
+          <InfoField label='Architecture' value={deviceInfo?.architecture} />
+          {/* CPU count is the one host fact with an operational consequence
+              here: a scan task per core is the budget, and an operator sizing
+              tasks needs the number in front of them. */}
+          <InfoField label='CPU cores' value={deviceInfo?.cpus?.toString()} />
+          <InfoField label='Memory' value={describeMemory(deviceInfo?.memoryBytes)} />
         </dl>
       </header>
 
@@ -226,31 +234,40 @@ const InfoField = ({ label, value }: { label: string; value?: string | null }) =
 )
 
 /**
- * Say who may change the version, in words rather than an enum.
+ * Name the device this screen is actually showing.
  *
- * "managed" is the orchestrator case and the wording points the operator at
- * openplc-web rather than leaving them looking for a button that is not there.
+ * `runtimeConnection.ipAddress` is NOT that address whenever a device is
+ * reached through an orchestrator: it is the IP saved in the project's Device
+ * configuration, which has no relationship to the device being displayed. On a
+ * project carrying an old address, the header confidently labelled a device
+ * with a machine somewhere else on the network.
+ *
+ * So the connected device's own name wins, and the direct-connection address
+ * is used only when there is no orchestrator in the picture. The hostname the
+ * machine reports for itself is added when it says something the identifier
+ * does not.
  */
-const describePolicy = (policy?: string): string | undefined => {
-  switch (policy) {
-    case 'self':
-      return 'From this editor'
-    case 'managed':
-      return 'Managed by orchestrator'
-    case 'manual':
-      return 'Command line only'
-    case 'none':
-      return 'Provided by the device vendor'
-    default:
-      return undefined
-  }
+const describeDevice = (
+  hostname: string | undefined,
+  deviceName: string | undefined,
+  ipAddress: string | null,
+): string => {
+  const identity = deviceName ?? ipAddress ?? undefined
+  if (hostname && identity && hostname !== identity) return `${hostname} · ${identity}`
+  return hostname ?? identity ?? 'unknown device'
 }
 
-
-/** Only says what the device reported; silence stays silence. */
-const describeDeployment = (containerized: boolean | undefined): string | undefined => {
-  if (containerized === undefined) return undefined
-  return containerized ? 'Container' : 'Native'
+/**
+ * Total RAM, in the units a datasheet uses.
+ *
+ * Powers of 1024 rather than 1000: the daemon reports what the kernel sees, so
+ * 1935417344 is the 2 GB a board is sold as, and rounding it to "1.9 GB" would
+ * leave someone comparing it against the wrong number.
+ */
+const describeMemory = (bytes: number | undefined): string | undefined => {
+  if (bytes === undefined || bytes <= 0) return undefined
+  const gib = bytes / 1024 ** 3
+  return gib >= 1 ? `${gib.toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`
 }
 
 export { RuntimeStatusEditor }

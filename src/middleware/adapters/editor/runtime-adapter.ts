@@ -82,6 +82,13 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
           return { success: false as const, error: getErrorMessage(err) }
         }
       },
+      async getDeviceInfo() {
+        try {
+          return await window.bridge.bootloaderGetDeviceInfo(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
       async getRuntimeLogs(tail?: number) {
         try {
           return await window.bridge.bootloaderGetRuntimeLogs(requireIp(), tail)
@@ -139,14 +146,6 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         return await window.bridge.runtimeCreateUser(ip, params.username, params.password, params.role)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
-      }
-    },
-
-    async getDeviceInfo() {
-      try {
-        return await window.bridge.runtimeGetDeviceInfo(requireIp())
-      } catch (err) {
-        return { success: false as const, error: getErrorMessage(err) }
       }
     },
 

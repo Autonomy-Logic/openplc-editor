@@ -22,11 +22,11 @@ let storeState: Record<string, unknown> = {}
 
 vi.mock('@root/middleware/shared/providers/platform-context', () => ({
   useRuntime: () => ({
-    getDeviceInfo,
     bootloader: {
       getCapabilities,
       login: bootloaderLogin,
       getStatus,
+      getDeviceInfo,
       getRuntimeLogs: vi.fn(),
       startUpdate: vi.fn(),
       getUpdateProgress: vi.fn().mockResolvedValue({ success: false, error: 'none' }),
@@ -57,7 +57,8 @@ const connectedState = (overrides: Record<string, unknown> = {}) => ({
   runtimeConnection: {
     connectionStatus: 'connected',
     runtimeVersion: 'v4.2.1',
-    ipAddress: '192.168.2.4',
+    ipAddress: '192.168.1.112',
+    selectedDevice: { orchestratorId: 'local', orchestratorAgentId: 'local', deviceId: 'd1', deviceName: '192.168.2.4' },
     timingStats: null,
     storedCredentials: { username: 'op', password: 'op' },
     ...overrides,
@@ -76,6 +77,22 @@ beforeEach(() => {
   bootloaderLogin.mockResolvedValue({ success: false, error: 'no' })
   getStatus.mockResolvedValue({ success: false, error: 'no' })
 })
+
+/**
+ * A device whose bootloader answers and accepts the operator's credentials.
+ *
+ * Device info comes from the bootloader now, behind its login, so every test
+ * that expects a populated header has to get this far first -- which is the
+ * point: the bootloader is present whatever runtime version is installed.
+ */
+const withBootloader = () => {
+  getCapabilities.mockResolvedValue({
+    success: true,
+    data: { service: 'openplc-bootloader', state: 'healthy', recovery: false, bootloaderVersion: 'bootloader-v1.0.0' },
+  })
+  bootloaderLogin.mockResolvedValue({ success: true, data: {} })
+  getStatus.mockResolvedValue({ success: true, data: { state: 'healthy', recovery: false } })
+}
 
 describe('Runtime Status', () => {
   it('asks the operator to connect before showing anything', () => {
@@ -123,31 +140,43 @@ describe('Runtime Status', () => {
     expect(screen.getByText(/runtime exited 3 times/i)).toBeTruthy()
   })
 
-  it('shows what the device reports about itself', async () => {
+  it('shows what the bootloader reports about the machine', async () => {
+    withBootloader()
     getDeviceInfo.mockResolvedValue({
       success: true,
       data: {
         hostname: 'slm-rp4',
         architecture: 'aarch64',
         kernel: '6.12.35-rt10-v8+',
-        containerized: true,
-        updatePolicy: 'self',
+        system: 'Debian GNU/Linux 12 (bookworm)',
+        cpus: 4,
+        memoryBytes: 1935417344,
       },
     })
     render(<RuntimeStatusEditor />)
 
     await waitFor(() => expect(screen.getByText('aarch64')).toBeTruthy())
+    expect(screen.getByText('slm-rp4')).toBeTruthy()
     expect(screen.getByText('6.12.35-rt10-v8+')).toBeTruthy()
-    expect(screen.getByText('Container')).toBeTruthy()
-    // The policy is rendered in words, never as a bare enum.
-    expect(screen.getByText('From this editor')).toBeTruthy()
-    expect(screen.queryByText('self')).toBeNull()
+    expect(screen.getByText('Debian GNU/Linux 12 (bookworm)')).toBeTruthy()
+    expect(screen.getByText('4')).toBeTruthy()
+    // Powers of 1024, so a 2 GB board reads as the number on its datasheet.
+    expect(screen.getByText('1.8 GB')).toBeTruthy()
   })
 
-  it('explains a managed device instead of leaving the operator hunting', async () => {
-    getDeviceInfo.mockResolvedValue({ success: true, data: { updatePolicy: 'managed' } })
+  it('populates the header on a device whose runtime predates all of this', async () => {
+    // The whole reason these facts come from the bootloader. A released
+    // runtime serves no device information at all, and this screen is most
+    // useful on exactly those devices -- so nothing here may depend on the
+    // runtime version.
+    withBootloader()
+    getDeviceInfo.mockResolvedValue({ success: true, data: { hostname: 'slm-rp4', kernel: '6.12.35-rt10-v8+' } })
+    storeState = connectedState({ runtimeVersion: 'v4.1.0' })
+
     render(<RuntimeStatusEditor />)
-    await waitFor(() => expect(screen.getByText('Managed by orchestrator')).toBeTruthy())
+
+    await waitFor(() => expect(screen.getByText('slm-rp4')).toBeTruthy())
+    expect(screen.getByText('6.12.35-rt10-v8+')).toBeTruthy()
   })
 
   it('asks the poller for the statistics it displays, and stops on unmount', () => {
@@ -168,27 +197,47 @@ describe('Runtime Status', () => {
 })
 
 describe('Runtime Status header honesty', () => {
-  it('says nothing about deployment when the runtime did not report it', async () => {
-    // Every runtime released before this endpoint answers HTTP 200 with its
-    // catch-all body rather than a 404. Read as device info, that produced
-    // "Native" for a container -- a false claim about the entire installed
-    // base, and one nobody would think to check.
+  it('leaves a field blank rather than inventing a value', async () => {
+    // A bootloader that could not reach the daemon still answers, with less in
+    // it. The header must show what is missing as missing.
+    withBootloader()
     getDeviceInfo.mockResolvedValue({ success: true, data: { hostname: 'slm-rp4' } })
-    getCapabilities.mockResolvedValue({
-      success: true,
-      data: { service: 'openplc-bootloader', state: 'healthy', recovery: false },
-    })
 
     render(<RuntimeStatusEditor />)
 
     await waitFor(() => expect(screen.getByText('slm-rp4')).toBeTruthy())
-    expect(screen.queryByText('Native')).toBeNull()
+    // The fields it was not told about stay empty. The old runtime-sourced
+    // header filled them in from defaults, which is how it came to state
+    // "Native" about a container.
+    expect(screen.queryByText('aarch64')).toBeNull()
     expect(screen.queryByText('Container')).toBeNull()
+    expect(screen.queryByText('From this editor')).toBeNull()
+  })
+})
+
+describe('Which device the header names', () => {
+  it('names the connected device, not the address saved in the project', async () => {
+    // runtimeConnection.ipAddress is the project's configured runtime IP. On a
+    // device reached through an orchestrator it has no relationship to the
+    // device on screen, and a project carrying an old address labelled the
+    // header with a machine elsewhere on the network.
+    withBootloader()
+    getDeviceInfo.mockResolvedValue({ success: true, data: { hostname: 'slm-rp4' } })
+
+    render(<RuntimeStatusEditor />)
+
+    // The subtitle names both, so match the whole line rather than a fragment
+    // that also appears in the Host field below it.
+    await waitFor(() => expect(screen.getByText('slm-rp4 · 192.168.2.4')).toBeTruthy())
+    expect(screen.queryByText(/192\.168\.1\.112/)).toBeNull()
   })
 
-  it('still reports a native install when the runtime says so', async () => {
-    getDeviceInfo.mockResolvedValue({ success: true, data: { containerized: false } })
+  it('falls back to the dialled address when there is no orchestrator', async () => {
+    // The desktop editor connects straight to an IP and has no device record,
+    // so that address is the only identity available before the bootloader
+    // answers.
+    storeState = connectedState({ selectedDevice: null, ipAddress: '192.168.2.4' })
     render(<RuntimeStatusEditor />)
-    await waitFor(() => expect(screen.getByText('Native')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/192\.168\.2\.4/)).toBeTruthy())
   })
 })
