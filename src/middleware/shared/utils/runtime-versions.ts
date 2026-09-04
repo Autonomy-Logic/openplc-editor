@@ -34,9 +34,7 @@ export type RuntimeVersion = {
   prerelease: boolean
 }
 
-export type RuntimeVersionsResult =
-  | { ok: true; versions: RuntimeVersion[] }
-  | { ok: false; error: string }
+export type RuntimeVersionsResult = { ok: true; versions: RuntimeVersion[] } | { ok: false; error: string }
 
 let cache: { at: number; versions: RuntimeVersion[] } | null = null
 

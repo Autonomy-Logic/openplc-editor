@@ -20,8 +20,36 @@ const mockSetPlcLogs = jest.fn()
 const mockAppendPlcLogs = jest.fn()
 const mockSetPlcLogsLastId = jest.fn()
 const mockClearPlcLogs = jest.fn()
+// The poller lowers this once the device reports a terminal update state.
+const mockSetRuntimeUpdateInProgress = jest.fn()
 
-const mockState: Record<string, unknown> = {
+/**
+ * The slice of the store this hook reads.
+ *
+ * Typed so the per-test setup can assign fields directly. It used to be
+ * `Record<string, unknown>` and every setup cast it with `as object`, which
+ * meant a typo in a field name -- or a field the hook stopped reading --
+ * produced no error at all.
+ */
+type MockRuntimeConnection = {
+  connectionStatus: string
+  jwtToken: string | null
+  includeTimingStatsInPolling: boolean
+  includeEthercatStatsInPolling: boolean
+  plcStatus: unknown
+  ethercatStatus: unknown
+  runtimeUpdateInProgress?: boolean
+  selectedDevice?: { deviceName?: string } | null
+  ipAddress?: string | null
+}
+
+const mockState: {
+  runtimeConnection: MockRuntimeConnection
+  workspace: Record<string, unknown>
+  deviceActions: Record<string, jest.Mock>
+  modalActions: Record<string, jest.Mock>
+  workspaceActions: Record<string, jest.Mock>
+} = {
   runtimeConnection: {
     connectionStatus: 'connected',
     jwtToken: 'tok',
@@ -38,6 +66,7 @@ const mockState: Record<string, unknown> = {
     setEthercatStatus: mockSetEthercatStatus,
     setRuntimeJwtToken: mockSetRuntimeJwtToken,
     setRuntimeConnectionStatus: mockSetRuntimeConnectionStatus,
+    setRuntimeUpdateInProgress: mockSetRuntimeUpdateInProgress,
   },
   modalActions: { openModal: mockOpenModal },
   workspaceActions: {
@@ -93,7 +122,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
     mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
     mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
     mockRuntime.getEthercatRuntimeStatus = undefined
-    Object.assign(mockState.runtimeConnection as object, {
+    Object.assign(mockState.runtimeConnection, {
       connectionStatus: 'connected',
       jwtToken: 'tok',
       includeTimingStatsInPolling: false,
@@ -102,7 +131,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('clears stored ethercat status when the polling flag is off', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: false })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: false })
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: { masters: [] } })
 
     renderHook(() => useRuntimePolling())
@@ -115,7 +144,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('skips cleanly when the optional getEthercatRuntimeStatus method is not on the runtime', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
     mockRuntime.getEthercatRuntimeStatus = undefined
 
     renderHook(() => useRuntimePolling())
@@ -128,7 +157,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('writes the runtime payload into the store on a successful ethercat poll', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
     const payload = { masters: [{ name: 'BusA', plugin_state: 'OPERATIONAL' }] }
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: payload })
 
@@ -140,7 +169,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('does not tear down the connection on a transient ethercat rejection', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockRejectedValue(new Error('boom'))
 
     renderHook(() => useRuntimePolling())
@@ -162,7 +191,7 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
     mockRuntime.getEthercatRuntimeStatus = undefined
     mockRuntime.bootloader.getUpdateProgress.mockResolvedValue({ success: false, error: 'idle' })
-    Object.assign(mockState.runtimeConnection as object, {
+    Object.assign(mockState.runtimeConnection, {
       connectionStatus: 'connected',
       jwtToken: 'tok',
       includeTimingStatsInPolling: false,
@@ -178,7 +207,7 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     // its silence is the expected state, not a fault. Polling through it
     // counted the gap as failures and announced a lost connection in the
     // middle of an update that was working.
-    Object.assign(mockState.runtimeConnection as object, { runtimeUpdateInProgress: true })
+    Object.assign(mockState.runtimeConnection, { runtimeUpdateInProgress: true })
 
     renderHook(() => useRuntimePolling())
     await flushAll()
@@ -198,7 +227,7 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     // microtasks in a loop -- what this used to do -- runs the FIRST poll five
     // times over and never reaches the failure threshold, which is why the
     // assertions below were reachable only behind an `if`.
-    jest.useFakeTimers();
+    jest.useFakeTimers()
     try {
       renderHook(() => useRuntimePolling())
       for (let attempt = 0; attempt < MAX_CONSECUTIVE_FAILURES + 1; attempt += 1) {

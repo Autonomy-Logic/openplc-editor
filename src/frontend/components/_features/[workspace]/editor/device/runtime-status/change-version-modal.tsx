@@ -71,6 +71,9 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
   // on every tick, which would restart the interval each time.
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // True while a progress request is open, so ticks cannot overlap.
+  const pollInFlightRef = useRef(false)
+
   // onFinished is a prop, and callers pass an inline arrow -- a new function
   // every render. Depending on it directly made `poll` unstable, which made
   // the effect below unstable, which leaked a timer per render while an
@@ -83,31 +86,82 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
     onFinishedRef.current = onFinished
   }, [onFinished])
 
-  const stopPolling = useCallback(() => {
+  /**
+   * Stop this dialog's timer. Says nothing about the device.
+   *
+   * Deliberately separate from lowering runtimeUpdateInProgress. Every effect
+   * cleanup here runs on unmount, and one of them used to call a combined
+   * stop that lowered the flag -- so navigating away from the Runtime Status
+   * tab mid-swap told the status poller the update was over. It then resumed,
+   * counted five silent polls against a runtime that was still being
+   * replaced, and raised the "connection lost" modal the flag exists to
+   * prevent.
+   *
+   * The flag is now lowered in exactly two places, both of which have seen a
+   * terminal state: poll() below while the dialog is open, and
+   * use-runtime-polling once it is not. Unmounting is not evidence that
+   * anything finished.
+   */
+  const stopInterval = useCallback(() => {
     if (pollingRef.current !== null) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
     }
-    setRuntimeUpdateInProgress(false)
-  }, [setRuntimeUpdateInProgress])
+  }, [])
 
+  /** The update reached a terminal state: stop, and release the poller. */
+  const finishPolling = useCallback(() => {
+    stopInterval()
+    setRuntimeUpdateInProgress(false)
+  }, [stopInterval, setRuntimeUpdateInProgress])
+
+  /**
+   * Ask the device where it has got to, one request at a time.
+   *
+   * The guard is load-bearing. The tick interval is shorter than a request can
+   * take on a busy device, so without it two polls overlap -- and a stale
+   * `pulling` reply landing AFTER a `success` reply would overwrite the
+   * terminal state, leaving the dialog showing an update in progress with no
+   * poller left to finish it. A skipped tick costs nothing; an out-of-order
+   * reply costs the operator the end of their update.
+   *
+   * It also never throws. The interval callback cannot await it, so an
+   * escaping rejection would surface as an unhandled promise rejection rather
+   * than as anything anybody could act on.
+   */
   const poll = useCallback(async () => {
-    const result = await runtime.bootloader.getUpdateProgress()
-    if (!result.success) {
-      // A poll failing mid-update is expected: the runtime container is being
-      // replaced, and on a host-network device that can briefly interrupt
-      // everything. Keep polling rather than declaring failure.
-      return
-    }
-    setProgress(result.data)
-    if (!IN_FLIGHT.has(result.data.state)) {
-      stopPolling()
-      if (result.data.state === 'failed') {
-        setError(result.data.error ?? 'The update failed.')
+    if (pollInFlightRef.current) return
+    pollInFlightRef.current = true
+    try {
+      const result = await runtime.bootloader.getUpdateProgress()
+
+      // The loop was stopped while this request was open -- the dialog closed,
+      // or a terminal state already arrived. Applying a late reply now would
+      // resurrect state the component has moved past.
+      if (pollingRef.current === null) return
+
+      if (!result.success) {
+        // A poll failing mid-update is expected: the runtime container is
+        // being replaced, and on a host-network device that can briefly
+        // interrupt everything. Keep polling rather than declaring failure.
+        return
       }
-      onFinishedRef.current?.()
+      setProgress(result.data)
+      if (!IN_FLIGHT.has(result.data.state)) {
+        finishPolling()
+        if (result.data.state === 'failed') {
+          setError(result.data.error ?? 'The update failed.')
+        }
+        onFinishedRef.current?.()
+      }
+    } catch (err) {
+      // Treated like a failed poll: the device is mid-swap and unreachable,
+      // which is the normal shape of this error.
+      console.warn('[RuntimeStatus] Update progress request failed', err)
+    } finally {
+      pollInFlightRef.current = false
     }
-  }, [runtime, stopPolling])
+  }, [runtime, stopInterval, finishPolling])
 
   /**
    * Begin following an update, replacing any loop already running.
@@ -117,12 +171,13 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
    * ticking, unreferenced and unstoppable.
    */
   const startPolling = useCallback(() => {
-    stopPolling()
+    stopInterval()
     setRuntimeUpdateInProgress(true)
     pollingRef.current = setInterval(() => {
+      // poll() handles its own errors, so nothing escapes here.
       void poll()
     }, POLL_INTERVAL_MS)
-  }, [poll, stopPolling, setRuntimeUpdateInProgress])
+  }, [poll, stopInterval, setRuntimeUpdateInProgress])
 
   const startUpdate = useCallback(async () => {
     const target = version.trim()
@@ -181,7 +236,7 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
   // the device will refuse.
   useEffect(() => {
     if (!open) {
-      stopPolling()
+      stopInterval()
       // Reset. This component is mounted unconditionally by the screen, so
       // only the Radix content unmounts when `open` goes false -- progress,
       // error and the chosen version all survived a close. Reopening after a
@@ -203,41 +258,22 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
       }
     })()
     // Stopping the timer here is not optional: without it a re-run of this
-    // effect abandons the previous one still ticking.
+    // effect abandons the previous one still ticking. The DEVICE flag is not
+    // touched -- this cleanup also runs on unmount, and an unmount says
+    // nothing about whether the device finished.
     return () => {
       cancelled = true
-      stopPolling()
+      stopInterval()
     }
-  }, [open, runtime, startPolling, stopPolling])
+  }, [open, runtime, startPolling, stopInterval])
 
-  // On unmount, stop this dialog's timer -- but do NOT tell the poller the
-  // update is over if the device is still working.
+  // On unmount, stop this dialog's timer and nothing else.
   //
-  // `busy` blocks the dialog's own close, but nothing blocks navigating away
-  // from the Runtime Status tab, and this cleanup used to clear
-  // runtimeUpdateInProgress mid-swap. The status poller then resumed, counted
-  // five silent polls and raised the very "connection lost" modal the flag
-  // exists to prevent.
-  //
-  // The flag is left raised in that case. The poller clears it itself once the
-  // device reports a terminal state, so it cannot stick.
-  const inFlightRef = useRef(false)
-  useEffect(() => {
-    inFlightRef.current = progress !== null && IN_FLIGHT.has(progress.state)
-  }, [progress])
-
-  useEffect(
-    () => () => {
-      if (pollingRef.current !== null) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-      if (!inFlightRef.current) {
-        setRuntimeUpdateInProgress(false)
-      }
-    },
-    [setRuntimeUpdateInProgress],
-  )
+  // An earlier version guarded the flag with a ref instead, which looked
+  // equivalent and was not: a sibling effect's cleanup also ran a combined
+  // stop that lowered it, so the guard here never got the chance. Keeping
+  // every cleanup timer-only removes the ordering question altogether.
+  useEffect(() => stopInterval, [stopInterval])
 
   const inFlight = progress !== null && IN_FLIGHT.has(progress.state)
   const succeeded = progress?.state === 'success'
@@ -326,18 +362,14 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
             )}
 
             {currentVersion && (
-              <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                Currently running {currentVersion}
-              </span>
+              <span className='text-xs text-neutral-500 dark:text-neutral-400'>Currently running {currentVersion}</span>
             )}
           </div>
 
           {progress && (
             <div aria-live='polite' className='flex flex-col gap-2'>
               <div className='flex items-center justify-between text-sm'>
-                <span className='text-neutral-700 dark:text-neutral-300'>
-                  {describeState(progress)}
-                </span>
+                <span className='text-neutral-700 dark:text-neutral-300'>{describeState(progress)}</span>
                 {/* No percentage while the daemon has reported no size to work
                     from -- for layers it already holds, and before any size is
                     known. Showing 0% there would read as a stall. */}

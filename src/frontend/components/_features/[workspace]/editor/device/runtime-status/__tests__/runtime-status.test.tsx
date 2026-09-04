@@ -73,7 +73,12 @@ const connectedState = (overrides: Record<string, unknown> = {}) => ({
     connectionStatus: 'connected',
     runtimeVersion: 'v4.2.1',
     ipAddress: '192.168.1.112',
-    selectedDevice: { orchestratorId: 'local', orchestratorAgentId: 'local', deviceId: 'd1', deviceName: '192.168.2.4' },
+    selectedDevice: {
+      orchestratorId: 'local',
+      orchestratorAgentId: 'local',
+      deviceId: 'd1',
+      deviceName: '192.168.2.4',
+    },
     timingStats: null,
     storedCredentials: { username: 'op', password: 'op' },
     ...overrides,
@@ -135,12 +140,15 @@ describe('Runtime Status', () => {
   it('offers a version change when a bootloader answers', async () => {
     getCapabilities.mockResolvedValue({
       success: true,
-      data: { service: 'openplc-bootloader', state: 'healthy', recovery: false, bootloaderVersion: 'bootloader-v1.0.0' },
+      data: {
+        service: 'openplc-bootloader',
+        state: 'healthy',
+        recovery: false,
+        bootloaderVersion: 'bootloader-v1.0.0',
+      },
     })
     render(<RuntimeStatusEditor />)
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /change runtime version/i })).toBeTruthy(),
-    )
+    await waitFor(() => expect(screen.getByRole('button', { name: /change runtime version/i })).toBeTruthy())
   })
 
   it('announces a device in recovery, with the reason', async () => {

@@ -104,15 +104,23 @@ const RuntimeStatusEditor = () => {
     const host = await orchestrator.getOrchestratorHostInfo(orchestratorId)
     if (!host) return null
 
-    const cpus = host.cpu !== undefined ? Number(host.cpu) : undefined
+    // Narrowed rather than asserted: the agent's numbers arrive as strings,
+    // and a non-numeric one has to drop out rather than become NaN.
+    const asNumber = (value: string | undefined): number | undefined => {
+      if (value === undefined) return undefined
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : undefined
+    }
+
+    const cpus = asNumber(host.cpu)
     // The agent reports total RAM in MB; the header formats bytes.
-    const megabytes = host.memory !== undefined ? Number(host.memory) : undefined
+    const megabytes = asNumber(host.memory)
     return {
       hostname: host.name,
       system: host.os,
       kernel: host.kernel,
-      cpus: Number.isFinite(cpus) ? cpus : undefined,
-      memoryBytes: Number.isFinite(megabytes) ? (megabytes as number) * 1024 * 1024 : undefined,
+      cpus,
+      memoryBytes: megabytes === undefined ? undefined : megabytes * 1024 * 1024,
       agentVersion: host.agentVersion,
     }
   }, [orchestrator, selectedDevice?.orchestratorId])
@@ -136,6 +144,12 @@ const RuntimeStatusEditor = () => {
     if (!capabilities.success) {
       setBootloader({ present: false })
 
+      // Cleared BEFORE the request below, not after it. The fallback is a
+      // round-trip to the agent, and leaving the previous device's hostname,
+      // kernel and memory on screen for its duration means the header can
+      // name the new device while describing the old one.
+      setDeviceInfo(null)
+
       // No bootloader is the NORMAL case in production: a device under an
       // orchestrator is a vPLC container with no bootloader beside it, so
       // there is nothing on 8445 to ask. The agent managing it knows the same
@@ -158,10 +172,7 @@ const RuntimeStatusEditor = () => {
     if (storedCredentials) {
       const signIn = await runtime.bootloader.login(storedCredentials.username, storedCredentials.password)
       if (signIn.success) {
-        const [status, info] = await Promise.all([
-          runtime.bootloader.getStatus(),
-          runtime.bootloader.getDeviceInfo(),
-        ])
+        const [status, info] = await Promise.all([runtime.bootloader.getStatus(), runtime.bootloader.getDeviceInfo()])
         if (status.success) {
           next.state = status.data.state
           next.recovery = status.data.recovery ?? next.recovery
@@ -212,9 +223,7 @@ const RuntimeStatusEditor = () => {
   if (!connected) {
     return (
       <div className='flex h-full w-full items-center justify-center'>
-        <p className='text-sm text-neutral-500 dark:text-neutral-400'>
-          Connect to a runtime to see its status.
-        </p>
+        <p className='text-sm text-neutral-500 dark:text-neutral-400'>Connect to a runtime to see its status.</p>
       </div>
     )
   }

@@ -16,8 +16,10 @@ const tags = (...names: unknown[]) => names.map((name) => ({ name }))
  * restored between tests. Same coverage as the web copy, different runner --
  * the two apps share this module but not a test framework.
  */
-const stubFetch = (impl: unknown): void => {
-  ;(globalThis as { fetch: unknown }).fetch = impl
+type FetchLike = typeof globalThis.fetch
+
+const stubFetch = (impl: FetchLike): void => {
+  globalThis.fetch = impl
 }
 
 const respondWith = (body: unknown, status = 200) =>
@@ -35,7 +37,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  ;(globalThis as { fetch: unknown }).fetch = realFetch
+  globalThis.fetch = realFetch
 })
 
 describe('listRuntimeVersions', () => {
@@ -124,8 +126,7 @@ describe('listRuntimeVersions', () => {
     // fallback disabled the whole time. Asserted through the rejection the
     // abort produces rather than by driving the timer, which AbortSignal
     // .timeout does not take from fake timers.
-    stubFetch(jest.fn().mockRejectedValue(new DOMException('signal timed out', 'TimeoutError')),
-    )
+    stubFetch(jest.fn().mockRejectedValue(new DOMException('signal timed out', 'TimeoutError')))
 
     const result = await listRuntimeVersions()
 

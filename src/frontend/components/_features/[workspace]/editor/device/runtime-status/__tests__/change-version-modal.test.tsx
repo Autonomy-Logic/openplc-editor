@@ -161,11 +161,53 @@ describe('Following an update', () => {
     await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
   })
 
-  it('lets the poller resume once the dialog is gone', async () => {
-    // A flag left raised would disable status polling for the rest of the
-    // session, which is a quieter failure than the one it prevents.
+  it('does not declare an update finished just because the dialog closed', async () => {
+    // Unmounting is not evidence about the device. The flag is lowered in
+    // exactly two places, both of which have seen a terminal state: poll()
+    // while this dialog is open, and use-runtime-polling once it is not.
     const { unmount } = render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
     unmount()
-    expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(false)
+    expect(setRuntimeUpdateInProgress).not.toHaveBeenCalledWith(false)
+  })
+
+  it('releases the poller when the update reaches a terminal state', async () => {
+    // The path that DOES lower the flag. The dialog adopts an update already
+    // in flight, then the next poll sees it finish.
+    // Every call reports in-flight to begin with. A `...Once` chain is not
+    // reliable here: the adopt effect re-runs whenever the runtime port's
+    // identity changes and discards the request it had open, so which call
+    // wins is not fixed.
+    getUpdateProgress.mockResolvedValue({ success: true, data: { state: 'pulling', to: 'v4.1.10' } })
+
+    render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
+
+    // Adopted: the loop is running and the poller has been stood down.
+    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
+
+    // Now the device finishes.
+    getUpdateProgress.mockResolvedValue({ success: true, data: { state: 'success', to: 'v4.1.10' } })
+
+    // One tick later the update reports success, which releases the poller.
+    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(false), {
+      timeout: 5000,
+    })
+  })
+
+  it('keeps the poller stood down when unmounted mid-swap', async () => {
+    // The case that matters, and the one that was untested. `busy` blocks the
+    // dialog's own close but nothing blocks navigating away from the Runtime
+    // Status tab -- and clearing the flag here would let the status poller
+    // resume during the runtime's expected outage, count five silent polls
+    // and raise the "connection lost" modal this flag exists to prevent.
+    getUpdateProgress.mockResolvedValue({ success: true, data: { state: 'swapping', to: 'v4.1.10' } })
+
+    const { unmount } = render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
+    // Wait for the adopt path to see the in-flight state.
+    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
+    setRuntimeUpdateInProgress.mockClear()
+
+    unmount()
+
+    expect(setRuntimeUpdateInProgress).not.toHaveBeenCalledWith(false)
   })
 })
