@@ -62,6 +62,20 @@ const fail = (message: string, title?: string): ProjectResponse => ({ ok: false,
 /** IEC identifiers are case-insensitive — the rule every element-name lookup folds by. */
 const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
+// Text paths (code view commit, reconcile) skip the table's per-row validation, so the list is checked whole.
+const findDuplicateVariableName = (variables: PLCVariable[]): string | undefined => {
+  const seen = new Set<string>()
+  for (const variable of variables) {
+    const key = variable.name.toLowerCase()
+    if (seen.has(key)) return variable.name
+    seen.add(key)
+  }
+  return undefined
+}
+
+const duplicateVariableFailure = (name: string): ProjectResponse =>
+  fail(`"${name}" is declared more than once. Please make sure that the name is unique.`, 'Variable already exists')
+
 // Default S7Comm configurations
 const DEFAULT_S7COMM_SERVER_SETTINGS: S7CommServerSettings = {
   enabled: false,
@@ -611,6 +625,8 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
+    const duplicate = findDuplicateVariableName(parsed)
+    if (duplicate) return duplicateVariableFailure(duplicate)
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)
@@ -1071,6 +1087,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       return response
     },
     setPouVariables: ({ pouName, variables }) => {
+      const duplicate = findDuplicateVariableName(variables)
+      if (duplicate) return duplicateVariableFailure(duplicate)
       setState(
         produce((slice: ProjectSlice) => {
           const pou = slice.project.data.pous.find((p) => p.name === pouName)
@@ -1080,6 +1098,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       return ok()
     },
     setGlobalVariables: ({ variables }) => {
+      const duplicate = findDuplicateVariableName(variables)
+      if (duplicate) return duplicateVariableFailure(duplicate)
       setState(
         produce((slice: ProjectSlice) => {
           slice.project.data.configurations.resource.globalVariables = variables
