@@ -1,18 +1,26 @@
 import {
+  DEFAULT_EXECUTE_CONNECTOR_Y,
+  DEFAULT_EXECUTE_WIDTH,
+  executeHeight,
+} from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/constants'
+import {
   BlockNode,
   BlockVariant,
   CoilNode,
   ContactNode,
+  ExecuteNode,
   PowerRailNode,
   VariableNode,
 } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import { LadderFlowType } from '@root/frontend/store/slices'
 import { Edge, Position } from '@xyflow/react'
 
+import { readExecuteStCode } from '../../execute-plcopen'
 import { asArray, asRecord, asString } from '../xml-node'
+import type { XyPosition } from './geometry'
 import { makeHandle, parsePositionXml, toNumber } from './geometry'
 
-type LadderParsedNode = PowerRailNode | ContactNode | CoilNode | BlockNode<BlockVariant> | VariableNode
+type LadderParsedNode = PowerRailNode | ContactNode | CoilNode | BlockNode<BlockVariant> | VariableNode | ExecuteNode
 
 // Reverse of xml-generator/old-editor/language/ladder-xml.ts. Greenfield (no
 // PLCopen import reference existed anywhere before this) — reconstructed by
@@ -73,6 +81,12 @@ function parseConnectionXml(connXml: unknown, targetNumericId: string, targetHan
   }
 }
 
+// Rails are the one exception to this file's `TYPE-<localId>` id convention.
+// The rung layout resolves them by prefix — `id.startsWith('left-rail')` /
+// `'right-rail'` (see changeRailBounds and the handle-branch helpers) — so a
+// differently-prefixed id makes an imported rung's right rail invisible to the
+// layout: it never repositions, and elements added afterwards run straight
+// past it.
 function parseLeftRailXml(entry: Record<string, unknown>): PowerRailNode {
   const numericId = asString(entry['@localId'])
   const position = parsePositionXml(entry.position)
@@ -85,7 +99,7 @@ function parseLeftRailXml(entry: Record<string, unknown>): PowerRailNode {
   )
 
   return {
-    id: `LEFT-POWER-RAIL-${numericId}`,
+    id: `left-rail-${numericId}`,
     type: 'powerRail',
     position,
     width: toNumber(entry['@width']),
@@ -119,7 +133,7 @@ function parseRightRailXml(entry: Record<string, unknown>): { node: PowerRailNod
   )
 
   const node: PowerRailNode = {
-    id: `RIGHT-POWER-RAIL-${numericId}`,
+    id: `right-rail-${numericId}`,
     type: 'powerRail',
     position,
     width: toNumber(entry['@width']),
@@ -334,6 +348,105 @@ function parseBlockXml(entry: Record<string, unknown>): { node: BlockNode<BlockV
   return { node, pendingEdges }
 }
 
+/** An `EN` / `ENO` handle for a file that declared neither. */
+function makeExecuteFallbackHandle(id: 'EN' | 'ENO', position: XyPosition) {
+  const side = id === 'EN' ? Position.Left : Position.Right
+  const relPosition = { '@x': id === 'EN' ? 0 : DEFAULT_EXECUTE_WIDTH, '@y': DEFAULT_EXECUTE_CONNECTOR_Y }
+  return makeHandle(id, id === 'EN' ? 'target' : 'source', side, position, relPosition, {
+    top: DEFAULT_EXECUTE_CONNECTOR_Y,
+    ...(id === 'EN' ? { left: 0 } : { right: 0 }),
+  })
+}
+
+/**
+ * Rebuild an Execute ("ST Block") element from a `<block typeName="EXECUTE">`.
+ *
+ * PLCopen has no inline-ST element, so the snippet rides in an `<addData>`
+ * under 3S's `.../plcopenxml/stcode` URI — the same shape CODESYS writes, so
+ * their exports import here too. See `utils/PLC/execute-plcopen.ts`.
+ *
+ * The `EN`/`ENO` pins are ordinary formal parameters, so connections rebuild
+ * through exactly the same `parseConnectionXml` path as any other block.
+ */
+function parseExecuteXml(
+  entry: Record<string, unknown>,
+  code: string,
+): { node: ExecuteNode; pendingEdges: PendingEdge[] } {
+  const numericId = asString(entry['@localId'])
+  const position = parsePositionXml(entry.position)
+  const pendingEdges: PendingEdge[] = []
+
+  const inputHandles: ExecuteNode['data']['inputHandles'] = []
+  for (const varRaw of asArray(asRecord(entry.inputVariables).variable)) {
+    const v = asRecord(varRaw)
+    const formalParameter = asString(v['@formalParameter'])
+    const connIn = asRecord(v.connectionPointIn)
+    // `style.top` is what places the handle's DOM element, and React Flow
+    // draws edges to the DOM position — without it an imported box has its
+    // wires meeting it at the element's vertical centre instead of the pin row.
+    inputHandles.push(
+      makeHandle(formalParameter, 'target', Position.Left, position, connIn.relPosition, {
+        top: DEFAULT_EXECUTE_CONNECTOR_Y,
+        left: 0,
+      }),
+    )
+    for (const connRaw of asArray(connIn.connection)) {
+      pendingEdges.push(parseConnectionXml(connRaw, numericId, formalParameter))
+    }
+  }
+
+  const outputHandles: ExecuteNode['data']['outputHandles'] = asArray(asRecord(entry.outputVariables).variable).map(
+    (varRaw) => {
+      const v = asRecord(varRaw)
+      const connOut = asRecord(v.connectionPointOut)
+      return makeHandle(asString(v['@formalParameter']), 'source', Position.Right, position, connOut.relPosition, {
+        top: DEFAULT_EXECUTE_CONNECTOR_Y,
+        right: 0,
+      })
+    },
+  )
+
+  // A file that declares typeName="EXECUTE" without EN/ENO still has to
+  // produce a usable box: the rung layout reads `inputConnector` /
+  // `outputConnector` to place whatever is inserted next to it, and an
+  // undefined one crashes it. Nothing we write omits them — this covers
+  // hand-edited and foreign files.
+  if (inputHandles.length === 0) inputHandles.push(makeExecuteFallbackHandle('EN', position))
+  if (outputHandles.length === 0) outputHandles.push(makeExecuteFallbackHandle('ENO', position))
+
+  // `||` and not `??`: toNumber yields 0 for an absent or unparseable
+  // attribute, and a 0-sized box is exactly what needs the fallback. CODESYS
+  // omits width/height entirely, so this is its normal path.
+  const width = toNumber(entry['@width']) || DEFAULT_EXECUTE_WIDTH
+  const height = toNumber(entry['@height']) || executeHeight(code === '' ? 0 : code.split('\n').length)
+
+  const node: ExecuteNode = {
+    id: `EXECUTE-${numericId}`,
+    type: 'execute',
+    position,
+    width,
+    height,
+    draggable: true,
+    selectable: true,
+    data: {
+      handles: [...inputHandles, ...outputHandles],
+      inputHandles,
+      outputHandles,
+      inputConnector: inputHandles[0],
+      outputConnector: outputHandles[0],
+      numericId,
+      code,
+      variable: { name: '' },
+      executionOrder: toNumber(entry['@executionOrderId']),
+      draggable: true,
+      selectable: true,
+      deletable: true,
+    },
+  }
+
+  return { node, pendingEdges }
+}
+
 function parseInVariableXml(entry: Record<string, unknown>): VariableNode {
   const numericId = asString(entry['@localId'])
   const position = parsePositionXml(entry.position)
@@ -456,7 +569,112 @@ class UnionFind {
   }
 }
 
-export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderFlowType; warnings: string[] } {
+/**
+ * Shift a rung's nodes vertically by `dy`, keeping handle geometry in step.
+ *
+ * Mutates the freshly-parsed nodes rather than rebuilding them: `data` is a
+ * discriminated union whose members differ, and every node's handles are
+ * reached the same way regardless. `inputConnector` / `outputConnector` alias
+ * the same handle objects, so moving those objects updates every view of them.
+ */
+function translateRungY(rungNodes: LadderParsedNode[], dy: number): void {
+  if (dy === 0) return
+  // `handles` holds the same objects as `inputHandles` / `outputHandles`, so
+  // track identity — moving one twice would double the shift.
+  const moved = new Set<object>()
+  for (const node of rungNodes) {
+    node.position = { x: node.position.x, y: node.position.y + dy }
+    const data: unknown = node.data
+    if (typeof data !== 'object' || data === null) continue
+    for (const key of ['handles', 'inputHandles', 'outputHandles'] as const) {
+      if (!(key in data)) continue
+      const handles = (data as Record<string, unknown>)[key]
+      if (!Array.isArray(handles)) continue
+      for (const handle of handles) {
+        if (typeof handle !== 'object' || handle === null || !('glbPosition' in handle)) continue
+        if (moved.has(handle)) continue
+        moved.add(handle)
+        const { glbPosition } = handle as { glbPosition: { x: number; y: number } }
+        glbPosition.y += dy
+      }
+    }
+  }
+}
+
+/**
+ * Put a rung's nodes in electrical order: left rail first, each element in
+ * signal-flow order, right rail last.
+ *
+ * The parse builds nodes grouped by XML element type — every `<contact>`, then
+ * every `<coil>`, then every `<block>` — because that is the shape
+ * fast-xml-parser hands over. The ladder editor reads a rung's node array as
+ * its serial spine, though: `appendSerialConnection` and `getPreviousElement`
+ * both take "the entry before this one in the array" to be the electrical
+ * predecessor. Fed a type-grouped array, inserting an element wires it to
+ * whatever happened to be parsed before it — typically the right power rail,
+ * which has no output connector at all.
+ *
+ * Kahn's algorithm over the rung's own edges, tie-broken by X then parse order.
+ * Newly-ready successors go to the front of the queue so a chain stays
+ * contiguous — a parallel path's elements must not interleave with its
+ * sibling's.
+ */
+function orderRungNodes(rungNodes: LadderParsedNode[], rungEdges: Edge[]): LadderParsedNode[] {
+  const byId = new Map(rungNodes.map((node) => [node.id, node]))
+  const parseIndex = new Map(rungNodes.map((node, index) => [node.id, index]))
+  const inDegree = new Map(rungNodes.map((node) => [node.id, 0]))
+  const successors = new Map<string, string[]>()
+
+  for (const edge of rungEdges) {
+    if (!inDegree.has(edge.source) || !inDegree.has(edge.target)) continue
+    inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
+    const existing = successors.get(edge.source)
+    if (existing) existing.push(edge.target)
+    else successors.set(edge.source, [edge.target])
+  }
+
+  const compare = (a: LadderParsedNode, b: LadderParsedNode): number =>
+    a.position.x - b.position.x || (parseIndex.get(a.id) ?? 0) - (parseIndex.get(b.id) ?? 0)
+
+  const queue = rungNodes.filter((node) => (inDegree.get(node.id) ?? 0) === 0).sort(compare)
+  const ordered: LadderParsedNode[] = []
+  const placed = new Set<string>()
+
+  while (queue.length > 0) {
+    const node = queue.shift()
+    if (!node) break
+    ordered.push(node)
+    placed.add(node.id)
+
+    const unlocked: LadderParsedNode[] = []
+    for (const successorId of successors.get(node.id) ?? []) {
+      const remaining = (inDegree.get(successorId) ?? 0) - 1
+      inDegree.set(successorId, remaining)
+      if (remaining !== 0) continue
+      const successor = byId.get(successorId)
+      if (successor) unlocked.push(successor)
+    }
+    queue.unshift(...unlocked.sort(compare))
+  }
+
+  // Ladder bodies are acyclic, so this only guards against a malformed file —
+  // an unorderable node keeps its parse position rather than being dropped.
+  for (const node of rungNodes) if (!placed.has(node.id)) ordered.push(node)
+
+  return ordered
+}
+
+export function parseLadderXml(
+  pouName: string,
+  ldXml: unknown,
+  /**
+   * Untrimmed `<STCode>` payloads by `@localId`, from a second parse — see
+   * `parse-xml-document.ts`. The main parse trims text nodes, which would
+   * eat an Execute snippet's first-line indentation and trailing newline.
+   * Absent (tests, callers that don't care) falls back to the trimmed text.
+   */
+  executeStCode: ReadonlyMap<string, string> = new Map(),
+): { body: LadderFlowType; warnings: string[] } {
   const ld = asRecord(ldXml)
   const warnings: string[] = []
   const nodes: LadderParsedNode[] = []
@@ -487,7 +705,14 @@ export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderF
     pendingEdges.push(...edges)
   }
   for (const entry of asArray(ld.block)) {
-    const { node, pendingEdges: edges } = parseBlockXml(asRecord(entry))
+    const record = asRecord(entry)
+    // An Execute ("ST Block") element rides in as a <block> with
+    // typeName="EXECUTE" — the shape CODESYS itself writes — so it has to be
+    // split out here before the generic block path claims it as a function call.
+    const trimmedCode = readExecuteStCode(record)
+    const executeCode = trimmedCode === null ? null : (executeStCode.get(asString(record['@localId'])) ?? trimmedCode)
+    const { node, pendingEdges: edges } =
+      executeCode === null ? parseBlockXml(record) : parseExecuteXml(record, executeCode)
     nodes.push(node)
     nodeIdByNumericId.set(node.data.numericId, node.id)
     pendingEdges.push(...edges)
@@ -538,7 +763,7 @@ export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderF
   // Rungs never cross-connect, so a connected-component partition of the
   // node/edge graph recovers them, without needing the array-position
   // pairing the generator's own output happens to preserve.
-  const componentOrder: string[] = []
+  const allComponents: string[] = []
   const componentNodes = new Map<string, LadderParsedNode[]>()
   for (const node of nodes) {
     const root = forest.find(node.id)
@@ -547,20 +772,45 @@ export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderF
       group.push(node)
     } else {
       componentNodes.set(root, [node])
-      componentOrder.push(root)
+      allComponents.push(root)
     }
   }
 
-  // Rung stacking (offsetY in the generator) bakes a cumulative Y shift into
-  // every node's position; re-basing each rung to a local origin would need
-  // to rebuild every node-data variant's handles generically, which TS can't
-  // do without a type assertion across this discriminated union — kept as
-  // absolute coordinates instead (still internally consistent per rung; a
-  // reopened diagram just starts further down the canvas for later rungs).
+  // A component of nothing but power rails carries no logic — it is a rail the
+  // file left unwired (CODESYS emits its <rightPowerRail> with an empty
+  // <connectionPointIn>, so it lands in a component of its own). Turning that
+  // into a rung yields one the editor cannot lay out or add to, so drop it and
+  // say so rather than shipping a broken rung.
+  const componentOrder: string[] = []
+  let skippedEmptyNetworks = 0
+  for (const root of allComponents) {
+    const group = componentNodes.get(root) ?? []
+    if (group.some((node) => node.type !== 'powerRail')) componentOrder.push(root)
+    else skippedEmptyNetworks += 1
+  }
+  if (skippedEmptyNetworks > 0) {
+    warnings.push(
+      `POU "${pouName}": ${skippedEmptyNetworks} LD network(s) with no elements (unwired power rail) skipped`,
+    )
+  }
+
+  // Rung stacking bakes a cumulative Y shift into every node's position (the
+  // generator adds each preceding rung's viewport height, see ladderToXml), so
+  // an imported rung's contents would otherwise sit far below its own
+  // viewport — a large blank gap above the elements, growing with every rung.
+  // Re-base each rung so its topmost element sits where the first rung's does.
+  const rungTops = componentOrder.map((root) => {
+    const rungNodes = componentNodes.get(root) ?? []
+    return rungNodes.length > 0 ? Math.min(...rungNodes.map((n) => n.position.y)) : 0
+  })
+  const topmostRungY = rungTops.length > 0 ? Math.min(...rungTops) : 0
+
   const rungs: LadderFlowType['rungs'] = componentOrder.map((root, index) => {
     const rungNodeIds = new Set(componentNodes.get(root)?.map((n) => n.id))
     const rungEdges = edges.filter((e) => rungNodeIds.has(e.source) && rungNodeIds.has(e.target))
-    const rungNodes = componentNodes.get(root) ?? []
+    const rungNodes = orderRungNodes(componentNodes.get(root) ?? [], rungEdges)
+
+    translateRungY(rungNodes, topmostRungY - rungTops[index])
 
     const minX = Math.min(...rungNodes.map((n) => n.position.x))
     const minY = Math.min(...rungNodes.map((n) => n.position.y))

@@ -98,6 +98,10 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
   }
 
+  handleImportProjectRequest() {
+    this.mainWindow.webContents.send('project:import-plcopen-request')
+  }
+
   async handleGetRecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getHistoryProjectsFilePath())
     return response
@@ -259,6 +263,10 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.exportToCodesysXml'),
           click: () => this.handleExportProjectRequest('codesys'),
+        },
+        {
+          label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+          click: () => this.handleImportProjectRequest(),
         },
         { type: 'separator' },
         {
@@ -532,6 +540,10 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.exportToCodesysXml'),
             click: () => this.handleExportProjectRequest('codesys'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+            click: () => this.handleImportProjectRequest(),
           },
           {
             type: 'separator',

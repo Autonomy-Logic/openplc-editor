@@ -66,9 +66,11 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     if (!capabilities.hasProjectExport) return
 
-    const unsub = accelerator.onExportProject(() => {
+    const unsub = accelerator.onExportProject((format) => {
       setRequestFlag(true)
-      setParseTo('old-editor')
+      // Defaulting to 'old-editor' keeps platforms whose menu sends no dialect
+      // on the PLCOpen export.
+      setParseTo(format ?? 'old-editor')
     })
 
     if (requestFlag && parseTo) {
@@ -90,6 +92,18 @@ const AcceleratorHandler = () => {
 
     return unsub
   }, [requestFlag, parseTo, accelerator, compilerPort, capabilities.hasProjectExport, project])
+
+  /**
+   * Import PLCopen XML accelerator. Opens the confirm-overwrite modal rather
+   * than importing directly, since an import replaces the open project's
+   * contents in place.
+   */
+  useEffect(() => {
+    if (!capabilities.hasProjectImport) return
+    return accelerator.onImportProject(() => {
+      openModal('confirm-plcopen-import')
+    })
+  }, [accelerator, capabilities.hasProjectImport, openModal])
 
   /**
    * Create project

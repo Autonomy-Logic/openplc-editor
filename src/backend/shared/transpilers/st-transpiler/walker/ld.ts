@@ -32,6 +32,7 @@ import {
   asConnectorData,
   asContactData,
   asContinuationData,
+  asExecuteData,
   asParallelData,
   asPowerRailData,
   asVariableData,
@@ -230,6 +231,11 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
         if (data.variant === 'output' || data.variant === 'inout') sinks.push(node)
       } else if (node.type === 'block') {
         sinks.push(node)
+      } else if (node.type === 'execute') {
+        // Always emits: the snippet is a side effect, so unlike a coil there
+        // is no output binding that could make it redundant. Empty and
+        // malformed payloads warn at emit time rather than being dropped here.
+        sinks.push(node)
       } else if (node.type === 'connector') {
         sinks.push(node)
       }
@@ -281,6 +287,7 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
 function nodeExecutionOrder(node: RFNode): number {
   if (node.type === 'coil') return asCoilData(node.data)?.executionOrder ?? 0
   if (node.type === 'block') return asBlockData(node.data)?.executionOrder ?? 0
+  if (node.type === 'execute') return asExecuteData(node.data)?.executionOrder ?? 0
   if (isVariableNode(node)) return asVariableData(node.data)?.executionOrder ?? 0
   return 0
 }
@@ -330,6 +337,7 @@ function emitSink(state: WalkerState, node: RFNode): void {
     return
   }
   if (node.type === 'block') return emitStandaloneBlock(state, node)
+  if (node.type === 'execute') return emitExecuteNode(state, node)
   if (node.type === 'connector') return emitConnectorNode(state, node)
 }
 
@@ -555,6 +563,81 @@ function emitConnectorNode(state: WalkerState, node: RFNode): void {
   state.connectorExprs.set(data.name, pathsToChunks(paths))
 }
 
+/* ─────────────────────────── execute ("ST Block") ───────────────────────── */
+
+/**
+ * Re-indent a user-authored ST snippet to sit at `indent`.
+ *
+ * The snippet is stored exactly as typed, so it may carry a common leading
+ * margin. Strip that, then prefix every line with `indent`, preserving
+ * relative nesting. Blank lines stay blank rather than becoming trailing
+ * whitespace.
+ */
+function reindentSnippet(code: string, indent: string): string[] {
+  const lines = code.replace(/\r\n?/g, '\n').split('\n')
+  // Trailing-newline presence is inconsistent across sources (CODESYS writes
+  // one for LD payloads but not FBD), so normalise it away here.
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
+  while (lines.length > 0 && lines[0].trim() === '') lines.shift()
+  if (lines.length === 0) return []
+
+  let margin = Infinity
+  for (const line of lines) {
+    if (line.trim() === '') continue
+    const leading = line.length - line.trimStart().length
+    if (leading < margin) margin = leading
+  }
+  if (!Number.isFinite(margin)) margin = 0
+
+  return lines.map((line) => (line.trim() === '' ? '\n' : `${indent}${line.slice(margin)}\n`))
+}
+
+/**
+ * Emit an Execute ("ST Block") element: the user's raw ST snippet, gated by
+ * the rung condition reaching its `EN` input.
+ *
+ * Gating is skipped when that condition is trivially true — no incoming edge
+ * (FBD with `EN` unwired) or a single path resolving to `TRUE` (an LD box on
+ * the left rail). Both mean "runs every scan", and emitting the body bare
+ * keeps the generated ST readable instead of burying it in `IF TRUE THEN`.
+ *
+ * The snippet is emitted verbatim apart from re-indentation; strucpp is what
+ * judges its validity.
+ */
+function emitExecuteNode(state: WalkerState, node: RFNode): void {
+  const data = asExecuteData(node.data)
+  if (data === null) {
+    state.warnings.push(`execute node "${node.id}" has unrecognised data shape`)
+    return
+  }
+
+  // Bail before emitting anything — an empty box would otherwise
+  // produce a hollow `IF cond THEN END_IF;`, which is legal ST but
+  // pure noise in the generated output.
+  if (data.code.trim() === '') {
+    state.warnings.push(`Execute block "${node.id}" is empty.`)
+    return
+  }
+
+  const info: Location = [state.tagName, 'execute', locId(node)]
+  const paths = pathsFromIncoming(state, node.id, /*order=*/ false)
+  const gated = paths.length > 0 && !(paths.length === 1 && paths[0].kind === 'true')
+
+  if (gated) {
+    state.program.push([`${state.currentIndent}IF `, info])
+    for (const chunk of pathsToChunks(paths)) state.program.push(chunk)
+    state.program.push([' THEN\n', []])
+    state.currentIndent += '  '
+  }
+
+  for (const line of reindentSnippet(data.code, state.currentIndent)) state.program.push([line, info])
+
+  if (gated) {
+    state.currentIndent = state.currentIndent.slice(0, -2)
+    state.program.push([`${state.currentIndent}END_IF;\n`, []])
+  }
+}
+
 /* ─────────────────────────── standalone block ───────────────────────────── */
 
 function emitStandaloneBlock(state: WalkerState, node: RFNode): void {
@@ -610,6 +693,14 @@ function visitUpstream(state: WalkerState, node: RFNode, edge: RFEdge, order: bo
       // past a coil to feed a downstream node.  Mirror legacy walker
       // behaviour: emit nothing for the coil, just propagate the
       // upstream signal.
+      return visitCoilPassthrough(state, node, order)
+    case 'execute':
+      // ENO passthrough: an Execute box conducts rung power straight through,
+      // so `contact -> EXECUTE -> coil` yields `coil := contact` and the
+      // snippet emits separately as a sink. Confirmed against a CODESYS
+      // PLCopen export, where a downstream coil references the EXECUTE block
+      // with no `formalParameter` qualifier — plain rung continuation. Same
+      // algebra as a coil passthrough.
       return visitCoilPassthrough(state, node, order)
     case 'continuation':
       return visitContinuation(state, node)

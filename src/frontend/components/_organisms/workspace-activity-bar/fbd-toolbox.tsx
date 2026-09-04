@@ -2,6 +2,7 @@ import { BlockButton } from '../../_molecules/workspace-activity-bar/fbd/block'
 import { Comment } from '../../_molecules/workspace-activity-bar/fbd/comment'
 import { Connector } from '../../_molecules/workspace-activity-bar/fbd/connector'
 import { Continuation } from '../../_molecules/workspace-activity-bar/fbd/continuation'
+import { Execute } from '../../_molecules/workspace-activity-bar/fbd/execute'
 import { InputVariable } from '../../_molecules/workspace-activity-bar/fbd/input-variable'
 import { OutVariable } from '../../_molecules/workspace-activity-bar/fbd/out-variable'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
@@ -29,6 +30,9 @@ export const FBDToolbox = () => {
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Continuation'>
         <Continuation onDragStart={(event) => handleDragStart(event, 'continuation')} />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Execute — inline Structured Text'>
+        <Execute onDragStart={(event) => handleDragStart(event, 'execute')} />
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Comment'>
         <Comment onDragStart={(event) => handleDragStart(event, 'comment')} />

@@ -62,8 +62,14 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
       return window.bridge.closeProjectAccelerator(() => callback())
     },
 
-    onExportProject(callback: () => void): Unsubscribe {
-      return window.bridge.exportProjectRequest(() => callback())
+    onExportProject(callback: (format?: 'old-editor' | 'codesys') => void): Unsubscribe {
+      return window.bridge.exportProjectRequest((_event: unknown, format: unknown) =>
+        callback(format === 'codesys' ? 'codesys' : 'old-editor'),
+      )
+    },
+
+    onImportProject(callback: () => void): Unsubscribe {
+      return window.bridge.importProjectRequest(() => callback())
     },
 
     onCloseTab(callback: () => void): Unsubscribe {

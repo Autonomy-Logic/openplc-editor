@@ -34,7 +34,7 @@ export interface RFNode {
    *  boundary in `from-schema.ts` can pass the editor's `node.type:
    *  string` straight through without a typecast.  Known values the
    *  walker dispatches on: `'powerRail' | 'contact' | 'coil' | 'block'
-   *  | 'variable' | 'input-variable' | 'output-variable' |
+   *  | 'execute' | 'variable' | 'input-variable' | 'output-variable' |
    *  'inout-variable' | 'parallel' | 'connector' | 'continuation'`.
    *  Anything else is treated as a no-op sink. */
   type: string

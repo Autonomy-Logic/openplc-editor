@@ -16,7 +16,7 @@
  * unless the user switches tabs or FB instance selection.
  */
 
-import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
+import type { FbInstanceInfo, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import { buildGlobalCompositeKey } from './debug-variable-finder'
 
 /**
@@ -339,9 +339,9 @@ function computeVisibleVariableKeys(
   }
 
   if (language === 'ld') {
-    collectLdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys)
+    collectLdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys, currentPou.interface?.variables ?? [])
   } else if (language === 'fbd') {
-    collectFbdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys)
+    collectFbdVisibleKeys(state, makeKey, addLeavesWithPrefix, keys, currentPou.interface?.variables ?? [])
   } else if (language === 'st' || language === 'il') {
     collectStIlVisibleKeys(currentPou, makeKey, addLeavesWithPrefix, keys)
   }
@@ -357,6 +357,7 @@ function collectLdVisibleKeys(
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,
+  variables: readonly PLCVariable[],
 ): void {
   const editorName = state.editor.meta.name
   const currentFlow = state.ladderFlows.find((f) => f.name === editorName)
@@ -364,7 +365,16 @@ function collectLdVisibleKeys(
 
   for (const rung of currentFlow.rungs) {
     for (const node of rung.nodes) {
-      if (node.type === 'contact' || node.type === 'coil') {
+      if (node.type === 'execute') {
+        // An Execute box references variables in its ST text rather than
+        // binding one, so scan the snippet the same way a textual POU
+        // body is scanned. Skipping this leaves its inline debug badges
+        // showing `?` forever.
+        const code = (node.data as { code?: string }).code
+        if (typeof code === 'string' && code !== '') {
+          collectKeysFromSourceText(code, variables, makeKey, addLeavesWithPrefix, keys)
+        }
+      } else if (node.type === 'contact' || node.type === 'coil') {
         const nodeData = node.data as { variable?: { name?: string } }
         const varName = nodeData.variable?.name
         if (varName) {
@@ -393,13 +403,20 @@ function collectFbdVisibleKeys(
   makeKey: (name: string) => string | null,
   addLeavesWithPrefix: (prefix: string) => void,
   keys: Set<string>,
+  variables: readonly PLCVariable[],
 ): void {
   const editorName = state.editor.meta.name
   const currentFlow = state.fbdFlows.find((f) => f.name === editorName)
   if (!currentFlow) return
 
   for (const node of currentFlow.rung.nodes) {
-    if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
+    if (node.type === 'execute') {
+      // Same as LD — see `collectLdVisibleKeys`.
+      const code = (node.data as { code?: string }).code
+      if (typeof code === 'string' && code !== '') {
+        collectKeysFromSourceText(code, variables, makeKey, addLeavesWithPrefix, keys)
+      }
+    } else if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
       const nodeData = node.data as { variable?: { name?: string } }
       const varName = nodeData.variable?.name
       if (varName) {
@@ -463,8 +480,26 @@ function collectStIlVisibleKeys(
   const sourceText = typeof currentPou.body.value === 'string' ? currentPou.body.value : ''
   if (!sourceText) return
 
-  const variables = currentPou.interface?.variables ?? []
+  collectKeysFromSourceText(sourceText, currentPou.interface?.variables ?? [], makeKey, addLeavesWithPrefix, keys)
+}
 
+/**
+ * Collect composite keys for every declared variable that appears in a
+ * chunk of ST/IL source text.
+ *
+ * Shared by two callers with the same need but different sources: a
+ * textual POU's whole body, and the snippet inside an Execute ("ST
+ * Block") element on a graphical diagram. Without this, an Execute
+ * box's inline debug badges would render `?` forever — the poller
+ * simply would not know those variables were on screen.
+ */
+export function collectKeysFromSourceText(
+  sourceText: string,
+  variables: readonly PLCVariable[],
+  makeKey: (name: string) => string | null,
+  addLeavesWithPrefix: (prefix: string) => void,
+  keys: Set<string>,
+): void {
   for (const v of variables) {
     // Escape regex special characters in variable name
     const escaped = v.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
