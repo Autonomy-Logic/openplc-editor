@@ -217,9 +217,7 @@ describe('renderFbdPou', () => {
         { x: 0, y: 600 },
         { x: 600, y: 600 },
       ]
-      const nodes = corners.map((position, i) =>
-        makeNode({ id: `corner-${i}`, type: 'connector', position, data: {} }),
-      )
+      const nodes = corners.map((position, i) => makeNode({ id: `corner-${i}`, type: 'connector', position, data: {} }))
       const blocks = renderFbdPou(makeRung({ nodes }), 'normal', 225, 225)
       expect(blocks.length).toBeGreaterThan(1)
       // at least one tile was forced to a full-page height (a real split occurred)
@@ -230,6 +228,48 @@ describe('renderFbdPou', () => {
       const a = makeNode({ id: 'a', type: 'connector', position: { x: 0, y: 0 }, data: {} })
       const b = makeNode({ id: 'b', type: 'connector', position: { x: 600, y: 600 }, data: {} })
       const blocks = renderFbdPou(makeRung({ nodes: [a, b] }), 'scale-to-fit', 225, 225)
+      expect(blocks).toHaveLength(1)
+    })
+
+    it('shrinks a chain of touching (gap-less) nodes instead of letting it overflow the page width', () => {
+      // Regression: three nodes with no gap between them merge into one
+      // unbreakable interval. `gapAlignedCuts` used to let that whole chain's
+      // tile draw wider than the page rather than bisect it, so the part past
+      // the page edge got silently clipped there instead.
+      const nodes = [0, 100, 200].map((x) => makeNode({ id: `n${x}`, position: { x, y: 0 }, width: 100 }))
+      const narrowWidthPt = 100 // stripWidthPx ≈ 133, well under the 300px-wide chain
+
+      const blocks = renderFbdPou(makeRung({ nodes }), 'normal', narrowWidthPt, GENEROUS_HEIGHT_PT)
+
+      expect(blocks).toHaveLength(1)
+      const clipOp = blocks[0].ops.find((op) => op.kind === 'clipPush')
+      expect(clipOp?.kind).toBe('clipPush')
+      if (clipOp?.kind === 'clipPush') {
+        expect(clipOp.width).toBeLessThanOrEqual(narrowWidthPt + 0.01)
+      }
+    })
+
+    it('never lets a cut land inside a wire connecting two elements across an otherwise-empty gap', () => {
+      // Regression: two connected nodes with real empty space between them
+      // (only the wire runs through it) weren't accounted for by
+      // `gapAlignedCuts`, which only knew about node bounding boxes — it
+      // could place a cut right in that gap, clipping the wire in two and
+      // leaving the far node with no visible connection at all.
+      const a = makeNode({ id: 'a', type: 'connector', position: { x: 0, y: 0 }, data: {} })
+      const b = makeNode({ id: 'b', type: 'connector', position: { x: 500, y: 0 }, data: {} })
+      const edge = makeEdge({ id: 'e1', source: 'a', target: 'b' })
+      // stripWidthPx = 375 / PX_TO_PT = 500 — bigger than either node alone,
+      // smaller than the full 600px span, so a split is forced and the only
+      // candidate gap is the one the wire runs through.
+      const narrowWidthPt = 375
+
+      const blocks = renderFbdPou(
+        makeRung({ nodes: [a, b], edges: [edge] }),
+        'normal',
+        narrowWidthPt,
+        GENEROUS_HEIGHT_PT,
+      )
+
       expect(blocks).toHaveLength(1)
     })
   })

@@ -8,6 +8,7 @@ import { renderVariablesTable } from './variables-table'
 
 const BLOCK_GAP_PT = 8
 const HEADER_HEIGHT_PT = 22
+const HEADER_RESERVED_PT = HEADER_HEIGHT_PT + BLOCK_GAP_PT
 
 function headerBlock(pou: PrintPou, contentWidthPt: number): ContentBlock {
   const label = `${pou.name} (${pou.kind.toUpperCase()})`
@@ -27,19 +28,27 @@ function renderPouBlocks(
   contentWidthPt: number,
   contentHeightPt: number,
 ): ContentBlock[] {
+  // A scale-to-fit renderer sizes its one block against the height it's given —
+  // reserving the header's own space here up front guarantees that block can
+  // never be taller than what's left after the header on a fresh page. Without
+  // this, it fits the FULL page height, then overflows the instant the header
+  // (already placed) eats into that budget, so the whole diagram or text jumps
+  // to its own page, leaving the header alone above blank space.
+  const availableContentHeightPt = Math.max(0, contentHeightPt - HEADER_RESERVED_PT)
+
   let contentBlocks: ContentBlock[]
   switch (pou.kind) {
     case 'ld':
-      contentBlocks = renderLadderPou(pou.rungs, mode, contentWidthPt)
+      contentBlocks = renderLadderPou(pou.rungs, mode, contentWidthPt, availableContentHeightPt)
       break
     case 'fbd':
-      contentBlocks = renderFbdPou(pou.rung, mode, contentWidthPt, contentHeightPt)
+      contentBlocks = renderFbdPou(pou.rung, mode, contentWidthPt, availableContentHeightPt)
       break
     case 'st':
     case 'il':
     case 'cpp':
     case 'python':
-      contentBlocks = renderTextPou(pou.lines, mode, contentWidthPt, contentHeightPt)
+      contentBlocks = renderTextPou(pou.lines, mode, contentWidthPt, availableContentHeightPt)
       break
     default: {
       const exhaustive: never = pou

@@ -1,8 +1,21 @@
 import type { RungLadderState } from '@root/middleware/shared/ports/types'
+import type { Node } from '@xyflow/react'
 
 import { paginate } from '../paginate'
 import { resolvePageBox } from '../geometry'
 import type { PrintPou, PrintRequest } from '../types'
+
+function makeFbdNode(overrides: Record<string, unknown> = {}): Node {
+  return {
+    id: 'n1',
+    type: 'block',
+    position: { x: 0, y: 0 },
+    width: 100,
+    height: 40,
+    data: {},
+    ...overrides,
+  } as unknown as Node
+}
 
 function makeRung(overrides: Partial<RungLadderState> = {}): RungLadderState {
   return {
@@ -87,7 +100,23 @@ describe('paginate', () => {
       pagePolicy: 'may-share-page',
       page: { size: 'a4', orientation: 'portrait', marginsPt: { top: 400, right: 36, bottom: 400, left: 36 } },
       pous: [
-        { name: 'Overflow', kind: 'il', lines: Array.from({ length: 30 }, () => ({ runs: [{ text: 'x', color: '#000' }] })), variables: [{ name: 'v1', varClass: 'local', flag: '', type: 'BOOL', location: '', initialValue: '', documentation: '', debug: false }] },
+        {
+          name: 'Overflow',
+          kind: 'il',
+          lines: Array.from({ length: 30 }, () => ({ runs: [{ text: 'x', color: '#000' }] })),
+          variables: [
+            {
+              name: 'v1',
+              varClass: 'local',
+              flag: '',
+              type: 'BOOL',
+              location: '',
+              initialValue: '',
+              documentation: '',
+              debug: false,
+            },
+          ],
+        },
       ],
     })
     const pages = paginate(request)
@@ -97,6 +126,31 @@ describe('paginate', () => {
   it('renders an FBD POU', () => {
     const request = baseRequest({ pous: [fbdPou('Diagram')] })
     const pages = paginate(request)
+    expect(pages).toHaveLength(1)
+  })
+
+  it('keeps a scale-to-fit FBD diagram on the same page as its header, even when the diagram is much taller than wide', () => {
+    // Regression: `scaleToFitBlock` used to size against the FULL page height,
+    // so a diagram this tall would come out just under `contentHeightPt`.
+    // Placed right after the header, it then overflowed on its own and the
+    // whole diagram jumped to a second page, leaving the header alone above
+    // blank space on the first.
+    const tallRung = {
+      comment: '',
+      selectedNodes: [],
+      nodes: [
+        makeFbdNode({ id: 'top', position: { x: 0, y: 0 } }),
+        makeFbdNode({ id: 'bottom', position: { x: 0, y: 3000 } }),
+      ],
+      edges: [],
+    }
+    const request = baseRequest({
+      mode: 'scale-to-fit',
+      pous: [{ name: 'Tall', kind: 'fbd', rung: tallRung, variables: [] }],
+    })
+
+    const pages = paginate(request)
+
     expect(pages).toHaveLength(1)
   })
 

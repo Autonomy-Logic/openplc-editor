@@ -232,8 +232,17 @@ function nodeOps(node: Node): DrawOp[] {
   }
 }
 
-/** One node's (or edge's) draw ops, tagged with the x-position that decides which band it belongs to. */
-type PlacedOps = { originX: number; ops: DrawOp[] }
+/**
+ * One node's (or edge's) draw ops, tagged with the x-range that decides
+ * which band(s) it belongs to. A node is a single point (`spanStart ===
+ * spanEnd`) — `gapAlignedCuts` never bisects its own box, so point
+ * membership is exact. A wire's span is its full source-to-target range: a
+ * cut IS allowed to fall inside it (only node boxes are off-limits), and
+ * including the wire in every band its span overlaps — each clipped to that
+ * band's own rect — is what makes it visually continue on the next band
+ * instead of vanishing on one side of the cut.
+ */
+type PlacedOps = { spanStart: number; spanEnd: number; isPowerRail: boolean; ops: DrawOp[] }
 
 type RenderedRung = { placed: PlacedOps[]; bounds: Bounds; elementBoxes: Bounds[] }
 
@@ -246,16 +255,55 @@ function renderRung(rung: RungLadderState): RenderedRung {
   for (const node of visibleNodes) {
     const box = nodeBounds(node)
     elementBoxes.push(box)
-    placed.push({ originX: box.x, ops: nodeOps(node) })
+    placed.push({ spanStart: box.x, spanEnd: box.x, isPowerRail: node.type === 'powerRail', ops: nodeOps(node) })
   }
   for (const edge of rung.edges) {
     if (!isVisibleEdge(nodesById, edge)) continue
     const op = edgeToDrawOp(nodesById, edge, INK_COLOR, 1)
     const source = nodesById.get(edge.source)
-    if (op && source) placed.push({ originX: source.position.x, ops: [op] })
+    const target = nodesById.get(edge.target)
+    if (!op || !source || !target) continue
+    placed.push({
+      spanStart: Math.min(source.position.x, target.position.x),
+      spanEnd: Math.max(source.position.x, target.position.x),
+      isPowerRail: false,
+      ops: [op],
+    })
   }
 
   return { placed, bounds: unionBounds(elementBoxes), elementBoxes }
+}
+
+const bandOverlaps = (p: PlacedOps, start: number, end: number) => p.spanStart < end && p.spanEnd >= start
+
+/**
+ * The right (closing) power rail sits close to a rung's last real element —
+ * a band split there normally carries the wire leading into it too (see
+ * `bandOverlaps`), but if a rail is ever wired to nothing, coalesce its
+ * content-less band into a neighboring one instead of letting it stand
+ * alone, preferring the previous band (a closing rail visually belongs with
+ * the rung before it) and only merging forward for a content-less leading band.
+ */
+function mergeRailOnlyBands(rawBoundaries: number[], placed: PlacedOps[]): number[] {
+  const hasRealContent = (start: number, end: number) =>
+    placed.some((p) => bandOverlaps(p, start, end) && !p.isPowerRail)
+
+  const bands: { start: number; end: number }[] = []
+  for (let i = 0; i < rawBoundaries.length - 1; i++) {
+    const start = rawBoundaries[i]
+    const end = rawBoundaries[i + 1]
+    if (bands.length > 0 && !hasRealContent(start, end)) {
+      bands[bands.length - 1].end = end
+    } else {
+      bands.push({ start, end })
+    }
+  }
+  while (bands.length > 1 && !hasRealContent(bands[0].start, bands[0].end)) {
+    bands[1].start = bands[0].start
+    bands.shift()
+  }
+
+  return [bands[0]?.start ?? rawBoundaries[0], ...bands.map((b) => b.end)]
 }
 
 function commentBlock(comment: string, widthPt: number): ContentBlock {
@@ -274,10 +322,18 @@ function rungToBlocks(
   rendered: RenderedRung,
   mode: PrintRenderMode,
   contentWidthPt: number,
-  scale: number,
+  contentHeightPt: number,
+  modeScale: number,
 ): ContentBlock[] {
-  const contentWidthPx = contentWidthPt / (PX_TO_PT * scale)
   const { bounds } = rendered
+  // A rung's elements sit on one horizontal line — unlike an FBD diagram,
+  // there's no sensible way to split one across pages. If it's still taller
+  // than the page even at `modeScale`, shrink it further so the whole rung
+  // stays visible instead of drawing past the page edge and getting clipped.
+  const heightAtModeScale = pxToPt(bounds.height) * modeScale
+  const heightSafetyScale = heightAtModeScale > contentHeightPt ? contentHeightPt / heightAtModeScale : 1
+  const scale = modeScale * heightSafetyScale
+  const contentWidthPx = contentWidthPt / (PX_TO_PT * scale)
 
   if (mode === 'scale-to-fit' || bounds.width <= contentWidthPx) {
     const allOps = flatten(rendered.placed)
@@ -292,18 +348,39 @@ function rungToBlocks(
   }
 
   const cuts = gapAlignedCuts(rendered.elementBoxes, contentWidthPx)
-  const boundaries = dedupeBoundaries([bounds.x, ...cuts, bounds.x + bounds.width])
+  const rawBoundaries = dedupeBoundaries([bounds.x, ...cuts, bounds.x + bounds.width])
+  const boundaries = mergeRailOnlyBands(rawBoundaries, rendered.placed)
+
+  // A cut is only ever forced to overflow its own band when elements truly
+  // have no gap between them at all (touching or overlapping node boxes) —
+  // `gapAlignedCuts` otherwise always finds a node-free point to cut at, wire
+  // or no wire. That's rare enough that reaching for a further shrink here,
+  // on top of the split that already happened, is a reasonable last resort.
+  const maxBandWidthPt = pxToPt(Math.max(...boundaries.slice(1).map((end, i) => end - boundaries[i]))) * scale
+  const widthSafetyScale = maxBandWidthPt > contentWidthPt ? contentWidthPt / maxBandWidthPt : 1
+  const finalScale = scale * widthSafetyScale
+
   const blocks: ContentBlock[] = []
   for (let i = 0; i < boundaries.length - 1; i++) {
     const xStart = boundaries[i]
     const xEnd = boundaries[i + 1]
-    const bandOps = flatten(rendered.placed.filter((p) => p.originX >= xStart && p.originX < xEnd))
+    const bandOps = flatten(rendered.placed.filter((p) => bandOverlaps(p, xStart, xEnd)))
     blocks.push({
       widthPt: contentWidthPt,
-      heightPt: pxToPt(bounds.height),
+      heightPt: pxToPt(bounds.height) * finalScale,
       ops: [
-        { kind: 'clipPush', x: 0, y: 0, width: pxToPt(xEnd - xStart), height: pxToPt(bounds.height) },
-        ...transformDrawOps(bandOps, { dx: pxToPt(-xStart), dy: pxToPt(-bounds.y), scale: PX_TO_PT }),
+        {
+          kind: 'clipPush',
+          x: 0,
+          y: 0,
+          width: pxToPt(xEnd - xStart) * finalScale,
+          height: pxToPt(bounds.height) * finalScale,
+        },
+        ...transformDrawOps(bandOps, {
+          dx: -finalScale * pxToPt(xStart),
+          dy: -finalScale * pxToPt(bounds.y),
+          scale: PX_TO_PT * finalScale,
+        }),
         { kind: 'clipPop' },
       ],
     })
@@ -316,19 +393,20 @@ export function renderLadderPou(
   rungs: RungLadderState[],
   mode: PrintRenderMode,
   contentWidthPt: number,
+  contentHeightPt: number,
 ): ContentBlock[] {
   const rendered = rungs.map(renderRung)
 
-  let scale = 1
+  let modeScale = 1
   if (mode === 'scale-to-fit') {
     const maxWidthPx = Math.max(0, ...rendered.map((r) => r.bounds.width))
-    scale = scaleToFitWidth(maxWidthPx, contentWidthPt / PX_TO_PT)
+    modeScale = scaleToFitWidth(maxWidthPx, contentWidthPt / PX_TO_PT)
   }
 
   const blocks: ContentBlock[] = []
   rungs.forEach((rung, i) => {
     if (rung.comment) blocks.push(commentBlock(rung.comment, contentWidthPt))
-    blocks.push(...rungToBlocks(rendered[i], mode, contentWidthPt, scale))
+    blocks.push(...rungToBlocks(rendered[i], mode, contentWidthPt, contentHeightPt, modeScale))
   })
   return blocks
 }

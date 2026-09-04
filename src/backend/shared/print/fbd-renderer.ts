@@ -171,7 +171,7 @@ function nodeOps(node: Node): DrawOp[] {
 }
 
 type PlacedOps = { box: Bounds; ops: DrawOp[] }
-type RenderedFbd = { placed: PlacedOps[]; bounds: Bounds; elementBoxes: Bounds[] }
+type RenderedFbd = { placed: PlacedOps[]; bounds: Bounds; elementBoxes: Bounds[]; edgeSpans: Bounds[] }
 
 function renderFbdRung(rung: FBDRungState): RenderedFbd {
   const nodesById = new Map(rung.nodes.map((n) => [n.id, n]))
@@ -183,14 +183,28 @@ function renderFbdRung(rung: FBDRungState): RenderedFbd {
     elementBoxes.push(box)
     placed.push({ box, ops: nodeOps(node) })
   }
+  // A wire's own span (e.g. two blocks connected across an otherwise-empty
+  // gap) doesn't show up in either node's own bounding box, so without this
+  // `gapAlignedCuts` sees a "gap" a cut can freely land in on either axis —
+  // even though a wire actually runs through it — clipping it in two at the
+  // tile boundary, with the far side never drawn at all.
+  const edgeSpans: Bounds[] = []
   for (const edge of rung.edges) {
     if (!isVisibleEdge(nodesById, edge)) continue
     const op = edgeToDrawOp(nodesById, edge, INK_COLOR, 1)
     const source = nodesById.get(edge.source)
+    const target = nodesById.get(edge.target)
     if (op && source) placed.push({ box: nodeBounds(source), ops: [op] })
+    if (source && target) {
+      const x1 = source.position.x
+      const x2 = target.position.x
+      const y1 = source.position.y
+      const y2 = target.position.y
+      edgeSpans.push({ x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) })
+    }
   }
 
-  return { placed, bounds: unionBounds(elementBoxes), elementBoxes }
+  return { placed, bounds: unionBounds(elementBoxes), elementBoxes, edgeSpans }
 }
 
 function flatten(placed: PlacedOps[]): DrawOp[] {
@@ -215,12 +229,23 @@ function renderTile(
   const tileOps = flatten(
     rendered.placed.filter((p) => p.box.x >= xStart && p.box.x < xEnd && p.box.y >= yStart && p.box.y < yEnd),
   )
+  const naturalWidthPt = pxToPt(xEnd - xStart)
+  const naturalHeightPt = pxToPt(yEnd - yStart)
+  // `gapAlignedCuts` lets a chain of connected nodes it can't cleanly split
+  // overflow its own band rather than bisect it — that can leave a tile
+  // wider or taller than the page. Scale the whole tile down to fit instead
+  // of letting the overflow draw past the page edge and get silently clipped.
+  const widthScale = naturalWidthPt > contentWidthPt ? contentWidthPt / naturalWidthPt : 1
+  const heightScale =
+    forcedHeightPt !== undefined && naturalHeightPt > forcedHeightPt ? forcedHeightPt / naturalHeightPt : 1
+  const scale = Math.min(widthScale, heightScale)
+  const transform = { dx: -scale * pxToPt(xStart), dy: -scale * pxToPt(yStart), scale: PX_TO_PT * scale }
   return {
     widthPt: contentWidthPt,
-    heightPt: forcedHeightPt ?? pxToPt(yEnd - yStart),
+    heightPt: forcedHeightPt ?? naturalHeightPt * scale,
     ops: [
-      { kind: 'clipPush', x: 0, y: 0, width: pxToPt(xEnd - xStart), height: pxToPt(yEnd - yStart) },
-      ...transformDrawOps(tileOps, { dx: pxToPt(-xStart), dy: pxToPt(-yStart), scale: PX_TO_PT }),
+      { kind: 'clipPush', x: 0, y: 0, width: naturalWidthPt * scale, height: naturalHeightPt * scale },
+      ...transformDrawOps(tileOps, transform),
       { kind: 'clipPop' },
     ],
   }
@@ -237,8 +262,9 @@ function normalModeTiles(rendered: RenderedFbd, contentWidthPt: number, contentH
   const stripWidthPx = contentWidthPt / PX_TO_PT
   const stripHeightPx = contentHeightPt / PX_TO_PT
 
-  const xCuts = gapAlignedCuts(rendered.elementBoxes, stripWidthPx)
-  const yCutsTransposed = gapAlignedCuts(transposeBounds(rendered.elementBoxes), stripHeightPx)
+  const cutCandidates = [...rendered.elementBoxes, ...rendered.edgeSpans]
+  const xCuts = gapAlignedCuts(cutCandidates, stripWidthPx)
+  const yCutsTransposed = gapAlignedCuts(transposeBounds(cutCandidates), stripHeightPx)
 
   if (xCuts.length === 0 && yCutsTransposed.length === 0) {
     return [
