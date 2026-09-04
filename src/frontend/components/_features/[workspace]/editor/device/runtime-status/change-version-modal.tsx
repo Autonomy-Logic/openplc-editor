@@ -13,6 +13,7 @@
 
 import * as Select from '@radix-ui/react-select'
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
+import { useOpenPLCStore } from '@root/frontend/store'
 import { useRuntime } from '@root/middleware/shared/providers/platform-context'
 import {
   clearRuntimeVersionsCache,
@@ -49,6 +50,9 @@ const IN_FLIGHT = new Set(['pulling', 'swapping', 'verifying'])
 
 const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: ChangeVersionModalProps) => {
   const runtime = useRuntime()
+  // Tells the status poller to stand down: the runtime is about to be stopped
+  // and replaced, and that silence must not be read as a lost connection.
+  const setRuntimeUpdateInProgress = useOpenPLCStore((state) => state.deviceActions.setRuntimeUpdateInProgress)
 
   const [version, setVersion] = useState('')
   const [progress, setProgress] = useState<UpdateProgress | null>(null)
@@ -67,12 +71,25 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
   // on every tick, which would restart the interval each time.
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // onFinished is a prop, and callers pass an inline arrow -- a new function
+  // every render. Depending on it directly made `poll` unstable, which made
+  // the effect below unstable, which leaked a timer per render while an
+  // update was running. Each leaked timer re-rendered the parent, which
+  // leaked another: the count compounded until the app was firing hundreds of
+  // requests a second and everything downstream fell over. Holding it in a ref
+  // keeps the callback current without putting its identity in a dep array.
+  const onFinishedRef = useRef(onFinished)
+  useEffect(() => {
+    onFinishedRef.current = onFinished
+  }, [onFinished])
+
   const stopPolling = useCallback(() => {
     if (pollingRef.current !== null) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
     }
-  }, [])
+    setRuntimeUpdateInProgress(false)
+  }, [setRuntimeUpdateInProgress])
 
   const poll = useCallback(async () => {
     const result = await runtime.bootloader.getUpdateProgress()
@@ -88,9 +105,24 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
       if (result.data.state === 'failed') {
         setError(result.data.error ?? 'The update failed.')
       }
-      onFinished?.()
+      onFinishedRef.current?.()
     }
-  }, [runtime, stopPolling, onFinished])
+  }, [runtime, stopPolling])
+
+  /**
+   * Begin following an update, replacing any loop already running.
+   *
+   * Every start goes through here. Assigning `pollingRef.current` at a call
+   * site is what allowed a second timer to exist while the first kept
+   * ticking, unreferenced and unstoppable.
+   */
+  const startPolling = useCallback(() => {
+    stopPolling()
+    setRuntimeUpdateInProgress(true)
+    pollingRef.current = setInterval(() => {
+      void poll()
+    }, POLL_INTERVAL_MS)
+  }, [poll, stopPolling, setRuntimeUpdateInProgress])
 
   const startUpdate = useCallback(async () => {
     const target = version.trim()
@@ -113,12 +145,8 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
       return
     }
     setProgress(result.data)
-
-    stopPolling()
-    pollingRef.current = setInterval(() => {
-      void poll()
-    }, POLL_INTERVAL_MS)
-  }, [runtime, version, poll, stopPolling])
+    startPolling()
+  }, [runtime, version, startPolling])
 
   const loadVersions = useCallback(async (signal?: AbortSignal) => {
     setLoadingVersions(true)
@@ -162,15 +190,16 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
       if (cancelled || !result.success) return
       if (IN_FLIGHT.has(result.data.state)) {
         setProgress(result.data)
-        pollingRef.current = setInterval(() => {
-          void poll()
-        }, POLL_INTERVAL_MS)
+        startPolling()
       }
     })()
+    // Stopping the timer here is not optional: without it a re-run of this
+    // effect abandons the previous one still ticking.
     return () => {
       cancelled = true
+      stopPolling()
     }
-  }, [open, runtime, poll, stopPolling])
+  }, [open, runtime, startPolling, stopPolling])
 
   useEffect(() => stopPolling, [stopPolling])
 

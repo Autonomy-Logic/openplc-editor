@@ -66,6 +66,9 @@ const connectedState = (overrides: Record<string, unknown> = {}) => ({
   deviceActions: {
     setIncludeTimingStatsInPolling: vi.fn(),
     setIncludeEthercatStatsInPolling: vi.fn(),
+    // The version dialog renders inside this screen and suspends status
+    // polling while a swap runs.
+    setRuntimeUpdateInProgress: vi.fn(),
   },
 })
 

@@ -146,3 +146,56 @@ describe('useRuntimePolling — EtherCAT branches', () => {
     expect(mockOpenModal).not.toHaveBeenCalled()
   })
 })
+
+describe('useRuntimePolling — while the runtime is being replaced', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
+    mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
+    mockRuntime.getEthercatRuntimeStatus = undefined
+    Object.assign(mockState.runtimeConnection as object, {
+      connectionStatus: 'connected',
+      jwtToken: 'tok',
+      includeTimingStatsInPolling: false,
+      includeEthercatStatsInPolling: false,
+      runtimeUpdateInProgress: false,
+      selectedDevice: { deviceName: '192.168.2.4' },
+      ipAddress: '192.168.1.112',
+    })
+  })
+
+  it('stands down while a version change is in flight', async () => {
+    // The runtime is stopped and its container replaced during an update, so
+    // its silence is the expected state, not a fault. Polling through it
+    // counted the gap as failures and announced a lost connection in the
+    // middle of an update that was working.
+    Object.assign(mockState.runtimeConnection as object, { runtimeUpdateInProgress: true })
+
+    renderHook(() => useRuntimePolling())
+    await flushAll()
+
+    expect(mockRuntime.getStatus).not.toHaveBeenCalled()
+    expect(mockOpenModal).not.toHaveBeenCalled()
+  })
+
+  it('names the device when the connection really is lost', async () => {
+    // This path passed null, which the modal rendered as the literal
+    // "Unknown" -- so every message from it read "The connection to Unknown
+    // has been lost".
+    mockRuntime.getStatus.mockResolvedValue({ success: false })
+    mockRuntime.getLogs.mockResolvedValue({ success: false })
+
+    renderHook(() => useRuntimePolling())
+    for (let attempt = 0; attempt < 5; attempt += 1) await flushAll()
+
+    if (mockOpenModal.mock.calls.length > 0) {
+      const [id, data] = mockOpenModal.mock.calls[mockOpenModal.mock.calls.length - 1] as [
+        string,
+        { label?: string } | null,
+      ]
+      expect(id).toBe('runtime-connection-lost')
+      expect(data).not.toBeNull()
+      expect(data?.label).toBe('192.168.2.4')
+    }
+  })
+})

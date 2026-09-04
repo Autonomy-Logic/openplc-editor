@@ -15,6 +15,12 @@ import userEvent from '@testing-library/user-event'
 const startUpdate = vi.fn()
 const getUpdateProgress = vi.fn()
 
+const setRuntimeUpdateInProgress = vi.fn()
+vi.mock('@root/frontend/store', () => ({
+  useOpenPLCStore: (selector: (state: unknown) => unknown) =>
+    selector({ deviceActions: { setRuntimeUpdateInProgress } }),
+}))
+
 vi.mock('@root/middleware/shared/providers/platform-context', () => ({
   useRuntime: () => ({
     bootloader: { startUpdate, getUpdateProgress, clearSession: vi.fn() },
@@ -95,5 +101,71 @@ describe('Change Runtime Version', () => {
     await userEvent.type(field, 'v4.0.9')
     await userEvent.click(screen.getByRole('button', { name: /install/i }))
     await waitFor(() => expect(startUpdate).toHaveBeenCalledWith('v4.0.9'))
+  })
+})
+
+describe('Following an update', () => {
+  /**
+   * The bug this pins down took the whole app out, not just this dialog.
+   *
+   * `onFinished` is passed as an inline arrow, so it is a new function on
+   * every parent render. It was a dependency of `poll`, which was a
+   * dependency of the effect that starts the poll timer -- and that effect
+   * assigned `pollingRef.current` without clearing what was there, while its
+   * cleanup only set a `cancelled` flag. So each parent render started
+   * another timer and abandoned the last one. Each timer's tick re-rendered
+   * the parent, which started another: the count compounded until the app was
+   * firing hundreds of requests a second, the dev server returned 503 to
+   * everything, and the editor looked dead.
+   */
+  it('keeps exactly one poll loop no matter how often the parent re-renders', async () => {
+    vi.useFakeTimers()
+    try {
+      getUpdateProgress.mockResolvedValue({ success: true, data: { state: 'pulling', to: 'v4.1.10' } })
+
+      const { rerender } = render(
+        <ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} onFinished={() => undefined} />,
+      )
+      await vi.advanceTimersByTimeAsync(0)
+
+      // Re-render the way the real parent does: a fresh callback each time.
+      for (let render_ = 0; render_ < 10; render_ += 1) {
+        rerender(
+          <ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} onFinished={() => undefined} />,
+        )
+        await vi.advanceTimersByTimeAsync(0)
+      }
+
+      getUpdateProgress.mockClear()
+      // Three intervals of a single loop. With the timers stacking, ten
+      // re-renders made this an order of magnitude larger.
+      await vi.advanceTimersByTimeAsync(3 * 1500)
+
+      expect(getUpdateProgress.mock.calls.length).toBeLessThanOrEqual(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('tells the status poller to stand down when an update starts', async () => {
+    // getUpdateProgress stays idle (the beforeEach default): an in-flight
+    // state at mount is adopted, which disables the picker before it can be
+    // used.
+    startUpdate.mockResolvedValue({ success: true, data: { state: 'pulling', to: 'v4.1.10' } })
+
+    render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('combobox'))
+    await userEvent.click(await screen.findByText('v4.1.10'))
+    await userEvent.click(screen.getByRole('button', { name: /install/i }))
+
+    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
+  })
+
+  it('lets the poller resume once the dialog is gone', async () => {
+    // A flag left raised would disable status polling for the rest of the
+    // session, which is a quieter failure than the one it prevents.
+    const { unmount } = render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
+    unmount()
+    expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(false)
   })
 })

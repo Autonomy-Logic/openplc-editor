@@ -51,7 +51,15 @@ export const useRuntimePolling = () => {
     const { workspaceActions } = useOpenPLCStore.getState()
     workspaceActions.setPlcLogsVisible(false)
     workspaceActions.clearPlcLogs()
-    openModal('runtime-connection-lost', null)
+    // Name the device. Passing null here fell through to the literal
+    // "Unknown", so every message from this path read "The connection to
+    // Unknown has been lost".
+    const { runtimeConnection } = useOpenPLCStore.getState()
+    const endpoint = runtimeConnection.selectedDevice?.deviceName ?? runtimeConnection.ipAddress ?? 'the runtime'
+    openModal('runtime-connection-lost', {
+      label: endpoint,
+      body: `The connection to ${endpoint} was lost after several failed attempts. Check that the runtime is running and reachable, then connect again.`,
+    })
   }, [clearConnectionState, openModal])
 
   const poll = useCallback(async () => {
@@ -70,6 +78,16 @@ export const useRuntimePolling = () => {
     } = currentState
 
     if (curStatus !== 'connected' || !curToken) return
+
+    // A version change stops the runtime on purpose and replaces its
+    // container. Polling through that window would count the gap as failures
+    // and tear down a connection that is about to come back on its own -- so
+    // stand down entirely, and forget the failures already counted so the
+    // first poll after the swap starts from zero.
+    if (currentState.runtimeConnection.runtimeUpdateInProgress) {
+      consecutiveFailuresRef.current = 0
+      return
+    }
 
     isPollingRef.current = true
 
