@@ -302,6 +302,26 @@ describe('A device with no bootloader', () => {
     expect(screen.queryByRole('button', { name: /change runtime version/i })).toBeNull()
   })
 
+  it('treats a blank CPU or memory value as not reported', async () => {
+    // Number('') and Number('   ') are both 0, not NaN, so an agent that
+    // reports an empty count would otherwise have rendered "0 CPU cores" --
+    // a claim about the machine rather than an absence of one.
+    getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
+    getOrchestratorHostInfo.mockResolvedValue({
+      os: 'Debian GNU/Linux 12 (bookworm)',
+      cpu: '',
+      memory: '   ',
+      name: 'shop-floor-01',
+    })
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(screen.getByText('Debian GNU/Linux 12 (bookworm)')).toBeTruthy())
+    expect(screen.queryByText('0')).toBeNull()
+    expect(screen.queryByText('0.0 GB')).toBeNull()
+    expect(screen.queryByText('0 MB')).toBeNull()
+  })
+
   it('shows an empty header rather than failing when the agent says nothing', async () => {
     getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
     getOrchestratorHostInfo.mockResolvedValue(null)

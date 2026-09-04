@@ -106,8 +106,13 @@ const RuntimeStatusEditor = () => {
 
     // Narrowed rather than asserted: the agent's numbers arrive as strings,
     // and a non-numeric one has to drop out rather than become NaN.
+    //
+    // Blank is checked before the conversion because Number('') and
+    // Number('   ') are both 0, not NaN -- so an agent reporting an empty CPU
+    // count would have rendered as "0 CPU cores", which reads as a fact about
+    // the machine rather than as nothing reported.
     const asNumber = (value: string | undefined): number | undefined => {
-      if (value === undefined) return undefined
+      if (value === undefined || value.trim() === '') return undefined
       const parsed = Number(value)
       return Number.isFinite(parsed) ? parsed : undefined
     }
