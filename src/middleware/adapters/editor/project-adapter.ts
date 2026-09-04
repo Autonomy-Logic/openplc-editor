@@ -207,9 +207,6 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // Read is unconditional: a flag-off build must still open a project
-        // a flag-on build migrated, so turning the flag off is a round trip
-        // rather than a project that loads with no data types.
         // Array guard: the IPC payload is a cast, not validated — a
         // version-skewed main process must not crash project open.
         Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
@@ -232,9 +229,6 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // Read is unconditional: a flag-off build must still open a project
-        // a flag-on build migrated, so turning the flag off is a round trip
-        // rather than a project that loads with no data types.
         // Array guard: the IPC payload is a cast, not validated — a
         // version-skewed main process must not crash project open.
         Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],

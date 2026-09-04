@@ -57,3 +57,27 @@ export function parseAddress(address: string): ParsedAddress | null {
 export function isIecAddress(value: string): boolean {
   return parseAddress(value) !== null
 }
+
+/**
+ * Do two located declarations touch the same storage?
+ *
+ * A scalar occupies one slot; an ARRAY occupies one PER ELEMENT, laid out
+ * consecutively from its declared address. So `%QX0.0` holding an
+ * `ARRAY [0..9] OF BOOL` runs through `%QX1.1`, and a plain `BOOL` at
+ * `%QX0.6` lands inside it — a collision the compiler rejects, even though
+ * the two address strings differ (openplc-editor#565).
+ *
+ * Only ranges in the SAME class collide. Each prefix is its own linear space:
+ * `%MW0` and `%MD0` name unrelated storage (different runtime arrays), so
+ * they never overlap regardless of index.
+ *
+ * `slots` below 1 is read as 1 — a declaration always occupies at least the
+ * address it names, and an unreadable array shape must not silently claim
+ * nothing.
+ */
+export function slotRangesOverlap(a: ParsedAddress, aSlots: number, b: ParsedAddress, bSlots: number): boolean {
+  if (a.cls.direction !== b.cls.direction || a.cls.size !== b.cls.size) return false
+  const aEnd = a.linear + Math.max(1, aSlots) - 1
+  const bEnd = b.linear + Math.max(1, bSlots) - 1
+  return a.linear <= bEnd && b.linear <= aEnd
+}
