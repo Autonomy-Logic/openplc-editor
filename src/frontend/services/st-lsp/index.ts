@@ -36,7 +36,6 @@ import {
 } from 'vscode-languageserver-protocol'
 
 import { openPLCStoreBase } from '../../store'
-import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
 import { dataTypeLineSpans, serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-serializer'
 import {
@@ -236,7 +235,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
   // so a change there leaves the model's own text untouched and Monaco
   // never re-queries on its own. Re-drive both from the store instead.
   const dtViewSyncDisposables: Array<() => void> = []
-  if (monacoApi && isDataTypeFilesEnabled()) {
+  if (monacoApi) {
     const api = monacoApi
     const hasDtViewModel = () => api.editor.getModels().some((m) => parseDtViewUri(m.uri.toString()) !== null)
     dtViewSyncDisposables.push(
