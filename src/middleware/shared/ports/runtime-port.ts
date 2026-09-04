@@ -38,15 +38,6 @@
  */
 
 import type {
-  BootloaderApiResult,
-  BootloaderCapabilities,
-  BootloaderLogs,
-  BootloaderStatus,
-  BootloaderUpdateProgress,
-  RuntimeDeviceInfo,
-} from '@root/backend/editor/runtime/bootloader-api-client'
-
-import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
   EtherCATScanResponse,
@@ -237,62 +228,99 @@ export interface FetchedProject {
 }
 
 /**
+ * Result shape shared by every bootloader call. `error` strings come from the
+ * bootloader itself and are written to be shown to a person.
+ */
+export type BootloaderApiResult<T> = { success: true; data: T } | { success: false; error: string }
+
+/**
  * The runtime bootloader (RTOP-283): a second service on the device that
  * starts the runtime container and stays reachable when the runtime will not
- * run, so a version can be changed or repaired without SSH.
+ * run, so a version can be changed or repaired without shell access.
  *
- * Every method returns the client's discriminated union. `error` strings are
- * written for a person and are meant to be shown as they are.
+ * Reached through the same agent proxy as the runtime, on its own port. A
+ * device with no bootloader -- an orchestrator-managed vPLC, or a native
+ * install -- simply fails getCapabilities, which is the ordinary answer and
+ * not an error to surface.
  */
+export type BootloaderCapabilities = {
+  service: string
+  bootloaderVersion?: string
+  runtimeVersion?: string
+  state: string
+  recovery: boolean
+}
+
+export type BootloaderStatus = {
+  state: string
+  reason?: string
+  since?: string
+  crashCount?: number
+  healthSource?: string
+  containerId?: string
+  containerName?: string
+  image?: string
+  runtimeVersion?: string
+  recovery?: boolean
+}
+
+export type BootloaderLogs = {
+  logs: string
+  available: boolean
+  reason?: string
+  tail?: number
+}
+
+/**
+ * Update progress. `percent` is absent while the daemon has reported no size
+ * to work from -- for layers it already holds, and before any size is known --
+ * so a UI must treat "no percentage" as indeterminate, never as zero.
+ */
+export type BootloaderUpdateProgress = {
+  state: string
+  from?: string
+  to?: string
+  phase?: string
+  percent?: number | null
+  error?: string
+  startedAt?: string
+  finishedAt?: string | null
+}
+
+/**
+ * Host facts for the Runtime Status header, served by the bootloader.
+ *
+ * The bootloader rather than the runtime, because the bootloader is present on
+ * every device that can be updated at all -- including one running a runtime
+ * far older than this feature. A runtime-served equivalent only answered on
+ * runtimes new enough to have it, which is none of the devices in the field,
+ * so the screen sat empty exactly where it was most needed.
+ *
+ * It is also the better-placed of the two: the bootloader reads these from the
+ * Docker daemon, which runs on the host and answers for it, while a runtime
+ * inside a container can only describe its own namespace.
+ */
+export type RuntimeDeviceInfo = {
+  hostname?: string
+  architecture?: string
+  kernel?: string
+  system?: string
+  cpus?: number
+  memoryBytes?: number
+  dockerVersion?: string
+}
+
 export interface BootloaderPort {
-  /**
-   * Is a bootloader answering on this device?
-   *
-   * Answerable before login, because the editor uses it to decide whether to
-   * offer a version change at all. A failure here is the ordinary case for a
-   * native install or an orchestrator-managed vPLC, not an error to surface.
-   */
   getCapabilities(): Promise<BootloaderApiResult<BootloaderCapabilities>>
-
-  /**
-   * Sign in to the bootloader.
-   *
-   * Its credentials are the runtime's own -- the two services read one user
-   * database -- so the editor can reuse what the operator already entered.
-   * They do NOT share a session, so this is a separate login.
-   */
   login(username: string, password: string): Promise<BootloaderApiResult<{ role?: string }>>
-
-  /**
-   * Host facts for the Runtime Status header.
-   *
-   * Served by the bootloader rather than the runtime, because the bootloader
-   * is present on every device this feature can act on whatever runtime
-   * version is installed -- and because it reads them from the Docker daemon,
-   * which runs on the host and answers for it.
-   */
-  getDeviceInfo(): Promise<BootloaderApiResult<RuntimeDeviceInfo>>
-
-  /** Supervisor state: healthy, starting, updating or recovery, and why. */
   getStatus(): Promise<BootloaderApiResult<BootloaderStatus>>
-
-  /** The runtime container's recent output, for diagnosing a failed start. */
+  /** Host facts for the Runtime Status header. Authenticated, like status. */
+  getDeviceInfo(): Promise<BootloaderApiResult<RuntimeDeviceInfo>>
   getRuntimeLogs(tail?: number): Promise<BootloaderApiResult<BootloaderLogs>>
-
-  /**
-   * Change the runtime version. Returns once the work is under way; poll
-   * `getUpdateProgress`, because a pull can run for many minutes.
-   *
-   * Upgrade and downgrade are the same call: no direction, no version floor.
-   */
+  /** Upgrade and downgrade are the same call: no direction, no version floor. */
   startUpdate(version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>>
-
   getUpdateProgress(): Promise<BootloaderApiResult<BootloaderUpdateProgress>>
-
-  /** Stop and start the runtime container, health-gated on the way back. */
   restartRuntime(): Promise<BootloaderApiResult<{ state?: string; reason?: string }>>
-
-  /** Forget the bootloader session for this device. */
   clearSession(): Promise<void>
 }
 

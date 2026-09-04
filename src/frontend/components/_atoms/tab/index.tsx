@@ -61,6 +61,10 @@ const TabIcons: Record<string, React.ReactNode> = {
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
   'user-management': <UsersIcon className='h-4 w-4 flex-shrink-0' />,
   'persistent-storage': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
+  // Same icon as the tree node for this screen, so the tab and the tree
+  // agree. Without an entry here the tab rendered with no icon at all,
+  // which every other device tab has.
+  'runtime-status': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'diff-viewer': <GitCompare className='h-4 w-4 flex-shrink-0 text-[#0464FB]' />,
 }
 

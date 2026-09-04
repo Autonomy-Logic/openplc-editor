@@ -182,6 +182,15 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
   useEffect(() => {
     if (!open) {
       stopPolling()
+      // Reset. This component is mounted unconditionally by the screen, so
+      // only the Radix content unmounts when `open` goes false -- progress,
+      // error and the chosen version all survived a close. Reopening after a
+      // successful update therefore showed the previous run's "is installed
+      // and running" message with the Install button still hidden, and after
+      // a failure the old red error.
+      setProgress(null)
+      setError(null)
+      setVersion('')
       return
     }
     let cancelled = false
@@ -201,7 +210,34 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
     }
   }, [open, runtime, startPolling, stopPolling])
 
-  useEffect(() => stopPolling, [stopPolling])
+  // On unmount, stop this dialog's timer -- but do NOT tell the poller the
+  // update is over if the device is still working.
+  //
+  // `busy` blocks the dialog's own close, but nothing blocks navigating away
+  // from the Runtime Status tab, and this cleanup used to clear
+  // runtimeUpdateInProgress mid-swap. The status poller then resumed, counted
+  // five silent polls and raised the very "connection lost" modal the flag
+  // exists to prevent.
+  //
+  // The flag is left raised in that case. The poller clears it itself once the
+  // device reports a terminal state, so it cannot stick.
+  const inFlightRef = useRef(false)
+  useEffect(() => {
+    inFlightRef.current = progress !== null && IN_FLIGHT.has(progress.state)
+  }, [progress])
+
+  useEffect(
+    () => () => {
+      if (pollingRef.current !== null) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+      if (!inFlightRef.current) {
+        setRuntimeUpdateInProgress(false)
+      }
+    },
+    [setRuntimeUpdateInProgress],
+  )
 
   const inFlight = progress !== null && IN_FLIGHT.has(progress.state)
   const succeeded = progress?.state === 'success'
@@ -262,7 +298,10 @@ const ChangeVersionModal = ({ open, onOpenChange, currentVersion, onFinished }: 
               <input
                 aria-label='Runtime version to install'
                 className='h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
-                disabled={busy || loadingVersions}
+                // NOT disabled while loading. The list can take up to its
+                // timeout to fail, and a disabled field made the typed
+                // fallback unreachable for exactly that window.
+                disabled={busy}
                 onChange={(event) => setVersion(event.target.value)}
                 placeholder={loadingVersions ? 'Loading versions…' : (currentVersion ?? 'v4.2.1')}
                 value={version}

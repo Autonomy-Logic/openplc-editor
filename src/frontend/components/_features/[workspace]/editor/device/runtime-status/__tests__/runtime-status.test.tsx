@@ -18,9 +18,20 @@ const getCapabilities = vi.fn()
 const bootloaderLogin = vi.fn()
 const getStatus = vi.fn()
 
-let storeState: Record<string, unknown> = {}
+/** Typed, so reading the action spies back needs no cast. */
+type MockStore = {
+  runtimeConnection: Record<string, unknown>
+  deviceActions: Record<string, ReturnType<typeof vi.fn>>
+}
+
+let storeState: MockStore
+
+const getOrchestratorHostInfo = vi.fn()
 
 vi.mock('@root/middleware/shared/providers/platform-context', () => ({
+  // The production source of these facts for an orchestrator-managed device,
+  // which has no bootloader container to ask.
+  useOrchestrator: () => ({ getOrchestratorHostInfo }),
   useRuntime: () => ({
     bootloader: {
       getCapabilities,
@@ -40,9 +51,13 @@ vi.mock('@root/middleware/shared/providers/platform-context', () => ({
 // a mock path relative to its setup file, not the test, so a relative one
 // fails there while working under Vitest. The alias resolves to the same
 // module in both, which keeps this file identical across the two apps.
-vi.mock('@root/frontend/store', () => ({
-  useOpenPLCStore: (selector: (state: unknown) => unknown) => selector(storeState),
-}))
+vi.mock('@root/frontend/store', () => {
+  const useOpenPLCStore = (selector: (state: unknown) => unknown) => selector(storeState)
+  // The screen reads the store directly when comparing the reported runtime
+  // version, to avoid putting it in a dependency list.
+  useOpenPLCStore.getState = () => storeState
+  return { useOpenPLCStore }
+})
 
 // The statistics panels are exercised by their own tests; here they would only
 // add noise and a dependency on live timing data.
@@ -69,6 +84,9 @@ const connectedState = (overrides: Record<string, unknown> = {}) => ({
     // The version dialog renders inside this screen and suspends status
     // polling while a swap runs.
     setRuntimeUpdateInProgress: vi.fn(),
+    // Written after an install so the header and the picker agree on what is
+    // running.
+    setRuntimeVersion: vi.fn(),
   },
 })
 
@@ -76,6 +94,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   storeState = connectedState()
   getDeviceInfo.mockResolvedValue({ success: false, error: 'not supported' })
+  getOrchestratorHostInfo.mockResolvedValue(null)
   getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
   bootloaderLogin.mockResolvedValue({ success: false, error: 'no' })
   getStatus.mockResolvedValue({ success: false, error: 'no' })
@@ -186,8 +205,7 @@ describe('Runtime Status', () => {
     // These toggles moved here from the screens that used to show the stats.
     // Without them the screen would render empty panels forever; without the
     // cleanup, a device would be polled for data nobody is looking at.
-    const actions = (storeState as { deviceActions: Record<string, ReturnType<typeof vi.fn>> })
-      .deviceActions
+    const actions = storeState.deviceActions
     const { unmount } = render(<RuntimeStatusEditor />)
 
     expect(actions.setIncludeTimingStatsInPolling).toHaveBeenCalledWith(true)
@@ -242,5 +260,43 @@ describe('Which device the header names', () => {
     storeState = connectedState({ selectedDevice: null, ipAddress: '192.168.2.4' })
     render(<RuntimeStatusEditor />)
     await waitFor(() => expect(screen.getByText(/192\.168\.2\.4/)).toBeTruthy())
+  })
+})
+
+describe('A device with no bootloader', () => {
+  it('falls back to what the orchestrator agent knows about the host', async () => {
+    // The production case. Devices under an orchestrator are vPLC containers
+    // with no bootloader beside them, so nothing answers on 8445 and the
+    // header used to sit completely blank. The agent already collects these
+    // facts for its own consumption reporting and Edge exposes them.
+    getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
+    getOrchestratorHostInfo.mockResolvedValue({
+      os: 'Debian GNU/Linux 12 (bookworm)',
+      cpu: '4',
+      memory: '1846',
+      agentVersion: '1.6.0',
+      name: 'shop-floor-01',
+    })
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(screen.getByText('Debian GNU/Linux 12 (bookworm)')).toBeTruthy())
+    expect(screen.getByText('4')).toBeTruthy()
+    expect(screen.getByText('1.8 GB')).toBeTruthy()
+    // Named as the agent, not as a bootloader that is not there.
+    expect(screen.getByText('Orchestrator agent')).toBeTruthy()
+    expect(screen.getByText('1.6.0')).toBeTruthy()
+    // And still no version action: nothing on this device can perform a swap.
+    expect(screen.queryByRole('button', { name: /change runtime version/i })).toBeNull()
+  })
+
+  it('shows an empty header rather than failing when the agent says nothing', async () => {
+    getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
+    getOrchestratorHostInfo.mockResolvedValue(null)
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(getOrchestratorHostInfo).toHaveBeenCalled())
+    expect(screen.getByText('Runtime Status')).toBeTruthy()
   })
 })

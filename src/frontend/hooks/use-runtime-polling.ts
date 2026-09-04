@@ -10,6 +10,10 @@ const POLL_INTERVAL_MS = 2000
 // Number of consecutive poll failures before showing connection lost modal
 const MAX_CONSECUTIVE_FAILURES = 5
 
+// Bootloader update states that mean the device is still working. Kept in step
+// with the dialog's own list; anything else is terminal.
+const UPDATE_IN_FLIGHT = new Set(['pulling', 'swapping', 'verifying'])
+
 /**
  * Custom hook that handles runtime status and logs polling.
  * Uses the RuntimePort abstraction so the same hook works on both
@@ -86,6 +90,18 @@ export const useRuntimePolling = () => {
     // first poll after the swap starts from zero.
     if (currentState.runtimeConnection.runtimeUpdateInProgress) {
       consecutiveFailuresRef.current = 0
+      // Ask the device whether it is still working, and lower the flag when it
+      // is not.
+      //
+      // The dialog raises the flag and used to lower it on unmount -- which
+      // happened mid-swap if the operator navigated away, re-arming the
+      // "connection lost" modal the flag prevents. It now leaves the flag up,
+      // so the clearing has to happen here: this hook runs for as long as the
+      // device is connected, whatever screen is open.
+      const update = await runtime.bootloader?.getUpdateProgress?.()
+      if (update?.success === true && !UPDATE_IN_FLIGHT.has(update.data.state)) {
+        useOpenPLCStore.getState().deviceActions.setRuntimeUpdateInProgress(false)
+      }
       return
     }
 

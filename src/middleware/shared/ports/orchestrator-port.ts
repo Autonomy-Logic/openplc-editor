@@ -63,9 +63,50 @@ export interface DiscoveredOrchestratorRuntime {
 /**
  * Port interface for orchestrator operations.
  */
+/**
+ * What the orchestrator agent knows about the machine it runs on.
+ *
+ * The Runtime Status header's real source in production. Devices under an
+ * orchestrator are vPLC containers with no bootloader beside them, so the
+ * bootloader's device-info endpoint answers nothing there and the header sat
+ * blank. The agent already collects exactly these facts for its own
+ * consumption reporting (`tools/system_info.py::get_static_system_info`), and
+ * Edge bridges them to REST at `GET /orchestrators/:id/details`.
+ *
+ * Every field is optional: an agent too old to report, or one that is offline
+ * when asked, yields nothing rather than an error.
+ */
+export type OrchestratorHostInfo = {
+  /** Operating system description, e.g. "Debian GNU/Linux 12 (bookworm)". */
+  os?: string
+  /** CPU count, as the agent reports it. */
+  cpu?: string
+  /** Total RAM in MB, as the agent reports it. */
+  memory?: string
+  /** Total disk in GB, as the agent reports it. */
+  disk?: string
+  /** Version of the agent itself. */
+  agentVersion?: string
+  /** The orchestrator's name, which is the closest thing to a hostname here. */
+  name?: string
+}
+
 export interface OrchestratorPort {
   /** Fetch all orchestrators with their devices. */
   listOrchestrators(): Promise<OrchestratorInfo[]>
+
+  /**
+   * Host facts for one orchestrator, from its agent.
+   *
+   * Optional: it needs an agent that answers the consumption request Edge
+   * forwards, and an Edge new enough to expose the details route. A failure
+   * yields nothing and the header simply shows less.
+   *
+   * Note that `kernel` is NOT available here even though the agent sends it --
+   * Edge's own response type drops it. Adding it needs a change in
+   * autonomy-edge.
+   */
+  getOrchestratorHostInfo?(orchestratorId: string): Promise<OrchestratorHostInfo | null>
 
   /**
    * Ask one orchestrator's agent what its runtimes are advertising.

@@ -518,6 +518,10 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
     this.tokens.clear()
     this.runtimeApi.clearSession()
+    // The bootloader keeps its own session, so clearing only the runtime's
+    // left the previous user's bootloader token usable -- and that token can
+    // change the runtime version. Signing out has to mean both.
+    this.bootloaderApi.clearSession()
     return { success: true }
   }
 

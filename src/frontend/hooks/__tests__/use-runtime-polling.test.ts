@@ -1,4 +1,8 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
+
+// Mirrors the hook's own constant; the test has to cross it to reach the
+// connection-lost path at all.
+const MAX_CONSECUTIVE_FAILURES = 5
 
 // The `mock*` prefix lets ts-jest hoist these references into the
 // `jest.mock` factories below — Jest reuses the same babel-plugin-jest
@@ -54,9 +58,13 @@ const mockRuntime: {
   getStatus: jest.Mock
   getLogs: jest.Mock
   getEthercatRuntimeStatus: undefined | jest.Mock
+  // The hook asks the bootloader whether a version change has finished, so it
+  // can lower the flag that suspends connection-lost detection.
+  bootloader: { getUpdateProgress: jest.Mock }
 } = {
   getStatus: jest.fn(),
   getLogs: jest.fn(),
+  bootloader: { getUpdateProgress: jest.fn() },
   getEthercatRuntimeStatus: undefined,
 }
 
@@ -153,6 +161,7 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
     mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
     mockRuntime.getEthercatRuntimeStatus = undefined
+    mockRuntime.bootloader.getUpdateProgress.mockResolvedValue({ success: false, error: 'idle' })
     Object.assign(mockState.runtimeConnection as object, {
       connectionStatus: 'connected',
       jwtToken: 'tok',
@@ -185,17 +194,31 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     mockRuntime.getStatus.mockResolvedValue({ success: false })
     mockRuntime.getLogs.mockResolvedValue({ success: false })
 
-    renderHook(() => useRuntimePolling())
-    for (let attempt = 0; attempt < 5; attempt += 1) await flushAll()
-
-    if (mockOpenModal.mock.calls.length > 0) {
-      const [id, data] = mockOpenModal.mock.calls[mockOpenModal.mock.calls.length - 1] as [
-        string,
-        { label?: string } | null,
-      ]
-      expect(id).toBe('runtime-connection-lost')
-      expect(data).not.toBeNull()
-      expect(data?.label).toBe('192.168.2.4')
+    // The polls happen on a 2s interval, so the clock has to move. Awaiting
+    // microtasks in a loop -- what this used to do -- runs the FIRST poll five
+    // times over and never reaches the failure threshold, which is why the
+    // assertions below were reachable only behind an `if`.
+    jest.useFakeTimers();
+    try {
+      renderHook(() => useRuntimePolling())
+      for (let attempt = 0; attempt < MAX_CONSECUTIVE_FAILURES + 1; attempt += 1) {
+        await act(async () => {
+          jest.advanceTimersByTime(2000)
+          await flushAll()
+        })
+      }
+    } finally {
+      jest.useRealTimers()
     }
+
+    // Asserted unconditionally. This sat behind `if (calls.length > 0)`, so
+    // when the five failing polls never reached handleConnectionLost the test
+    // asserted nothing and passed -- it could not regress, and did not prove
+    // the label fix it was named for.
+    expect(mockOpenModal).toHaveBeenCalled()
+    const [id, data] = mockOpenModal.mock.calls[mockOpenModal.mock.calls.length - 1]
+    expect(id).toBe('runtime-connection-lost')
+    expect(data).not.toBeNull()
+    expect(data.label).toBe('192.168.2.4')
   })
 })

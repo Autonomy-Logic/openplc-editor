@@ -14,7 +14,7 @@
  */
 
 import type { TimingStats } from '@root/middleware/shared/ports/types'
-import { useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../../../store'
@@ -32,6 +32,12 @@ type DeviceInfo = {
   cpus?: number
   memoryBytes?: number
   dockerVersion?: string
+  /**
+   * Version of the orchestrator agent, when the facts came from one rather
+   * than from a bootloader. Named so the header can say which it is looking
+   * at instead of implying a bootloader that is not there.
+   */
+  agentVersion?: string
 }
 
 type BootloaderInfo = {
@@ -47,8 +53,12 @@ const RuntimeStatusEditor = () => {
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const runtimeVersion = useOpenPLCStore((state) => state.runtimeConnection.runtimeVersion)
+  const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const ipAddress = useOpenPLCStore((state) => state.runtimeConnection.ipAddress)
   const selectedDevice = useOpenPLCStore((state) => state.runtimeConnection.selectedDevice)
+  // Used only when no bootloader answers, which under an orchestrator is
+  // always: a vPLC has no bootloader container beside it.
+  const orchestrator = useOrchestrator()
   const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
   const storedCredentials = useOpenPLCStore((state) => state.runtimeConnection.storedCredentials)
   const setIncludeTimingStatsInPolling = useOpenPLCStore(
@@ -79,15 +89,64 @@ const RuntimeStatusEditor = () => {
    * credentials the operator already gave the runtime: the two services read
    * one user database, so there is nothing more to ask for.
    */
+  /**
+   * Host facts from the orchestrator agent, for a device with no bootloader.
+   *
+   * Deliberately a different shape of answer: the agent describes the HOST
+   * running the vPLC, not the container, and it cannot report a kernel version
+   * (Edge's response type drops the field the agent sends) or an
+   * architecture. What it does give is enough to stop the header being empty,
+   * which is what it was for every orchestrator-managed device.
+   */
+  const hostInfoFromOrchestrator = useCallback(async (): Promise<DeviceInfo | null> => {
+    const orchestratorId = selectedDevice?.orchestratorId
+    if (!orchestratorId || !orchestrator.getOrchestratorHostInfo) return null
+
+    const host = await orchestrator.getOrchestratorHostInfo(orchestratorId)
+    if (!host) return null
+
+    const cpus = host.cpu !== undefined ? Number(host.cpu) : undefined
+    // The agent reports total RAM in MB; the header formats bytes.
+    const megabytes = host.memory !== undefined ? Number(host.memory) : undefined
+    return {
+      hostname: host.name,
+      system: host.os,
+      cpus: Number.isFinite(cpus) ? cpus : undefined,
+      memoryBytes: Number.isFinite(megabytes) ? (megabytes as number) * 1024 * 1024 : undefined,
+      agentVersion: host.agentVersion,
+    }
+  }, [orchestrator, selectedDevice?.orchestratorId])
+
   const refresh = useCallback(async () => {
-    if (!connected) return
+    // Disconnected clears everything. The component stays mounted while
+    // disconnected, and returning early without clearing left the PREVIOUS
+    // device's hostname, kernel and memory in the header -- so reconnecting to
+    // a different device whose login is refused, or one with no stored
+    // credentials, described a machine that was no longer there.
+    if (!connected) {
+      setDeviceInfo(null)
+      // Idempotent on purpose. A fresh object here is a state change on every
+      // call, and `refresh` re-runs whenever the runtime port's identity does
+      // -- which is enough to spin: set state, re-render, refresh, set state.
+      setBootloader((previous) => (previous.present ? { present: false } : previous))
+      return
+    }
 
     const capabilities = await runtime.bootloader.getCapabilities()
     if (!capabilities.success) {
       setBootloader({ present: false })
-      setDeviceInfo(null)
+
+      // No bootloader is the NORMAL case in production: a device under an
+      // orchestrator is a vPLC container with no bootloader beside it, so
+      // there is nothing on 8445 to ask. The agent managing it knows the same
+      // sort of facts about its host, and Edge exposes them -- so the header
+      // reports those instead of sitting blank.
+      setDeviceInfo(await hostInfoFromOrchestrator())
       return
     }
+    // Cleared before the login below, so a failure there cannot leave stale
+    // facts on screen.
+    setDeviceInfo(null)
 
     const next: BootloaderInfo = {
       present: true,
@@ -109,10 +168,25 @@ const RuntimeStatusEditor = () => {
           next.reason = status.data.reason
         }
         setDeviceInfo(info.success ? (info.data ?? null) : null)
+
+        // The store's runtimeVersion is written once, at connect time, so
+        // after installing v4.2.1 over v4.2.0 the header still said v4.2.0 --
+        // and the picker offered v4.2.1 as installable while disabling
+        // Install on the version that was no longer running. Both the status
+        // and the capabilities reply carry the truth.
+        const reported = status.success
+          ? (status.data.runtimeVersion ?? capabilities.data.runtimeVersion)
+          : capabilities.data.runtimeVersion
+        // Compared against the store directly rather than the rendered
+        // value: depending on runtimeVersion here would rebuild `refresh`
+        // whenever it changed, re-running the effect that calls it.
+        if (reported && reported !== useOpenPLCStore.getState().runtimeConnection.runtimeVersion) {
+          setRuntimeVersion(reported)
+        }
       }
     }
     setBootloader(next)
-  }, [connected, runtime, storedCredentials])
+  }, [connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
 
   useEffect(() => {
     void refresh()
@@ -191,7 +265,13 @@ const RuntimeStatusEditor = () => {
 
         <dl className='grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3'>
           <InfoField label='Runtime version' value={runtimeVersion} />
-          {bootloader.present && <InfoField label='Bootloader' value={bootloader.version} />}
+          {bootloader.present ? (
+            <InfoField label='Bootloader' value={bootloader.version} />
+          ) : (
+            // Names the source, so a blank kernel/architecture reads as "the
+            // agent does not report these" rather than "something is wrong".
+            <InfoField label='Orchestrator agent' value={deviceInfo?.agentVersion} />
+          )}
           <InfoField label='Host' value={deviceInfo?.hostname} />
           <InfoField label='Operating system' value={deviceInfo?.system} />
           <InfoField label='Kernel' value={deviceInfo?.kernel} />

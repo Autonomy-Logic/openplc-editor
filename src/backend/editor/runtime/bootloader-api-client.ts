@@ -27,13 +27,22 @@ import { z } from 'zod'
 /** The bootloader's HTTPS control port. Odd, alongside the runtime's 8443. */
 export const BOOTLOADER_API_PORT = 8445
 
-export type BootloaderApiResult<T> = { success: true; data: T } | { success: false; error: string }
+
 
 /**
  * What the bootloader advertises without authentication, so the editor can
  * tell what it reached -- and whether the device is in recovery -- before it
  * has credentials.
  */
+/**
+ * Ceiling on a bootloader response body.
+ *
+ * Generous enough for the largest thing this API returns -- a log tail, which
+ * the server caps -- and small enough that a device sending nonsense cannot
+ * exhaust the editor's memory.
+ */
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+
 const CapabilitiesSchema = z.object({
   service: z.string(),
   bootloaderVersion: z.string().optional(),
@@ -41,7 +50,7 @@ const CapabilitiesSchema = z.object({
   state: z.string(),
   recovery: z.boolean(),
 })
-export type BootloaderCapabilities = z.infer<typeof CapabilitiesSchema>
+
 
 const LoginSchema = z.object({
   access_token: z.string(),
@@ -60,7 +69,7 @@ const StatusSchema = z.object({
   runtimeVersion: z.string().optional(),
   recovery: z.boolean().optional(),
 })
-export type BootloaderStatus = z.infer<typeof StatusSchema>
+
 
 /**
  * Host facts for the Runtime Status header.
@@ -83,7 +92,7 @@ const DeviceInfoSchema = z.object({
   memoryBytes: z.number().optional(),
   dockerVersion: z.string().optional(),
 })
-export type RuntimeDeviceInfo = z.infer<typeof DeviceInfoSchema>
+
 
 const LogsSchema = z.object({
   logs: z.string(),
@@ -91,7 +100,7 @@ const LogsSchema = z.object({
   reason: z.string().optional(),
   tail: z.number().optional(),
 })
-export type BootloaderLogs = z.infer<typeof LogsSchema>
+
 
 /**
  * Update progress. `percent` is absent while the daemon has reported no size
@@ -109,7 +118,52 @@ const UpdateProgressSchema = z.object({
   startedAt: z.string().optional(),
   finishedAt: z.string().nullable().optional(),
 })
-export type BootloaderUpdateProgress = z.infer<typeof UpdateProgressSchema>
+/**
+ * Types come from the port, not the other way round.
+ *
+ * The port used to import these from this file, which broke the layer rule
+ * (`ports` may depend on `utils` and `ports` only) and turned the editor's
+ * architecture job red. The port owns the contract; this client's schemas are
+ * pinned to it below, so a drift between the two is a type error rather than
+ * a silent divergence.
+ */
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
+} from '@root/middleware/shared/ports/runtime-port'
+
+/**
+ * The schemas above must keep producing exactly the port's shapes. These
+ * assignments are the check: if a schema and the contract drift apart, this
+ * file stops compiling instead of the two quietly disagreeing.
+ */
+const _contract: {
+  capabilities: z.ZodType<BootloaderCapabilities>
+  status: z.ZodType<BootloaderStatus>
+  deviceInfo: z.ZodType<RuntimeDeviceInfo>
+  logs: z.ZodType<BootloaderLogs>
+  progress: z.ZodType<BootloaderUpdateProgress>
+} = {
+  capabilities: CapabilitiesSchema,
+  status: StatusSchema,
+  deviceInfo: DeviceInfoSchema,
+  logs: LogsSchema,
+  progress: UpdateProgressSchema,
+}
+void _contract
+
+export type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
+} from '@root/middleware/shared/ports/runtime-port'
 
 const ErrorSchema = z.object({ error: z.string() })
 
@@ -125,6 +179,14 @@ type RequestOptions = {
   body?: string
   token?: string
   timeoutMs?: number
+  /**
+   * Return a 409 body as a success instead of an error.
+   *
+   * Only the update route sets this: a conflict there means an update is
+   * already running and the body carries its progress, which is what the
+   * caller is trying to obtain.
+   */
+  treatConflictAsSuccess?: boolean
 }
 
 export class BootloaderApiClient {
@@ -239,11 +301,17 @@ export class BootloaderApiClient {
       path: '/api/bootloader/update',
       body: JSON.stringify({ version }),
       timeoutMs: 20000,
+      // A 409 means an update is ALREADY running, and its body carries that
+      // update's progress. Reported as a failure, the caller showed an error
+      // and never started polling -- so a second editor, or one that opened
+      // this dialog after the update began, could not follow along. The
+      // conflict body is returned instead and the caller adopts it.
+      treatConflictAsSuccess: true,
     })
     if (!result.success) return result
 
-    // 202 carries { accepted, progress }; a 409 was already turned into a
-    // failure by `request`, with the bootloader's own message.
+    // 202 carries { accepted, progress }; a 409 carries { error, progress }.
+    // Both are read the same way -- the progress is the useful part.
     const accepted = z.object({ progress: UpdateProgressSchema.optional() })
     const parsed = this.parse(accepted, result.data)
     if (!parsed.success) return parsed
@@ -326,12 +394,34 @@ export class BootloaderApiClient {
         },
         (response) => {
           let data = ''
-          response.on('data', (chunk) => {
+          let received = 0
+          response.on('data', (chunk: Buffer | string) => {
+            // Bounded. Without a cap, any bootloader endpoint -- a log tail
+            // above all -- could grow this string until the editor process
+            // runs out of memory, and a device is not a trusted source of
+            // length just because it is on the LAN.
+            received += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length
+            if (received > MAX_RESPONSE_BYTES) {
+              request.destroy()
+              resolve({
+                success: false,
+                error:
+                  `The bootloader on ${ipAddress}:${this.port} sent more than ` +
+                  `${Math.round(MAX_RESPONSE_BYTES / 1024 / 1024)} MB; the response was discarded.`,
+              })
+              return
+            }
             data += chunk
           })
           response.on('end', () => {
             const status = response.statusCode ?? 0
             if (status >= 200 && status < 300) {
+              resolve({ success: true, data })
+              return
+            }
+            if (status === 409 && options.treatConflictAsSuccess === true) {
+              // The body carries the in-flight progress, which is exactly
+              // what the caller wanted.
               resolve({ success: true, data })
               return
             }

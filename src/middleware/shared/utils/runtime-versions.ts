@@ -19,6 +19,14 @@ const TAGS_URL = 'https://api.github.com/repos/Autonomy-Logic/openplc-runtime/ta
 /** How long a fetched list stays fresh. Releases are not minutes apart. */
 const CACHE_TTL_MS = 10 * 60 * 1000
 
+/**
+ * How long to wait for GitHub before giving up.
+ *
+ * Long enough for a slow connection, short enough that the offline fallback
+ * appears while somebody is still looking at the dialog.
+ */
+const FETCH_TIMEOUT_MS = 8000
+
 export type RuntimeVersion = {
   /** The tag exactly as it must be sent to the bootloader, e.g. "v4.2.1". */
   tag: string
@@ -73,8 +81,18 @@ export async function listRuntimeVersions(signal?: AbortSignal): Promise<Runtime
   }
 
   try {
+    // A timeout of our own, combined with the caller's signal.
+    //
+    // Without it a black-holed api.github.com -- filtered DNS, a captive
+    // portal -- left `fetch` hanging for the browser's TCP timeout with the
+    // fallback field disabled behind `loadingVersions`. The offline path this
+    // function exists to provide was unreachable in exactly the situation that
+    // needs it.
+    const signals: AbortSignal[] = [AbortSignal.timeout(FETCH_TIMEOUT_MS)]
+    if (signal) signals.push(signal)
+
     const response = await fetch(TAGS_URL, {
-      signal,
+      signal: AbortSignal.any(signals),
       headers: { Accept: 'application/vnd.github+json' },
     })
     if (!response.ok) {
@@ -91,9 +109,20 @@ export async function listRuntimeVersions(signal?: AbortSignal): Promise<Runtime
       return { ok: false, error: 'The version list came back in an unexpected shape.' }
     }
 
+    // flatMap with a real guard, not a cast. A `null` element -- or any entry
+    // that is not an object -- made the cast throw on property access, which
+    // landed in the catch below and was reported as "could not reach GitHub",
+    // discarding every valid tag alongside it.
     const versions = body
-      .map((entry) => (entry as { name?: unknown }).name)
-      .filter((name): name is string => typeof name === 'string' && RELEASE_TAG.test(name))
+      .flatMap((entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        'name' in entry &&
+        typeof (entry as { name: unknown }).name === 'string'
+          ? [(entry as { name: string }).name]
+          : [],
+      )
+      .filter((name) => RELEASE_TAG.test(name))
       .sort(compareVersions)
       .map((tag) => ({ tag, prerelease: tag.includes('-') }))
 
@@ -104,7 +133,11 @@ export async function listRuntimeVersions(signal?: AbortSignal): Promise<Runtime
     cache = { at: Date.now(), versions }
     return { ok: true, versions }
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      return { ok: false, error: 'GitHub did not answer in time.' }
+    }
     if (error instanceof DOMException && error.name === 'AbortError') {
+      // The caller's signal: the dialog closed. Not worth reporting.
       return { ok: false, error: 'cancelled' }
     }
     return {
