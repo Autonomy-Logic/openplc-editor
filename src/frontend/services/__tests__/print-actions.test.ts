@@ -163,7 +163,9 @@ describe('collectSelectedPous', () => {
   })
 
   it('builds a "ld" PrintPou from a ladder body', async () => {
-    const rungs = [{ id: 'r1', comment: '', defaultBounds: [], reactFlowViewport: [], selectedNodes: [], nodes: [], edges: [] }]
+    const rungs = [
+      { id: 'r1', comment: '', defaultBounds: [], reactFlowViewport: [], selectedNodes: [], nodes: [], edges: [] },
+    ]
     const pou = makePou({
       name: 'MyLadder',
       pouType: 'function-block',
@@ -205,18 +207,21 @@ describe('collectSelectedPous', () => {
     expect(await collectSelectedPous(['BadFbd'])).toEqual([])
   })
 
-  it.each(['il', 'cpp', 'python'] as const)('builds a "%s" PrintPou with colored lines from Monaco tokenize', async (language) => {
-    const pou = makePou({ name: 'MyText', body: { language, value: 'LINE_ONE\nLINE_TWO' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+  it.each(['il', 'cpp', 'python'] as const)(
+    'builds a "%s" PrintPou with colored lines from Monaco tokenize',
+    async (language) => {
+      const pou = makePou({ name: 'MyText', body: { language, value: 'LINE_ONE\nLINE_TWO' } })
+      mockGetState.mockReturnValue(makeState({ pous: [pou] }))
 
-    const [result] = await collectSelectedPous(['MyText'])
+      const [result] = await collectSelectedPous(['MyText'])
 
-    expect(result?.kind).toBe(language)
-    if (result?.kind !== 'ld' && result?.kind !== 'fbd') {
-      expect(result?.lines.map((l) => l.runs.map((r) => r.text).join(''))).toEqual(['LINE_ONE', 'LINE_TWO'])
-    }
-    expect(mockTokenize).toHaveBeenCalledWith('LINE_ONE\nLINE_TWO', language)
-  })
+      expect(result?.kind).toBe(language)
+      if (result?.kind !== 'ld' && result?.kind !== 'fbd') {
+        expect(result?.lines.map((l) => l.runs.map((r) => r.text).join(''))).toEqual(['LINE_ONE', 'LINE_TWO'])
+      }
+      expect(mockTokenize).toHaveBeenCalledWith('LINE_ONE\nLINE_TWO', language)
+    },
+  )
 
   it('colors "st" lines from the LSP semantic-tokens response when available', async () => {
     const requestBodySemanticTokens = vi.fn().mockResolvedValue({

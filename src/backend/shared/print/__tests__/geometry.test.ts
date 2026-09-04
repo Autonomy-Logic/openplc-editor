@@ -186,7 +186,15 @@ describe('transformDrawOp / transformDrawOps', () => {
 
   it('transforms a line op', () => {
     const op: DrawOp = { kind: 'line', x1: 1, y1: 1, x2: 2, y2: 2, color: '#000000', widthPt: 1 }
-    expect(transformDrawOp(op, t)).toEqual({ kind: 'line', x1: 12, y1: 22, x2: 14, y2: 24, color: '#000000', widthPt: 2 })
+    expect(transformDrawOp(op, t)).toEqual({
+      kind: 'line',
+      x1: 12,
+      y1: 22,
+      x2: 14,
+      y2: 24,
+      color: '#000000',
+      widthPt: 2,
+    })
   })
 
   it('transforms a rect op with strokeWidthPt', () => {
@@ -245,7 +253,10 @@ describe('transformDrawOp / transformDrawOps', () => {
   })
 
   it('transformDrawOps maps over a list of ops', () => {
-    const ops: DrawOp[] = [{ kind: 'clipPop' }, { kind: 'text', text: 'a', x: 0, y: 0, sizePt: 1, color: '#000', font: 'sans' }]
+    const ops: DrawOp[] = [
+      { kind: 'clipPop' },
+      { kind: 'text', text: 'a', x: 0, y: 0, sizePt: 1, color: '#000', font: 'sans' },
+    ]
     const result = transformDrawOps(ops, t)
     expect(result).toHaveLength(2)
     expect(result[0]).toEqual({ kind: 'clipPop' })

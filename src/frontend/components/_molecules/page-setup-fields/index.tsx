@@ -75,7 +75,10 @@ const PageSetupFields = () => {
         <legend className={LABEL}>Margins (pt)</legend>
         <div className='grid grid-cols-2 gap-2'>
           {MARGIN_SIDES.map((side) => (
-            <label key={side} className='flex items-center justify-between gap-2 text-sm capitalize text-neutral-850 dark:text-neutral-300'>
+            <label
+              key={side}
+              className='flex items-center justify-between gap-2 text-sm capitalize text-neutral-850 dark:text-neutral-300'
+            >
               {side}
               <input
                 type='number'

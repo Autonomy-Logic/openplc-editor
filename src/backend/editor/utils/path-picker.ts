@@ -136,7 +136,11 @@ const getPlcopenExportSavePath = async (serviceManager: GetProjectPathProps, def
   }
 }
 
-const getPdfExportSavePath = async (serviceManager: GetProjectPathProps, defaultFileName: string, bytes: Uint8Array) => {
+const getPdfExportSavePath = async (
+  serviceManager: GetProjectPathProps,
+  defaultFileName: string,
+  bytes: Uint8Array,
+) => {
   const { canceled, filePath } = await dialog.showSaveDialog(serviceManager, {
     title: 'Export PDF',
     defaultPath: defaultFileName,
