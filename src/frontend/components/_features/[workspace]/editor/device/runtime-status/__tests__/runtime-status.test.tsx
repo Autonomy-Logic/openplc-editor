@@ -272,6 +272,9 @@ describe('A device with no bootloader', () => {
     getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
     getOrchestratorHostInfo.mockResolvedValue({
       os: 'Debian GNU/Linux 12 (bookworm)',
+      // Needs an Edge carrying EDGE-631; before that the agent sent this and
+      // Edge did not declare it, so it could not be read.
+      kernel: '6.12.35-rt10-v8+',
       cpu: '4',
       memory: '1846',
       agentVersion: '1.6.0',
@@ -286,6 +289,7 @@ describe('A device with no bootloader', () => {
     // Named as the agent, not as a bootloader that is not there.
     expect(screen.getByText('Orchestrator agent')).toBeTruthy()
     expect(screen.getByText('1.6.0')).toBeTruthy()
+    expect(screen.getByText('6.12.35-rt10-v8+')).toBeTruthy()
     // And still no version action: nothing on this device can perform a swap.
     expect(screen.queryByRole('button', { name: /change runtime version/i })).toBeNull()
   })

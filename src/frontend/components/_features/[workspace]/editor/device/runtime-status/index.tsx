@@ -93,10 +93,9 @@ const RuntimeStatusEditor = () => {
    * Host facts from the orchestrator agent, for a device with no bootloader.
    *
    * Deliberately a different shape of answer: the agent describes the HOST
-   * running the vPLC, not the container, and it cannot report a kernel version
-   * (Edge's response type drops the field the agent sends) or an
-   * architecture. What it does give is enough to stop the header being empty,
-   * which is what it was for every orchestrator-managed device.
+   * running the vPLC, not the container, and it reports no architecture. The
+   * kernel needs an Edge carrying EDGE-631; against an older one that field
+   * is absent and the header simply shows less.
    */
   const hostInfoFromOrchestrator = useCallback(async (): Promise<DeviceInfo | null> => {
     const orchestratorId = selectedDevice?.orchestratorId
@@ -111,6 +110,7 @@ const RuntimeStatusEditor = () => {
     return {
       hostname: host.name,
       system: host.os,
+      kernel: host.kernel,
       cpus: Number.isFinite(cpus) ? cpus : undefined,
       memoryBytes: Number.isFinite(megabytes) ? (megabytes as number) * 1024 * 1024 : undefined,
       agentVersion: host.agentVersion,

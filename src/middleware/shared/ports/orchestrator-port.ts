@@ -79,6 +79,13 @@ export interface DiscoveredOrchestratorRuntime {
 export type OrchestratorHostInfo = {
   /** Operating system description, e.g. "Debian GNU/Linux 12 (bookworm)". */
   os?: string
+  /**
+   * Host kernel version, e.g. "6.12.35-rt10-v8+".
+   *
+   * The agent has always sent this; Edge did not declare it until EDGE-631,
+   * so it could not be read. An older Edge simply yields nothing here.
+   */
+  kernel?: string
   /** CPU count, as the agent reports it. */
   cpu?: string
   /** Total RAM in MB, as the agent reports it. */
@@ -102,9 +109,8 @@ export interface OrchestratorPort {
    * forwards, and an Edge new enough to expose the details route. A failure
    * yields nothing and the header simply shows less.
    *
-   * Note that `kernel` is NOT available here even though the agent sends it --
-   * Edge's own response type drops it. Adding it needs a change in
-   * autonomy-edge.
+   * `kernel` needs an Edge carrying EDGE-631; against an older one the field
+   * is simply absent and the header shows less.
    */
   getOrchestratorHostInfo?(orchestratorId: string): Promise<OrchestratorHostInfo | null>
 
