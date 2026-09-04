@@ -10,6 +10,8 @@
  *   - Editor uses `configuration` (singular), port uses `configurations` (plural)
  */
 
+import type * as PdfJsLib from 'pdfjs-dist'
+
 import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type { PrintRequest } from '../../shared/ports/print-types'
@@ -35,6 +37,7 @@ import type {
   Unsubscribe,
 } from '../../shared/ports/types'
 import { getEmbeddedFontSet } from './services/pdf-export/fonts/embedded-font-set'
+import { applyPdfJsEnginePolyfills } from './services/pdf-export/pdfjs-engine-polyfills'
 
 /** Editor IPC POU shape (discriminated union). */
 interface IpcPou {
@@ -392,6 +395,19 @@ export function createEditorProjectAdapter(): ProjectPort {
       // one worker file was judged disproportionate to a render that
       // normally completes in well under a second.
       return renderProjectToPdf(request, getEmbeddedFontSet())
+    },
+
+    async preparePdfPreviewWorker(_pdfjsLib: typeof PdfJsLib): Promise<void> {
+      // pdf.js's main API layer (`pdf.mjs`, always main-thread) and, once
+      // registered below, its worker code too call several very recent JS
+      // platform APIs Electron's bundled V8 doesn't have yet.
+      applyPdfJsEnginePolyfills()
+      // pdf.js's own hook for running its worker code in-process: `PDFWorker`
+      // checks `window.pdfjsWorker` before ever constructing a real Worker.
+      // @ts-expect-error -- pdfjs-dist ships no .d.ts for this deep worker
+      // chunk; imported directly (not via `?url`) so it executes here rather
+      // than resolving to just a URL string.
+      window.pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs')
     },
   }
 }

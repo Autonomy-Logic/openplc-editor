@@ -17,7 +17,13 @@ import * as monaco from 'monaco-editor'
 
 import type { ColoredLine, PrintPou, PrintRequest, PrintVar, TextRun } from '../../middleware/shared/ports/print-types'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
-import type { FBDRungState, PLCPou, PLCVariable, PouLanguage, RungLadderState } from '../../middleware/shared/ports/types'
+import type {
+  FBDRungState,
+  PLCPou,
+  PLCVariable,
+  PouLanguage,
+  RungLadderState,
+} from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { OPENPLC_LIGHT_EDITOR_FOREGROUND, resolveOpenPlcTokenColor } from '../utils/monaco/openplc-theme-data'
@@ -99,7 +105,10 @@ function decodeSemanticTokensToColoredLines(
     for (const token of lineTokens) {
       if (token.col > cursor) runs.push({ text: text.slice(cursor, token.col), color: OPENPLC_LIGHT_EDITOR_FOREGROUND })
       const end = Math.min(token.col + token.len, text.length)
-      runs.push({ text: text.slice(token.col, end), color: resolveOpenPlcTokenColor(legend.tokenTypes[token.typeIdx] ?? '') })
+      runs.push({
+        text: text.slice(token.col, end),
+        color: resolveOpenPlcTokenColor(legend.tokenTypes[token.typeIdx] ?? ''),
+      })
       cursor = end
     }
     if (cursor < text.length) runs.push({ text: text.slice(cursor), color: OPENPLC_LIGHT_EDITOR_FOREGROUND })
@@ -207,6 +216,7 @@ export async function renderPrintPdf(
     const bytes = await projectPort.renderPdf(request)
     return { ok: true, bytes }
   } catch (err) {
+    console.error('[print] renderPrintPdf failed:', err)
     return {
       ok: false,
       error: err instanceof Error ? err.message : 'An unexpected error occurred while rendering the PDF.',

@@ -6,9 +6,22 @@ jest.mock('../../../../backend/shared/print', () => ({
   renderProjectToPdf: (...args: unknown[]) => mockRenderProjectToPdf(...args),
 }))
 
-const mockFontSet = { sans: new Uint8Array(), sansBold: new Uint8Array(), mono: new Uint8Array(), monoBold: new Uint8Array() }
+const mockFontSet = {
+  sans: new Uint8Array(),
+  sansBold: new Uint8Array(),
+  mono: new Uint8Array(),
+  monoBold: new Uint8Array(),
+}
 jest.mock('../services/pdf-export/fonts/embedded-font-set', () => ({
   getEmbeddedFontSet: () => mockFontSet,
+}))
+
+const mockPdfWorkerModule = { WorkerMessageHandler: { fake: true } }
+jest.mock('pdfjs-dist/build/pdf.worker.min.mjs', () => mockPdfWorkerModule)
+
+const mockApplyPdfJsEnginePolyfills = jest.fn()
+jest.mock('../services/pdf-export/pdfjs-engine-polyfills', () => ({
+  applyPdfJsEnginePolyfills: () => mockApplyPdfJsEnginePolyfills(),
 }))
 
 const mockIpcProjectResponse = {
@@ -709,6 +722,26 @@ describe('createEditorProjectAdapter', () => {
 
       expect(mockRenderProjectToPdf).toHaveBeenCalledWith(request, mockFontSet)
       expect(result).toBe(bytes)
+    })
+  })
+
+  describe('preparePdfPreviewWorker', () => {
+    afterEach(() => {
+      delete window.pdfjsWorker
+    })
+
+    it('registers the worker module on window.pdfjsWorker so pdf.js runs it in-process', async () => {
+      await adapter.preparePdfPreviewWorker({} as unknown as typeof import('pdfjs-dist'))
+
+      expect(window.pdfjsWorker?.WorkerMessageHandler).toBe(mockPdfWorkerModule.WorkerMessageHandler)
+    })
+
+    it('applies the engine polyfills before registering the worker module', async () => {
+      mockApplyPdfJsEnginePolyfills.mockClear()
+
+      await adapter.preparePdfPreviewWorker({} as unknown as typeof import('pdfjs-dist'))
+
+      expect(mockApplyPdfJsEnginePolyfills).toHaveBeenCalledTimes(1)
     })
   })
 

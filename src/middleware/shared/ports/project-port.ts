@@ -29,6 +29,8 @@
  *   - Project state in Zustand store
  */
 
+import type * as PdfJsLib from 'pdfjs-dist'
+
 import type { PrintRequest } from './print-types'
 import type { DeviceConfiguration, DevicePin, PLCProjectData, ProjectMeta, RecentProject, Unsubscribe } from './types'
 
@@ -404,4 +406,23 @@ export interface ProjectPort {
    * Rejects on render failure; callers catch and toast.
    */
   renderPdf(request: PrintRequest): Promise<Uint8Array>
+
+  /**
+   * Configure pdf.js's rendering backend before opening a document with it
+   * (the export-to-PDF wizard's preview step). Idempotent — safe to call on
+   * every preview open; each implementation only does real work once.
+   * Web: points `GlobalWorkerOptions.workerSrc` at pdf.js's bundled worker
+   * asset so parsing/rendering runs in a real Worker, off the main thread.
+   * Editor: deliberately does NOT use a Worker. It registers the worker
+   * module on `globalThis.pdfjsWorker` — pdf.js's own documented hook for
+   * running that same code in-process instead — which sidesteps two
+   * Electron-only problems at once: this app's CSP (`script-src 'self'
+   * 'unsafe-inline'`, no `worker-src`) leaves a `blob:`-constructed Worker
+   * an open question, and pdf.js's worker code calls the native
+   * `Uint8Array.prototype.toHex()` to compute PDF fingerprints, which is
+   * missing from Electron's bundled V8 — running main-thread lets the
+   * polyfill for it apply directly in this realm instead of reaching into
+   * a separate Worker global scope.
+   */
+  preparePdfPreviewWorker(pdfjsLib: typeof PdfJsLib): Promise<void>
 }
