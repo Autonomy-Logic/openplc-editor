@@ -39,6 +39,20 @@ describe('openFetchedProject', () => {
     expect(openPLCStoreBase.getState().project.meta.name).toBe('Irrigation Controller')
   })
 
+  it('marks it as having no location the user chose', async () => {
+    // Not a detail of loading it: it is what makes the next Save refuse and
+    // point at Save As, instead of writing into a scratch directory the app
+    // prunes behind the user. Asserting only that the project loaded let a
+    // version through that loaded it and marked nothing -- this call went to
+    // `handleOpenProjectResponse`, which does the first half and not the
+    // second, and the silent save came back.
+    const port = portReturning({ success: true, data: parsedProject })
+
+    await openFetchedProject(fetched, port)
+
+    expect(openPLCStoreBase.getState().workspace.isEphemeralProject).toBe(true)
+  })
+
   it('unpacks the payload as the path to open', async () => {
     const port = portReturning({ success: true, data: parsedProject })
 

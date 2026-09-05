@@ -9,9 +9,14 @@
  *
  * Two steps, and missing the second is what made a successful retrieve land on
  * the start screen: `openProjectByPath` only READS and parses, handing back a
- * parsed project and touching no state. `handleOpenProjectResponse` is what
- * loads it, exactly as the recent-projects list and the open-project
- * accelerator do it. Web's `importRetrievedProject` ends the same way.
+ * parsed project and touching no state.
+ *
+ * Loading it is `openRetrievedProject`, which web's `import-retrieved-project`
+ * also calls with the project it parsed from an archive. The platforms differ in
+ * where the files come from and agree on everything after — load it, and mark it
+ * as having no location the user chose — so that half is written once, in the
+ * store. The reader/shared-consumer split `build-upload-snapshot` uses, in the
+ * other direction.
  */
 
 import { openPLCStoreBase } from '../../../frontend/store'
@@ -29,6 +34,6 @@ export async function openFetchedProject(
   if (!opened.success || !opened.data) {
     return { success: false, error: opened.error?.description ?? 'The retrieved project could not be opened.' }
   }
-  openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(opened.data)
+  openPLCStoreBase.getState().sharedWorkspaceActions.openRetrievedProject(opened.data)
   return { success: true }
 }

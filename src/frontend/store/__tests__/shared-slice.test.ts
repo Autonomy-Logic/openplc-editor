@@ -2492,6 +2492,33 @@ describe('createSharedSlice', () => {
     })
 
     // -----------------------------------------------------------------------
+    // openRetrievedProject
+    // -----------------------------------------------------------------------
+    describe('openRetrievedProject', () => {
+      // The shared tail of both platforms' retrieve adapters: the desktop
+      // unpacks an archive to a scratch directory and reads it back, web parses
+      // the same archive in memory, and from here on they are the same two
+      // steps. Written per platform, the desktop's copy shipped without the
+      // load and web's marked the project ephemeral twice.
+      it('loads the project and marks it as having no location yet', () => {
+        store.getState().sharedWorkspaceActions.openRetrievedProject({
+          meta: { name: 'Irrigation Controller', type: 'plc-project', path: '/scratch/retrieved/irrigation' },
+          projectData: {
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+
+        expect(store.getState().project.meta.name).toBe('Irrigation Controller')
+        // What stops the next Save writing into a scratch directory the app
+        // prunes behind the user: it points them at Save As instead.
+        expect(store.getState().workspace.isEphemeralProject).toBe(true)
+      })
+    })
+
+    // -----------------------------------------------------------------------
     // hasUnsavedChanges
     // -----------------------------------------------------------------------
     describe('hasUnsavedChanges', () => {

@@ -65,7 +65,6 @@ const RetrieveProjectModal = () => {
   const {
     modals,
     modalActions,
-    workspaceActions,
     sharedWorkspaceActions: { closeProject, hasUnsavedChanges },
   } = useOpenPLCStore()
   const runtime = useRuntime()
@@ -215,11 +214,10 @@ const RetrieveProjectModal = () => {
         return
       }
 
-      // No location the user chose, so a user-initiated save is refused and
-      // points at Save As. The build's own flush is unaffected -- refusing that
-      // would not protect anything, it would just stop the project compiling.
-      workspaceActions.setIsEphemeralProject(true)
-
+      // Marking it as having no location is `openRetrievedProject`'s job, on
+      // the far side of the port: both platforms' adapters end there, so the
+      // project arrives already marked. Doing it here as well was the same
+      // decision made in two places.
       await offerLibraries(project)
 
       toast({
@@ -228,7 +226,7 @@ const RetrieveProjectModal = () => {
         variant: 'default',
       })
     },
-    [offerLibraries, runtime, workspaceActions],
+    [offerLibraries, runtime],
   )
 
   /** Fetch, then open. Everything before this is about getting a session. */
