@@ -292,6 +292,50 @@ describe('parseIecStringToVariables', () => {
     expect(result[0].type).toEqual({ definition: 'user-data-type', value: 'Motor' })
   })
 
+  // A standalone comment inside a VAR block is legal ST and is how a long
+  // declaration list is given section headings. It used to be a syntax error,
+  // so a readable program failed to load with "No variable defined".
+  describe('a comment on a line of its own', () => {
+    it('is skipped inside a VAR block', () => {
+      const result = parseIecStringToVariables(
+        'VAR\n' +
+          '  (* --- the node --- *)\n' +
+          '  node : DINT;\n' +
+          '\n' +
+          '  (* --- the plant --- *)\n' +
+          '  level : REAL;\n' +
+          'END_VAR',
+      )
+      expect(result.map((v) => v.name)).toEqual(['node', 'level'])
+    })
+
+    it('leaves a trailing comment with its declaration', () => {
+      const result = parseIecStringToVariables('VAR\n  level : REAL; (* tank A *)\nEND_VAR')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('level')
+      expect(result[0].documentation).toBe('tank A')
+    })
+
+    it('skips a comment spread over several lines', () => {
+      const result = parseIecStringToVariables(
+        'VAR\n' +
+          '  (* ==========================\n' +
+          '     WHAT WE WATCH\n' +
+          '     ========================== *)\n' +
+          '  level : REAL;\n' +
+          'END_VAR',
+      )
+      expect(result.map((v) => v.name)).toEqual(['level'])
+    })
+
+    it('reads the declaration that follows a multi-line comment', () => {
+      const result = parseIecStringToVariables(
+        'VAR\n  (* one\n     two *)\n  a : INT;\n  (* three *)\n  b : BOOL;\nEND_VAR',
+      )
+      expect(result.map((v) => v.name)).toEqual(['a', 'b'])
+    })
+  })
+
   describe('a declared string length', () => {
     // STruC++ emits `IECStringVar<23>` — 54 bytes against 518 for the
     // unqualified type.

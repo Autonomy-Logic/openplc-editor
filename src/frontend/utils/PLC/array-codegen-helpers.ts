@@ -1,39 +1,26 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { parseStringLength } from '../iec-types-registry'
+import { IEC_BASE_TYPES, parseStringLength } from '../iec-types-registry'
 import { parseDimensionRange } from './dimension-range'
 
-const BASE_TYPE_TO_IEC: Record<string, string> = {
-  bool: 'IEC_BOOL',
-  sint: 'IEC_SINT',
-  int: 'IEC_INT',
-  dint: 'IEC_DINT',
-  lint: 'IEC_LINT',
-  usint: 'IEC_USINT',
-  uint: 'IEC_UINT',
-  udint: 'IEC_UDINT',
-  ulint: 'IEC_ULINT',
-  byte: 'IEC_BYTE',
-  word: 'IEC_WORD',
-  dword: 'IEC_DWORD',
-  lword: 'IEC_LWORD',
-  real: 'IEC_REAL',
-  lreal: 'IEC_LREAL',
-  string: 'IEC_STRING',
-  wstring: 'IEC_WSTRING',
-
-  // Duration and calendar types. Absent until DOPE-584's type sweep: a C++
-  // block declaring `TIME` emitted `strucpp::TIME`, which names nothing, and the
-  // build failed on generated code the user never wrote. The aliases these map
-  // to are the ones strucpp declares (`IEC_TIME = IECVar<TIME_t>`, and so on).
-  time: 'IEC_TIME',
-  date: 'IEC_DATE',
-  tod: 'IEC_TOD',
-  dt: 'IEC_DT',
-
-  // The long spellings IEC 61131-3 also allows for the same two types.
-  time_of_day: 'IEC_TOD',
-  date_and_time: 'IEC_DT',
-}
+/**
+ * IEC elementary type name (lower-cased) to the `IEC_*` alias STruC++ declares
+ * for it in `iec_var.hpp` — `IEC_BOOL`, `IEC_TIME`, and so on.
+ *
+ * Derived from the registry rather than restated, so a type added there is
+ * mapped here without a second edit. This used to be a hand-written list, which
+ * is how `TIME` came to emit `strucpp::TIME` — a name that does not exist — and
+ * failed the build on generated code the user never wrote.
+ *
+ * Aliases resolve to their canonical type's spelling (`time_of_day` →
+ * `IEC_TOD`). The leading underscores of `__XWORD` are dropped, because
+ * STruC++ spells that one `IEC_XWORD`.
+ */
+const BASE_TYPE_TO_IEC: Record<string, string> = Object.fromEntries(
+  IEC_BASE_TYPES.flatMap((type) => {
+    const alias = `IEC_${type.name.replace(/^_+/, '')}`
+    return [type.name, ...type.aliases].map((spelling) => [spelling.toLowerCase(), alias])
+  }),
+)
 
 /**
  * Check if a PLCVariable has an array type definition.

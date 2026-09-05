@@ -153,10 +153,27 @@ export const parseIecStringToVariables = (
   const lines = iecString.split(/\r?\n/)
   let currentClass: PLCVariable['class'] | null = null
 
+  let inComment = false
+
   lines.forEach((rawLine, idx) => {
     const lineNumber = idx + 1
     const line = rawLine.trim()
     if (line === '') return
+
+    // A comment on a line of its own, which is legal ST and is how a long VAR
+    // block is given section headings — on one line or spread over several.
+    //
+    // Only a comment that STARTS a line is skipped: a trailing one still
+    // belongs to the declaration in front of it, and is parsed as its
+    // documentation.
+    if (inComment) {
+      if (line.includes('*)')) inComment = false
+      return
+    }
+    if (line.startsWith('(*')) {
+      if (!line.includes('*)')) inComment = true
+      return
+    }
 
     const blockStart = line.match(/^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i)
     if (blockStart) {
