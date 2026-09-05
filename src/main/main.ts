@@ -16,8 +16,6 @@ import { join, resolve } from 'path'
 
 import { ensureCliShimInstalled, shimStatePath } from '../backend/editor/cli-shim/first-run'
 import { CompilerModule } from '../backend/editor/compiler'
-// TODO: Refactor this type declaration
-import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
 import { HardwareModule } from '../backend/editor/hardware'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
@@ -107,6 +105,7 @@ const installExtensions = async () => {
   }
 }
 
+/** Create one main window at a time and release failed windows so activation can retry. */
 const createMainWindow = async () => {
   if (mainWindow !== null || isCreatingMainWindow) return
 
@@ -178,54 +177,46 @@ const createMainWindow = async () => {
       },
     })
 
-    // Load the URL or index.html file. In development Electron and the
-    // webpack dev server are started concurrently, so the first request can
-    // arrive before webpack is listening on the configured port.
-    //
-    // Keep the splash visible until the renderer has REALLY finished loading.
-    // This avoids showing a blank BrowserWindow while webpack is still compiling.
+    const window = mainWindow
+
+    /** Retry renderer startup in development and reveal the window only after loading succeeds. */
     const loadMainWindow = async () => {
-      const url = resolveHtmlPath('index.html')
       const maxAttempts = isDebug ? 20 : 1
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (window.isDestroyed()) return
+
         try {
-          await mainWindow?.loadURL(url)
+          await window.loadURL(resolveHtmlPath('index.html'))
           logger.info(`Main window loaded successfully on attempt ${attempt}`)
 
-          if (!mainWindow || mainWindow.isDestroyed()) return
+          if (window.isDestroyed()) return
 
-          mainWindow.maximize()
-
+          window.maximize()
           if (process.env.START_MINIMIZED) {
-            mainWindow.minimize()
+            window.minimize()
           }
-
           if (splash && !splash.isDestroyed()) {
             splash.close()
           }
-
-          mainWindow.show()
+          window.show()
           return
         } catch (error) {
           logger.warn(`Main window load attempt ${attempt}/${maxAttempts} failed: ${getErrorMessage(error)}`)
-
-          if (attempt < maxAttempts) {
-            await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
-          }
+          if (attempt === maxAttempts) throw error
+          if (window.isDestroyed()) return
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
         }
       }
-
-      logger.error(`Unable to load main window: ${url}`)
     }
 
-    void loadMainWindow()
-
     // Save window bounds on resize, close, and move events
+    /** Persist the current window geometry. */
     const saveBounds = () => {
       store.set('window.bounds', mainWindow?.getBounds())
     }
 
+    /** Notify the renderer when the maximized state changes. */
     const isMaximizedWindow = () => {
       mainWindow?.webContents.send('window-controls:toggle-maximized')
     }
@@ -332,11 +323,17 @@ const createMainWindow = async () => {
       pouService,
       compilerModule,
       hardwareModule,
-    } as unknown as MainIpcModuleConstructor)
+    })
     mainIpcModule.setupMainIpcListener()
 
     // Remove this if your app does not use auto updates;
     new AppUpdater()
+    await loadMainWindow()
+  } catch (error) {
+    logger.error(`Unable to create or load main window: ${getErrorMessage(error)}`)
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy()
+    mainWindow = null
+    if (splash && !splash.isDestroyed()) splash.close()
   } finally {
     isCreatingMainWindow = false
   }
@@ -365,6 +362,7 @@ if (!app.requestSingleInstanceLock()) {
  * the application's dock or taskbar icon.
  */
 app.on('activate', () => {
+  if (isCreatingMainWindow) return
   if (mainWindow === null) {
     void createMainWindow()
   } else {
