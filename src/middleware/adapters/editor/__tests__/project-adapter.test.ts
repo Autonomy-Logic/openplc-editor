@@ -114,6 +114,7 @@ beforeEach(() => {
     openPathPicker: jest.fn().mockResolvedValue({ success: true, path: '/picked/path' }),
     retrieveRecent: jest.fn().mockResolvedValue(mockRecentProjects),
     removeProjectFromRecent: jest.fn().mockResolvedValue({ success: true }),
+    trackRecentProject: jest.fn().mockResolvedValue(undefined),
     deleteProject: jest.fn().mockResolvedValue({ success: true }),
     fileReadContent: jest.fn().mockResolvedValue({ success: true, content: 'file content' }),
     fileWatchStart: jest.fn().mockResolvedValue({ success: true }),
@@ -479,6 +480,18 @@ describe('createEditorProjectAdapter', () => {
       ;(window.bridge.removeProjectFromRecent as jest.Mock).mockResolvedValue({ success: false, error: 'EBUSY' })
       const result = await adapter.removeRecentProject('/p/some-project')
       expect(result).toEqual({ success: false, error: 'EBUSY' })
+    })
+  })
+
+  describe('trackRecentProject', () => {
+    // Save As is the one flow that gives a project a location without reading
+    // it, so it is the one that has to say "now track this" out loud. A
+    // retrieved project relies on it: untracked while it sits in scratch, on
+    // the list once the user keeps it somewhere.
+    it('delegates to window.bridge.trackRecentProject with the project path', async () => {
+      await adapter.trackRecentProject?.('/p/kept-here')
+
+      expect(window.bridge.trackRecentProject).toHaveBeenCalledWith('/p/kept-here')
     })
   })
 

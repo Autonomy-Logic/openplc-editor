@@ -236,6 +236,10 @@ export function createEditorProjectAdapter(): ProjectPort {
       return { success: true, data: parsed }
     },
 
+    async trackRecentProject(projectPath: string): Promise<void> {
+      await window.bridge.trackRecentProject(projectPath)
+    },
+
     async readProjectFiles(projectPath: string): Promise<RawProjectFiles> {
       return (await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles
     },

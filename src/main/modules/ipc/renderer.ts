@@ -144,6 +144,7 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
   saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
+  retrieveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:retrieve-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
 
@@ -228,6 +229,9 @@ const rendererProcessBridge = {
    *  start screen's "Remove from list" action. */
   removeProjectFromRecent: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:remove-from-recent', projectPath),
+  /** Add a project to the recent list without reading it — see
+   *  `ProjectPort.trackRecentProject`. */
+  trackRecentProject: (projectPath: string): Promise<void> => ipcRenderer.invoke('project:track-recent', projectPath),
   /** Recursively delete a project directory AND drop it from the recent
    *  list. Gated by the main-process service's `project.json` safety
    *  check — see `ProjectService.deleteProject`. */
