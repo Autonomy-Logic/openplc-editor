@@ -509,3 +509,52 @@ describe('an unparseable list declaration is saved as text', () => {
     expect(list?.variables.map((v) => v.name)).toEqual(['A'])
   })
 })
+
+/**
+ * A retrieved project has no location the user chose: it sits in a scratch
+ * directory the app prunes behind them. Both save entry points must refuse and
+ * say so, rather than writing there and reporting success.
+ *
+ * Untested until now, which is how a refactor that stopped marking retrieved
+ * projects at all reached a user: the save silently wrote to scratch and showed
+ * nothing, because on the desktop a successful save is silent.
+ */
+describe('a project with no location the user chose', () => {
+  beforeEach(() => {
+    openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
+  })
+
+  afterEach(() => {
+    openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(false)
+  })
+
+  it('refuses Save Project and points at Save As', async () => {
+    const port = makeProjectPort()
+
+    const result = await executeSaveProject(port, capabilities)
+
+    expect(result).toEqual({ success: false })
+    expect(port.saveProject).not.toHaveBeenCalled()
+    expect(lastToast()?.title).toBe('This project has no location yet')
+  })
+
+  it('refuses Save File too — one file lands in the same temporary place', async () => {
+    createLadderPou('ScratchPou')
+    const port = makeProjectPort()
+
+    const result = await executeSaveFile('ScratchPou', port, capabilities)
+
+    expect(result).toEqual({ success: false })
+    expect(port.saveFile).not.toHaveBeenCalled()
+    expect(lastToast()?.title).toBe('This project has no location yet')
+  })
+
+  it('still lets the build flush the tree it has to compile from', async () => {
+    const port = makeProjectPort()
+
+    const result = await executeSaveProject(port, capabilities, 'pre-build')
+
+    expect(result.success).toBe(true)
+    expect(port.saveProject).toHaveBeenCalled()
+  })
+})

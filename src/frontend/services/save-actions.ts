@@ -434,6 +434,28 @@ const ENDED_SESSION_NO_RETURN = {
     'Editing sessions are temporary and this one has run out, so nothing further can be saved from this tab. Open the project again from the application you came from to carry on.',
 } as const
 
+/**
+ * Refuse a user-initiated save on a project with no location the user chose.
+ *
+ * A retrieved project lives in a scratch directory the app prunes behind the
+ * user. Writing there and reporting success would tell someone their work is
+ * safe when it is somewhere temporary, so both save entry points ask this and
+ * point at Save As instead -- Save File as much as Save Project, since a single
+ * file lands in the same temporary place as all of them.
+ *
+ * The build's flush is exempt: it needs the tree on disk to compile, and scratch
+ * is a perfectly good place for that.
+ */
+function refusedForHavingNoLocation(reason: SaveReason): boolean {
+  if (!openPLCStoreBase.getState().workspace.isEphemeralProject || reason !== 'user') return false
+  toast({
+    title: 'This project has no location yet',
+    description: 'It was retrieved from a device. Use Save As to choose where to keep it, then saving works as usual.',
+    variant: 'warn',
+  })
+  return true
+}
+
 export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
@@ -461,19 +483,7 @@ export async function executeSaveProject(
     return { success: false }
   }
 
-  // A retrieved project has no location the user chose. Writing to the scratch
-  // directory and reporting success would tell someone their work is safe when
-  // it is somewhere temporary. The build's flush is exempt: it needs the tree
-  // on disk to compile, and scratch is a perfectly good place for that.
-  if (state.workspace.isEphemeralProject && reason === 'user') {
-    toast({
-      title: 'This project has no location yet',
-      description:
-        'It was retrieved from a device. Use Save As to choose where to keep it, then saving works as usual.',
-      variant: 'warn',
-    })
-    return { success: false }
-  }
+  if (refusedForHavingNoLocation(reason)) return { success: false }
 
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
@@ -756,6 +766,8 @@ export async function executeSaveFile(
     notifyNoWritePermission('save changes to')
     return { success: false }
   }
+  // Same again: every caller of this is a person pressing Save.
+  if (refusedForHavingNoLocation('user')) return { success: false }
   const { project, files } = state
   const { setEditingState } = state.workspaceActions
   const { updateFile, checkIfAllFilesAreSaved } = state.fileActions
