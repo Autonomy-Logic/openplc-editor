@@ -3,6 +3,9 @@ import { EventEmitter } from 'events'
 
 const mockApp = Object.assign(new EventEmitter(), {
   isPackaged: false,
+  disableHardwareAcceleration: jest.fn(),
+  setAppUserModelId: jest.fn(),
+  getName: jest.fn(() => 'OpenPLC Editor'),
   whenReady: jest.fn(() => new Promise(() => {})),
   requestSingleInstanceLock: jest.fn(() => true),
 })
@@ -35,6 +38,12 @@ class MockWindow extends EventEmitter {
     return this.destroyed
   }
 }
+
+// Exercise the release-dependent startup path used by the Linux CI runner.
+jest.mock('os', () => ({
+  ...jest.requireActual<typeof import('os')>('os'),
+  release: () => '6.1.0',
+}))
 
 jest.mock('electron', () => ({
   app: mockApp,
