@@ -36,6 +36,23 @@ import type {
 } from '../../shared/ports/runtime-port'
 import type { SerialPort, Unsubscribe } from '../../shared/ports/types'
 
+/**
+ * Ask the main process for the stored project on `ipAddress`, unpacked.
+ *
+ * An internal of `fetchRetrievableProject`, which is the one way in that shared
+ * code uses. It was a port method until nothing outside this file turned out to
+ * call it: the desktop pulls a path out of a scratch directory and web pulls
+ * bytes out of an orchestrator response, and neither shape is any use to the
+ * shared picker, which is why both are hidden behind one method that is.
+ */
+async function retrieveProjectFromDevice(ipAddress: string) {
+  try {
+    return await window.bridge.runtimeRetrieveProject(ipAddress)
+  } catch (err) {
+    return { success: false as const, error: getErrorMessage(err) }
+  }
+}
+
 export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimePort {
   // Whether a runtime session is active. The token itself lives in the main
   // process; this only gates isReadyForDebug.
@@ -331,14 +348,6 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
 
     // --- stored source project ---
 
-    async retrieveProject(ipAddress: string) {
-      try {
-        return await window.bridge.runtimeRetrieveProject(ipAddress)
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
-      }
-    },
-
     async installRetrievedLibraries(project: FetchedProject, names: string[]) {
       try {
         return await window.bridge.runtimeInstallRetrievedLibraries(String(project.payload), names)
@@ -381,7 +390,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     },
 
     async fetchRetrievableProject(device: RetrievableDevice) {
-      const retrieved = await this.retrieveProject!(device.key)
+      const retrieved = await retrieveProjectFromDevice(device.key)
       if (!retrieved.success || !retrieved.projectPath) {
         return { success: false as const, error: retrieved.error || 'The device did not return a project.' }
       }

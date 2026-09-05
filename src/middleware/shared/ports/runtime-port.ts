@@ -463,44 +463,10 @@ export interface RuntimePort {
 
   // --- stored source project ---
 
-  /**
-   * Retrieve the stored project and unpack it somewhere the editor can open it.
-   *
-   * Desktop only, and it returns a path rather than the archive on purpose:
-   * those are untrusted bytes from a device, and every check deciding whether
-   * they are safe to WRITE belongs beside the write, in the main process,
-   * rather than in the renderer.
-   *
-   * Web implements `retrieveProjectArchive` instead. The split is real rather
-   * than cosmetic: web has no filesystem to unpack onto and imports the project
-   * into its workspace, so forcing both onto one shape would mean one of them
-   * returning a path that does not exist.
-   */
-  retrieveProject?(ipAddress: string): Promise<{
-    success: boolean
-    projectPath?: string
-    projectName?: string
-    metadata?: RuntimeProjectSnapshotMetadata
-    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
-    error?: string
-  }>
-
   /** Username of the live runtime session, for attributing a stored project to
    *  whoever uploaded it. Only the username -- the password stays inside the
    *  token authority. */
   getSessionUsername?(): string | null
-
-  /**
-   * Retrieve the stored project as raw archive bytes.
-   *
-   * Web's counterpart to `retrieveProject`: there is no filesystem to unpack
-   * onto, so the archive is parsed in the browser and imported into the
-   * workspace. The bytes are still untrusted -- the shared parser validates
-   * before yielding any of them.
-   */
-  retrieveProjectArchive?(): Promise<
-    { success: true; archive: Uint8Array; projectName: string } | { success: false; error: string }
-  >
 
   // --- Retrieve Project from PLC ---------------------------------------
   //
@@ -510,6 +476,14 @@ export interface RuntimePort {
   // desktop scans a LAN and unpacks to a scratch directory, web asks an
   // orchestrator and parses into the workspace. Those are the only differences,
   // so those are the only things behind the port.
+  //
+  // And only those. Each platform's own way of pulling the bytes down --
+  // `retrieveProject` on the desktop, `retrieveProjectArchive` on web -- used to
+  // be declared here too, alongside an `importRetrievedProject` nothing ever
+  // called. Nothing shared reached any of them: they are internals of the
+  // adapter that implements `fetchRetrievableProject`, and a port that offers
+  // three ways in when the picker uses one is an invitation to write a second
+  // flow through the other two.
 
   /**
    * The devices this platform can offer, already merged with whatever it knows
@@ -563,21 +537,6 @@ export interface RuntimePort {
 
   /** Make a fetched project the open one. */
   openFetchedProject?(project: FetchedProject): Promise<{ success: boolean; error?: string }>
-
-  /**
-   * Open a retrieved archive as the workspace's project.
-   *
-   * The sibling of `retrieveProjectArchive`, and the reason both exist as port
-   * methods rather than as a direct call: the picker is a shared component, and
-   * how an archive becomes an open project is exactly the part that differs per
-   * platform -- web parses it into the workspace, desktop unpacks it to a
-   * scratch directory first. Reaching into a platform's adapter from the
-   * component would tie the shared picker to one of them.
-   *
-   * Throws on a bad archive, so the caller can report it without replacing the
-   * workspace: the parser validates everything before yielding a single file.
-   */
-  importRetrievedProject?(archive: Uint8Array): Promise<{ projectName: string }>
 
   /**
    * Install libraries a retrieved project brought with it, by name.

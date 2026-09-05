@@ -650,22 +650,6 @@ describe('isReadyForDebug', () => {
 // stored source project
 // ---------------------------------------------------------------------------
 
-describe('retrieveProject', () => {
-  it('delegates to bridge with the device address', async () => {
-    const result = await adapter.retrieveProject!('192.168.1.100')
-
-    expect(window.bridge.runtimeRetrieveProject).toHaveBeenCalledWith('192.168.1.100')
-    expect(result).toEqual({ success: true, projectName: 'Traffic Light', libraries: [] })
-  })
-
-  it('reports a failed IPC call rather than throwing at the caller', async () => {
-    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockRejectedValue(new Error('retrieve failed'))
-    const result = await adapter.retrieveProject!('192.168.1.100')
-
-    expect(result).toEqual({ success: false, error: 'retrieve failed' })
-  })
-})
-
 describe('installRetrievedLibraries', () => {
   it('delegates to bridge with the project path and the names to install', async () => {
     const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
@@ -792,6 +776,16 @@ describe('fetchRetrievableProject', () => {
         libraries: [{ name: 'oscat-basic', version: '3.3.4', status: 'missing' }],
       },
     })
+  })
+
+  it('reports a failed IPC call rather than throwing at the caller', async () => {
+    // The fetch itself is an internal of this method now rather than a port
+    // method of its own, so this is where its error handling is exercised.
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockRejectedValue(new Error('retrieve failed'))
+
+    const result = await adapter.fetchRetrievableProject!(device)
+
+    expect(result).toEqual({ success: false, error: 'retrieve failed' })
   })
 
   it('reports a device that returned nothing', async () => {
