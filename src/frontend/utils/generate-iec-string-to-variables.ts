@@ -347,3 +347,17 @@ export const parseIecStringToVariables = (
 
   return variables
 }
+
+/** First name declared twice, folded case-insensitively like every IEC identifier lookup. */
+export const findDuplicateVariableName = (variables: PLCVariable[]): string | undefined => {
+  const seen = new Set<string>()
+  for (const variable of variables) {
+    const key = variable.name.toLowerCase()
+    if (seen.has(key)) return variable.name
+    seen.add(key)
+  }
+  return undefined
+}
+
+export const duplicateVariableNameMessage = (name: string): string =>
+  `"${name}" is declared more than once. Please make sure that the name is unique.`

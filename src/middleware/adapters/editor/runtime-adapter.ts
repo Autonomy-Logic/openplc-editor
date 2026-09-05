@@ -52,6 +52,81 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       return getIpAddress() !== '' && loggedIn
     },
 
+    /**
+     * The bootloader on the currently targeted device.
+     *
+     * A nested object rather than eight more top-level methods: it is a
+     * different service on a different port with its own session, and keeping
+     * that boundary visible at the call site stops it being mistaken for the
+     * runtime's API.
+     */
+    bootloader: {
+      async getCapabilities() {
+        try {
+          return await window.bridge.bootloaderGetCapabilities(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async login(username: string, password: string) {
+        try {
+          return await window.bridge.bootloaderLogin(requireIp(), username, password)
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getStatus() {
+        try {
+          return await window.bridge.bootloaderGetStatus(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getDeviceInfo() {
+        try {
+          return await window.bridge.bootloaderGetDeviceInfo(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getRuntimeLogs(tail?: number) {
+        try {
+          return await window.bridge.bootloaderGetRuntimeLogs(requireIp(), tail)
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async startUpdate(version: string) {
+        try {
+          return await window.bridge.bootloaderStartUpdate(requireIp(), version)
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getUpdateProgress() {
+        try {
+          return await window.bridge.bootloaderGetUpdateProgress(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async restartRuntime() {
+        try {
+          return await window.bridge.bootloaderRestartRuntime(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async clearSession() {
+        try {
+          await window.bridge.bootloaderClearSession(requireIp())
+        } catch {
+          // Best effort: a session the main process may already have dropped
+          // is not worth surfacing to anybody.
+        }
+      },
+    },
+
     async login(params: LoginParams): Promise<LoginResult> {
       try {
         const ip = requireIp()
