@@ -23,12 +23,6 @@
  *      the archive blob + serialized bytes ready for `.stlib`
  *      write-out.
  *
- *   4. `composeVerificationProject(project)` — produces the same
- *      stubbed PLCProject the verification compile path needs
- *      (Phase 8 — feeds the existing `compileProgram` flow against
- *      the OpenPLC Simulator target to surface generated-C++
- *      compile errors).
- *
  * Everything here is pure: no fs, no spawn, no electron.  The
  * Electron compiler module and the web backend service both
  * consume this same orchestration.
@@ -512,30 +506,6 @@ function inferCategory(fileName: string): string | undefined {
   // this to group functions vs function-blocks in the manifest, but
   // accepts `undefined` and falls back to detecting from the body.
   return undefined
-}
-
-// ---------------------------------------------------------------------------
-// Stage 4: verification project (Phase 8)
-// ---------------------------------------------------------------------------
-
-/**
- * Build a transient PLCProject the verification compile path
- * consumes.  Same stub-program shape as `stubProgramFor`, but
- * tagged `plc-project` so the existing `compileProgram` flow
- * (Phase 8) doesn't try to recurse back into the library branch.
- *
- * Verification runs the resulting project through the standard
- * ST→C++→arduino-cli pipeline against the OpenPLC Simulator
- * target.  Compile failures there are surfaced as warnings — the
- * `.stlib` is still produced (the user may legitimately target a
- * platform with more memory than the AVR simulator).
- */
-export function composeVerificationProject(project: PLCProject): PLCProject {
-  const stubbed = stubProgramFor(project)
-  return {
-    meta: { ...project.meta, type: 'plc-project' },
-    data: stubbed.data,
-  }
 }
 
 // Exposed for test ergonomics only — keeps the stub-name constants

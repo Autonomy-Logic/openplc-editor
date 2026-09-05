@@ -43,6 +43,22 @@ export type VariableClass = 'input' | 'output' | 'inOut' | 'external' | 'local' 
 
 export type VariableTypeDefinition = 'base-type' | 'user-data-type' | 'array' | 'derived'
 
+/**
+ * The IEC block qualifier a variable is declared under — what the variables
+ * table shows in its **Flags** column.
+ *
+ * Single-valued, and deliberately so: `CONSTANT` and `RETAIN` are mutually
+ * exclusive (STruC++ rejects the combination), so one optional field makes the
+ * invalid pair unrepresentable rather than merely validated. Absent means a
+ * plain `VAR` — which is IEC's `NON_RETAIN`, the default.
+ *
+ * CODESYS's `PERSISTENT` maps to `'retain'` on import. It promises more than
+ * that (it also survives a program download) and the toolchain does not deliver
+ * the difference yet, so it is folded in rather than given a value of its own —
+ * matching how STruC++ treats the keyword.
+ */
+export type VariableFlag = 'constant' | 'retain'
+
 export interface PLCVariableType {
   definition: VariableTypeDefinition
   value: string
@@ -66,6 +82,8 @@ export interface PLCVariable {
   initialValue?: string | null
   documentation: string
   debug?: boolean
+  /** IEC block qualifier; absent = plain `VAR`. See {@link VariableFlag}. */
+  flag?: VariableFlag
 }
 
 export interface PLCTask {
@@ -559,6 +577,13 @@ export interface ProjectCapabilities {
   hasProgramBuild: boolean
   /** Show the Library-specific build button (produces `.stlib`). */
   hasLibraryBuild: boolean
+  /** Show the Library-specific debug button.  Compiles a synthetic
+   *  harness program that instantiates every block in the library
+   *  once, runs it on the in-process simulator, and attaches the
+   *  debugger so the author can force inputs and watch outputs.
+   *  Distinct from `hasProgramBuild`: a library has no program of its
+   *  own to build or upload, only blocks to exercise. */
+  hasLibraryDebug: boolean
   /** Show the version-control affordance. */
   hasVersionControl: boolean
   /** Show the debugger panel + watch list. */
@@ -583,6 +608,7 @@ export function projectCapabilities(
       hasVendorScreens: false,
       hasProgramBuild: false,
       hasLibraryBuild: true,
+      hasLibraryDebug: true,
       hasVersionControl: false,
       hasDebugger: false,
       hasRuntimeControls: false,
@@ -598,6 +624,7 @@ export function projectCapabilities(
     hasVendorScreens: true,
     hasProgramBuild: true,
     hasLibraryBuild: false,
+    hasLibraryDebug: false,
     hasVersionControl: true,
     hasDebugger: true,
     hasRuntimeControls: true,
@@ -740,6 +767,16 @@ export interface VppModuleDefinition {
   addressMapping?: unknown
 }
 
+/**
+ * Screens the runtime itself provides, which a VPP may replace.
+ *
+ * A closed union rather than a free string: a name that is not a native screen
+ * is a typo, and silently ignoring it would leave the native feature running
+ * alongside the vendor's — which is the whole thing this mechanism exists to
+ * stop.
+ */
+export type NativeScreenId = 'persistent-storage'
+
 export interface VppMetadata {
   packageId: string
   /** Human-readable vendor name from the package manifest's
@@ -750,6 +787,9 @@ export interface VppMetadata {
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
+  /** Native screens this device replaces; see
+   *  `PackageManifest.devices[].hidesNativeScreens`. */
+  hidesNativeScreens?: NativeScreenId[]
   moduleSystem: {
     enabled: boolean
     maxSlots: number
@@ -873,6 +913,17 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
+    /** Native runtime-v4 screens this device REPLACES.
+     *
+     *  Hiding a screen disables the functionality behind it. The editor removes
+     *  it from the project tree AND turns the native feature off on the device,
+     *  so the vendor's driver is the only thing handling it — two live
+     *  implementations of the same feature is the failure this prevents.
+     *
+     *  Declared only when the device's own HAL/driver implements the feature.
+     *  The vendor may then offer its own screen under `screens`, or none at all
+     *  when the platform needs no configuration. */
+    hidesNativeScreens?: NativeScreenId[]
     /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
      *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
      *  `select` fields via `optionsRef: 'board.serialPorts'`. */
@@ -1027,10 +1078,65 @@ export interface DevicePin {
   alias?: string
 }
 
+/**
+ * Bounds on the retain store's commit period, mirroring the runtime's own
+ * (`webserver/retain_config.py`), which refuses anything outside them at install
+ * time.
+ *
+ * The floor is not arbitrary: the runtime hands the blob over every scan cycle,
+ * and a sub-second period would write through at close to scan rate, which is
+ * exactly what the buffering exists to avoid. The ceiling keeps "enabled" from
+ * meaning "saved once an hour", which would look like retention and behave like
+ * none.
+ *
+ * Here rather than in the compile step because both the store and the screen
+ * need them, and `store` may not import from `backend/shared`.
+ */
+export const RETAIN_MIN_FLUSH_SECONDS = 1
+export const RETAIN_MAX_FLUSH_SECONDS = 3600
+export const DEFAULT_RETAIN_FLUSH_SECONDS = 5
+
+/**
+ * Persistent storage (RETAIN) for the runtime's built-in file store.
+ *
+ * A project property, configured offline on the Persistent Storage screen and
+ * delivered to the device as `retain.conf` inside the program upload — the same
+ * route VPP plugin config takes. Nothing here is read back from a device.
+ */
+export interface PersistentStorageSettings {
+  /** Whether the runtime's built-in file store keeps this project's retained
+   *  variables. Off by default; a project that leaves it off causes the upload
+   *  to carry no `retain.conf` at all, which is what keeps the built-in store
+   *  switched off on the device. */
+  enabled: boolean
+  /** Absolute path on the DEVICE. Empty means "use the runtime's default" —
+   *  the editor does not hardcode a device filesystem layout, so the runtime
+   *  fills this in and the field's placeholder is the only place a default
+   *  appears in the UI. */
+  path: string
+  /** How often the store commits, in seconds. Bounds the retained state a power
+   *  cut can cost against how hard the storage is worked; the runtime rejects a
+   *  value outside its accepted range at install time. */
+  flushSeconds: number
+}
+
 export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
   runtimeIpAddress?: string
+  /**
+   * The project's persistent-storage (RETAIN) settings, or absent when this
+   * project does not use persistent storage — which is also the signal that
+   * makes the runtime's built-in store stay off.
+   */
+  persistentStorage?: PersistentStorageSettings
+  /**
+   * Per-board archive of persistent-storage settings, mirroring the pattern
+   * `vendorScreenDataByBoard` uses. A storage path is a property of the target
+   * box, not of the program, so retargeting a project should not silently carry
+   * one device's path onto another.
+   */
+  persistentStorageByBoard?: Record<string, PersistentStorageSettings>
   /**
    * Active board's VPP vendor-screen data (backplane modules, IO mappings,
    * Modbus tables, …). This is the flat view every consumer and the compile
@@ -1272,12 +1378,14 @@ export interface DebugCompileResult {
  * shape of `CompileResult` (success / error) plus the artefact path
  * the console surfaces so the user can find the produced archive.
  *
- * The verification step (Phase 8 — running the synthetic project
- * through avr-gcc on the simulator target) reports its outcome
- * through `verification`: missing means the step hasn't been wired
- * yet; `success: true` means it ran clean; `success: false` does NOT
- * fail the build, the warning surfaces to the console instead (a
- * legitimate target may have more memory than the AVR simulator).
+ * There is deliberately no verification field.  The build used to run
+ * the library through avr-gcc against the simulator target and report
+ * the outcome here, which judged every library by whether it links on
+ * an ATmega2560 — a target most libraries never run on.  Executing a
+ * library is now its own action: the debug harness
+ * (`composeLibraryDebugHarness`) instantiates every block and runs it
+ * on the simulator when the author asks for it.  strucpp's
+ * `compileStlib` remains the build's correctness gate.
  */
 export interface CompileLibraryResult {
   success: boolean
@@ -1286,10 +1394,6 @@ export interface CompileLibraryResult {
   /** Manifest name extracted from `library.json`. */
   libraryName?: string
   error?: string
-  verification?: {
-    success: boolean
-    message?: string
-  }
 }
 
 // ---------------------------------------------------------------------------

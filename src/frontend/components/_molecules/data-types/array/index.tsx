@@ -129,78 +129,65 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   // or the rest of the datatype (`name`, `derivation`, `baseType`, …)
   // gets stripped and downstream selectors lose the entry.
   const writeDimensions = (newRows: PLCArrayDatatype['dimensions']) => {
-    updateDatatype(data.name, { ...data, dimensions: newRows })
+    const current = dataTypes.find((dt) => dt.name === data.name)
+    if (!current || current.derivation !== 'array') return
+    updateDatatype(data.name, { ...current, dimensions: newRows })
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
 
+  // newRows is computed before any setState call — a store write nested inside setTableData's own updater risks a nested-update loop.
   const addNewRow = () => {
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      const newRows = [...prevRows, { dimension: '' }]
-
-      setArrayTable({ selectedRow: newRows.length - 1 })
-      writeDimensions(newRows)
-      return newRows
-    })
+    const newRows = [...tableData, { dimension: '' }]
+    setTableData(newRows)
+    setArrayTable({ selectedRow: newRows.length - 1 })
+    writeDimensions(newRows)
   }
 
   const removeRow = () => {
+    if (arrayTable.selectedRow < 0 || arrayTable.selectedRow >= tableData.length) return
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      if (arrayTable.selectedRow !== null) {
-        const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
+    const newRows = tableData.filter((_, index) => index !== arrayTable.selectedRow)
+    const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
 
-        const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
-        setArrayTable({ selectedRow: newFocusIndex })
-
-        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-        prevRows = newRows
-      }
-      return prevRows
-    })
+    setTableData(newRows)
+    setArrayTable({ selectedRow: newFocusIndex })
+    writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
   }
 
   const moveRowUp = () => {
+    if (arrayTable.selectedRow <= 0 || arrayTable.selectedRow >= tableData.length) return
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
-        const newRows = [...prevRows]
-        const temp = newRows[arrayTable.selectedRow]
-        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow - 1]
-        newRows[arrayTable.selectedRow - 1] = temp
+    const newRows = [...tableData]
+    const temp = newRows[arrayTable.selectedRow]
+    newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow - 1]
+    newRows[arrayTable.selectedRow - 1] = temp
+    const newFocusIndex = arrayTable.selectedRow - 1
 
-        const newFocusIndex = arrayTable.selectedRow - 1
-        setArrayTable({ selectedRow: newFocusIndex })
-
-        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-        prevRows = newRows
-      }
-      return prevRows
-    })
+    setTableData(newRows)
+    setArrayTable({ selectedRow: newFocusIndex })
+    writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
   }
 
   const moveRowDown = () => {
+    if (arrayTable.selectedRow <= ROWS_NOT_SELECTED || arrayTable.selectedRow >= tableData.length - 1) return
     captureAndPush(editor.meta.name)
 
-    setTableData((prevRows) => {
-      if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
-        const newRows = [...prevRows]
-        const temp = newRows[arrayTable.selectedRow]
-        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow + 1]
-        newRows[arrayTable.selectedRow + 1] = temp
+    const newRows = [...tableData]
+    const temp = newRows[arrayTable.selectedRow]
+    newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow + 1]
+    newRows[arrayTable.selectedRow + 1] = temp
+    const newFocusIndex = arrayTable.selectedRow + 1
 
-        const newFocusIndex = arrayTable.selectedRow + 1
-        setArrayTable({ selectedRow: newFocusIndex })
-
-        writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
-        prevRows = newRows
-      }
-      return prevRows
-    })
+    setTableData(newRows)
+    setArrayTable({ selectedRow: newFocusIndex })
+    writeDimensions(newRows.map((row) => ({ dimension: row?.dimension })))
   }
+
+  const hasValidRowSelection = arrayTable.selectedRow >= 0 && arrayTable.selectedRow < tableData.length
 
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
@@ -259,19 +246,19 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                 {
                   ariaLabel: 'Remove table row button',
                   onClick: removeRow,
+                  disabled: !hasValidRowSelection,
                   icon: <MinusIcon className='stroke-[#0464FB]' />,
                 },
                 {
                   ariaLabel: 'Move table row up button',
                   onClick: moveRowUp,
-                  disabled: arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === 0,
+                  disabled: !hasValidRowSelection || arrayTable.selectedRow === 0,
                   icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
                 },
                 {
                   ariaLabel: 'Move table row down button',
                   onClick: moveRowDown,
-                  disabled:
-                    arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === tableData.length - 1,
+                  disabled: !hasValidRowSelection || arrayTable.selectedRow === tableData.length - 1,
                   icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
                 },
               ]}

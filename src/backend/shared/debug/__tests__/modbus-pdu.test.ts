@@ -12,7 +12,7 @@ if (typeof globalThis.TextDecoder === 'undefined') {
 
 import { ModbusDebugResponse, ModbusFunctionCode } from '../../simulator/types'
 import {
-  buildGetBoardIdRequest,
+  buildGetDeviceIdRequest,
   buildGetListRequest,
   buildGetMd5Request,
   buildGetStatusRequest,
@@ -20,7 +20,7 @@ import {
   buildReadLicenseRequest,
   buildSetVariableRequest,
   buildWriteLicenseRequest,
-  parseGetBoardIdResponse,
+  parseGetDeviceIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
   parseGetStatusResponse,
@@ -323,69 +323,69 @@ describe('buildGetVersionRequest / parseGetVersionResponse', () => {
   })
 })
 
-describe('buildGetBoardIdRequest / parseGetBoardIdResponse', () => {
+describe('buildGetDeviceIdRequest / parseGetDeviceIdResponse', () => {
   it('builds a bare 1-byte FC PDU', () => {
-    const buf = buildGetBoardIdRequest()
+    const buf = buildGetDeviceIdRequest()
     expect(buf).toHaveLength(1)
-    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_BOARD_ID)
+    expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_DEVICE_ID)
   })
 
   it('parses id bytes and hex on success', () => {
     const buf = new Uint8Array([
-      ModbusFunctionCode.DEBUG_GET_BOARD_ID,
+      ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
       ModbusDebugResponse.SUCCESS,
       0x03, // id_len = 3
       0x0a,
       0xbc,
       0x01,
     ])
-    const result = parseGetBoardIdResponse(buf)
+    const result = parseGetDeviceIdResponse(buf)
     expect(result.success).toBe(true)
-    expect(Array.from(result.boardId!)).toEqual([0x0a, 0xbc, 0x01])
-    expect(result.boardIdHex).toBe('0abc01')
+    expect(Array.from(result.deviceId!)).toEqual([0x0a, 0xbc, 0x01])
+    expect(result.deviceIdHex).toBe('0abc01')
   })
 
   it('handles id_len = 0 (unsupported core) as success with empty id', () => {
-    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS, 0x00])
-    const result = parseGetBoardIdResponse(buf)
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS, 0x00])
+    const result = parseGetDeviceIdResponse(buf)
     expect(result.success).toBe(true)
-    expect(result.boardIdHex).toBe('')
-    expect(Array.from(result.boardId!)).toEqual([])
+    expect(result.deviceIdHex).toBe('')
+    expect(Array.from(result.deviceId!)).toEqual([])
   })
 
   it('flags too-short buffer', () => {
-    const result = parseGetBoardIdResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID]))
+    const result = parseGetDeviceIdResponse(new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID]))
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/too short/)
   })
 
   it('flags function code mismatch', () => {
-    const result = parseGetBoardIdResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
+    const result = parseGetDeviceIdResponse(new Uint8Array([0x00, ModbusDebugResponse.SUCCESS]))
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/mismatch/)
   })
 
   it('surfaces error status', () => {
-    const result = parseGetBoardIdResponse(
-      new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
+    const result = parseGetDeviceIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.ERROR_OUT_OF_BOUNDS]),
     )
     expect(result.success).toBe(false)
     expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
   })
 
   it('flags a missing id_len byte', () => {
-    const result = parseGetBoardIdResponse(
-      new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS]),
+    const result = parseGetDeviceIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS]),
     )
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/at least 3/)
   })
 
   it('flags truncated id bytes', () => {
-    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_BOARD_ID, ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b])
-    const result = parseGetBoardIdResponse(buf)
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b])
+    const result = parseGetDeviceIdResponse(buf)
     expect(result.success).toBe(false)
-    expect(result.error).toMatch(/Incomplete board-id data/)
+    expect(result.error).toMatch(/Incomplete identity data/)
   })
 })
 

@@ -84,7 +84,7 @@ function toSpacedHex(bytes: number[]): string {
 }
 
 describe('WebSocketDebugTransport license function codes', () => {
-  it('getBoardId (0x48) hands back the anchor bytes the runtime answers with', async () => {
+  it('getAnchor (0x48) hands back the anchor bytes the runtime answers with', async () => {
     // The runtime answers 0x48 with the RAW hardware anchor (its device-tree
     // serial, trailing NUL/CR/LF/space already stripped runtime-side) — the
     // pre-image the licensing identity derives from, not a hex string to decode.
@@ -92,66 +92,66 @@ describe('WebSocketDebugTransport license function codes', () => {
     currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, anchor.length, ...anchor]) })
 
     const transport = await connected()
-    const result = await transport.getBoardId()
+    const result = await transport.getAnchor()
 
     expect(result.success).toBe(true)
-    expect(Array.from(result.boardId ?? [])).toEqual(anchor)
+    expect(Array.from(result.anchor ?? [])).toEqual(anchor)
   })
 
-  it('getBoardId (0x48) maps LIC_UNSUPPORTED to a terminal unsupported, not a retryable failure', async () => {
+  it('getAnchor (0x48) maps LIC_UNSUPPORTED to a terminal unsupported, not a retryable failure', async () => {
     // A runtime-v4 host with no device-tree serial answers 0x85: it has no
     // hardware anchor to license against — ever. The flow lands on the
     // terminal 'unsupported' outcome instead of nagging retry forever.
     currentResponder = () => ({ success: true, data: '48 85' })
 
     const transport = await connected()
-    const result = await transport.getBoardId()
+    const result = await transport.getAnchor()
 
     expect(result.success).toBe(false)
     expect(result.unsupported).toBe(true)
   })
 
-  it('getBoardId (0x48) resolves a refusal as failure, never as an identity', async () => {
+  it('getAnchor (0x48) resolves a refusal as failure, never as an identity', async () => {
     // A runtime that predates the license FCs hands 0x48 to its realtime core,
     // which refuses it. That must resolve to success: false — the licensing flow
     // then reports check-failed instead of deriving a device id from nothing.
     currentResponder = () => ({ success: false, error: 'Unknown function code' })
 
     const transport = await connected()
-    const result = await transport.getBoardId()
+    const result = await transport.getAnchor()
 
     expect(result.success).toBe(false)
-    expect(result.boardId).toBeUndefined()
+    expect(result.anchor).toBeUndefined()
   })
 
-  it('getBoardId (0x48) re-strips a raw anchor tail — the set license_platform.c strips', async () => {
+  it('getAnchor (0x48) re-strips a raw anchor tail — the set license_platform.c strips', async () => {
     // Defensive re-normalization: the runtime already strips on the wire, but
     // the closed core's __linux__ branch strips this exact set before deciding
     // the identity — so a runtime build that ever answered raw must not make
-    // the editor derive a deviceId the device cannot reproduce.
+    // the editor derive a anchor the device cannot reproduce.
     const serial = Array.from('10000000abcdef01', (c) => c.charCodeAt(0))
     const rawTail = [...serial, 0x00, 0x0d, 0x0a, 0x20] // NUL, CR, LF, SPACE
     currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, rawTail.length, ...rawTail]) })
 
     const transport = await connected()
-    const result = await transport.getBoardId()
+    const result = await transport.getAnchor()
 
     expect(result.success).toBe(true)
-    expect(Array.from(result.boardId ?? [])).toEqual(serial)
-    expect(result.boardIdHex).toBe(serial.map((b) => b.toString(16).padStart(2, '0')).join(''))
+    expect(Array.from(result.anchor ?? [])).toEqual(serial)
+    expect(result.anchorHex).toBe(serial.map((b) => b.toString(16).padStart(2, '0')).join(''))
   })
 
-  it('getBoardId (0x48) strips an all-padding anchor to EMPTY, never to an identity', async () => {
+  it('getAnchor (0x48) strips an all-padding anchor to EMPTY, never to an identity', async () => {
     // All-padding is what the core would strip to zero bytes as well: the
     // licensing flow refuses a zero-length anchor ("no unique hardware id")
-    // instead of hashing padding into a fleet-wide shared deviceId.
+    // instead of hashing padding into a fleet-wide shared anchor.
     currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, 3, 0x00, 0x0a, 0x20]) })
 
     const transport = await connected()
-    const result = await transport.getBoardId()
+    const result = await transport.getAnchor()
 
     expect(result.success).toBe(true)
-    expect(result.boardId?.length).toBe(0)
+    expect(result.anchor?.length).toBe(0)
   })
 
   it('readLicense (0x4A) parses a full 98-byte blob on SUCCESS', async () => {
@@ -216,10 +216,10 @@ describe('WebSocketDebugTransport license function codes', () => {
     expect(result.error).toContain('no license backend wired')
   })
 
-  it('getBoardId (0x48) strips the four anchor-parity RAW vectors to one identity pre-image', async () => {
+  it('getAnchor (0x48) strips the four anchor-parity RAW vectors to one identity pre-image', async () => {
     // The cross-repo contract (openplc-packages license-core/test/runtime-v4/
     // anchor-parity.mjs): the same serial with tails NUL, LF, CRLF and " NUL"
-    // must all normalize to the SAME bytes — the pre-image of deviceId
+    // must all normalize to the SAME bytes — the pre-image of anchor
     // 7146518f9842adacfadc731ee7f546e5, pinned editor-side in
     // device-identity.test.ts. If the strip set here ever drifts from
     // license_platform.c's, one of these vectors stops matching.
@@ -229,8 +229,8 @@ describe('WebSocketDebugTransport license function codes', () => {
     for (const tail of tails) {
       const raw = [...base, ...tail]
       currentResponder = () => ({ success: true, data: toSpacedHex([0x48, 0x7e, raw.length, ...raw]) })
-      const result = await transport.getBoardId()
-      expect(Array.from(result.boardId ?? [])).toEqual(base)
+      const result = await transport.getAnchor()
+      expect(Array.from(result.anchor ?? [])).toEqual(base)
     }
   })
 
@@ -249,9 +249,9 @@ describe('WebSocketDebugTransport license function codes', () => {
       return { success: true, data: toSpacedHex([0x4a, 0x7e, 0x00, 98, ...blob]) }
     }
     const transport = await connected()
-    const [board, license] = await Promise.all([transport.getBoardId(), transport.readLicense()])
+    const [board, license] = await Promise.all([transport.getAnchor(), transport.readLicense()])
     expect(board.success).toBe(true)
-    expect(Array.from(board.boardId ?? [])).toEqual(anchor)
+    expect(Array.from(board.anchor ?? [])).toEqual(anchor)
     expect(license.success).toBe(true)
     expect(license.blob?.length).toBe(98)
   })
@@ -267,16 +267,16 @@ describe('WebSocketDebugTransport license function codes', () => {
     ]
 
     const transport = await connected()
-    const result = await transport.getBoardId()
+    const result = await transport.getAnchor()
 
     expect(result.success).toBe(true)
-    expect(Array.from(result.boardId ?? [])).toEqual(anchor)
+    expect(Array.from(result.anchor ?? [])).toEqual(anchor)
   })
 
   it('refuses all three calls when the socket is not connected', async () => {
     const transport = new WebSocketDebugTransport({ host: '127.0.0.1', port: 8443, token: 'jwt' })
 
-    await expect(transport.getBoardId()).resolves.toEqual({ success: false, error: 'Not connected to target' })
+    await expect(transport.getAnchor()).resolves.toEqual({ success: false, error: 'Not connected to target' })
     await expect(transport.readLicense()).resolves.toEqual({ success: false, error: 'Not connected to target' })
     await expect(transport.writeLicense(new Uint8Array(98))).resolves.toEqual({
       success: false,

@@ -94,6 +94,12 @@ describe('createVariableValidation', () => {
     expect(result).toBe('Var_1')
   })
 
+  it('suffixes a name that differs from an existing one only by case', () => {
+    const variables = [makeVariable('Var')]
+    const result = createVariableValidation(variables, 'var')
+    expect(result).toBe('var_1')
+  })
+
   it('increments suffix when numbered variable exists', () => {
     const variables = [makeVariable('Var'), makeVariable('Var_1')]
     const result = createVariableValidation(variables, 'Var')
@@ -188,6 +194,12 @@ describe('createGlobalVariableValidation', () => {
     const result = createGlobalVariableValidation(variables, 'GVarA')
     expect(result).toBe('GVarA_1')
   })
+
+  it('suffixes a name that differs from an existing global only by case', () => {
+    const variables = [makeGlobalVariable('GVar')]
+    const result = createGlobalVariableValidation(variables, 'gvar')
+    expect(result).toBe('gvar_1')
+  })
 })
 
 // ===========================================================================
@@ -210,6 +222,12 @@ describe('updateVariableValidation', () => {
 
   it('returns error when name already exists', () => {
     const result = updateVariableValidation(existing, { name: 'Var2' })
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('already exists')
+  })
+
+  it('returns error when the name differs from an existing one only by case', () => {
+    const result = updateVariableValidation(existing, { name: 'var2' })
     expect(result.ok).toBe(false)
     expect(result.title).toContain('already exists')
   })
@@ -253,5 +271,26 @@ describe('updateGlobalVariableValidation', () => {
   it('returns ok: true for a unique valid name', () => {
     const result = updateGlobalVariableValidation(existing, { name: 'NewGlobal' })
     expect(result.ok).toBe(true)
+  })
+
+  it('rejects a name that differs from an existing global only by case', () => {
+    const result = updateGlobalVariableValidation(existing, { name: 'gvar1' })
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('already exists')
+  })
+
+  it('allows a case-only rename of a global onto itself', () => {
+    const target = makeGlobalVariable('GVar1')
+    const globals = [target, makeGlobalVariable('GVar2')]
+    const result = updateGlobalVariableValidation(globals, { name: 'gvar1' }, target)
+    expect(result.ok).toBe(true)
+  })
+
+  it('still rejects renaming a global onto another global regardless of case', () => {
+    const target = makeGlobalVariable('GVar1')
+    const globals = [target, makeGlobalVariable('GVar2')]
+    const result = updateGlobalVariableValidation(globals, { name: 'gvar2' }, target)
+    expect(result.ok).toBe(false)
+    expect(result.title).toContain('already exists')
   })
 })

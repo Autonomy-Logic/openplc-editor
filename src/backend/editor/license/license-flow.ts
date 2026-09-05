@@ -16,7 +16,7 @@
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
 import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
 import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../shared/debug/types'
-import { deriveDeviceId, deriveVppId } from './device-identity'
+import { deriveDeviceId, deriveVppId, DEVICE_ID_BYTES } from './device-identity'
 import { checkDeviceActivation } from './license-activation-client'
 
 /** Just enough of a transport to run the licensing FCs. */
@@ -43,9 +43,30 @@ const LIC_CRC_COVERAGE = 94
  */
 export type { DeviceLicenseReport, DeviceLicenseState }
 
+/**
+ * What FC 0x48 answered, and WHICH KIND of value it is (DOPE-589).
+ *
+ * The two platforms report different things and the difference decides whether
+ * this side hashes or not, so it is carried in the type rather than in a
+ * comment:
+ *
+ *   - `device-id`: BARE METAL. The closed license-core read the silicon and
+ *     derived the id itself (`license_gate_device_id`), so it is used AS IS.
+ *     Hashing it again would produce an identity no licence was ever issued for
+ *     and no device can reproduce.
+ *   - `anchor`: RUNTIME-V4. The raw device-tree serial, already stripped of its
+ *     trailing bytes on the wire, from which the editor derives the device_id
+ *     with `deriveDeviceId`.
+ *
+ * A single `Uint8Array` field would type-check either way and silently do the
+ * wrong thing on one of them, which is precisely the failure this shape exists
+ * to make impossible.
+ */
+export type DeviceIdentity = { kind: 'device-id'; deviceId: Uint8Array } | { kind: 'anchor'; anchor: Uint8Array }
+
 export interface DeviceLicenseInput {
-  /** Raw hardware anchor bytes from the board-id read (FC 0x48). */
-  anchor: Uint8Array
+  /** What the identity read (FC 0x48) returned, tagged with its kind. */
+  identity: DeviceIdentity
   /** Reverse-domain VPP package id (`package.id`) from `resolveLicensingTarget`. */
   packageId: string
 }
@@ -90,31 +111,31 @@ export function verifyStoredLicenseBlob(
   if (!blob || blob.length !== LIC_BLOB_SIZE) {
     // A 0x7E with no (or a short) blob is itself off-contract: the parser only
     // fills `blob` when the device sent all `len` bytes. Treat as unverified.
-    return { ok: false, reason: `stored license is ${blob?.length ?? 0} bytes, expected ${LIC_BLOB_SIZE}` }
+    return { ok: false, reason: 'The licence stored on this device is incomplete.' }
   }
 
   const parsed = deserializeLicenseBlob(blob)
 
   if (parsed.magic !== LIC_MAGIC_LE) {
-    return { ok: false, reason: 'stored license has no OPLC magic' }
+    return { ok: false, reason: 'The data stored on this device is not a licence.' }
   }
 
   const expectedCrc = crc32IsoHdlc(blob.subarray(0, LIC_CRC_COVERAGE))
   if (parsed.crc32 !== expectedCrc) {
-    return { ok: false, reason: 'stored license fails its crc32 (truncated or corrupted)' }
+    return { ok: false, reason: 'The licence stored on this device is damaged.' }
   }
 
   const blobDeviceId = bytesToHex(parsed.deviceId)
   if (blobDeviceId !== deviceIdHex) {
     // The clone case: valid bytes, wrong board. The gate answers DEVICE_MISMATCH.
-    return { ok: false, reason: `stored license is bound to device ${blobDeviceId}, not ${deviceIdHex}` }
+    return { ok: false, reason: 'The licence stored on this device was issued for a different device.' }
   }
 
   if (packageId) {
     const expectedProductId = deriveVppId(packageId)
     const blobProductId = bytesToHex(parsed.productId)
     if (blobProductId !== expectedProductId) {
-      return { ok: false, reason: `stored license is for product ${blobProductId}, not ${expectedProductId}` }
+      return { ok: false, reason: 'The licence stored on this device was issued for a different VPP.' }
     }
   }
 
@@ -146,7 +167,7 @@ export async function resolveDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
 ): Promise<DeviceLicenseReport> {
-  const identity = deriveIdentity(input.anchor)
+  const identity = deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
 
@@ -176,7 +197,7 @@ export async function inspectDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
 ): Promise<DeviceLicenseReport> {
-  const identity = deriveIdentity(input.anchor)
+  const identity = deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
 
@@ -194,28 +215,62 @@ export async function inspectDeviceLicense(
 /**
  * Derive the licensing identity, or explain why there is none.
  *
- * An anchor of zero bytes is a REAL reply, not a failure: cores without
- * ArduinoUniqueID support, and boards that opt out with `OPENPLC_NO_UNIQUE_ID`,
- * answer `id_len = 0` rather than fail to compile, and the link classifier
- * correctly counts that as "firmware present".
+ * An identity of zero bytes is a REAL reply, not a failure: a board with no
+ * license-core, and one whose architecture the closed reader refuses (AVR,
+ * RP2040), answer `id_len = 0`, and the link classifier correctly counts that as
+ * "firmware present".
  *
  * It is fatal HERE, and must be caught before deriving anything, because
  * `sha256(prefix || <nothing>)` is a CONSTANT: every such board would share one
  * device id, so one purchase would license an entire fleet and a license issued
  * for one board would verify on all of them.
  */
-function deriveIdentity(anchor: Uint8Array): { deviceId: string } | DeviceLicenseReport {
-  if (anchor.length === 0) {
+function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | DeviceLicenseReport {
+  const bytes = identity.kind === 'device-id' ? identity.deviceId : identity.anchor
+  if (bytes.length === 0) {
     return {
       outcome: {
         state: 'check-failed',
+        // Since the packages gate refuses `isLicensable` on silicon the
+        // license-core cannot read, a licensable board answering nothing is a
+        // FIRMWARE that was built without licensing support — which a rebuild
+        // does fix. Says that, instead of naming license-core at a user who has
+        // no way to act on the word.
         error:
-          'this board reports no unique hardware id, so no license can be bound to it. ' +
-          'A licensed VPP requires a board whose core exposes a unique id.',
+          'This board did not report an identity a licence can be issued for. ' +
+          'Its firmware was built without licensing support, so rebuild and upload the program to this board.',
+        retryable: false,
       },
     }
   }
-  return { deviceId: deriveDeviceId(anchor) }
+
+  // Bare metal already derived it inside the closed artifact. The length is
+  // checked rather than trusted: a short id is not a weaker identity, it is a
+  // DIFFERENT one, and a firmware answering the wrong number of bytes must not
+  // send a customer to a checkout for an id no device can reproduce.
+  if (identity.kind === 'device-id') {
+    if (identity.deviceId.length !== DEVICE_ID_BYTES) {
+      return {
+        outcome: {
+          state: 'check-failed',
+          // The width belongs in the trace, not on the user's screen: "a 6-byte
+          // device id, expected 16" states an internal contract nobody outside
+          // this codebase can act on, and it is the FIRST thing a user sees when
+          // connecting a board flashed by an older editor. What they can act on
+          // is the rebuild. Fail-closed either way: an identity of the wrong
+          // width is a DIFFERENT identity, never a weaker one, and buying a
+          // licence for it would bind money to an id no device reproduces.
+          error:
+            "This board's firmware reports its identity in a format this editor does not recognise. " +
+            'Rebuild and upload the program to bring the firmware up to date.',
+          retryable: false,
+        },
+      }
+    }
+    return { deviceId: bytesToHex(identity.deviceId) }
+  }
+
+  return { deviceId: deriveDeviceId(identity.anchor) }
 }
 
 /**
@@ -240,7 +295,10 @@ async function readAndVerify(
   if (!stored.success) {
     return {
       kind: 'settled',
-      outcome: { state: 'check-failed', error: stored.error ?? 'the device did not answer 0x4A' },
+      outcome: {
+        state: 'check-failed',
+        error: stored.error ?? 'The device did not answer when asked for its stored licence.',
+      },
     }
   }
 
@@ -294,7 +352,7 @@ async function recoverLicense(
     // could not confirm rather than claiming either state.
     return {
       deviceId,
-      outcome: { state: 'check-failed', error: 'the backend reported a license but returned no blob to write' },
+      outcome: { state: 'check-failed', error: 'The licence server reported a licence but sent no licence data.' },
     }
   }
 
@@ -304,7 +362,10 @@ async function recoverLicense(
     return { deviceId, outcome: { state: 'unsupported' } }
   }
   if (!write.success) {
-    return { deviceId, outcome: { state: 'check-failed', error: write.error ?? 'the license write failed' } }
+    return {
+      deviceId,
+      outcome: { state: 'check-failed', error: write.error ?? 'The licence could not be written to the device.' },
+    }
   }
 
   // RE-READ; do not trust the write. 0x49 only STORES bytes: no target checks
@@ -318,7 +379,7 @@ async function recoverLicense(
       deviceId,
       outcome: {
         state: 'check-failed',
-        error: `the license was written but could not be confirmed: the read-back failed (${readBack.error ?? 'no reply'})`,
+        error: `The licence was written but could not be confirmed. Reading it back from the device failed: ${readBack.error ?? 'the device did not reply'}.`,
       },
     }
   }
@@ -334,7 +395,7 @@ async function recoverLicense(
     deviceId,
     outcome: {
       state: 'check-failed',
-      error: `the license was written but could not be confirmed on the device: ${verdict.reason}`,
+      error: `The licence was written but could not be confirmed on the device. ${verdict.reason}`,
     },
   }
 }

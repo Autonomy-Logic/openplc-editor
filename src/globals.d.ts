@@ -17,13 +17,6 @@ declare const APP_NAME: string
 declare const BUILD_DATE: string
 
 /**
- * Per-build data-type persistence switch (DOPE-385), injected from
- * `DATATYPES_DT_FILES` in the build environment. `undefined` where the
- * DefinePlugin doesn't run (unit tests), which `feature-flags.ts` reads as off.
- */
-declare const DATATYPES_DT_FILES: boolean | undefined
-
-/**
  * Vitest-compatible `vi` global — aliased to `jest` in Jest via jest-vi-shim.ts
  * so shared test files can use `vi.spyOn()` in both Jest and Vitest.
  */

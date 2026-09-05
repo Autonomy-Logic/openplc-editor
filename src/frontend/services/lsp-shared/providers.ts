@@ -52,6 +52,13 @@ import {
   monacoPositionToLsp,
 } from './converters'
 import {
+  clipEditsToWindow,
+  clipSymbolsToWindow,
+  lspLineInWindow,
+  type LspLineWindow,
+  modelMatchesDocumentWindow,
+} from './internal/line-window'
+import {
   lspDocumentSymbolToMonaco,
   normaliseLocationResponse,
   symbolInformationToDocumentSymbol,
@@ -64,10 +71,15 @@ import {
  * service uses synthetic URIs that need rewriting (ST's
  * `pouvars://` view targets a different LSP document than the
  * variables-text editor's model URI).
+ *
+ * `lineWindow` marks a model that renders only a slice of the resolved
+ * document, so requests landing outside it answer nothing instead of
+ * resolving onto the neighbouring slice.
  */
 export interface LspContext {
   lspUri: string
   lineOffset: number
+  lineWindow?: LspLineWindow
 }
 
 /**
@@ -102,9 +114,19 @@ export interface ProviderHooks {
    * Filter the formatting edits returned by the worker before they
    * reach Monaco.  Default: keep edits whose entire range sits at
    * or past `offset` (so preamble edits are dropped — they'd land
-   * at negative lines or clobber body content).
+   * at negative lines or clobber body content).  One-sided by design:
+   * the result is clipped to the context's `lineWindow` afterwards, so
+   * a custom hook cannot let a windowed view receive foreign edits.
    */
   filterFormattingEdits?: (edits: LspTextEdit[], offset: number) => LspTextEdit[]
+  /**
+   * The LSP-side text of `lspUri`, as last sent to the worker.
+   * Required for formatting in a windowed view: edit columns are
+   * computed against this text, so a buffer that no longer matches
+   * its window slice must not apply them. Windowed formatting is a
+   * no-op when the hook is absent or the texts have drifted.
+   */
+  getLspDocumentText?: (lspUri: string) => string | undefined
 }
 
 export interface RegisterLspProvidersOptions {
@@ -132,6 +154,7 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   const resolveLspContext = opts.hooks?.resolveLspContext ?? defaultResolveLspContext
   const definitionInterceptors = opts.hooks?.definitionInterceptors ?? []
   const filterFormattingEdits = opts.hooks?.filterFormattingEdits ?? defaultFilterFormattingEdits
+  const getLspDocumentText = opts.hooks?.getLspDocumentText
   const completionTriggerCharacters = opts.completionTriggerCharacters ?? []
   const signatureHelpTriggerCharacters = opts.signatureHelpTriggerCharacters ?? []
 
@@ -145,7 +168,9 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
     monacoApi.languages.registerCompletionItemProvider(languageId, {
       triggerCharacters: completionTriggerCharacters,
       provideCompletionItems: async (model, position) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        const lspPosition = monacoPositionToLsp(position, lineOffset)
+        if (!lspLineInWindow(lspPosition.line, lineWindow)) return { suggestions: [] }
         const word = model.getWordUntilPosition(position)
         const defaultRange: monaco.IRange = {
           startLineNumber: position.lineNumber,
@@ -155,7 +180,7 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
         }
         const result = await connection.sendRequest(CompletionRequest.type, {
           textDocument: { uri: lspUri },
-          position: monacoPositionToLsp(position, lineOffset),
+          position: lspPosition,
         })
         return lspCompletionListToMonaco(result, defaultRange, monacoApi, lineOffset)
       },
@@ -169,10 +194,12 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerHoverProvider(languageId, {
       provideHover: async (model, position) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        const lspPosition = monacoPositionToLsp(position, lineOffset)
+        if (!lspLineInWindow(lspPosition.line, lineWindow)) return undefined
         const result = await connection.sendRequest(HoverRequest.type, {
           textDocument: { uri: lspUri },
-          position: monacoPositionToLsp(position, lineOffset),
+          position: lspPosition,
         })
         return lspHoverToMonaco(result, lineOffset) ?? undefined
       },
@@ -187,10 +214,12 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
     monacoApi.languages.registerSignatureHelpProvider(languageId, {
       signatureHelpTriggerCharacters,
       provideSignatureHelp: async (model, position) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        const lspPosition = monacoPositionToLsp(position, lineOffset)
+        if (!lspLineInWindow(lspPosition.line, lineWindow)) return null
         const result = await connection.sendRequest(SignatureHelpRequest.type, {
           textDocument: { uri: lspUri },
-          position: monacoPositionToLsp(position, lineOffset),
+          position: lspPosition,
         })
         const help = lspSignatureHelpToMonaco(result)
         if (!help) return null
@@ -206,10 +235,12 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerDefinitionProvider(languageId, {
       provideDefinition: async (model, position) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        const lspPosition = monacoPositionToLsp(position, lineOffset)
+        if (!lspLineInWindow(lspPosition.line, lineWindow)) return null
         const result = await connection.sendRequest(DefinitionRequest.type, {
           textDocument: { uri: lspUri },
-          position: monacoPositionToLsp(position, lineOffset),
+          position: lspPosition,
         })
         // DefinitionRequest may resolve to Location, Location[], or
         // LocationLink[].  Normalise to Location[] first so the
@@ -234,10 +265,12 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerReferenceProvider(languageId, {
       provideReferences: async (model, position, context) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        const lspPosition = monacoPositionToLsp(position, lineOffset)
+        if (!lspLineInWindow(lspPosition.line, lineWindow)) return []
         const result = await connection.sendRequest(ReferencesRequest.type, {
           textDocument: { uri: lspUri },
-          position: monacoPositionToLsp(position, lineOffset),
+          position: lspPosition,
           context: { includeDeclaration: context.includeDeclaration },
         })
         return (lspLocationsToMonaco(result, monacoApi) as monaco.languages.Location[] | null) ?? []
@@ -252,20 +285,28 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerDocumentSymbolProvider(languageId, {
       provideDocumentSymbols: async (model) => {
-        const { lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
         const result = await connection.sendRequest(DocumentSymbolRequest.type, {
-          textDocument: { uri: model.uri.toString() },
+          textDocument: { uri: lspUri },
         })
         if (!result) return []
         if (result.length === 0) return []
+        // A body editor renders the document from `lineOffset` down, so a
+        // preamble symbol converts to a line Monaco rejects the moment the
+        // outline navigates to it.
+        const visible = lineWindow ?? { startLine: lineOffset, endLineExclusive: Number.MAX_SAFE_INTEGER }
         // The handler can return either DocumentSymbol[] (nested
         // hierarchy) or SymbolInformation[] (flat list with
         // containerName).  Monaco's outline view wants
         // DocumentSymbol[] — flat lists get rewrapped.
         if ('range' in result[0]) {
-          return (result as DocumentSymbol[]).map((s) => lspDocumentSymbolToMonaco(s, lineOffset))
+          return clipSymbolsToWindow(result as DocumentSymbol[], visible).map((s) =>
+            lspDocumentSymbolToMonaco(s, lineOffset),
+          )
         }
-        return (result as SymbolInformation[]).map((s) => symbolInformationToDocumentSymbol(s, lineOffset))
+        return (result as SymbolInformation[])
+          .filter((s) => lspLineInWindow(s.location.range.start.line, visible))
+          .map((s) => symbolInformationToDocumentSymbol(s, lineOffset))
       },
     }),
   )
@@ -277,7 +318,18 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerDocumentFormattingEditProvider(languageId, {
       provideDocumentFormattingEdits: async (model, options) => {
-        const { lspUri, lineOffset } = resolveLspContext(model.uri.toString())
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        if (lineWindow) {
+          const documentText = getLspDocumentText?.(lspUri)
+          if (
+            documentText === undefined ||
+            !modelMatchesDocumentWindow(model.getValue(), documentText, lineOffset, lineWindow)
+          ) {
+            // Distinguishes "nothing to format" from "guard tripped" in a bug report.
+            console.debug(`[lsp] Format Document skipped: windowed view drifted from ${lspUri}`)
+            return []
+          }
+        }
         const result = await connection.sendRequest(DocumentFormattingRequest.type, {
           textDocument: { uri: lspUri },
           options: {
@@ -286,7 +338,8 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
           },
         })
         if (!result) return []
-        return filterFormattingEdits(result, lineOffset).map((te) => lspTextEditToMonaco(te, lineOffset))
+        const edits = clipEditsToWindow(filterFormattingEdits(result, lineOffset), lineWindow)
+        return edits.map((te) => lspTextEditToMonaco(te, lineOffset))
       },
     }),
   )

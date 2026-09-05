@@ -4,8 +4,8 @@
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import type { SystemLibrary } from '../../../store/slices/library/types'
 import { openPLCStoreBase } from '../../../store'
-import { attachEnabledLibrariesSync, attachProjectSync } from '../project-sync'
-import type { StLspService } from '../types'
+import { attachEnabledLibrariesSync, attachProjectSync, getSyncedDocumentText } from '../project-sync'
+import { pouUri, type StLspService } from '../types'
 
 function makeStPou(name: string, body: string = 'x := 1;'): PLCPou {
   return {
@@ -610,5 +610,45 @@ describe('attachEnabledLibrariesSync', () => {
     expect(service.refreshStlibs).toHaveBeenCalledTimes(1)
     expect(onAfterRefresh).toHaveBeenCalledTimes(1)
     unsubscribe()
+  })
+})
+
+describe('getSyncedDocumentText', () => {
+  it('reads back the text last sent to the worker for a synced URI', () => {
+    setProjectPous([makeStPou('main', 'y := 2;')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    const text = getSyncedDocumentText(pouUri('main'))
+    expect(text).toContain('y := 2;')
+    handle.dispose()
+  })
+
+  it('answers undefined for a URI the sync never sent', () => {
+    setProjectPous([makeStPou('main')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    expect(getSyncedDocumentText(pouUri('ghost'))).toBeUndefined()
+    handle.dispose()
+  })
+
+  it('answers undefined after the owning sync is disposed', () => {
+    setProjectPous([makeStPou('main')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    expect(getSyncedDocumentText(pouUri('main'))).toBeDefined()
+    handle.dispose()
+    expect(getSyncedDocumentText(pouUri('main'))).toBeUndefined()
+  })
+
+  it('rewires to the latest sync when a new one attaches', () => {
+    setProjectPous([makeStPou('main', 'first := 1;')])
+    const first = attachProjectSync(makeStubService())
+    setProjectPous([makeStPou('main', 'second := 2;')])
+    const second = attachProjectSync(makeStubService())
+    expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
+    // Disposing the superseded sync must not tear down the live reader.
+    first.dispose()
+    expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
+    second.dispose()
   })
 })

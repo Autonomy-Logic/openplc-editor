@@ -3,7 +3,6 @@
  */
 import type { PLCDataType, PLCGlobalVariableList, PLCPou } from '../../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../../store'
-import * as featureFlags from '../../../utils/feature-flags'
 import { setBodyLineOffset } from '../../lsp-shared/body-offsets'
 import { redirectDefinitionToStore } from '../goto-definition-redirect'
 
@@ -81,11 +80,6 @@ describe('redirectDefinitionToStore', () => {
         ...s,
         project: { ...s.project, data: { ...s.project.data, dataTypes } },
       }))
-      jest.spyOn(featureFlags, 'isDataTypeFilesEnabled').mockReturnValue(true)
-    })
-
-    afterEach(() => {
-      jest.restoreAllMocks()
     })
 
     it('opens the owning type in code mode with the cursor on its declaration line', () => {
@@ -127,20 +121,6 @@ describe('redirectDefinitionToStore', () => {
           range: { start: { line: 5, character: 0 }, end: { line: 5, character: 0 } },
         }),
       ).toBe(false)
-    })
-
-    it('opens the form tab without a cursor when the code view is not built in', () => {
-      jest.spyOn(featureFlags, 'isDataTypeFilesEnabled').mockReturnValue(false)
-      expect(
-        redirectDefinitionToStore({
-          uri: 'inmemory://datatypes/__project__.st',
-          range: { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } },
-        }),
-      ).toBe(true)
-
-      const model = openPLCStoreBase.getState().editor
-      expect(model.type === 'plc-datatype' && model.structure.display).toBe('table')
-      expect(model.cursorPosition).toBeUndefined()
     })
   })
 

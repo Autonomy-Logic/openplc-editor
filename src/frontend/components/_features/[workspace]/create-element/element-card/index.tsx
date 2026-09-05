@@ -1,21 +1,13 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import * as Popover from '@radix-ui/react-popover'
-
-import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
-import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
-import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
-import { CreatePouSources, PouLanguageSources } from '../../../../../data/sources/POU'
-import { useOpenPLCStore } from '../../../../../store'
-import { InputWithRef } from '../../../../_atoms/input'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
-
-type PLCArrayDatatype = Extract<PLCDataType, { derivation: 'array' }>
-type PLCEnumeratedDatatype = Extract<PLCDataType, { derivation: 'enumerated' }>
-type PLCStructureDatatype = Extract<PLCDataType, { derivation: 'structure' }>
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
+import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
+import { CreatePouSources, PouLanguageSources } from '../../../../../data/sources/POU'
+import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import {
   isArduinoTarget as checkIsArduinoTarget,
@@ -23,6 +15,8 @@ import {
   isSimulatorTarget,
 } from '../../../../../utils/device'
 import { ConvertToLangShortenedFormat } from '../../../../../utils/formatters/POU'
+import { InputWithRef } from '../../../../_atoms/input'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../_atoms/select'
 import { useToast } from '../../../[app]/toast/use-toast'
 import { validatePouOrDataTypeName } from '../hooks/use-name-validation'
 
@@ -103,10 +97,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     control: datatypeControl,
     register: datatypeRegister,
     handleSubmit: handleSubmitDatatype,
-    /**
-     * TODO: add validation
-     */
-    // setError: datatypeSetError,
+    setError: datatypeSetError,
     formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
@@ -163,8 +154,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     if (!pouWasCreated.ok) {
       pouSetError('name', {
         type: 'already-exists',
+        message: pouWasCreated.message,
       })
-      toast({ title: 'Invalid Pou', description: "You can't create a Pou with this name.", variant: 'fail' })
+      toast({
+        title: 'Invalid Pou',
+        description: pouWasCreated.message ?? "You can't create a Pou with this name.",
+        variant: 'fail',
+      })
       return
     }
     toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
@@ -202,35 +198,20 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    if (data.derivation === 'array') {
-      const draft = {
-        name: data.name,
-        derivation: data.derivation,
-        baseType: {
-          definition: 'base-type',
-          value: 'BOOL',
-        },
-        initialValue: '',
-        dimensions: [],
-      } as PLCArrayDatatype
-      createDatatype(draft)
-    }
-    if (data.derivation === 'enumerated') {
-      const draft = {
-        name: data.name,
-        derivation: data.derivation,
-        initialValue: '',
-        values: [],
-      } as PLCEnumeratedDatatype
-      createDatatype(draft)
-    }
-    if (data.derivation === 'structure') {
-      const draft = {
-        name: data.name,
-        derivation: data.derivation,
-        variable: [],
-      } as PLCStructureDatatype
-      createDatatype(draft)
+    // Name and derivation only: `datatypeActions.create` builds the datatype itself
+    // through `createDatatypeObject`, so any seed passed here would be discarded.
+    const created = createDatatype({ name: data.name, derivation: data.derivation })
+    if (!created.ok) {
+      // The refusal is often about a POU or a global variable list, not another data
+      // type, so the reason has to reach the user — the form used to close on failure
+      // with nothing created and nothing said.
+      datatypeSetError('name', { type: 'already-exists', message: created.message })
+      toast({
+        title: 'Invalid data type',
+        description: created.message ?? "You can't create a data type with this name.",
+        variant: 'fail',
+      })
+      return
     }
     closeContainer((prev) => !prev)
     setIsOpen(false)
@@ -330,7 +311,9 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {datatypeErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * data type name already exists
+                          {/* The store's reason when it gave one — it names the POU or list
+                              actually in the way, which the generic wording cannot. */}
+                          * {datatypeErrors.name.message ?? 'data type name already exists'}
                         </span>
                       )}
                       {!datatypeErrors.name && (
@@ -786,7 +769,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                       {pouErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * POU name already exists
+                          * {pouErrors.name.message ?? 'POU name already exists'}
                         </span>
                       )}
                       {pouErrors.name?.type === 'validate' && (
