@@ -1,12 +1,16 @@
 /**
  * Tests for the shared library-build orchestrator.
  *
- * The orchestrator's job is to drive the 7-stage flow through a
+ * The orchestrator's job is to drive the stage flow through a
  * `LibraryBuildPort`.  These tests mock the port + the inner shared
  * helpers (`prepareXmlForLibraryBuild`, `libraryBuildFromTranspiledSt`)
  * and verify the orchestrator's contract: stage ordering, error
- * propagation, cache hit/miss, archive feed-through, verification
- * gating.
+ * propagation, archive feed-through.
+ *
+ * The build no longer runs an avr-gcc verification compile, so there is
+ * nothing here about verify caching, `cleanBuild`, or advisory verify
+ * failures — running a library goes through the debug harness instead
+ * (`composeLibraryDebugHarness`).
  *
  * Production callers (desktop adapter and the future web adapter) get
  * exercised through their own integration paths — this file is
@@ -17,8 +21,7 @@ import type { LibraryBuildPort, VerifyCompileArgs } from '../../../../middleware
 import type { TranspileToStArgs, TranspileToStResult } from '../../../../middleware/shared/ports/compiler-platform-port'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 
-// ST the fake `transpileToSt` port method emits.  Fixed content so the
-// verification-cache tests can precompute the harness MD5 off it.
+// ST the fake `transpileToSt` port method emits.
 const FAKE_PROGRAM_ST = 'PROGRAM main\n(* transpiled *)\nEND_PROGRAM\n'
 
 // ---------------------------------------------------------------------------
@@ -234,6 +237,15 @@ describe('runLibraryBuildPipeline', () => {
     )
     // The stubbed projectData from Stage 1 is what the transpiler sees.
     expect(harness.transpileCalls).toHaveLength(1)
+    // The verify stage runs, forwards the inner compile's own lines under a
+    // `[verify]` prefix, and reports its outcome. Asserted on the whole event
+    // stream rather than through the `arrayContaining` above, which would pass
+    // just as happily if a line went missing.
+    expect(events.filter((e) => /verif/i.test(e.message)).map((e) => e.message)).toEqual([
+      'Verifying library compile...',
+      '[verify] verifying...',
+      'Verification passed.',
+    ])
   })
 
   it('does not call deleteBuildSubtree (intermediates are no longer persisted)', async () => {
@@ -279,7 +291,6 @@ describe('runLibraryBuildPipeline', () => {
     // Should NOT have called any later stages.
     expect(mockPrepareXml).not.toHaveBeenCalled()
     expect(mockLibraryBuild).not.toHaveBeenCalled()
-    expect(harness.verifyCalls).toHaveLength(0)
   })
 
   it('feeds the resolved library archives into libraryBuildFromTranspiledSt', async () => {
@@ -332,7 +343,6 @@ describe('runLibraryBuildPipeline', () => {
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/ghost-lib/)
     expect(result.error).toMatch(/Library Manager/)
-    expect(harness.verifyCalls).toHaveLength(0)
     expect(mockLibraryBuild).not.toHaveBeenCalled()
   })
 
@@ -690,7 +700,7 @@ describe('runLibraryBuildPipeline', () => {
     } as unknown as PLCProjectData
 
     await runLibraryBuildPipeline(
-      { projectPath: '/project', projectData, verifyProjectData: projectDataEmpty(), cleanBuild: false },
+      { projectPath: '/project', projectData, verifyProjectData: projectData, cleanBuild: false },
       harness.port,
       emit,
     )
@@ -728,7 +738,7 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData,
-        verifyProjectData: projectDataEmpty(),
+        verifyProjectData: projectData,
         cleanBuild: false,
         nativePous: [
           { name: 'MyCppFb', language: 'cpp', relPath: 'pous/function-blocks/MyCppFb.cpp' },
@@ -766,7 +776,7 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData,
-        verifyProjectData: projectDataEmpty(),
+        verifyProjectData: projectData,
         cleanBuild: false,
         nativePous: [{ name: 'CPP_ADD', language: 'cpp', relPath: 'pous/functions/CPP_ADD.cpp' }],
       },
@@ -872,7 +882,6 @@ describe('runLibraryBuildPipeline', () => {
     expect(result.success).toBe(false)
     expect(result.error).toBe('library.json is missing manifest.namespace')
     expect(mockLibraryBuild).not.toHaveBeenCalled()
-    expect(harness.verifyCalls).toHaveLength(0)
   })
 
   it('fails when reading library.json throws an IO error', async () => {
@@ -919,7 +928,6 @@ describe('runLibraryBuildPipeline', () => {
     expect(result.error).toMatch(/transpile-from-json failed: unexpected token in POU body/)
     expect(result.libraryName).toBe('lib')
     expect(mockLibraryBuild).not.toHaveBeenCalled()
-    expect(harness.verifyCalls).toHaveLength(0)
   })
 
   it('falls back to a generic message when the transpiler returns ok=true but no ST', async () => {

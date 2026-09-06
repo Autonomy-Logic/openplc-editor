@@ -86,6 +86,10 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
+  handleSaveProjectAs() {
+    this.mainWindow.webContents.send('project:save-as-accelerator')
+  }
+
   handleSaveFile() {
     this.mainWindow.webContents.send('project:save-file-accelerator')
   }
@@ -235,8 +239,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.saveAs'),
           accelerator: 'Cmd+Shift+A',
-          click: () => {},
-          enabled: false,
+          click: () => this.handleSaveProjectAs(),
         },
         {
           label: i18n.t('menu:file.submenu.closeTab'),

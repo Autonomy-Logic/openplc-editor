@@ -12,6 +12,7 @@ import {
   LIBRARY_MANIFEST_TAB_NAME,
 } from '../../../store/slices/tabs/utils'
 import { isUserManagementCapableRuntime } from '../../../utils/device'
+import { isNativeScreenAvailable } from '../../../utils/native-screens'
 import { useToast } from '../../_features/[app]/toast/use-toast'
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 import {
@@ -67,6 +68,10 @@ const Project = () => {
   const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
   const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
+  // Everything on the Runtime Status screen is read from a live device -- scan
+  // statistics, host facts, the bootloader's state -- so the leaf appears only
+  // while connected rather than opening onto an empty screen.
+  const showRuntimeStatus = runtimeConnected
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -88,6 +93,22 @@ const Project = () => {
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
+
+  // Persistent Storage is a PROJECT screen: the settings are saved with the
+  // project and delivered by the upload, so it is available offline and has
+  // nothing to do with whether a device is connected. Two facts about the
+  // TARGET decide whether it appears at all:
+  //
+  //   • the target's runtime has a built-in retain store to configure. Only
+  //     runtime v4 does; on baremetal the store is whatever the board's driver
+  //     provides and nothing in the project can point it anywhere.
+  //   • the target has not taken retention over. A VPP whose driver implements
+  //     its own store declares `hidesNativeScreens: ['persistent-storage']`,
+  //     and the editor then also emits no `retain.conf` — which makes the
+  //     runtime remove its copy and the built-in store stand down. So the
+  //     screen never offers settings that are inert.
+  const showPersistentStorage =
+    targetCaps.nativeRetainStore && isNativeScreenAvailable(currentBoardInfo, 'persistent-storage')
 
   const handleCreateTab = ({ elementType, name, path, configuration: tabConfig }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }
@@ -436,6 +457,36 @@ const Project = () => {
                       name: 'Orchestrators',
                       path: `/device/orchestrators`,
                       elementType: { type: 'device', derivation: 'orchestrators' },
+                    })
+                  }
+                />
+              )}
+              {showRuntimeStatus && (
+                <ProjectTreeLeaf
+                  key='Runtime Status'
+                  leafLang='devConfig'
+                  leafType='device'
+                  label='Runtime Status'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'Runtime Status',
+                      path: `/device/runtime-status`,
+                      elementType: { type: 'device', derivation: 'runtime-status' },
+                    })
+                  }
+                />
+              )}
+              {showPersistentStorage && (
+                <ProjectTreeLeaf
+                  key='Persistent Storage'
+                  leafLang='persistentStorage'
+                  leafType='persistent-storage'
+                  label='Persistent Storage'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'Persistent Storage',
+                      path: `/device/persistent-storage`,
+                      elementType: { type: 'persistent-storage' },
                     })
                   }
                 />

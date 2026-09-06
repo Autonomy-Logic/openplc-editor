@@ -21,7 +21,6 @@ import { HardwareModule } from '@root/backend/editor/hardware'
 import { ProjectService } from '@root/backend/editor/services'
 import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
 import { openPLCStoreBase } from '@root/frontend/store'
-import { isDataTypeFilesEnabled } from '@root/frontend/utils/feature-flags'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
 export interface LoadedProject {
@@ -60,9 +59,9 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
     raw.data.serverFiles,
     raw.data.remoteDeviceFiles,
     raw.data.libraryManifest,
-    // Same flag gate the project adapter applies: with the flag off, legacy
-    // project.json stays the source of truth for datatypes.
-    isDataTypeFilesEnabled() && Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+    // Array guard, same as the project adapter: the IPC payload is a cast,
+    // not validated, so a version-skewed main process must not crash a load.
+    Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
   )
 
   // Boards first, exactly as the workspace screen does on load: target-capability

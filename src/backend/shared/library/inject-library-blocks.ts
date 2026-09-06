@@ -29,20 +29,21 @@
  * Were the lowered ST stored instead, every previously published library would
  * break on the next bridge change until rebuilt.
  *
- * ## Renaming
+ * ## Naming
  *
- * Each block's name is prefixed with the library's `namespace`
- * (`<namespace>__<block>`) so two libraries can both ship a `Foo`, and so a
- * consumer's own POU may also be called `Foo`.  The library-tree picker
- * surfaces the prefixed name, so the user authors their ST against it directly
- * and no source rewriting is needed.
+ * The synthesized POU takes the block's own name, unprefixed — the same name
+ * the library tree offers and the same name `resolveFunctionBlockPins` looks
+ * up.  There is exactly one name for a library block across the whole system;
+ * an earlier `<library>__<block>` qualification here was a namespace nothing
+ * else spoke, which left the graphical editors unable to resolve the block
+ * they had just inserted.
  *
- * The prefix is the NAMESPACE, not `manifest.name`: `name` is checked only for
- * path safety, so a hyphenated `my-lib` would yield `my-lib__FOO`, which no ST
- * parser accepts. `namespace` is validated as a C++ identifier.
+ * A block whose name collides with one of the project's own POUs is skipped,
+ * matching the precedence the variables parser and the pin resolver already
+ * apply: the project's definition wins.
  *
- * Symbol-level renames inside the synthesized POU (the `<NAME>_VARS` struct,
- * the `<name>_setup` / `<name>_loop` functions) follow automatically, because
+ * Symbol-level names inside the synthesized POU (the `<NAME>_VARS` struct, the
+ * `<name>_setup` / `<name>_loop` functions) follow automatically, because
  * `generateCppSTCode`, `generateCBlocksHeader` and `generateCBlocksCode` all
  * derive their names from `pou.name`.
  */
@@ -51,37 +52,9 @@ import { parseHybridPouFromString } from '../../../frontend/utils/PLC/pou-text-p
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { PLCPou, PLCProjectData } from '../../../middleware/shared/ports/types'
 
-/** Separator between the library name and the block name. */
-const LIBRARY_BLOCK_SEPARATOR = '__'
-
-/**
- * Build the project-visible POU name for a library block.
- *
- * `libraryIdentifier` is the manifest's `namespace`, not its `name`: the result
- * is parsed as an ST identifier.
- */
-export function libraryBlockPouName(libraryIdentifier: string, blockName: string): string {
-  return `${libraryIdentifier}${LIBRARY_BLOCK_SEPARATOR}${blockName}`
-}
-
-/**
- * The identifier an archive's blocks are prefixed with.
- *
- * `namespace` is required of every manifest this editor builds, and validated
- * as a C++ identifier. A foreign archive may lack one, so the name is folded
- * into an identifier rather than trusted as it stands.
- */
-function libraryIdentifierOf(manifest: { name: string; namespace?: string }): string {
-  const declared = manifest.namespace
-  if (declared && /^[A-Za-z_][A-Za-z0-9_]*$/.test(declared)) return declared
-  const folded = manifest.name.replace(/[^A-Za-z0-9_]/g, '_')
-  return /^[0-9]/.test(folded) ? `_${folded}` : folded
-}
-
 /** One native block an archive ships, resolved to its authored source. */
 type ResolvedNativeBlock = {
-  /** Identifier form, for the POU name — see the Renaming note above. */
-  libraryIdentifier: string
+  libraryName: string
   blockName: string
   language: 'cpp' | 'python'
   /** The authored file, verbatim — ST header plus native body. */
@@ -122,7 +95,7 @@ function resolveNativeBlocks(
         continue
       }
       blocks.push({
-        libraryIdentifier: libraryIdentifierOf(archive.manifest),
+        libraryName,
         blockName: entry.name,
         language: entry.implementation,
         source,
@@ -154,8 +127,13 @@ export function injectLibraryBlocks(projectData: PLCProjectData, archives: Stlib
   const { blocks } = resolveNativeBlocks(projectData, archives)
   if (blocks.length === 0) return projectData
 
+  // The project's own POUs win a name clash, so a library block that collides
+  // with one is left out rather than shadowing it.
+  const takenNames = new Set(projectData.pous.map((pou) => pou.name.toUpperCase()))
+
   const synthesized: PLCPou[] = []
   for (const block of blocks) {
+    if (takenNames.has(block.blockName.toUpperCase())) continue
     let parsed: PLCPou
     try {
       parsed = parseHybridPouFromString(block.source, block.language, 'function-block')
@@ -165,9 +143,10 @@ export function injectLibraryBlocks(projectData: PLCProjectData, archives: Stlib
       // undefined type, which names the block the user actually referenced.
       continue
     }
+    takenNames.add(block.blockName.toUpperCase())
     synthesized.push({
       ...parsed,
-      name: libraryBlockPouName(block.libraryIdentifier, block.blockName),
+      name: block.blockName,
       pouType: 'function-block',
     })
   }

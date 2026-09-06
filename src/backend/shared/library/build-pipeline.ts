@@ -23,12 +23,6 @@
  *      the archive blob + serialized bytes ready for `.stlib`
  *      write-out.
  *
- *   4. `composeVerificationProject(project)` — produces the same
- *      stubbed PLCProject the verification compile path needs
- *      (Phase 8 — feeds the existing `compileProgram` flow against
- *      the OpenPLC Simulator target to surface generated-C++
- *      compile errors).
- *
  * Everything here is pure: no fs, no spawn, no electron.  The
  * Electron compiler module and the web backend service both
  * consume this same orchestration.

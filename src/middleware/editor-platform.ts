@@ -51,12 +51,29 @@ export function setProjectPath(path: string): void {
 /**
  * Editor platform ports — all port interfaces wired to Electron IPC bridge.
  */
+const editorProject = createEditorProjectAdapter()
+const editorRuntime = createEditorRuntimeAdapter(() => _runtimeIpAddress)
+
+/**
+ * Opening a fetched project is the one retrieve step that needs two ports.
+ *
+ * The runtime adapter unpacks the archive into a scratch directory; turning
+ * that directory into the open project is the project port's job. Wired here
+ * rather than inside either adapter, which is where both are already in scope.
+ */
+editorRuntime.openFetchedProject = async (project) => {
+  const opened = await editorProject.openProjectByPath(String(project.payload))
+  return opened.success
+    ? { success: true }
+    : { success: false, error: opened.error?.description ?? 'The retrieved project could not be opened.' }
+}
+
 export const editorPorts: PlatformPorts = {
   compiler: createEditorCompilerAdapter(),
-  runtime: createEditorRuntimeAdapter(() => _runtimeIpAddress),
+  runtime: editorRuntime,
   debugger: createEditorDebuggerAdapter(),
   simulator: createEditorSimulatorAdapter(),
-  project: createEditorProjectAdapter(),
+  project: editorProject,
   device: createEditorDeviceAdapter(),
   orchestrator: createEditorOrchestratorAdapter(),
   system: createEditorSystemAdapter(),

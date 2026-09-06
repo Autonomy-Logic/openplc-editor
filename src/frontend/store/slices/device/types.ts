@@ -7,6 +7,7 @@ import type {
   DeviceConfiguration,
   DeviceLinkTransport,
   DevicePin,
+  PersistentStorageSettings,
   PlcStatus,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
@@ -84,6 +85,16 @@ export type RuntimeConnection = {
   includeTimingStatsInPolling: boolean
   ethercatStatus: EtherCATRuntimeStatusResponse | null
   includeEthercatStatsInPolling: boolean
+  /**
+   * A runtime version change is in flight on the device.
+   *
+   * The runtime is deliberately stopped and replaced during one, so its
+   * silence is expected rather than a fault. Without this the status poller
+   * counted the swap as five failed polls and announced a lost connection --
+   * in the middle of an update that was working, while the dialog beside it
+   * said the device carries on by itself.
+   */
+  runtimeUpdateInProgress: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +262,8 @@ export type DeviceActions = {
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
   setIncludeTimingStatsInPolling: (include: boolean) => void
+  /** Suspend "connection lost" detection while the runtime is being replaced. */
+  setRuntimeUpdateInProgress: (inProgress: boolean) => void
   setEthercatStatus: (status: EtherCATRuntimeStatusResponse | null) => void
   setIncludeEthercatStatsInPolling: (include: boolean) => void
   setTemporaryDhcpIp: (ipAddress?: string) => void
@@ -286,6 +299,15 @@ export type DeviceActions = {
   setAwaitingPurchase: (awaiting: boolean) => void
   /** Reset licensing to `idle`/null — on disconnect, board change, project close. */
   clearDeviceLicense: () => void
+  /**
+   * Update the project's persistent-storage (RETAIN) settings.
+   *
+   * A project property: the values travel with the project, are editable with
+   * no device attached, and reach the runtime as `retain.conf` in the upload.
+   * Partial by design so the screen can change one field at a time without
+   * re-sending the other two.
+   */
+  setPersistentStorage: (patch: Partial<PersistentStorageSettings>) => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

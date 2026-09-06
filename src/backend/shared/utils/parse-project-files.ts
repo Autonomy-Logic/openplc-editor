@@ -11,7 +11,9 @@
 import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-text-parser'
 import {
   detectLanguageFromExtension,
+  findGraphicalBodyStartIndex,
   findLastEndVarIndex,
+  isGraphicalBodyShape,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
@@ -38,6 +40,32 @@ import { getDefaultSchemaValues } from './default-zod-schema-values'
 // ---------------------------------------------------------------------------
 
 type FallbackPou = PLCPou & { variablesText?: string }
+
+/**
+ * Thrown when a POU cannot be recovered at all, as opposed to a POU whose
+ * *declarations* are malformed.
+ *
+ * The distinction drives what the editor does on open (DOPE-592):
+ *
+ * - **Recoverable** — the variable declarations don't parse. The body is
+ *   intact, so the project opens normally and the offending variables table
+ *   opens in text mode for the user to fix. `createFallbackPou` keeps the raw
+ *   declarations in `variablesText` for exactly this.
+ * - **Unrecoverable** — a graphical POU's JSON body doesn't parse. There is
+ *   nothing to show and nothing to edit. Substituting an empty body here would
+ *   render a blank canvas indistinguishable from a legitimately empty POU, and
+ *   the first save would write that emptiness over the user's real diagram.
+ *   The project must not open with content in this state.
+ */
+export class UnrecoverablePouError extends Error {
+  constructor(
+    message: string,
+    readonly relativePath: string,
+  ) {
+    super(message)
+    this.name = 'UnrecoverablePouError'
+  }
+}
 
 export interface ParsedProjectData {
   meta: {
@@ -72,6 +100,10 @@ export interface ParsedProjectData {
     libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
   }
+  /** POUs that could not be parsed at all. Non-empty means the project must
+   *  NOT be opened with content: see `UnrecoverablePouError`. Distinct from
+   *  `warnings`, which are recoverable and open normally. */
+  fatalErrors?: string[]
   deviceConfiguration?: DeviceConfiguration
   /** Pin mappings parsed from `devices/pin-mapping.json`. Forwarded
    *  to the store's `setDeviceDefinitions`, which accepts BOTH:
@@ -87,6 +119,12 @@ export interface ParsedProjectData {
    *  can echo them back verbatim — an unreadable file must never be
    *  silently dropped from disk. */
   unparsedDataTypeFiles?: RawProjectFile[]
+  /** True when the project still carries its data types inline in
+   *  `project.json` and has no `datatypes/*.dt` on disk — i.e. it predates
+   *  DOPE-385 and has never been saved by a `.dt`-writing build. The save
+   *  flow reads this to migrate the whole set at once rather than leaving a
+   *  half-migrated project behind (see `executeSaveFile`). */
+  dataTypesNeedMigration?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +172,34 @@ function getBaseNameFromPath(relativePath: string): string {
   )
 }
 
+/** A plain IEC 61131-3 identifier — the only shape safe to use as a file name. */
+const iecIdentifierRegex = /^[A-Za-z_]\w*$/
+
+/**
+ * Fold the legacy inline `project.json` data type list in behind the
+ * `datatypes/*.dt` files.
+ *
+ * A `.dt` file is always authoritative for the type it declares. Anything left
+ * only in the inline list is appended, so a project that is HALF migrated — one
+ * `.dt` written by a single-file save, or a batch that failed part-way — keeps
+ * every type instead of losing the ones that have no file yet. Once a project
+ * is fully migrated its inline list is `[]` and this returns the files verbatim.
+ *
+ * A name owned by an UNPARSED `.dt` is excluded as well: the file is the newer
+ * truth even though it cannot be read, and the save flow echoes it back
+ * verbatim, so resurrecting the stale inline copy beside it would show the user
+ * a version that no longer exists on disk.
+ */
+function mergeDataTypes(
+  fromFiles: PLCDataType[],
+  fromProjectJson: PLCDataType[],
+  dataTypeFiles: RawProjectFile[],
+): PLCDataType[] {
+  if (dataTypeFiles.length === 0) return fromProjectJson
+  const ownedByAFile = new Set(dataTypeFiles.map((file) => getBaseNameFromPath(file.relativePath).toLowerCase()))
+  return [...fromFiles, ...fromProjectJson.filter((dt) => !ownedByAFile.has(dt.name.toLowerCase()))]
+}
+
 // ---------------------------------------------------------------------------
 // Fallback POU creation
 // ---------------------------------------------------------------------------
@@ -168,7 +234,12 @@ function createFallbackPou(content: string, language: string, pouType: string, p
   )
   let variablesText = 'VAR\nEND_VAR'
   if (varStartIndex !== -1) {
-    const lastEnd = findLastEndVarIndex(remainingContent, varStartIndex)
+    // Graphical bodies bound the scan at the JSON, for the reason spelled out on
+    // `findLastEndVarIndex`: without it this fallback repeats the very failure it
+    // exists to recover from (DOPE-592).
+    const bodyStart =
+      language === 'ld' || language === 'fbd' ? findGraphicalBodyStartIndex(remainingContent, varStartIndex) : -1
+    const lastEnd = findLastEndVarIndex(remainingContent, varStartIndex, bodyStart === -1 ? undefined : bodyStart)
     if (lastEnd !== -1) {
       variablesText = remainingContent.slice(varStartIndex, lastEnd)
       bodyStartIndex = lastEnd
@@ -193,8 +264,29 @@ function createFallbackPou(content: string, language: string, pouType: string, p
         : remainingContent.slice(bodyStartIndex).trim()
     try {
       bodyValue = JSON.parse(bodyContent)
-    } catch {
-      bodyValue = { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+      // Valid JSON is not enough. LD consumers read `value.rungs`, FBD
+      // consumers read `value.rung.nodes`; anything else (`null`, an object of
+      // the *other* language's shape) sails through `JSON.parse` and only fails
+      // later, deep in a consumer — which is the same class of bug this whole
+      // change exists to remove. Reject it here, where it is still nameable.
+      if (!isGraphicalBodyShape(bodyValue, language)) {
+        throw new SyntaxError(
+          `body is not a valid ${language.toUpperCase()} diagram (expected ${
+            language === 'ld'
+              ? 'an object with a "rungs" array'
+              : 'an object with a "rung" object holding a "nodes" array'
+          })`,
+        )
+      }
+    } catch (bodyErr) {
+      // Unrecoverable: see `UnrecoverablePouError`. The old behaviour
+      // substituted `{ nodes: [], edges: [], viewport }` here, which is the FBD
+      // shape — for a ladder POU it has no `rungs` at all, and it is what made
+      // a failed parse look like an empty diagram the user could then save over.
+      throw new UnrecoverablePouError(
+        bodyErr instanceof Error ? bodyErr.message : String(bodyErr),
+        `${pouName}${language === 'ld' ? '.ld' : '.fbd'}`,
+      )
     }
   } else if (language === 'st' || language === 'il' || language === 'python' || language === 'cpp') {
     const endRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
@@ -270,7 +362,11 @@ function foldLegacyVariableAliases(value: unknown): unknown {
   return value
 }
 
-function parsePouFile(file: RawProjectFile, warnings: string[]): (PLCPou & { variablesText?: string }) | null {
+function parsePouFile(
+  file: RawProjectFile,
+  warnings: string[],
+  fatalErrors: string[],
+): (PLCPou & { variablesText?: string }) | null {
   const ext = file.relativePath.split('.').pop()?.toLowerCase()
   /* istanbul ignore if -- defensive: parseProjectFiles upstream only forwards files whose
      extension matched the POU file glob; an extension-less file path can never reach here */
@@ -333,6 +429,18 @@ function parsePouFile(file: RawProjectFile, warnings: string[]): (PLCPou & { var
     try {
       return createFallbackPou(file.content, language, pouType, pouName)
     } catch (fallbackErr) {
+      // An unrecoverable body is not a warning: there is nothing to show and
+      // nothing to repair in-app, and opening with a blank canvas would invite
+      // a save that destroys the original (DOPE-592). Drop the warning pushed
+      // above — it says "loaded with partial data", which is now untrue — and
+      // report it as fatal so the caller opens the editor empty instead.
+      if (fallbackErr instanceof UnrecoverablePouError) {
+        warnings.pop()
+        fatalErrors.push(
+          `POU "${pouName}" (${file.relativePath}) could not be parsed and the project was not opened: ${fallbackErr.message}`,
+        )
+        return null
+      }
       /* istanbul ignore next -- defensive: createFallbackPou itself is non-throwing for any
          (content, language, pouType, pouName) tuple producible by getLanguageFromExt */
       console.error(`[parseProjectFiles] Fallback also failed: ${file.relativePath}`, fallbackErr)
@@ -412,6 +520,7 @@ export function parseProjectFiles(
   dataTypeFiles: RawProjectFile[] = [],
 ): ParsedProjectData {
   const warnings: string[] = []
+  const fatalErrors: string[] = []
 
   // Parse and Zod-validate project.json (matches old backend safeParseProjectFile behavior)
   let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> }
@@ -494,7 +603,7 @@ export function parseProjectFiles(
   // Parse POU files
   const pous: (PLCPou & { variablesText?: string })[] = []
   for (const file of filteredPouFiles) {
-    const pou = parsePouFile(file, warnings)
+    const pou = parsePouFile(file, warnings, fatalErrors)
     if (pou) {
       // Ensure all POUs have a name (derive from filename if missing)
       if (!pou.name) {
@@ -582,13 +691,32 @@ export function parseProjectFiles(
   /* istanbul ignore next -- defensive guard, same rationale as above */
   if (!configuration.resource.globalVariables) configuration.resource.globalVariables = []
 
+  // `data.dataTypes[].name` is unvalidated external input that the save flow
+  // turns into a path segment (`datatypes/<name>.dt`). A name carrying `..` or
+  // a separator would escape the project directory on the next save, so reject
+  // anything that is not a plain IEC identifier at the boundary — the rule
+  // CLAUDE.md states for every external payload. A type sourced from a `.dt`
+  // file cannot reach here: its name comes from the file name and has already
+  // been through the text parser's own identifier check.
+  const legacyDataTypes: PLCDataType[] = []
+  for (const dt of (data.dataTypes as PLCDataType[]) ?? []) {
+    if (iecIdentifierRegex.test(dt.name)) {
+      legacyDataTypes.push(dt)
+      continue
+    }
+    warnings.push(`Data type "${dt.name}" in project.json has an invalid name and was skipped.`)
+  }
+
   return {
     meta,
     projectData: {
-      // Migration rule: any .dt file present ⇒ the files are the
-      // source of truth; the legacy JSON field is only the fallback
-      // for projects that predate the format.
-      dataTypes: dataTypeFiles.length > 0 ? dataTypesFromFiles : ((data.dataTypes as PLCDataType[]) ?? []),
+      // Migration rule: a `.dt` file always wins for the type it declares,
+      // and any type still only in the legacy `project.json` list rides along
+      // beside it. Merging rather than replacing wholesale is what makes a
+      // HALF-migrated project safe: a build that wrote one `.dt` and left the
+      // inline list alone — or a save that failed part-way through writing
+      // them — would otherwise drop every type that had no file yet.
+      dataTypes: mergeDataTypes(dataTypesFromFiles, legacyDataTypes, dataTypeFiles),
       // Global Variable Lists ride along from project.json. Assembling `projectData`
       // field by field means anything not named here is dropped on load, however well
       // the schema validates it — which is how a list survived every unit test and then
@@ -615,6 +743,8 @@ export function parseProjectFiles(
     deviceConfiguration,
     devicePinMapping,
     warnings: warnings.length > 0 ? warnings : undefined,
+    fatalErrors: fatalErrors.length > 0 ? fatalErrors : undefined,
     ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
+    ...(dataTypeFiles.length === 0 && legacyDataTypes.length > 0 ? { dataTypesNeedMigration: true } : {}),
   }
 }

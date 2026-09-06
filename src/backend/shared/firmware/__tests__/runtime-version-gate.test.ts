@@ -4,12 +4,45 @@ import {
   describeIncompatibleRuntime,
   describeVppRuntimeMismatch,
   isStrucppCompatibleRuntime,
+  isRetainConfigCapableRuntime,
   isUserManagementCapableRuntime,
   MIN_RUNTIME_VERSION,
   MIN_STRUCPP_RUNTIME_VERSION,
+  MIN_RETAIN_CONFIG_RUNTIME_VERSION,
   MIN_USER_MANAGEMENT_RUNTIME_VERSION,
   parseRuntimeVersion,
 } from '../runtime-version-gate'
+
+describe('isRetainConfigCapableRuntime', () => {
+  it('is exposed with the documented minimum version', () => {
+    expect(MIN_RETAIN_CONFIG_RUNTIME_VERSION).toBe('4.2.0')
+  })
+
+  it('accepts v4.2.0 and newer', () => {
+    expect(isRetainConfigCapableRuntime('v4.2.0')).toBe(true)
+    expect(isRetainConfigCapableRuntime('4.2.1')).toBe(true)
+    expect(isRetainConfigCapableRuntime('v5.0.0')).toBe(true)
+  })
+
+  it('accepts a pre-release on the target patch', () => {
+    expect(isRetainConfigCapableRuntime('v4.2.0-rc.1')).toBe(true)
+  })
+
+  it('rejects runtimes with no built-in retain store', () => {
+    // 4.1.10 can still do retain through a VPP driver; what it lacks is
+    // anything for this screen to configure.
+    expect(isRetainConfigCapableRuntime('v4.1.10')).toBe(false)
+    expect(isRetainConfigCapableRuntime('v4.1.9')).toBe(false)
+    expect(isRetainConfigCapableRuntime('v3.0.0')).toBe(false)
+  })
+
+  it('rejects an unknown version rather than guessing', () => {
+    expect(isRetainConfigCapableRuntime(null)).toBe(false)
+    expect(isRetainConfigCapableRuntime(undefined)).toBe(false)
+    expect(isRetainConfigCapableRuntime('')).toBe(false)
+    expect(isRetainConfigCapableRuntime('dev')).toBe(false)
+  })
+})
 
 describe('isUserManagementCapableRuntime', () => {
   it('is exposed with the documented minimum version', () => {

@@ -23,7 +23,7 @@ void debugGetMd5(void *endianness);
 // Always-on debugger extras — served even without full Modbus (DEBUGGER_ENABLED).
 void debugGetStatus(void);
 void debugGetVersion(void);
-void debugGetBoardId(void);
+void debugGetDeviceId(void);
 // On-device license storage (0x49/0x4A). `len` is the BIG-ENDIAN wire length
 // (already unpacked by the dispatcher); the blob CONTENT is little-endian.
 void debugWriteLicense(uint16_t len, const uint8_t *blob);  // 0x49

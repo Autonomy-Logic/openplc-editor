@@ -19,11 +19,12 @@ const currentStatus = (): string => (mockState.deviceConnection as { status: str
 const mockStartLicenseCheck = jest.fn()
 const mockSetLicenseReport = jest.fn()
 const mockClearDeviceLicense = jest.fn()
+const mockSetAwaitingPurchase = jest.fn()
 
 const mockState: Record<string, unknown> = {
   deviceDefinitions: { configuration: { deviceBoard: 'Test Board', communicationPort: 'COM5', vendorScreenData: {} } },
   deviceConnection: { status: 'disconnected', port: null },
-  deviceLicense: { phase: 'idle', report: null },
+  deviceLicense: { phase: 'idle', report: null, awaitingPurchaseUntil: null },
   runtimeConnection: { ipAddress: '192.168.0.128', jwtToken: 'jwt-tok' },
   modalActions: { openModal: mockOpenModal },
   consoleActions: { addLog: mockAddLog },
@@ -32,6 +33,7 @@ const mockState: Record<string, unknown> = {
     startDeviceLicenseCheck: mockStartLicenseCheck,
     setDeviceLicenseReport: mockSetLicenseReport,
     clearDeviceLicense: mockClearDeviceLicense,
+    setAwaitingPurchase: mockSetAwaitingPurchase,
   },
 }
 
@@ -384,7 +386,7 @@ describe('useDeviceConnect', () => {
       await result.current.connect()
 
       const [, props] = mockOpenModal.mock.calls[0]
-      expect(props).toMatchObject({ title: 'No Licence For This Device' })
+      expect(props).toMatchObject({ title: 'No Licence for This Device' })
       expect((props as { buttons: string[] }).buttons).toEqual(['Buy Licence', 'Continue in Demo Mode'])
 
       // Buying opens the device-BOUND purchase page: the id derived main-side is

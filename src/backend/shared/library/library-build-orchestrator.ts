@@ -6,11 +6,10 @@
  * Single source of truth for the `.stlib` compilation flow.  Both
  * desktop and web drive this function through their own
  * `LibraryBuildPort` implementation; every decision, every event,
- * every file name, every hash, every error message, every cache rule
- * is owned by this module.  The port carries only the IO primitives
- * (read / write / delete project files, resolve library archives,
- * run a verification compile) — anything that looks like business
- * logic stays here, by design.
+ * every file name, every error message is owned by this module.  The
+ * port carries only the IO primitives (read / write / delete project
+ * files, resolve library archives) — anything that looks like
+ * business logic stays here, by design.
  *
  * Stages:
  *
@@ -27,8 +26,20 @@
  *      circuits.  Cache record persisted under `build/`.
  *   5. Gather `pouDocs` from the project data, and read the authored
  *      C/C++ / Python POU files off disk for strucpp to carry verbatim.
- *   6. strucpp compile via `libraryBuildFromTranspiledSt`.
- *   7. Write `.stlib` archive to `build/{name}.stlib`.
+ *   5. strucpp compile via `libraryBuildFromTranspiledSt`.
+ *   6. Write `.stlib` archive to `build/{name}.stlib`.
+ *
+ * The build is deliberately TARGET-NEUTRAL.  It used to end with an
+ * avr-gcc verification compile against the OpenPLC Simulator board,
+ * which meant every library was judged by whether its generated C++
+ * links on an ATmega2560 — a board most libraries never run on, and a
+ * ~30 s tax on every clean build.  Worse, the project it verified
+ * instantiated nothing (its whole body was `LocalVar := 3;`), so it
+ * never said anything about whether the library behaves.  Running a
+ * library is now its own action: `composeLibraryDebugHarness` builds
+ * a project that instantiates every block and drives it through the
+ * simulator with the debugger attached.  strucpp's `compileStlib` is
+ * what still fails a bad build.
  *
  * The orchestrator returns a structured result; the adapter wraps it
  * in whatever transport it owns (IPC port message on desktop, Promise
@@ -71,8 +82,8 @@ export interface LibraryBuildArgs {
   /** Build-pass project data: Python POUs lowered to runtime ST, C/C++
    *  POUs replaced by stubs with the originals on `originalCppPous`. */
   projectData: PLCProjectData
-  /** Verification-pass project data: Python POUs lowered to no-op
-   *  stubs (the AVR simulator has no Python interpreter). */
+  /** Verification-pass project data: Python POUs lowered to no-op stubs — a
+   *  verification compile has no Python interpreter behind it. */
   verifyProjectData: PLCProjectData
   /** Skip the MD5 verification cache and force a fresh verify run. */
   cleanBuild: boolean
@@ -179,8 +190,7 @@ async function readResources(
  * The result mirrors the existing `CompileLibraryResult` shape so the
  * desktop's MessagePort wrapper and the web adapter both surface the
  * same structure to the renderer.  `success: false` from this function
- * is a fatal build error; verification failures show up under
- * `verification.success: false` with `success: true` overall.
+ * is a fatal build error.
  */
 export async function runLibraryBuildPipeline(
   args: LibraryBuildArgs,
@@ -242,16 +252,14 @@ export async function runLibraryBuildPipeline(
   const programSt = transpile.programSt
 
   // -------------------------------------------------------------------------
-  // Stage 4: resolve project-enabled library archives
+  // Stage 3: resolve project-enabled library archives
   //
-  // ONE resolution path feeding both verification (so the simulator
-  // compile sees the same symbol set the user's project sees) and
-  // the strucpp library compile.  Missing names fail fast with a
-  // Library-Manager-pointing message before either heavy step runs.
-  // The bundled IEC standard set (TON, TP, CTU, etc.) is included
-  // automatically by every port impl — desktop reads it off disk,
-  // web pulls it from its bundled-stlibs asset glob.  THIS is the
-  // step whose absence on web caused the "Undefined type 'TON'" bug.
+  // Missing names fail fast with a Library-Manager-pointing message
+  // before the strucpp compile runs.  The bundled IEC standard set
+  // (TON, TP, CTU, etc.) is included automatically by every port impl
+  // — desktop reads it off disk, web pulls it from its bundled-stlibs
+  // asset glob.  THIS is the step whose absence on web caused the
+  // "Undefined type 'TON'" bug.
   // -------------------------------------------------------------------------
   const enabledLibraryRefs = (projectData.libraries ?? []).map((ref) => ({
     name: ref.name,
@@ -427,31 +435,31 @@ export async function runLibraryBuildPipeline(
   // Stage 7: strucpp compileStlib
   // -------------------------------------------------------------------------
   emit({ message: 'Compiling library archive...', level: 'info' })
-  const stage7 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
+  const stage5 = libraryBuildFromTranspiledSt(programSt, knownPous, manifest, {
     pouDocs,
     dependencyArchives: depArchives,
     dependencyRefs: enabledLibraryRefs,
     nativeSources,
     resources,
   })
-  if (!stage7.success) {
-    for (const err of stage7.errors) {
+  if (!stage5.success) {
+    for (const err of stage5.errors) {
       const where = err.file ? `[${err.file}${err.line ? `:${err.line}` : ''}] ` : ''
       emit({ message: `${where}${err.message}`, level: 'error' })
     }
     return {
       success: false,
-      error: stage7.errors[0]?.message ?? 'Library compilation failed.',
+      error: stage5.errors[0]?.message ?? 'Library compilation failed.',
       libraryName: manifest.name,
     }
   }
 
   // -------------------------------------------------------------------------
-  // Stage 8: write .stlib archive
+  // Stage 6: write .stlib archive
   // -------------------------------------------------------------------------
   const stlibRelPath = `${STLIB_OUT_DIR}/${manifest.name}.stlib`
   try {
-    await port.writeBuildFile(projectPath, stlibRelPath, JSON.stringify(stage7.archive, null, 2) + '\n')
+    await port.writeBuildFile(projectPath, stlibRelPath, JSON.stringify(stage5.archive, null, 2) + '\n')
   } catch (error) {
     return fail(emit, `Could not write ${manifest.name}.stlib: ${formatError(error)}`, { libraryName: manifest.name })
   }

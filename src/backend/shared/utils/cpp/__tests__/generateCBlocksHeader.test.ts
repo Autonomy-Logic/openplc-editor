@@ -91,7 +91,7 @@ describe('generateCBlocksHeader', () => {
       expect(result).toContain('  strucpp::HELPER *H;')
     })
 
-    it('spells an array of a data type through the same rule', () => {
+    it('spells an array of a data type bare, not through the scalar rule', () => {
       const variables: PLCVariable[] = [
         {
           name: 'bank',
@@ -112,7 +112,43 @@ describe('generateCBlocksHeader', () => {
 
       const result = generateCBlocksHeader([{ name: 'Blk', variables }], ['Motor'])
 
-      expect(result).toContain('  strucpp::IEC_MOTOR *BANK;')
+      // strucpp declares `Array1D<MOTOR, 0, 3>`, so the element is a bare
+      // `MOTOR`. `IEC_MOTOR` happened to name the same type here — the alias is
+      // the identity for a structure — but it is the wrong rule, and for an
+      // enumeration the same mistake produced a pointer type that would not
+      // compile. See the enumeration case below.
+      expect(result).toContain('  strucpp::MOTOR *BANK;')
+    })
+
+    it('spells an array of an enumeration bare, which the scalar rule got wrong', () => {
+      // Regression for the defect this exposed: `using IEC_MODE =
+      // IEC_ENUM<MODE>` is a wrapper, but strucpp stores the raw enum inside an
+      // array, so the glue's `&MODES[0]` is a `MODE*`. Emitting `IEC_MODE*`
+      // here failed the device build with `cannot convert MODE* to IEC_MODE*`,
+      // making an array of an enumeration undeclarable on a C++ block.
+      const variables: PLCVariable[] = [
+        {
+          name: 'modes',
+          class: 'input',
+          type: {
+            definition: 'array',
+            value: 'ARRAY [0..1] OF Mode',
+            data: {
+              baseType: { definition: 'user-data-type', value: 'Mode' },
+              dimensions: [{ dimension: '0..1' }],
+            },
+          },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ]
+
+      const result = generateCBlocksHeader([{ name: 'Blk', variables }], ['Mode'])
+
+      expect(result).toContain('  strucpp::MODE *MODES;')
+      // The SCALAR spelling must stay wrapped — that one was always right.
+      expect(result).not.toContain('IEC_MODE *MODES;')
     })
 
     it('leaves every user type bare when the project declares no data types', () => {

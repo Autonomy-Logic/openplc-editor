@@ -119,6 +119,9 @@ export function buildCBlocksFromPous(
   }
 }
 
+// Included from src/ units (runtime glue, HALs); arduino-cli hides the sketch dir from library builds.
+const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
+
 /**
  * Assemble the firmware file tree.
  *
@@ -128,6 +131,7 @@ export function buildCBlocksFromPous(
  *  - `src/c_blocks_code.cpp`                         — written when `cBlocks.code !== null`
  *  - `examples/Baremetal/modules/...`                — from skeleton (Arduino library helpers)
  *  - `src/arduino.cpp`                               — from skeleton (HAL adapter, simulator-specific)
+ *  - `src/openplc_retain.h`                          — mirrored from `examples/Baremetal/` (vendor-facing contract)
  *  - `src/c_blocks.h`                                — written verbatim from `cBlocks.header`
  *  - `src/defines.h`                                 — written verbatim from `definesH`
  *  - `src/<strucpp-emitted-file>`                    — every key from `strucppFiles`
@@ -185,6 +189,12 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // runtime header, etc.).  Subsequent overwrites replace specific
   // entries.
   Object.assign(files, firmwareSkeleton)
+
+  // Copied, not moved: the sketch still compiles its own copy next to openplc_retain_weak.cpp.
+  for (const header of VENDOR_FACING_CONTRACT_HEADERS) {
+    const content = files[`examples/Baremetal/${header}`]
+    if (typeof content === 'string') files[`src/${header}`] = content
+  }
 
   // Strucpp output lands under `src/` alongside the runtime glue
   // — arduino-cli's `--library src` pass picks every TU there into

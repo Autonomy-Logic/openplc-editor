@@ -105,14 +105,26 @@ describe('describeShmLeaves', () => {
     expect(leaf.field).toBe('x')
     expect(leaf.path).toEqual(['x'])
     expect(leaf.access).toBe('X')
-    expect(leaf.count).toBe(1)
+    expect(leaf.access).toBe('X')
   })
 
-  it('describes an array as one leaf with its element count and lower bound', () => {
-    const [leaf] = leavesOf(describeShmLeaves(arrayOf('data', 'INT', '2..5'), inbound()))
+  it('describes an array as one leaf PER ELEMENT, at its declared indices', () => {
+    // The compiler enumerates every element of every array as its own leaf, and
+    // this follows it. The previous model was one leaf plus a repeat count,
+    // which could not describe an array of anything whose element needs more
+    // than a single struct format item.
+    const leaves = leavesOf(describeShmLeaves(arrayOf('data', 'INT', '2..5'), inbound()))
 
-    expect(leaf.count).toBe(4)
-    expect(leaf.startIndex).toBe(2)
+    expect(leaves).toHaveLength(4)
+    expect(leaves.map((l) => l.access)).toEqual(['DATA[2]', 'DATA[3]', 'DATA[4]', 'DATA[5]'])
+    expect(leaves.map((l) => l.access)).toEqual(['DATA[2]', 'DATA[3]', 'DATA[4]', 'DATA[5]'])
+    // Python index == IEC index, on every surface.
+    expect(leaves.map((l) => l.path)).toEqual([
+      ['data', 2],
+      ['data', 3],
+      ['data', 4],
+      ['data', 5],
+    ])
   })
 
   it('flattens a structure into one leaf per member, in declaration order', () => {
@@ -150,7 +162,10 @@ describe('describeShmLeaves', () => {
   it('describes an enumeration as its stored integer, naming the type for Python', () => {
     const [leaf] = leavesOf(describeShmLeaves(userTyped('md', 'Mode'), inbound([MODE])))
 
-    expect(leaf.descriptor.cType).toBe('int16_t')
+    // 32-bit, matching the C++ storage: the editor's enumerated type carries no
+    // base type, so strucpp emits a bare `enum class` whose underlying type is
+    // `int`. Narrowing to int16 was a truncation waiting for a reason.
+    expect(leaf.descriptor.cType).toBe('int32_t')
     expect(leaf.enumTypeName).toBe('Mode')
     // The access stays assignable; the emitter casts through the wrapper, since
     // an IEC_ENUM_Var yields an IEC_ENUM_Value that converts to the scoped enum
@@ -200,11 +215,10 @@ describe('describeShmLeaves', () => {
         },
       ],
     }
-    const [leaf] = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
+    const leaves = leavesOf(describeShmLeaves(userTyped('r', 'Rig'), inbound([rig])))
 
-    expect(leaf.count).toBe(3)
-    expect(leaf.startIndex).toBe(1)
-    expect(leaf.access).toBe('R.TRIMS')
+    expect(leaves.map((l) => l.access)).toEqual(['R.TRIMS[1]', 'R.TRIMS[2]', 'R.TRIMS[3]'])
+    expect(leaves.map((l) => l.access)).toEqual(['R.TRIMS[1]', 'R.TRIMS[2]', 'R.TRIMS[3]'])
   })
 
   it('refuses an array member whose dimension text is malformed', () => {
@@ -361,10 +375,10 @@ describe('describeShmLeaves', () => {
       expect(leaves.every((l) => l.descriptor.size === 8)).toBe(true)
     })
 
-    it('refuses an instance whose pin is a multi-dimensional array', () => {
-      // The rank rule applies to a block's pins too, not only to the variables
-      // the Python POU declares itself — an instance's pins cross the same
-      // boundary and are emitted by the same exchange.
+    it('expands an instance whose pin is a multi-dimensional array', () => {
+      // The rank rule applies to a block's pins as it does to a POU's own
+      // variables — an instance's pins cross the same boundary and are emitted
+      // by the same exchange. Rank 2 is now described rather than refused.
       const gridBlock = {
         name: 'Grid',
         pouType: 'function-block' as const,
@@ -389,10 +403,10 @@ describe('describeShmLeaves', () => {
         body: { language: 'st' as const, value: '' },
       }
       const instance: PLCVariable = { ...ton('g'), type: { definition: 'derived', value: 'Grid' } }
-      const refusal = refusalOf(describeShmLeaves(instance, { dataTypes: [], pous: [gridBlock], direction: 'in' }))
+      const leaves = leavesOf(describeShmLeaves(instance, { dataTypes: [], pous: [gridBlock], direction: 'in' }))
 
-      expect(refusal?.reason).toContain('2-dimensional array cannot cross into Python')
-      expect(refusal?.path).toEqual(['g', 'CELLS'])
+      expect(leaves.map((l) => l.access)).toEqual(['G.CELLS(0, 0)', 'G.CELLS(0, 1)', 'G.CELLS(1, 0)', 'G.CELLS(1, 1)'])
+      expect(leaves[0].access).toBe('G.CELLS(0, 0)')
     })
 
     it('omits a library block’s pins that are not declared', () => {
@@ -473,7 +487,7 @@ describe('describeShmLeaves', () => {
       expect(refusal?.reason).toContain('no function block by that name was found')
     })
 
-    it('refuses an array of function block instances', () => {
+    it('describes an array of function block instances, one set of pins per element', () => {
       const bank: PLCVariable = {
         name: 'bank',
         class: 'local',
@@ -486,10 +500,18 @@ describe('describeShmLeaves', () => {
         documentation: '',
         debug: false,
       }
+      const leaves = leavesOf(describeShmLeaves(bank, { ...inbound(), libraries: [TON_LIB] }))
 
-      expect(refusalOf(describeShmLeaves(bank, { ...inbound(), libraries: [TON_LIB] }))?.reason).toContain(
-        'array of function block instances',
-      )
+      expect(leaves.map((l) => l.access)).toEqual([
+        'BANK[0].IN',
+        'BANK[0].PT',
+        'BANK[0].Q',
+        'BANK[0].ET',
+        'BANK[1].IN',
+        'BANK[1].PT',
+        'BANK[1].Q',
+        'BANK[1].ET',
+      ])
     })
 
     it('refuses an instance whose pin type cannot cross, naming the pin', () => {
@@ -503,11 +525,14 @@ describe('describeShmLeaves', () => {
       expect(refusal?.path).toEqual(['a', 'IN1'])
     })
 
-    it('refuses an array of structures', () => {
-      const bank = arrayOf('bank', 'Motor')
-      bank.type.data!.baseType = { definition: 'user-data-type', value: 'Motor' }
+    it('describes an array of structures, one set of members per element', () => {
+      const bank = arrayOfRank('bank', 'Motor', ['0..1'], 'user-data-type')
+      const leaves = leavesOf(describeShmLeaves(bank, inbound([MOTOR])))
 
-      expect(refusalOf(describeShmLeaves(bank, inbound([MOTOR])))?.reason).toContain('array of structures')
+      expect(leaves.map((l) => l.access)).toEqual(['BANK[0].SPEED', 'BANK[0].LABEL', 'BANK[1].SPEED', 'BANK[1].LABEL'])
+      // The class name for each element's node travels with the leaf, so the
+      // Python assembler never has to walk the project's types again.
+      expect(leaves[0].objectPath).toEqual([null, 'Motor', null])
     })
 
     it('refuses a named ARRAY type', () => {
@@ -577,60 +602,126 @@ describe('describeShmLayout', () => {
   })
 })
 
-describe('describeShmLeaves — array shapes the exchange cannot express', () => {
-  // Each of these used to be accepted and then mis-emitted. A refusal is the
-  // contract (AC 3): marshal correctly, or say why not. Silence was the one
-  // outcome ruled out, because a leaf the format string mis-sizes shifts every
-  // field after it and the corruption surfaces on an unrelated variable.
+describe('describeShmLeaves — array shapes, following the compiler', () => {
+  // Every one of these was refused under the count-based model, because one leaf
+  // plus a repeat count cannot describe an element that needs more than a single
+  // struct format item, or an index that needs more than one subscript. The
+  // compiler enumerates them all as individual leaves (verified against a real
+  // `debug-map.json`), and following that enumeration makes them ordinary.
 
-  it('refuses a two-dimensional array, naming the rank and the way out', () => {
-    const refusal = refusalOf(describeShmLeaves(arrayOfRank('grid', 'INT', ['0..1', '0..2']), inbound()))
-    expect(refusal?.reason).toContain('2-dimensional array cannot cross into Python')
-    expect(refusal?.reason).toContain('one-dimensional arrays only')
+  it('expands a two-dimensional array row-major, at its declared bounds', () => {
+    const leaves = leavesOf(describeShmLeaves(arrayOfRank('grid', 'INT', ['1..2', '0..2']), inbound()))
+
+    expect(leaves.map((l) => l.access)).toEqual([
+      'GRID(1, 0)',
+      'GRID(1, 1)',
+      'GRID(1, 2)',
+      'GRID(2, 0)',
+      'GRID(2, 1)',
+      'GRID(2, 2)',
+    ])
+    // strucpp passes rank >= 2 as Array2D/Array3D, whose storage is private, so
+    // the element is reached through `operator()` rather than a flat subscript.
+    expect(leaves[0].access).toBe('GRID(1, 0)')
   })
 
-  it('refuses a three-dimensional array', () => {
-    const refusal = refusalOf(describeShmLeaves(arrayOfRank('cube', 'INT', ['0..1', '0..1', '0..1']), inbound()))
-    expect(refusal?.reason).toContain('3-dimensional array cannot cross into Python')
+  it('expands a three-dimensional array', () => {
+    const leaves = leavesOf(describeShmLeaves(arrayOfRank('cube', 'INT', ['0..1', '0..1', '0..1']), inbound()))
+
+    expect(leaves).toHaveLength(8)
+
+    expect(leaves[0].access).toBe('CUBE(0, 0, 0)')
+    expect(leaves[7].access).toBe('CUBE(1, 1, 1)')
   })
 
-  it('accepts a one-dimensional array, so the rank check is not over-broad', () => {
-    const [leaf] = leavesOf(describeShmLeaves(arrayOfRank('row', 'INT', ['0..3']), inbound()))
-    expect(leaf.isArray).toBe(true)
-    expect(leaf.count).toBe(4)
-  })
-
-  it('refuses an array of STRING', () => {
-    expect(refusalOf(describeShmLeaves(arrayOf('names', 'STRING'), inbound()))?.reason).toContain(
-      'an array of STRING cannot cross into Python yet',
+  it('refuses beyond rank 3, which is where the compiler stops generating containers', () => {
+    const refusal = refusalOf(
+      describeShmLeaves(arrayOfRank('hyper', 'INT', ['0..1', '0..1', '0..1', '0..1']), inbound()),
     )
+    expect(refusal?.reason).toContain('4-dimensional array cannot cross into Python')
+    expect(refusal?.reason).toContain('up to 3 dimensions')
   })
 
-  it('refuses an array of WSTRING', () => {
-    expect(refusalOf(describeShmLeaves(arrayOf('names', 'WSTRING'), inbound()))?.reason).toContain(
-      'an array of WSTRING cannot cross into Python yet',
+  it('expands an array of STRING, one length-and-body pair per element', () => {
+    const leaves = leavesOf(describeShmLeaves(arrayOf('names', 'STRING', '0..2'), inbound()))
+
+    expect(leaves.map((l) => l.access)).toEqual(['NAMES[0]', 'NAMES[1]', 'NAMES[2]'])
+    expect(leaves.every((l) => l.descriptor.kind === 'string')).toBe(true)
+  })
+
+  it('expands an array of WSTRING', () => {
+    const leaves = leavesOf(describeShmLeaves(arrayOf('names', 'WSTRING', '0..1'), inbound()))
+
+    expect(leaves.map((l) => l.access)).toEqual(['NAMES[0]', 'NAMES[1]'])
+    expect(leaves.every((l) => l.descriptor.kind === 'wstring')).toBe(true)
+  })
+
+  it('expands an array of an enumeration, each element wrapped in its class', () => {
+    const leaves = leavesOf(
+      describeShmLeaves(arrayOfRank('modes', 'Mode', ['0..2'], 'user-data-type'), inbound([MODE])),
     )
+
+    expect(leaves.map((l) => l.access)).toEqual(['MODES[0]', 'MODES[1]', 'MODES[2]'])
+    expect(leaves.every((l) => l.enumTypeName === 'Mode')).toBe(true)
   })
 
-  it('refuses an array of an enumeration', () => {
-    const modes = arrayOfRank('modes', 'Mode', ['0..2'], 'user-data-type')
-    const refusal = refusalOf(describeShmLeaves(modes, inbound([MODE])))
-    expect(refusal?.reason).toContain('an array of enumerations cannot cross into Python yet')
+  it('describes a single-element array as an array of one, not a scalar', () => {
+    const leaves = leavesOf(describeShmLeaves(arrayOf('one', 'INT', '0..0'), inbound()))
+
+    expect(leaves).toHaveLength(1)
+    expect(leaves[0].access).toBe('ONE[0]')
+    expect(leaves[0].path).toEqual(['one', 0])
   })
 
-  it('treats a single-element array as an array, not a scalar', () => {
-    // `ARRAY [0..0] OF INT` has count 1. Every emitter used to branch on
-    // `count > 1`, so this bound a plain int where the user declared an array —
-    // a scalar struct field against an array member on the C side.
-    const [leaf] = leavesOf(describeShmLeaves(arrayOf('one', 'INT', '0..0'), inbound()))
-    expect(leaf.isArray).toBe(true)
-    expect(leaf.count).toBe(1)
-    expect(leaf.startIndex).toBe(0)
-  })
-
-  it('carries isArray false for a genuine scalar', () => {
+  it('leaves a genuine scalar unsubscripted', () => {
     const [leaf] = leavesOf(describeShmLeaves(scalar('x', 'INT'), inbound()))
-    expect(leaf.isArray).toBe(false)
-    expect(leaf.count).toBe(1)
+
+    expect(leaf.access).toBe('X')
+    expect(leaf.path).toEqual(['x'])
+  })
+
+  it('still refuses an array whose bounds cannot be read', () => {
+    const bad = arrayOfRank('bad', 'INT', ['nonsense'])
+    expect(refusalOf(describeShmLeaves(bad, inbound()))?.reason).toContain('array bounds cannot be read')
+  })
+})
+
+describe('refusals propagate from wherever they happen', () => {
+  it('surfaces a nested structure member the boundary cannot describe, naming its path', () => {
+    // The refusal has to travel out of the member loop rather than be swallowed
+    // into a partial leaf list — a layout missing a field is exactly the silent
+    // corruption the walk exists to prevent.
+    const inner: PLCDataType = {
+      name: 'Inner',
+      derivation: 'structure',
+      variable: [{ name: 'mystery', type: { definition: 'base-type', value: 'NotAType' } }],
+    }
+    const outer: PLCDataType = {
+      name: 'Outer',
+      derivation: 'structure',
+      variable: [{ name: 'deep', type: { definition: 'user-data-type', value: 'Inner' } }],
+    }
+    const refusal = refusalOf(describeShmLeaves(userTyped('o', 'Outer'), inbound([outer, inner])))
+
+    expect(refusal?.path).toEqual(['o', 'deep', 'mystery'])
+    expect(refusal?.reason).toContain('not a type a Python block can exchange')
+  })
+
+  it('surfaces an array whose ELEMENT type cannot be described', () => {
+    // The refusal happens inside the per-element expansion, so it has to travel
+    // out of that loop too — otherwise the array contributes a short leaf list
+    // and every field after it shifts.
+    const bad = arrayOfRank('junk', 'NotAType', ['0..1'])
+    const refusal = refusalOf(describeShmLeaves(bad, inbound()))
+
+    expect(refusal?.reason).toContain('not a type a Python block can exchange')
+    // The path names the element that failed, not just the variable.
+    expect(refusal?.path).toEqual(['junk', 0])
+  })
+
+  it('lists instances with no data types supplied, which is the library-only case', () => {
+    // `dataTypes` defaults to empty: a project can declare no structures at all
+    // and still instantiate a library function block.
+    expect(pythonFunctionBlockInstances([userTyped('t', 'TON')]).map((v) => v.name)).toEqual(['t'])
   })
 })

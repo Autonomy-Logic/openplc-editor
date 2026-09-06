@@ -115,6 +115,55 @@ describe('parseAdvertisement', () => {
       apiPort: 8443,
     })
   })
+
+  it('carries the stored project name and timestamp when the device has one', () => {
+    // This is what lets the retrieve picker show something useful without
+    // logging in to every device on the network first.
+    const device = parseAdvertisement(
+      JSON.stringify({
+        service: 'openplc-runtime',
+        hostname: 'plc-1',
+        runtime_version: 'v4.2.0',
+        api_port: 8443,
+        project_name: 'Traffic Light',
+        project_timestamp: '2026-08-31T12:00:00Z',
+      }),
+      '10.0.0.5',
+    )
+    expect(device?.projectName).toBe('Traffic Light')
+    expect(device?.projectTimestamp).toBe('2026-08-31T12:00:00Z')
+  })
+
+  it('leaves the project fields undefined when the device stores nothing', () => {
+    // Absent keys are how a device says "nothing to retrieve"; turning them
+    // into empty strings would make that indistinguishable from a project
+    // whose name is blank.
+    const device = parseAdvertisement(
+      JSON.stringify({
+        service: 'openplc-runtime',
+        hostname: 'plc-1',
+        runtime_version: 'v4.2.0',
+        api_port: 8443,
+      }),
+      '10.0.0.5',
+    )
+    expect(device?.projectName).toBeUndefined()
+    expect(device?.projectTimestamp).toBeUndefined()
+  })
+
+  it('ignores an empty project name rather than showing a blank row', () => {
+    const device = parseAdvertisement(
+      JSON.stringify({
+        service: 'openplc-runtime',
+        hostname: 'plc-1',
+        runtime_version: 'v4.2.0',
+        api_port: 8443,
+        project_name: '',
+      }),
+      '10.0.0.5',
+    )
+    expect(device?.projectName).toBeUndefined()
+  })
 })
 
 describe('clampDiscoveryDuration', () => {

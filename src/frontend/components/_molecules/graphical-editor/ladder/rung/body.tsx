@@ -503,10 +503,28 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
 
-      if (blockLibraryType === 'system')
-        pouLibrary = libraries.system
+      if (blockLibraryType === 'system') {
+        const libraryPou = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
+        // Copy the signature, not the library entry. That entry also carries
+        // `body` (the authored source, which for a native C/C++ or Python block
+        // is the entire file) and `language`, and passing the object straight
+        // through froze a copy of the library's source into every project that
+        // placed the block. Nothing ever reads either field back off a placed
+        // variant, and the embedded VAR ... END_VAR broke the POU parser badly
+        // enough that the project would not open (DOPE-592). The user-library
+        // branch below has always built a curated object this way.
+        pouLibrary = libraryPou
+          ? {
+              name: libraryPou.name,
+              type: libraryPou.type,
+              variables: libraryPou.variables,
+              documentation: libraryPou.documentation,
+              extensible: libraryPou.extensible ?? false,
+            }
+          : undefined
+      }
 
       if (blockLibraryType === 'user') {
         const library = libraries.user.find((library) => library.name === blockLibrary)

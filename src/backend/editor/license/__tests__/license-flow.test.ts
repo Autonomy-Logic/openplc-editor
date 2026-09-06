@@ -94,14 +94,19 @@ describe('verifyStoredLicenseBlob', () => {
     const other = deriveDeviceId(Uint8Array.from([9, 9, 9, 9]))
     const verdict = verifyStoredLicenseBlob(blobFor({ deviceId: other }), DEVICE_ID, PACKAGE_ID)
 
-    expect(verdict).toEqual({ ok: false, reason: `stored license is bound to device ${other}, not ${DEVICE_ID}` })
+    // The reason reaches the user verbatim, so it must not carry the two 32-hex
+    // ids — it says WHICH device, not which bytes.
+    expect(verdict).toEqual({
+      ok: false,
+      reason: 'The licence stored on this device was issued for a different device.',
+    })
   })
 
   it('rejects a blob issued for another VPP', () => {
     const verdict = verifyStoredLicenseBlob(blobFor({ packageId: 'com.openplc.other-licensed' }), DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(verdict.reason).toMatch(/stored license is for product/)
+    if (!verdict.ok) expect(verdict.reason).toBe('The licence stored on this device was issued for a different VPP.')
   })
 
   it('rejects a blob whose crc32 does not cover its bytes (tampered or truncated in place)', () => {
@@ -111,28 +116,30 @@ describe('verifyStoredLicenseBlob', () => {
     const verdict = verifyStoredLicenseBlob(tampered, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    if (!verdict.ok) expect(verdict.reason).toMatch(/crc32/)
+    if (!verdict.ok) expect(verdict.reason).toBe('The licence stored on this device is damaged.')
   })
 
-  it('rejects a blob with no OPLC magic', () => {
+  it('rejects a blob that is not a licence at all (no magic)', () => {
     const noMagic = blobFor()
     noMagic[0] = 0x00
 
     const verdict = verifyStoredLicenseBlob(noMagic, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
-    // Magic is checked before crc32, so the message names the real problem.
-    if (!verdict.ok) expect(verdict.reason).toMatch(/no OPLC magic/)
+    // Magic is checked before the checksum, so the message names the real
+    // problem. And the reason reaches the user, so it names the CONDITION
+    // rather than the field that failed.
+    if (!verdict.ok) expect(verdict.reason).toBe('The data stored on this device is not a licence.')
   })
 
   it('rejects a short or absent blob rather than parsing past the end', () => {
     expect(verifyStoredLicenseBlob(undefined, DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
-      reason: 'stored license is 0 bytes, expected 98',
+      reason: 'The licence stored on this device is incomplete.',
     })
     expect(verifyStoredLicenseBlob(blobFor().subarray(0, 40), DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
-      reason: 'stored license is 40 bytes, expected 98',
+      reason: 'The licence stored on this device is incomplete.',
     })
   })
 
@@ -151,7 +158,10 @@ describe('resolveDeviceLicense', () => {
   it('reports an already-stored license without asking the backend', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: blobFor() }] })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } })
     expect(checkDeviceActivation).not.toHaveBeenCalled()
@@ -168,7 +178,10 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'activated' } })
     expect(checkDeviceActivation).toHaveBeenCalledWith({ deviceId: DEVICE_ID, packageId: PACKAGE_ID })
@@ -191,7 +204,10 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(checkDeviceActivation).toHaveBeenCalled()
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
@@ -201,7 +217,10 @@ describe('resolveDeviceLicense', () => {
     checkDeviceActivation.mockResolvedValue({ licensed: false, reason: 'no active subscription' })
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     // `entitlementChecked: true` is what earns the UI the right to offer a
     // purchase: the backend WAS asked and said no.
@@ -219,7 +238,10 @@ describe('resolveDeviceLicense', () => {
     checkDeviceActivation.mockResolvedValue({ licensed: false, error: 'Activation request failed: 429' })
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'check-failed', error: 'Activation request failed: 429' })
   })
@@ -227,23 +249,104 @@ describe('resolveDeviceLicense', () => {
   it('reports unsupported when the device has no storage backend', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_UNSUPPORTED, unsupported: true }] })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'unsupported' } })
     expect(checkDeviceActivation).not.toHaveBeenCalled()
   })
 
   it('never derives an id from an empty anchor', async () => {
-    // sha256(prefix || <nothing>) is a CONSTANT: every board without a unique id
+    // sha256(prefix || <nothing>) is a CONSTANT: every board without an identity
     // would share one device id, so one purchase would license the whole fleet.
     const link = transport({ reads: [] })
 
-    const result = await resolveDeviceLicense(link, { anchor: new Uint8Array(0), packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: new Uint8Array(0) },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/no unique hardware id/)
+      expect(result.outcome.error).toMatch(/did not report an identity a licence can be issued for/)
+      // Terminal: re-asking cannot change it, so the UI must not offer a retry.
+      expect(result.outcome.retryable).toBe(false)
+      // The message names the ACTION (rebuild), not the internals. "license-core"
+      // is a component the user cannot act on.
+      expect(result.outcome.error).toMatch(/rebuild and upload/i)
+      expect(result.outcome.error).not.toMatch(/license-core/i)
+    }
+    expect(link.readCount()).toBe(0)
+    expect(checkDeviceActivation).not.toHaveBeenCalled()
+  })
+
+  /*
+   * The baremetal half of the union (DOPE-589). The board reports an id the
+   * closed license-core already derived, so the editor must USE it, not hash it
+   * again: a second hash would produce an identity the device can never
+   * reproduce and no licence was ever issued for.
+   */
+  it('uses a reported device id as-is, without hashing it again', async () => {
+    const reported = Uint8Array.from(Buffer.from(DEVICE_ID, 'hex'))
+    const link = transport({ reads: [] })
+
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'device-id', deviceId: reported },
+      packageId: PACKAGE_ID,
+    })
+
+    // Same hex the anchor path derives for this board: the two halves of the
+    // union agree on the identity, which is the whole point of the move.
+    expect(result.deviceId).toBe(DEVICE_ID)
+    expect(deriveDeviceId(reported)).not.toBe(DEVICE_ID) // hashing again WOULD differ
+  })
+
+  it('refuses an empty reported device id', async () => {
+    const link = transport({ reads: [] })
+
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'device-id', deviceId: new Uint8Array(0) },
+      packageId: PACKAGE_ID,
+    })
+
+    expect(result.deviceId).toBeUndefined()
+    expect(result.outcome.state).toBe('check-failed')
+    if (result.outcome.state === 'check-failed') {
+      expect(result.outcome.error).toMatch(/did not report an identity a licence can be issued for/)
+      // Terminal: re-asking cannot change it, so the UI must not offer a retry.
+      expect(result.outcome.retryable).toBe(false)
+      // The message names the ACTION (rebuild), not the internals. "license-core"
+      // is a component the user cannot act on.
+      expect(result.outcome.error).toMatch(/rebuild and upload/i)
+      expect(result.outcome.error).not.toMatch(/license-core/i)
+    }
+    expect(link.readCount()).toBe(0)
+    expect(checkDeviceActivation).not.toHaveBeenCalled()
+  })
+
+  it('refuses a reported device id of the wrong length', async () => {
+    // 9 bytes is what an AVR ArduinoUniqueID used to report on 0x48. A firmware
+    // that still answers a raw anchor there, against a license-core that
+    // derives, would send a customer to checkout for an id no device holds.
+    const link = transport({ reads: [] })
+
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'device-id', deviceId: new Uint8Array(9) },
+      packageId: PACKAGE_ID,
+    })
+
+    expect(result.deviceId).toBeUndefined()
+    expect(result.outcome.state).toBe('check-failed')
+    if (result.outcome.state === 'check-failed') {
+      // The width is an internal contract; it used to be the FIRST thing a user
+      // saw when connecting a board flashed by an older editor.
+      expect(result.outcome.error).toMatch(/format this editor does not recognise/)
+      expect(result.outcome.error).toMatch(/rebuild and upload/i)
+      expect(result.outcome.error).not.toMatch(/\d+-byte|expected 16/)
+      expect(result.outcome.retryable).toBe(false)
     }
     expect(link.readCount()).toBe(0)
     expect(checkDeviceActivation).not.toHaveBeenCalled()
@@ -252,7 +355,10 @@ describe('resolveDeviceLicense', () => {
   it('reports check-failed when the device does not answer the read at all', async () => {
     const link = transport({ reads: [{ success: false, error: 'Request timeout' }] })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'check-failed', error: 'Request timeout' } })
   })
@@ -270,7 +376,10 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
@@ -287,11 +396,14 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/the read-back failed/)
+      expect(result.outcome.error).toMatch(/Reading it back from the device failed/)
     }
   })
 
@@ -302,7 +414,10 @@ describe('resolveDeviceLicense', () => {
       write: { success: true, status: LIC_UNSUPPORTED, unsupported: true },
     })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'unsupported' })
   })
@@ -314,7 +429,10 @@ describe('resolveDeviceLicense', () => {
       write: { success: false, error: 'ERROR_OUT_OF_MEMORY' },
     })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'check-failed', error: 'ERROR_OUT_OF_MEMORY' })
   })
@@ -323,11 +441,14 @@ describe('resolveDeviceLicense', () => {
     checkDeviceActivation.mockResolvedValue({ licensed: true })
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
-      expect(result.outcome.error).toMatch(/no blob to write/)
+      expect(result.outcome.error).toMatch(/sent no licence data/)
     }
     expect(link.writes).toHaveLength(0)
   })
@@ -338,7 +459,10 @@ describe('resolveDeviceLicense', () => {
       writeLicense: () => Promise.resolve({ success: true }),
     }
 
-    const result = await resolveDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await resolveDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'check-failed', error: 'port closed' } })
   })
@@ -352,7 +476,10 @@ describe('inspectDeviceLicense', () => {
   it('confirms a stored, verified license', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: blobFor() }] })
 
-    const result = await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } })
   })
@@ -360,7 +487,7 @@ describe('inspectDeviceLicense', () => {
   it('NEVER contacts the backend, even when the device holds nothing', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    await inspectDeviceLicense(link, { identity: { kind: 'anchor', anchor: ANCHOR }, packageId: PACKAGE_ID })
 
     // The whole point of this entry point: cheap enough for a screen open.
     expect(checkDeviceActivation).not.toHaveBeenCalled()
@@ -372,7 +499,10 @@ describe('inspectDeviceLicense', () => {
     // license" would be a guess, and the wrong one for anyone who already paid.
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'unlicensed', entitlementChecked: false })
   })
@@ -381,7 +511,10 @@ describe('inspectDeviceLicense', () => {
     const foreign = blobFor({ deviceId: deriveDeviceId(Uint8Array.from([1, 2, 3, 4])) })
     const link = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: foreign }] })
 
-    const result = await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'unlicensed', entitlementChecked: false })
   })
@@ -389,7 +522,10 @@ describe('inspectDeviceLicense', () => {
   it('reports unsupported when the device has no storage backend', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_UNSUPPORTED, unsupported: true }] })
 
-    const result = await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'unsupported' })
   })
@@ -397,7 +533,10 @@ describe('inspectDeviceLicense', () => {
   it('reports check-failed when the device does not answer', async () => {
     const link = transport({ reads: [{ success: false, error: 'Request timeout' }] })
 
-    const result = await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.outcome).toEqual({ state: 'check-failed', error: 'Request timeout' })
   })
@@ -405,7 +544,10 @@ describe('inspectDeviceLicense', () => {
   it('refuses an empty anchor without reading anything', async () => {
     const link = transport({ reads: [] })
 
-    const result = await inspectDeviceLicense(link, { anchor: new Uint8Array(0), packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: new Uint8Array(0) },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
@@ -418,7 +560,10 @@ describe('inspectDeviceLicense', () => {
       writeLicense: () => Promise.resolve({ success: true }),
     }
 
-    const result = await inspectDeviceLicense(link, { anchor: ANCHOR, packageId: PACKAGE_ID })
+    const result = await inspectDeviceLicense(link, {
+      identity: { kind: 'anchor', anchor: ANCHOR },
+      packageId: PACKAGE_ID,
+    })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'check-failed', error: 'port closed' } })
   })

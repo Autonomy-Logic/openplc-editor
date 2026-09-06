@@ -41,6 +41,9 @@ export interface AcceleratorPort {
   onOpenProject(callback: () => void): Unsubscribe
   onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe
   onSaveProject(callback: () => void): Unsubscribe
+  /** Save As. Desktop only in practice; web's adapter returns a no-op
+   *  unsubscribe like its other accelerators. */
+  onSaveProjectAs(callback: () => void): Unsubscribe
   onSaveFile(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe
   onExportProject(callback: () => void): Unsubscribe

@@ -9,6 +9,7 @@ import {
   useWindow,
 } from '../../../middleware/shared/providers'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
+import { executeSaveProjectAs } from '../../services/save-project-as'
 import { openPLCStoreBase, useOpenPLCStore } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
 import { toast } from '../_features/[app]/toast/use-toast'
@@ -208,6 +209,16 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [accelerator, executeSave])
+
+  /**
+   * Save As (Cmd+Shift+A)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onSaveProjectAs(() => {
+      void executeSaveProjectAs(projectPort, capabilities)
+    })
+    return unsub
+  }, [accelerator, capabilities, projectPort])
 
   /**
    * Delete file

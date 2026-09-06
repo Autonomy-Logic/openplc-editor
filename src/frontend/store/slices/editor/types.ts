@@ -164,7 +164,7 @@ export type EditorModel = EditorModelBase &
         type: 'plc-device'
         meta: {
           name: string
-          derivation: 'configuration' | 'pin-mapping' | 'orchestrators'
+          derivation: 'configuration' | 'pin-mapping' | 'orchestrators' | 'runtime-status'
         }
       }
     | {
@@ -204,6 +204,15 @@ export type EditorModel = EditorModelBase &
         /** Runtime User Management screen. A device-scoped singleton shown
          *  under the Device tree branch while connected to a runtime. */
         type: 'plc-user-management'
+        meta: {
+          name: string
+        }
+      }
+    | {
+        /** Persistent Storage screen — where the connected runtime keeps its
+         *  RETAIN variables. Device-scoped like User Management: the settings
+         *  live on the runtime, not in the project. */
+        type: 'plc-persistent-storage'
         meta: {
           name: string
         }

@@ -149,13 +149,17 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
         type: typeRef(v.type),
       })),
     ]
-    // A native (C/C++, Python) block is surfaced under the library-prefixed
-    // name (`<library>__<name>`) that the consumer's source must reference,
-    // because the compile-time graft produces a POU with exactly that name.
-    // The picker shows the prefix so the user types the right thing.
+    // A native (C/C++, Python) block is surfaced under its own name, exactly
+    // like every other library block. It briefly carried a `<library>__<name>`
+    // prefix to keep two libraries' same-named blocks apart, but nothing else
+    // in the system speaks that name: `resolveFunctionBlockPins` looks blocks
+    // up by the manifest name, so a prefixed entry resolved to no pins and the
+    // graphical editors could not build an instance for it. Name collisions
+    // are settled the way they are everywhere else — the project's own POU
+    // wins — rather than by giving native blocks a private namespace.
     const nativeLanguage = fb.implementation
     pous.push({
-      name: nativeLanguage ? `${m.name}__${fb.name}` : fb.name,
+      name: fb.name,
       type: 'function-block',
       language: nativeLanguage ?? 'st',
       variables,

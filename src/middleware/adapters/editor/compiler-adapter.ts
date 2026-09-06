@@ -15,7 +15,7 @@ import {
   findLibrariesMissingNativeSources,
   injectLibraryBlocks,
 } from '../../../backend/shared/library/inject-library-blocks'
-import { collectNativePous } from '../../../backend/shared/library/native-pou-list'
+import { collectNativePous, type NativePouRef } from '../../../backend/shared/library/native-pou-list'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type {
   CompileLibraryArgs,
@@ -131,6 +131,33 @@ function inferStage(message: string): CompileProgressEvent['stage'] {
   if (lower.includes('arduino') || lower.includes('compiling') || lower.includes('uploading')) return 'arduino'
   return 'st'
 }
+
+/**
+ * Argument tuple for the `compiler:run-compile-library` channel.
+ *
+ * Declared here, beside `IpcProjectData`, for the same reason
+ * `CompileProgramIpcArgs` is: the renderer bridge and the main-process
+ * handler both name this type instead of restating a loose
+ * `Array<string | ... >`, so adding, removing or reordering a slot is a
+ * compile error on every side at once rather than a cast that silently
+ * still fits.  The main process still VALIDATES what arrives — a type is
+ * a statement about our own callers, not a guarantee about the channel.
+ */
+export type CompileLibraryIpcArgs = [
+  projectPath: string,
+  /** Build-pass project data, `preprocessPous` with `isSimulator: false`. */
+  projectData: IpcProjectData,
+  /** Verification-pass project data, `preprocessPous` with `isSimulator: true`. */
+  verifyProjectData: IpcProjectData,
+  /** Skip the verification cache and verify again. */
+  cleanBuild: boolean,
+  /**
+   * Native (C/C++, Python) POUs collected from the RAW project data before
+   * preprocessing lowered every native body to bridge ST — the main process
+   * cannot derive this itself.  See `collectNativePous`.
+   */
+  nativePous: NativePouRef[],
+]
 
 export function createEditorCompilerAdapter(): CompilerPort {
   return {
@@ -255,33 +282,22 @@ export function createEditorCompilerAdapter(): CompilerPort {
       args: CompileLibraryArgs,
       onProgress: (event: CompileProgressEvent) => void,
     ): Promise<CompileLibraryResult> {
-      // Two preprocess passes — the library build and the
-      // simulator-target verification want different Python
-      // treatment, and `preprocessPous` is the only place that
-      // decision lives.
+      // ONE preprocess pass, `isSimulator: false`.  Python POUs go
+      // through `injectPythonCode` + `generateSTCode`, becoming
+      // self-contained ST with the Python source embedded as strings —
+      // exactly the shape strucpp compiles for a runtime-target program
+      // build.  The `.stlib` ships real Python code, usable by any
+      // consumer that targets a Python-capable runtime.
       //
-      //   - `isSimulator: false` for the LIBRARY BUILD itself.
-      //     Python POUs go through `injectPythonCode` +
-      //     `generateSTCode`, becoming self-contained ST with the
-      //     Python source embedded as strings — exactly the shape
-      //     strucpp compiles for a runtime-target program build.
-      //     The `.stlib` ships real Python code, usable by any
-      //     consumer that targets a Python-capable runtime.
+      // A second `isSimulator: true` pass feeds the verification compile.  It
+      // stubs Python POUs to no-ops, because the toolchain behind a
+      // verification compile has no interpreter — what verification proves is
+      // that the library's ST, IL and data types compile cleanly, not that its
+      // Python runs.
       //
-      //   - `isSimulator: true` for the VERIFICATION compile.
-      //     Python POUs become `first_run := 0;` no-op stubs.  The
-      //     AVR simulator has no Python interpreter, so passing
-      //     full-Python-as-ST through to arduino-cli would fail at
-      //     link time (the strucpp-emitted code calls into
-      //     Python loader externs the simulator runtime doesn't
-      //     ship).  Stubbing keeps the verify compile honest: it
-      //     still proves the library's ST/IL/data-types compile
-      //     cleanly to AVR — the only thing it can't prove is
-      //     that the Python POUs run, and we accept that.
+      // Only the build pass's preprocess output reaches `onProgress`, so the
+      // console does not carry every "Found Python POU…" line twice.
       //
-      // The renderer-side `onProgress` log channel only sees the
-      // build pass's preprocess output to avoid duplicate "Found
-      // Python POU…" lines.
       // Taken BEFORE preprocessing: that step lowers every native body to
       // bridge ST and rewrites the language tag with it, leaving nothing to
       // identify a native POU by.  Sent over IPC because the main process
@@ -319,8 +335,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         args.projectData,
         true,
         () => {
-          // Silent — same project gets logged once via the build
-          // pass; a second round of "Found …" lines is noise.
+          // Silent — the build pass above already logged this project.
         },
         undefined,
         fbSources,
@@ -358,13 +373,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         //     `'close'` event — that's the sole "build done"
         //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
-          [
-            args.projectPath,
-            ipcDataForBuild as never,
-            ipcDataForVerify as never,
-            args.cleanBuild ?? false,
-            nativePous as never,
-          ],
+          [args.projectPath, ipcDataForBuild, ipcDataForVerify, args.cleanBuild ?? false, nativePous],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult

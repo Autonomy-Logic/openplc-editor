@@ -99,6 +99,38 @@ describe('CompilerModule', () => {
     expect(compilerModule).toBeInstanceOf(CompilerModule)
   })
 
+  describe('handleUploadProgram (no serial port)', () => {
+    /**
+     * A step that cannot run must FAIL, not return quietly.
+     *
+     * `uploadArduinoBoard` only awaits this method and reports `{ ok: true }` on
+     * any normal return, and the build's outcome now comes from the pipeline's
+     * verdict rather than from whether an error was logged. So a silent bail
+     * here told the user their board had been flashed when nothing was sent —
+     * red "No communication port specified", then "Arduino upload complete.",
+     * then success.
+     */
+    it('throws when no port is passed and none is persisted', async () => {
+      const logged: Array<{ message: string; level?: string }> = []
+
+      await expect(
+        compilerModule.handleUploadProgram({
+          // A directory with no devices/configuration.json, so the disk
+          // fallback finds nothing either.
+          projectPath: join(tmpdir(), 'openplc-no-such-project'),
+          arduinoPlatform: 'arduino:avr:uno',
+          compilationPath: join(tmpdir(), 'openplc-no-such-build'),
+          handleOutputData: (chunk, level) => {
+            logged.push({ message: typeof chunk === 'string' ? chunk : chunk.toString(), ...(level ? { level } : {}) })
+          },
+        }),
+      ).rejects.toThrow(/No communication port specified/)
+
+      // It must not have announced anything that reads like progress.
+      expect(logged.some((entry) => /upload complete/i.test(entry.message))).toBe(false)
+    })
+  })
+
   it('should have expected static properties', () => {
     expect(typeof CompilerModule.HOST_PLATFORM).toBe('string')
     expect(['x64', 'arm64', 'ia32', 'arm']).toContain(CompilerModule.HOST_ARCHITECTURE)
@@ -997,6 +1029,114 @@ describe('CompilerModule', () => {
       ).rejects.toThrow(
         /Toolchain arch subdir resolution failed for "unknown:vendor:weird-board".*build\.mcu.*build\.architecture.*build\.arch.*file an issue/s,
       )
+    })
+  })
+
+  describe('compileLibrary — IPC payload validation', () => {
+    /**
+     * Collects what the module posts over the progress channel, plus whether
+     * it ever closed. A build that neither posts a result nor closes is the
+     * exact failure being guarded against: `main.ts` invokes this method with
+     * `void`, so a throw would leave the renderer's promise unsettled forever.
+     */
+    function makeChannel() {
+      // `unknown[]`, matching `CompileProgressChannel.postMessage(message:
+      // unknown)`. Typing the sink as the shape we hope to find would assume
+      // the very thing these tests exist to check.
+      const messages: unknown[] = []
+      let closed = false
+      return {
+        messages,
+        isClosed: () => closed,
+        channel: {
+          start: () => {},
+          postMessage: (m: unknown) => messages.push(m),
+          close: () => {
+            closed = true
+          },
+        },
+      }
+    }
+
+    /** The build result carried by one of `messages`, or null if none does. */
+    function readBuildResult(messages: unknown[]): { success: boolean; error?: string } | null {
+      for (const message of messages) {
+        if (typeof message !== 'object' || message === null) continue
+        if (!('libraryBuildResult' in message)) continue
+        const result = message.libraryBuildResult
+        if (typeof result !== 'object' || result === null) continue
+        if (!('success' in result) || typeof result.success !== 'boolean') continue
+        const error = 'error' in result && typeof result.error === 'string' ? result.error : undefined
+        return { success: result.success, ...(error === undefined ? {} : { error }) }
+      }
+      return null
+    }
+
+    // The verification compile reaches `compileProgram`, whose bridge contract
+    // names the runtime-API pair.  Neither is called here — the build fails on
+    // the missing manifest long before — so a throwing stub documents that.
+    const bridge = {
+      loadEnabledArchives: () => ({ archives: [], missing: [] }),
+      makeRuntimeApiRequest: () => {
+        throw new Error('the library path never talks to a runtime')
+      },
+      makeRuntimeApiUpload: () => {
+        throw new Error('the library path never uploads')
+      },
+    } as unknown as Parameters<CompilerModule['compileLibrary']>[2]
+
+    const wellFormed = {
+      pous: [],
+      dataTypes: [],
+      libraries: [],
+      configuration: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    }
+
+    it('accepts the payload the editor adapter actually sends', async () => {
+      // Guards the other direction from the rejection cases below: a validator
+      // that turns away a well-formed build is a worse regression than the hole
+      // it closes. This is `IpcProjectData`'s shape — note `configuration`
+      // (singular), which is what the adapter emits and what `stubProgramFor`
+      // reads.
+      const compilerModule = new CompilerModule()
+      const { messages, channel } = makeChannel()
+
+      await compilerModule.compileLibrary(['/project', wellFormed, wellFormed, false, []], channel, bridge)
+
+      const result = readBuildResult(messages)
+      // It still fails — there is no `library.json` on disk at `/project` — but
+      // it must fail on THAT, having passed the boundary check.
+      expect(result?.error ?? '').not.toMatch(
+        /malformed request|no project path|no project data|no POU list|no configuration|no resource|no task or instance list/,
+      )
+    })
+
+    it.each([
+      ['not an array', 'malformed request'],
+      [[], 'malformed request'],
+      [['/project'], 'malformed request'],
+      [['', wellFormed, []], 'no project path'],
+      [['/project', null, []], 'no project data'],
+      [['/project', {}, []], 'no POU list'],
+      [['/project', { pous: [] }, []], 'no configuration'],
+      [['/project', { pous: [], configuration: {} }, []], 'no resource'],
+      [['/project', { pous: [], configuration: { resource: {} } }, []], 'no task or instance list'],
+      [['/project', wellFormed, null, false, []], 'no verification project data'],
+    ])('rejects %p with a result and a closed port', async (args, expected) => {
+      const compilerModule = new CompilerModule()
+      const { messages, isClosed, channel } = makeChannel()
+
+      await compilerModule.compileLibrary(args, channel, bridge)
+
+      const result = readBuildResult(messages)
+      // A result is what settles the renderer's promise — the assertion that
+      // matters more than the wording.
+      expect(result).not.toBeNull()
+      expect(result?.success).toBe(false)
+      expect(result?.error).toContain(expected)
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(isClosed()).toBe(true)
     })
   })
 })

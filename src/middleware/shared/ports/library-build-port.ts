@@ -8,15 +8,22 @@
  * primitives the orchestrator cannot perform itself because they
  * cross the platform boundary (filesystem ↔ HTTP, etc.).
  *
+ * `verifyCompile` drives the library through the toolchain the
+ * manifest's `build` block names, so a block that does not compile is
+ * reported at build time rather than by whoever installs the archive.
+ * Running a library is a separate action driven from the renderer
+ * through `CompilerPort.compileProgram` with a generated harness
+ * project (`composeLibraryDebugHarness`).
+ *
  * Contract symmetry rule
  * ----------------------
  * Both desktop and web MUST implement every method on this interface
  * with semantically identical behaviour.  When the orchestrator calls
- * `port.readBuildFile(p, 'build/.verify-cache-library.json')`, both
- * platforms return the same content if the project tree carries the
- * same bytes.  Differences are confined to *transport* (fs vs HTTP),
- * never to logic — anything that looks like business logic belongs in
- * the shared orchestrator instead.
+ * `port.readBuildFile(p, 'library.json')`, both platforms return the
+ * same content if the project tree carries the same bytes.
+ * Differences are confined to *transport* (fs vs HTTP), never to
+ * logic — anything that looks like business logic belongs in the
+ * shared orchestrator instead.
  *
  * Web safety reminder
  * -------------------
@@ -111,10 +118,10 @@ export interface VerifyCompileArgs {
 export interface LibraryBuildPort {
   // -------------------------------------------------------------------------
   // Cryptography + transpile (same signatures `CompilerPlatformPort`
-  // uses for the program build — duplicated here intentionally so the
-  // orchestrator takes a single port object instead of two.  Each
-  // impl is free to delegate to whatever its program-build path uses
-  // internally; the contract is just that bytes in match bytes out.)
+  // uses for the program build — declared here too so the orchestrator
+  // takes a single port object instead of two.  Each impl is free to
+  // delegate to whatever its program-build path uses internally; the
+  // contract is just that bytes in match bytes out.)
   // -------------------------------------------------------------------------
 
   /** MD5 hex digest.  Editor wires it to Node's `crypto`; web wires
@@ -187,8 +194,8 @@ export interface LibraryBuildPort {
   deleteBuildSubtree(projectPath: string, relPath: string): Promise<void>
 
   // -------------------------------------------------------------------------
-  // Library-resolution and verification (platform-shaped operations
-  // whose implementations differ in transport but not in semantics)
+  // Library resolution (platform-shaped operation whose implementation
+  // differs in transport but not in semantics)
   // -------------------------------------------------------------------------
 
   /**

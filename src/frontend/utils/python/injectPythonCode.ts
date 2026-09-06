@@ -1,7 +1,6 @@
 import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import type { LibraryFunctionBlockSource } from '../PLC/function-block-pins'
 import { pythonInboundVariables, pythonOutboundVariables } from './block-interface'
-import { encodeCharactersFromVariable } from './encodeCharactersFromVariable'
 import { injectPythonRuntime } from './injectPythonRuntime'
 import type { ShmWalkContext } from './shm-leaves'
 
@@ -29,12 +28,7 @@ const injectPythonCode = (
     const inbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'in' }
     const outbound: ShmWalkContext = { dataTypes, pous, libraries, direction: 'out' }
 
-    const fmtIn = encodeCharactersFromVariable(inputVariables, inbound)
-    const fmtOut = encodeCharactersFromVariable(outputVariables, outbound)
-
     const injectedCode = injectPythonRuntime({
-      fmtIn,
-      fmtOut,
       inputVariables,
       outputVariables,
       originalCode: pou.code,

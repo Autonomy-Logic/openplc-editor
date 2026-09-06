@@ -41,7 +41,11 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
@@ -611,6 +615,8 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
+    const duplicate = findDuplicateVariableName(parsed)
+    if (duplicate) return fail(duplicateVariableNameMessage(duplicate), 'Variable already exists')
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)
@@ -809,6 +815,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
   },
   pendingDeletions: [],
   unparsedDataTypeFiles: [],
+  dataTypesNeedMigration: false,
   iecAliasMemory: {},
 
   projectActions: {
@@ -845,6 +852,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           }
           slice.pendingDeletions = []
           slice.unparsedDataTypeFiles = []
+          slice.dataTypesNeedMigration = false
           // Session alias-memory is per-project; drop it on a fresh slate so
           // one project's remembered aliases can't leak into the next.
           slice.iecAliasMemory = {}
@@ -1439,9 +1447,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     deleteDatatype: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
-          // Harmless while the file doesn't exist yet (flag off): the
-          // editor's deletion pass is existence-checked, the web's
-          // relies on delete-by-omission.
+          // Harmless when the file was never written (a type created and
+          // deleted before any save): the editor's deletion pass is
+          // existence-checked, the web's relies on delete-by-omission.
           slice.pendingDeletions.push(`datatypes/${name}.dt`)
           slice.project.data.dataTypes = slice.project.data.dataTypes.filter((d) => d.name !== name)
         }),
@@ -1534,6 +1542,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           slice.unparsedDataTypeFiles = files
+        }),
+      )
+    },
+    setDataTypesNeedMigration: (needsMigration) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.dataTypesNeedMigration = needsMigration
         }),
       )
     },

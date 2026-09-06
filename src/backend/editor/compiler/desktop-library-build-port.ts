@@ -6,13 +6,9 @@
  * Owns ONLY the platform-specific primitives the shared
  * `runLibraryBuildPipeline` cannot perform itself:
  *
- *   - MD5 hashing (Node `crypto`)
  *   - ST transpilation via the in-process JSON-fed transpiler
  *   - read / write / delete project files on the local disk
  *   - resolve library-name → `.stlib` archive via the main-process bridge
- *   - drive a verification compile through the editor's existing
- *     `compileProgram` flow (which already routes through the
- *     shared `runCompilePipeline`)
  *
  * No business logic lives here.  The orchestrator owns the build
  * sequence, cache decisions, error formatting, and the stable

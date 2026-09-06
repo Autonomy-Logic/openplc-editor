@@ -16,6 +16,9 @@ jobs:
   lint:
     uses: ./.github/workflows/ci-lint.yml
 
+  unit-tests:
+    uses: ./.github/workflows/ci-unit-tests.yml
+
   format:
     needs: [architecture, build-check, lint]
     uses: ./.github/workflows/ci-format.yml
@@ -27,4 +30,8 @@ jobs:
 
   complete-build:
     needs: [sync]
+    # Full 3-OS packaging is release work: the tag-triggered release
+    # workflow builds it for real, so PRs into development skip it and
+    # only the promotion PRs into main still prove the app packages.
+    if: github.base_ref == 'main'
     uses: ./.github/workflows/build.yml

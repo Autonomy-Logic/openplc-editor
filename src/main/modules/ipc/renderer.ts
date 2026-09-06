@@ -1,5 +1,10 @@
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
-import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
+import type {
+  DiscoveredRuntimeDevice,
+  RuntimeLogEntry,
+  RuntimeProjectSnapshotMetadata,
+} from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
   DeviceLicenseReport,
@@ -34,6 +39,15 @@ import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-serv
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
+} from '../../../backend/editor/runtime/bootloader-api-client'
+
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
 /**
@@ -66,6 +80,19 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** The build's verdict, carried on the `closePort` message. Sourced from
+   *  `runCompilePipeline`, which reduces every step's process exit code to one
+   *  boolean, so it — not the presence of error-level log lines — is what
+   *  decides whether a build failed.
+   *
+   *  Declared here because the seam is typed: `onmessage` currently forwards
+   *  `event.data` wholesale, so a consumer reading a `Record<string, unknown>`
+   *  sees the field regardless. A bridge refactor that reconstructs the
+   *  message field-by-field (the shape the `libraryBuildResult` path already
+   *  uses) would otherwise drop it silently, and `compileProgramFlow` would
+   *  fall back to its `hasError` heuristic — reintroducing a resolved bug with
+   *  no compile error and no failing test. */
+  success?: boolean
   /** Final structured outcome of a library build.  Set only on the
    *  close-port message emitted by `compileLibrary`; absent from
    *  intermediate log entries and from program-build / debug-build
@@ -116,6 +143,7 @@ const rendererProcessBridge = {
   writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
+  saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
 
@@ -266,21 +294,11 @@ const rendererProcessBridge = {
   },
 
   /** Build the open Library Project into a `.stlib` archive.  Same
-   *  MessageChannel pattern as `runCompileProgram`.  Args:
-   *    [0] projectPath
-   *    [1] projectData preprocessed with `isSimulator: false` (full
-   *        Python-as-ST), used for the library build proper.
-   *    [2] projectData preprocessed with `isSimulator: true` (Python
-   *        as no-op stubs), used as input to the simulator-target
-   *        verification compile so it doesn't try to link Python
-   *        loader externs the AVR simulator runtime doesn't ship.
-   *    [3] cleanBuild flag (skips the verification cache).
-   *  Callback receives a stream of log messages and a final
-   *  `libraryBuildResult`. */
-  runCompileLibrary: (
-    compileArgs: Array<string | PLCProjectData | boolean>,
-    callback: (args: CompilerPortMessage) => void,
-  ) => {
+   *  MessageChannel pattern as `runCompileProgram`; the tuple shape
+   *  is `CompileLibraryIpcArgs`, declared next to the adapter that
+   *  fills it.  Callback receives a stream of log messages and a
+   *  final `libraryBuildResult`. */
+  runCompileLibrary: (compileArgs: CompileLibraryIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
@@ -573,6 +591,33 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
+
+  // ===================== BOOTLOADER (RTOP-283) =====================
+  // The bootloader is a separate service on port 8445 with its own session.
+  // Results are the client's discriminated union, so a caller checks `success`
+  // and shows `error` verbatim -- its messages are written for a person.
+  bootloaderGetCapabilities: (ipAddress: string): Promise<BootloaderApiResult<BootloaderCapabilities>> =>
+    ipcRenderer.invoke('bootloader:get-capabilities', ipAddress),
+  bootloaderLogin: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<BootloaderApiResult<{ role?: string }>> =>
+    ipcRenderer.invoke('bootloader:login', ipAddress, username, password),
+  bootloaderGetStatus: (ipAddress: string): Promise<BootloaderApiResult<BootloaderStatus>> =>
+    ipcRenderer.invoke('bootloader:get-status', ipAddress),
+  bootloaderGetDeviceInfo: (ipAddress: string): Promise<BootloaderApiResult<RuntimeDeviceInfo>> =>
+    ipcRenderer.invoke('bootloader:get-device-info', ipAddress),
+  bootloaderGetRuntimeLogs: (ipAddress: string, tail?: number): Promise<BootloaderApiResult<BootloaderLogs>> =>
+    ipcRenderer.invoke('bootloader:get-runtime-logs', ipAddress, tail),
+  bootloaderStartUpdate: (ipAddress: string, version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:start-update', ipAddress, version),
+  bootloaderGetUpdateProgress: (ipAddress: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:get-update-progress', ipAddress),
+  bootloaderRestartRuntime: (ipAddress: string): Promise<BootloaderApiResult<{ state?: string; reason?: string }>> =>
+    ipcRenderer.invoke('bootloader:restart-runtime', ipAddress),
+  bootloaderClearSession: (ipAddress?: string): Promise<{ success: true }> =>
+    ipcRenderer.invoke('bootloader:clear-session', ipAddress),
   runtimeGetCompilationStatus: (
     ipAddress: string,
   ): Promise<{
@@ -594,6 +639,29 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
+  /**
+   * Retrieve the stored project and unpack it to a scratch directory.
+   *
+   * Returns a path, never the archive: those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write lives beside the
+   * write in the main process.
+   */
+  runtimeRetrieveProject: (
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => ipcRenderer.invoke('runtime:retrieve-project', ipAddress),
+  /** Install libraries a retrieved project brought with it, by name. */
+  runtimeInstallRetrievedLibraries: (
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> =>
+    ipcRenderer.invoke('runtime:install-retrieved-libraries', projectPath, names),
   onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
     ipcRenderer.on('runtime:device-discovered', callback)
     return () => ipcRenderer.removeListener('runtime:device-discovered', callback)

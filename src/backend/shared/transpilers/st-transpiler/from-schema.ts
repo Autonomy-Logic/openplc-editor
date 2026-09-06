@@ -235,6 +235,7 @@ function projectVariable(v: SchemaVariable): TranspileVariable {
       ? { initialValue: v.initialValue }
       : {}),
     ...(v.documentation !== undefined && v.documentation !== '' ? { documentation: v.documentation } : {}),
+    ...(v.flag !== undefined ? { flag: v.flag } : {}),
   }
 }
 
