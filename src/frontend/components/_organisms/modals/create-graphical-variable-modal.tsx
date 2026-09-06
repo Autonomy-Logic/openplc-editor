@@ -50,6 +50,7 @@ const CreateGraphicalVariableModal = ({
     setName(data.name)
     setVariableClass('local')
     setTypeValue(data.suggestedType.value)
+    setStringLength('')
   }, [isOpen, data.name, data.suggestedType.value])
 
   /**
@@ -76,7 +77,8 @@ const CreateGraphicalVariableModal = ({
   }
 
   const lengthIsOffered = isLengthQualifiedType(typeValue)
-  const declaredType = lengthIsOffered && stringLength.trim() !== '' ? `${typeValue}(${stringLength.trim()})` : typeValue
+  const declaredType =
+    lengthIsOffered && stringLength.trim() !== '' ? `${typeValue}(${stringLength.trim()})` : typeValue
   const lengthIsValid = !lengthIsOffered || stringLength.trim() === '' || parseStringLength(declaredType).valid
 
   const handleConfirm = () => {

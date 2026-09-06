@@ -1,6 +1,6 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import _ from 'lodash'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { isLengthQualifiedType } from '../../../utils/iec-types-registry'
@@ -28,6 +28,11 @@ export const TypeDropdownSelector = ({
     'user-data-type': '',
   })
   const [stringLengths, setStringLengths] = useState<Record<string, string>>(() => seedStringLengths(value))
+
+  // A table recycles this component across rows, so the seed cannot be a
+  // mount-time value: the box would keep the length the previous row declared
+  // and apply it to this one.
+  useEffect(() => setStringLengths(seedStringLengths(value)), [value])
 
   return (
     <PrimitiveDropdown.Root onOpenChange={setPopoverIsOpen} open={popoverIsOpen}>

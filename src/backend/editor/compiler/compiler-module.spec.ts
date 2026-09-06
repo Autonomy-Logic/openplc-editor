@@ -522,7 +522,10 @@ describe('CompilerModule', () => {
      * database it would have written, into the `--build-path` it was given.
      */
     const writeCompilationDatabase = (cmd: string, includeDirs: readonly string[]) => {
-      const buildPath = /--build-path\s+(\S+)/.exec(cmd)?.[1]
+      // `renderArgvAsCmd` quotes any argument holding a space, which
+      // `os.tmpdir()` does on a machine whose user name has one.
+      const match = /--build-path\s+(?:"([^"]+)"|(\S+))/.exec(cmd)
+      const buildPath = match?.[1] ?? match?.[2]
       if (!buildPath) throw new Error('database run was given no --build-path')
       fs.mkdirSync(buildPath, { recursive: true })
       fs.writeFileSync(
@@ -1122,6 +1125,9 @@ describe('CompilerModule', () => {
       [['/project', { pous: [], configuration: {} }, []], 'no resource'],
       [['/project', { pous: [], configuration: { resource: {} } }, []], 'no task or instance list'],
       [['/project', wellFormed, null, false, []], 'no verification project data'],
+      // The verification payload is a separate argument and gets the same
+      // shape check as the build payload; an empty object used to pass.
+      [['/project', wellFormed, {}, false, []], 'verification project data has no POU list'],
     ])('rejects %p with a result and a closed port', async (args, expected) => {
       const compilerModule = new CompilerModule()
       const { messages, isClosed, channel } = makeChannel()

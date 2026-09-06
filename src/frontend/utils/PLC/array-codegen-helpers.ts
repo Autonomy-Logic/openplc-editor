@@ -104,8 +104,7 @@ const GENERIC_TYPE_TO_IEC: Record<string, string> = {
  * Whether a pin's declared type is a generic (or the descriptor it carries),
  * and so resolves to the runtime's `IEC_ANY` rather than to a project type.
  */
-const isDescriptorPinType = (typeName: string): boolean =>
-  GENERIC_TYPE_TO_IEC[typeName.toUpperCase()] !== undefined
+const isDescriptorPinType = (typeName: string): boolean => GENERIC_TYPE_TO_IEC[typeName.toUpperCase()] !== undefined
 
 const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>): string => {
   const upper = typeName.toUpperCase()
@@ -160,7 +159,11 @@ const mapArrayElementTypeToIEC = (baseType: string): string => {
   const sized = sizedStringIECType(baseType)
   if (sized) return sized
   const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
-  return elementary ?? baseType.toUpperCase()
+  if (elementary) return elementary
+  // A generic and the descriptor it carries are one runtime type, and that
+  // spelling is the same in element position — the bare name is not a C++ type
+  // at all. Everything else user-defined is bare here; see the note above.
+  return GENERIC_TYPE_TO_IEC[baseType.toUpperCase()] ?? baseType.toUpperCase()
 }
 
 const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>): string => {

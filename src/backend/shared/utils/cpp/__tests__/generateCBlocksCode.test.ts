@@ -332,5 +332,4 @@ describe('generateCBlocksCode', () => {
 
     expect(result).toContain('using MOTOR = strucpp::MOTOR;')
   })
-
 })

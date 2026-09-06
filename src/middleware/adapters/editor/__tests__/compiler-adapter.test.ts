@@ -631,6 +631,26 @@ describe('createEditorCompilerAdapter', () => {
   })
 
   describe('compileLibrary', () => {
+    it("hands the installed libraries' function blocks to the POU preprocessor", async () => {
+      // A library's own Python POU may instantiate a function block that another
+      // library ships, so the preprocessor needs the same pin source a program
+      // build gets. With no library installed the list is empty and the mapping
+      // never runs, which is why it takes an installed one to exercise.
+      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
+        { manifest: { name: 'motor_lib', functionBlocks: [{ name: 'Driver', inputs: [], outputs: [], inouts: [] }] } },
+      ])
+
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, () => {})
+      await flushMicrotasks()
+      libraryCallback!({ libraryBuildResult: { success: true, libraryName: 'demo_lib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+
+      expect(window.bridge.loadAllLibraries).toHaveBeenCalled()
+      expect(window.bridge.runCompileLibrary).toHaveBeenCalled()
+    })
+
     it('posts project path + IPC data to runCompileLibrary and resolves the structured result', async () => {
       const progressEvents: CompileProgressEvent[] = []
       const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>

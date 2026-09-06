@@ -224,10 +224,7 @@ async function runLibraryInstall(reporter: Reporter, stlibPath: string | undefin
 
   const result = await new LibraryManagerModule().installFromFile(stlibPath)
   if (!result.success) {
-    return reporter.failure(
-      { code: ErrorCode.InvalidArgument, message: result.error },
-      ExitCode.TargetError,
-    )
+    return reporter.failure({ code: ErrorCode.InvalidArgument, message: result.error }, ExitCode.TargetError)
   }
   if (result.canceled) {
     return reporter.failure(
@@ -244,14 +241,12 @@ async function runLibraryInstall(reporter: Reporter, stlibPath: string | undefin
 
 function runLibraryList(reporter: Reporter): CliResult {
   const installed = new LibraryManagerModule().listInstalled()
-  return reporter.success(
-    { ok: true, libraries: installed },
-    () =>
-      installed.length === 0
-        ? 'No libraries installed.'
-        : renderTable(
-            ['Name', 'Version', 'Origin'],
-            installed.map((library) => [library.name, library.version, library.origin]),
-          ),
+  return reporter.success({ ok: true, libraries: installed }, () =>
+    installed.length === 0
+      ? 'No libraries installed.'
+      : renderTable(
+          ['Name', 'Version', 'Origin'],
+          installed.map((library) => [library.name, library.version, library.origin]),
+        ),
   )
 }

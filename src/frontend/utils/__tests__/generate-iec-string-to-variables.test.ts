@@ -388,7 +388,9 @@ describe('parseIecStringToVariables', () => {
       ['zero', 'STRING(0)'],
       ['past the implementation maximum', 'STRING(255)'],
     ])('is refused for %s, rather than becoming a stranger type', (_label, declared) => {
-      expect(() => parseIecStringToVariables(`VAR\n  s : ${declared};\nEND_VAR`)).toThrow(/takes a length from 1 to 254/)
+      expect(() => parseIecStringToVariables(`VAR\n  s : ${declared};\nEND_VAR`)).toThrow(
+        /takes a length from 1 to 254/,
+      )
     })
 
     // The element form needs `parseArrayType` to admit a length after `OF`;
@@ -743,7 +745,6 @@ describe('parseIecStringToVariables', () => {
     expect(result[0].type).toEqual({ definition: 'base-type', value: 'INT' })
     expect(result[0].documentation).toBe('how many')
   })
-
 })
 
 describe('findDuplicateVariableName', () => {

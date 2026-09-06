@@ -14,7 +14,7 @@ import {
   needsMigration,
 } from '@root/backend/shared/utils/migrate-project-to-name-type-system'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
-import { findLastEndVarIndex } from '@root/frontend/utils/PLC/pou-text-parser'
+import { extractDocumentation, findLastEndVarIndex } from '@root/frontend/utils/PLC/pou-text-parser'
 import {
   detectLanguageFromExtension,
   parseGraphicalPouFromString,
@@ -173,9 +173,10 @@ function detectPouTypeFromPath(filePath: string): string {
  * @returns A partial PLCPou with empty variables array but preserved variablesText
  */
 function createFallbackPou(content: string, language: string, pouType: string, pouName: string): PLCPou {
-  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
-  const documentation = docMatch ? docMatch[1].trim() : ''
-  const remainingContent = docMatch ? content.slice(docMatch[0].length) : content
+  // Shared with the primary parser: a header written as several consecutive
+  // comment blocks kept only its first block here, and left the rest in front
+  // of the declaration the regex below then failed to match.
+  const { documentation, remainingContent } = extractDocumentation(content)
 
   const varStartIndex = remainingContent.search(
     /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,

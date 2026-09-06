@@ -35,17 +35,13 @@ describe('a declared string length over PLCopen XML', () => {
     })
   })
 
-  it.each([
-    ['STRING(1)'],
-    ['STRING(23)'],
-    ['STRING(254)'],
-    ['WSTRING(8)'],
-    ['STRING'],
-    ['INT'],
-  ])('round-trips %s unchanged', (declared) => {
-    const xml = convertTypeToXml({ definition: 'base-type', value: declared })
-    expect(parseTypeXml(xml)).toEqual({ definition: 'base-type', value: declared })
-  })
+  it.each([['STRING(1)'], ['STRING(23)'], ['STRING(254)'], ['WSTRING(8)'], ['STRING'], ['INT']])(
+    'round-trips %s unchanged',
+    (declared) => {
+      const xml = convertTypeToXml({ definition: 'base-type', value: declared })
+      expect(parseTypeXml(xml)).toEqual({ definition: 'base-type', value: declared })
+    },
+  )
 
   it('round-trips an ARRAY of sized strings, element length included', () => {
     const type = {

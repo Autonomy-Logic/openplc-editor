@@ -141,17 +141,45 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
  * Returns null if not an array type, otherwise returns the parsed array type definition.
  * Also consumed by the data-type text parser (`PLC/data-type-text-parser.ts`).
  */
+/**
+ * A `STRING(...)` / `WSTRING[...]` declaration, whatever sits between the
+ * delimiters. Matching the shape commits the writer to a length, so anything
+ * `parseStringLength` will not accept from here — `STRING[]`, `STRING(abc)`,
+ * `STRING(0)`, `STRING(999)`, the mismatched `STRING(23]` — is a mistake to
+ * report rather than a type name to keep.
+ */
+const SIZED_STRING_SHAPE = /^(W?STRING)\s*[([]\s*([^)\]]*?)\s*[)\]]$/i
+
+/**
+ * The declaration's type name and the length it got wrong, or `null` when the
+ * type is not sized-string-shaped or its length is one we can carry.
+ */
+const badStringLength = (typeStr: string): { typeName: string; got: string } | null => {
+  const shape = SIZED_STRING_SHAPE.exec(typeStr)
+  if (!shape) return null
+  const { length, valid } = parseStringLength(typeStr)
+  // `parseStringLength` reports `valid: true` with no length for an
+  // unqualified name, so the undefined case must be caught explicitly.
+  if (length !== undefined && valid) return null
+  return { typeName: shape[1].toUpperCase(), got: shape[2] }
+}
+
 export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
   // ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally
   // namespaced) that may carry a declared string length —
   // `ARRAY [0..3] OF STRING(23)`.
-  const arrayMatch = typeStr.match(
-    /^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*(?:\s*[([]\s*\d+\s*[)\]])?)\s*$/i,
-  )
+  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*(?:\s*[([]\s*\d+\s*[)\]])?)\s*$/i)
   if (!arrayMatch) return null
 
   const dimensionsStr = arrayMatch[1]
   const baseTypeStr = arrayMatch[2].trim()
+
+  // An element's length is held to the same rule as a scalar's. Without this
+  // the element fails `baseTypeSchema` and is kept as a user data type named
+  // `STRING(0)`, which is then persisted and emitted verbatim into generated
+  // ST. Refusing the array here lets the caller report it as the syntax error
+  // it is.
+  if (badStringLength(baseTypeStr)) return null
 
   // Parse dimensions (can be comma-separated for multi-dimensional arrays)
   const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())
@@ -277,6 +305,24 @@ export const parseIecStringToVariables = (
 
     const parsedType = type.trim()
 
+    // A length-qualified string — `STRING(23)`, `WSTRING(8)`. STruC++ emits
+    // `IECStringVar<23>` at 54 bytes where a plain STRING is 518. Square
+    // brackets are accepted and normalised to the parenthesised form.
+    //
+    // Checked in element position as well as scalar, and before the array
+    // dispatch, because the two paths fail differently and both fail quietly:
+    // a bad scalar is stored as a user data type named "STRING(0)", and a bad
+    // element leaves the whole declaration as one named
+    // "ARRAY[0..1] OF STRING(0)". Either is emitted verbatim into generated ST.
+    const arrayElement = /^ARRAY\s*\[[^\]]+\]\s+OF\s+(.+)$/i.exec(parsedType)
+    const badLength = badStringLength(arrayElement ? arrayElement[1].trim() : parsedType)
+    if (badLength) {
+      throw new Error(
+        `Syntax error on line ${lineNumber}: "${line}". ` +
+          `${badLength.typeName} takes a length from 1 to ${MAX_STRING_LENGTH}, got "${badLength.got}".`,
+      )
+    }
+
     // Check if it's an array type first
     const arrayType = parseArrayType(parsedType)
     if (arrayType) {
@@ -304,31 +350,6 @@ export const parseIecStringToVariables = (
       throw new Error(
         `Syntax error on line ${lineNumber}: "${line}". A comma is only allowed between inline ARRAY bounds (e.g. "ARRAY[0..1, 0..2] OF INT"), and no bound may be empty.`,
       )
-    }
-
-    // A length-qualified string — `STRING(23)`, `WSTRING(8)`. STruC++ emits
-    // `IECStringVar<23>` at 54 bytes where a plain STRING is 518. Square
-    // brackets are accepted and normalised to the parenthesised form.
-    //
-    // Only a malformed or out-of-range length is refused, and refused here
-    // rather than left to fall through: an unrecognised type is stored as a
-    // user data type named "STRING(0)" and emitted verbatim into generated ST.
-    //
-    // The array element form is handled by `parseArrayType` above.
-    const stringWithLength = /^(W?STRING)\s*[([]\s*([^)\]]*?)\s*[)\]]$/i.exec(parsedType)
-    if (stringWithLength) {
-      // Matching the shape commits to a length, so `STRING[]`, `STRING(abc)`,
-      // `STRING(0)` and `STRING(999)` are all reported here. `parseStringLength`
-      // returns `valid: true` with no length for an unqualified name, so the
-      // undefined case must be caught explicitly.
-      const { length, valid } = parseStringLength(parsedType)
-      if (length === undefined || !valid) {
-        throw new Error(
-          `Syntax error on line ${lineNumber}: "${line}". ` +
-            `${stringWithLength[1].toUpperCase()} takes a length from 1 to ${MAX_STRING_LENGTH}, ` +
-            `got "${stringWithLength[2]}".`,
-        )
-      }
     }
 
     const baseCheck = baseTypeSchema.safeParse(parsedType.toUpperCase())

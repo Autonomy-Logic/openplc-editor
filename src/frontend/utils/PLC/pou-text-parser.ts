@@ -7,7 +7,7 @@ import { getLanguageFromExtension } from './pou-file-extensions'
  * @param content - The content to extract documentation from
  * @returns Object with documentation and remaining content
  */
-const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
+export const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
   // A comment is legal wherever whitespace is, so a header may be written as
   // several consecutive blocks.  Taking only the first leaves the rest in
   // front of the declaration, which the declaration regex then fails to match.

@@ -220,5 +220,4 @@ describe('iec-types-registry', () => {
       expect(isLengthQualifiedType('WString')).toBe(true)
     })
   })
-
 })

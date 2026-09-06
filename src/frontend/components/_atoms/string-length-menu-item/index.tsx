@@ -60,9 +60,14 @@ export const StringLengthMenuItem = ({
         onChange={(e) => onLengthChange(e.target.value)}
         // Radix routes typing to its typeahead and Space/Enter to selection, so
         // digits reach the box only if the keystroke stops here.
+        //
+        // Enter is the exception: it is let through to the item, whose own
+        // `onSelect` applies the type and closes the menu. Applying it here
+        // instead left the menu open, because nothing but a Radix selection
+        // closes it.
         onKeyDown={(e) => {
+          if (e.key === 'Enter') return
           e.stopPropagation()
-          if (e.key === 'Enter' && valid) onApply(declaredType)
         }}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

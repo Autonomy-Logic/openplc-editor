@@ -121,11 +121,13 @@ export function parseStringLength(name: string): {
   valid: boolean
 } {
   const trimmed = name.trim()
-  const match = /^([A-Za-z_]\w*)\s*[([]\s*(\d+)\s*[)\]]$/.exec(trimmed)
+  // The two delimiters are alternatives, not a character class: `STRING(23]`
+  // is a typo, and matching it would normalise it into a valid declaration.
+  const match = /^([A-Za-z_]\w*)\s*(?:\(\s*(\d+)\s*\)|\[\s*(\d+)\s*\])$/.exec(trimmed)
   if (!match) return { base: trimmed.toUpperCase(), valid: true }
 
   const base = match[1].toUpperCase()
-  const length = Number(match[2])
+  const length = Number(match[2] ?? match[3])
   const valid = LENGTH_QUALIFIED.has(base) && length >= 1 && length <= MAX_STRING_LENGTH
   return { base, length, valid }
 }

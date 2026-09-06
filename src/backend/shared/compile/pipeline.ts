@@ -366,39 +366,53 @@ function collectLibraryResources(
   const enabled = new Set((projectData.libraries ?? []).map((ref) => ref.name))
 
   const byLibrary = new Map<string, Map<string, string>>()
-  const addResource = (resource: { path: string; content: string }): void => {
-    // These paths come off an installed archive and become files under the
-    // build directory, so they are checked before they are used as one.
-    if (!isSafeRelativePath(resource.path)) return
-    // The first segment names the library folder the file belongs to.
-    const separator = resource.path.indexOf('/')
-    if (separator <= 0) return
-    const name = resource.path.slice(0, separator)
-    let files = byLibrary.get(name)
-    if (!files) {
-      files = new Map<string, string>()
-      byLibrary.set(name, files)
+
+  /**
+   * One source's folders, kept apart until that source is fully collected.
+   *
+   * Merging as we go would mix two versions of the same third-party library —
+   * a header from one and the source from the other, which is a link error at
+   * best and the wrong behaviour at worst. Two libraries bundling the same
+   * Arduino dependency is ordinary, so the later folder replaces the earlier
+   * one whole.
+   */
+  const collect = (resources: readonly unknown[]): void => {
+    const staged = new Map<string, Map<string, string>>()
+    for (const resource of resources) {
+      // An archive is external data; a record missing its path or content is
+      // skipped rather than allowed to abort the compile.
+      if (typeof resource !== 'object' || resource === null) continue
+      const { path, content } = resource as { path?: unknown; content?: unknown }
+      if (typeof path !== 'string' || typeof content !== 'string') continue
+      // These paths come off an installed archive and become files under the
+      // build directory, so they are checked before they are used as one.
+      if (!isSafeRelativePath(path)) continue
+      // The first segment names the library folder the file belongs to.
+      const separator = path.indexOf('/')
+      if (separator <= 0) continue
+      const name = path.slice(0, separator)
+      let files = staged.get(name)
+      if (!files) {
+        files = new Map<string, string>()
+        staged.set(name, files)
+      }
+      files.set(path.slice(separator + 1), content)
     }
-    files.set(resource.path.slice(separator + 1), resource.content)
+    for (const [name, files] of staged) byLibrary.set(name, files)
   }
 
-  for (const archive of (enabled.size === 0 ? [] : libraryArchives) as Array<{
-    manifest?: { name?: string }
-    resources?: Array<{ path: string; content: string }>
-  }>) {
-    const archiveName = archive?.manifest?.name
+  for (const archive of enabled.size === 0 ? [] : libraryArchives) {
+    if (typeof archive !== 'object' || archive === null) continue
+    const { manifest, resources } = archive as { manifest?: unknown; resources?: unknown }
+    const archiveName = (manifest as { name?: unknown } | undefined)?.name
     if (typeof archiveName !== 'string' || !enabled.has(archiveName)) continue
-    for (const resource of archive.resources ?? []) {
-      addResource(resource)
-    }
+    collect(Array.isArray(resources) ? resources : [])
   }
 
   // A library project does not list itself, so its own resources arrive here
   // directly when it verifies.
-  const own = (projectData as { ownLibraryResources?: Array<{ path: string; content: string }> }).ownLibraryResources
-  for (const resource of own ?? []) {
-    addResource(resource)
-  }
+  const own = (projectData as { ownLibraryResources?: unknown }).ownLibraryResources
+  collect(Array.isArray(own) ? own : [])
 
   return [...byLibrary].map(([name, files]) => ({
     name,

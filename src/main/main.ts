@@ -180,7 +180,10 @@ const createMainWindow = async () => {
   // dev server answers. ERR_ABORTED (-3) is a superseded navigation, not a
   // failure, and retrying it would fight the navigation that replaced it.
   if (isDebug) {
-    mainWindow.webContents.on('did-fail-load', (_event, errorCode) => {
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, _description, _url, isMainFrame) => {
+      // A subframe that fails is its own business; reloading over it would
+      // throw away the renderer that is already up.
+      if (!isMainFrame) return
       if (errorCode === -3) return
       setTimeout(() => void mainWindow?.loadURL(resolveHtmlPath('index.html')), 500)
     })

@@ -122,7 +122,7 @@ const SelectableTypeCell = ({
                 ? ''
                 : definition === 'array' || definition === 'derived'
                   ? cellValue
-                  : (cellValue as unknown as string).toUpperCase()}
+                  : cellValue.toUpperCase()}
             </span>
           </div>
         </PrimitiveDropdown.Trigger>

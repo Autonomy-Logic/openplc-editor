@@ -129,43 +129,56 @@ function parseCompileLibraryArgs(
   if (typeof projectPath !== 'string' || projectPath === '') {
     return { ok: false, error: 'Library build failed: request carried no project path.' }
   }
-  if (typeof projectData !== 'object' || projectData === null) {
-    return { ok: false, error: 'Library build failed: request carried no project data.' }
-  }
-  const data = projectData as Record<string, unknown>
-  if (!Array.isArray(data.pous)) {
-    return { ok: false, error: 'Library build failed: project data has no POU list.' }
-  }
-  const configuration = data.configuration
-  if (typeof configuration !== 'object' || configuration === null) {
-    return { ok: false, error: 'Library build failed: project data has no configuration.' }
-  }
-  const resource = (configuration as Record<string, unknown>).resource
-  if (typeof resource !== 'object' || resource === null) {
-    return { ok: false, error: 'Library build failed: project configuration has no resource.' }
-  }
-  const { tasks, instances } = resource as Record<string, unknown>
-  if (!Array.isArray(tasks) || !Array.isArray(instances)) {
-    return { ok: false, error: 'Library build failed: project resource has no task or instance list.' }
-  }
-  if (typeof verifyProjectData !== 'object' || verifyProjectData === null) {
-    return { ok: false, error: 'Library build failed: request carried no verification project data.' }
-  }
+  const project = narrowProjectData(projectData, 'project data')
+  if ('error' in project) return { ok: false, error: project.error }
+  // The verification pass runs the same pipeline over its own payload, so it
+  // is held to the same shape. It used to be checked only for being an object,
+  // on the reasoning that it is the same project — but it arrives as a
+  // separate argument, and `{}` passed.
+  const verify = narrowProjectData(verifyProjectData, 'verification project data')
+  if ('error' in verify) return { ok: false, error: verify.error }
+
   return {
     ok: true,
     value: {
       projectPath,
-      // Shape-checked above for everything the pipeline reaches for. The
-      // remaining fields are optional to it (`libraries ?? []`,
-      // `dataTypes ?? []`), so a narrower cast here would buy nothing.
-      projectData: projectData as PLCProjectData,
-      // The verification pass is the same project through the same
-      // preprocessor, so the checks above cover it too.
-      verifyProjectData: verifyProjectData as PLCProjectData,
+      projectData: project.value,
+      verifyProjectData: verify.value,
       cleanBuild: cleanBuild === true,
       nativePous: parseNativePouRefs(rawNativePous),
     },
   }
+}
+
+/**
+ * Narrow one IPC project payload to the shape the pipeline reaches for.
+ *
+ * Everything checked here is read unconditionally downstream; the rest is
+ * optional to it (`libraries ?? []`, `dataTypes ?? []`), so checking more would
+ * reject payloads the build handles today. `what` names the payload in the
+ * message, because two of them cross this call.
+ */
+function narrowProjectData(value: unknown, what: string): { value: PLCProjectData } | { error: string } {
+  if (typeof value !== 'object' || value === null) {
+    return { error: `Library build failed: request carried no ${what}.` }
+  }
+  const data = value as Record<string, unknown>
+  if (!Array.isArray(data.pous)) {
+    return { error: `Library build failed: ${what} has no POU list.` }
+  }
+  const configuration = data.configuration
+  if (typeof configuration !== 'object' || configuration === null) {
+    return { error: `Library build failed: ${what} has no configuration.` }
+  }
+  const resource = (configuration as Record<string, unknown>).resource
+  if (typeof resource !== 'object' || resource === null) {
+    return { error: `Library build failed: ${what} configuration has no resource.` }
+  }
+  const { tasks, instances } = resource as Record<string, unknown>
+  if (!Array.isArray(tasks) || !Array.isArray(instances)) {
+    return { error: `Library build failed: ${what} resource has no task or instance list.` }
+  }
+  return { value: value as PLCProjectData }
 }
 
 /**
@@ -564,7 +577,10 @@ class CompilerModule {
       const seen = new Set<string>()
       const flags: string[] = []
       for (const entry of entries) {
-        for (const token of entry.arguments ?? entry.command?.split(/\s+/) ?? []) {
+        // `command` is one shell line, so it quotes any path holding a space.
+        // Splitting on whitespace would hand the compiler half a path; the
+        // recipe tokenizer already knows the quoting rules.
+        for (const token of entry.arguments ?? (entry.command ? tokenizeRecipe(entry.command) : [])) {
           if (!token.startsWith('-I') || token.length === 2) continue
           if (seen.has(token)) continue
           seen.add(token)

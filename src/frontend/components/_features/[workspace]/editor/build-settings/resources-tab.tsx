@@ -17,6 +17,9 @@ import { PlusIcon } from '../../../../../assets/icons/interface/Plus'
 import { TrashCanIcon } from '../../../../../assets/icons/interface/TrashCan'
 import { useToast } from '../../../[app]/toast/use-toast'
 
+/** Toast text for a rejected port call. */
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
 const ResourcesTab = () => {
   const projectPort = useProject()
   const { toast } = useToast()
@@ -32,19 +35,31 @@ const ResourcesTab = () => {
   // `in` rather than a truthiness check on the members: reading a method off
   // the port without calling it is what the unbound-method rule flags.
   const canManage = 'listLibraryResources' in projectPort && 'addLibraryResource' in projectPort
+  // Each resource method is independently optional on the port, so removal is
+  // asked about separately — the controls must not offer what `handleRemove`
+  // would silently decline.
+  const canRemove = canManage && 'removeLibraryResource' in projectPort
 
+  // Every port call below can reject — the IPC channel drops, the filesystem
+  // refuses — and each caller hands the promise to `void`. Without a catch here
+  // the rejection is unhandled and the user is told nothing at all, so the
+  // failure is reported on the same toast as a returned error.
   const refresh = useCallback(async () => {
     if (!projectPort.listLibraryResources) return
-    const result = await projectPort.listLibraryResources()
-    setPendingRemoval(null)
-    if (!result.success) {
-      toast({ title: 'Could not read resources', description: result.error, variant: 'fail' })
-      return
+    try {
+      const result = await projectPort.listLibraryResources()
+      setPendingRemoval(null)
+      if (!result.success) {
+        toast({ title: 'Could not read resources', description: result.error, variant: 'fail' })
+        return
+      }
+      const next = result.folders ?? []
+      setFolders(next)
+      // Keep the selection only while it still names a folder.
+      setSelected((current) => (current && next.some((f) => f.name === current) ? current : (next[0]?.name ?? null)))
+    } catch (error) {
+      toast({ title: 'Could not read resources', description: errorText(error), variant: 'fail' })
     }
-    const next = result.folders ?? []
-    setFolders(next)
-    // Keep the selection only while it still names a folder.
-    setSelected((current) => (current && next.some((f) => f.name === current) ? current : (next[0]?.name ?? null)))
   }, [projectPort, toast])
 
   useEffect(() => {
@@ -65,6 +80,8 @@ const ResourcesTab = () => {
       await refresh()
       if (result.folder) setSelected(result.folder.name)
       toast({ title: `Added ${result.folder?.name ?? 'folder'}`, variant: 'default' })
+    } catch (error) {
+      toast({ title: 'Could not add the folder', description: errorText(error), variant: 'fail' })
     } finally {
       setIsBusy(false)
     }
@@ -80,6 +97,8 @@ const ResourcesTab = () => {
         return
       }
       await refresh()
+    } catch (error) {
+      toast({ title: `Could not remove ${name}`, description: errorText(error), variant: 'fail' })
     } finally {
       setIsBusy(false)
     }
@@ -145,7 +164,7 @@ const ResourcesTab = () => {
                   </span>
                 </button>
 
-                {pendingRemoval === folder.name ? (
+                {!canRemove ? null : pendingRemoval === folder.name ? (
                   <span className='flex shrink-0 items-center gap-2'>
                     <button
                       type='button'
