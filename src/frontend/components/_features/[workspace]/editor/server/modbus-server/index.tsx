@@ -222,10 +222,9 @@ const ModbusServerEditor = () => {
     actions,
   } = useModbusServerConfig(serverName)
 
-  // The RTU shares the editor's line when it is on the default UART. The
-  // firmware serves both there, so the port's speed and its slave id are the
-  // editor's own connection parameters -- owned by the package, shown here
-  // read-only. Changing them would be changing how the editor reaches the board.
+  // The RTU shares the editor's line when it is on the default UART. The firmware
+  // answers both ids there and routes by function code, so the slave id stays the
+  // user's to pick; what is shared is the wire, not the address.
   const rtuAvailable = profile.transports.includes('rtu')
   const rtuOnEditorPort =
     rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
@@ -415,9 +414,7 @@ const ModbusServerEditor = () => {
               hint={
                 !rtuAvailable
                   ? 'RTU only. TCP addresses by IP.'
-                  : rtuOnEditorPort
-                    ? 'Set by the board on this port.'
-                    : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
+                  : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
               }
             >
               <div className='w-24'>
@@ -429,7 +426,7 @@ const ModbusServerEditor = () => {
                   onBlur={commitSlaveId}
                   min={MIN_SLAVE_ID}
                   max={MAX_SLAVE_ID}
-                  disabled={!enabled || !rtuAvailable || rtuOnEditorPort}
+                  disabled={!enabled || !rtuAvailable}
                   className={inputStyles}
                 />
               </div>

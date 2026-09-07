@@ -230,11 +230,16 @@ so `selectModbusServer` refuses a build with more than one enabled server and
 names them. The editor still allows several, because a project moves between
 targets.
 
-The editor's own link is deliberately NOT derived from the server: `DEBUG_BAUD`
-and `DEBUG_SLAVE` come from `screens.serial.baud_rate` and
-`screens.serial.slave_id`, so a project with no Modbus server still debugs, and
-changing a server's slave id is not an access event. When the RTU shares the
-default UART the two are one listener, so the editor's id wins for both.
+The editor's own link is deliberately NOT derived from the server. `DEBUG_BAUD`
+comes from `screens.serial.baud_rate` — that UART's speed is the package's to
+state — and `DEBUG_SLAVE` is the constant 1, so a project with no Modbus server
+still debugs and changing a server's slave id is not an access event.
+
+On the default UART the firmware answers **both** ids and routes by function
+code: `0x41`-`0x4B` on the editor's, everything on the server's. So a server
+sharing that port keeps whatever id the user picked, and `MBSERIAL_SLAVE` is the
+server's on every port. A board flashed before 4.4.0 may answer the editor on
+another id; Connect tries 1 first and the project's legacy id after.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 

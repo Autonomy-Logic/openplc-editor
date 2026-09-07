@@ -44,10 +44,6 @@ export interface VppModbusScreenState {
    *  are still read as a fallback -- see the `modbus_rtu` members below. */
   serial?: {
     baud_rate?: string
-    /** Slave id the editor's own connection is framed with. The package owns
-     *  it because it is a property of that link, not of any Modbus server:
-     *  the debugger answers on it whether or not a server exists. */
-    slave_id?: number
     modbus_port?: string
     modbus_baud_rate?: string
     enable_rs485_en_pin?: boolean
@@ -171,30 +167,23 @@ export function resolveDebugBaud(state: VppModbusScreenState): string {
   return state.serial?.baud_rate ?? state.modbus_rtu?.baud_rate ?? state.modbus_rtu?.rtu_baud_rate ?? DEFAULT_DEBUG_BAUD
 }
 
-/** Slave id the always-on debugger frames on when the project states none. */
-export const DEFAULT_DEBUG_SLAVE = 1
-
 /**
  * Slave id the always-on debugger answers on, and therefore the one the editor
- * dials. The firmware drops every frame whose slave id does not match, and for
- * debug function codes that check is the ONLY validation there is, so the two
- * sides disagreeing means a healthy board that answers nothing.
+ * dials. A constant, not a setting.
  *
- * It comes from the package, never from the Modbus server. Welding it to the
- * server's slave id — which is what this used to do — made every change to that
- * field an access event, and made a project with no server unable to debug at
- * all now that a server is something the user creates rather than something
- * every board has.
+ * The firmware answers it IN ADDITION to whatever the Modbus server is set to,
+ * routing by function code (`mb_pdu_is_editor_fc`, `0x41`-`0x4B`), so the two
+ * never compete for the same UART and the server's id is the user's to pick on
+ * every port. That makes an editor-side id a control that changes nothing:
+ * whatever value it held would have to match a firmware the user cannot see, and
+ * a mismatch reads as a healthy board that answers nothing. It was briefly a
+ * package field (`screens.serial.slave_id`) and is now gone from the packages.
  *
- * The `modbus_rtu` fallback carries a package published before it declared
- * `serial.slave_id`. The editor's version floor stops an old EDITOR meeting a
- * new package; nothing stops a new editor meeting an old package, which is
- * exactly what this chain is for.
+ * A board flashed before this change may still answer on another id. That is
+ * Connect's problem, not the emitter's: it tries this id first and the project's
+ * legacy one after.
  */
-export function resolveDebugSlave(state: VppModbusScreenState): number {
-  const declared = state.serial?.slave_id ?? state.modbus_rtu?.rtu_slave_id
-  return typeof declared === 'number' ? declared : DEFAULT_DEBUG_SLAVE
-}
+export const DEBUG_SLAVE = 1
 
 /**
  * `aa:bb:cc:dd:ee:ff` → `0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff` so it can
@@ -302,14 +291,10 @@ export function generateModbusDefines(
     const baud = onDefaultPort
       ? resolveDebugBaud(state)
       : (state.serial?.modbus_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
-    // On the default port the RTU and the debugger are one listener, matched by
-    // one slave id. Emitting the server's here instead would compile a board
-    // that answers the bus on one id and the editor on another, with only one
-    // of them able to be right -- so the editor's link wins, which is what the
-    // screen shows read-only.
-    const slave = onDefaultPort
-      ? resolveDebugSlave(state)
-      : (server?.slaveId ?? rtu.rtu_slave_id ?? RTU_DEFAULTS.rtu_slave_id)
+    // The server's id, on every port. On the default port the firmware answers
+    // DEBUG_SLAVE alongside it for the editor's function codes, so the two share
+    // the UART without sharing an address.
+    const slave = server?.slaveId ?? rtu.rtu_slave_id ?? RTU_DEFAULTS.rtu_slave_id
     lines.push(`#define MBSERIAL_IFACE ${iface}`)
     lines.push(`#define MBSERIAL_BAUD ${baud}`)
     lines.push(`#define MBSERIAL_SLAVE ${slave}`)

@@ -108,8 +108,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { serial: { baud_rate: '115200', slave_id: 1 } },
-      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
+      vppModbusState: { serial: { baud_rate: '115200' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 1 },
     })
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 115200')
@@ -242,18 +242,19 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('#define DEBUG_BAUD 57600')
   })
 
-  it('emits one id for both when the RTU shares the editor line', () => {
-    // One listener answers the bus and the editor there, and it can only have
-    // one id. The package states it; the server's own is not consulted.
+  it('keeps the two ids apart when the RTU shares the editor line', () => {
+    // The firmware answers both on that UART and routes by function code, so the
+    // server keeps the address the user picked. Emitting one id for both is what
+    // made this field read-only on the default port.
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { serial: { baud_rate: '9600', slave_id: 3 } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
       modbusServer: { transports: ['rtu'], serialPort: 'Serial', slaveId: 7 },
     })
-    expect(out).toContain('#define MBSERIAL_SLAVE 3')
-    expect(out).toContain('#define DEBUG_SLAVE 3')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
   })
 
   it('keeps the editor id untouched when the RTU has a UART of its own', () => {
@@ -261,30 +262,29 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { serial: { baud_rate: '9600', slave_id: 3 } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
       modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 7 },
     })
     expect(out).toContain('#define MBSERIAL_SLAVE 7')
-    expect(out).toContain('#define DEBUG_SLAVE 3')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
   })
 
-  // The slave-id twin of the DEBUG_BAUD regression above, and the harsher one:
-  // Connect sweeps baud rates, but nothing sweeps slave ids. With Modbus off and
-  // slave id 7 saved on the screen, the editor addresses 7 while a firmware left
-  // on modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback frames on 1 — every
-  // frame dropped at the id check, reported as "No Firmware Detected".
-  it('aligns DEBUG_SLAVE with the screen slave id when Modbus is DISABLED', () => {
+  // The editor's id is a constant, so nothing a project can express moves it.
+  // This used to be derived from the screen, and a stale value there addressed a
+  // firmware framing on another id — every frame dropped at the id check and
+  // reported as "No Firmware Detected".
+  it('emits DEBUG_SLAVE 1 whatever a legacy project left on the screen', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
       vppModbusState: { modbus_rtu: { enabled: false, rtu_slave_id: 7 } },
     })
-    expect(out).toContain('#define DEBUG_SLAVE 7')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
     expect(out).not.toContain('#define MODBUS_ENABLED')
   })
 
-  it('falls back to DEBUG_SLAVE 1 when the project states no slave id', () => {
+  it('emits DEBUG_SLAVE 1 for a project with no screen state at all', () => {
     const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
     expect(out).toContain('#define DEBUG_SLAVE 1')
   })

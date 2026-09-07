@@ -1,9 +1,8 @@
 import {
+  DEBUG_SLAVE,
   DEFAULT_DEBUG_BAUD,
-  DEFAULT_DEBUG_SLAVE,
   generateModbusDefines,
   resolveDebugBaud,
-  resolveDebugSlave,
   selectModbusServer,
 } from '../steps/modbus-defines'
 
@@ -37,27 +36,14 @@ describe('resolveDebugBaud', () => {
 })
 
 /**
- * The slave id the always-on debugger frames on. The firmware drops every frame
- * whose id does not match, and for debug function codes that check is the only
- * validation there is, so a disagreement is a healthy board answering nothing.
+ * The slave id the editor frames on. It is a constant rather than a setting
+ * because the firmware answers it alongside the Modbus server's id and routes by
+ * function code, so nothing a project can express moves the editor's link. The
+ * value itself is load-bearing: every board already in the field answers 1.
  */
-describe('resolveDebugSlave', () => {
-  it('takes the id the package declares for the editor link', () => {
-    expect(resolveDebugSlave({ serial: { slave_id: 9 } })).toBe(9)
-  })
-
-  it('falls back to the RTU section for a package that does not declare one yet', () => {
-    // A new editor can meet an old package: the version floor only stops the
-    // other direction.
-    expect(resolveDebugSlave({ modbus_rtu: { rtu_slave_id: 4 } })).toBe(4)
-  })
-
-  it('prefers the package over the legacy fallback when both exist', () => {
-    expect(resolveDebugSlave({ serial: { slave_id: 9 }, modbus_rtu: { rtu_slave_id: 4 } })).toBe(9)
-  })
-
-  it('falls back for an empty project', () => {
-    expect(resolveDebugSlave({})).toBe(DEFAULT_DEBUG_SLAVE)
+describe('DEBUG_SLAVE', () => {
+  it('is 1, the id every board already in the field answers on', () => {
+    expect(DEBUG_SLAVE).toBe(1)
   })
 })
 
@@ -73,7 +59,7 @@ describe('generateModbusDefines', () => {
     // is still the only statement of what is served. It has to compile to the
     // same firmware it compiled to yesterday.
     const out = generateModbusDefines({
-      serial: { baud_rate: '115200', slave_id: 1 },
+      serial: { baud_rate: '115200' },
       modbus_rtu: { enabled: true },
     })
     expect(out).toBe(
@@ -118,21 +104,22 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBTCP')
   })
 
-  it('gives the editor its own slave id when the RTU shares the default port', () => {
-    // One listener answers both there, and it can only have one id. If the
-    // server's won, the board would answer the bus on one id and the editor on
-    // another, with only one of them able to be right.
-    const out = generateModbusDefines({ serial: { baud_rate: '9600', slave_id: 3 } }, 'Serial', {
+  it('honours the server slave id on the default port, where the editor also listens', () => {
+    // The firmware answers DEBUG_SLAVE there too, routed by function code, so
+    // the server keeps its own address on the UART the editor is using. This
+    // used to be overridden with the editor's id, which is what made the field
+    // read-only on that port.
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
       transports: ['rtu'],
       serialPort: 'Serial',
       slaveId: 7,
     })
-    expect(out).toContain('#define MBSERIAL_SLAVE 3')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
   })
 
   it('honours the server slave id on a UART of its own', () => {
-    const out = generateModbusDefines({ serial: { baud_rate: '9600', slave_id: 3 } }, 'Serial', {
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
       transports: ['rtu'],
       serialPort: 'Serial1',
       slaveId: 7,
@@ -391,7 +378,7 @@ describe('generateModbusDefines', () => {
 
   it('combines RTU + TCP and emits MODBUS_ENABLED exactly once', () => {
     const out = generateModbusDefines({
-      serial: { baud_rate: '9600', slave_id: 5 },
+      serial: { baud_rate: '9600' },
       modbus_rtu: { enabled: true },
       modbus_tcp: { enabled: true, tcp_interface: 'Ethernet', enable_dhcp: true },
     })
@@ -446,7 +433,7 @@ describe('generateModbusDefines', () => {
 
   it('output always ends with a trailing newline (so callers can concatenate)', () => {
     const out = generateModbusDefines({
-      serial: { baud_rate: '115200', slave_id: 1 },
+      serial: { baud_rate: '115200' },
       modbus_rtu: { enabled: true },
     })
     expect(out.endsWith('\n')).toBe(true)

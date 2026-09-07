@@ -99,6 +99,29 @@ export function planBaudAttempts(declaredBaud: number | undefined, options: { sw
 }
 
 /**
+ * The slave id a board flashed before 4.4.0 answers the editor on, when the
+ * project says it is not the current one.
+ *
+ * The editor's id is a constant now, and the firmware answers it alongside the
+ * Modbus server's. A board built before that change answers only whatever
+ * `rtu_slave_id` its project stated, so pinning the editor would drop it out of
+ * Connect until somebody re-flashed it — and it fails as silence, which reads as
+ * a dead board rather than a stale address.
+ *
+ * Returns `undefined` when there is nothing to add: no legacy id recorded, one
+ * that is not a usable address, or one that is already the id being dialled.
+ *
+ * Unlike the baud sweep this costs no port open — same port, different first
+ * byte — so it is one request timeout, and only on a project that carries the
+ * old field at all.
+ */
+export function legacySlaveAttempt(current: number | undefined, legacy: unknown): number | undefined {
+  if (typeof legacy !== 'number' || !Number.isInteger(legacy)) return undefined
+  if (legacy < 1 || legacy > 247) return undefined
+  return legacy === current ? undefined : legacy
+}
+
+/**
  * Connect with a bounded retry/backoff loop. A device flashed over arduino-cli
  * serial reboots as the programmer releases the port, so the first connect right
  * after an upload frequently races the reboot; retry, rethrowing the last error

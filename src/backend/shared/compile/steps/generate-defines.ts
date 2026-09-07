@@ -19,10 +19,10 @@
 
 import type { DevicePin } from '../../types/PLC/devices'
 import {
+  DEBUG_SLAVE,
   generateModbusDefines,
   type ModbusServerCompileConfig,
   resolveDebugBaud,
-  resolveDebugSlave,
   type VppModbusScreenState,
 } from './modbus-defines'
 
@@ -227,12 +227,10 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     // the editor dialled the other value, and the board answered nothing
     // ("No Firmware Detected" on a healthy board).
     DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {})}\n`
-    // Same two-sided agreement as the baud, and the same symptom when it breaks:
-    // the firmware drops every frame whose slave id doesn't match, and that check
-    // is the only validation debug function codes get. It comes from the package,
-    // not from any Modbus server — the debugger answers here whether or not a
-    // server exists, and a project that has none must still be debuggable.
-    DEFINES_CONTENT += `#define DEBUG_SLAVE ${resolveDebugSlave(vppModbusState ?? {})}\n`
+    // A constant, unlike the baud: the firmware answers it alongside the Modbus
+    // server's id and routes by function code, so nothing the user configures can
+    // move the editor's link off it.
+    DEFINES_CONTENT += `#define DEBUG_SLAVE ${DEBUG_SLAVE}\n`
     DEFINES_CONTENT += `\n\n`
   }
 

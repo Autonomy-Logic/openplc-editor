@@ -20,7 +20,7 @@ import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
 
 import { WebSocketDebugTransport } from '../../shared/debug/websocket-debug-transport'
-import { planBaudAttempts } from './device-probe'
+import { legacySlaveAttempt, planBaudAttempts } from './device-probe'
 import type { DeviceDebugCandidate, DeviceLinkCandidate } from './device-session-manager'
 import { buildDeviceModbusTransport, modbusTransportKind } from './device-transport-factory'
 
@@ -71,14 +71,19 @@ export function toDeviceLinkCandidates(
   // TCP address is a better next try than a rate nobody asked for.
   const speculative: DeviceLinkCandidate[] = []
 
-  const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
+  const build = (
+    config: DebugConnectionConfig,
+    baudRate: number | undefined,
+    isGuess: boolean,
+    slaveId: number | undefined = config.connectionParams.slaveId,
+  ): void => {
     const kind = modbusTransportKind(config.connectionType)
     if (kind === null) return
     const params = {
       connectionType: config.connectionType,
       port: config.connectionParams.port,
       baudRate,
-      slaveId: config.connectionParams.slaveId,
+      slaveId,
       host: config.connectionParams.ipAddress,
     }
     // Only the simulator needs an in-process serial port; building one for a real
@@ -117,6 +122,19 @@ export function toDeviceLinkCandidates(
     for (const attempt of planBaudAttempts(config.connectionParams.baudRate, { sweep: opts.probeBaudRates })) {
       build(config, attempt.baudRate, attempt.speculative)
     }
+
+    // A board flashed before the editor's id became a constant answers only the
+    // id its project recorded. Added at the DECLARED baud alone: pairing it with
+    // the swept rates would cost five more port opens, and each open resets an
+    // AVR or ESP8266 — restarting the user's program to chase a combination of
+    // two stale values.
+    // RTU only: over TCP the unit id is a gateway routing field, not an address
+    // the board filters on, and the simulator is built fresh every time.
+    const legacy =
+      modbusTransportKind(config.connectionType) === 'rtu'
+        ? legacySlaveAttempt(config.connectionParams.slaveId, config.connectionParams.legacySlaveId)
+        : undefined
+    if (legacy !== undefined) build(config, config.connectionParams.baudRate, true, legacy)
   }
 
   // The patient budget belongs to the last DECLARED endpoint, not to the last

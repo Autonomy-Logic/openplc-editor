@@ -1,6 +1,12 @@
 import type { DebugDeviceIdResult } from '@root/backend/shared/debug/types'
 
-import { classifyDeviceLink, FALLBACK_BAUD_RATES, planBaudAttempts, readDeviceIdWithRetries } from '../device-probe'
+import {
+  classifyDeviceLink,
+  FALLBACK_BAUD_RATES,
+  legacySlaveAttempt,
+  planBaudAttempts,
+  readDeviceIdWithRetries,
+} from '../device-probe'
 
 /**
  * A channel that answers the board-id read (FC 0x48) according to a script, so
@@ -26,6 +32,40 @@ const SILENT: DebugDeviceIdResult = { success: false }
 /** Answered the frame but reported no identity (no license-core linked, or an
  *  architecture the closed reader refuses: AVR, RP2040). */
 const EMPTY_ID: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([]) }
+
+/**
+ * The editor's slave id is a constant now, so a board flashed before that
+ * answers only the id its project recorded. Getting this wrong costs a board in
+ * the field, and it fails as silence rather than as an error.
+ */
+describe('legacySlaveAttempt', () => {
+  it("offers the project's old id when it differs from the one being dialled", () => {
+    expect(legacySlaveAttempt(1, 7)).toBe(7)
+  })
+
+  it('offers nothing when the old id is the one already being dialled', () => {
+    // Every board flashed at the default. Retrying it would double the wait
+    // before Connect gives up, for every project that carries the old field.
+    expect(legacySlaveAttempt(1, 1)).toBeUndefined()
+  })
+
+  it('offers nothing when the project records no old id', () => {
+    expect(legacySlaveAttempt(1, undefined)).toBeUndefined()
+  })
+
+  it('ignores a value that is not a usable Modbus address', () => {
+    // Screen state is JSON a user's project file carries; it can hold anything.
+    expect(legacySlaveAttempt(1, '7')).toBeUndefined()
+    expect(legacySlaveAttempt(1, 0)).toBeUndefined()
+    expect(legacySlaveAttempt(1, 248)).toBeUndefined()
+    expect(legacySlaveAttempt(1, 7.5)).toBeUndefined()
+    expect(legacySlaveAttempt(1, null)).toBeUndefined()
+  })
+
+  it('still offers the old id when the current one is unknown', () => {
+    expect(legacySlaveAttempt(undefined, 7)).toBe(7)
+  })
+})
 
 describe('planBaudAttempts', () => {
   it('leads with the configured rate, then sweeps the rest', () => {

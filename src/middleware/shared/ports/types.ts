@@ -1354,6 +1354,13 @@ export interface DebugConnectionConfig {
     port?: string
     baudRate?: number
     slaveId?: number
+    /**
+     * An id a board flashed before 4.4.0 may still answer the editor on, tried
+     * only after `slaveId` has gone unanswered. Not a manifest field: the editor
+     * reads it from the project's own legacy screen state, because the packages
+     * no longer declare the screen it lived on.
+     */
+    legacySlaveId?: number
     jwtToken?: string
   }
 }
