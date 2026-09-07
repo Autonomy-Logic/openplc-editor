@@ -4,7 +4,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_serial.h"
-#include "modbus_pdu.h"   // process_mbpacket, mb_pdu_request_len, mb_pdu_skips_crc
+#include "modbus_pdu.h"   // process_mbpacket, mb_pdu_request_len, mb_pdu_skips_crc, mb_pdu_is_editor_fc
 #include "modbus_crc.h"   // calcCrc
 
 #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
@@ -141,8 +141,15 @@ static void mb_rtu_drop_front(uint8_t *buf, uint16_t *plen, uint16_t k)
 // and the response written back to `port`. In the single-serial build `buf` IS
 // `mb_frame` (in-place, no copy); in the dual-serial build each port owns a
 // distinct buffer and `mb_frame` is the transient process/TX scratch.
+//
+// `editorid` is a SECOND id the port answers, carrying the editor's private
+// function codes only. It lets the user's Modbus server keep an id of its own on
+// the UART the editor is already using. Pass it equal to `slaveid` — the common
+// case, and every port the editor does not sit on — and this costs nothing: the
+// server's branch matches first and behaviour is exactly what it was.
 static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
-                               uint8_t *buf, uint16_t *plen, uint32_t *plast)
+                               uint8_t editorid, uint8_t *buf, uint16_t *plen,
+                               uint32_t *plast)
 {
     uint16_t packet_crc;
 
@@ -163,13 +170,26 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
         if (*plen == 0)
             return;
 
-        // Header byte-alignment: the first byte must be THIS port's slave id.
-        // This is the cheap framing check, and it is the ONLY validation applied
-        // to debugger frames (CRC is deliberately skipped on debug FCs for
-        // performance — those function codes are private and well-formed).
-        if (buf[0] != slaveid)
+        // Header byte-alignment: the first byte must be one of the ids THIS port
+        // answers. This is the cheap framing check, and it is the ONLY validation
+        // applied to debugger frames (CRC is deliberately skipped on debug FCs
+        // for performance — those function codes are private and well-formed).
+        const bool editor_only = (buf[0] != slaveid) && (buf[0] == editorid);
+
+        if (buf[0] != slaveid && !editor_only)
         {
             mb_rtu_drop_front(buf, plen, 1);            // foreign/garbage head — slide
+            continue;
+        }
+
+        // The editor's id carries the editor's function codes and nothing else.
+        // Silence rather than an exception: the channel is private, and answering
+        // would tell whoever is scanning the bus that the address is live. Checked
+        // as soon as the FC byte exists, so a foreign request is not buffered
+        // whole before being discarded.
+        if (editor_only && *plen >= 2 && !mb_pdu_is_editor_fc(buf[1]))
+        {
+            mb_rtu_drop_front(buf, plen, 1);
             continue;
         }
 
@@ -276,16 +296,28 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
 void handle_serial()
 {
 #ifdef MBSERIAL_ON_SECONDARY
-    handle_serial_port(&DEBUG_IFACE, -1, DEBUG_SLAVE, mb_rx_dbg, &mb_rx_dbg_len, &mb_rx_dbg_last_ms);
+    handle_serial_port(&DEBUG_IFACE, -1, DEBUG_SLAVE, DEBUG_SLAVE, mb_rx_dbg, &mb_rx_dbg_len, &mb_rx_dbg_last_ms);
+    // The editor is not on this UART, so it answers the server's id alone.
     #ifdef MBSERIAL_TXPIN
-        handle_serial_port(&MBSERIAL_IFACE, MBSERIAL_TXPIN, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
+        handle_serial_port(&MBSERIAL_IFACE, MBSERIAL_TXPIN, MBSERIAL_SLAVE, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
     #else
-        handle_serial_port(&MBSERIAL_IFACE, -1, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
+        handle_serial_port(&MBSERIAL_IFACE, -1, MBSERIAL_SLAVE, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
     #endif
-#elif defined(MBTCP)
-    handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, mb_rx_single, &mb_rx_len, &mb_rx_last_ms);
 #else
-    handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, mb_frame, &mb_rx_len, &mb_rx_last_ms);
+    // One UART for both. The editor answers its own id here, so the server's is
+    // whatever the project set it to.
+    #ifdef MB_EDITOR_SLAVE
+        const uint8_t editor_id = MB_EDITOR_SLAVE;
+    #else
+        // No debugger in this build: nothing to keep reachable beside the server,
+        // so the second id is the first and the extra branch never fires.
+        const uint8_t editor_id = modbus.slaveid;
+    #endif
+    #ifdef MBTCP
+        handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, editor_id, mb_rx_single, &mb_rx_len, &mb_rx_last_ms);
+    #else
+        handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, editor_id, mb_frame, &mb_rx_len, &mb_rx_last_ms);
+    #endif
 #endif
 }
 #endif // MB_SERIAL_ACTIVE

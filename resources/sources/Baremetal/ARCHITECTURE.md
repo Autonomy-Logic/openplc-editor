@@ -79,6 +79,14 @@ composite gates in `modbus_config.h`:
    `mb_pdu_request_len()` how many bytes the frame should be (derived per FC).
 3. Unless the FC is a debug FC (`mb_pdu_skips_crc()`), validate the CRC with
    `modbus_crc::calcCrc()`.
+
+   Step 2 accepts **two** slave ids on this port: the Modbus server's, and
+   `MB_EDITOR_SLAVE` for the editor's own link. A frame that matched only the
+   editor's id must carry an editor function code (`mb_pdu_is_editor_fc()`,
+   `0x41`-`0x4B`) or it is dropped in silence — the channel is private, and an
+   exception would tell a bus scanner the address is live. When the two ids are
+   equal, which is the default, the server's branch matches first and this costs
+   nothing.
 4. `process_mbpacket()` dispatches: operation FC → `modbus_registers`; debug FC →
    `modbus_debug`. The response is built back into `mb_frame`.
 5. `handle_serial_port` appends the CRC and writes to the serial port.
@@ -92,9 +100,12 @@ header (no CRC) instead of RTU framing.
 ## Invariants
 
 1. **Transports do not know the function-code set.** They ask `modbus_pdu`
-   (`mb_pdu_request_len` + `mb_pdu_skips_crc`). Adding a function code touches
-   only `modbus_debug` (the handler) and `modbus_pdu` (dispatch + shape) — never
-   the transports.
+   (`mb_pdu_request_len`, `mb_pdu_skips_crc`, `mb_pdu_is_editor_fc`). Adding a
+   function code touches only `modbus_debug` (the handler) and `modbus_pdu`
+   (dispatch + shape) — never the transports. The three predicates answer
+   different questions and are not interchangeable: `mb_pdu_skips_crc` excludes
+   `0x4B`, which does carry a CRC, so using it as "is this the editor" would make
+   run/stop unreachable on the editor's id.
 2. **`mb_frame` is the one seam.** Every transport fills it, calls
    `process_mbpacket()`, and reads the response back out. Single-threaded
    cooperative scheduling means the transports time-slice within a scan; there
