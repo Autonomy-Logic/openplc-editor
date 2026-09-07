@@ -34,6 +34,27 @@ const Panel = ({ title, children }: { title: string; children: React.ReactNode }
   </div>
 )
 
+const Toggle = ({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (value: boolean) => void
+  label: string
+}) => (
+  <label className='relative inline-flex cursor-pointer items-center' aria-label={label}>
+    <input type='checkbox' checked={checked} onChange={(e) => onChange(e.target.checked)} className='peer sr-only' />
+    <div
+      className={cn(
+        'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+        'peer-checked:bg-brand peer-checked:after:translate-x-full',
+        'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+      )}
+    />
+  </label>
+)
+
 const Row = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
   <div className='flex items-center gap-4'>
     <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>{label}</Label>
@@ -153,23 +174,29 @@ const TRANSPORT_LABEL: Record<ModbusServerTransport, string> = {
   tcp: 'Modbus TCP',
 }
 
-/** Transport sets the target can be pointed at, in the order the selector
- *  shows them. "Both" only where the board actually offers both. */
-function buildTransportChoices(
-  offered: readonly ModbusServerTransport[],
-): { label: string; transports: ModbusServerTransport[] }[] {
-  const single = offered.map((transport) => ({ label: TRANSPORT_LABEL[transport], transports: [transport] }))
-  return offered.length > 1 ? [...single, { label: 'Both', transports: [...offered] }] : single
-}
+const selectTriggerStyles =
+  'flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+const selectContentStyles =
+  'h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+const selectItemStyles = cn(
+  'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+  'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+  'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+)
+const hardwareButtonStyles =
+  'h-8 rounded-md border border-neutral-300 px-3 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-neutral-300 disabled:hover:text-neutral-800 dark:border-neutral-700 dark:text-neutral-200'
 
-function sameTransports(a: readonly ModbusServerTransport[], b: readonly ModbusServerTransport[]): boolean {
-  return a.length === b.length && a.every((transport) => b.includes(transport))
-}
-
-const choiceButtonStyles =
-  'h-[30px] rounded-md border px-3 font-caption text-xs font-medium transition-colors disabled:cursor-not-allowed'
-const readOnlyValueStyles =
-  'flex h-[30px] w-full items-center rounded-md bg-neutral-100 px-2 py-1 font-caption text-xs font-medium tabular-nums text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+/**
+ * Transport sets the dropdown offers, in a fixed order on every target. A set
+ * the target cannot serve is rendered disabled rather than dropped, so the
+ * screen has the same shape everywhere and the user can see what the board is
+ * missing rather than guess.
+ */
+const TRANSPORT_CHOICES: { value: string; label: string; transports: ModbusServerTransport[] }[] = [
+  { value: 'rtu', label: 'Modbus RTU', transports: ['rtu'] },
+  { value: 'tcp', label: 'Modbus TCP', transports: ['tcp'] },
+  { value: 'rtu+tcp', label: 'Modbus RTU and TCP', transports: ['rtu', 'tcp'] },
+]
 
 const ModbusServerEditor = () => {
   const editor = useOpenPLCStore((s) => s.editor)
@@ -182,15 +209,43 @@ const ModbusServerEditor = () => {
   const serverName = editor.type === 'plc-server' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-server' ? editor.meta.protocol : 'modbus-tcp'
 
-  const { profile, transports, slaveId, serialPort, port, bindAddress, buffers, bufferMapping, available, actions } =
-    useModbusServerConfig(serverName)
+  const {
+    profile,
+    transports,
+    enabled,
+    slaveId,
+    serialPort,
+    port,
+    bindAddress,
+    buffers,
+    bufferMapping,
+    available,
+    actions,
+  } = useModbusServerConfig(serverName)
 
   // The RTU shares the editor's line when it is on the default UART. The
   // firmware serves both there, so the port's speed and its slave id are the
   // editor's own connection parameters -- owned by the package, shown here
   // read-only. Changing them would be changing how the editor reaches the board.
-  const rtuOnEditorPort = transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
-  const transportChoices = buildTransportChoices(profile.transports)
+  const rtuAvailable = profile.transports.includes('rtu')
+  const rtuOnEditorPort =
+    rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
+
+  const transportChoiceValue =
+    TRANSPORT_CHOICES.find(
+      (choice) =>
+        choice.transports.length === transports.length && choice.transports.every((t) => transports.includes(t)),
+    )?.value ?? 'tcp'
+  const onTransportChange = useCallback(
+    (value: string) => {
+      const choice = TRANSPORT_CHOICES.find((entry) => entry.value === value)
+      if (choice) actions.setTransports(choice.transports)
+    },
+    [actions],
+  )
+  const transportHint = profile.transports.includes('rtu')
+    ? 'What the server answers on. Serving both means one board on two wires.'
+    : 'This target serves Modbus over the network only.'
 
   // Text state for the inputs that commit on blur, so a half-typed number does
   // not reach the store and get clamped mid-keystroke.
@@ -278,10 +333,8 @@ const ModbusServerEditor = () => {
   }
 
   const heading = `Modbus Server: ${serverName}`
-  const activeSegments = profile.segments
-  const visibleBlocks = BLOCK_ORDER.filter((block) =>
-    activeSegments.some((segment) => SEGMENT_META[segment].block === block),
-  )
+  const allSegments = Object.keys(SEGMENT_META) as ModbusSegment[]
+  const visibleBlocks = BLOCK_ORDER
 
   return (
     <div aria-label='Server content container' className='flex h-full w-full flex-col overflow-hidden p-4'>
@@ -295,202 +348,187 @@ const ModbusServerEditor = () => {
       </div>
 
       <div className='flex flex-1 flex-col gap-6 overflow-auto'>
-        <Panel title='Transports'>
-          {/* A server exists because the user created it, and it answers on
-           * whatever it was given. Two independent switches could both end up
-           * off, which would be deleting the server from inside its own
-           * editor -- deleting is the explorer's Delete. */}
-          <Row label='Serves' hint='Delete the server from the project tree to stop serving Modbus.'>
-            <div className='flex gap-1'>
-              {transportChoices.map((choice) => {
-                const selected = sameTransports(choice.transports, transports)
-                return (
-                  <button
-                    key={choice.label}
-                    type='button'
-                    aria-label={`serve-${choice.transports.join('-')}`}
-                    aria-pressed={selected}
-                    onClick={() => actions.setTransports(choice.transports)}
-                    className={cn(
-                      choiceButtonStyles,
-                      selected
-                        ? 'border-brand bg-brand !text-white'
-                        : 'border-neutral-300 bg-white text-neutral-850 hover:bg-neutral-100 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-800',
-                    )}
-                  >
-                    {choice.label}
-                  </button>
-                )
-              })}
+        <Panel title='Modbus Server'>
+          {/* One screen for every target. What a target cannot configure comes
+           * through disabled with the reason, rather than absent: a control
+           * that disappears makes the user wonder whether the feature exists
+           * at all, and two targets whose screens differ in shape cannot be
+           * compared. */}
+          <Row
+            label='Enabled'
+            hint={
+              enabled
+                ? 'The server answers on the transports below.'
+                : 'The server is kept with its configuration, and serves nothing.'
+            }
+          >
+            <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
+          </Row>
+
+          <Row label='Transport' hint={transportHint}>
+            <div className='w-64'>
+              <Select value={transportChoiceValue} onValueChange={onTransportChange} disabled={!enabled}>
+                <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
+                <SelectContent className={selectContentStyles}>
+                  {TRANSPORT_CHOICES.map((choice) => (
+                    <SelectItem
+                      key={choice.value}
+                      value={choice.value}
+                      disabled={!choice.transports.every((t) => profile.transports.includes(t))}
+                      className={selectItemStyles}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {choice.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </Row>
 
-          {transports.includes('rtu') && profile.serialPorts.length > 0 && (
-            <Row
-              label='Serial Port'
-              hint={
-                rtuOnEditorPort
+          <Row
+            label='Serial Port'
+            hint={
+              !rtuAvailable
+                ? 'This target serves Modbus over the network only.'
+                : rtuOnEditorPort
                   ? 'This is the port the editor talks to the board on. The firmware serves both there, so you talk to one at a time.'
                   : 'A UART of its own, separate from the editor connection.'
-              }
-            >
-              <div className='w-64'>
-                <Select value={serialPort || profile.defaultSerial} onValueChange={actions.setSerialPort}>
-                  <SelectTrigger
-                    withIndicator
-                    placeholder='Select serial port'
-                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                  />
-                  <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
-                    {profile.serialPorts.map((option) => (
-                      <SelectItem
-                        key={option}
-                        value={option}
-                        className={cn(
-                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                          'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                        )}
-                      >
-                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {option}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Row>
-          )}
+            }
+          >
+            <div className='w-64'>
+              <Select
+                value={serialPort || profile.defaultSerial}
+                onValueChange={actions.setSerialPort}
+                disabled={!enabled || !rtuAvailable || profile.serialPorts.length === 0}
+              >
+                <SelectTrigger withIndicator placeholder='Select serial port' className={selectTriggerStyles} />
+                <SelectContent className={selectContentStyles}>
+                  {(profile.serialPorts.length > 0 ? profile.serialPorts : [profile.defaultSerial]).map((option) => (
+                    <SelectItem key={option} value={option} className={selectItemStyles}>
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {option}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </Row>
 
-          {transports.includes('rtu') && (
-            <Row
-              label='Slave ID'
-              hint={
-                rtuOnEditorPort
+          <Row
+            label='Slave ID'
+            hint={
+              !rtuAvailable
+                ? 'Addressing on this target is the IP address; Modbus RTU is where a slave id applies.'
+                : rtuOnEditorPort
                   ? "Fixed to the board's own value: it is the id the editor dials, and changing it here would leave the board unreachable."
                   : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Change it and the board must be reflashed before the editor can reach it again.`
-              }
-            >
-              <div className='w-24'>
-                {rtuOnEditorPort ? (
-                  <span aria-label='Slave ID' className={readOnlyValueStyles}>
-                    {slaveId}
-                  </span>
-                ) : (
-                  <InputWithRef
-                    type='number'
-                    aria-label='Slave ID'
-                    value={slaveIdText}
-                    onChange={(e) => setSlaveIdText(e.target.value)}
-                    onBlur={commitSlaveId}
-                    min={MIN_SLAVE_ID}
-                    max={MAX_SLAVE_ID}
-                    className={inputStyles}
-                  />
-                )}
-              </div>
-            </Row>
-          )}
+            }
+          >
+            <div className='w-24'>
+              <InputWithRef
+                type='number'
+                aria-label='Slave ID'
+                value={slaveIdText}
+                onChange={(e) => setSlaveIdText(e.target.value)}
+                onBlur={commitSlaveId}
+                min={MIN_SLAVE_ID}
+                max={MAX_SLAVE_ID}
+                disabled={!enabled || !rtuAvailable || rtuOnEditorPort}
+                className={inputStyles}
+              />
+            </div>
+          </Row>
 
-          {transports.includes('tcp') && (
-            <>
-              {profile.configurableBindAddress && (
-                <Row label='Network Interface'>
-                  <div className='w-64'>
-                    <Select value={bindAddress} onValueChange={actions.setBindAddress}>
-                      <SelectTrigger
-                        withIndicator
-                        placeholder='Select network interface'
-                        className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                      />
-                      <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
-                        {BIND_ADDRESS_OPTIONS.map((option) => (
-                          <SelectItem
-                            key={option.value}
-                            value={option.value}
-                            className={cn(
-                              'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                              'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                            )}
-                          >
-                            <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                              {option.label}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </Row>
-              )}
-
-              <Row
-                label='Port'
-                hint={
-                  profile.configurablePort
-                    ? 'Default: 502'
-                    : 'Fixed by the firmware. Changing it needs a firmware change, not a setting.'
-                }
+          <Row
+            label='Network Interface'
+            hint={
+              profile.configurableBindAddress
+                ? undefined
+                : 'A microcontroller binds the one interface it has, so there is nothing to pick.'
+            }
+          >
+            <div className='w-64'>
+              <Select
+                value={bindAddress}
+                onValueChange={actions.setBindAddress}
+                disabled={!enabled || !profile.configurableBindAddress}
               >
-                <div className='w-64'>
-                  {profile.configurablePort ? (
-                    <InputWithRef
-                      type='number'
-                      aria-label='Port'
-                      value={portText}
-                      onChange={(e) => setPortText(e.target.value)}
-                      onBlur={commitPort}
-                      placeholder='502'
-                      min='1'
-                      max='65535'
-                      className={inputStyles}
-                    />
-                  ) : (
-                    <span
-                      aria-label='Port'
-                      className='flex h-[30px] w-full items-center rounded-md bg-neutral-100 px-2 py-1 font-caption text-xs font-medium tabular-nums text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
-                    >
-                      {port}
-                    </span>
-                  )}
-                </div>
-              </Row>
-            </>
-          )}
+                <SelectTrigger withIndicator placeholder='Select network interface' className={selectTriggerStyles} />
+                <SelectContent className={selectContentStyles}>
+                  {BIND_ADDRESS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </Row>
+
+          <Row
+            label='Port'
+            hint={
+              profile.configurablePort
+                ? 'Default: 502'
+                : 'Fixed by the firmware. Changing it needs a firmware change, not a setting.'
+            }
+          >
+            <div className='w-64'>
+              <InputWithRef
+                type='number'
+                aria-label='Port'
+                value={portText}
+                onChange={(e) => setPortText(e.target.value)}
+                onBlur={commitPort}
+                placeholder='502'
+                min='1'
+                max='65535'
+                disabled={!enabled || !profile.configurablePort}
+                className={inputStyles}
+              />
+            </div>
+          </Row>
         </Panel>
 
         {/* The board's own wiring — baud rates, RS-485 pin, Wi-Fi credentials —
          *  belongs to the vendor package that knows the hardware, and it is
          *  edited on the pages that package ships. Duplicating those fields
-         *  here would give the same value two owners. */}
-        {(profile.vppScreens.serial || profile.vppScreens.network) && (
-          <Panel title='Hardware Settings'>
-            <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-              Which UART Modbus RTU uses, how fast it runs, the RS-485 driver-enable pin and the network credentials are
-              properties of the board. They are configured on the pages its vendor package provides.
-            </p>
-            <div className='flex flex-wrap gap-2'>
-              {profile.vppScreens.serial && (
-                <button
-                  type='button'
-                  onClick={() => openVppScreen(profile.vppScreens.serial as string)}
-                  className='h-8 rounded-md border border-neutral-300 px-3 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand dark:border-neutral-700 dark:text-neutral-200'
-                >
-                  Serial settings
-                </button>
-              )}
-              {profile.vppScreens.network && (
-                <button
-                  type='button'
-                  onClick={() => openVppScreen(profile.vppScreens.network as string)}
-                  className='h-8 rounded-md border border-neutral-300 px-3 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand dark:border-neutral-700 dark:text-neutral-200'
-                >
-                  Network settings
-                </button>
-              )}
-            </div>
-          </Panel>
-        )}
+         *  here would give the same value two owners.
+         *
+         *  The card is rendered on every target, with its buttons disabled
+         *  where there is no such page: a card that appears and disappears
+         *  with the target is the screen changing shape, which is exactly what
+         *  it is supposed to stop doing. */}
+        <Panel title='Hardware Settings'>
+          <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+            {profile.vppScreens.serial || profile.vppScreens.network
+              ? 'Which UART Modbus RTU uses, how fast it runs, the RS-485 driver-enable pin and the network credentials are properties of the board. They are configured on the pages its vendor package provides.'
+              : 'This target has no board-level wiring to configure: the runtime reaches its network and serial ports through the host operating system, which owns them.'}
+          </p>
+          <div className='flex flex-wrap gap-2'>
+            <button
+              type='button'
+              disabled={!profile.vppScreens.serial}
+              onClick={() => profile.vppScreens.serial && openVppScreen(profile.vppScreens.serial)}
+              className={hardwareButtonStyles}
+            >
+              Serial settings
+            </button>
+            <button
+              type='button'
+              disabled={!profile.vppScreens.network}
+              onClick={() => profile.vppScreens.network && openVppScreen(profile.vppScreens.network)}
+              className={hardwareButtonStyles}
+            >
+              Network settings
+            </button>
+          </div>
+        </Panel>
 
         <Panel title='Buffer Mapping'>
           <p className='text-xs text-neutral-600 dark:text-neutral-400'>
@@ -509,20 +547,30 @@ const ModbusServerEditor = () => {
           <div className='grid gap-4 sm:grid-cols-2'>
             {visibleBlocks.map((block) => (
               <BufferBlock key={block} title={block}>
-                {activeSegments
+                {allSegments
                   .filter((segment) => SEGMENT_META[segment].block === block)
                   .map((segment) => {
                     const meta = SEGMENT_META[segment]
+                    // A segment the target has no storage for is shown, sized
+                    // zero, with the reason -- not hidden. Hiding it made two
+                    // targets' screens differ in shape, and left the user with
+                    // no way to tell "this board has no %MX" from "the editor
+                    // forgot about %MX".
+                    const absent = !profile.segments.includes(segment)
                     return (
                       <BufferInput
                         key={segment}
                         label={`%${segment}`}
-                        value={countText[segment] ?? String(buffers[segment])}
+                        value={absent ? '0' : (countText[segment] ?? String(buffers[segment]))}
                         onChange={(value) => setCountText((prev) => ({ ...prev, [segment]: value }))}
                         onBlur={() => commitCount(segment)}
                         max={profile.maxCounts?.[segment] ?? meta.max}
-                        description={meta.description}
-                        readOnly={!profile.configurableBuffers}
+                        description={
+                          absent
+                            ? `${meta.description} — this target has no ${`%${segment}`} storage.`
+                            : meta.description
+                        }
+                        readOnly={!profile.configurableBuffers || absent}
                       />
                     )
                   })}

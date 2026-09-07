@@ -51,9 +51,12 @@ export interface ModbusServerView {
 }
 
 export interface ModbusServerActions {
+  /** The master switch. A server that is off keeps every setting and serves
+   *  nothing, which is what the user wants far more often than deleting it. */
+  setEnabled: (enabled: boolean) => void
   /** Re-point the server at a different set of transports. Never empty: a
-   *  server that answers on nothing does not exist, and deleting one is the
-   *  explorer's job rather than a state the editor can be left in. */
+   *  server has to answer on something, and "answers on nothing" is what the
+   *  switch above is for. */
   setTransports: (transports: readonly ModbusServerTransport[]) => void
   setSlaveId: (slaveId: number) => void
   setSerialPort: (serialPort: string) => void
@@ -118,7 +121,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     return {
       profile,
       transports,
-      enabled: (config?.enabled ?? false) && transports.length > 0,
+      enabled: config?.enabled ?? false,
       slaveId: config?.slaveId ?? DEFAULT_SLAVE_ID,
       serialPort: config?.serialPort ?? '',
       port: profile.configurablePort ? (config?.port ?? profile.fixedPort) : profile.fixedPort,
@@ -139,10 +142,12 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     [serverName, updateServerConfig, handleFileAndWorkspaceSavedState],
   )
 
+  const setEnabled = useCallback((enabled: boolean) => commit({ enabled }), [commit])
+
   const setTransports = useCallback(
     (transports: readonly ModbusServerTransport[]) => {
       if (transports.length === 0) return
-      commit({ transports: [...transports], enabled: true })
+      commit({ transports: [...transports] })
     },
     [commit],
   )
@@ -176,6 +181,6 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
 
   return {
     ...view,
-    actions: { setTransports, setSlaveId, setSerialPort, setPort, setBindAddress, setBufferCount },
+    actions: { setEnabled, setTransports, setSlaveId, setSerialPort, setPort, setBindAddress, setBufferCount },
   }
 }
