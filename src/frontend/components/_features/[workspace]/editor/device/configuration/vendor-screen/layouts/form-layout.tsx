@@ -1,7 +1,7 @@
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
+import { FieldHelpIcon, TooltipProvider } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
@@ -55,29 +55,6 @@ type FormLayoutProps = {
   section: ScreenSection
 }
 
-// Small "info" glyph that reveals the field's help text on hover.
-function FieldHelpIcon({ text }: { text: string }) {
-  return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label='Field help'
-          className='inline-flex h-3.5 w-3.5 cursor-help select-none items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 focus:outline-none focus-visible:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
-        >
-          <svg viewBox='0 0 16 16' fill='none' className='h-3.5 w-3.5'>
-            <circle cx='8' cy='8' r='7' stroke='currentColor' strokeWidth='1.5' />
-            <path d='M8 7.25v4.25' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
-            <circle cx='8' cy='4.75' r='0.85' fill='currentColor' />
-          </svg>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side='right' align='start' sideOffset={6} className='text-xs'>
-        {text}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 function FormLayout({ section }: FormLayoutProps) {
   const fields = (section.fields ?? []) as FieldDef[]
