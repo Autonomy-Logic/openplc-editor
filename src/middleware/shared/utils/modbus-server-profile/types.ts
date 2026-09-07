@@ -38,21 +38,6 @@ export type ModbusServerTransport = 'rtu' | 'tcp'
  */
 export type ModbusSegment = 'QW' | 'MW' | 'MD' | 'ML' | 'QX' | 'MX' | 'IX' | 'IW'
 
-/**
- * Where the Modbus server's settings are persisted for this target.
- *
- *   - `plc-server`: a project-scoped `PLCServer` element, written to
- *     `devices/servers/<name>.json`. Runtime v4 and the Simulator.
- *   - `vendor-screen`: the board-scoped VPP screen state under
- *     `vendorScreenData`, keyed by section id. Baremetal.
- *   - `none`: the target serves no Modbus server.
- *
- * This is the fork the whole unified screen turns on, and it is deliberately
- * NOT a boolean: a third store would be a third value here, not a second
- * branch at every call site.
- */
-export type ModbusServerStore = 'plc-server' | 'vendor-screen' | 'none'
-
 /** Buffer counts, in IEC values (not Modbus addresses). */
 export interface ModbusSegmentCounts {
   QW: number
@@ -66,16 +51,11 @@ export interface ModbusSegmentCounts {
 }
 
 export interface ModbusServerProfile {
-  /** Which store the screen reads and writes. `none` hides the screen. */
-  store: ModbusServerStore
-
-  /** Transports the target can serve, in the order the UI should offer them. */
+  /** Transports the target can serve, in the order the UI should offer them.
+   *  Empty means the target serves no Modbus at all, which is what hides the
+   *  screen — there is no separate flag, because a server that answers on
+   *  nothing and a target that cannot serve are the same absence. */
   transports: ModbusServerTransport[]
-
-  /** Set when the target's firmware serves Modbus RTU but this board cannot:
-   *  every UART it declares is the one carrying the editor connection. The
-   *  screen says so rather than leaving the user to wonder where RTU went. */
-  rtuUnavailable?: 'no-free-serial-port'
 
   /** Segments this target actually has. Absent segments are not rendered and
    *  never appear in the address map — a `%MX` row on an Arduino is a lie. */
@@ -105,6 +85,18 @@ export interface ModbusServerProfile {
   /** The user picks which local interface the server binds to. Meaningless on
    *  a microcontroller with one network interface. */
   configurableBindAddress: boolean
+
+  /** UARTs the board declares, for the RTU port picker. Empty when the package
+   *  declares none, in which case the picker falls back to its static list --
+   *  refusing RTU on a board whose UART set nobody has confirmed would remove a
+   *  configuration that works today. */
+  serialPorts: string[]
+
+  /** The UART the editor's own connection lands on. RTU may use it, and the
+   *  firmware then serves the debugger and the register table there together,
+   *  but the package owns that port's speed and slave id: they are what the
+   *  editor dials, and a project that changed them would lock itself out. */
+  defaultSerial: string
 
   /** TCP port the server answers on. Authoritative when `configurablePort` is
    *  false; otherwise the default for a newly created server. */

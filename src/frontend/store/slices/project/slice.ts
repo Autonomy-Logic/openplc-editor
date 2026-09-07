@@ -1717,8 +1717,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           const server = slice.project.data.servers?.find((s) => s.name === name)
           if (!server?.modbusSlaveConfig) return
           if (config.enabled !== undefined) server.modbusSlaveConfig.enabled = config.enabled
+          if (config.transports !== undefined) server.modbusSlaveConfig.transports = config.transports
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
+          if (config.slaveId !== undefined) server.modbusSlaveConfig.slaveId = config.slaveId
+          if (config.serialPort !== undefined) server.modbusSlaveConfig.serialPort = config.serialPort
+          if (config.baudRate !== undefined) server.modbusSlaveConfig.baudRate = config.baudRate
+          if (config.parity !== undefined) server.modbusSlaveConfig.parity = config.parity
+          if (config.stopBits !== undefined) server.modbusSlaveConfig.stopBits = config.stopBits
+          if (config.dataBits !== undefined) server.modbusSlaveConfig.dataBits = config.dataBits
           if (config.bufferMapping) {
             const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
             server.modbusSlaveConfig.bufferMapping = {

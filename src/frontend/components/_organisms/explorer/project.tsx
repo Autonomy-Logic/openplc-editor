@@ -87,12 +87,12 @@ const Project = () => {
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
 
-  // A board whose Modbus config lives in a VPP screen shows that screen under
-  // Servers, alongside the Runtime v4 servers, instead of in the generic
-  // vendor-screen list. Same tab, same persistence — the difference is only
-  // where the user looks for it, and "Modbus server" is a server.
+  // The board's Modbus screen is not listed among the vendor screens: since
+  // 4.4.0 a baremetal board's Modbus is a `PLCServer` like any other target's,
+  // rendered by the native screen under Servers. What the package still owns —
+  // Serial, Network — stays in the list, because that is hardware.
   const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
-  const modbusUnderServers = modbusProfile.store === 'vendor-screen' ? modbusProfile.vppScreens.modbus : undefined
+  const boardModbusScreen = modbusProfile.vppScreens.modbus
 
   // Persistent Storage is a PROJECT screen: the settings are saved with the
   // project and delivered by the upload, so it is available offline and has
@@ -482,7 +482,7 @@ const Project = () => {
            *  out here rather than listed twice. */}
           {projectCaps.hasVendorScreens &&
             vendorScreens
-              .filter((screenName) => screenName !== modbusUnderServers)
+              .filter((screenName) => screenName !== boardModbusScreen)
               .map((screenName) => (
                 <ProjectTreeLeaf
                   key={`vendor-${screenName}`}
@@ -505,7 +505,7 @@ const Project = () => {
            *  builds), per the fix in d257e2a07; libraries still hide
            *  it via the `projectCaps.hasServers` capability check. */}
           {projectCaps.hasServers && (
-            <ProjectTreeBranch branchTarget='server' forceExpandable={!!modbusUnderServers}>
+            <ProjectTreeBranch branchTarget='server'>
               {[...(servers || [])]
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((server) => (
@@ -524,25 +524,6 @@ const Project = () => {
                     }
                   />
                 ))}
-              {/* The board's Modbus slave, opened through its vendor-screen tab
-               *  so persistence, dirty tracking and save stay exactly as they
-               *  were; only the renderer is the native server editor. */}
-              {modbusUnderServers && (
-                <ProjectTreeLeaf
-                  key={`server-modbus-${modbusUnderServers}`}
-                  leafLang='server'
-                  leafType='server'
-                  label='Modbus'
-                  highlightQuery={searchQuery}
-                  onClick={() =>
-                    handleCreateTab({
-                      name: modbusUnderServers,
-                      path: `/vendor-screen/${modbusUnderServers}`,
-                      elementType: { type: 'vendor-screen', screenName: modbusUnderServers },
-                    })
-                  }
-                />
-              )}
             </ProjectTreeBranch>
           )}
 

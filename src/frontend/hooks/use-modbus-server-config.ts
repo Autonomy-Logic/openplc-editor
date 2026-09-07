@@ -1,98 +1,65 @@
 /**
- * One Modbus-server view over two stores.
+ * One Modbus-server view over one store.
  *
- * A Runtime v4 server is a project element: a `PLCServer` in
- * `project.data.servers`, written to `devices/servers/<name>.json`. A baremetal
- * board's Modbus config is board state: sections of `vendorScreenData`, keyed
- * by section id, archived per board in `vendorScreenDataByBoard`.
+ * Every target's Modbus server is a `PLCServer` in `project.data.servers`,
+ * written to `devices/servers/<name>.json` -- baremetal included, since 4.4.0.
+ * Protocol configuration is the editor's, so there is no second store and no
+ * fork at each call site: what differs between a microcontroller and a Runtime
+ * v4 target is which fields the target lets the user set, and saying that is
+ * the profile's job.
  *
- * Keeping them in their own stores is deliberate. The persistence key for a VPP
- * section IS the section id, so leaving baremetal config where it is means no
- * project file migrates; every device's `debug` spec `$ref`s
- * `screens.modbus_rtu.*`, so Connect keeps resolving; and the scopes genuinely
- * differ — a Wi-Fi SSID stored project-wide would follow the project onto a
- * board with no radio.
- *
- * What should NOT differ is the screen. This hook is the seam: it reads and
- * writes whichever store the target's profile names, and hands the component a
- * single shape.
+ * The board's VPP screens still own the physical transport layer -- the UART,
+ * its speed, the RS-485 pin, Wi-Fi and Ethernet -- and this hook does not touch
+ * them. It links out to them instead.
  */
 
 import { useCallback, useMemo } from 'react'
 
 import type { ModbusBufferMapping } from '../../middleware/shared/ports/types'
 import type {
-  IoSizeFields,
-  ModbusSegment,
   ModbusSegmentCounts,
   ModbusServerProfile,
+  ModbusServerTransport,
 } from '../../middleware/shared/utils/modbus-server-profile'
 import { resolveModbusServerProfile } from '../../middleware/shared/utils/modbus-server-profile'
 import { useOpenPLCStore } from '../store'
 import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-config'
-
-/** VPP section ids the screen reads and writes. Stable across the pre- and
- *  post-split screen shapes, which is why the split needed no migration. */
-const RTU_SECTION = 'modbus_rtu'
-const TCP_SECTION = 'modbus_tcp'
-const NETWORK_SECTION = 'network'
-/** Where a project's raised I/O buffer sizes live. Board-scoped like every
- *  other vendor-screen section, which is right: how much room a board has is a
- *  property of the board, not of the project. */
-const IO_SIZES_SECTION = 'io_sizes'
-
-/** Which `io_sizes` field backs each IEC segment. Mirrors the mapping
- *  `init_mbregs` implies -- see the profile resolver. */
-const IO_FIELD_BY_SEGMENT: Record<ModbusSegment, keyof IoSizeFields | null> = {
-  QW: 'analogOutput',
-  MW: 'memoryWord',
-  MD: 'memoryDword',
-  ML: 'memoryLword',
-  QX: 'digitalOutput',
-  // Baremetal has no %MX bank at all, so no field backs it.
-  MX: null,
-  IX: 'digitalInput',
-  IW: 'analogInput',
-}
-
-/** Field ids within those sections. */
-const FIELD_ENABLED = 'enabled'
-const FIELD_SLAVE_ID = 'rtu_slave_id'
 
 /** Slave id the firmware falls back to (`modbus_config.h`). */
 const DEFAULT_SLAVE_ID = 1
 
 export interface ModbusServerView {
   profile: ModbusServerProfile
-  rtu: { enabled: boolean; slaveId: number }
-  tcp: { enabled: boolean; port: number; bindAddress: string }
-  /** Buffer counts in IEC values. Derived and read-only when the profile says
-   *  the firmware fixes them. */
+  /** Transports this server answers on, filtered to what the board offers. A
+   *  project carried over from a two-UART board can hold `rtu` on a board with
+   *  none, and that stale value must not present itself as served. */
+  transports: ModbusServerTransport[]
+  /** True while the server answers on anything at all. */
+  enabled: boolean
+  slaveId: number
+  serialPort: string
+  port: number
+  bindAddress: string
+  /** Buffer counts in IEC values. Derived and read-only when the target's
+   *  firmware fixes them. */
   buffers: ModbusSegmentCounts
-  /** Present only for the `plc-server` store — the address-map component and
-   *  the save path both still speak the persisted shape. */
+  /** The address-map component and the save path both speak the persisted
+   *  shape. */
   bufferMapping: ModbusBufferMapping
-  /** True when the screen has a store to write to at all. */
+  /** True when there is a server to edit on a target that can serve one. */
   available: boolean
 }
 
 export interface ModbusServerActions {
-  setTransportEnabled: (transport: 'rtu' | 'tcp', enabled: boolean) => void
+  /** Re-point the server at a different set of transports. Never empty: a
+   *  server that answers on nothing does not exist, and deleting one is the
+   *  explorer's job rather than a state the editor can be left in. */
+  setTransports: (transports: readonly ModbusServerTransport[]) => void
   setSlaveId: (slaveId: number) => void
+  setSerialPort: (serialPort: string) => void
   setPort: (port: number) => void
   setBindAddress: (address: string) => void
-  /** `segment` routes the write on a baremetal target, where the count is an
-   *  `io_sizes` field rather than a `bufferMapping` entry; `group` and `field`
-   *  address the persisted `PLCServer` shape on a Runtime v4 one. */
-  setBufferCount: (segment: ModbusSegment, group: keyof ModbusBufferMapping, field: string, value: number) => void
-}
-
-function asBoolean(value: unknown): boolean {
-  return value === true
-}
-
-function asNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  setBufferCount: (group: keyof ModbusBufferMapping, field: string, value: number) => void
 }
 
 function countsFromMapping(mapping: ModbusBufferMapping): ModbusSegmentCounts {
@@ -109,21 +76,22 @@ function countsFromMapping(mapping: ModbusBufferMapping): ModbusSegmentCounts {
   }
 }
 
+function mappingFromCounts(counts: ModbusSegmentCounts): ModbusBufferMapping {
+  return {
+    holdingRegisters: { qwCount: counts.QW, mwCount: counts.MW, mdCount: counts.MD, mlCount: counts.ML },
+    coils: { qxBits: counts.QX, mxBits: counts.MX },
+    discreteInputs: { ixBits: counts.IX },
+    inputRegisters: { iwCount: counts.IW },
+  }
+}
+
 /** Counts to show when the firmware fixes them and the board declared none. */
 const UNKNOWN_COUNTS: ModbusSegmentCounts = { QW: 0, MW: 0, MD: 0, ML: 0, QX: 0, MX: 0, IX: 0, IW: 0 }
 
-/**
- * Read and write the Modbus server config for the current target.
- *
- * `serverName` names the `PLCServer` to edit and is ignored by the
- * vendor-screen store, where the board has exactly one Modbus configuration
- * and no name to disambiguate.
- */
+/** Read and write the Modbus server config for `serverName`. */
 export function useModbusServerConfig(serverName: string): ModbusServerView & { actions: ModbusServerActions } {
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
-  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
-  const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
   const servers = useOpenPLCStore((s) => s.project.data.servers)
   const updateServerConfig = useOpenPLCStore((s) => s.projectActions.updateServerConfig)
   const handleFileAndWorkspaceSavedState = useOpenPLCStore(
@@ -132,159 +100,82 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
 
   const boardInfo = availableBoards.get(deviceBoard)
   const profile = useMemo(() => resolveModbusServerProfile(boardInfo), [boardInfo])
-
-  const server = useMemo(() => servers?.find((s) => s.name === serverName), [servers, serverName])
-
-  /** Read a field out of a vendor-screen section. */
-  const readSection = useCallback(
-    (sectionId: string): Record<string, unknown> => {
-      const raw = vendorScreenData?.[sectionId]
-      return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-    },
-    [vendorScreenData],
-  )
-
-  /**
-   * Merge a patch into a vendor-screen section.
-   *
-   * `setVendorScreenData` replaces the whole section, so every write has to
-   * read first — the form layout only persists fields the user touched, and
-   * clobbering the section would drop the baud rate the Serial screen set.
-   */
-  const patchSection = useCallback(
-    (sectionId: string, patch: Record<string, unknown>) => {
-      setVendorScreenData(sectionId, { ...readSection(sectionId), ...patch })
-    },
-    [readSection, setVendorScreenData],
-  )
+  const server = useMemo(() => servers?.find((entry) => entry.name === serverName), [servers, serverName])
 
   const view = useMemo<ModbusServerView>(() => {
-    if (profile.store === 'vendor-screen') {
-      const rtu = readSection(RTU_SECTION)
-      const tcp = readSection(TCP_SECTION)
-      const requested = readSection(IO_SIZES_SECTION)
-      // The firmware defaults are the floor; the project may only have raised
-      // things. `generate-io-sizes.ts` clamps the same way at build time, so
-      // what the screen shows is what gets compiled.
-      const counts = { ...(profile.derivedCounts ?? UNKNOWN_COUNTS) }
-      if (profile.derivedCounts) {
-        for (const segment of profile.segments) {
-          const field = IO_FIELD_BY_SEGMENT[segment]
-          if (!field) continue
-          const want = requested[field]
-          if (typeof want !== 'number' || !Number.isFinite(want)) continue
-          const floor = profile.minCounts?.[segment] ?? profile.derivedCounts[segment]
-          const ceiling = profile.maxCounts?.[segment] ?? floor
-          counts[segment] = Math.min(Math.max(Math.trunc(want), floor), ceiling)
-        }
-      }
-      return {
-        profile,
-        rtu: {
-          enabled: asBoolean(rtu[FIELD_ENABLED]),
-          slaveId: asNumber(rtu[FIELD_SLAVE_ID], DEFAULT_SLAVE_ID),
-        },
-        tcp: {
-          enabled: asBoolean(tcp[FIELD_ENABLED]),
-          port: profile.fixedPort,
-          bindAddress: '',
-        },
-        buffers: counts,
-        bufferMapping: {
-          holdingRegisters: { qwCount: counts.QW, mwCount: counts.MW, mdCount: counts.MD, mlCount: counts.ML },
-          coils: { qxBits: counts.QX, mxBits: counts.MX },
-          discreteInputs: { ixBits: counts.IX },
-          inputRegisters: { iwCount: counts.IW },
-        },
-        available: true,
-      }
-    }
-
     const config = server?.modbusSlaveConfig
-    const mapping = config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING
+    // Absent `transports` is a project saved before baremetal had a server, and
+    // Runtime v4 has always served TCP and nothing else.
+    const stored = config?.transports ?? ['tcp']
+    const transports = profile.transports.filter((transport) => stored.includes(transport))
+
+    // A target whose firmware fixes the buffer sizes reports them through the
+    // profile; only a target that lets the user size them reads the server.
+    const counts = profile.configurableBuffers
+      ? countsFromMapping(config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING)
+      : (profile.derivedCounts ?? UNKNOWN_COUNTS)
+
     return {
       profile,
-      rtu: { enabled: false, slaveId: DEFAULT_SLAVE_ID },
-      tcp: {
-        enabled: config?.enabled ?? false,
-        port: config?.port ?? profile.fixedPort,
-        bindAddress: config?.networkInterface || '0.0.0.0',
-      },
-      buffers: countsFromMapping(mapping),
-      bufferMapping: mapping,
-      available: profile.store === 'plc-server',
+      transports,
+      enabled: (config?.enabled ?? false) && transports.length > 0,
+      slaveId: config?.slaveId ?? DEFAULT_SLAVE_ID,
+      serialPort: config?.serialPort ?? '',
+      port: profile.configurablePort ? (config?.port ?? profile.fixedPort) : profile.fixedPort,
+      bindAddress: config?.networkInterface || '0.0.0.0',
+      buffers: counts,
+      bufferMapping: profile.configurableBuffers
+        ? (config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING)
+        : mappingFromCounts(counts),
+      available: !!server && profile.transports.length > 0,
     }
-  }, [profile, readSection, server])
+  }, [profile, server])
 
-  const markDirty = useCallback(() => {
-    // The vendor-screen tab tracks its own dirty state by diffing the slice it
-    // owns against the snapshot taken on mount, so it needs no nudge here.
-    if (profile.store === 'plc-server') handleFileAndWorkspaceSavedState(serverName)
-  }, [profile.store, serverName, handleFileAndWorkspaceSavedState])
-
-  const setTransportEnabled = useCallback(
-    (transport: 'rtu' | 'tcp', enabled: boolean) => {
-      if (profile.store === 'vendor-screen') {
-        patchSection(transport === 'rtu' ? RTU_SECTION : TCP_SECTION, { [FIELD_ENABLED]: enabled })
-        // Modbus TCP cannot come up without a network, and the Network screen
-        // is a separate page the user may never open. Turning the network on
-        // with the transport is what the user meant; leaving it off produced a
-        // board that compiled MBTCP and never linked.
-        if (transport === 'tcp' && enabled && profile.vppScreens.network) {
-          patchSection(NETWORK_SECTION, { [FIELD_ENABLED]: true })
-        }
-        return
-      }
-      if (transport !== 'tcp') return
-      updateServerConfig(serverName, { enabled })
-      markDirty()
+  const commit = useCallback(
+    (patch: Parameters<typeof updateServerConfig>[1]) => {
+      updateServerConfig(serverName, patch)
+      handleFileAndWorkspaceSavedState(serverName)
     },
-    [profile, patchSection, serverName, updateServerConfig, markDirty],
+    [serverName, updateServerConfig, handleFileAndWorkspaceSavedState],
   )
 
-  const setSlaveId = useCallback(
-    (slaveId: number) => {
-      if (profile.store !== 'vendor-screen') return
-      patchSection(RTU_SECTION, { [FIELD_SLAVE_ID]: slaveId })
+  const setTransports = useCallback(
+    (transports: readonly ModbusServerTransport[]) => {
+      if (transports.length === 0) return
+      commit({ transports: [...transports], enabled: true })
     },
-    [profile.store, patchSection],
+    [commit],
+  )
+
+  const setSlaveId = useCallback((slaveId: number) => commit({ slaveId }), [commit])
+  const setSerialPort = useCallback((serialPort: string) => commit({ serialPort }), [commit])
+
+  const setBindAddress = useCallback(
+    (networkInterface: string) => {
+      if (!profile.configurableBindAddress) return
+      commit({ networkInterface })
+    },
+    [profile.configurableBindAddress, commit],
   )
 
   const setPort = useCallback(
     (port: number) => {
       if (!profile.configurablePort) return
-      updateServerConfig(serverName, { port })
-      markDirty()
+      commit({ port })
     },
-    [profile.configurablePort, serverName, updateServerConfig, markDirty],
-  )
-
-  const setBindAddress = useCallback(
-    (address: string) => {
-      if (!profile.configurableBindAddress) return
-      updateServerConfig(serverName, { networkInterface: address })
-      markDirty()
-    },
-    [profile.configurableBindAddress, serverName, updateServerConfig, markDirty],
+    [profile.configurablePort, commit],
   )
 
   const setBufferCount = useCallback(
-    (segment: ModbusSegment, group: keyof ModbusBufferMapping, field: string, value: number) => {
+    (group: keyof ModbusBufferMapping, field: string, value: number) => {
       if (!profile.configurableBuffers) return
-      if (profile.store === 'vendor-screen') {
-        const ioField = IO_FIELD_BY_SEGMENT[segment]
-        if (!ioField) return
-        patchSection(IO_SIZES_SECTION, { [ioField]: value })
-        return
-      }
-      updateServerConfig(serverName, { bufferMapping: { [group]: { [field]: value } } })
-      markDirty()
+      commit({ bufferMapping: { [group]: { [field]: value } } })
     },
-    [profile.configurableBuffers, profile.store, patchSection, serverName, updateServerConfig, markDirty],
+    [profile.configurableBuffers, commit],
   )
 
   return {
     ...view,
-    actions: { setTransportEnabled, setSlaveId, setPort, setBindAddress, setBufferCount },
+    actions: { setTransports, setSlaveId, setSerialPort, setPort, setBindAddress, setBufferCount },
   }
 }

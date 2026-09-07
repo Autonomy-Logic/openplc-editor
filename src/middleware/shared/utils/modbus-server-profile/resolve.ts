@@ -55,27 +55,6 @@ const DEFAULT_TCP_PORT = 502
 /** Port name assumed when a package declares no `defaultSerial`. */
 const FALLBACK_DEFAULT_SERIAL = 'Serial'
 
-/**
- * Can this board serve Modbus RTU to anything but the editor?
- *
- * The default UART is the editor's link: the always-on debugger, the status
- * and the licensing function codes all answer there, and it is the port the USB
- * cable lands on. A second master cannot share that line, so an RTU slave has
- * to take a different UART — and a board that has no other UART cannot serve
- * RTU at all while remaining reachable from the editor.
- *
- * A board that declares no `serialPorts` is treated as capable. The picker
- * there falls back to its static option list, which is the pre-split behaviour,
- * and refusing RTU on a board whose UART set nobody has confirmed would remove
- * a configuration that works today.
- */
-function hasSerialPortForRtu(board: ModbusBoardInfoLike): boolean {
-  const ports = board.serialPorts
-  if (!ports || ports.length === 0) return true
-  const defaultSerial = board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL
-  return ports.some((port) => port !== defaultSerial)
-}
-
 /** Canonical name of the always-on serial screen a split VPP ships. */
 const SERIAL_SCREEN = 'serial'
 /** Canonical name of the network screen a split VPP ships. */
@@ -135,12 +114,13 @@ function countsFromIoSizes(io: Partial<IoSizeFields>): ModbusSegmentCounts | nul
  * an unresolved board, a project opened before its VPP was installed.
  */
 const NO_SERVER: ModbusServerProfile = {
-  store: 'none',
   transports: [],
   segments: [],
   configurableBuffers: false,
   configurablePort: false,
   configurableBindAddress: false,
+  serialPorts: [],
+  defaultSerial: FALLBACK_DEFAULT_SERIAL,
   fixedPort: DEFAULT_TCP_PORT,
   derivedCounts: null,
   minCounts: null,
@@ -151,21 +131,16 @@ const NO_SERVER: ModbusServerProfile = {
 /**
  * Resolve the Modbus-server profile for a board.
  *
- * Three outcomes, decided by where the settings live rather than by which
- * runtime it is:
+ * The settings always live in the same place — a `PLCServer` in the project —
+ * so what this decides is what the target LETS the user set:
  *
- *  - **vendor-screen** — the board carries a VPP Modbus screen. Baremetal.
- *    Transports come from the capability matrix, buffers are read-only, the
- *    port is fixed, and the serial / network screens are linked rather than
- *    absorbed.
- *  - **plc-server** — the target hosts a TCP server the project configures.
- *    Runtime v4 and the Simulator.
- *  - **none** — neither.
- *
- * A board with a VPP Modbus screen wins over the `plc-server` path even when
- * its capabilities also report `modbusTcpServer`, because the screen IS where
- * that board's Modbus state already lives; reading it from a `PLCServer`
- * instead would silently drop every existing project's configuration.
+ *  - a board carrying a VPP Modbus screen is baremetal. Transports come from
+ *    the capability matrix, the buffer sizes are the firmware's and read-only,
+ *    the TCP port is fixed at 502, and the serial / network screens are linked
+ *    rather than absorbed, because the package owns the physical layer.
+ *  - a target reporting `modbusTcpServer` without such a screen hosts a server
+ *    the project sizes and addresses itself. Runtime v4 and the Simulator.
+ *  - anything else serves no Modbus, and reports no transports.
  */
 export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefined | null): ModbusServerProfile {
   if (!board) return NO_SERVER
@@ -180,25 +155,27 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     const ceilings = defaults && board.ioMax ? countsFromIoSizes({ ...board.io, ...board.ioMax }) : null
 
     const transports: ModbusServerTransport[] = []
-    const rtuHasPort = hasSerialPortForRtu(board)
-    if (caps.modbusRtuServer && rtuHasPort) transports.push('rtu')
+    // The default UART is offered like any other. It carries the editor's
+    // connection, and the firmware serves the debugger and the register table
+    // on it together (`MBSERIAL_SHARES_DEBUG_SERIAL`); which of the two the
+    // user talks to at a given moment is theirs to arrange, not ours to refuse.
+    if (caps.modbusRtuServer) transports.push('rtu')
     if (caps.modbusTcpServer) transports.push('tcp')
     if (transports.length === 0) return NO_SERVER
 
     return {
-      store: 'vendor-screen',
       transports,
-      ...(caps.modbusRtuServer && !rtuHasPort ? { rtuUnavailable: 'no-free-serial-port' as const } : {}),
       segments: BAREMETAL_SEGMENTS,
       // Fixed at compile time by the MCU's MAX_* constants, which also size
-      // the IEC pointer arrays. Phase 5 (DOPE-370) is what makes these move.
-      // Raisable only when the package states both what the firmware compiles
-      // and how far the board can be pushed. A package that declares neither
-      // -- or only the defaults -- leaves nothing for the user to change, and
-      // an input that cannot move is worse than a number.
-      configurableBuffers: !!defaults && !!ceilings,
+      // the IEC pointer arrays and are aliased into the Modbus banks by
+      // mapEmptyBuffers(). Raising them is an I/O-image change rather than a
+      // Modbus setting, which is why it belongs to DOPE-615 and not here: this
+      // demand shows the sizes and the map they produce, and nothing more.
+      configurableBuffers: false,
       configurablePort: false,
       configurableBindAddress: false,
+      serialPorts: board.serialPorts ?? [],
+      defaultSerial: board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL,
       fixedPort: BAREMETAL_TCP_PORT,
       derivedCounts: defaults,
       // Never below the firmware default: these counts dimension the IEC
@@ -217,12 +194,14 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
   if (!caps.modbusTcpServer) return NO_SERVER
 
   return {
-    store: 'plc-server',
     transports: ['tcp'],
     segments: RUNTIME_SEGMENTS,
     configurableBuffers: true,
     configurablePort: true,
     configurableBindAddress: true,
+    // A Runtime v4 target's Modbus is TCP only, so it declares no UART here.
+    serialPorts: [],
+    defaultSerial: FALLBACK_DEFAULT_SERIAL,
     fixedPort: DEFAULT_TCP_PORT,
     derivedCounts: null,
     minCounts: null,

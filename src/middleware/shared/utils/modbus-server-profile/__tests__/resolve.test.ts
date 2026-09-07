@@ -13,9 +13,10 @@
  *  - its buffer sizes are compile-time constants that also size the IEC
  *    pointer arrays, so they are read-only until the firmware says otherwise;
  *  - and, most consequentially, a board whose VPP carries a Modbus screen must
- *    resolve to the vendor-screen store even though its capabilities also
- *    report `modbusTcpServer` — reading a PLCServer instead would silently
- *    ignore every existing project's configuration.
+ *    resolve as a baremetal target even though its capabilities also report
+ *    `modbusTcpServer`, because what that decides is which fields the target
+ *    lets the user set — a fixed port and firmware-sized buffers, not the
+ *    project's own.
  */
 
 import { resolveModbusServerProfile } from '../resolve'
@@ -43,22 +44,22 @@ const arduinoBoard = (overrides: Record<string, unknown> = {}) => ({
 
 describe('resolveModbusServerProfile', () => {
   it('answers "no server" for a board that does not resolve', () => {
-    expect(resolveModbusServerProfile(undefined).store).toBe('none')
-    expect(resolveModbusServerProfile(null).store).toBe('none')
+    expect(resolveModbusServerProfile(undefined).transports).toEqual([])
+    expect(resolveModbusServerProfile(null).transports).toEqual([])
   })
 
   it('answers "no server" for Runtime v3, which hosts none', () => {
     // v3 predates the slave plugin; its capability block says so.
     const profile = resolveModbusServerProfile({ capabilities: { modbusTcpServer: false } })
-    expect(profile.store).toBe('none')
+    expect(profile.transports).toEqual([])
     expect(profile.transports).toEqual([])
   })
 
-  describe('Runtime v4 (plc-server store)', () => {
+  describe('Runtime v4', () => {
     const profile = resolveModbusServerProfile({ compiler: 'openplc-compiler' })
 
     it('reads and writes the project-scoped PLCServer', () => {
-      expect(profile.store).toBe('plc-server')
+      expect(profile.configurablePort).toBe(true)
     })
 
     it('offers TCP only — the slave plugin is a listener with no serial path', () => {
@@ -84,11 +85,11 @@ describe('resolveModbusServerProfile', () => {
     })
   })
 
-  describe('baremetal (vendor-screen store)', () => {
+  describe('baremetal', () => {
     const profile = resolveModbusServerProfile(arduinoBoard())
 
     it('reads and writes the board-scoped vendor screen state', () => {
-      expect(profile.store).toBe('vendor-screen')
+      expect(profile.configurablePort).toBe(false)
     })
 
     it('offers both transports', () => {
@@ -135,8 +136,13 @@ describe('resolveModbusServerProfile', () => {
   describe('a board whose package declares headroom', () => {
     const profile = resolveModbusServerProfile(arduinoBoard({ ioMax: { ...IO, digitalOutput: 512, memoryWord: 256 } }))
 
-    it('lets the user raise the counts', () => {
-      expect(profile.configurableBuffers).toBe(true)
+    it('still does not let the user raise the counts here', () => {
+      // The headroom is real and the ceilings are reported, but raising the
+      // counts is an I/O-image change rather than a Modbus setting: the same
+      // MAX_* dimension the IEC pointer arrays and mapEmptyBuffers() aliases
+      // %MW/%MD/%ML into the Modbus banks. That belongs to DOPE-615. This
+      // screen shows the sizes and the map they produce, and nothing more.
+      expect(profile.configurableBuffers).toBe(false)
     })
 
     it('floors every segment at the firmware default', () => {
@@ -162,28 +168,23 @@ describe('resolveModbusServerProfile', () => {
     expect(profile.maxCounts).toBeNull()
   })
 
-  describe('a board whose only UART carries the editor connection', () => {
+  it('offers Modbus RTU on a board whose only UART carries the editor connection', () => {
     // The default port answers the debugger, the status and the licensing
-    // function codes, and it is where the USB cable lands. A second Modbus
-    // master cannot share that line, so a single-UART board -- a NodeMCU, an
-    // Uno -- cannot serve RTU and stay reachable from the editor.
+    // function codes, and it is where the USB cable lands. The firmware serves
+    // the debugger and the register table there together, so using it for RTU
+    // is a legitimate choice: which of the two the user talks to at a given
+    // moment is theirs to arrange. Refusing it was the editor deciding for them.
     const profile = resolveModbusServerProfile(arduinoBoard({ serialPorts: ['Serial'] }))
-
-    it('does not offer Modbus RTU', () => {
-      expect(profile.transports).toEqual(['tcp'])
-    })
-
-    it('says why, so the missing transport is not a mystery', () => {
-      expect(profile.rtuUnavailable).toBe('no-free-serial-port')
-    })
+    expect(profile.transports).toContain('rtu')
   })
 
-  it('offers RTU when a second UART exists, whatever the default is called', () => {
+  it('carries the board UART set and the editor port, for the picker and the read-only rule', () => {
     const profile = resolveModbusServerProfile(
       arduinoBoard({ serialPorts: ['SerialUSB', 'Serial1'], defaultSerial: 'SerialUSB' }),
     )
     expect(profile.transports).toContain('rtu')
-    expect(profile.rtuUnavailable).toBeUndefined()
+    expect(profile.serialPorts).toEqual(['SerialUSB', 'Serial1'])
+    expect(profile.defaultSerial).toBe('SerialUSB')
   })
 
   it('offers RTU on a board that declares no UART set at all', () => {
@@ -194,12 +195,12 @@ describe('resolveModbusServerProfile', () => {
     expect(profile.transports).toContain('rtu')
   })
 
-  it('wins over the plc-server path even when the board also reports modbusTcpServer', () => {
+  it('stays a baremetal profile even when the board also reports modbusTcpServer', () => {
     // A migrated arduino board reports both. Resolving it as `plc-server`
     // would read an empty PLCServer and present a board whose Modbus is
     // configured as though it were not.
     const profile = resolveModbusServerProfile(arduinoBoard({ capabilities: { modbusTcpServer: true } }))
-    expect(profile.store).toBe('vendor-screen')
+    expect(profile.configurablePort).toBe(false)
   })
 
   it('offers only RTU when the board declares no TCP', () => {
@@ -216,16 +217,16 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile(
       arduinoBoard({ capabilities: { modbusRtuServer: false, modbusTcpServer: false } }),
     )
-    expect(profile.store).toBe('none')
+    expect(profile.transports).toEqual([])
   })
 
   describe('a package that has not been migrated', () => {
     // Stage-by-stage rollout means an installed VPP may still carry the single
-    // pre-split screen. The screen is still the store; only the links differ.
+    // pre-split screen. Only the links differ.
     const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { Modbus: {} } } }))
 
-    it('still resolves to the vendor-screen store', () => {
-      expect(profile.store).toBe('vendor-screen')
+    it('still resolves as a baremetal target', () => {
+      expect(profile.configurablePort).toBe(false)
     })
 
     it('reports no serial or network screen to link to', () => {
@@ -258,13 +259,13 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile({ compiler: 'arduino-cli' })
     // No Modbus screen → not a vendor-screen target; arduino has no PLCServer
     // path either, so there is nothing to configure.
-    expect(profile.store).toBe('plc-server')
+    expect(profile.configurablePort).toBe(true)
     expect(profile.derivedCounts).toBeNull()
   })
 
   it('treats the Simulator as a plc-server target so a v4 project keeps its config', () => {
     const profile = resolveModbusServerProfile({ compiler: 'simulator' })
-    expect(profile.store).toBe('plc-server')
+    expect(profile.configurablePort).toBe(true)
     expect(profile.transports).toEqual(['tcp'])
   })
 })

@@ -34,27 +34,6 @@ const Panel = ({ title, children }: { title: string; children: React.ReactNode }
   </div>
 )
 
-const Toggle = ({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean
-  onChange: (value: boolean) => void
-  label: string
-}) => (
-  <label className='relative inline-flex cursor-pointer items-center' aria-label={label}>
-    <input type='checkbox' checked={checked} onChange={(e) => onChange(e.target.checked)} className='peer sr-only' />
-    <div
-      className={cn(
-        'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
-        'peer-checked:bg-brand peer-checked:after:translate-x-full',
-        'dark:bg-neutral-700 dark:peer-checked:bg-brand',
-      )}
-    />
-  </label>
-)
-
 const Row = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
   <div className='flex items-center gap-4'>
     <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>{label}</Label>
@@ -174,6 +153,24 @@ const TRANSPORT_LABEL: Record<ModbusServerTransport, string> = {
   tcp: 'Modbus TCP',
 }
 
+/** Transport sets the target can be pointed at, in the order the selector
+ *  shows them. "Both" only where the board actually offers both. */
+function buildTransportChoices(
+  offered: readonly ModbusServerTransport[],
+): { label: string; transports: ModbusServerTransport[] }[] {
+  const single = offered.map((transport) => ({ label: TRANSPORT_LABEL[transport], transports: [transport] }))
+  return offered.length > 1 ? [...single, { label: 'Both', transports: [...offered] }] : single
+}
+
+function sameTransports(a: readonly ModbusServerTransport[], b: readonly ModbusServerTransport[]): boolean {
+  return a.length === b.length && a.every((transport) => b.includes(transport))
+}
+
+const choiceButtonStyles =
+  'h-[30px] rounded-md border px-3 font-caption text-xs font-medium transition-colors disabled:cursor-not-allowed'
+const readOnlyValueStyles =
+  'flex h-[30px] w-full items-center rounded-md bg-neutral-100 px-2 py-1 font-caption text-xs font-medium tabular-nums text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+
 const ModbusServerEditor = () => {
   const editor = useOpenPLCStore((s) => s.editor)
   const updateTabs = useOpenPLCStore((s) => s.tabsActions.updateTabs)
@@ -182,22 +179,27 @@ const ModbusServerEditor = () => {
   const getEditorFromEditors = useOpenPLCStore((s) => s.editorActions.getEditorFromEditors)
   const setSelectedTab = useOpenPLCStore((s) => s.tabsActions.setSelectedTab)
 
-  // In the `plc-server` store the tab names the server being edited. In the
-  // vendor-screen store the board has exactly one Modbus configuration and
-  // nothing to disambiguate, so the name is empty and the hook ignores it.
   const serverName = editor.type === 'plc-server' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-server' ? editor.meta.protocol : 'modbus-tcp'
 
-  const { profile, rtu, tcp, buffers, bufferMapping, available, actions } = useModbusServerConfig(serverName)
+  const { profile, transports, slaveId, serialPort, port, bindAddress, buffers, bufferMapping, available, actions } =
+    useModbusServerConfig(serverName)
+
+  // The RTU shares the editor's line when it is on the default UART. The
+  // firmware serves both there, so the port's speed and its slave id are the
+  // editor's own connection parameters -- owned by the package, shown here
+  // read-only. Changing them would be changing how the editor reaches the board.
+  const rtuOnEditorPort = transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
+  const transportChoices = buildTransportChoices(profile.transports)
 
   // Text state for the inputs that commit on blur, so a half-typed number does
   // not reach the store and get clamped mid-keystroke.
-  const [slaveIdText, setSlaveIdText] = useState(String(rtu.slaveId))
-  const [portText, setPortText] = useState(String(tcp.port))
+  const [slaveIdText, setSlaveIdText] = useState(String(slaveId))
+  const [portText, setPortText] = useState(String(port))
   const [countText, setCountText] = useState<Partial<Record<ModbusSegment, string>>>({})
 
-  useEffect(() => setSlaveIdText(String(rtu.slaveId)), [rtu.slaveId])
-  useEffect(() => setPortText(String(tcp.port)), [tcp.port])
+  useEffect(() => setSlaveIdText(String(slaveId)), [slaveId])
+  useEffect(() => setPortText(String(port)), [port])
   useEffect(() => setCountText({}), [serverName])
 
   const openVppScreen = useCallback(
@@ -222,20 +224,20 @@ const ModbusServerEditor = () => {
   const commitSlaveId = useCallback(() => {
     const parsed = Number.parseInt(slaveIdText, 10)
     if (Number.isNaN(parsed) || parsed < MIN_SLAVE_ID || parsed > MAX_SLAVE_ID) {
-      setSlaveIdText(String(rtu.slaveId))
+      setSlaveIdText(String(slaveId))
       return
     }
-    if (parsed !== rtu.slaveId) actions.setSlaveId(parsed)
-  }, [slaveIdText, rtu.slaveId, actions])
+    if (parsed !== slaveId) actions.setSlaveId(parsed)
+  }, [slaveIdText, slaveId, actions])
 
   const commitPort = useCallback(() => {
     const parsed = Number.parseInt(portText, 10)
     if (Number.isNaN(parsed) || parsed < 1 || parsed > 65535) {
-      setPortText(String(tcp.port))
+      setPortText(String(port))
       return
     }
-    if (parsed !== tcp.port) actions.setPort(parsed)
-  }, [portText, tcp.port, actions])
+    if (parsed !== port) actions.setPort(parsed)
+  }, [portText, port, actions])
 
   const commitCount = useCallback(
     (segment: ModbusSegment) => {
@@ -249,7 +251,7 @@ const ModbusServerEditor = () => {
         setCountText((prev) => ({ ...prev, [segment]: undefined }))
         return
       }
-      if (parsed !== buffers[segment]) actions.setBufferCount(segment, meta.group, meta.field, parsed)
+      if (parsed !== buffers[segment]) actions.setBufferCount(meta.group, meta.field, parsed)
     },
     [countText, buffers, actions, profile],
   )
@@ -275,7 +277,7 @@ const ModbusServerEditor = () => {
     )
   }
 
-  const heading = profile.store === 'vendor-screen' ? 'Modbus Server' : `Modbus TCP Slave Server: ${serverName}`
+  const heading = `Modbus Server: ${serverName}`
   const activeSegments = profile.segments
   const visibleBlocks = BLOCK_ORDER.filter((block) =>
     activeSegments.some((segment) => SEGMENT_META[segment].block === block),
@@ -286,63 +288,116 @@ const ModbusServerEditor = () => {
       <div className='mb-4'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>{heading}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>
-          {profile.transports.map((t) => TRANSPORT_LABEL[t]).join(' and ')}
+          {transports.length > 0
+            ? `Serving ${transports.map((t) => TRANSPORT_LABEL[t]).join(' and ')}`
+            : 'Not serving yet — pick a transport below'}
         </p>
       </div>
 
       <div className='flex flex-1 flex-col gap-6 overflow-auto'>
         <Panel title='Transports'>
-          {profile.rtuUnavailable === 'no-free-serial-port' && (
-            <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-              This board has a single UART, and it carries the editor connection. Modbus RTU needs a port of its own, so
-              only Modbus TCP is available here.
-            </p>
-          )}
-          {profile.transports.includes('rtu') && (
-            <>
-              <Row label='Modbus RTU' hint={rtu.enabled ? 'Served over a hardware serial port' : 'Not served'}>
-                <Toggle
-                  checked={rtu.enabled}
-                  onChange={(value) => actions.setTransportEnabled('rtu', value)}
-                  label='Enable Modbus RTU'
-                />
-              </Row>
-              {rtu.enabled && (
-                <Row label='Slave ID' hint={`${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. The debugger addresses this same id.`}>
-                  <div className='w-24'>
-                    <InputWithRef
-                      type='number'
-                      aria-label='Slave ID'
-                      value={slaveIdText}
-                      onChange={(e) => setSlaveIdText(e.target.value)}
-                      onBlur={commitSlaveId}
-                      min={MIN_SLAVE_ID}
-                      max={MAX_SLAVE_ID}
-                      className={inputStyles}
-                    />
-                  </div>
-                </Row>
-              )}
-            </>
+          {/* A server exists because the user created it, and it answers on
+           * whatever it was given. Two independent switches could both end up
+           * off, which would be deleting the server from inside its own
+           * editor -- deleting is the explorer's Delete. */}
+          <Row label='Serves' hint='Delete the server from the project tree to stop serving Modbus.'>
+            <div className='flex gap-1'>
+              {transportChoices.map((choice) => {
+                const selected = sameTransports(choice.transports, transports)
+                return (
+                  <button
+                    key={choice.label}
+                    type='button'
+                    aria-label={`serve-${choice.transports.join('-')}`}
+                    aria-pressed={selected}
+                    onClick={() => actions.setTransports(choice.transports)}
+                    className={cn(
+                      choiceButtonStyles,
+                      selected
+                        ? 'border-brand bg-brand !text-white'
+                        : 'border-neutral-300 bg-white text-neutral-850 hover:bg-neutral-100 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-800',
+                    )}
+                  >
+                    {choice.label}
+                  </button>
+                )
+              })}
+            </div>
+          </Row>
+
+          {transports.includes('rtu') && profile.serialPorts.length > 0 && (
+            <Row
+              label='Serial Port'
+              hint={
+                rtuOnEditorPort
+                  ? 'This is the port the editor talks to the board on. The firmware serves both there, so you talk to one at a time.'
+                  : 'A UART of its own, separate from the editor connection.'
+              }
+            >
+              <div className='w-64'>
+                <Select value={serialPort || profile.defaultSerial} onValueChange={actions.setSerialPort}>
+                  <SelectTrigger
+                    withIndicator
+                    placeholder='Select serial port'
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                    {profile.serialPorts.map((option) => (
+                      <SelectItem
+                        key={option}
+                        value={option}
+                        className={cn(
+                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                          'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                        )}
+                      >
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </Row>
           )}
 
-          {profile.transports.includes('tcp') && (
-            <>
-              <Row
-                label={profile.transports.length > 1 ? 'Modbus TCP' : 'Enable Server'}
-                hint={tcp.enabled ? 'Server will start when the PLC runs' : 'Server is disabled'}
-              >
-                <Toggle
-                  checked={tcp.enabled}
-                  onChange={(value) => actions.setTransportEnabled('tcp', value)}
-                  label='Enable Modbus TCP'
-                />
-              </Row>
+          {transports.includes('rtu') && (
+            <Row
+              label='Slave ID'
+              hint={
+                rtuOnEditorPort
+                  ? "Fixed to the board's own value: it is the id the editor dials, and changing it here would leave the board unreachable."
+                  : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Change it and the board must be reflashed before the editor can reach it again.`
+              }
+            >
+              <div className='w-24'>
+                {rtuOnEditorPort ? (
+                  <span aria-label='Slave ID' className={readOnlyValueStyles}>
+                    {slaveId}
+                  </span>
+                ) : (
+                  <InputWithRef
+                    type='number'
+                    aria-label='Slave ID'
+                    value={slaveIdText}
+                    onChange={(e) => setSlaveIdText(e.target.value)}
+                    onBlur={commitSlaveId}
+                    min={MIN_SLAVE_ID}
+                    max={MAX_SLAVE_ID}
+                    className={inputStyles}
+                  />
+                )}
+              </div>
+            </Row>
+          )}
 
+          {transports.includes('tcp') && (
+            <>
               {profile.configurableBindAddress && (
                 <Row label='Network Interface'>
                   <div className='w-64'>
-                    <Select value={tcp.bindAddress} onValueChange={actions.setBindAddress}>
+                    <Select value={bindAddress} onValueChange={actions.setBindAddress}>
                       <SelectTrigger
                         withIndicator
                         placeholder='Select network interface'
@@ -395,7 +450,7 @@ const ModbusServerEditor = () => {
                       aria-label='Port'
                       className='flex h-[30px] w-full items-center rounded-md bg-neutral-100 px-2 py-1 font-caption text-xs font-medium tabular-nums text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
                     >
-                      {tcp.port}
+                      {port}
                     </span>
                   )}
                 </div>
