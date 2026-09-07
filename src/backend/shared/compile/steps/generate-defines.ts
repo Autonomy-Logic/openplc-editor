@@ -18,7 +18,13 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
-import { generateModbusDefines, resolveDebugBaud, resolveDebugSlave, type VppModbusScreenState } from './modbus-defines'
+import {
+  generateModbusDefines,
+  type ModbusServerCompileConfig,
+  resolveDebugBaud,
+  resolveDebugSlave,
+  type VppModbusScreenState,
+} from './modbus-defines'
 
 export type { VppModbusScreenState } from './modbus-defines'
 
@@ -79,6 +85,9 @@ export interface GenerateDefinesInput {
    *  fixed RTU-over-USART0 block.  Web passes `undefined` until
    *  VPP screens land on the web build. */
   vppModbusState?: VppModbusScreenState
+  /** The project's Modbus server, when it has one. Says what is served; the
+   *  screen state says what it is served over. */
+  modbusServer?: ModbusServerCompileConfig
   /** Name of the board's default serial port (from the VPP manifest device's
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
@@ -121,6 +130,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     buildMD5Hash,
     boardRuntime,
     vppModbusState,
+    modbusServer,
     defaultSerial,
     retainBlobSize,
   } = input
@@ -192,7 +202,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
-    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial)
+    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial, modbusServer)
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'
@@ -212,17 +222,16 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
     DEFINES_CONTENT += `#define DEBUG_IFACE ${defaultSerial ?? 'Serial'}\n`
     // Not `serial.baud_rate ?? 115200`: a package published without a `serial`
-    // section still configures a baud — on the RTU section — and when the RTU
-    // shares the default port that IS this port's speed. Ignoring it compiled a
-    // firmware listening at 115200 while the editor dialled the RTU's baud, and
-    // the board answered nothing ("No Firmware Detected" on a healthy board).
-    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {}, defaultSerial)}\n`
+    // section still configures a baud — on the RTU section — and that IS this
+    // port's speed. Ignoring it compiled a firmware listening at 115200 while
+    // the editor dialled the other value, and the board answered nothing
+    // ("No Firmware Detected" on a healthy board).
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {})}\n`
     // Same two-sided agreement as the baud, and the same symptom when it breaks:
     // the firmware drops every frame whose slave id doesn't match, and that check
-    // is the only validation debug function codes get. The editor addresses the
-    // RTU screen's slave id whether or not the RTU is enabled, so emit it rather
-    // than leaving modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback to disagree
-    // with a project that configured anything else.
+    // is the only validation debug function codes get. It comes from the package,
+    // not from any Modbus server — the debugger answers here whether or not a
+    // server exists, and a project that has none must still be debuggable.
     DEFINES_CONTENT += `#define DEBUG_SLAVE ${resolveDebugSlave(vppModbusState ?? {})}\n`
     DEFINES_CONTENT += `\n\n`
   }

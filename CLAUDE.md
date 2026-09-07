@@ -217,6 +217,25 @@ Structured Text is generated in-process by the TS transpiler
 legacy `xml2st` binary path has been retired. `XmlGenerator` is kept only for
 the "Export Project as XML" feature.
 
+**The Modbus block of `defines.h` has two sources**, split along the ownership
+boundary (`src/backend/shared/compile/steps/modbus-defines.ts`):
+
+- the project's Modbus `PLCServer` says **what is served** — the transports,
+  the slave id, the TCP port. On every target, baremetal included.
+- the board's VPP screens say **what it is served over** — the UART's speed,
+  the RS-485 pin, the network. `serial` and `network` sections.
+
+A firmware build serves exactly one slave (`modbus.slaveid` is a single global),
+so `selectModbusServer` refuses a build with more than one enabled server and
+names them. The editor still allows several, because a project moves between
+targets.
+
+The editor's own link is deliberately NOT derived from the server: `DEBUG_BAUD`
+and `DEBUG_SLAVE` come from `screens.serial.baud_rate` and
+`screens.serial.slave_id`, so a project with no Modbus server still debugs, and
+changing a server's slave id is not an access event. When the RTU shares the
+default UART the two are one listener, so the editor's id wins for both.
+
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 ### Debugging

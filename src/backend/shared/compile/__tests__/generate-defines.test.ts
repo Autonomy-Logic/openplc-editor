@@ -108,14 +108,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: {
-        modbus_rtu: {
-          enabled: true,
-          rtu_interface: 'Serial1',
-          rtu_baud_rate: '115200',
-          rtu_slave_id: 1,
-        },
-      },
+      vppModbusState: { serial: { baud_rate: '115200', slave_id: 1 } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
     })
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 115200')
@@ -129,9 +123,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'openplc-compiler',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '115200', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '115200' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
     })
     expect(out).not.toContain('MBSERIAL_IFACE')
     expect(out).not.toContain('MODBUS_ENABLED')
@@ -174,7 +167,7 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
       boardRuntime: 'arduino-cli',
       vppModbusState: {
         serial: { baud_rate: '9600' },
-        modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
+        modbus_rtu: { enabled: true },
       },
       defaultSerial: 'Serial',
     })
@@ -210,9 +203,7 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 1 },
-      },
+      vppModbusState: { modbus_rtu: { enabled: true, rtu_baud_rate: '9600', rtu_slave_id: 1 } },
     })
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
@@ -236,31 +227,44 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).not.toContain('#define MODBUS_ENABLED')
   })
 
-  it('keeps DEBUG_BAUD at the firmware default when the RTU has its own second port', () => {
+  it('keeps DEBUG_BAUD on the package value when the RTU has its own second port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '57600', modbus_baud_rate: '9600' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
     })
-    // Two distinct ports, two distinct rates — and the debugger keeps the default.
+    // Two distinct ports, two distinct rates — and the debugger keeps the one
+    // the package states for its own line.
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
-    expect(out).toContain('#define DEBUG_BAUD 115200')
+    expect(out).toContain('#define DEBUG_BAUD 57600')
   })
 
-  it('emits DEBUG_SLAVE from the RTU screen so it matches the id the editor addresses', () => {
+  it('emits one id for both when the RTU shares the editor line', () => {
+    // One listener answers the bus and the editor there, and it can only have
+    // one id. The package states it; the server's own is not consulted.
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 3 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600', slave_id: 3 } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial', slaveId: 7 },
     })
     expect(out).toContain('#define MBSERIAL_SLAVE 3')
+    expect(out).toContain('#define DEBUG_SLAVE 3')
+  })
+
+  it('keeps the editor id untouched when the RTU has a UART of its own', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { serial: { baud_rate: '9600', slave_id: 3 } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 7 },
+    })
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
     expect(out).toContain('#define DEBUG_SLAVE 3')
   })
 

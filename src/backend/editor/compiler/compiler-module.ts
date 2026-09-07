@@ -11,8 +11,8 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
-import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { IoSizes } from '@root/backend/shared/compile/steps/generate-io-sizes'
+import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
@@ -2715,10 +2715,14 @@ class CompilerModule {
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
-    if (!isRuntimeV4 && hasServers) {
+    // Baremetal serves Modbus too since 4.4.0, so the warning is for the
+    // targets that genuinely ignore a server: Runtime v3 and the openplc
+    // compiler, which ship no Modbus slave at all.
+    const targetIgnoresServers = boardRuntime === 'openplc-compiler'
+    if (!isRuntimeV4 && targetIgnoresServers && hasServers) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
-        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
+        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. The server configurations will be ignored during compilation.`,
       })
     }
     if (!isRuntimeV4 && hasRemoteDevices) {
