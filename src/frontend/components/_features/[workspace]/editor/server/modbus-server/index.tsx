@@ -191,21 +191,10 @@ const hardwareButtonStyles =
  * screen has the same shape everywhere and the user can see what the board is
  * missing rather than guess.
  */
-const TRANSPORT_CHOICES: {
-  value: string
-  label: string
-  transports: ModbusServerTransport[]
-  /** Not offered as a new choice; only shown when a project is already in it.
-   *  A board serves one Modbus transport at a time, so offering both invited a
-   *  configuration nobody wanted to support. Existing projects can still be in
-   *  it -- a pre-4.4.0 board with both screens enabled migrates that way -- and
-   *  the dropdown has to say so rather than name one of the two and look
-   *  settled. */
-  legacy?: true
-}[] = [
+const TRANSPORT_CHOICES: { value: string; label: string; transports: ModbusServerTransport[] }[] = [
   { value: 'rtu', label: 'Modbus RTU', transports: ['rtu'] },
   { value: 'tcp', label: 'Modbus TCP', transports: ['tcp'] },
-  { value: 'rtu+tcp', label: 'Modbus RTU and TCP', transports: ['rtu', 'tcp'], legacy: true },
+  { value: 'rtu+tcp', label: 'Modbus RTU and TCP', transports: ['rtu', 'tcp'] },
 ]
 
 const ModbusServerEditor = () => {
@@ -253,12 +242,9 @@ const ModbusServerEditor = () => {
     },
     [actions],
   )
-  const transportHint =
-    transportChoiceValue === 'rtu+tcp'
-      ? 'Serving both is no longer offered. Pick one — nothing else is lost.'
-      : profile.transports.includes('rtu')
-        ? 'One transport per board.'
-        : 'This target serves over the network only.'
+  const transportHint = profile.transports.includes('rtu')
+    ? 'What the server answers on. Both means one board on two wires.'
+    : 'This target serves over the network only.'
 
   // Text state for the inputs that commit on blur, so a half-typed number does
   // not reach the store and get clamped mid-keystroke.
@@ -377,20 +363,18 @@ const ModbusServerEditor = () => {
                 <Select value={transportChoiceValue} onValueChange={onTransportChange} disabled={!enabled}>
                   <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
                   <SelectContent className={selectContentStyles}>
-                    {TRANSPORT_CHOICES.filter((choice) => !choice.legacy || choice.value === transportChoiceValue).map(
-                      (choice) => (
-                        <SelectItem
-                          key={choice.value}
-                          value={choice.value}
-                          disabled={!!choice.legacy || !choice.transports.every((t) => profile.transports.includes(t))}
-                          className={selectItemStyles}
-                        >
-                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                            {choice.label}
-                          </span>
-                        </SelectItem>
-                      ),
-                    )}
+                    {TRANSPORT_CHOICES.map((choice) => (
+                      <SelectItem
+                        key={choice.value}
+                        value={choice.value}
+                        disabled={!choice.transports.every((t) => profile.transports.includes(t))}
+                        className={selectItemStyles}
+                      >
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {choice.label}
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
