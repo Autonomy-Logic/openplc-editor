@@ -824,6 +824,16 @@ describe('createProjectSlice', () => {
   })
 
   describe('setPouVariables', () => {
+    it('replaces the list as-is, even with a duplicate name: undo/redo and reclassification restore through here', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('old')]))
+      const result = store.getState().projectActions.setPouVariables({
+        pouName: 'Main',
+        variables: [makeVariable('Motor'), makeVariable('motor')],
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['Motor', 'motor'])
+    })
+
     it('replaces all variables on a POU', () => {
       seedPou(store, makePou('Main', 'program', [makeVariable('old')]))
       const result = store.getState().projectActions.setPouVariables({
@@ -841,6 +851,14 @@ describe('createProjectSlice', () => {
   })
 
   describe('setGlobalVariables', () => {
+    it('replaces the list as-is, even with a duplicate name (restore paths rely on it)', () => {
+      const result = store.getState().projectActions.setGlobalVariables({
+        variables: [makeVariable('Line', 'global'), makeVariable('line', 'global')],
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables).toHaveLength(2)
+    })
+
     it('replaces global variables', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('old', 'global') })
       const result = store.getState().projectActions.setGlobalVariables({
@@ -3960,6 +3978,29 @@ describe('createProjectSlice', () => {
       if (editor.type === 'plc-textual') {
         expect(editor.variable.display).toBe('table')
       }
+    })
+
+    it('reconcile refuses a code-mode buffer that declares one name twice', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('Original')]))
+      const duplicateText = 'VAR\n\tMotor : BOOL;\n\tmotor : INT;\nEND_VAR'
+      const model = {
+        type: 'plc-textual' as const,
+        meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: duplicateText },
+      }
+      store.getState().editorActions.addModel(model)
+      store.getState().editorActions.setEditor(model)
+
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: makeVariable('FromBlock'),
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Variable already exists')
+      expect(result.message).toContain('"motor"')
+      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['Original'])
     })
 
     it('reconcile parses text + regenerate writes back when code-mode buffer is valid', () => {

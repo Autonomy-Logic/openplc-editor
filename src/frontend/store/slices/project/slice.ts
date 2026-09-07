@@ -41,7 +41,11 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
@@ -611,6 +615,8 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
+    const duplicate = findDuplicateVariableName(parsed)
+    if (duplicate) return fail(duplicateVariableNameMessage(duplicate), 'Variable already exists')
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)

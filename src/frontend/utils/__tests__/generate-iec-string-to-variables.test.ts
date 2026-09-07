@@ -1,6 +1,10 @@
 import type { LibraryState } from '../../../middleware/shared/ports/library-types'
 import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../generate-iec-string-to-variables'
 
 describe('parseIecStringToVariables', () => {
   // ---- basic parsing ----
@@ -610,5 +614,31 @@ describe('parseIecStringToVariables', () => {
     const result = parseIecStringToVariables(input)
 
     expect(result[0].class).toBe('input')
+  })
+})
+
+describe('findDuplicateVariableName', () => {
+  const variable = (name: string): PLCVariable => ({
+    name,
+    class: 'local',
+    type: { definition: 'base-type', value: 'INT' },
+    location: '',
+    documentation: '',
+  })
+
+  it('returns undefined when every name is unique', () => {
+    expect(findDuplicateVariableName([variable('Motor'), variable('Speed')])).toBeUndefined()
+    expect(findDuplicateVariableName([])).toBeUndefined()
+  })
+
+  it('returns the second spelling of a name declared twice, folding case like IEC does', () => {
+    expect(findDuplicateVariableName([variable('Motor'), variable('Speed'), variable('motor')])).toBe('motor')
+    expect(findDuplicateVariableName([variable('Motor'), variable('Motor')])).toBe('Motor')
+  })
+
+  it('names the variable in the message', () => {
+    expect(duplicateVariableNameMessage('motor')).toBe(
+      '"motor" is declared more than once. Please make sure that the name is unique.',
+    )
   })
 })
