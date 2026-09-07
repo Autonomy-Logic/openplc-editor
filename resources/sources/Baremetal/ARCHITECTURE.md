@@ -112,15 +112,28 @@ header (no CRC) instead of RTU framing.
 
 That is the whole surface. `modbus_serial.*` and `modbus_tcp.*` are untouched.
 
-## Known constraint — single-serial + TCP
+## Serial and TCP in the same build
 
-`mb_frame` is shared between `handle_tcp()` and the single-serial assembly path.
-In **single-serial** builds `mb_frame` doubles as the RX-assembly buffer and
-holds a partial RTU/debug frame **across scan cycles**; since `mbtask()` runs
-`handle_tcp()` first, an incoming TCP request can clobber that partial frame.
-The framing logic resyncs, but the in-flight transaction is lost → intermittent
-glitches under concurrent TCP load. Dual-serial + TCP is safe (dedicated RX
-buffers; `mb_frame` only transient). The original design assumed a single Modbus
-operation transport per board; the editor allowing RTU + TCP together violates
-that. Fix is planned separately (dedicated single-serial RX buffer scoped to
-`MBSERIAL && MBTCP`).
+`mb_frame` is the shared process/TX buffer, and it is NOT an assembly buffer for
+any port that has to survive a scan cycle alongside TCP.
+
+The single-serial path used to assemble into `mb_frame` directly. That is only
+safe while nothing else writes it between cycles, and TCP does: `mbtask()` runs
+`handle_tcp()` first, so an incoming request overwrote a partial serial frame
+while `mb_rx_len` still described it. The framing logic resynced a byte at a
+time and the in-flight transaction was lost — intermittent, and worst under the
+concurrent TCP load a working installation produces.
+
+Every path now has its own RX assembly buffer wherever it can be raced:
+
+| Build | Serial assembly | `mb_frame` |
+|---|---|---|
+| single-serial, no TCP | `mb_frame` in place | assembly + process + TX |
+| single-serial + TCP (`MBTCP`) | `mb_rx_single` | process + TX only |
+| dual-serial (`MBSERIAL_ON_SECONDARY`) | `mb_rx_dbg`, `mb_rx_rtu` | process + TX only |
+
+The extra buffer costs `MAX_MB_FRAME` bytes (128 on ATmega328P/32U4, 256
+elsewhere) and is compiled only where TCP is present, so a board without it
+keeps its original footprint. The condition is `MBTCP` rather than
+`MBSERIAL && MBTCP` because the always-on debugger assembles through the same
+path and was losing frames the same way in a TCP-only Modbus build.

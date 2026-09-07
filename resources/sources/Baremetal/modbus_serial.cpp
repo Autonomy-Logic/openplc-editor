@@ -80,11 +80,30 @@ void mbconfig_serial_iface(Stream* port, long baud, int txPin)
 
 // Persistent RX-assembly state. handle_serial() is called every scan cycle and
 // never blocks; a request whose bytes straddle several calls is carried across
-// them in mb_frame[0..mb_rx_len). (This shares mb_frame with handle_tcp, which
-// is safe because an OpenPLC board is configured for a single Modbus transport;
-// the two are not driven mid-frame at the same time.)
+// them in the port's assembly buffer.
 static uint16_t mb_rx_len = 0;
 static uint32_t mb_rx_last_ms = 0;
+
+#ifdef MBTCP
+// The single-serial path used mb_frame as its own assembly buffer, which is
+// only safe while nothing else writes mb_frame between scan cycles. TCP does:
+// mbtask() runs handle_tcp() FIRST, and a TCP request overwrites mb_frame from
+// index 0 while mb_rx_len still describes a partial serial frame held across
+// cycles. The framing logic then resyncs a byte at a time and the in-flight
+// transaction is lost -- intermittent, and worst under exactly the TCP load a
+// working installation produces.
+//
+// So in a build that also serves TCP the serial path gets a buffer of its own,
+// and mb_frame goes back to being what the dual-serial path already treats it
+// as: transient process/TX scratch, borrowed for one complete transaction.
+// Compiled only where TCP is present, so a board without it keeps its
+// footprint (MAX_MB_FRAME bytes: 128 on the small AVRs, 256 elsewhere).
+//
+// This covers the debug-only build too, not just MBSERIAL: the always-on
+// debugger assembles its frames through this same path and was losing them the
+// same way.
+static uint8_t mb_rx_single[MAX_MB_FRAME];
+#endif
 
 #ifdef MBSERIAL_ON_SECONDARY
 // Dual-serial: the debugger keeps the default serial while Modbus RTU runs on a
@@ -250,7 +269,8 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
 }
 
 // Dispatch to one or two serial ports. Single-serial: the debugger and Modbus
-// RTU (if any) share one port, assembled in-place in mb_frame. Dual-serial
+// RTU (if any) share one port, assembled in mb_frame when nothing else writes
+// it, or in a buffer of its own when TCP is in the build. Dual-serial
 // (MBSERIAL_ON_SECONDARY): the debugger keeps the default serial while Modbus
 // RTU runs on a distinct UART — each with its own RX buffer.
 void handle_serial()
@@ -262,6 +282,8 @@ void handle_serial()
     #else
         handle_serial_port(&MBSERIAL_IFACE, -1, MBSERIAL_SLAVE, mb_rx_rtu, &mb_rx_rtu_len, &mb_rx_rtu_last_ms);
     #endif
+#elif defined(MBTCP)
+    handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, mb_rx_single, &mb_rx_len, &mb_rx_last_ms);
 #else
     handle_serial_port(mb_serialport, mb_txpin, modbus.slaveid, mb_frame, &mb_rx_len, &mb_rx_last_ms);
 #endif
