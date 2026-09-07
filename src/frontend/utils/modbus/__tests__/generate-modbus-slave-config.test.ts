@@ -136,4 +136,28 @@ describe('generateModbusSlaveConfig', () => {
     expect(bm.discrete_inputs.ix_bits).toBe(DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits)
     expect(bm.input_registers.iw_count).toBe(DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount)
   })
+
+  // NFR02. `ModbusSlaveConfig` gained the RTU wiring so one screen can configure
+  // baremetal and Runtime v4 alike, but the v4 plugin's config file is a
+  // contract with software already in the field: a key it does not expect is a
+  // change to that contract. The generator builds an explicit shape rather than
+  // spreading the config, and this is what keeps it that way.
+  it('does not leak the serial transport fields into the runtime plugin config', () => {
+    const server = makeModbusServer()
+    Object.assign(server.modbusSlaveConfig!, {
+      transports: ['rtu', 'tcp'],
+      slaveId: 7,
+      serialPort: 'Serial1',
+      baudRate: 19200,
+      parity: 'N',
+      stopBits: 1,
+      dataBits: 8,
+    })
+
+    const withSerial = generateModbusSlaveConfig([server])
+    const withoutSerial = generateModbusSlaveConfig([makeModbusServer()])
+
+    expect(withSerial).toBe(withoutSerial)
+    expect(Object.keys(JSON.parse(withSerial!))).toEqual(['network_configuration', 'buffer_mapping'])
+  })
 })

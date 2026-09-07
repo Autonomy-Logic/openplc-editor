@@ -15,6 +15,7 @@ import { findGlobalVariableListReferences } from '../../../utils/PLC/global-vari
 import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
 import { collectAllSlaveNames, generateUniqueSlaveName } from '../../../utils/unique-slave-name'
+import { planVendorModbusMigration } from '../../../utils/vpp/migrate-vendor-modbus-to-server'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
@@ -1419,6 +1420,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           configuration: data.deviceConfiguration,
           pinMapping: data.devicePinMapping,
         })
+      }
+
+      // A project saved before 4.4.0 kept its baremetal Modbus in the board's
+      // VPP screen, because baremetal had no server element. Protocol
+      // configuration belongs to the editor now, so promote it to a real
+      // `PLCServer`. It runs HERE because it is the first point where both
+      // halves are readable: the project's servers landed with `setProject`
+      // above, the screen state with `setDeviceDefinitions` just now.
+      const migratedModbusServer = planVendorModbusMigration(
+        getState().deviceDefinitions.configuration.vendorScreenData,
+        getState().project.data.servers,
+      )
+      if (migratedModbusServer) {
+        getState().projectActions.createServer({ data: migratedModbusServer })
       }
 
       // Restore debug flags from debugVariables

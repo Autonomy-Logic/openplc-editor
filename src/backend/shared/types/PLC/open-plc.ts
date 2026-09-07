@@ -309,10 +309,44 @@ const ModbusSlaveBufferMappingSchema = z.object({
 })
 type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
 
+// Wire transports a Modbus endpoint answers on. Shared by the slave (server)
+// and the master (remote device): the same two wires carry both roles, and the
+// unified server screen is modelled on the master's transport selector.
+const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
+type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
+
+// Modbus RTU parity settings
+const ModbusParitySchema = z.enum(['N', 'E', 'O'])
+type ModbusParity = z.infer<typeof ModbusParitySchema>
+
 const ModbusSlaveConfigSchema = z.object({
   enabled: z.boolean(),
+  /**
+   * Transports this server answers on. RTU and TCP together are ONE server with
+   * two transports, never two servers, so this is a set rather than the single
+   * `transport` the master carries -- a master dials one endpoint, a server
+   * listens on everything it was given.
+   *
+   * Absent means TCP, which is what every project saved before baremetal gained
+   * a real `PLCServer` implies: Runtime v4 serves TCP and nothing else.
+   */
+  transports: z.array(ModbusTransportTypeSchema).optional(),
   networkInterface: z.string(),
   port: z.number(),
+  /**
+   * Slave id this server answers to. Meaningful on RTU, where it is the only
+   * addressing there is; on TCP the MBAP unit id is a gateway routing field and
+   * is deliberately not filtered on.
+   */
+  slaveId: z.number().int().min(0).max(255).optional(),
+  // RTU wiring, mirroring the master's serial half. Absent on a TCP-only
+  // server, and absent on baremetal when the RTU shares the editor's default
+  // port, where the package owns the port's speed.
+  serialPort: z.string().optional(),
+  baudRate: z.number().optional(),
+  parity: ModbusParitySchema.optional(),
+  stopBits: z.number().int().min(1).max(2).optional(),
+  dataBits: z.number().int().min(7).max(8).optional(),
   bufferMapping: ModbusSlaveBufferMappingSchema.optional(),
 })
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
@@ -571,14 +605,6 @@ type ModbusFunctionCode = z.infer<typeof ModbusFunctionCodeSchema>
 
 const ModbusErrorHandlingSchema = z.enum(['keep-last-value', 'set-to-zero'])
 type ModbusErrorHandling = z.infer<typeof ModbusErrorHandlingSchema>
-
-// Modbus transport type: TCP/IP or RTU (serial)
-const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
-type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
-
-// Modbus RTU parity settings
-const ModbusParitySchema = z.enum(['N', 'E', 'O'])
-type ModbusParity = z.infer<typeof ModbusParitySchema>
 
 const ModbusIOPointSchema = z.object({
   id: z.string(),

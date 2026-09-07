@@ -221,10 +221,31 @@ export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
 export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
 
 // Modbus
+
+/** Wire transports a Modbus endpoint answers on, shared by the slave and the
+ *  master: the same two wires carry both roles. */
+export type ModbusTransport = 'rtu' | 'tcp'
+
+/** Modbus RTU parity, shared by the slave and the master. */
+export type ModbusParity = 'N' | 'E' | 'O'
+
 export interface ModbusSlaveConfig {
   enabled: boolean
+  /** Transports this server answers on. RTU and TCP together are ONE server
+   *  with two transports, never two servers. Absent means TCP, which is what
+   *  every project saved before baremetal gained a real `PLCServer` implies. */
+  transports?: ModbusTransport[]
   networkInterface: string
   port: number
+  /** Meaningful on RTU, where it is the only addressing there is. On TCP the
+   *  MBAP unit id is a gateway routing field and is not filtered on. */
+  slaveId?: number
+  // RTU wiring, mirroring the master's serial half.
+  serialPort?: string
+  baudRate?: number
+  parity?: ModbusParity
+  stopBits?: number
+  dataBits?: number
   bufferMapping?: ModbusBufferMapping
 }
 
@@ -260,7 +281,7 @@ export interface ModbusRemoteTcpConfig {
   port?: number
   serialPort?: string
   baudRate?: number
-  parity?: 'N' | 'E' | 'O'
+  parity?: ModbusParity
   stopBits?: number
   dataBits?: number
   slaveId?: number
