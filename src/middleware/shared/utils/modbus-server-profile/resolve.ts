@@ -147,9 +147,17 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
 
   const caps = resolveTargetCapabilities(board)
   const screens = board.vpp?.screens
-  const modbusScreen = findScreen(screens, MODBUS_SCREEN)
 
-  if (modbusScreen) {
+  // Baremetal is the compiler, not a screen. It used to be recognised by the
+  // package shipping a Modbus screen, which stopped being a signal once that
+  // screen's contents became the editor's: a package with nothing left to put
+  // there ships none, and every board would have silently resolved as a
+  // Runtime v4 target. The screen is still accepted so a package published
+  // before the split keeps working.
+  const modbusScreen = findScreen(screens, MODBUS_SCREEN)
+  const isBaremetal = board.compiler === 'arduino-cli' || !!modbusScreen
+
+  if (isBaremetal) {
     const defaults = board.io ? countsFromIoSizes(board.io) : null
     // A ceiling is only meaningful alongside the defaults it raises.
     const ceilings = defaults && board.ioMax ? countsFromIoSizes({ ...board.io, ...board.ioMax }) : null

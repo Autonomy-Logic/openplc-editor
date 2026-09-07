@@ -255,11 +255,14 @@ describe('resolveModbusServerProfile', () => {
     expect(profile.derivedCounts).toBeNull()
   })
 
-  it('reports no counts when a board has no vpp metadata at all', () => {
+  it('is still baremetal with no vpp metadata at all', () => {
+    // The compiler decides, not the package. A board recognised by a screen
+    // the package happens to ship would stop being baremetal the day that
+    // screen had nothing left to hold.
     const profile = resolveModbusServerProfile({ compiler: 'arduino-cli' })
-    // No Modbus screen → not a vendor-screen target; arduino has no PLCServer
-    // path either, so there is nothing to configure.
-    expect(profile.configurablePort).toBe(true)
+    expect(profile.configurablePort).toBe(false)
+    expect(profile.fixedPort).toBe(502)
+    // Nothing declared its firmware sizes, so there is no map to draw.
     expect(profile.derivedCounts).toBeNull()
   })
 
