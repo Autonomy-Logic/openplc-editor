@@ -255,10 +255,10 @@ const ModbusServerEditor = () => {
   )
   const transportHint =
     transportChoiceValue === 'rtu+tcp'
-      ? 'This project serves both, which is no longer offered. Pick one and the server keeps every other setting.'
+      ? 'Serving both is no longer offered. Pick one — nothing else is lost.'
       : profile.transports.includes('rtu')
-        ? 'What the server answers on. A board serves one at a time.'
-        : 'This target serves Modbus over the network only.'
+        ? 'One transport per board.'
+        : 'This target serves over the network only.'
 
   // Text state for the inputs that commit on blur, so a half-typed number does
   // not reach the store and get clamped mid-keystroke.
@@ -368,14 +368,7 @@ const ModbusServerEditor = () => {
              * that disappears makes the user wonder whether the feature exists
              * at all, and two targets whose screens differ in shape cannot be
              * compared. */}
-            <Row
-              label='Enabled'
-              hint={
-                enabled
-                  ? 'The server answers on the transports below.'
-                  : 'The server is kept with its configuration, and serves nothing.'
-              }
-            >
+            <Row label='Enabled' hint={enabled ? 'Serving.' : 'Not serving. Settings are kept.'}>
               <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
             </Row>
 
@@ -407,10 +400,10 @@ const ModbusServerEditor = () => {
               label='Serial Port'
               hint={
                 !rtuAvailable
-                  ? 'This target serves Modbus over the network only.'
+                  ? 'RTU only.'
                   : rtuOnEditorPort
-                    ? 'This is the port the editor talks to the board on. The firmware serves both there, so you talk to one at a time.'
-                    : 'A UART of its own, separate from the editor connection.'
+                    ? 'Shared with the editor connection. One at a time.'
+                    : 'A UART of its own.'
               }
             >
               <div className='w-64'>
@@ -437,10 +430,10 @@ const ModbusServerEditor = () => {
               label='Slave ID'
               hint={
                 !rtuAvailable
-                  ? 'Addressing on this target is the IP address; Modbus RTU is where a slave id applies.'
+                  ? 'RTU only. TCP addresses by IP.'
                   : rtuOnEditorPort
-                    ? "Fixed to the board's own value: it is the id the editor dials, and changing it here would leave the board unreachable."
-                    : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Change it and the board must be reflashed before the editor can reach it again.`
+                    ? 'Set by the board on this port.'
+                    : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
               }
             >
               <div className='w-24'>
@@ -460,11 +453,7 @@ const ModbusServerEditor = () => {
 
             <Row
               label='Network Interface'
-              hint={
-                profile.configurableBindAddress
-                  ? undefined
-                  : 'A microcontroller binds the one interface it has, so there is nothing to pick.'
-              }
+              hint={profile.configurableBindAddress ? undefined : 'This board has one interface.'}
             >
               <div className='w-64'>
                 <Select
@@ -486,14 +475,7 @@ const ModbusServerEditor = () => {
               </div>
             </Row>
 
-            <Row
-              label='Port'
-              hint={
-                profile.configurablePort
-                  ? 'Default: 502'
-                  : 'Fixed by the firmware. Changing it needs a firmware change, not a setting.'
-              }
-            >
+            <Row label='Port' hint={profile.configurablePort ? 'Default 502.' : 'Fixed by the firmware.'}>
               <div className='w-64'>
                 <InputWithRef
                   type='number'
@@ -523,8 +505,8 @@ const ModbusServerEditor = () => {
           <Panel title='Hardware Settings'>
             <p className='text-xs text-neutral-600 dark:text-neutral-400'>
               {profile.vppScreens.serial || profile.vppScreens.network
-                ? 'Which UART Modbus RTU uses, how fast it runs, the RS-485 driver-enable pin and the network credentials are properties of the board. They are configured on the pages its vendor package provides.'
-                : 'This target has no board-level wiring to configure: the runtime reaches its network and serial ports through the host operating system, which owns them.'}
+                ? 'Baud rates, RS-485 pin and network credentials belong to the board. Configure them on its vendor pages.'
+                : "The host operating system owns this target's ports."}
             </p>
             <div className='flex flex-wrap gap-2'>
               <button
@@ -549,8 +531,8 @@ const ModbusServerEditor = () => {
           <Panel title='Buffer Mapping'>
             <p className='text-xs text-neutral-600 dark:text-neutral-400'>
               {profile.configurableBuffers
-                ? 'Configure the size of each register segment exposed by the Modbus slave server. These values define how many addresses are allocated for each IEC variable type.'
-                : 'This target sizes its Modbus buffers at compile time, from the I/O limits its firmware was built with. The counts below are what the board will serve.'}
+                ? 'How many addresses each IEC segment gets.'
+                : 'Sized by the firmware at compile time.'}
             </p>
 
             {!profile.configurableBuffers && !profile.derivedCounts && (
@@ -581,11 +563,7 @@ const ModbusServerEditor = () => {
                           onChange={(value) => setCountText((prev) => ({ ...prev, [segment]: value }))}
                           onBlur={() => commitCount(segment)}
                           max={profile.maxCounts?.[segment] ?? meta.max}
-                          description={
-                            absent
-                              ? `${meta.description} — this target has no ${`%${segment}`} storage.`
-                              : meta.description
-                          }
+                          description={absent ? `${meta.description} — not on this target.` : meta.description}
                           readOnly={!profile.configurableBuffers || absent}
                         />
                       )
