@@ -27,6 +27,7 @@ import type {
   EdgeSignInOutcome,
   EdgeUserRead,
 } from '../../shared/ports/edge-account-port'
+import { EdgeSignInOutcomeSchema, EdgeUserReadSchema } from '../../shared/ports/edge-account-port'
 import { getEdgeWebUrl } from './system-adapter'
 
 /** The providers Edge offers, in the order its own sign-in screen lists them. */
@@ -153,7 +154,18 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
     let read: EdgeUserRead
 
     try {
-      read = await window.bridge.edgeAccountFetchUser()
+      // Validated, not annotated. The type on the bridge method is a description of
+      // what the main process is meant to send; it checks nothing at runtime, and a
+      // `null` or a shape from a drifted build would be read for `.status` here and
+      // drive the session state machine off it. An unreadable answer is exactly what
+      // `unknown` is for: the question could not be asked.
+      const parsed = EdgeUserReadSchema.safeParse(await window.bridge.edgeAccountFetchUser())
+
+      if (!parsed.success) {
+        return { status: 'unknown' }
+      }
+
+      read = parsed.data
     } catch {
       // An IPC call that threw tells us nothing about the session — the same standing
       // as a network failure, and the caller must be able to hold its ground.
@@ -185,7 +197,16 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
     let outcome: EdgeSignInOutcome
 
     try {
-      outcome = await window.bridge.edgeAccountSignIn(email, password)
+      // Same reasoning as `fetchUser`, with the opposite safe direction: an answer
+      // this build cannot read is a sign-in that did not happen, so it must not be
+      // allowed to look like one.
+      const parsed = EdgeSignInOutcomeSchema.safeParse(await window.bridge.edgeAccountSignIn(email, password))
+
+      if (!parsed.success) {
+        return { status: 'failed' }
+      }
+
+      outcome = parsed.data
     } catch {
       return { status: 'failed' }
     }

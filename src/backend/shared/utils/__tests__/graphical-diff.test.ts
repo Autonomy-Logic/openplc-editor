@@ -253,3 +253,32 @@ describe('computeGraphicalDiff — FBD', () => {
     expect(nodeDiffMaps.current.get('NODE_b')).toBe('unchanged')
   })
 })
+
+describe('computeGraphicalDiff — what it is given', () => {
+  it('produces an empty diff for a file that is not graphical at all', () => {
+    // `main.st` used to be typed `'ld' | 'fbd'` by an assertion on the extension. The
+    // result happened to be right, because the extractor answers null for anything it
+    // cannot read — but nothing about the type said so, and the next branch written on
+    // `ext` would have been unsound with no warning.
+    const body = 'PROGRAM main\nVAR\n  A : BOOL;\nEND_VAR\nA := TRUE;\nEND_PROGRAM'
+
+    const result = computeGraphicalDiff(body, body, 'pous/programs/main.st')
+
+    expect(result.isLadder).toBe(false)
+    expect(result.flows).toEqual([])
+  })
+
+  it('drops a malformed node instead of losing the rung it sits in', () => {
+    // A node with no id cannot be keyed, and used to be carried through as if it were
+    // a real one. The rest of the rung still diffs.
+    const broken = withBody({
+      rungs: [{ id: 'r1', edges: [], nodes: [rail('RAIL_1'), { type: 'contact' }, coil('NODE_c', 'A', 300)] }],
+    })
+    const fixed = ld([{ id: 'r1', nodes: [rail('RAIL_1'), coil('NODE_c', 'A', 300)] }])
+
+    const result = computeGraphicalDiff(broken, fixed, 'pous/programs/main.ld')
+
+    expect(result.flows).toHaveLength(1)
+    expect(result.flows[0].original?.nodes.map((n) => n.id)).toEqual(['RAIL_1', 'NODE_c'])
+  })
+})

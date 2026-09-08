@@ -75,8 +75,8 @@ import type {
   CloudProjectsResult,
   RawProjectFiles,
   UploadProjectResult,
-  WriteProjectFiles,
 } from '@root/middleware/shared/ports/project-port'
+import { WriteProjectFilesSchema } from '@root/middleware/shared/ports/project-port'
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
@@ -1344,15 +1344,26 @@ class MainProcessBridge implements MainIpcModule {
     return readCloudProject(projectId)
   }
 
+  /**
+   * Takes `unknown` and validates, like the channels either side of it.
+   *
+   * It used to declare the parameter as `WriteProjectFiles` and check `projectPath`
+   * alone, which is a wish rather than a check: the renderer is where the payload comes
+   * from, and a TypeScript annotation on an IPC argument survives nothing. The whole
+   * payload becomes an envelope posted to Edge, and the backend deletes by omission —
+   * a missing `pouFiles` would ask it to delete every POU in the project.
+   */
   handleEdgeProjectsSaveProject = (
     _event: IpcMainInvokeEvent,
-    files: WriteProjectFiles,
+    files: unknown,
   ): Promise<{ success: boolean; error?: string }> => {
-    if (typeof files?.projectPath !== 'string' || files.projectPath.length === 0) {
-      return Promise.resolve({ success: false, error: 'No project id was given.' })
+    const parsed = WriteProjectFilesSchema.safeParse(files)
+
+    if (!parsed.success) {
+      return Promise.resolve({ success: false, error: 'The editor made an invalid save request.' })
     }
 
-    return saveCloudProject(files)
+    return saveCloudProject(parsed.data)
   }
 
   handleEdgeProjectsSaveFile = (
@@ -1573,6 +1584,14 @@ class MainProcessBridge implements MainIpcModule {
     const id = MainProcessBridge.vcString(projectId)
     const commitMessage = MainProcessBridge.vcString(message)
 
+    // Refused rather than dropped, for the reason `handleEdgeVcDiscardChanges` spells
+    // out: `vcStringArray` answers undefined for a partially valid list, and undefined
+    // means "all files" to `createCommit`. One non-string entry would turn "commit
+    // these three" into "commit the whole project".
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
     return id && commitMessage
       ? createCommit(id, commitMessage, MainProcessBridge.vcStringArray(files), MainProcessBridge.vcString(branch))
       : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
@@ -1653,6 +1672,12 @@ class MainProcessBridge implements MainIpcModule {
     files: unknown,
   ): Promise<VersionControlResult<unknown>> => {
     const id = MainProcessBridge.vcString(projectId)
+
+    // Same refusal as commit and discard: undefined means "all files" downstream, so a
+    // malformed list would stash the whole project instead of the selection.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
 
     return id
       ? createStash(id, MainProcessBridge.vcString(message), MainProcessBridge.vcStringArray(files))

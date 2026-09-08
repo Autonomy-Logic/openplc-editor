@@ -8,6 +8,7 @@
  */
 
 import type { Edge, Node } from '@xyflow/react'
+import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,7 +73,74 @@ const STRUCTURAL_NODE_TYPES = new Set([
 // Flow data extraction
 // ---------------------------------------------------------------------------
 
-function extractFlowData(content: string, ext: 'ld' | 'fbd'): FlowData[] | null {
+/** The two graphical languages this module knows how to read a body for. */
+type GraphicalLanguage = 'ld' | 'fbd'
+
+/**
+ * A node and an edge as this module needs them.
+ *
+ * `Node` and `Edge` come from @xyflow/react and carry far more than a body on disk is
+ * obliged to fill in, so restating them as a schema would reject valid flows. What is
+ * checked is what the diff below actually depends on: `id` keys every map here, and
+ * `source`/`target` are what an edge is FOR. Anything else is read defensively at the
+ * point of use.
+ */
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+const NodeSchema = z.custom<Node>((value) => isRecord(value) && typeof value.id === 'string')
+
+const EdgeSchema = z.custom<Edge>(
+  (value) =>
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.source === 'string' &&
+    typeof value.target === 'string',
+)
+
+/**
+ * An array that drops what it cannot validate instead of failing whole.
+ *
+ * A diff of the rest of a rung is worth more to the reader than no diff at all, and a
+ * single malformed node used to be carried through as if it were a real one.
+ */
+const arrayOfValid = <T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>) =>
+  z.array(z.unknown()).transform((items) =>
+    items.flatMap((item) => {
+      const parsed = schema.safeParse(item)
+
+      return parsed.success ? [parsed.data] : []
+    }),
+  )
+
+/** A rung as it is serialised into the POU body, after `END_VAR`. */
+const RawFlowSchema = z.object({
+  id: z.string().optional(),
+  nodes: arrayOfValid(NodeSchema).optional(),
+  edges: arrayOfValid(EdgeSchema).optional(),
+  reactFlowViewport: z.tuple([z.number(), z.number()]).optional(),
+})
+
+const LadderBodySchema = z.object({ rungs: z.array(RawFlowSchema) })
+
+const FbdBodySchema = z.object({ rung: RawFlowSchema })
+
+/**
+ * Which graphical language a path is, or null for anything else.
+ *
+ * Narrowed rather than asserted: `pous/programs/main.st` yields `st`, which the old
+ * assertion typed as `'ld' | 'fbd'` and handed on. Nothing broke — `extractFlowData`
+ * happens to answer null for it — but the type was a lie, and the first `switch` on
+ * `ext` written against it would have been unsound with no warning.
+ */
+function graphicalLanguageOf(filePath: string): GraphicalLanguage | null {
+  const ext = filePath.split('.').pop()?.toLowerCase()
+
+  return ext === 'ld' || ext === 'fbd' ? ext : null
+}
+
+function extractFlowData(content: string, ext: GraphicalLanguage | null): FlowData[] | null {
+  if (ext === null) return null
+
   const endMatch = content.match(/\b(END_PROGRAM|END_FUNCTION_BLOCK|END_FUNCTION)\b/i)
   if (!endMatch || endMatch.index === undefined) return null
 
@@ -85,25 +153,19 @@ function extractFlowData(content: string, ext: 'ld' | 'fbd'): FlowData[] | null 
     let parsed: unknown = JSON.parse(bodyContent) as unknown
     if (typeof parsed === 'string') parsed = JSON.parse(parsed) as unknown
 
-    type RawFlow = {
-      id?: string
-      nodes?: Node[]
-      edges?: Edge[]
-      reactFlowViewport?: [number, number]
-    }
-
     if (ext === 'ld') {
-      const rungs = (parsed as { rungs?: RawFlow[] }).rungs
-      if (!Array.isArray(rungs)) return null
-      return rungs.map((r) => ({
+      const rungs = LadderBodySchema.safeParse(parsed)
+      if (!rungs.success) return null
+      return rungs.data.rungs.map((r) => ({
         id: r.id,
         nodes: r.nodes ?? [],
         edges: r.edges ?? [],
         reactFlowViewport: r.reactFlowViewport,
       }))
     } else {
-      const rung = (parsed as { rung?: RawFlow }).rung
-      if (!rung) return null
+      const body = FbdBodySchema.safeParse(parsed)
+      if (!body.success) return null
+      const rung = body.data.rung
       return [{ nodes: rung.nodes ?? [], edges: rung.edges ?? [], reactFlowViewport: rung.reactFlowViewport }]
     }
   } catch {
@@ -480,7 +542,7 @@ export function computeGraphicalDiff(
   currentContent: string,
   filePath: string,
 ): GraphicalDiffResult {
-  const ext = filePath.split('.').pop()?.toLowerCase() as 'ld' | 'fbd'
+  const ext = graphicalLanguageOf(filePath)
   const isLadder = ext === 'ld'
 
   const originalFlows = extractFlowData(originalContent, ext)

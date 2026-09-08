@@ -11,6 +11,8 @@
  */
 
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import { buildProjectResponseFromPlcopenParse } from '../../../frontend/utils/PLC/build-plcopen-project-response'
+import { parsePlcopenXml } from '../../../frontend/utils/PLC/xml-parser'
 import type {
   CloudFoldersResult,
   CloudProjectsResult,
@@ -189,6 +191,36 @@ function mapIpcResponse(
  */
 export const isCloudProjectId = isRemoteProjectPath
 
+/**
+ * The cloud read, refusing rather than throwing when the channel is not there.
+ *
+ * The listing channels each check this and say why: the preload bundle and the
+ * renderer bundle are built separately and can skew, and a running app whose main
+ * process predates a channel has no such method. Without the check the call raises
+ * "is not a function", and that rejection escapes `openProjectByPath` to callers that
+ * do not catch it — the cloud-projects card among them, which takes the start screen
+ * down over one stale bundle.
+ */
+async function readCloudProjectFiles(projectId: string): Promise<RawProjectFiles> {
+  if (typeof window.bridge.edgeProjectsRead !== 'function') {
+    return {
+      success: false,
+      error: {
+        title: 'Failed to open project',
+        description: 'This build of the editor cannot open cloud projects.',
+      },
+    }
+  }
+
+  return window.bridge.edgeProjectsRead(projectId)
+}
+
+/** What a cloud write answers when the channel it needs is not in this build. */
+const NO_CLOUD_WRITE_CHANNEL = {
+  success: false,
+  error: 'This build of the editor cannot save cloud projects.',
+} as const
+
 export function createEditorProjectAdapter(): ProjectPort {
   return {
     async createProject(params: CreateProjectParams): Promise<ProjectResponse> {
@@ -235,11 +267,37 @@ export function createEditorProjectAdapter(): ProjectPort {
       // way — only where the bytes come from differs, which is the whole point of the
       // cloud reader returning the same `RawProjectFiles` the filesystem one does.
       const raw = isCloudProjectId(projectPath)
-        ? await window.bridge.edgeProjectsRead(projectPath)
+        ? await readCloudProjectFiles(projectPath)
         : ((await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles)
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
+
+      /**
+       * A project uploaded as raw PLCopen XML has no `project.json` and no POUs — only
+       * Node's `plcopen-pending-import.xml` marker, stored verbatim because nothing
+       * parses it server-side. Handing that to `parseProjectFiles` loads schema
+       * defaults and ignores the XML entirely, so the project opens EMPTY: the imported
+       * program is on the server, and the editor shows a blank one over it.
+       *
+       * The web adapter has had this branch since the marker existed; the desktop
+       * inherited the reader without it. `wasPendingPlcopenImport` tells the caller to
+       * save immediately, which prunes the marker — Node's save deletes what the
+       * payload omits.
+       */
+      const pending = raw.data.pendingPlcopenSource
+
+      if (pending !== undefined && pending.length > 0) {
+        return {
+          success: true,
+          data: {
+            ...buildProjectResponseFromPlcopenParse(parsePlcopenXml(pending), raw.data.projectPath),
+            wasPendingPlcopenImport: true,
+            canEdit: raw.data.canEdit,
+          },
+        }
+      }
+
       const parsed = parseProjectFiles(
         raw.data.projectPath,
         raw.data.projectJson,
@@ -285,6 +343,10 @@ export function createEditorProjectAdapter(): ProjectPort {
 
     async saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
       if (isCloudProjectId(files.projectPath)) {
+        if (typeof window.bridge.edgeProjectsSaveProject !== 'function') {
+          return NO_CLOUD_WRITE_CHANNEL
+        }
+
         return window.bridge.edgeProjectsSaveProject(files)
       }
 
@@ -299,6 +361,10 @@ export function createEditorProjectAdapter(): ProjectPort {
       // `projectId/relative/path` for a cloud project, an absolute path for a local one.
       // Both arrive here from the same shared save flow.
       if (isCloudProjectId(filePath)) {
+        if (typeof window.bridge.edgeProjectsSaveFile !== 'function') {
+          return NO_CLOUD_WRITE_CHANNEL
+        }
+
         return window.bridge.edgeProjectsSaveFile(filePath, content)
       }
 

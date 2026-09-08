@@ -10,15 +10,32 @@
  *    the handler on each poll.
  */
 
-import type { EdgeUserRead } from '../../../shared/ports/edge-account-port'
 import { __resetEdgeSessionForTests, editorEdgeAccountPort, isSessionPersistent } from '../edge-account-adapter'
 
-const bridge = {
-  edgeAccountFetchUser: jest.fn<Promise<EdgeUserRead>, []>(),
-  edgeAccountFetchPlanCaption: jest.fn<Promise<string | null>, []>(),
+/**
+ * The five bridge methods `editorEdgeAccountPort` touches, and only those.
+ *
+ * Picked from the real bridge rather than described again here, so each double carries
+ * the real signature: a channel whose arguments or answer change breaks this file
+ * instead of being papered over. It used to be installed through
+ * `as unknown as typeof window.bridge`, which accepted any shape at all — including
+ * one missing a method the port had started calling.
+ */
+type EdgeAccountBridge = Pick<
+  typeof window.bridge,
+  | 'edgeAccountFetchUser'
+  | 'edgeAccountFetchPlanCaption'
+  | 'edgeAccountSignIn'
+  | 'edgeAccountSignOut'
+  | 'edgeAccountIsSessionPersistent'
+>
+
+const bridge: { [Method in keyof EdgeAccountBridge]: jest.MockedFunction<EdgeAccountBridge[Method]> } = {
+  edgeAccountFetchUser: jest.fn(),
+  edgeAccountFetchPlanCaption: jest.fn(),
   edgeAccountSignIn: jest.fn(),
-  edgeAccountSignOut: jest.fn<Promise<void>, []>(),
-  edgeAccountIsSessionPersistent: jest.fn<Promise<boolean>, []>(),
+  edgeAccountSignOut: jest.fn(),
+  edgeAccountIsSessionPersistent: jest.fn(),
 }
 
 const USER = { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', username: 'ada' }
@@ -33,7 +50,9 @@ beforeEach(() => {
   bridge.edgeAccountSignOut.mockResolvedValue(undefined)
   bridge.edgeAccountIsSessionPersistent.mockResolvedValue(true)
 
-  window.bridge = bridge as unknown as typeof window.bridge
+  // Assigned onto `window` rather than cast onto `window.bridge`: the seam is
+  // deliberately partial, and saying so is the point.
+  Object.assign(window, { bridge })
 })
 
 describe('static surface', () => {
@@ -252,5 +271,54 @@ describe('listener bookkeeping', () => {
     // It still retires `absent`, which is what stops the next expiry being worded as
     // "you were never signed in".
     expect(editorEdgeAccountPort.session.isAbsent()).toBe(false)
+  })
+})
+
+/**
+ * The bridge's return types are a description of what the main process is MEANT to
+ * send. They check nothing at runtime, and the answers here drive the session state
+ * machine — so an answer this build cannot read has to have a safe reading, and each
+ * of the two has a different one.
+ */
+describe('an answer the renderer cannot read', () => {
+  it('is `unknown` for a user read, never a sign-out', async () => {
+    // The whole point of `unknown`: a reading we cannot trust must not end a session
+    // that may be perfectly alive. `null` is what a main process that failed to answer
+    // sends, and `.status` on it used to throw.
+    bridge.edgeAccountFetchUser.mockResolvedValue(null as never)
+
+    await expect(editorEdgeAccountPort.fetchUser()).resolves.toEqual({ status: 'unknown' })
+  })
+
+  it('is `unknown` for a user read whose shape drifted', async () => {
+    // A `signed-in` with no user is a build that has drifted, not a session.
+    bridge.edgeAccountFetchUser.mockResolvedValue({ status: 'signed-in' } as never)
+
+    await expect(editorEdgeAccountPort.fetchUser()).resolves.toEqual({ status: 'unknown' })
+  })
+
+  it('is a failed sign-in, because an unreadable one did not happen', async () => {
+    // The opposite safe direction: nothing here may look like a sign-in that worked.
+    bridge.edgeAccountSignIn.mockResolvedValue({ status: 'signed-in', user: { id: 'u1' } } as never)
+
+    await expect(editorEdgeAccountPort.signIn('ada@example.com', 'pw')).resolves.toEqual({ status: 'failed' })
+  })
+
+  it('does not end a live session just because one read came back unreadable', async () => {
+    bridge.edgeAccountFetchUser.mockResolvedValue({ status: 'signed-in', user: USER })
+    await editorEdgeAccountPort.fetchUser()
+
+    let announcedDead = 0
+    editorEdgeAccountPort.session.onExpired(() => {
+      announcedDead += 1
+    })
+
+    bridge.edgeAccountFetchUser.mockResolvedValue(undefined as never)
+    await editorEdgeAccountPort.fetchUser()
+
+    // This is the failure the `unknown` case was built to prevent, reached by a new
+    // route: a reply the renderer cannot parse must not sign anyone out.
+    expect(announcedDead).toBe(0)
+    expect(editorEdgeAccountPort.session.isExpired()).toBe(false)
   })
 })

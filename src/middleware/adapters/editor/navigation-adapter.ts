@@ -117,7 +117,11 @@ export function createEditorNavigationAdapter(): NavigationPort {
       // the same missing-screen case as above: a `BrowserWindow` pointed at it shows an
       // empty page in development and a missing `file://` in a packaged build.
       if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
-        window.open(buildNavigationUrl(path, search), '_blank')
+        // `noopener,noreferrer`, not just `_blank`: without it the opened page keeps a
+        // live `window.opener` back into the renderer, and the renderer is where the
+        // whole editor lives. Nothing in this build sends a hostile URL here today —
+        // that is a reason to have the guard, not to skip it.
+        window.open(buildNavigationUrl(path, search), '_blank', 'noopener,noreferrer')
 
         return
       }

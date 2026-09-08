@@ -76,10 +76,13 @@ describe('openInNewWindow', () => {
     adapter.openInNewWindow('https://edge.example.com/diff', { commit: 'abc123' })
 
     expect(stubWindow.open).toHaveBeenCalledTimes(1)
-    const [url, target] = stubWindow.open.mock.calls[0]
+    const [url, target, features] = stubWindow.open.mock.calls[0]
     expect(url).toContain('/diff')
     expect(url).toContain('commit=abc123')
     expect(target).toBe('_blank')
+    // The opened page must not keep a handle back into the renderer, which is where
+    // the entire editor lives.
+    expect(features).toBe('noopener,noreferrer')
   })
 
   it('refuses an in-app path instead of opening an empty window', () => {

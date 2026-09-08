@@ -857,4 +857,80 @@ describe('cloud projects', () => {
 
     expect(window.bridge.saveFile).toHaveBeenCalled()
   })
+
+  it('converts a pending PLCopen import instead of opening an empty project over it', async () => {
+    // A project uploaded as raw PLCopen XML has NO `project.json` and no POUs — just
+    // Node's marker, stored verbatim because nothing parses it server-side. Handed to
+    // `parseProjectFiles` it loads schema defaults and ignores the XML, so the editor
+    // shows a blank project on top of the real one. The web adapter has always had
+    // this branch; the desktop inherited the reader without it.
+    const xml = [
+      '<?xml version="1.0" encoding="utf-8"?>',
+      '<project xmlns="http://www.plcopen.org/xml/tc6_0201">',
+      '<fileHeader companyName="" productName="" productVersion="" creationDateTime="2026-08-24T00:00:00" />',
+      '<contentHeader name="Imported From XML">',
+      '<coordinateInfo><fbd><scaling x="0" y="0"/></fbd><ld><scaling x="0" y="0"/></ld>',
+      '<sfc><scaling x="0" y="0"/></sfc></coordinateInfo></contentHeader>',
+      '<types><dataTypes/><pous/></types>',
+      '<instances><configurations/></instances>',
+      '</project>',
+    ].join('')
+    ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      data: { ...mockRawProjectFiles.data, projectJson: '', pouFiles: [], pendingPlcopenSource: xml },
+    })
+
+    const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.meta.name).toBe('Imported From XML')
+    // The caller has to save straight away: Node's save deletes what the payload omits,
+    // which is what prunes the marker.
+    expect(result.data?.wasPendingPlcopenImport).toBe(true)
+  })
+
+  it('takes the ordinary path when the marker is an empty string', async () => {
+    ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      data: { ...mockRawProjectFiles.data, pendingPlcopenSource: '' },
+    })
+
+    const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(result.data?.wasPendingPlcopenImport).toBeUndefined()
+  })
+
+  /**
+   * The preload bundle and the renderer bundle are built separately and can skew. The
+   * listing channels have always checked for this; the read and the two writes did not,
+   * and their rejection escapes to callers that do not catch it — taking the start
+   * screen down over one stale bundle.
+   */
+  describe('a main process that predates a cloud channel', () => {
+    it('refuses the read instead of raising "is not a function"', async () => {
+      Object.assign(window.bridge, { edgeProjectsRead: undefined })
+
+      const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(result.success).toBe(false)
+      expect(result.error?.description).toContain('cannot open cloud projects')
+    })
+
+    it('refuses the project save', async () => {
+      Object.assign(window.bridge, { edgeProjectsSaveProject: undefined })
+
+      await expect(
+        cloudAdapter.saveProject({ projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never),
+      ).resolves.toEqual({ success: false, error: 'This build of the editor cannot save cloud projects.' })
+    })
+
+    it('refuses the single-file save', async () => {
+      Object.assign(window.bridge, { edgeProjectsSaveFile: undefined })
+
+      await expect(cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x;')).resolves.toEqual({
+        success: false,
+        error: 'This build of the editor cannot save cloud projects.',
+      })
+    })
+  })
 })

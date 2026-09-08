@@ -29,6 +29,8 @@
  *   - Project state in Zustand store
  */
 
+import { z } from 'zod'
+
 import type { DeviceConfiguration, DevicePin, PLCProjectData, ProjectMeta, RecentProject, Unsubscribe } from './types'
 
 export interface CreateProjectParams {
@@ -150,6 +152,34 @@ export interface WriteProjectFiles {
   /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
   deletions: string[]
 }
+
+const RawProjectFileSchema = z.object({
+  relativePath: z.string(),
+  content: z.string(),
+}) satisfies z.ZodType<RawProjectFile>
+
+/**
+ * The same shape as a runtime check, for the boundaries that receive one from
+ * somewhere they do not control.
+ *
+ * The editor's `edge-projects:save-project` IPC channel is the reason it exists: it
+ * declared the parameter as `WriteProjectFiles` and validated only `projectPath`, so a
+ * renderer bug could send a payload with `pouFiles: undefined` and reach the save
+ * itself. A TypeScript annotation on an IPC argument is a wish, not a check — the
+ * neighbouring channels take `unknown` and narrow, and this is what they narrow with.
+ */
+export const WriteProjectFilesSchema = z.object({
+  projectPath: z.string().min(1),
+  projectJson: z.string(),
+  deviceConfig: z.string().optional(),
+  pinMapping: z.string().optional(),
+  libraryManifest: z.string().optional(),
+  pouFiles: z.array(RawProjectFileSchema),
+  serverFiles: z.array(RawProjectFileSchema),
+  remoteDeviceFiles: z.array(RawProjectFileSchema),
+  dataTypeFiles: z.array(RawProjectFileSchema),
+  deletions: z.array(z.string()),
+}) satisfies z.ZodType<WriteProjectFiles>
 
 export interface CreatePouParams {
   name: string

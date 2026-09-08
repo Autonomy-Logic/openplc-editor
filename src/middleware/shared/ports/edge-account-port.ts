@@ -21,6 +21,8 @@
  * tokens because its renderer is not on that domain.
  */
 
+import { z } from 'zod'
+
 /** Mirrors Edge's `UserProfile`, narrowed to what the account UI renders. */
 export interface EdgeUser {
   id: string
@@ -60,6 +62,39 @@ export type EdgeSignInOutcome =
   | { status: 'email-unverified'; email: string }
   | { status: 'invalid-credentials' }
   | { status: 'failed' }
+
+/**
+ * The same three answers, as a runtime check.
+ *
+ * The desktop adapter needs one because its `EdgeUserRead` arrives over IPC, where a
+ * TypeScript annotation establishes nothing: a main process that answered `null`, or
+ * a shape from a build that has drifted, used to be read for `.status` and flow
+ * straight into the session state machine. The stakes are exactly the ones the
+ * `unknown` case exists for — a wrong reading here signs a working session out.
+ */
+export const EdgeUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  username: z.string(),
+  profileImage: z.string().nullish(),
+  customInitials: z.string().nullish(),
+  initialsColor: z.string().nullish(),
+  emailVerifiedAt: z.string().nullish(),
+}) satisfies z.ZodType<EdgeUser>
+
+export const EdgeUserReadSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('signed-in'), user: EdgeUserSchema }),
+  z.object({ status: z.literal('no-session') }),
+  z.object({ status: z.literal('unknown') }),
+]) satisfies z.ZodType<EdgeUserRead>
+
+export const EdgeSignInOutcomeSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('signed-in'), user: EdgeUserSchema }),
+  z.object({ status: z.literal('email-unverified'), email: z.string() }),
+  z.object({ status: z.literal('invalid-credentials') }),
+  z.object({ status: z.literal('failed') }),
+]) satisfies z.ZodType<EdgeSignInOutcome>
 
 /** The providers Edge itself offers. */
 export type EdgeOAuthProviderId = 'google' | 'microsoft' | 'apple'
