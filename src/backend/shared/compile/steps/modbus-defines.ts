@@ -27,6 +27,12 @@
  * for fishing `modbus_rtu` and `modbus_tcp` out of `vendorScreenData`.
  */
 
+import {
+  DEFAULT_SERIAL_BAUD,
+  resolveDefaultPortBaud,
+  resolveServerBaud,
+} from '../../../../middleware/shared/utils/modbus-server-profile'
+
 /**
  * Subset of the persisted screen state this emitter reads. Mirrors the
  * field IDs declared in `screens/modbus.json` — keep in sync if the
@@ -105,6 +111,9 @@ export interface ModbusServerCompileConfig {
   transports?: ('rtu' | 'tcp')[]
   slaveId?: number
   serialPort?: string
+  /** Speed of the UART the server answers on. Read only when that UART is not
+   *  the default one, whose speed is the editor's line and the package's. */
+  baudRate?: number
   port?: number
 }
 
@@ -142,30 +151,18 @@ export function selectModbusServer(servers: readonly ModbusServerLike[] | undefi
   return { server: serving[0].modbusSlaveConfig }
 }
 
-/** Baud the always-on debugger falls back to when nothing else says otherwise. */
-export const DEFAULT_DEBUG_BAUD = '115200'
-
 /**
- * Baud rate the DEFAULT serial port comes up at — the one the always-on
- * debugger answers on, and therefore the one the editor must dial to reach it.
+ * Baud rate the DEFAULT serial port comes up at — the one the always-on debugger
+ * answers on, and therefore the one the editor must dial to reach it. It belongs
+ * to the package, not to any Modbus server: it is a property of the editor's
+ * link, and the debugger answers on it whether or not a server exists.
  *
- * The two sides derive this independently (the firmware from here, the editor
- * from the board's `debug` spec), so they have to agree or the port opens and
- * decodes nothing.
- *
- * It belongs to the package, not to any Modbus server: it is a property of the
- * editor's link, and the debugger answers on it whether or not a server exists.
- * The RTU's own choice of UART no longer enters into it — when the RTU takes
- * the default port it inherits this speed, and when it takes another one that
- * port's speed is stated separately.
- *
- * The `modbus_rtu` fallbacks are for a project saved before the serial fields
- * moved, where the RTU section was the only place a serial speed was stated at
- * all.
+ * Re-exported rather than defined here because the SCREEN resolves it through
+ * the same function. The two sides used to derive it independently, and a screen
+ * quietly disagreeing with the firmware is the failure this area keeps
+ * producing.
  */
-export function resolveDebugBaud(state: VppModbusScreenState): string {
-  return state.serial?.baud_rate ?? state.modbus_rtu?.baud_rate ?? state.modbus_rtu?.rtu_baud_rate ?? DEFAULT_DEBUG_BAUD
-}
+export { DEFAULT_SERIAL_BAUD, resolveDefaultPortBaud }
 
 /**
  * Slave id the always-on debugger answers on, and therefore the one the editor
@@ -223,7 +220,6 @@ function formatIpForDefine(raw: string): string {
 // to compile (ModbusSlave.cpp uses them as object/literal values).
 // Keep these in sync if the screen schema's defaults change.
 const RTU_DEFAULTS = {
-  rtu_baud_rate: '115200',
   rtu_slave_id: 1,
 } as const
 
@@ -288,9 +284,10 @@ export function generateModbusDefines(
     // Which UART is the server's; that UART's speed is the package's.
     const iface = server?.serialPort || state.serial?.modbus_port || defaultSerial
     const onDefaultPort = iface === defaultSerial
-    const baud = onDefaultPort
-      ? resolveDebugBaud(state)
-      : (state.serial?.modbus_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
+    // The default port's speed is the editor's line and the package's to state;
+    // a UART of its own belongs to the server. One UART has one speed, and
+    // unlike the slave id no amount of firmware routing changes that.
+    const baud = resolveServerBaud({ onDefaultPort, serverBaud: server?.baudRate, state })
     // The server's id, on every port. On the default port the firmware answers
     // DEBUG_SLAVE alongside it for the editor's function codes, so the two share
     // the UART without sharing an address.

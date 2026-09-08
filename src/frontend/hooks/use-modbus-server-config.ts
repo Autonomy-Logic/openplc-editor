@@ -8,9 +8,15 @@
  * v4 target is which fields the target lets the user set, and saying that is
  * the profile's job.
  *
- * The board's VPP screens still own the physical transport layer -- the UART,
- * its speed, the RS-485 pin, Wi-Fi and Ethernet -- and this hook does not touch
- * them. It links out to them instead.
+ * The board's VPP screens still own most of the physical transport layer -- the
+ * default UART's speed, the RS-485 pin, Wi-Fi and Ethernet -- and this hook does
+ * not write them. It links out to them instead, and READS one of them: the
+ * default port's baud rate, so the screen can show what the build will emit
+ * rather than a second opinion about it. Reading a value to display it is not
+ * owning it.
+ *
+ * The speed of a SECONDARY UART is the server's, because the editor is not on
+ * that line and nothing else claims it.
  */
 
 import { useCallback, useMemo } from 'react'
@@ -21,7 +27,11 @@ import type {
   ModbusServerProfile,
   ModbusServerTransport,
 } from '../../middleware/shared/utils/modbus-server-profile'
-import { resolveModbusServerProfile } from '../../middleware/shared/utils/modbus-server-profile'
+import {
+  readSerialBaudState,
+  resolveModbusServerProfile,
+  resolveServerBaud,
+} from '../../middleware/shared/utils/modbus-server-profile'
 import { useOpenPLCStore } from '../store'
 import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-config'
 
@@ -38,6 +48,13 @@ export interface ModbusServerView {
   enabled: boolean
   slaveId: number
   serialPort: string
+  /** Speed of the UART this server answers on, as a string so it matches the
+   *  option list and the emitted define. The package's value when that UART is
+   *  the default one, the server's otherwise. */
+  baudRate: string
+  /** False while the speed is the package's to state -- the default UART, which
+   *  is the editor's own line. */
+  baudRateEditable: boolean
   port: number
   bindAddress: string
   /** Buffer counts in IEC values. Derived and read-only when the target's
@@ -60,6 +77,9 @@ export interface ModbusServerActions {
   setTransports: (transports: readonly ModbusServerTransport[]) => void
   setSlaveId: (slaveId: number) => void
   setSerialPort: (serialPort: string) => void
+  /** Only meaningful on a UART of its own; on the default one the package
+   *  states the speed and this is refused rather than silently ignored. */
+  setBaudRate: (baudRate: number) => void
   setPort: (port: number) => void
   setBindAddress: (address: string) => void
   setBufferCount: (group: keyof ModbusBufferMapping, field: string, value: number) => void
@@ -94,6 +114,7 @@ const UNKNOWN_COUNTS: ModbusSegmentCounts = { QW: 0, MW: 0, MD: 0, ML: 0, QX: 0,
 /** Read and write the Modbus server config for `serverName`. */
 export function useModbusServerConfig(serverName: string): ModbusServerView & { actions: ModbusServerActions } {
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
+  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const servers = useOpenPLCStore((s) => s.project.data.servers)
   const updateServerConfig = useOpenPLCStore((s) => s.projectActions.updateServerConfig)
@@ -118,12 +139,22 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       ? countsFromMapping(config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING)
       : (profile.derivedCounts ?? UNKNOWN_COUNTS)
 
+    // Empty means "wherever the board defaults to", which is the default UART.
+    const serialPort = config?.serialPort ?? ''
+    const onDefaultPort = serialPort === '' || serialPort === profile.defaultSerial
+
     return {
       profile,
       transports,
       enabled: config?.enabled ?? false,
       slaveId: config?.slaveId ?? DEFAULT_SLAVE_ID,
-      serialPort: config?.serialPort ?? '',
+      serialPort,
+      baudRate: resolveServerBaud({
+        onDefaultPort,
+        serverBaud: config?.baudRate,
+        state: readSerialBaudState(vendorScreenData),
+      }),
+      baudRateEditable: !onDefaultPort,
       port: profile.configurablePort ? (config?.port ?? profile.fixedPort) : profile.fixedPort,
       bindAddress: config?.networkInterface || '0.0.0.0',
       buffers: counts,
@@ -132,7 +163,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
         : mappingFromCounts(counts),
       available: !!server && profile.transports.length > 0,
     }
-  }, [profile, server])
+  }, [profile, server, vendorScreenData])
 
   const commit = useCallback(
     (patch: Parameters<typeof updateServerConfig>[1]) => {
@@ -154,6 +185,16 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
 
   const setSlaveId = useCallback((slaveId: number) => commit({ slaveId }), [commit])
   const setSerialPort = useCallback((serialPort: string) => commit({ serialPort }), [commit])
+
+  const setBaudRate = useCallback(
+    (baudRate: number) => {
+      // On the default UART the speed is the editor's line and the package's to
+      // state. Accepting a write here would store a value the build ignores.
+      if (!view.baudRateEditable) return
+      commit({ baudRate })
+    },
+    [view.baudRateEditable, commit],
+  )
 
   const setBindAddress = useCallback(
     (networkInterface: string) => {
@@ -181,6 +222,15 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
 
   return {
     ...view,
-    actions: { setEnabled, setTransports, setSlaveId, setSerialPort, setPort, setBindAddress, setBufferCount },
+    actions: {
+      setEnabled,
+      setTransports,
+      setSlaveId,
+      setSerialPort,
+      setBaudRate,
+      setPort,
+      setBindAddress,
+      setBufferCount,
+    },
   }
 }

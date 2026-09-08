@@ -22,7 +22,7 @@ import {
   DEBUG_SLAVE,
   generateModbusDefines,
   type ModbusServerCompileConfig,
-  resolveDebugBaud,
+  resolveDefaultPortBaud,
   type VppModbusScreenState,
 } from './modbus-defines'
 
@@ -226,7 +226,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     // port's speed. Ignoring it compiled a firmware listening at 115200 while
     // the editor dialled the other value, and the board answered nothing
     // ("No Firmware Detected" on a healthy board).
-    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {})}\n`
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDefaultPortBaud(vppModbusState ?? {})}\n`
     // A constant, unlike the baud: the firmware answers it alongside the Modbus
     // server's id and routes by function code, so nothing the user configures can
     // move the editor's link off it.

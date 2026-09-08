@@ -1,46 +1,5 @@
-import {
-  DEBUG_SLAVE,
-  DEFAULT_DEBUG_BAUD,
-  generateModbusDefines,
-  resolveDebugBaud,
-  selectModbusServer,
-} from '../steps/modbus-defines'
+import { DEBUG_SLAVE, generateModbusDefines, selectModbusServer } from '../steps/modbus-defines'
 
-/**
- * The baud the always-on debugger answers on. It has to agree with the rate the
- * editor dials, and the two are derived in different places — so these pin the
- * derivation against the shapes real projects actually persist.
- */
-describe('resolveDebugBaud', () => {
-  it('prefers an explicit `serial` section when a package declares one', () => {
-    expect(resolveDebugBaud({ serial: { baud_rate: '57600' }, modbus_rtu: { rtu_baud_rate: '9600' } })).toBe('57600')
-  })
-
-  it('falls back to the RTU section for a package published before `serial` existed', () => {
-    expect(resolveDebugBaud({ modbus_rtu: { rtu_baud_rate: '9600' } })).toBe('9600')
-  })
-
-  it('does not care which UART the RTU took', () => {
-    // The debugger is on the default port either way, and that port's speed is
-    // the package's to state. Deriving it from the RTU's choice was what welded
-    // the editor's link to a Modbus setting.
-    const onDefault = resolveDebugBaud({ serial: { baud_rate: '19200', modbus_port: 'Serial' } })
-    const onSecondary = resolveDebugBaud({ serial: { baud_rate: '19200', modbus_port: 'Serial1' } })
-    expect(onDefault).toBe('19200')
-    expect(onSecondary).toBe('19200')
-  })
-
-  it('falls back for an empty project', () => {
-    expect(resolveDebugBaud({})).toBe(DEFAULT_DEBUG_BAUD)
-  })
-})
-
-/**
- * The slave id the editor frames on. It is a constant rather than a setting
- * because the firmware answers it alongside the Modbus server's id and routes by
- * function code, so nothing a project can express moves the editor's link. The
- * value itself is load-bearing: every board already in the field answers 1.
- */
 describe('DEBUG_SLAVE', () => {
   it('is 1, the id every board already in the field answers on', () => {
     expect(DEBUG_SLAVE).toBe(1)
@@ -173,6 +132,29 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBSERIAL_SLAVE 7')
     expect(out).toContain('#define MBSERIAL_TXPIN 4')
     expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  })
+
+  it('takes the secondary UART speed from the server, not from the screen', () => {
+    // The speed of a UART the editor is not on belongs to the server, like the
+    // slave id and the port itself. The screen value is only the fallback for a
+    // project that predates the move.
+    const out = generateModbusDefines({ serial: { baud_rate: '9600', modbus_baud_rate: '19200' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial2',
+      baudRate: 57600,
+    })
+    expect(out).toContain('#define MBSERIAL_BAUD 57600')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  })
+
+  it('ignores the server speed on the default port, where the editor already sets it', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial',
+      baudRate: 57600,
+    })
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
   })
 
   it('shares the default port baud when the RTU stays on it', () => {

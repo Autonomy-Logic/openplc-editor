@@ -25,6 +25,10 @@ const MAX_BIT_COUNT = 8192
 const MIN_SLAVE_ID = 1
 const MAX_SLAVE_ID = 247
 
+/** The rates every package's serial screen has ever offered. Held here because
+ *  the speed of the server's UART is the server's now, not the package's. */
+const BAUD_RATE_OPTIONS = ['9600', '14400', '19200', '38400', '57600', '115200']
+
 const inputStyles =
   'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
@@ -214,6 +218,8 @@ const ModbusServerEditor = () => {
     enabled,
     slaveId,
     serialPort,
+    baudRate,
+    baudRateEditable,
     port,
     bindAddress,
     buffers,
@@ -410,6 +416,36 @@ const ModbusServerEditor = () => {
             </Row>
 
             <Row
+              label='Baud Rate'
+              hint={
+                !rtuAvailable
+                  ? 'RTU only.'
+                  : baudRateEditable
+                    ? 'Speed of this UART. Takes effect on the next upload.'
+                    : 'Set by the board: this is the editor line.'
+              }
+            >
+              <div className='w-64'>
+                <Select
+                  value={baudRate}
+                  onValueChange={(value) => actions.setBaudRate(Number(value))}
+                  disabled={!enabled || !rtuAvailable || !baudRateEditable}
+                >
+                  <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {BAUD_RATE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </Row>
+
+            <Row
               label='Slave ID'
               hint={
                 !rtuAvailable
@@ -486,7 +522,7 @@ const ModbusServerEditor = () => {
           <Panel title='Hardware Settings'>
             <p className='text-xs text-neutral-600 dark:text-neutral-400'>
               {profile.vppScreens.serial || profile.vppScreens.network
-                ? 'Baud rates, RS-485 pin and network credentials belong to the board. Configure them on its vendor pages.'
+                ? 'The editor line speed, the RS-485 pin and network credentials belong to the board. Configure them on its vendor pages.'
                 : "The host operating system owns this target's ports."}
             </p>
             <div className='flex flex-wrap gap-2'>
