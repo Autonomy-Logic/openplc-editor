@@ -17,6 +17,8 @@
  * thing — the same contract the web adapter follows.
  */
 
+import { z } from 'zod'
+
 import { APP_VERSION } from '../../../frontend/data/constants/app-version'
 import type {
   CloudProjectsResult,
@@ -26,23 +28,45 @@ import type {
 import {
   apiFilesToRaw,
   type ApiProjectFiles,
+  ApiProjectFilesSchema,
   envelopeFromWriteProjectFiles,
+  getInEnvelope,
   setInEnvelope,
 } from '../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
-import { parseJsonBody } from '../edge-account/edge-http'
+import { parseJsonBodyAs } from '../edge-account/edge-http'
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
-interface Envelope<T> {
-  data?: T
-}
+const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
 
-interface ApiProjectRow {
-  id?: unknown
-  name?: unknown
-  language?: unknown
-  updatedAt?: unknown
-}
+/**
+ * A row in the recents list, left deliberately loose.
+ *
+ * The fields are `unknown` rather than typed because the narrowing below is what
+ * decides whether a row is usable: a row with no id is a list entry that cannot be
+ * opened, and dropping it is better than showing it.
+ */
+const ApiProjectRowSchema = z
+  .object({
+    id: z.unknown(),
+    name: z.unknown(),
+    language: z.unknown(),
+    updatedAt: z.unknown(),
+  })
+  // A row that is not even an object becomes an empty one, which the narrowing below
+  // drops. Rejecting instead would take the whole list down over a single bad row.
+  .catch({ id: undefined, name: undefined, language: undefined, updatedAt: undefined })
+
+const RecentProjectsSchema = envelopeOf(z.object({ projects: z.array(ApiProjectRowSchema).nullish() }))
+
+const ProjectFilesSchema = envelopeOf(z.object({ files: ApiProjectFilesSchema.nullish() }))
+
+const ProjectDetailsSchema = envelopeOf(
+  z.object({
+    files: ApiProjectFilesSchema.nullish(),
+    capabilities: z.object({ canEdit: z.boolean().nullish() }).nullish(),
+  }),
+)
 
 /**
  * The most recently changed projects on the account.
@@ -77,7 +101,7 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
     return { status: 'unreachable' }
   }
 
-  const rows = parseJsonBody<Envelope<{ projects?: ApiProjectRow[] }>>(response.body)?.data?.projects
+  const rows = parseJsonBodyAs(response.body, RecentProjectsSchema)?.data?.projects
 
   if (!Array.isArray(rows)) {
     return { status: 'ok', projects: [] }
@@ -123,7 +147,7 @@ async function readEnvelope(projectId: string): Promise<ApiProjectFiles | null> 
     return null
   }
 
-  return parseJsonBody<Envelope<{ files?: ApiProjectFiles }>>(response.body)?.data?.files ?? null
+  return parseJsonBodyAs(response.body, ProjectFilesSchema)?.data?.files ?? null
 }
 
 /**
@@ -185,9 +209,7 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       }
     }
 
-    const payload = parseJsonBody<Envelope<{ files?: ApiProjectFiles; capabilities?: { canEdit?: boolean } }>>(
-      response.body,
-    )?.data
+    const payload = parseJsonBodyAs(response.body, ProjectDetailsSchema)?.data
     const files = payload?.files
 
     if (!files) {
@@ -203,7 +225,7 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       success: true,
       data: {
         ...raw,
-        canEdit: payload?.capabilities?.canEdit,
+        canEdit: payload?.capabilities?.canEdit ?? undefined,
         /**
          * The bytes exactly as the API sent them, keyed by path.
          *
@@ -292,7 +314,17 @@ export async function saveCloudFile(filePath: string, content: unknown): Promise
       return { success: false, error: 'Could not read the project before saving it.' }
     }
 
-    setInEnvelope(envelope, relativePath, typeof content === 'string' ? content : JSON.stringify(content))
+    const text = typeof content === 'string' ? content : JSON.stringify(content)
+
+    setInEnvelope(envelope, relativePath, text)
+
+    // `setInEnvelope` is a no-op for any path outside its allowlist — a nested `build/…`
+    // path, or a category added to the iterator without a matching branch here. Posting
+    // the unmodified envelope and answering `success: true` would mark the file saved
+    // while the edit was never persisted, and the user would find out on the next open.
+    if (getInEnvelope(envelope, relativePath) !== text) {
+      return { success: false, error: `Autonomy Edge has no slot for ${relativePath}.` }
+    }
 
     return await writeEnvelope(projectId, envelope, [])
   } catch (error) {

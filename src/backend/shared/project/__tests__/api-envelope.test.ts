@@ -9,12 +9,19 @@
  */
 
 import type { WriteProjectFiles } from '../../../../middleware/shared/ports/project-port'
-import { type ApiProjectFiles, envelopeFromWriteProjectFiles, getInEnvelope, setInEnvelope } from '../api-envelope'
+import {
+  type ApiProjectFiles,
+  ApiProjectFilesSchema,
+  envelopeFromWriteProjectFiles,
+  getInEnvelope,
+  type IncomingApiProjectFiles,
+  setInEnvelope,
+} from '../api-envelope'
 
 function makeEnvelope(overrides?: Partial<ApiProjectFiles>): ApiProjectFiles {
   return {
     'project.json': '{}',
-    devices: {} as ApiProjectFiles['devices'],
+    devices: {},
     pous: {},
     ...overrides,
   }
@@ -49,14 +56,14 @@ describe('getInEnvelope', () => {
 
   it('reads devices/configuration.json from envelope.devices', () => {
     const env = makeEnvelope({
-      devices: { 'configuration.json': '{"board":"uno"}' } as ApiProjectFiles['devices'],
+      devices: { 'configuration.json': '{"board":"uno"}' },
     })
     expect(getInEnvelope(env, 'devices/configuration.json')).toBe('{"board":"uno"}')
   })
 
   it('reads devices/pin-mapping.json from envelope.devices', () => {
     const env = makeEnvelope({
-      devices: { 'pin-mapping.json': '[]' } as ApiProjectFiles['devices'],
+      devices: { 'pin-mapping.json': '[]' },
     })
     expect(getInEnvelope(env, 'devices/pin-mapping.json')).toBe('[]')
   })
@@ -114,19 +121,19 @@ describe('setInEnvelope', () => {
   it('writes devices/configuration.json', () => {
     const env = makeEnvelope()
     setInEnvelope(env, 'devices/configuration.json', '{"board":"uno"}')
-    expect(env.devices['configuration.json']).toBe('{"board":"uno"}')
+    expect(env.devices?.['configuration.json']).toBe('{"board":"uno"}')
   })
 
   it('writes devices/pin-mapping.json', () => {
     const env = makeEnvelope()
     setInEnvelope(env, 'devices/pin-mapping.json', '[]')
-    expect(env.devices['pin-mapping.json']).toBe('[]')
+    expect(env.devices?.['pin-mapping.json']).toBe('[]')
   })
 
   it('lazily initialises devices.remote container when writing first remote device', () => {
     const env = makeEnvelope()
     setInEnvelope(env, 'devices/remote/bus0.json', '{"id":0}')
-    expect(env.devices.remote).toEqual({ 'bus0.json': '{"id":0}' })
+    expect(env.devices?.remote).toEqual({ 'bus0.json': '{"id":0}' })
   })
 
   it('appends to existing devices.remote', () => {
@@ -243,9 +250,15 @@ describe('setInEnvelope', () => {
  * they build a complete envelope from scratch.
  */
 describe('setInEnvelope on the envelope a new project really returns', () => {
-  /** `files: {}` — no containers at all, as the API sends it. */
-  function emptyEnvelope(): ApiProjectFiles {
-    return {} as unknown as ApiProjectFiles
+  /**
+   * `files: {}` — no containers at all, as the API sends it.
+   *
+   * Typed `IncomingApiProjectFiles` rather than asserted into `ApiProjectFiles`:
+   * that IS the shape on the wire, and it is the shape `setInEnvelope` declares it
+   * accepts. Asserting here used to hide the mismatch these tests exist to prove.
+   */
+  function emptyEnvelope(): IncomingApiProjectFiles {
+    return {}
   }
 
   it('writes a POU without a pous container', () => {
@@ -261,7 +274,7 @@ describe('setInEnvelope on the envelope a new project really returns', () => {
 
     setInEnvelope(env, 'devices/configuration.json', '{"board":"uno"}')
 
-    expect(env.devices['configuration.json']).toBe('{"board":"uno"}')
+    expect(env.devices?.['configuration.json']).toBe('{"board":"uno"}')
   })
 
   it('writes the pin mapping without a devices container', () => {
@@ -269,7 +282,7 @@ describe('setInEnvelope on the envelope a new project really returns', () => {
 
     setInEnvelope(env, 'devices/pin-mapping.json', '[]')
 
-    expect(env.devices['pin-mapping.json']).toBe('[]')
+    expect(env.devices?.['pin-mapping.json']).toBe('[]')
   })
 
   it('writes a remote device without a devices container', () => {
@@ -277,7 +290,7 @@ describe('setInEnvelope on the envelope a new project really returns', () => {
 
     setInEnvelope(env, 'devices/remote/bus0.json', '{"id":0}')
 
-    expect(env.devices.remote).toEqual({ 'bus0.json': '{"id":0}' })
+    expect(env.devices?.remote).toEqual({ 'bus0.json': '{"id":0}' })
   })
 
   it('writes project.json without any containers', () => {
@@ -431,5 +444,62 @@ describe('envelopeFromWriteProjectFiles', () => {
       functions: { 'c.st': 'C' },
       'function-blocks': { 'd.st': 'D' },
     })
+  })
+})
+
+/**
+ * The schema is what stands between a response off the wire and the reader, so its
+ * failure mode is not a type error — it is a project that opens with pieces missing
+ * and no complaint. Each case here is a container that must survive the crossing.
+ */
+describe('ApiProjectFilesSchema', () => {
+  it('keeps devices/remote AND the flat device files beside it', () => {
+    // `devices` is the one container that is both a flat file map and a parent. A
+    // schema that demands a string for every key rejects it whole the moment a project
+    // owns a remote device, and the tolerant branch then hands back an empty container
+    // — losing the board configuration and the pin mapping along with the bus.
+    const parsed = ApiProjectFilesSchema.parse({
+      'project.json': '{}',
+      devices: { 'configuration.json': '{"board":"uno"}', 'pin-mapping.json': '[]', remote: { 'bus0.json': '{}' } },
+      pous: { programs: { 'main.st': 'x;' } },
+    })
+
+    expect(parsed.devices['configuration.json']).toBe('{"board":"uno"}')
+    expect(parsed.devices['pin-mapping.json']).toBe('[]')
+    expect(parsed.devices.remote).toEqual({ 'bus0.json': '{}' })
+  })
+
+  it('accepts the bare envelope a project that was never saved answers with', () => {
+    // `GET /details` answers `files: {}` for a brand-new project. Rejecting that would
+    // make the first save of every new project fail.
+    expect(ApiProjectFilesSchema.parse({})).toEqual({ 'project.json': '', devices: {}, pous: {} })
+  })
+
+  it('carries the optional containers through untouched', () => {
+    const parsed = ApiProjectFilesSchema.parse({
+      'project.json': '{}',
+      'library.json': '{"lib":1}',
+      devices: {},
+      pous: {},
+      datatypes: { 'colours.dt': 'TYPE' },
+      servers: { 'modbus.json': '{}' },
+      build: { 'lib.stlib': 'bytes' },
+    })
+
+    expect(parsed['library.json']).toBe('{"lib":1}')
+    expect(parsed.datatypes).toEqual({ 'colours.dt': 'TYPE' })
+    expect(parsed.servers).toEqual({ 'modbus.json': '{}' })
+    expect(parsed.build).toEqual({ 'lib.stlib': 'bytes' })
+  })
+
+  it('carries the pending PLCopen marker, which is the whole signal for that flow', () => {
+    const parsed = ApiProjectFilesSchema.parse({
+      'project.json': '',
+      'plcopen-pending-import.xml': '<project/>',
+      devices: {},
+      pous: {},
+    })
+
+    expect(parsed['plcopen-pending-import.xml']).toBe('<project/>')
   })
 })

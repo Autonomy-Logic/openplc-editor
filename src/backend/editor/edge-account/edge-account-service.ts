@@ -15,8 +15,10 @@
  * used offline, on a local project, by someone who never wanted an account.
  */
 
+import { z } from 'zod'
+
 import type { EdgeSignInOutcome, EdgeUser, EdgeUserRead } from '../../../middleware/shared/ports/edge-account-port'
-import { edgeRequest, parseJsonBody } from './edge-http'
+import { edgeRequest, parseJsonBodyAs } from './edge-http'
 import { clearRefreshToken, readRefreshToken, saveRefreshToken } from './session-store'
 
 /** In-memory access token and the moment it stops being usable. */
@@ -39,15 +41,51 @@ let renewal: Promise<boolean> | null = null
  */
 const RENEW_MARGIN_MS = 60_000
 
-interface TokenPair {
-  accessToken?: string | null
-  refreshToken?: string | null
-}
+/**
+ * What the server has to send for a value to be treated as a token.
+ *
+ * `.nullable()` rather than optional-and-loose: `accessToken: null` is a real answer
+ * from Edge (an unverified account signs in with a 200 and no tokens), while a token
+ * field that arrives as a number or an object is a server the editor does not
+ * understand — and used to become session state, because nothing checked.
+ */
+const TokenPairSchema = z.object({
+  accessToken: z.string().nullish(),
+  refreshToken: z.string().nullish(),
+})
+
+type TokenPair = z.infer<typeof TokenPairSchema>
+
+/**
+ * Only the fields this process reads are named. Edge is free to add more: `.passthrough()`
+ * is the default in zod 3, so an extra field is carried, not a validation failure.
+ */
+const EdgeUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  username: z.string(),
+  profileImage: z.string().nullish(),
+  customInitials: z.string().nullish(),
+  initialsColor: z.string().nullish(),
+  emailVerifiedAt: z.string().nullish(),
+}) satisfies z.ZodType<EdgeUser>
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
-interface Envelope<T> {
-  data?: T
-}
+const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
+
+const RefreshResponseSchema = envelopeOf(TokenPairSchema)
+
+const MeResponseSchema = envelopeOf(z.object({ user: EdgeUserSchema.nullish() }))
+
+const SubscriptionResponseSchema = envelopeOf(
+  z.object({ plan: z.object({ displayName: z.string().nullish() }).nullish() }),
+)
+
+const SignInResponseSchema = envelopeOf(TokenPairSchema.extend({ user: EdgeUserSchema.nullish() }))
+
+/** The JWT payload, of which only `exp` is read. */
+const JwtPayloadSchema = z.object({ exp: z.number().optional() })
 
 /**
  * Adopt a freshly issued pair.
@@ -84,9 +122,9 @@ function readJwtExpiryMs(token: string): number {
       return Date.now()
     }
 
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')) as { exp?: number }
+    const decoded = JwtPayloadSchema.safeParse(JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')))
 
-    return typeof decoded.exp === 'number' ? decoded.exp * 1000 : Date.now()
+    return decoded.success && decoded.data.exp !== undefined ? decoded.data.exp * 1000 : Date.now()
   } catch {
     return Date.now()
   }
@@ -131,7 +169,7 @@ async function renewNow(): Promise<boolean> {
     return false
   }
 
-  return adoptTokens(parseJsonBody<Envelope<TokenPair>>(response.body)?.data ?? {})
+  return adoptTokens(parseJsonBodyAs(response.body, RefreshResponseSchema)?.data ?? {})
 }
 
 /** Renew, sharing one in-flight attempt across every concurrent caller. */
@@ -213,7 +251,7 @@ export async function fetchUser(): Promise<EdgeUserRead> {
       return { status: 'no-session' }
     }
 
-    const user = parseJsonBody<Envelope<{ user?: EdgeUser }>>(response.body)?.data?.user
+    const user = parseJsonBodyAs(response.body, MeResponseSchema)?.data?.user
 
     return user ? { status: 'signed-in', user } : { status: 'no-session' }
   } catch {
@@ -237,8 +275,7 @@ export async function fetchPlanCaption(): Promise<string | null> {
       return null
     }
 
-    const displayName = parseJsonBody<Envelope<{ plan?: { displayName?: string | null } }>>(response.body)?.data?.plan
-      ?.displayName
+    const displayName = parseJsonBodyAs(response.body, SubscriptionResponseSchema)?.data?.plan?.displayName
 
     // Same wording as Edge's own `contextSwitcher.planLabel`.
     return displayName ? `${displayName} Plan` : null
@@ -260,7 +297,7 @@ export async function signIn(email: string, password: string): Promise<EdgeSignI
       return { status: 'failed' }
     }
 
-    const payload = parseJsonBody<Envelope<TokenPair & { user?: EdgeUser }>>(response.body)?.data
+    const payload = parseJsonBodyAs(response.body, SignInResponseSchema)?.data
 
     // A verified account comes back with tokens; an unverified one comes back with
     // `accessToken: null` and the SAME 200. Reporting that as a failed sign-in sends
@@ -275,7 +312,7 @@ export async function signIn(email: string, password: string): Promise<EdgeSignI
       return { status: 'failed' }
     }
 
-    return await completeSignIn(payload.user)
+    return await completeSignIn(payload.user ?? undefined)
   } catch {
     return { status: 'failed' }
   }

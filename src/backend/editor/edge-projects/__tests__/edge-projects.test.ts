@@ -11,6 +11,9 @@
  *    user needs a different thing from each.
  */
 
+import { z } from 'zod'
+
+import { ApiProjectFilesSchema } from '../../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
 import { listRecentCloudProjects, readCloudProject, saveCloudFile, saveCloudProject } from '..'
 
@@ -18,10 +21,27 @@ jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAuthedRequest: jest.fn(),
 }))
 
-const request = edgeAuthedRequest as jest.MockedFunction<typeof edgeAuthedRequest>
+const request = jest.mocked(edgeAuthedRequest)
 
-function ok(data: unknown) {
+/** What `edgeAuthedRequest` resolves with, so a table of responses is typed as one. */
+type EdgeResponse = Awaited<ReturnType<typeof edgeAuthedRequest>>
+
+function ok(data: unknown): EdgeResponse {
   return { status: 200, body: JSON.stringify({ data }) }
+}
+
+const SentBodySchema = z.object({ files: ApiProjectFilesSchema, deletions: z.array(z.string()).optional() })
+
+/**
+ * The body of the n-th request, validated once here rather than asserted at each
+ * assertion. Validating (rather than casting) is what makes the assertions below mean
+ * something: a save that stopped sending `files` would fail here instead of quietly
+ * reading `undefined` through a cast.
+ */
+function sentBody(callIndex: number): z.infer<typeof SentBodySchema> {
+  const init = request.mock.calls[callIndex]?.[1]
+
+  return SentBodySchema.parse(init && 'json' in init ? init.json : undefined)
 }
 
 /** The envelope shape the API returns under `files`. */
@@ -118,12 +138,12 @@ describe('listRecentCloudProjects', () => {
     await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'unreachable' })
   })
 
-  it.each([
+  it.each<[string, EdgeResponse]>([
     ['a payload with no projects array', ok({})],
     ['an unparseable body', { status: 200, body: 'not json' }],
   ])('reports an empty account for %s', async (_label, response) => {
     // The server answered and the session is fine; there is simply nothing to list.
-    request.mockResolvedValueOnce(response as never)
+    request.mockResolvedValueOnce(response)
 
     await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'ok', projects: [] })
   })
@@ -201,10 +221,10 @@ describe('saveCloudFile', () => {
 
     await expect(saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')).resolves.toEqual({ success: true })
 
-    const [path, init] = request.mock.calls[1]
+    const [path] = request.mock.calls[1]
     expect(path).toBe('/projects/p1/files/save')
 
-    const sent = (init as { json: { files: typeof FILES } }).json.files
+    const sent = sentBody(1).files
 
     // The patched slot changed...
     expect(sent.pous.programs['main.st']).toBe('x := FALSE;')
@@ -222,7 +242,7 @@ describe('saveCloudFile', () => {
 
     await saveCloudFile('p1/devices/configuration.json', { baudRate: 9600 })
 
-    const sent = (request.mock.calls[1][1] as { json: { files: { devices: Record<string, string> } } }).json.files
+    const sent = sentBody(1).files
 
     expect(JSON.parse(sent.devices['configuration.json'])).toEqual({ baudRate: 9600 })
   })
@@ -268,16 +288,14 @@ describe('saveCloudProject', () => {
   it('omits deletions when there are none, and sends them when there are', async () => {
     request.mockResolvedValueOnce({ status: 200, body: '{}' })
     await saveCloudProject(files)
-    expect((request.mock.calls[0][1] as { json: Record<string, unknown> }).json).not.toHaveProperty('deletions')
+    expect(sentBody(0).deletions).toBeUndefined()
 
     request.mockResolvedValueOnce({ status: 200, body: '{}' })
     await saveCloudProject({ ...files, deletions: ['pous/programs/old.st', ''] })
 
     // The empty entry is dropped: an empty path would ask the backend to delete the
     // project root.
-    expect((request.mock.calls[1][1] as { json: { deletions: string[] } }).json.deletions).toEqual([
-      'pous/programs/old.st',
-    ])
+    expect(sentBody(1).deletions).toEqual(['pous/programs/old.st'])
   })
 
   it('reports a refusal rather than claiming success', async () => {

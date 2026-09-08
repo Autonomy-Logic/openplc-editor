@@ -23,15 +23,12 @@ import {
 import { edgeRequest } from '../edge-http'
 import { clearRefreshToken, readRefreshToken, saveRefreshToken } from '../session-store'
 
+// Only the transport is stubbed. The parsing and validation helpers are the real
+// ones, so a response shape the service should reject is rejected here too rather
+// than being waved through by a permissive double.
 jest.mock('../edge-http', () => ({
+  ...jest.requireActual<typeof import('../edge-http')>('../edge-http'),
   edgeRequest: jest.fn(),
-  parseJsonBody: (body: string) => {
-    try {
-      return JSON.parse(body)
-    } catch {
-      return null
-    }
-  },
 }))
 
 jest.mock('../session-store', () => ({
@@ -41,10 +38,10 @@ jest.mock('../session-store', () => ({
   isEncryptionAvailable: jest.fn(() => true),
 }))
 
-const request = edgeRequest as jest.MockedFunction<typeof edgeRequest>
-const readStored = readRefreshToken as jest.MockedFunction<typeof readRefreshToken>
-const saveStored = saveRefreshToken as jest.MockedFunction<typeof saveRefreshToken>
-const clearStored = clearRefreshToken as jest.MockedFunction<typeof clearRefreshToken>
+const request = jest.mocked(edgeRequest)
+const readStored = jest.mocked(readRefreshToken)
+const saveStored = jest.mocked(saveRefreshToken)
+const clearStored = jest.mocked(clearRefreshToken)
 
 const USER = { id: 'u1', name: 'Ada', email: 'ada@example.com', username: 'ada' }
 

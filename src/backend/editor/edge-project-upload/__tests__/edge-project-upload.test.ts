@@ -18,7 +18,7 @@ import path from 'path'
 import JSZip from 'jszip'
 
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
-import { buildProjectArchive, listCloudFolders, uploadProjectToCloud } from '..'
+import { buildProjectArchive, fileDispositionHeader, listCloudFolders, uploadProjectToCloud, zipNameFor } from '..'
 
 jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAuthedRequest: jest.fn(),
@@ -126,6 +126,48 @@ describe('building the archive', () => {
     }
   })
 
+  it('refuses the total before it has allocated it', async () => {
+    await writeProject({ 'project.json': '{}' })
+
+    // Three 40MB files: each is under the 50MB per-file ceiling, together they are over
+    // the 100MB total. The point of the assertion is not the refusal — it is that the
+    // third file is never read. Checking the ceiling after `readFile` enforces it on
+    // memory that has already been allocated, which is how a large project used to take
+    // the whole process down rather than fail politely.
+    const forty = new Uint8Array(40 * 1024 * 1024)
+    await fs.writeFile(path.join(projectDir, 'a.st'), forty)
+    await fs.writeFile(path.join(projectDir, 'b.st'), forty)
+    await fs.writeFile(path.join(projectDir, 'c.st'), forty)
+
+    const readFile = jest.spyOn(fs, 'readFile')
+
+    const result = await buildProjectArchive(projectDir)
+
+    expect(result).toMatchObject({ ok: false, failure: { reason: 'too-large' } })
+
+    // project.json plus the two that fit. The one that would have breached the ceiling
+    // was rejected from its stat, never read.
+    const bigReads = readFile.mock.calls.filter((call) => String(call[0]).endsWith('.st'))
+    expect(bigReads).toHaveLength(2)
+
+    readFile.mockRestore()
+  })
+
+  it('refuses more files than the importer accepts, before reading them all', async () => {
+    const files: Record<string, string> = { 'project.json': '{}' }
+
+    for (let i = 0; i < 1000; i += 1) {
+      files[`p${i}.st`] = 'x;'
+    }
+
+    await writeProject(files)
+
+    await expect(buildProjectArchive(projectDir)).resolves.toMatchObject({
+      ok: false,
+      failure: { reason: 'too-many-files' },
+    })
+  })
+
   it('refuses a project nested deeper than the importer allows', async () => {
     const deep = Array.from({ length: 12 }, (_, i) => `d${i}`).join('/')
     await writeProject({ 'project.json': '{}', [`${deep}/main.st`]: 'x;' })
@@ -202,25 +244,34 @@ describe('uploading', () => {
     expect(body).toContain('public')
   })
 
-  it('cannot be made to forge a header through the filename', async () => {
+  it('cannot be made to forge a header through the filename', () => {
+    // The crafted name is handed to the real boundary directly instead of being created
+    // as a directory: Windows forbids `"`, CR and LF in a filename, so `mkdtemp` could
+    // never produce this on the windows-latest leg of CI. `zipNameFor` is the same
+    // function the upload path calls, so this still exercises the production route from
+    // a project path to a header.
+    const lines = fileDispositionHeader('B', zipNameFor(`${path.sep}tmp${path.sep}evil"\r\nX-Injected: 1`)).split(
+      '\r\n',
+    )
+
+    // The property that matters is that the break is gone, not that the text is: a
+    // forged header would have to start its own line. The characters survive inside the
+    // filename, harmlessly, which is why asserting on the substring would be asserting
+    // the wrong thing.
+    expect(lines.some((line) => line.startsWith('X-Injected'))).toBe(false)
+    expect(lines.filter((line) => line.includes('filename='))).toHaveLength(1)
+  })
+
+  it('names the archive after the project directory', async () => {
     request.mockResolvedValueOnce({ status: 201, body: '{}' })
-    const nasty = await fs.mkdtemp(path.join(os.tmpdir(), 'evil"\r\nX-Injected: 1'))
+    await writeProject({ 'project.json': '{}' })
 
-    try {
-      await fs.writeFile(path.join(nasty, 'project.json'), '{}')
-      await uploadProjectToCloud({ projectPath: nasty, parentFolderId: 'f1', visibility: 'private' })
+    await uploadProjectToCloud({ projectPath: projectDir, parentFolderId: 'f1', visibility: 'private' })
 
-      const lines = sentBody().split('\r\n')
-
-      // The property that matters is that the break is gone, not that the text is: a
-      // forged header would have to start its own line. The characters survive inside the
-      // filename, harmlessly, which is why asserting on the substring would be asserting
-      // the wrong thing.
-      expect(lines.some((line) => line.startsWith('X-Injected'))).toBe(false)
-      expect(lines.filter((line) => line.includes('filename='))).toHaveLength(1)
-    } finally {
-      await fs.rm(nasty, { recursive: true, force: true })
-    }
+    // The end-to-end half of the case above: one filename line, carrying the real name.
+    const lines = sentBody().split('\r\n')
+    expect(lines.filter((line) => line.includes('filename='))).toHaveLength(1)
+    expect(sentBody()).toContain(`filename="${path.basename(projectDir)}.zip"`)
   })
 
   it('does not upload at all when the archive could not be built', async () => {

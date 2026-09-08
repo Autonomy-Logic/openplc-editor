@@ -24,9 +24,11 @@
  * which owns renewal and the single retry.
  */
 
+import { z } from 'zod'
+
 import type { VersionControlFailure, VersionControlResult } from '../../../middleware/shared/ports/version-control-port'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
-import { parseJsonBody } from '../edge-account/edge-http'
+import { parseJsonBodyAs } from '../edge-account/edge-http'
 
 /**
  * Git work against a whole project is not an auth round trip. Matches the web build's
@@ -57,10 +59,35 @@ export type EdgeVcFailure = VersionControlFailure
 export type EdgeVcResult<T> = VersionControlResult<T>
 
 /** The `{ statusCode, data }` envelope every Edge route answers with. */
-interface EdgeEnvelope<T> {
-  statusCode?: number
-  data?: T
-}
+/**
+ * Every answer arrives wrapped as `{ statusCode, data }`. The wrapper is validated
+ * here and the payload by the schema each route passes in, so a 2xx carrying a body
+ * this build does not understand is reported as unreadable rather than handed to the
+ * renderer as if it were the expected shape.
+ */
+const edgeEnvelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) =>
+  z.object({ statusCode: z.number().optional(), data: data.optional() })
+
+/** A `message` field as Nest's exception filter writes it. */
+const FailureBodySchema = z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() })
+
+/**
+ * A human-readable caption the server sends alongside a completed operation.
+ *
+ * `.catch('')` rather than a required string: the port types these `string`, but the
+ * operation they describe has already happened on the server by the time the body is
+ * read. Failing a successful branch switch because its confirmation sentence was
+ * missing would report the wrong thing entirely — the fields with semantics
+ * (`branch`, `conflicts`, `total`) stay strict.
+ */
+const CaptionSchema = z.string().catch('')
+
+/** The top-level 409 body shared by the carry rejection and the merge refusal. */
+const ConflictBodySchema = z.object({
+  hasConflicts: z.boolean().nullish(),
+  conflictedFiles: z.array(z.string()).nullish(),
+  message: z.string().nullish(),
+})
 
 /**
  * Pull something readable out of a failure body.
@@ -70,7 +97,7 @@ interface EdgeEnvelope<T> {
  * toast when a proxy answers with HTML.
  */
 function messageFromBody(body: string, status: number): string {
-  const parsed = parseJsonBody<{ message?: string | string[] }>(body)
+  const parsed = parseJsonBodyAs(body, FailureBodySchema)
   const raw = parsed?.message
 
   if (Array.isArray(raw) && raw.length > 0) {
@@ -91,11 +118,12 @@ function messageFromBody(body: string, status: number): string {
  * conflict pass it, so a 409 anywhere else stays an ordinary HTTP failure rather than
  * being mistaken for a conflict the UI knows how to resolve.
  */
-async function call<T>(
+async function call<Schema extends z.ZodTypeAny>(
   path: string,
+  schema: Schema,
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
   on409?: (body: string) => EdgeVcFailure | null,
-): Promise<EdgeVcResult<T>> {
+): Promise<EdgeVcResult<z.infer<Schema>>> {
   let response: { status: number; body: string } | null
 
   try {
@@ -135,7 +163,7 @@ async function call<T>(
     return { ok: false, failure: { kind: 'http', status, message: messageFromBody(body, status) } }
   }
 
-  const envelope = parseJsonBody<EdgeEnvelope<T>>(body)
+  const envelope = parseJsonBodyAs(body, edgeEnvelopeOf(schema))
 
   if (!envelope || envelope.data === undefined) {
     // A 2xx whose body we cannot read is not a success we can hand to the UI.
@@ -154,7 +182,7 @@ async function callVoid(
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
   on409?: (body: string) => EdgeVcFailure | null,
 ): Promise<EdgeVcResult<null>> {
-  const result = await call<unknown>(path, init, on409)
+  const result = await call(path, z.unknown(), init, on409)
 
   // These routes may answer 204, or 200 with no `data`. Both are success, so the
   // unreadable-body check in `call` has to be relaxed for them rather than turning an
@@ -172,7 +200,7 @@ async function callVoid(
  * blocked carry from any other conflict on the same route.
  */
 function carryConflict(body: string): EdgeVcFailure | null {
-  const payload = parseJsonBody<{ hasConflicts?: boolean; conflictedFiles?: string[] }>(body)
+  const payload = parseJsonBodyAs(body, ConflictBodySchema)
 
   return payload?.hasConflicts ? { kind: 'carry-conflict', conflictedFiles: payload.conflictedFiles ?? [] } : null
 }
@@ -183,7 +211,7 @@ function carryConflict(body: string): EdgeVcFailure | null {
  * route stays an ordinary failure.
  */
 function mergeConflict(body: string): EdgeVcFailure | null {
-  const payload = parseJsonBody<{ hasConflicts?: boolean; conflictedFiles?: string[]; message?: string }>(body)
+  const payload = parseJsonBodyAs(body, ConflictBodySchema)
 
   return payload?.hasConflicts
     ? {
@@ -204,11 +232,14 @@ function stashConflict(): EdgeVcFailure {
 // ---------------------------------------------------------------------------
 
 export function listBranches(projectId: string) {
-  return call<{ branches: unknown[] }>(`/projects/${projectId}/branches`)
+  return call(`/projects/${projectId}/branches`, z.object({ branches: z.array(z.unknown()) }))
 }
 
 export function createBranch(projectId: string, name: string) {
-  return call<{ branch: unknown }>(`/projects/${projectId}/branches`, { method: 'POST', json: { name } })
+  return call(`/projects/${projectId}/branches`, z.object({ branch: z.unknown() }), {
+    method: 'POST',
+    json: { name },
+  })
 }
 
 export function deleteBranch(projectId: string, branchId: string) {
@@ -216,8 +247,9 @@ export function deleteBranch(projectId: string, branchId: string) {
 }
 
 export function switchBranch(projectId: string, branchName: string, strategy: 'discard' | 'carry') {
-  return call<{ message: string; branch: string }>(
+  return call(
     `/projects/${projectId}/branches/switch`,
+    z.object({ message: CaptionSchema, branch: z.string() }),
     { method: 'POST', json: { branchName, strategy } },
     carryConflict,
   )
@@ -226,7 +258,10 @@ export function switchBranch(projectId: string, branchName: string, strategy: 'd
 export function previewSwitchCarry(projectId: string, targetBranch: string) {
   const params = new URLSearchParams({ targetBranch })
 
-  return call<{ conflicts: string[] }>(`/projects/${projectId}/branches/preview-switch-carry?${params}`)
+  return call(
+    `/projects/${projectId}/branches/preview-switch-carry?${params}`,
+    z.object({ conflicts: z.array(z.string()) }),
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -242,8 +277,9 @@ export function listCommits(projectId: string, options: { limit?: number; offset
 
   const query = params.toString()
 
-  return call<{ commits: unknown[]; total: number; page: number }>(
+  return call(
     `/projects/${projectId}/commits${query ? `?${query}` : ''}`,
+    z.object({ commits: z.array(z.unknown()), total: z.number(), page: z.number() }),
   )
 }
 
@@ -253,14 +289,15 @@ export function createCommit(projectId: string, message: string, files?: string[
   if (files) json.files = files
   if (branch) json.branch = branch
 
-  return call<unknown>(`/projects/${projectId}/commits`, { method: 'POST', json })
+  return call(`/projects/${projectId}/commits`, z.unknown(), { method: 'POST', json })
 }
 
 export function getCommitFiles(projectId: string, hash: string, branch?: string) {
   const params = branch ? `?branch=${encodeURIComponent(branch)}` : ''
 
-  return call<{ files: unknown[]; parentFiles: unknown[]; commit: unknown }>(
+  return call(
     `/projects/${projectId}/commits/${hash}/files${params}`,
+    z.object({ files: z.array(z.unknown()), parentFiles: z.array(z.unknown()), commit: z.unknown() }),
   )
 }
 
@@ -269,10 +306,11 @@ export function restoreCommit(projectId: string, hash: string, branch?: string) 
 
   if (branch) json.branch = branch
 
-  return call<{ message: string; restoredCommit: unknown }>(`/projects/${projectId}/commits/${hash}/restore`, {
-    method: 'POST',
-    json,
-  })
+  return call(
+    `/projects/${projectId}/commits/${hash}/restore`,
+    z.object({ message: CaptionSchema, restoredCommit: z.unknown() }),
+    { method: 'POST', json },
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +328,10 @@ export function getChanges(projectId: string, includeContent?: boolean) {
 
   const query = search.toString()
 
-  return call<{ changes: unknown[]; hasChanges: boolean }>(`/projects/${projectId}/changes${query ? `?${query}` : ''}`)
+  return call(
+    `/projects/${projectId}/changes${query ? `?${query}` : ''}`,
+    z.object({ changes: z.array(z.unknown()), hasChanges: z.boolean() }),
+  )
 }
 
 export function discardChanges(projectId: string, files?: string[]) {
@@ -307,7 +348,7 @@ export function discardChanges(projectId: string, files?: string[]) {
 // ---------------------------------------------------------------------------
 
 export function listStashes(projectId: string) {
-  return call<{ stashes: unknown[] }>(`/projects/${projectId}/stashes`)
+  return call(`/projects/${projectId}/stashes`, z.object({ stashes: z.array(z.unknown()) }))
 }
 
 export function createStash(projectId: string, message?: string, files?: string[]) {
@@ -316,20 +357,22 @@ export function createStash(projectId: string, message?: string, files?: string[
   if (message) json.message = message
   if (files && files.length > 0) json.files = files
 
-  return call<{ stash: unknown }>(`/projects/${projectId}/stashes`, { method: 'POST', json })
+  return call(`/projects/${projectId}/stashes`, z.object({ stash: z.unknown() }), { method: 'POST', json })
 }
 
 export function applyStash(projectId: string, ref: string) {
-  return call<{ message: string }>(
+  return call(
     `/projects/${projectId}/stashes/apply`,
+    z.object({ message: CaptionSchema }),
     { method: 'POST', json: { ref } },
     stashConflict,
   )
 }
 
 export function popStash(projectId: string, ref: string) {
-  return call<{ message: string }>(
+  return call(
     `/projects/${projectId}/stashes/pop`,
+    z.object({ message: CaptionSchema }),
     { method: 'POST', json: { ref } },
     stashConflict,
   )
@@ -346,7 +389,7 @@ export function dropStash(projectId: string, ref: string) {
 export function getBranchDiffWithBase(projectId: string, source: string, target: string) {
   const params = new URLSearchParams({ source, target })
 
-  return call<unknown>(`/projects/${projectId}/branches-diff-with-base?${params}`)
+  return call(`/projects/${projectId}/branches-diff-with-base?${params}`, z.unknown())
 }
 
 /**
@@ -371,5 +414,5 @@ export function mergeBranches(params: {
   if (params.commitMessage) json.commitMessage = params.commitMessage
   if (params.resolutions) json.resolutions = params.resolutions
 
-  return call<unknown>(`/projects/${params.projectId}/branches/merge`, { method: 'POST', json }, mergeConflict)
+  return call(`/projects/${params.projectId}/branches/merge`, z.unknown(), { method: 'POST', json }, mergeConflict)
 }

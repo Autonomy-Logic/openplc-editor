@@ -19,9 +19,10 @@
 import fs from 'fs/promises'
 import JSZip from 'jszip'
 import path from 'path'
+import { z } from 'zod'
 
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
-import { parseJsonBody } from '../edge-account/edge-http'
+import { parseJsonBodyAs } from '../edge-account/edge-http'
 
 /**
  * The extensions `POST /projects/import` accepts. Anything else in the project directory
@@ -38,6 +39,28 @@ const MAX_DEPTH = 10
 
 /** A project without this is not a project the importer can read. */
 const PROJECT_MANIFEST = 'project.json'
+
+/**
+ * The folder tree as it arrives. Deliberately loose: only the fields the picker reads
+ * are named, and `flattenFolders` already tolerates a malformed node — a folder that
+ * cannot be understood is one destination missing from a menu, not a failure.
+ */
+const FoldersResponseSchema = z.object({ data: z.object({ folders: z.unknown() }).nullish() })
+
+/**
+ * The two shapes Edge uses to explain a rejection. Validated rather than asserted
+ * because the value lands in `failure.message`, which is typed `string`: a `message`
+ * that arrived as an object used to flow straight through and reach the UI.
+ */
+const ImportErrorSchema = z.object({
+  message: z.union([z.string(), z.array(z.string())]).nullish(),
+  error: z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() }).nullish(),
+})
+
+/** The id of the project that was just created, when the server names one. */
+const ImportCreatedSchema = z.object({
+  data: z.object({ project: z.object({ id: z.string().nullish() }).nullish() }).nullish(),
+})
 
 /** Zipping and uploading a whole project is not a request with a user tapping their foot. */
 const UPLOAD_TIMEOUT_MS = 300_000
@@ -149,7 +172,7 @@ export async function listCloudFolders(): Promise<CloudFoldersResult> {
     return { status: 'unreachable' }
   }
 
-  const payload = parseJsonBody<{ data?: { folders?: unknown } }>(response.body)
+  const payload = parseJsonBodyAs(response.body, FoldersResponseSchema)
 
   return { status: 'ok', folders: flattenFolders(payload?.data?.folders) }
 }
@@ -186,6 +209,12 @@ export type UploadProjectResult =
  * In memory because the archive has to be a single buffer for the multipart body anyway,
  * and the ceiling on that is 100MB — small enough that streaming to a temporary file
  * would add a cleanup path and a failure mode without buying anything.
+ *
+ * EVERY LIMIT IS CHECKED BEFORE THE READ, from the directory entry's own size. Checking
+ * after `readFile` means the ceiling is enforced on memory already allocated: a thousand
+ * accepted 50MB files is 50GB of allocation before the first rejection, which does not
+ * fail politely — it takes the Electron process with it. The size in the entry's stat is
+ * the same number the read would produce, minus the allocation.
  */
 async function collectFiles(
   projectPath: string,
@@ -193,6 +222,8 @@ async function collectFiles(
   prefix: string,
   depth: number,
   collected: CollectedFile[],
+  /** Bytes accepted so far, shared across the recursion so the total is enforced as it grows. */
+  budget: { bytes: number },
 ): Promise<UploadFailure | null> {
   if (depth > MAX_DEPTH) {
     return { reason: 'too-deep' }
@@ -214,7 +245,7 @@ async function collectFiles(
     const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
 
     if (entry.isDirectory()) {
-      const failure = await collectFiles(projectPath, absolute, relativePath, depth + 1, collected)
+      const failure = await collectFiles(projectPath, absolute, relativePath, depth + 1, collected, budget)
 
       if (failure) {
         return failure
@@ -233,6 +264,29 @@ async function collectFiles(
       continue
     }
 
+    let size: number
+
+    try {
+      size = (await fs.stat(absolute)).size
+    } catch (error) {
+      return {
+        reason: 'unreadable',
+        message: error instanceof Error ? error.message : `Could not read ${relativePath}`,
+      }
+    }
+
+    if (size > MAX_FILE_BYTES) {
+      return { reason: 'file-too-large', relativePath, bytes: size }
+    }
+
+    if (collected.length + 1 > MAX_FILES) {
+      return { reason: 'too-many-files', count: collected.length + 1 }
+    }
+
+    if (budget.bytes + size > MAX_TOTAL_BYTES) {
+      return { reason: 'too-large', bytes: budget.bytes + size }
+    }
+
     let contents: Buffer
 
     try {
@@ -244,14 +298,13 @@ async function collectFiles(
       }
     }
 
-    if (contents.length > MAX_FILE_BYTES) {
-      return { reason: 'file-too-large', relativePath, bytes: contents.length }
-    }
-
     collected.push({ relativePath, contents })
+    // From the bytes actually read, not the stat: a file that grew between the two
+    // must not let the total drift past the ceiling.
+    budget.bytes += contents.length
 
-    if (collected.length > MAX_FILES) {
-      return { reason: 'too-many-files', count: collected.length }
+    if (budget.bytes > MAX_TOTAL_BYTES) {
+      return { reason: 'too-large', bytes: budget.bytes }
     }
   }
 
@@ -263,7 +316,7 @@ export async function buildProjectArchive(
   projectPath: string,
 ): Promise<{ ok: true; zip: Buffer; fileCount: number } | { ok: false; failure: UploadFailure }> {
   const collected: CollectedFile[] = []
-  const failure = await collectFiles(projectPath, projectPath, '', 0, collected)
+  const failure = await collectFiles(projectPath, projectPath, '', 0, collected, { bytes: 0 })
 
   if (failure) {
     return { ok: false, failure }
@@ -280,11 +333,8 @@ export async function buildProjectArchive(
     return { ok: false, failure: { reason: 'no-manifest' } }
   }
 
-  const total = collected.reduce((sum, file) => sum + file.contents.length, 0)
-
-  if (total > MAX_TOTAL_BYTES) {
-    return { ok: false, failure: { reason: 'too-large', bytes: total } }
-  }
+  // The running budget in `collectFiles` already refuses to read past the ceiling, so
+  // reaching here means the total is within it. Re-summing would only restate that.
 
   const zip = new JSZip()
 
@@ -310,6 +360,30 @@ function headerSafe(value: string): string {
   return value.replace(/[\r\n"]/g, '')
 }
 
+/**
+ * What the archive is called in the multipart form. The project directory's own name,
+ * which means it is user-controlled text on its way into a header.
+ */
+export function zipNameFor(projectPath: string): string {
+  return `${path.basename(projectPath) || 'project'}.zip`
+}
+
+/**
+ * The header of the file part.
+ *
+ * Exported so the injection test can drive the real boundary with a crafted filename.
+ * It cannot go through a directory on disk: Windows forbids `\r`, `\n` and `\"` in a
+ * name outright, so the temp directory the test used to create could never exist there
+ * — and the suite runs on windows-latest.
+ */
+export function fileDispositionHeader(boundary: string, filename: string): string {
+  return (
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="${headerSafe(filename)}"\r\n` +
+    `Content-Type: application/zip\r\n\r\n`
+  )
+}
+
 /** One text field of a multipart form. */
 function textPart(boundary: string, name: string, value: string): Buffer {
   return Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${headerSafe(name)}"\r\n\r\n${value}\r\n`)
@@ -331,7 +405,7 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
   }
 
   const boundary = `----OpenPLCEditorBoundary${Math.random().toString(36).slice(2)}`
-  const zipName = `${path.basename(params.projectPath) || 'project'}.zip`
+  const zipName = zipNameFor(params.projectPath)
 
   const parts: Buffer[] = [
     textPart(boundary, 'parentFolderId', params.parentFolderId),
@@ -342,15 +416,7 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
     parts.push(textPart(boundary, 'projectName', params.projectName))
   }
 
-  parts.push(
-    Buffer.from(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${headerSafe(zipName)}"\r\n` +
-        `Content-Type: application/zip\r\n\r\n`,
-    ),
-    archive.zip,
-    Buffer.from(`\r\n--${boundary}--\r\n`),
-  )
+  parts.push(Buffer.from(fileDispositionHeader(boundary, zipName)), archive.zip, Buffer.from(`\r\n--${boundary}--\r\n`))
 
   // `Buffer.concat` is typed over `Uint8Array`, and this project's TS/@types/node pairing
   // will not take a `Buffer` there. A view over the same memory satisfies it without
@@ -384,21 +450,19 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
   }
 
   if (response.status >= 400) {
-    const parsed = parseJsonBody<{ message?: string | string[]; error?: { message?: string | string[] } }>(
-      response.body,
-    )
+    const parsed = parseJsonBodyAs(response.body, ImportErrorSchema)
     const raw = parsed?.message ?? parsed?.error?.message
     const message = Array.isArray(raw) ? raw.join('; ') : (raw ?? `Autonomy Edge answered ${response.status}.`)
 
     return { status: 'failed', failure: { reason: 'rejected', status: response.status, message } }
   }
 
-  const created = parseJsonBody<{ data?: { project?: { id?: unknown } } }>(response.body)
+  const created = parseJsonBodyAs(response.body, ImportCreatedSchema)
   const projectId = created?.data?.project?.id
 
   return {
     status: 'ok',
-    projectId: typeof projectId === 'string' ? projectId : null,
+    projectId: projectId ?? null,
     uploadedFiles: archive.fileCount,
   }
 }

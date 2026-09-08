@@ -1,14 +1,19 @@
 /**
- * Web-only Edge API envelope shape and the canonical path↔slot
- * mapping that goes with it.
+ * The Edge API project envelope and the canonical path↔slot mapping
+ * that goes with it.
  *
  * The Edge API stores projects as a nested JSON object (top-level
  * `project.json`, `library.json`, `devices/{...}`, `pous/{cat}/{file}`,
  * `servers/{file}`).  The backend's `flattenFileHierarchy` walks
  * this shape and lands each leaf at its `relativePath` on S3.
- * The shape is web-specific — the editor writes the same files
- * straight to disk and doesn't need an envelope at all — so this
- * module lives in the web adapter, not in `backend/shared`.
+ *
+ * It used to live in the web adapter, described here as web-specific
+ * on the reasoning that the editor writes the same files straight to
+ * disk and needs no envelope at all.  That stopped being true when the
+ * desktop learned to open a cloud project: `backend/editor/edge-projects`
+ * drives the same endpoints over the same envelope, so the shape is
+ * shared and lives in `backend/shared` accordingly.  Both builds must
+ * compute the same answer from the same bytes.
  *
  * `getInEnvelope` / `setInEnvelope` are the symmetric pair that
  * own the path→slot mapping; both `saveProject` (full-snapshot
@@ -19,6 +24,8 @@
  * calls `setInEnvelope` for each entry — the iterator decides
  * "which files exist", this helper decides "where they go".
  */
+
+import { z } from 'zod'
 
 import type { WriteProjectFiles } from '../../../middleware/shared/ports/project-port'
 import { iterateWriteProjectFiles } from './iterate-write-project-files'
@@ -64,6 +71,64 @@ export interface ApiProjectFiles {
 }
 
 /**
+ * An envelope as it may actually arrive.
+ *
+ * The API omits every container the project has no files for — a project that has
+ * never been saved answers `files: {}`, with no `pous`, no `devices` and not even a
+ * `project.json`.  {@link getInEnvelope} guards each container with `?.` and
+ * {@link setInEnvelope} creates them on the way in precisely because of that, so this
+ * is the type those two actually accept.  Saying so removes the only reason a caller
+ * ever had to assert its way past {@link ApiProjectFiles}.
+ */
+export type IncomingApiProjectFiles = Partial<ApiProjectFiles>
+
+const FileMapSchema = z.record(z.string())
+
+/**
+ * `devices` is a flat map of file contents that ALSO carries one nested slot, so a
+ * plain record of strings is wrong for it: `remote` is a map, and a schema that
+ * demands a string for every key rejects the whole container the moment a project has
+ * a remote device — silently emptying it, taking `configuration.json` and
+ * `pin-mapping.json` down with it. `catchall` keeps the flat files as strings while
+ * `remote` keeps its own shape.
+ */
+const DevicesSchema = z.object({ remote: FileMapSchema.optional() }).catchall(z.string())
+
+/**
+ * The envelope as it arrives from the API, for the callers that read one off
+ * the wire.
+ *
+ * Every container is optional because the server omits the ones a project has
+ * no files for — a brand-new project answers `files: {}` — and `getInEnvelope`
+ * already guards each with `?.` for that reason.  Only `project.json` is
+ * defaulted, to the empty string the readers already treat as "no manifest":
+ * the alternative is a validation failure on the one response shape a new
+ * project is guaranteed to produce.
+ *
+ * Loose on purpose about what it does NOT name: zod 3 strips unknown keys
+ * rather than rejecting, so a category Edge adds tomorrow costs a slot in the
+ * result, never an unreadable project.
+ */
+export const ApiProjectFilesSchema = z.object({
+  'project.json': z.string().catch(''),
+  'library.json': z.string().optional(),
+  'plcopen-pending-import.xml': z.string().optional(),
+  devices: DevicesSchema.catch({}),
+  pous: z.record(FileMapSchema).catch({}),
+  datatypes: FileMapSchema.optional(),
+  servers: FileMapSchema.optional(),
+  build: FileMapSchema.optional(),
+})
+
+/**
+ * Compile-time proof that what the schema produces IS an `ApiProjectFiles`.
+ * A field renamed on the interface without being renamed here fails at this
+ * line rather than at some distant call site.
+ */
+const _schemaProducesTheInterface: (parsed: z.infer<typeof ApiProjectFilesSchema>) => ApiProjectFiles = (parsed) =>
+  parsed
+
+/**
  * Look up a single file's content by its project-root-relative path.
  * Returns `undefined` when the envelope doesn't carry the file
  * (e.g. PLC project's `library.json`) OR when the path is unknown.
@@ -71,7 +136,7 @@ export interface ApiProjectFiles {
  * validate the path shape themselves; the contract here is the
  * superset of both.
  */
-export function getInEnvelope(env: ApiProjectFiles, relativePath: string): string | undefined {
+export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string): string | undefined {
   if (relativePath === 'project.json') return env['project.json']
   if (relativePath === 'library.json') return env['library.json']
   if (relativePath === 'devices/configuration.json') return env.devices?.['configuration.json']
@@ -124,7 +189,7 @@ export function getInEnvelope(env: ApiProjectFiles, relativePath: string): strin
  *
  * Mutates `env` in place.  Idempotent for the same `(path, content)`.
  */
-export function setInEnvelope(env: ApiProjectFiles, relativePath: string, content: string): void {
+export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string, content: string): void {
   if (relativePath === 'project.json') {
     env['project.json'] = content
     return
@@ -192,7 +257,7 @@ export function setInEnvelope(env: ApiProjectFiles, relativePath: string, conten
 export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProjectFiles {
   const env: ApiProjectFiles = {
     'project.json': '',
-    devices: {} as ApiProjectFiles['devices'],
+    devices: {},
     pous: {},
   }
   for (const entry of iterateWriteProjectFiles(files)) {

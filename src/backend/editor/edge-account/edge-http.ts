@@ -21,6 +21,7 @@
  */
 
 import type https from 'https'
+import type { z } from 'zod'
 
 import { defaultPortFor, httpModuleFor } from '../utils/http-module'
 
@@ -39,6 +40,45 @@ export function getEdgeApiBaseUrl(): string {
   const fromEnv = process.env.OPENPLC_EDGE_API_URL?.trim()
 
   return fromEnv && fromEnv.length > 0 ? fromEnv.replace(/\/+$/, '') : DEFAULT_EDGE_API_URL
+}
+
+/**
+ * Whether a host is this machine.
+ *
+ * The same rule browsers use for a secure context: loopback is trusted without TLS
+ * because the bytes never leave the machine, so no network can read them. Anything
+ * else is a network hop, and a password on a network hop needs TLS.
+ */
+function isLoopbackHost(hostname: string): boolean {
+  // `URL.hostname` keeps the brackets on an IPv6 literal.
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase()
+
+  return host === 'localhost' || host === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+}
+
+/**
+ * Refuse to put a session on the wire in cleartext.
+ *
+ * `OPENPLC_EDGE_API_URL` exists so a developer can point the editor at a backend
+ * running on their own machine, and that is the ONLY case plain http is acceptable
+ * in: loopback bytes never reach a network. Pointed at any other host over http, the
+ * override would send a password, and then every bearer token minted from it, to
+ * whoever is on the path — so it is refused rather than downgraded silently.
+ *
+ * Rejecting (rather than resolving with a status) is deliberate and matches the
+ * contract above: nothing was established about the session, which is exactly what a
+ * transport failure means.
+ */
+function assertTransportIsConfidential(url: URL): void {
+  if (url.protocol === 'https:' || isLoopbackHost(url.hostname)) {
+    return
+  }
+
+  throw new Error(
+    `Refusing to talk to the Autonomy Edge API over ${url.protocol}//${url.host}: ` +
+      'credentials may only travel over https, or over http to this machine. ' +
+      'Set OPENPLC_EDGE_API_URL to an https URL.',
+  )
 }
 
 export interface EdgeHttpResponse {
@@ -80,6 +120,10 @@ export interface EdgeRequestInit {
 export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<EdgeHttpResponse> {
   return new Promise((resolve, reject) => {
     const url = new URL(path.startsWith('/') ? path : `/${path}`, `${getEdgeApiBaseUrl()}/`)
+
+    // Before anything is serialised: a body built here may hold a password.
+    assertTransportIsConfidential(url)
+
     const json = init.json === undefined ? undefined : JSON.stringify(init.json)
     // Bytes either way, so one write path serves both. A JSON string is encoded here
     // rather than by `req.write`'s default so its Content-Length below is measured on
@@ -147,11 +191,33 @@ export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<E
  * means "the server did not tell us what we asked", and every caller treats a missing
  * field the same way. Returning null rather than throwing keeps that decision in one
  * place instead of wrapping each call site in a try.
+ *
+ * Returns `unknown` on purpose. It used to be generic, which let a caller name a type
+ * the bytes were never checked against: a 200 whose `accessToken` came back as a
+ * number satisfied `TokenPair` at compile time and became session state at runtime.
+ * Use {@link parseJsonBodyAs} to get a typed value out of a response.
  */
-export function parseJsonBody<T>(body: string): T | null {
+export function parseJsonBody(body: string): unknown {
   try {
-    return JSON.parse(body) as T
+    return JSON.parse(body)
   } catch {
     return null
   }
+}
+
+/**
+ * Parse a JSON envelope and validate it against a schema.
+ *
+ * Null for both failure modes — unparseable bytes and a shape the server should not
+ * have sent — because no caller here distinguishes them: either way the server did
+ * not answer the question that was asked. Callers that want the difference should
+ * parse and validate in two steps.
+ */
+export function parseJsonBodyAs<Output>(body: string, schema: z.ZodType<Output, z.ZodTypeDef, unknown>): Output | null {
+  // Parameterised on the OUTPUT type rather than on the schema. `z.ZodTypeAny` types
+  // `safeParse` as returning `any`, which would hand the caller an unchecked value out
+  // of the one function whose job is to check it.
+  const parsed = schema.safeParse(parseJsonBody(body))
+
+  return parsed.success ? parsed.data : null
 }
