@@ -304,7 +304,7 @@ export interface ProjectPort {
    * Optional: a platform whose recent list is not a list of paths simply does
    * not implement it.
    */
-  trackRecentProject?(projectPath: string): Promise<void>
+  trackRecentProject?(projectPath: string): Promise<{ success: boolean; error?: string }>
 
   /**
    * Recursively delete a project directory and drop its entry from

@@ -725,7 +725,15 @@ class MainProcessBridge implements MainIpcModule {
       // Retrievals recorded under Recent before they were excluded from it.
       // Pruning removes the directories; without this their rows outlive them
       // and the list keeps one dead entry per retrieval anyone ever made.
-      await this.forgetRetrievedProjectsInHistory()
+      //
+      // Its own try/catch, outside the retrieve's: a `projects.json` that is
+      // locked or unwritable would otherwise turn tidying up after the feature
+      // into a failed retrieve.
+      try {
+        await this.forgetRetrievedProjectsInHistory()
+      } catch (error) {
+        logger.error('Could not drop retrieved projects from history: ' + getErrorMessage(error))
+      }
 
       const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
         scratchRoot,
@@ -1047,14 +1055,19 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /** Drop every Recent entry that points into the retrieval scratch root. */
+  /**
+   * Drop every Recent entry that points into the retrieval scratch root.
+   *
+   * One read and at most one write. `removeProjectFromHistory` re-reads and
+   * rewrites the whole file per call, so looping it over the matches cost N
+   * round trips to remove N rows.
+   */
   private forgetRetrievedProjectsInHistory = async (): Promise<void> => {
-    const history = await this.projectService.readProjectHistory(this.projectService.getHistoryProjectsFilePath())
-    for (const entry of history) {
-      if (isRetrievedProjectPath(entry.path)) {
-        await this.projectService.removeProjectFromHistory(entry.path)
-      }
-    }
+    const historyPath = this.projectService.getHistoryProjectsFilePath()
+    const history = await this.projectService.readProjectHistory(historyPath)
+    const kept = history.filter((entry) => !isRetrievedProjectPath(entry.path))
+    if (kept.length === history.length) return
+    await this.projectService.replaceProjectHistory(historyPath, kept)
   }
 
   handleReadProjectFiles = async (_event: IpcMainInvokeEvent, projectPath: string) => {
@@ -1296,28 +1309,34 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
+   * Put a project on the recent list without reading it — Save As, which
+   * produces a location the user picked without going through an open.
+   *
+   * Still refuses the scratch root: a Save As target is somewhere the user
+   * chose, so a path in there did not come from this flow. Answers in the same
+   * shape as its sibling below, so a caller that wants to know whether the row
+   * was written can find out.
+   */
+  handleTrackRecentProject = async (_event: unknown, projectPath: string) => {
+    if (isRetrievedProjectPath(projectPath)) {
+      return { success: false, error: 'A retrieved project is not tracked until it has a location.' }
+    }
+    try {
+      await this.projectService.updateProjectHistory(projectPath)
+      return { success: true }
+    } catch (error) {
+      logger.error('Error tracking project in history: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
    * Drop a project entry from `projects.json` (recent list).
    * Disk is untouched — the project's files stay where they are. The
    * renderer-side use case is the start-screen 3-dot menu's "Remove
    * from list" action: a no-confirmation no-op as far as data goes,
    * just hides the entry from the recents view.
    */
-  /**
-   * Put a project on the recent list without reading it — Save As, which
-   * produces a location the user picked without going through an open.
-   *
-   * Still refuses the scratch root: a Save As target is somewhere the user
-   * chose, so a path in there did not come from this flow.
-   */
-  handleTrackRecentProject = async (_event: unknown, projectPath: string) => {
-    if (isRetrievedProjectPath(projectPath)) return
-    try {
-      await this.projectService.updateProjectHistory(projectPath)
-    } catch (error) {
-      logger.error('Error tracking project in history: ' + getErrorMessage(error))
-    }
-  }
-
   handleRemoveProjectFromRecent = async (_event: unknown, projectPath: string) => {
     try {
       await this.projectService.removeProjectFromHistory(projectPath)

@@ -236,8 +236,8 @@ export function createEditorProjectAdapter(): ProjectPort {
       return { success: true, data: parsed }
     },
 
-    async trackRecentProject(projectPath: string): Promise<void> {
-      await window.bridge.trackRecentProject(projectPath)
+    async trackRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }> {
+      return window.bridge.trackRecentProject(projectPath)
     },
 
     async readProjectFiles(projectPath: string): Promise<RawProjectFiles> {
