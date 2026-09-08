@@ -1,10 +1,8 @@
 import { useOpenPLCStore } from '@root/frontend/store'
 import { collectScreenPersistenceKeys } from '@root/frontend/utils/vpp/persistence-keys'
-import { resolveModbusServerProfile } from '@root/middleware/shared/utils/modbus-server-profile'
 import { useEffect, useMemo } from 'react'
 
 import { VendorScreenRenderer } from '../device/configuration/vendor-screen'
-import { ModbusServerEditor } from '../server/modbus-server'
 
 /**
  * Stable serialisation of the slice of `vendorScreenData` this screen
@@ -37,9 +35,6 @@ const VendorScreenEditor = () => {
   const moduleSystem = boardInfo?.vpp?.moduleSystem ?? null
 
   const ownedKeys = useMemo(() => collectScreenPersistenceKeys(screenDefinition), [screenDefinition])
-
-  const modbusScreenName = useMemo(() => resolveModbusServerProfile(boardInfo).vppScreens.modbus, [boardInfo])
-  const isModbusScreen = !!screenDefinition && screenName === modbusScreenName
 
   // Register the file entry for this tab on mount so Ctrl+S, File →
   // Save, and the save-changes-file modal on close find it.
@@ -88,10 +83,6 @@ const VendorScreenEditor = () => {
   // the same Modbus UI. The tab, the persistence keys and the dirty/save path
   // are unchanged — only the renderer differs, which is what keeps this from
   // needing a project migration.
-  if (isModbusScreen) {
-    return <ModbusServerEditor />
-  }
-
   return (
     <div className='flex min-h-0 flex-1 flex-col overflow-y-auto p-4'>
       <VendorScreenRenderer screenDefinition={screenDefinition} moduleSystem={moduleSystem} />
