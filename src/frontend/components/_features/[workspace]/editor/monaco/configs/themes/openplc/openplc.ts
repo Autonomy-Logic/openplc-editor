@@ -1,3 +1,4 @@
+import { OPENPLC_LIGHT_TOKEN_RULES } from '@root/frontend/utils/monaco/openplc-theme-data'
 import type * as Monaco from 'monaco-editor'
 
 // Monaco token-rule palette.  Two tokenisation layers feed the
@@ -26,11 +27,9 @@ import type * as Monaco from 'monaco-editor'
 // can't (literal vs identifier vs comment vs flow), without dropping
 // the brand colour on the most prominent token class.
 
+// Dark-theme role palette (VS Code Dark+ inspired). The light palette lives in
+// openplc-theme-data.ts, shared with the PDF export's text renderer.
 const COLORS = {
-  // App brand (kept for keyword / constant in both themes)
-  brand: '0464FB',
-  brandMedium: '0350C9',
-  // Dark-theme role palette (VS Code Dark+ inspired)
   darkBrandKeyword: '569CD6', // softer keyword blue for dark backgrounds
   darkType: '4EC9B0', // teal — BOOL/INT/REAL, user types
   darkString: 'CE9178', // yellow-orange
@@ -39,48 +38,13 @@ const COLORS = {
   darkFunction: 'DCDCAA', // ochre — predefined + user functions
   darkVariable: '9CDCFE', // light cyan — variables/parameters/properties
   darkEnumMember: '4FC1FF', // bright cyan — enum literals
-  // Light-theme role palette
-  lightType: '267F99', // teal
-  lightString: 'A31515', // classic VS Code red
-  lightNumber: '098658', // dark green
-  lightComment: '008000', // green
-  lightFunction: '795E26', // ochre
-  lightVariable: '001080', // dark navy — variables/parameters/properties
-  lightEnumMember: '0070C1', // medium blue
 } as const
 
 const lightThemeData: Monaco.editor.IStandaloneThemeData = {
   base: 'vs',
   inherit: true,
-  rules: [
-    // ───────────── Lexical (Monarch from basic-languages/st + il.ts)
-    { token: 'keyword', foreground: COLORS.brand, fontStyle: 'bold' }, // IF/THEN/CASE/FOR/...
-    { token: 'type', foreground: COLORS.lightType }, // BOOL/INT/REAL/...
-    { token: 'constant', foreground: COLORS.brandMedium }, // TRUE/FALSE/NULL
-    { token: 'predefined', foreground: COLORS.lightFunction }, // TO_INT, MOD, ABS, ...
-    { token: 'number', foreground: COLORS.lightNumber },
-    { token: 'string', foreground: COLORS.lightString },
-    { token: 'comment', foreground: COLORS.lightComment, fontStyle: 'italic' },
-    { token: 'tag', foreground: COLORS.lightNumber }, // T#/DT#/%I/%Q — literals, share number tone
-    // IL-specific (pre-existing rules, kept for IL editors)
-    { token: 'literalCode', foreground: COLORS.brand },
-    { token: 'typeKeyword', foreground: COLORS.lightType },
-    { token: 'label.il', foreground: COLORS.brand },
-    { token: 'labelValue', foreground: COLORS.lightType },
-    { token: 'st.keyword', foreground: COLORS.brand },
-
-    // ───────────── Semantic (STruC++ LSP)
-    { token: 'variable', foreground: COLORS.lightVariable }, // user variables
-    { token: 'parameter', foreground: COLORS.lightVariable, fontStyle: 'italic' }, // FB inputs / VAR_IN_OUT
-    { token: 'function', foreground: COLORS.lightFunction }, // functions / FB calls
-    { token: 'method', foreground: COLORS.lightFunction },
-    { token: 'property', foreground: COLORS.lightVariable },
-    { token: 'namespace', foreground: COLORS.lightType, fontStyle: 'bold' }, // PROGRAM
-    { token: 'class', foreground: COLORS.lightType, fontStyle: 'bold' }, // FUNCTION_BLOCK
-    { token: 'interface', foreground: COLORS.lightType, fontStyle: 'bold' },
-    { token: 'enum', foreground: COLORS.lightType, fontStyle: 'bold' },
-    { token: 'enumMember', foreground: COLORS.lightEnumMember },
-  ],
+  // Shared with the PDF export's text renderer — see openplc-theme-data.ts.
+  rules: OPENPLC_LIGHT_TOKEN_RULES,
   colors: {
     'editor.background': '#FFFFFF',
     'editor.foreground': '#000000',

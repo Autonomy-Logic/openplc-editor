@@ -10,7 +10,11 @@
  *   - Editor uses `configuration` (singular), port uses `configurations` (plural)
  */
 
+import type * as PdfJsLib from 'pdfjs-dist'
+
+import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import type { PrintRequest } from '../../shared/ports/print-types'
 import type {
   CreatePouParams,
   CreateProjectParams,
@@ -32,6 +36,7 @@ import type {
   RecentProject,
   Unsubscribe,
 } from '../../shared/ports/types'
+import { applyPdfJsEnginePolyfills } from './services/pdf-export/pdfjs-engine-polyfills'
 
 /** Editor IPC POU shape (discriminated union). */
 interface IpcPou {
@@ -358,6 +363,49 @@ export function createEditorProjectAdapter(): ProjectPort {
         return { success: false, error: response.error?.description }
       }
       return { success: true }
+    },
+
+    async exportPdfFile(
+      defaultFileName: string,
+      bytes: Uint8Array,
+    ): Promise<{ success: boolean; canceled?: boolean; error?: string }> {
+      const response = await window.bridge.exportPdfFile(defaultFileName, bytes)
+      if (response.canceled) {
+        return { success: false, canceled: true }
+      }
+      if (!response.success) {
+        return { success: false, error: response.error?.description }
+      }
+      return { success: true }
+    },
+
+    async renderPdf(request: PrintRequest): Promise<Uint8Array> {
+      // Runs on the renderer's main thread — unlike web, which offloads this
+      // to a Worker (Vite bundles an in-repo `.worker.ts` natively). Doing the
+      // same here would need `import.meta.url`, which this repo's single,
+      // CommonJS-targeted tsconfig.json (shared with the Electron main
+      // process) can't compile; standing up a second build target just for
+      // one worker file was judged disproportionate to a render that
+      // normally completes in well under a second.
+      //
+      // The embedded fonts (~464KB of base64) are imported dynamically here
+      // rather than at module load, so they never land in the startup bundle
+      // for a session that never opens the export wizard.
+      const { getEmbeddedFontSet } = await import('../../../backend/shared/print/fonts/embedded-font-set')
+      return renderProjectToPdf(request, getEmbeddedFontSet())
+    },
+
+    async preparePdfPreviewWorker(_pdfjsLib: typeof PdfJsLib): Promise<void> {
+      // pdf.js's main API layer (`pdf.mjs`, always main-thread) and, once
+      // registered below, its worker code too call several very recent JS
+      // platform APIs Electron's bundled V8 doesn't have yet.
+      applyPdfJsEnginePolyfills()
+      // pdf.js's own hook for running its worker code in-process: `PDFWorker`
+      // checks `window.pdfjsWorker` before ever constructing a real Worker.
+      // @ts-expect-error -- pdfjs-dist ships no .d.ts for this deep worker
+      // chunk; imported directly (not via `?url`) so it executes here rather
+      // than resolving to just a URL string.
+      window.pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.min.mjs')
     },
   }
 }
