@@ -99,9 +99,21 @@ export type CBlocksCodePou = CppPouDataCode
  * `cBlocks` input shape" case.  Caller can either use this or hand
  * the composer the pre-rendered strings directly.
  */
+/**
+ * `userTypeNames` spells pin types; `aliasTypeNames` is what gets a `using`.
+ *
+ * They differ because they answer different questions. A pin typed by an
+ * enabled library's enumeration has to be spelled `IEC_<NAME>`, so the header
+ * needs every type in scope, the project's and the libraries'. An alias, on the
+ * other hand, only compiles if the compiler declared that type for THIS build,
+ * and it declares a library's type when something uses it. Aliasing the rest
+ * names types that were never emitted. Pass the project's own types here; a
+ * library type a block actually names is picked up from the pins.
+ */
 export function buildCBlocksFromPous(
   originalCppPous: CppPouDataCode[],
   userTypeNames: Iterable<string> = [],
+  aliasTypeNames: Iterable<string> = userTypeNames,
 ): ComposeFirmwareBundleInput['cBlocks'] {
   if (originalCppPous.length === 0) {
     // Editor's behaviour: leave the static `c_blocks.h` baseline
@@ -115,7 +127,7 @@ export function buildCBlocksFromPous(
   }))
   return {
     header: generateCBlocksHeader(headers, userTypeNames),
-    code: generateCBlocksCode(originalCppPous, userTypeNames),
+    code: generateCBlocksCode(originalCppPous, aliasTypeNames),
   }
 }
 

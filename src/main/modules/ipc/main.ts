@@ -93,6 +93,7 @@ import {
 } from '../../../backend/editor/utils'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
+import type { EnabledArchives, LibraryRef } from '../../../middleware/shared/ports/library-types'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
 
 /** Why a channel could not be handed out. */
@@ -1207,8 +1208,8 @@ class MainProcessBridge implements MainIpcModule {
     }
     return installResult
   }
-  handleLibrariesUninstall = async (_event: IpcMainInvokeEvent, name: string) => {
-    const result = this.libraryManagerModule.uninstall(name)
+  handleLibrariesUninstall = async (_event: IpcMainInvokeEvent, name: string, version?: string) => {
+    const result = this.libraryManagerModule.uninstall(name, version)
     if (result.success) {
       this.mainWindow?.webContents.send('libraries:changed')
     }
@@ -1347,8 +1348,8 @@ class MainProcessBridge implements MainIpcModule {
    * and the library build (compileStlib's dependency list) so the
    * verify pass can't drift from the actual compile.
    */
-  loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
-    this.libraryManagerModule.loadEnabledArchives(enabledNames)
+  loadEnabledArchives = (refs: ReadonlyArray<LibraryRef>): EnabledArchives =>
+    this.libraryManagerModule.loadEnabledArchives(refs)
 
   // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {

@@ -29,6 +29,8 @@ import {
 import type { TranspileToStArgs, TranspileToStResult } from '@root/middleware/shared/ports/compiler-platform-port'
 import type { LibraryBuildPort, LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
 
+import type { EnabledArchives, LibraryRef } from '../../../middleware/shared/ports/library-types'
+
 /**
  * Subset of the desktop CompilerModule that the port leans on.
  * Injected (not imported as a module reference) so this file's
@@ -42,7 +44,7 @@ export interface DesktopLibraryBuildPortDeps {
    * `missing` — orchestrator fails the build with a Library-Manager-
    * pointing message before any heavy step runs.
    */
-  loadEnabledArchives(enabledNames: string[]): { archives: unknown[]; missing: string[] }
+  loadEnabledArchives(refs: ReadonlyArray<LibraryRef>): EnabledArchives
 
   /**
    * Run a verification compile against `target`.  Wraps
@@ -177,7 +179,7 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       // Bridge resolves bundled (always-included) + user-installed
       // archives in one call; names that don't resolve come back
       // under `missing` for the orchestrator to fail the build on.
-      return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs.map((r) => r.name)))
+      return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs))
     },
 
     async verifyCompile({ projectPath, verifyProjectData, target, emit }) {

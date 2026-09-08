@@ -119,6 +119,10 @@ export interface InstalledLibrary {
   origin: 'stlib' | 'codesys' | 'bundled'
   /** Optional human-readable label from the manifest.  Falls back
    *  to `name` in the UI. */
+  /** Every installed version of this library, newest first.  `version`
+   *  above is the first of these.  Absent for bundled libraries, which
+   *  ship one build with the editor. */
+  versions?: string[]
   displayName?: string
   /** Optional manifest descriptions surfaced in the manager's
    *  details panel.  Subset of the `.stlib` manifest — only the
@@ -148,3 +152,27 @@ export type LibraryInstallResult =
     }
   | { success: true; canceled: true }
   | { success: false; error: string }
+
+/** A project's reference to a library: a name, optionally pinned to a version. */
+export interface LibraryRef {
+  name: string
+  version?: string
+}
+
+/** The pinned version was not installed, so a different one was used. */
+export interface VersionSubstitution {
+  name: string
+  wanted: string
+  used: string
+}
+
+/** What a compile gets for the libraries a project enables.
+ *  Parameterised so the resolver can keep its parsed archive type while the
+ *  IPC boundary, which cannot, stays on `unknown`. */
+export interface EnabledArchives<Archive = unknown> {
+  archives: Archive[]
+  /** Enabled names no archive could be resolved for. */
+  missing: string[]
+  /** Resolved, but not to the version the project pins. */
+  substituted: VersionSubstitution[]
+}

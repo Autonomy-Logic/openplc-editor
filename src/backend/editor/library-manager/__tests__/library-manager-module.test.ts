@@ -11,7 +11,7 @@
  * the real (ESM) strucpp package.
  */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -60,6 +60,13 @@ jest.mock(
 
 import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import { LibraryManagerModule } from '../library-manager-module'
+
+/** Where the module actually put a library, read back from the registry. */
+function installedPath(librariesDir: string, name: string): string {
+  const registry = JSON.parse(readFileSync(join(librariesDir, 'registry.json'), 'utf-8'))
+  const versions = (registry.libraries[name]?.versions ?? {}) as Record<string, { stlibPath: string }>
+  return Object.values(versions)[0]?.stlibPath ?? ''
+}
 
 function makeArchive(name: string, version = '1.0.0') {
   return {
@@ -201,14 +208,14 @@ describe('LibraryManagerModule', () => {
       const result = await mod.installFromFile(tmp)
       expect(result).toEqual({ success: true, name: 'my-lib', version: '0.1.0', origin: 'stlib' })
 
-      // Archive lives under {librariesDir}/<name>/<name>.stlib
-      const stlibPath = join(librariesDir, 'my-lib', 'my-lib.stlib')
+      // Archive lives under {librariesDir}/<name>/<version>/<name>.stlib
+      const stlibPath = join(librariesDir, 'my-lib', '0.1.0', 'my-lib.stlib')
       expect(existsSync(stlibPath)).toBe(true)
 
-      // Registry has a row keyed by name with the right metadata.
+      // Registry has a row keyed by name, holding that version.
       const registry = JSON.parse(readFileSync(join(librariesDir, 'registry.json'), 'utf-8'))
-      expect(registry.libraries['my-lib']).toMatchObject({
-        version: '0.1.0',
+      expect(registry.formatVersion).toBe('2.0')
+      expect(registry.libraries['my-lib'].versions['0.1.0']).toMatchObject({
         origin: 'stlib',
         stlibPath,
       })
@@ -246,7 +253,7 @@ describe('LibraryManagerModule', () => {
       // Mock derives the name from the file basename, sanitised.
       if (result.success && !('canceled' in result && result.canceled)) {
         expect(result.name).toBe('OSCAT')
-        expect(existsSync(join(librariesDir, 'OSCAT', 'OSCAT.stlib'))).toBe(true)
+        expect(existsSync(installedPath(librariesDir, 'OSCAT'))).toBe(true)
       }
     })
 
@@ -314,7 +321,7 @@ describe('LibraryManagerModule', () => {
       // Simulate disk corruption: the file is gone but the registry
       // still records it.  loadAll should silently skip rather than
       // throw or return undefined entries.
-      rmSync(join(librariesDir, 'foo', 'foo.stlib'))
+      rmSync(join(librariesDir, 'foo', '1.0.0', 'foo.stlib'))
       expect(mod.loadAll()).toEqual([])
     })
   })
@@ -342,7 +349,7 @@ describe('LibraryManagerModule', () => {
       writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
       await mod.installFromFile(tmp)
 
-      const result = mod.loadEnabledArchives(['oscat-basic'])
+      const result = mod.loadEnabledArchives([{ name: 'oscat-basic' }])
       expect(result.archives.map((a) => a.manifest.name)).toEqual(['iec-standard-fb', 'oscat-basic'])
       expect(result.missing).toEqual([])
     })
@@ -365,9 +372,9 @@ describe('LibraryManagerModule', () => {
       await mod.installFromFile(tmp)
       // Wipe the archive but keep the registry entry — pre-compile
       // gate should detect this as missing.
-      rmSync(join(librariesDir, 'foo', 'foo.stlib'))
+      rmSync(join(librariesDir, 'foo', '1.0.0', 'foo.stlib'))
 
-      const result = mod.loadEnabledArchives(['foo', 'phantom'])
+      const result = mod.loadEnabledArchives([{ name: 'foo' }, { name: 'phantom' }])
       expect(result.archives).toEqual([])
       expect(result.missing).toEqual(['foo', 'phantom'])
     })
@@ -427,8 +434,8 @@ describe('LibraryManagerModule', () => {
       ])
       // Both files actually land on disk in the user-installed
       // shape so subsequent listInstalled() picks them up.
-      expect(existsSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'))).toBe(true)
-      expect(existsSync(join(librariesDir, 'beta-lib', 'beta-lib.stlib'))).toBe(true)
+      expect(existsSync(installedPath(librariesDir, 'alpha-lib'))).toBe(true)
+      expect(existsSync(installedPath(librariesDir, 'beta-lib'))).toBe(true)
       expect(mod.listInstalled().map((r) => r.name)).toEqual(['alpha-lib', 'beta-lib'])
     })
 
@@ -452,7 +459,7 @@ describe('LibraryManagerModule', () => {
       const installed = mod.listInstalled().find((l) => l.name === 'alpha-lib')
       expect(installed).toMatchObject({ displayName: 'ACME Industrial', description: 'Catalog description' })
 
-      const persistedArchive = JSON.parse(readFileSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'), 'utf-8'))
+      const persistedArchive = JSON.parse(readFileSync(installedPath(librariesDir, 'alpha-lib'), 'utf-8'))
       expect(persistedArchive.manifest.displayName).toBe('ACME Industrial')
       expect(persistedArchive.manifest.description).toBe('Catalog description')
     })
@@ -471,7 +478,7 @@ describe('LibraryManagerModule', () => {
         }),
       ])
 
-      const persistedText = readFileSync(join(librariesDir, 'alpha-lib', 'alpha-lib.stlib'), 'utf-8')
+      const persistedText = readFileSync(installedPath(librariesDir, 'alpha-lib'), 'utf-8')
       expect(JSON.parse(persistedText)).toEqual(archive)
     })
 
@@ -499,7 +506,7 @@ describe('LibraryManagerModule', () => {
         name: 'good-lib',
       })
       // The good one still made it to disk.
-      expect(existsSync(join(librariesDir, 'good-lib', 'good-lib.stlib'))).toBe(true)
+      expect(existsSync(installedPath(librariesDir, 'good-lib'))).toBe(true)
     })
 
     it('returns an empty batch when called with no ids', async () => {
@@ -528,6 +535,134 @@ describe('LibraryManagerModule', () => {
         name: 'iec-standard-fb',
         error: expect.stringContaining('bundled library'),
       })
+    })
+  })
+  describe('versions side by side', () => {
+    /** Install `name` at `version` through the normal file path. */
+    async function install(mod: LibraryManagerModule, name: string, version: string) {
+      const tmp = join(testRoot, `${name}-${version}.stlib`)
+      writeFileSync(tmp, JSON.stringify(makeArchive(name, version)), 'utf-8')
+      return mod.installFromFile(tmp)
+    }
+
+    it('keeps both versions on disk and in the registry', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+      await install(mod, 'node-uio', '0.0.2')
+
+      expect(existsSync(join(librariesDir, 'node-uio', '0.0.1', 'node-uio.stlib'))).toBe(true)
+      expect(existsSync(join(librariesDir, 'node-uio', '0.0.2', 'node-uio.stlib'))).toBe(true)
+      const registry = JSON.parse(readFileSync(join(librariesDir, 'registry.json'), 'utf-8'))
+      expect(Object.keys(registry.libraries['node-uio'].versions).sort()).toEqual(['0.0.1', '0.0.2'])
+    })
+
+    it('reports the newest version and lists the rest', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+      await install(mod, 'node-uio', '0.0.2')
+
+      expect(mod.listInstalled()).toEqual([
+        expect.objectContaining({ name: 'node-uio', version: '0.0.2', versions: ['0.0.2', '0.0.1'] }),
+      ])
+    })
+
+    it('resolves the version a project pins', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+      await install(mod, 'node-uio', '0.0.2')
+
+      const result = mod.loadEnabledArchives([{ name: 'node-uio', version: '0.0.1' }])
+      expect(result.archives.map((a) => a.manifest.version)).toEqual(['0.0.1'])
+      expect(result.substituted).toEqual([])
+    })
+
+    it('falls back to the newest and reports the substitution', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+
+      const result = mod.loadEnabledArchives([{ name: 'node-uio', version: '0.1.0' }])
+      expect(result.archives.map((a) => a.manifest.version)).toEqual(['0.0.1'])
+      expect(result.missing).toEqual([])
+      expect(result.substituted).toEqual([{ name: 'node-uio', wanted: '0.1.0', used: '0.0.1' }])
+    })
+
+    it('uninstalls one version and leaves the other', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+      await install(mod, 'node-uio', '0.0.2')
+
+      expect(mod.uninstall('node-uio', '0.0.1')).toEqual({ success: true })
+      expect(existsSync(join(librariesDir, 'node-uio', '0.0.1'))).toBe(false)
+      expect(existsSync(join(librariesDir, 'node-uio', '0.0.2', 'node-uio.stlib'))).toBe(true)
+      expect(mod.listInstalled()).toEqual([expect.objectContaining({ version: '0.0.2', versions: ['0.0.2'] })])
+    })
+
+    it('refuses to uninstall a version that is not installed', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+      expect(mod.uninstall('node-uio', '9.9.9')).toEqual({
+        success: false,
+        error: "Library 'node-uio' version 9.9.9 is not installed",
+      })
+    })
+
+    it('installs a version whose string is not a legal path segment', async () => {
+      // Semver build metadata is legal and its '+' is not a path character.
+      const mod = makeModule()
+      await install(mod, 'node-uio', '1.0.0')
+      const tmp = join(testRoot, 'build-meta.stlib')
+      writeFileSync(tmp, JSON.stringify(makeArchive('node-uio', '1.0.0+sha.abc')), 'utf-8')
+
+      expect(await mod.installFromFile(tmp)).toMatchObject({ success: true, version: '1.0.0+sha.abc' })
+      const registry = JSON.parse(readFileSync(join(librariesDir, 'registry.json'), 'utf-8'))
+      // The real version is the key; the folder is only sanitised.
+      expect(Object.keys(registry.libraries['node-uio'].versions).sort()).toEqual(['1.0.0', '1.0.0+sha.abc'])
+      expect(mod.loadEnabledArchives([{ name: 'node-uio', version: '1.0.0+sha.abc' }]).archives).toHaveLength(1)
+    })
+
+    it('re-installing a version reuses its folder rather than making another', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '1.0.0')
+      const first = installedPath(librariesDir, 'node-uio')
+      await install(mod, 'node-uio', '1.0.0')
+
+      expect(installedPath(librariesDir, 'node-uio')).toBe(first)
+      expect(mod.listInstalled()).toEqual([expect.objectContaining({ versions: ['1.0.0'] })])
+    })
+
+    it('lists the versions still on disk when the newest archive is gone', async () => {
+      const mod = makeModule()
+      await install(mod, 'node-uio', '0.0.1')
+      await install(mod, 'node-uio', '0.0.2')
+      rmSync(join(librariesDir, 'node-uio', '0.0.2'), { recursive: true })
+
+      expect(mod.listInstalled()).toEqual([
+        expect.objectContaining({ name: 'node-uio', version: '0.0.1', versions: ['0.0.1'] }),
+      ])
+    })
+
+    it('still resolves a library recorded by the old single-version registry', () => {
+      // The v1 layout: one archive directly under the library directory.
+      const legacyPath = join(librariesDir, 'legacy-lib', 'legacy-lib.stlib')
+      mkdirSync(join(librariesDir, 'legacy-lib'), { recursive: true })
+      writeFileSync(legacyPath, JSON.stringify(makeArchive('legacy-lib', '1.2.3')), 'utf-8')
+      writeFileSync(
+        join(librariesDir, 'registry.json'),
+        JSON.stringify({
+          formatVersion: '1.0',
+          libraries: {
+            'legacy-lib': { version: '1.2.3', installedAt: '', stlibPath: legacyPath, origin: 'stlib' },
+          },
+        }),
+        'utf-8',
+      )
+
+      const mod = makeModule()
+      expect(mod.listInstalled()).toEqual([
+        expect.objectContaining({ name: 'legacy-lib', version: '1.2.3', versions: ['1.2.3'] }),
+      ])
+      const result = mod.loadEnabledArchives([{ name: 'legacy-lib', version: '1.2.3' }])
+      expect(result.archives.map((a) => a.manifest.name)).toEqual(['legacy-lib'])
     })
   })
 })

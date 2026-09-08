@@ -14,6 +14,13 @@ const blockVariantVariableSchema = BaseLibraryVariableSchema.extend({
       definition: z.literal('generic-type'),
       value: genericTypeSchema.keyof(),
     }),
+    // A type the library or the project declares -- an enum, struct or alias.
+    // Library pins carry these (`library-types.ts` SystemLibraryVariable), so
+    // the placed pin has to be able to hold one too.
+    z.object({
+      definition: z.literal('derived-type'),
+      value: z.string(),
+    }),
   ]),
 })
 

@@ -26,6 +26,7 @@ import type {
   PlatformDeviceContext,
   PlatformLog,
 } from '../../../middleware/shared/ports/compiler-platform-port'
+import type { VersionSubstitution } from '../../../middleware/shared/ports/library-types'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
@@ -191,6 +192,9 @@ export interface RunCompilePipelineArgs {
    *  Strucpp's pre-compile gate fails fast on these with a clear
    *  message. */
   missingLibraries: string[]
+  /** Libraries resolved to a version the project does not pin.  Reported so a
+   *  build against something other than what the project names is visible. */
+  substitutedLibraries?: VersionSubstitution[]
   /** Firmware skeleton — bundled `Baremetal.ino`, Arduino HAL,
    *  strucpp runtime headers, simulator HAL adapter.  Editor: from
    *  filesystem; web: from `import.meta.glob`.  Contents byte-
@@ -420,6 +424,57 @@ function collectLibraryResources(
   }))
 }
 
+/**
+ * The libraries the resource libraries declare in `depends=`.
+ *
+ * Read from each folder's `library.properties`, which is the Arduino-native
+ * way for a library to say what it needs. It is taken from the declaration
+ * rather than by scanning the sources, because a source's `#include` may sit
+ * behind a platform guard — emitting `<ESP8266WiFi.h>` on an ESP32 build would
+ * break a sketch that was fine.
+ */
+function resourceLibraryDepends(
+  libraries: ReadonlyArray<{ files: ReadonlyArray<{ path: string; content: string }> }>,
+): string[] {
+  const field = (content: string, key: string): string | undefined => {
+    for (const line of content.split(/\r?\n/)) {
+      const match = new RegExp(`^\\s*${key}\\s*=\\s*(.+)$`).exec(line)
+      if (match) return match[1].trim()
+    }
+    return undefined
+  }
+
+  // A library's own name is not its header. `includes=` is where a library
+  // says what to include, so it is read from the depended library when that
+  // library is one of ours. For a platform library — Wire, Preferences — its
+  // properties are not here to read, and `<Name>.h` is the convention those
+  // follow.
+  const headerByName = new Map<string, string>()
+  for (const library of libraries) {
+    for (const file of library.files) {
+      if (!file.path.endsWith('library.properties')) continue
+      const name = field(file.content, 'name')
+      const includes = field(file.content, 'includes')
+      if (name && includes) headerByName.set(name, includes.split(',')[0].trim())
+    }
+  }
+
+  const headers: string[] = []
+  for (const library of libraries) {
+    for (const file of library.files) {
+      if (!file.path.endsWith('library.properties')) continue
+      const depends = field(file.content, 'depends')
+      if (!depends) continue
+      for (const entry of depends.split(',')) {
+        const name = entry.split('(')[0].trim()
+        if (!name) continue
+        headers.push(headerByName.get(name) ?? `${name.replace(/\s+/g, '')}.h`)
+      }
+    }
+  }
+  return headers
+}
+
 export async function runCompilePipeline(
   args: RunCompilePipelineArgs,
   port: CompilerPlatformPort,
@@ -456,6 +511,7 @@ async function runCompilePipelineInner(
     compileOnly,
     libraryArchives,
     missingLibraries,
+    substitutedLibraries,
     firmwareSkeleton,
     strucppRuntimeHeaders,
     avrLibStdCppInclude,
@@ -505,6 +561,19 @@ async function runCompilePipelineInner(
   // transpiler to emit, producing invalid code downstream.  Catch it
   // here and tell the user exactly which POU to fix.
   // ---------------------------------------------------------------------
+  // A pinned version that is not installed resolves to the newest one instead,
+  // rather than stranding the project. Say so: the program being built is not
+  // the one the project names.
+  for (const substitution of substitutedLibraries ?? []) {
+    emit({
+      stage: 'validate',
+      message:
+        `Library "${substitution.name}": the project pins ${substitution.wanted}, which is not installed. ` +
+        `Building against ${substitution.used}.`,
+      level: 'warning',
+    })
+  }
+
   const emptyVariables = findEmptyFbdVariables(processedData)
   if (emptyVariables.length > 0) {
     for (const variable of emptyVariables) {
@@ -635,7 +704,8 @@ async function runCompilePipelineInner(
     // The enabled libraries' data types count as well as the project's: a pin
     // typed by one has to be spelled the way strucpp declared it.
     const userTypeNames = projectAndLibraryTypeNames(projectData, libraryArchives)
-    const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
+    const ownTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames, ownTypeNames)
     const bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
@@ -943,6 +1013,7 @@ async function runCompilePipelineInner(
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    resourceLibraryDepends: resourceLibraryDepends(libraryResources),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose
@@ -959,8 +1030,13 @@ async function runCompilePipelineInner(
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
   emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
-  const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-  const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
+  // The enabled libraries' data types count as well as the project's, exactly
+  // as on the Runtime v4 path above: a pin typed by one has to be spelled the
+  // way strucpp declared it, or the struct field is the bare enumeration while
+  // the POU member is the wrapper around it.
+  const userTypeNames = projectAndLibraryTypeNames(projectData, libraryArchives)
+  const ownTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+  const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames, ownTypeNames)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
     libraryResources,

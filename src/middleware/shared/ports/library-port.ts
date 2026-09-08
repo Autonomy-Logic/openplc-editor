@@ -152,8 +152,11 @@ export interface LibraryPort {
    * Remove a user-installed library from the system pool.  Refuses
    * for bundled libraries — those are always-on; the caller should
    * disable them via project membership instead.
+   *
+   * `version` removes just that one build; omitted removes every
+   * installed version of the library.
    */
-  uninstall(name: string): Promise<Result>
+  uninstall(name: string, version?: string): Promise<Result>
 
   /**
    * Subscribe to system-pool change events fired after install /

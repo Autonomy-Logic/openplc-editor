@@ -195,8 +195,8 @@ const rendererProcessBridge = {
     | { success: true; canceled: true }
     | { success: false; error: string }
   > => ipcRenderer.invoke('libraries:install-from-file'),
-  uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('libraries:uninstall', name),
+  uninstallLibrary: (name: string, version?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('libraries:uninstall', name, version),
   // ----- Public-library catalog (autonomy-edge) -----
   queryPublicCatalog: (
     args: ListPublicLibrariesArgs,

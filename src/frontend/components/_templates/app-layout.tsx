@@ -24,6 +24,7 @@ import { CreateGraphicalVariableModal } from '../_organisms/modals/create-graphi
 import { DebuggerIpInputModal } from '../_organisms/modals/debugger-ip-input-modal'
 import { DebuggerMessageModal } from '../_organisms/modals/debugger-message-modal'
 import { ConfirmDeleteElementModal } from '../_organisms/modals/delete-confirmation-modal'
+import { LibraryUpdatesModal } from '../_organisms/modals/library-updates-modal'
 import { MissingLibrariesModal } from '../_organisms/modals/missing-libraries-modal'
 import { ProjectReadmeModal } from '../_organisms/modals/project-readme-modal'
 import { PublicCatalogBrowserModal } from '../_organisms/modals/public-catalog-browser-modal'
@@ -161,6 +162,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['debugger-ip-input']?.open === true && <DebuggerIpInputModal />}
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
+          {modals?.['library-updates']?.open === true && <LibraryUpdatesModal />}
           {modals?.['public-catalog-browser']?.open === true && <PublicCatalogBrowserModal />}
           {modals?.['confirm-install-libraries']?.open === true && <ConfirmInstallLibrariesModal />}
           {modals?.['project-readme']?.open === true && <ProjectReadmeModal />}

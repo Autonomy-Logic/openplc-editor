@@ -41,6 +41,7 @@ import {
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
+import type { EnabledArchives, LibraryRef, VersionSubstitution } from '@root/middleware/shared/ports/library-types'
 import {
   pickVerifyBoard,
   SIMULATOR_BOARD,
@@ -76,7 +77,7 @@ type LibraryCompileBridge = {
     cleanBuild: boolean
     onUploadAccepted?: (responseBody: string) => void
   }) => Promise<{ success: true; data: string } | { success: false; error: string }>
-  loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+  loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
 }
 
 type LibraryVerificationBridge = LibraryCompileBridge
@@ -2940,7 +2941,7 @@ class CompilerModule {
        * name.  Missing names (enabled but not installed) come back so
        * the caller can abort with a clear error before strucpp runs.
        */
-      loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+      loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
     },
   ): Promise<void> {
     _mainProcessPort.start()
@@ -3073,6 +3074,7 @@ class CompilerModule {
     let devicePinMapping: DevicePin[]
     let libraryArchives: unknown[]
     let missingLibraries: string[]
+    let substitutedLibraries: VersionSubstitution[]
     let avrLibStdCppInclude = ''
     try {
       firmwareSkeleton = await this.loadFirmwareSkeletonInMemory(boardRuntime)
@@ -3280,10 +3282,10 @@ class CompilerModule {
         // empty PINMASK_* entries in that case.
         devicePinMapping = []
       }
-      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
-      const archives = mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
+      const archives = mainProcessBridge.loadEnabledArchives(projectData.libraries ?? [])
       libraryArchives = archives.archives
       missingLibraries = archives.missing
+      substitutedLibraries = archives.substituted
       const coreId = typeof boardEntry?.core === 'string' ? boardEntry.core : ''
       if (coreId.startsWith('arduino:avr')) {
         avrLibStdCppInclude = await this.ensureAvrLibStdCppCache()
@@ -3472,6 +3474,7 @@ class CompilerModule {
         compileOnly: compileOnly ?? false,
         libraryArchives,
         missingLibraries,
+        substitutedLibraries,
         firmwareSkeleton,
         strucppRuntimeHeaders,
         avrLibStdCppInclude,
@@ -3577,7 +3580,7 @@ class CompilerModule {
     args: Array<string | null | PLCProjectData>,
     _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: {
-      loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+      loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
     },
   ): Promise<void> {
     _mainProcessPort.start()
@@ -3696,9 +3699,9 @@ class CompilerModule {
     // Resolved once, outside the compile step: the C-blocks header and code
     // below need the same archives, to spell a pin typed by a library's own
     // data type the way strucpp declared it.
-    const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
-    const { archives: libraries, missing: missingLibraries } =
-      mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
+    const { archives: libraries, missing: missingLibraries } = mainProcessBridge.loadEnabledArchives(
+      projectData.libraries ?? [],
+    )
     const typeNames = projectAndLibraryTypeNames(projectData, libraries)
 
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
@@ -3853,7 +3856,7 @@ class CompilerModule {
     // glue the library build needs — every stage decision lives in
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
-      loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
+      loadEnabledArchives: (refs) => mainProcessBridge.loadEnabledArchives(refs),
       runVerificationCompile: ({ projectPath: p, verifyProjectData: v, target, emit }) =>
         this.runVerificationCompile(p, v as PLCProjectData, target, mainProcessBridge, (message, logLevel) =>
           emit(message, logLevel),
