@@ -939,6 +939,9 @@ async function runCompilePipelineInner(
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    // Only for a target we actually size. Runtime v3 and the simulator keep
+    // openplc.h's own fallbacks, so their defines.h is unchanged.
+    ...(sizesTheImage ? { imageSizes: ioImage.sizes } : {}),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose

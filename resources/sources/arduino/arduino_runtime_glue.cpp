@@ -412,6 +412,29 @@ static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
               "state, not only its inputs and outputs.");
 #endif
 
+// The bit areas must be a whole number of bytes, or the build FAILS.
+//
+// openplc.h declares them as `bool_input[MAX_DIGITAL_INPUT/8][8]`, so the
+// number is in bits and the division has to come out even. A value that is not
+// a multiple of eight truncates: the array comes up one byte short and the
+// slots of the partial byte become unaddressable, so the top few points of an
+// image simply do nothing. Nothing downstream can report that -- there is no
+// console on a microcontroller -- so the check happens at build time or not at
+// all, exactly as with OPLC_RETAIN_BLOB_SIZE above.
+//
+// The editor already rounds these up when it emits them (DOPE-615), which is
+// why this should never fire. That is the point: it is here so that the day it
+// stops rounding, the failure is a compiler error naming the cause rather than
+// I/O that quietly stops at the wrong index.
+static_assert(MAX_DIGITAL_INPUT % 8 == 0,
+              "MAX_DIGITAL_INPUT must be a multiple of 8: openplc.h declares "
+              "bool_input as [MAX_DIGITAL_INPUT/8][8], so a remainder is "
+              "silently dropped and the last few inputs become unaddressable.");
+static_assert(MAX_DIGITAL_OUTPUT % 8 == 0,
+              "MAX_DIGITAL_OUTPUT must be a multiple of 8: openplc.h declares "
+              "bool_output as [MAX_DIGITAL_OUTPUT/8][8], so a remainder is "
+              "silently dropped and the last few outputs become unaddressable.");
+
 static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
 static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
 static bool     retain_available  = false;

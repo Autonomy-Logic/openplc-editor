@@ -449,6 +449,65 @@ describe('generateDefinesContent — retain blob size', () => {
   })
 })
 
+describe('generateDefinesContent — process image', () => {
+  it('overrides every MAX_* the firmware declares a buffer for', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      imageSizes: { '%IX': 240, '%QX': 240, '%IW': 64, '%QW': 64, '%ID': 8, '%QD': 8, '%MW': 40, '%MD': 4, '%ML': 2 },
+    })
+    expect(out).toContain('//Process image')
+    expect(out).toContain('#define MAX_DIGITAL_INPUT 240')
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 240')
+    expect(out).toContain('#define MAX_ANALOG_INPUT 64')
+    expect(out).toContain('#define MAX_ANALOG_OUTPUT 64')
+    expect(out).toContain('#define MAX_REAL_INPUT 8')
+    expect(out).toContain('#define MAX_REAL_OUTPUT 8')
+    expect(out).toContain('#define MAX_MEMORY_WORD 40')
+    expect(out).toContain('#define MAX_MEMORY_DWORD 4')
+    expect(out).toContain('#define MAX_MEMORY_LWORD 2')
+  })
+
+  it('emits the bit areas in BITS, which is what openplc.h divides by 8', () => {
+    // The opposite of image.conf for Runtime v4, whose BOOL tables count
+    // bytes. Bare metal writes bool_input[MAX_DIGITAL_INPUT/8][8].
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 64 } })
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 64')
+    expect(out).not.toContain('#define MAX_DIGITAL_OUTPUT 8')
+  })
+
+  it('emits a zero rather than skipping the area', () => {
+    // Skipping would hand the area back to openplc.h's fallback, which is the
+    // opposite of what a project with nothing in that area asked for.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 8 } })
+    expect(out).toContain('#define MAX_MEMORY_WORD 0')
+    expect(out).toContain('#define MAX_DIGITAL_INPUT 0')
+  })
+
+  it('emits no macro for an area bare metal has no buffer for', () => {
+    // %MX, %IB, %QB and %MB have no MAX_* because openplc.h declares no
+    // bit-addressed memory and no byte-addressed buffer at all. The compile
+    // gate refuses those declarations before the build gets here.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%MX': 16, '%IB': 4 } })
+    expect(out).not.toContain('%MX')
+    expect(out).not.toMatch(/MAX_MEMORY_BIT|MAX_BYTE/)
+  })
+
+  it('emits nothing at all for a target we do not size', () => {
+    // Runtime v3 and the simulator. Their defines.h must stay byte-identical,
+    // or every one of them rebuilds for no reason and openplc.h's own #ifdef
+    // ladder stops being what decides.
+    expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('Process image')
+    expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('MAX_DIGITAL_INPUT')
+  })
+
+  it('is deterministic and fixed in macro order', () => {
+    const sizes = { '%QX': 16, '%MW': 7 }
+    expect(generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: sizes })).toBe(
+      generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%MW': 7, '%QX': 16 } }),
+    )
+  })
+})
+
 describe('generateDefinesContent — full output snapshot', () => {
   it('produces the canonical defines.h for a typical simulator project', () => {
     const out = generateDefinesContent({

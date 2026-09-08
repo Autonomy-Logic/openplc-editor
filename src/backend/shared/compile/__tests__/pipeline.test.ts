@@ -484,6 +484,45 @@ describe('runCompilePipeline — I/O image gate', () => {
     expect(events.some((e) => e.message.includes('Generated image.conf'))).toBe(true)
   })
 
+  it('emits the sizes into defines.h on the arduino-cli path', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const files = jest.mocked(port.compileArduino).mock.calls[0][0].files as Record<string, string>
+    const defines = Object.entries(files).find(([name]) => name.endsWith('defines.h'))?.[1] ?? ''
+    expect(defines).toContain('//Process image')
+    // %QW3 is one word past index 3, and one %IX bit rounds to a whole byte.
+    expect(defines).toContain('#define MAX_ANALOG_OUTPUT 4')
+    expect(defines).toContain('#define MAX_DIGITAL_INPUT 8')
+    // Areas the project does not touch are handed zero, not the fallback.
+    expect(defines).toContain('#define MAX_MEMORY_WORD 0')
+  })
+
+  it('leaves the simulator defines.h without a process image block', async () => {
+    // It keeps openplc.h's own fallbacks, so its defines.h is byte-identical
+    // to what it was before any of this existed.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(makeArgs(), port, emit)
+
+    const files = jest.mocked(port.compileArduino).mock.calls[0][0].files as Record<string, string>
+    const defines = Object.entries(files).find(([name]) => name.endsWith('defines.h'))?.[1] ?? ''
+    expect(defines).not.toContain('Process image')
+  })
+
   it('exempts the simulator, which has no producers by construction', async () => {
     // Its capability block hides the pin table and nothing seeds pins, so
     // PINMASK_DIN is empty and simulator.cpp's I/O loops run zero times.
