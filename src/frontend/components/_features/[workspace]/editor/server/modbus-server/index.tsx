@@ -60,6 +60,63 @@ const Toggle = ({
   </label>
 )
 
+/**
+ * A named block of rows, with the way out to the board page that governs the
+ * same wiring.
+ *
+ * The link belongs to the group and not to a row because it explains all of
+ * them at once: the board's serial page holds that line's speed, its RS-485 pin
+ * and its driver-enable flag, and none of those maps onto a single field here.
+ * It used to be a card of its own two panels down, which is a long way to send
+ * someone looking at a value they cannot edit.
+ *
+ * Rendered on every target, with the link disabled and carrying its reason
+ * where the package ships no such page -- the same rule every other control on
+ * this screen follows, and the reason the card was never conditional either.
+ *
+ * The group's NAME is the wire, not the protocol. Its rows are enabled by what
+ * the board HAS rather than by what the user selected, so calling it "Modbus
+ * RTU" would promise a coupling the screen does not implement.
+ */
+const Group = ({
+  name,
+  action,
+  children,
+}: {
+  name?: string
+  action?: { label: string; screen?: string; reason: string; onOpen: (screen: string) => void }
+  children: React.ReactNode
+}) => (
+  <div
+    className={
+      name ? 'flex flex-col gap-3 border-t border-neutral-100 pt-4 dark:border-neutral-800' : 'flex flex-col gap-3'
+    }
+  >
+    {name ? (
+      <div className='flex items-baseline justify-between gap-4'>
+        <span className='font-caption text-[10px] font-semibold uppercase tracking-wider text-neutral-700 dark:text-neutral-600'>
+          {name}
+        </span>
+        {action ? (
+          <div className='flex items-center gap-1.5'>
+            <button
+              type='button'
+              disabled={!action.screen}
+              onClick={() => action.screen && action.onOpen(action.screen)}
+              className={groupActionStyles}
+            >
+              {action.label}
+              <span aria-hidden='true'>&#8599;</span>
+            </button>
+            {action.screen ? null : <FieldHelpIcon text={action.reason} />}
+          </div>
+        ) : null}
+      </div>
+    ) : null}
+    {children}
+  </div>
+)
+
 const Row = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
   <div className='flex items-center gap-2'>
     <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>{label}</Label>
@@ -186,8 +243,15 @@ const selectItemStyles = cn(
   'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
   'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
 )
-const hardwareButtonStyles =
-  'h-8 rounded-md border border-neutral-300 px-3 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-neutral-300 disabled:hover:text-neutral-800 dark:border-neutral-700 dark:text-neutral-200'
+/** The way out to a board page, sitting in a group header. A link rather than a
+ *  button: it navigates, it does not act on this screen. */
+const groupActionStyles =
+  'inline-flex items-center gap-1 font-caption text-xs font-medium text-brand-medium-dark hover:text-brand disabled:cursor-not-allowed disabled:text-neutral-600 disabled:hover:text-neutral-600 dark:text-brand-light dark:hover:text-brand dark:disabled:text-neutral-700'
+
+/** A value the board states, shown in place of the control the user would
+ *  otherwise get, and doubling as the way to the page that sets it. */
+const boardValueStyles =
+  'flex h-[30px] w-full items-center justify-between gap-2 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-2 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-300 disabled:hover:text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
 
 /**
  * Transport sets the dropdown offers, in a fixed order on every target. A set
@@ -232,6 +296,7 @@ const ModbusServerEditor = () => {
   // answers both ids there and routes by function code, so the slave id stays the
   // user's to pick; what is shared is the wire, not the address.
   const rtuAvailable = profile.transports.includes('rtu')
+  const boardSerialScreen = profile.vppScreens.serial
   const rtuOnEditorPort =
     rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
 
@@ -359,190 +424,201 @@ const ModbusServerEditor = () => {
              * that disappears makes the user wonder whether the feature exists
              * at all, and two targets whose screens differ in shape cannot be
              * compared. */}
-            <Row label='Enabled' hint={enabled ? 'Serving.' : 'Not serving. Settings are kept.'}>
-              <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
-            </Row>
+            <Group>
+              <Row label='Enabled' hint={enabled ? 'Serving.' : 'Not serving. Settings are kept.'}>
+                <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
+              </Row>
 
-            <Row label='Transport' hint={transportHint}>
-              <div className='w-64'>
-                <Select value={transportChoiceValue} onValueChange={onTransportChange} disabled={!enabled}>
-                  <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
-                  <SelectContent className={selectContentStyles}>
-                    {TRANSPORT_CHOICES.map((choice) => (
-                      <SelectItem
-                        key={choice.value}
-                        value={choice.value}
-                        disabled={!choice.transports.every((t) => profile.transports.includes(t))}
-                        className={selectItemStyles}
-                      >
-                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {choice.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Row>
+              <Row label='Transport' hint={transportHint}>
+                <div className='w-64'>
+                  <Select value={transportChoiceValue} onValueChange={onTransportChange} disabled={!enabled}>
+                    <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
+                    <SelectContent className={selectContentStyles}>
+                      {TRANSPORT_CHOICES.map((choice) => (
+                        <SelectItem
+                          key={choice.value}
+                          value={choice.value}
+                          disabled={!choice.transports.every((t) => profile.transports.includes(t))}
+                          className={selectItemStyles}
+                        >
+                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                            {choice.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Row>
+            </Group>
 
-            <Row
-              label='Serial Port'
-              hint={
-                !rtuAvailable
-                  ? 'RTU only.'
-                  : rtuOnEditorPort
-                    ? 'Shared with the editor connection. One at a time.'
-                    : 'A UART of its own.'
-              }
+            <Group
+              name='Serial line'
+              action={{
+                label: 'Board serial settings',
+                screen: profile.vppScreens.serial,
+                reason: "The host operating system owns this target's serial ports.",
+                onOpen: openVppScreen,
+              }}
             >
-              <div className='w-64'>
-                <Select
-                  value={serialPort || profile.defaultSerial}
-                  onValueChange={actions.setSerialPort}
-                  disabled={!enabled || !rtuAvailable || profile.serialPorts.length === 0}
-                >
-                  <SelectTrigger withIndicator placeholder='Select serial port' className={selectTriggerStyles} />
-                  <SelectContent className={selectContentStyles}>
-                    {(profile.serialPorts.length > 0 ? profile.serialPorts : [profile.defaultSerial]).map((option) => (
-                      <SelectItem key={option} value={option} className={selectItemStyles}>
-                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {option}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Row>
-
-            <Row
-              label='Baud Rate'
-              hint={
-                !rtuAvailable
-                  ? 'RTU only.'
-                  : baudRateEditable
-                    ? 'Speed of this UART. Takes effect on the next upload.'
-                    : 'Set by the board: this is the editor line.'
-              }
-            >
-              <div className='w-64'>
-                <Select
-                  value={baudRate}
-                  onValueChange={(value) => actions.setBaudRate(Number(value))}
-                  disabled={!enabled || !rtuAvailable || !baudRateEditable}
-                >
-                  <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
-                  <SelectContent className={selectContentStyles}>
-                    {BAUD_RATE_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option} className={selectItemStyles}>
-                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {option}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Row>
-
-            <Row
-              label='Slave ID'
-              hint={
-                !rtuAvailable
-                  ? 'RTU only. TCP addresses by IP.'
-                  : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
-              }
-            >
-              <div className='w-24'>
-                <InputWithRef
-                  type='number'
-                  aria-label='Slave ID'
-                  value={slaveIdText}
-                  onChange={(e) => setSlaveIdText(e.target.value)}
-                  onBlur={commitSlaveId}
-                  min={MIN_SLAVE_ID}
-                  max={MAX_SLAVE_ID}
-                  disabled={!enabled || !rtuAvailable}
-                  className={inputStyles}
-                />
-              </div>
-            </Row>
-
-            <Row
-              label='Network Interface'
-              hint={profile.configurableBindAddress ? undefined : 'This board has one interface.'}
-            >
-              <div className='w-64'>
-                <Select
-                  value={bindAddress}
-                  onValueChange={actions.setBindAddress}
-                  disabled={!enabled || !profile.configurableBindAddress}
-                >
-                  <SelectTrigger withIndicator placeholder='Select network interface' className={selectTriggerStyles} />
-                  <SelectContent className={selectContentStyles}>
-                    {BIND_ADDRESS_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {option.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </Row>
-
-            <Row label='Port' hint={profile.configurablePort ? 'Default 502.' : 'Fixed by the firmware.'}>
-              <div className='w-64'>
-                <InputWithRef
-                  type='number'
-                  aria-label='Port'
-                  value={portText}
-                  onChange={(e) => setPortText(e.target.value)}
-                  onBlur={commitPort}
-                  placeholder='502'
-                  min='1'
-                  max='65535'
-                  disabled={!enabled || !profile.configurablePort}
-                  className={inputStyles}
-                />
-              </div>
-            </Row>
-          </Panel>
-
-          {/* The board's own wiring — baud rates, RS-485 pin, Wi-Fi credentials —
-           *  belongs to the vendor package that knows the hardware, and it is
-           *  edited on the pages that package ships. Duplicating those fields
-           *  here would give the same value two owners.
-           *
-           *  The card is rendered on every target, with its buttons disabled
-           *  where there is no such page: a card that appears and disappears
-           *  with the target is the screen changing shape, which is exactly what
-           *  it is supposed to stop doing. */}
-          <Panel title='Hardware Settings'>
-            <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-              {profile.vppScreens.serial || profile.vppScreens.network
-                ? 'The editor line speed, the RS-485 pin and network credentials belong to the board. Configure them on its vendor pages.'
-                : "The host operating system owns this target's ports."}
-            </p>
-            <div className='flex flex-wrap gap-2'>
-              <button
-                type='button'
-                disabled={!profile.vppScreens.serial}
-                onClick={() => profile.vppScreens.serial && openVppScreen(profile.vppScreens.serial)}
-                className={hardwareButtonStyles}
+              <Row
+                label='Serial Port'
+                hint={
+                  !rtuAvailable
+                    ? 'RTU only.'
+                    : rtuOnEditorPort
+                      ? 'Shared with the editor connection. One at a time.'
+                      : 'A UART of its own.'
+                }
               >
-                Serial settings
-              </button>
-              <button
-                type='button'
-                disabled={!profile.vppScreens.network}
-                onClick={() => profile.vppScreens.network && openVppScreen(profile.vppScreens.network)}
-                className={hardwareButtonStyles}
+                <div className='w-64'>
+                  <Select
+                    value={serialPort || profile.defaultSerial}
+                    onValueChange={actions.setSerialPort}
+                    disabled={!enabled || !rtuAvailable || profile.serialPorts.length === 0}
+                  >
+                    <SelectTrigger withIndicator placeholder='Select serial port' className={selectTriggerStyles} />
+                    <SelectContent className={selectContentStyles}>
+                      {(profile.serialPorts.length > 0 ? profile.serialPorts : [profile.defaultSerial]).map(
+                        (option) => (
+                          <SelectItem key={option} value={option} className={selectItemStyles}>
+                            <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                              {option}
+                            </span>
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Row>
+
+              <Row
+                label='Baud Rate'
+                hint={
+                  !rtuAvailable
+                    ? 'RTU only.'
+                    : baudRateEditable
+                      ? 'Speed of this UART. Takes effect on the next upload.'
+                      : 'Set by the board: this is the editor line, and one UART has one speed.'
+                }
               >
-                Network settings
-              </button>
-            </div>
+                <div className='w-64'>
+                  {/* On the default UART the value is the board's, so the control
+                   *  stops being a dead dropdown and becomes the way to the page
+                   *  that sets it. Only where such a page exists -- otherwise
+                   *  there is nowhere to go and it stays a plain disabled field. */}
+                  {!baudRateEditable && rtuAvailable && boardSerialScreen ? (
+                    <button
+                      type='button'
+                      disabled={!enabled}
+                      onClick={() => openVppScreen(boardSerialScreen)}
+                      className={boardValueStyles}
+                    >
+                      <span>{baudRate}</span>
+                      <span className='font-normal text-neutral-600 dark:text-neutral-500'>
+                        set by the board <span aria-hidden='true'>&#8599;</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <Select
+                      value={baudRate}
+                      onValueChange={(value) => actions.setBaudRate(Number(value))}
+                      disabled={!enabled || !rtuAvailable || !baudRateEditable}
+                    >
+                      <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
+                      <SelectContent className={selectContentStyles}>
+                        {BAUD_RATE_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option} className={selectItemStyles}>
+                            <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                              {option}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </Row>
+
+              <Row
+                label='Slave ID'
+                hint={
+                  !rtuAvailable
+                    ? 'RTU only. TCP addresses by IP.'
+                    : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
+                }
+              >
+                <div className='w-24'>
+                  <InputWithRef
+                    type='number'
+                    aria-label='Slave ID'
+                    value={slaveIdText}
+                    onChange={(e) => setSlaveIdText(e.target.value)}
+                    onBlur={commitSlaveId}
+                    min={MIN_SLAVE_ID}
+                    max={MAX_SLAVE_ID}
+                    disabled={!enabled || !rtuAvailable}
+                    className={inputStyles}
+                  />
+                </div>
+              </Row>
+            </Group>
+
+            <Group
+              name='Network'
+              action={{
+                label: 'Board network settings',
+                screen: profile.vppScreens.network,
+                reason: "The host operating system owns this target's network.",
+                onOpen: openVppScreen,
+              }}
+            >
+              <Row
+                label='Network Interface'
+                hint={profile.configurableBindAddress ? undefined : 'This board has one interface.'}
+              >
+                <div className='w-64'>
+                  <Select
+                    value={bindAddress}
+                    onValueChange={actions.setBindAddress}
+                    disabled={!enabled || !profile.configurableBindAddress}
+                  >
+                    <SelectTrigger
+                      withIndicator
+                      placeholder='Select network interface'
+                      className={selectTriggerStyles}
+                    />
+                    <SelectContent className={selectContentStyles}>
+                      {BIND_ADDRESS_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                            {option.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Row>
+
+              <Row label='Port' hint={profile.configurablePort ? 'Default 502.' : 'Fixed by the firmware.'}>
+                <div className='w-64'>
+                  <InputWithRef
+                    type='number'
+                    aria-label='Port'
+                    value={portText}
+                    onChange={(e) => setPortText(e.target.value)}
+                    onBlur={commitPort}
+                    placeholder='502'
+                    min='1'
+                    max='65535'
+                    disabled={!enabled || !profile.configurablePort}
+                    className={inputStyles}
+                  />
+                </div>
+              </Row>
+            </Group>
           </Panel>
 
           <Panel title='Buffer Mapping'>
