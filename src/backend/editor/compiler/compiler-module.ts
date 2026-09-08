@@ -3072,41 +3072,54 @@ class CompilerModule {
     // never enables Modbus — at which point the debugger can't
     // talk to it (failing MD5 verification after retries).
     let vppModbusState: VppModbusScreenState | undefined
+    // Ethernet-upload boards (e.g. Siemens LOGO! 8.2) reach the editor ONLY over
+    // the network. Known before the config read so the mandate below applies even
+    // when there is no configuration.json.
+    const uploadsOverEthernet = (boardEntry as { uploadMethod?: string } | undefined)?.uploadMethod === 'ethernet'
     if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      let configuredIp: string | undefined
       try {
         const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         const vendorScreenData = deviceConfig.vendorScreenData ?? {}
+        configuredIp = deviceConfig.runtimeIpAddress
         vppModbusState = {
           serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
           modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
           modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
         }
-
-        // Ethernet-upload boards (e.g. Siemens LOGO! 8.2) reach the editor ONLY
-        // over the network — Modbus TCP is how the debugger connects and how the
-        // upload flow reboots the device, so it is not optional the way it is on
-        // a serial board. When the project hasn't configured it (a fresh project,
-        // or one created headless via the CLI that never opened the Modbus
-        // screen), seed the mandatory defaults so the firmware always comes up
-        // with Ethernet + Modbus TCP. Any value the user did set wins — this only
-        // fills the gap, keeping the block from compiling to nothing.
-        const tcpAlreadyOn = vppModbusState.modbus_tcp?.enabled === true || vppModbusState.network?.enabled === true
-        const uploadsOverEthernet = (boardEntry as { uploadMethod?: string } | undefined)?.uploadMethod === 'ethernet'
-        if (uploadsOverEthernet && !tcpAlreadyOn) {
-          const ip = deviceConfig.runtimeIpAddress || '192.168.2.4'
-          vppModbusState = {
-            ...vppModbusState,
-            network: { enabled: true, interface: 'Ethernet', enable_dhcp: false, ip_address: ip },
-            modbus_tcp: { ...(vppModbusState.modbus_tcp ?? {}), enabled: true, ip_address: ip },
-          }
-        }
       } catch {
-        // No configuration.json — leave undefined so the shared
-        // pipeline skips the Modbus block entirely (matches the
-        // pre-VPP behaviour for boards that never had a comms
-        // config persisted).
+        // No configuration.json — leave state undefined; for ethernet boards the
+        // mandate below still forces Modbus TCP on, and for serial boards the
+        // shared pipeline skips the Modbus block entirely (pre-VPP behaviour).
+      }
+
+      // Modbus TCP is MANDATORY on ethernet-upload boards and CANNOT be turned
+      // off: it is the device's only comms path (disabling it makes the LOGO
+      // unreachable), it is how the debugger connects and the upload flow reboots
+      // the device, and MODBUS_ENABLED is what makes the firmware allocate its I/O
+      // buffers — without it Baremetal.ino skips mapEmptyBuffers() and the HAL
+      // dereferences NULL input pointers on the first scan. So FORCE it on for
+      // every ethernet target, overriding any screen value and seeding it when the
+      // project never configured one, preserving only the IP the user set.
+      if (uploadsOverEthernet) {
+        const ip =
+          vppModbusState?.modbus_tcp?.ip_address ||
+          vppModbusState?.network?.ip_address ||
+          configuredIp ||
+          '192.168.2.4'
+        vppModbusState = {
+          ...(vppModbusState ?? {}),
+          network: {
+            ...(vppModbusState?.network ?? {}),
+            enabled: true,
+            interface: 'Ethernet',
+            enable_dhcp: vppModbusState?.network?.enable_dhcp ?? false,
+            ip_address: ip,
+          },
+          modbus_tcp: { ...(vppModbusState?.modbus_tcp ?? {}), enabled: true, ip_address: ip },
+        }
       }
     }
 
