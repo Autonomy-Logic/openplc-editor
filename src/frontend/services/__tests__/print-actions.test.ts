@@ -17,22 +17,28 @@ vi.mock('monaco-editor', () => ({
 }))
 
 const mockGetState = vi.fn()
-vi.mock('../../store', () => ({
+// `@root/...` (not a relative path) — under the editor's Jest, `vi.mock()`
+// resolves a relative specifier against the setup file that defines the
+// `vi = jest` alias (`jest-vi-shim.ts`), not against this file, since Jest
+// binds `jest.mock`'s relative resolution to whichever module the `jest`
+// object was handed to. An absolute-style alias sidesteps that entirely,
+// and resolves the same way under Vitest too.
+vi.mock('@root/frontend/store', () => ({
   openPLCStoreBase: { getState: () => mockGetState() },
 }))
 
 const mockFlushFlowWriteBacks = vi.fn()
-vi.mock('../../store/slices/shared/flow-writeback', () => ({
+vi.mock('@root/frontend/store/slices/shared/flow-writeback', () => ({
   flushFlowWriteBacks: (...args: unknown[]) => mockFlushFlowWriteBacks(...args),
 }))
 
 const mockToast = vi.fn()
-vi.mock('../../utils/toast', () => ({
+vi.mock('@root/frontend/utils/toast', () => ({
   toast: (...args: unknown[]) => mockToast(...args),
 }))
 
 const mockGetPrintSemanticTokensApi = vi.fn()
-vi.mock('../st-lsp', () => ({
+vi.mock('@root/frontend/services/st-lsp', () => ({
   getPrintSemanticTokensApi: () => mockGetPrintSemanticTokensApi(),
 }))
 

@@ -110,6 +110,13 @@ const PdfPageCanvas = ({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // A prior error unmounts the canvas (the error branch renders a div in
+    // its place), so a retry needs a render pass first to remount it before
+    // any render task can attach — clearing here and returning lets that happen.
+    if (error) {
+      setError(null)
+      return
+    }
     if (targetWidth === 0) return
     const canvas = canvasRef.current
     if (!canvas) return
@@ -139,7 +146,7 @@ const PdfPageCanvas = ({
       cancelled = true
       renderTask?.cancel()
     }
-  }, [doc, pageNumber, targetWidth])
+  }, [doc, pageNumber, targetWidth, error])
 
   if (error) {
     return (
@@ -444,9 +451,14 @@ const ExportPdfModal = () => {
   useEffect(() => {
     if (step !== 'preview' || renderState.status !== 'idle') return
     setRenderState({ status: 'loading' })
+    let cancelled = false
     void renderPrintPdf(projectPort).then((result) => {
+      if (cancelled) return
       setRenderState(result.ok ? { status: 'ready', bytes: result.bytes } : { status: 'error', error: result.error })
     })
+    return () => {
+      cancelled = true
+    }
   }, [step, renderState, projectPort])
 
   useEffect(() => {

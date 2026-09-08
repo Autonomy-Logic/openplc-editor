@@ -35,12 +35,13 @@ type HandlePoint = { x: number; y: number; position: Position }
 
 function resolveHandlePoint(node: Node, handleId: string | null | undefined, fallback: Position): HandlePoint {
   const handle = handleId ? getNodeHandles(node).find((h) => h.id === handleId) : undefined
-  if (!handle?.relPosition) {
+  const relPosition = handle?.relPosition
+  if (!relPosition || !Number.isFinite(relPosition.x) || !Number.isFinite(relPosition.y)) {
     return { x: node.position.x, y: node.position.y, position: fallback }
   }
   return {
-    x: node.position.x + handle.relPosition.x,
-    y: node.position.y + handle.relPosition.y,
+    x: node.position.x + relPosition.x,
+    y: node.position.y + relPosition.y,
     position: asPosition(handle.position) ?? fallback,
   }
 }

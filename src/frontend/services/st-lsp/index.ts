@@ -444,7 +444,12 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     const legend = sharedService.getSemanticTokensLegend()
     if (!legend) return null
     const uri = pouUri(pouName)
-    const result = await sharedService.requestSemanticTokens(uri)
+    let result: Awaited<ReturnType<typeof sharedService.requestSemanticTokens>>
+    try {
+      result = await sharedService.requestSemanticTokens(uri)
+    } catch {
+      return null
+    }
     if (!result) return null
     const lineOffset = getBodyLineOffset(uri)
     return { legend, data: shiftSemanticTokensToBody(result.data, lineOffset) }

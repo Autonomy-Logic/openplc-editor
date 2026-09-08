@@ -81,6 +81,25 @@ describe('edgeToDrawOp', () => {
     expect(op?.kind).toBe('path')
   })
 
+  it('falls back to the node position when relPosition is not finite (e.g. NaN)', () => {
+    const source = makeNode({
+      id: 'a',
+      position: { x: 0, y: 0 },
+      data: { handles: [{ id: 'out', position: Position.Right, relPosition: { x: NaN, y: 5 } }] },
+    })
+    const target = makeNode({ id: 'b', position: { x: 100, y: 50 }, data: {} })
+    const nodesById = new Map<string, Node>([
+      ['a', source],
+      ['b', target],
+    ])
+    const edge: Edge = { id: 'e1', source: 'a', target: 'b', sourceHandle: 'out' }
+
+    const op = edgeToDrawOp(nodesById, edge, '#000000', 1)
+
+    expect(op?.kind).toBe('path')
+    if (op?.kind === 'path') expect(op.d).not.toContain('NaN')
+  })
+
   it('ignores a handle entry with a position string that is not a valid Position enum value', () => {
     const source = makeNode({
       id: 'a',
