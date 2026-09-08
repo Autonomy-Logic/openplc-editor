@@ -229,22 +229,40 @@ const configuration: webpack.Configuration = {
     historyApiFallback: { verbose: true },
     client: {
       overlay: {
-        // Monaco cancels pending work by rejecting with an error it names
-        // `Canceled` — every disposed editor leaves one behind for whichever
-        // debounced contribution was still armed (see
-        // `frontend/utils/ignore-monaco-cancellations.ts`). The runtime guard
-        // there calls `preventDefault`, which silences the console but cannot
-        // silence this overlay: the dev-server client registers its own
-        // listener when the bundle boots, so it always runs first and
-        // `preventDefault` does not stop it. The result is a full-screen
-        // overlay over a cancellation that was deliberate, and since the
-        // overlay sits above everything it swallows every click until
-        // dismissed — reloading a project from the source-control panel used
-        // to leave the app looking frozen.
+        // Compile errors and warnings still get an overlay: those are the ones
+        // worth interrupting for, and they are what this overlay is good at.
+        errors: true,
+        warnings: true,
+        // Runtime errors do NOT, and it cannot be a filter instead.
         //
-        // This function is serialized into the client bundle, so it must not
-        // reference anything outside itself.
-        runtimeErrors: (error?: Error) => !(error instanceof Error && error.name === 'Canceled'),
+        // The reason to want one: Monaco cancels pending work by rejecting with
+        // an error it names `Canceled`, and every disposed editor leaves one
+        // behind for whichever debounced contribution was still armed. Nothing
+        // is wrong — cancellation is what disposal means — but it reaches
+        // `window` as an unhandled rejection, and a full-screen overlay sits
+        // above everything and swallows every click until dismissed. Reloading
+        // a project from the source-control panel left the app looking frozen.
+        //
+        // Why not a filter function, which is what webpack-dev-server offers
+        // and what this used to be: the option is serialized into the client's
+        // own URL as a STRING, and `decodeOverlayOptions` revives it with
+        // `new Function`. The renderer's CSP is `script-src 'self'
+        // 'unsafe-inline'` (see `src/index.ejs`), so that throws an EvalError
+        // while the dev-server client module is still initialising — which
+        // takes the whole bundle down and boots the app to a white screen.
+        // A boolean is not serialized as a string and never reaches `eval`.
+        //
+        // Why not suppress it from the app instead: the client registers its
+        // `unhandledrejection` listener at module init, before any of our code
+        // runs, so `preventDefault` cannot reach it and neither can
+        // `stopImmediatePropagation` — the listener that runs first wins, and
+        // ours is second by construction.
+        //
+        // What is lost: a genuine runtime error no longer raises an overlay in
+        // dev. It still reaches the console and the Electron DevTools, which is
+        // where this app is debugged anyway. `installMonacoCancellationGuard`
+        // in `main.tsx` keeps the cancellation itself out of the console.
+        runtimeErrors: false,
       },
     },
   },
