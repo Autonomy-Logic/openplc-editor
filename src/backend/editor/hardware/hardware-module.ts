@@ -348,6 +348,8 @@ class HardwareModule {
           boards.set(device.name, {
             compiler,
             core: device.target.core ?? '',
+            // Upload transport ("ethernet" for the LOGO! 8.2; serial default).
+            uploadMethod: device.target.uploadMethod,
             preview: device.preview,
             specs: device.specs ?? {},
             pins: {

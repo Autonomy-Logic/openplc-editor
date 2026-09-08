@@ -16,6 +16,7 @@ const BoardInfoSchema = z.object({
   // compiler should declare a new entry here rather than passing a free string.
   compiler: z.enum(['arduino-cli', 'openplc-compiler', 'simulator']),
   core: z.string(),
+  uploadMethod: z.enum(['serial', 'ethernet']).optional(),
   platform: z.string(),
   source: z.string(),
   preview: z.string(),

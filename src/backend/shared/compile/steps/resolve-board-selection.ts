@@ -68,6 +68,8 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       // come from the VPP manifest via BoardBuildInfo; absent for source boards.
       ...(boardInfo.precompiledLibraryDir ? { precompiledLibraryDir: boardInfo.precompiledLibraryDir } : {}),
       ...(boardInfo.coreVersion ? { coreVersion: boardInfo.coreVersion } : {}),
+      // Upload transport ("ethernet" for the LOGO! 8.2; serial otherwise).
+      ...(boardInfo.uploadMethod ? { uploadMethod: boardInfo.uploadMethod } : {}),
       // Vendor board-manager index, so a core outside arduino-cli's built-in
       // list can be auto-installed.  The resolver fills this from the VPP
       // manifest's `target.boardManagerUrl` (or hals.json `board_manager_url`);

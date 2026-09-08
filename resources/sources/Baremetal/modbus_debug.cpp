@@ -398,6 +398,39 @@ void plcSetState(uint8_t desired)
     mb_frame_len = 5;
 }
 
+// Magic that must accompany a reboot-to-bootloader request. Without it a stray
+// or probing 0x4C frame could reset a running PLC; with it, only the editor's
+// deliberate command reboots the device. Chosen arbitrarily -- the editor sends
+// these exact four bytes.
+static const uint8_t REBOOT_BOOTLOADER_MAGIC[4] = { 0xB0, 0x07, 0x10, 0xAD };
+
+// PDU request:  [FC][magic:4]
+// PDU response: [FC][status]        (0x7E = accepted and rebooting)
+//
+// Asks the HAL to reboot the device into its firmware bootloader so the host
+// can re-flash over the network without a physical power-cycle. The weak
+// default hardwareRebootToBootloader() is a no-op, so on a board with no such
+// bootloader this replies success but nothing happens (the board keeps running).
+//
+// Ordering matters: the response is BUILT here but SENT by the transport after
+// process_mbpacket() returns. A HAL that reboots must therefore ARM the reboot
+// now and carry out the actual reset a moment later (e.g. on its next output
+// scan), so this ack reaches the wire first and the editor sees it before the
+// link drops -- then it waits for the bootloader to answer on its own port.
+void rebootToBootloader(const uint8_t *magic)
+{
+    uint8_t status = MB_DEBUG_SUCCESS;
+    for (int i = 0; i < 4; i++)
+        if (magic[i] != REBOOT_BOOTLOADER_MAGIC[i]) { status = MB_DEBUG_ERROR_OUT_OF_BOUNDS; break; }
+
+    mb_frame[1] = MB_FC_REBOOT_BOOTLOADER;
+    mb_frame[2] = status;
+    mb_frame_len = 3;
+
+    if (status == MB_DEBUG_SUCCESS)
+        hardwareRebootToBootloader();   // arms; the actual reset happens post-reply
+}
+
 // PDU request:  [FC]
 // PDU response: [FC, STATUS, version_ascii...]  (no NUL terminator)
 //

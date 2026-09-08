@@ -114,6 +114,21 @@ void updateOutputBuffers();
  * ---------------------------------------------------------------------- */
 uint8_t hardwareStateSwitch(void);
 
+/* ---- Optional: reboot into the device's firmware bootloader ------------
+ * Weak default in arduino_runtime_glue.cpp is a no-op, so a HAL that does not
+ * define this leaves the board running (no bootloader to enter). A HAL whose
+ * device has a resident bootloader (e.g. the Siemens LOGO! second-stage
+ * loader) overrides it with a strong extern "C" definition that resets the
+ * MCU into that bootloader so the editor can re-flash over the network without
+ * a physical power-cycle.
+ *
+ * Invoked from the Modbus debug FC 0x4C handler AFTER the response frame has
+ * been built. Because the transport sends that frame only once the handler
+ * returns, an implementation MUST NOT reset synchronously here -- it must ARM
+ * the reset and perform it slightly later (e.g. on the next updateOutputBuffers
+ * call), so the ack reaches the wire before the link drops. ---------------- */
+void hardwareRebootToBootloader(void);
+
 /* ---- Optional: state indication ----------------------------------------
  * There is no indication callback. The runtime holds the state; a HAL with
  * a status LED reads it inside updateOutputBuffers() (which the runtime

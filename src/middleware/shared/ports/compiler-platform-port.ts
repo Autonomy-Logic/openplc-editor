@@ -183,6 +183,13 @@ export interface UploadArduinoBoardArgs {
   /** Serial port for upload (e.g. `/dev/cu.usbmodem1101`).  Editor
    *  resolves; web's adapter receives but ignores. */
   port: string
+  /** Upload transport. Absent/"serial" (default): `port` is a serial port.
+   *  "ethernet": the board's core does a network upload; `ipAddress` carries
+   *  the device IP that arduino-cli receives as `--port`. */
+  uploadMethod?: 'serial' | 'ethernet'
+  /** Device IP for `uploadMethod:"ethernet"` (from configuration
+   *  runtimeIpAddress). Ignored for serial uploads. */
+  ipAddress?: string
 }
 
 /** Runtime v3 upload (legacy, editor-only).  Web's adapter MUST

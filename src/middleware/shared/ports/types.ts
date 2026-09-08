@@ -672,6 +672,9 @@ export interface PlatformOption {
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
+  /** Upload transport for arduino-cli targets: "ethernet" (LOGO! 8.2) is
+   *  flashed over the network; absent/"serial" is the default USB path. */
+  uploadMethod?: 'serial' | 'ethernet'
   preview: string
   specs: Record<string, string>
   coreVersion?: string
@@ -849,6 +852,15 @@ export interface PackageManifest {
        * precompiled .a is ABI-locked to it.
        */
       coreVersion?: string
+      /**
+       * Upload transport for arduino-cli targets. Absent/"serial" (default):
+       * `arduino-cli upload --port <serialPort>`. "ethernet": upload over the
+       * network — the editor passes the device IP (configuration
+       * runtimeIpAddress) as arduino-cli's `--port`, and the board's core
+       * platform.txt upload recipe performs the network transfer. Currently
+       * only the Siemens LOGO! 8.2 uses "ethernet". See manifest.schema.json.
+       */
+      uploadMethod?: 'serial' | 'ethernet'
     }
     specs?: Record<string, string>
     hal: {

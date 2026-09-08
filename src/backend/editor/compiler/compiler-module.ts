@@ -1870,6 +1870,7 @@ class CompilerModule {
     arduinoPlatform,
     compilationPath,
     communicationPort,
+    uploadMethod,
     handleOutputData,
   }: {
     projectPath: string
@@ -1883,16 +1884,28 @@ class CompilerModule {
      * legacy disk read so older invocation paths still work.
      */
     communicationPort?: string
+    /**
+     * Upload transport declared by the board's VPP target. Absent/"serial"
+     * (default): `--port` is a serial device. "ethernet" (LOGO! 8.2): the
+     * board's core does a network upload, so `--port` carries the device IP,
+     * sourced from the persisted `runtimeIpAddress`. arduino-cli accepts a
+     * network address as `--port`; the core's platform.txt upload recipe
+     * consumes it as `{upload.port.address}`.
+     */
+    uploadMethod?: 'serial' | 'ethernet'
     handleOutputData: HandleOutputDataCallback
   }) {
-    let port = communicationPort
+    const isEthernet = uploadMethod === 'ethernet'
+    // For serial, `--port` is the serial device (from the picker, else disk).
+    // For ethernet, `--port` is the device IP (from persisted runtimeIpAddress).
+    let port = isEthernet ? undefined : communicationPort
     if (!port) {
       const devicesDirectoryPath = join(projectPath, 'devices')
       const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
       try {
-        const { communicationPort: persistedPort } =
+        const { communicationPort: persistedPort, runtimeIpAddress } =
           await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
-        port = persistedPort
+        port = isEthernet ? runtimeIpAddress : persistedPort
       } catch {
         // No devices/configuration.json yet — drop into the
         // "no port specified" branch below for a clear user message.
@@ -1910,7 +1923,11 @@ class CompilerModule {
       // outcome now comes from the pipeline's verdict, so a step that cannot
       // run has to fail through the channel the verdict is built from — the
       // catch in `uploadArduinoBoard` turns this into `{ ok: false }`.
-      throw new Error('No communication port specified — select a serial port for this board')
+      throw new Error(
+        isEthernet
+          ? 'No device IP specified — set the device IP address in Board Settings'
+          : 'No communication port specified — select a serial port for this board',
+      )
     }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
@@ -3065,6 +3082,25 @@ class CompilerModule {
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
           modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
           modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
+        }
+
+        // Ethernet-upload boards (e.g. Siemens LOGO! 8.2) reach the editor ONLY
+        // over the network — Modbus TCP is how the debugger connects and how the
+        // upload flow reboots the device, so it is not optional the way it is on
+        // a serial board. When the project hasn't configured it (a fresh project,
+        // or one created headless via the CLI that never opened the Modbus
+        // screen), seed the mandatory defaults so the firmware always comes up
+        // with Ethernet + Modbus TCP. Any value the user did set wins — this only
+        // fills the gap, keeping the block from compiling to nothing.
+        const tcpAlreadyOn = vppModbusState.modbus_tcp?.enabled === true || vppModbusState.network?.enabled === true
+        const uploadsOverEthernet = (boardEntry as { uploadMethod?: string } | undefined)?.uploadMethod === 'ethernet'
+        if (uploadsOverEthernet && !tcpAlreadyOn) {
+          const ip = deviceConfig.runtimeIpAddress || '192.168.2.4'
+          vppModbusState = {
+            ...vppModbusState,
+            network: { enabled: true, interface: 'Ethernet', enable_dhcp: false, ip_address: ip },
+            modbus_tcp: { ...(vppModbusState.modbus_tcp ?? {}), enabled: true, ip_address: ip },
+          }
         }
       } catch {
         // No configuration.json — leave undefined so the shared

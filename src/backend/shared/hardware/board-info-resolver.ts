@@ -179,6 +179,10 @@ export interface BoardBuildInfo {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From `target.coreVersion`. */
   coreVersion?: string
+  /** Upload transport for arduino-cli targets. Absent/"serial" (default):
+   *  serial-port upload. "ethernet": network upload — the editor passes the
+   *  device IP as arduino-cli's `--port`. From `target.uploadMethod`. */
+  uploadMethod?: 'serial' | 'ethernet'
   /** Per-board capability overrides.  Merged by
    *  `resolveTargetCapabilities` on top of the compiler preset.
    *  Sourced from `hals.json` `capabilities` (static boards) or VPP
@@ -296,6 +300,7 @@ export class BoardInfoResolver {
       info.platformOptions = device.target.platformOptions
     }
     if (device.target.coreVersion) info.coreVersion = device.target.coreVersion
+    if (device.target.uploadMethod) info.uploadMethod = device.target.uploadMethod
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)

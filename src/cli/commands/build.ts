@@ -151,7 +151,24 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
   let runtime: RuntimeApiClient | null = null
   let host: string | null = null
 
-  if (request.withUpload && capabilities.directUsbUpload) {
+  // Arduino-cli target uploaded over Ethernet (e.g. Siemens LOGO! 8.2): reached
+  // by IP, but with no runtime-v4 API and no login — the board's own core does
+  // the network flash. So it takes --host like a network target, but needs no
+  // credentials and opens no runtime client.
+  const isEthernetArduino = boardInfo.uploadMethod === 'ethernet'
+
+  if (request.withUpload && isEthernetArduino) {
+    host = request.host ?? null
+    if (!host) {
+      return reporter.failure(
+        {
+          code: ErrorCode.MissingArgument,
+          message: `"${target}" is flashed over Ethernet — pass --host <address> (the device IP)`,
+        },
+        ExitCode.Usage,
+      )
+    }
+  } else if (request.withUpload && capabilities.directUsbUpload) {
     // arduino-cli needs the port; the project may already remember it.
     if (!currentCommunicationPort()) {
       return reporter.failure(

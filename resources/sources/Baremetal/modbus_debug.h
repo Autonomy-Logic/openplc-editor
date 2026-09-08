@@ -31,5 +31,8 @@ void debugReadLicense(void);                                // 0x4A
 // FC 0x4B -- set the runtime run/stop state. Command only; the state is read
 // back through debugGetStatus (FC 0x46), which reports it.
 void plcSetState(uint8_t desired);
+// FC 0x4C -- reboot into the device's firmware bootloader (magic-guarded, so a
+// stray frame can't reset a running PLC). `magic` points at the 4 payload bytes.
+void rebootToBootloader(const uint8_t *magic);
 
 #endif

@@ -49,6 +49,8 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
             return 6 + (int32_t)(((uint16_t)f[2] << 8) | f[3]);
         case MB_FC_PLC_SET_STATE:
             return 5;                                   // [id][fc][state:1][crc:2]
+        case MB_FC_REBOOT_BOOTLOADER:
+            return 8;                                   // [id][fc][magic:4][crc:2]
         default:
             return -1;                                  // not one of our function codes
     }
@@ -203,6 +205,13 @@ void process_mbpacket()
         case MB_FC_PLC_SET_STATE:
             // PDU: [FC:1][state:u8]  (0 = STOP, 1 = RUN)
             plcSetState(mb_frame[2]);
+        break;
+
+        case MB_FC_REBOOT_BOOTLOADER:
+            // PDU: [FC:1][magic:4]  -- magic guards against an accidental reboot
+            // from a stray/probing frame. The device resets into its firmware
+            // bootloader so the host can re-flash without a physical power-cycle.
+            rebootToBootloader(&mb_frame[2]);
         break;
 
         default:

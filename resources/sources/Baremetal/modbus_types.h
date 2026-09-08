@@ -94,6 +94,7 @@ enum {
     MB_FC_DEBUG_WRITE_LICENSE = 0x49, // Debug write license blob to on-device storage
     MB_FC_DEBUG_READ_LICENSE  = 0x4A, // Debug read license blob from on-device storage
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
+    MB_FC_REBOOT_BOOTLOADER   = 0x4C, // Reboot the device into its firmware bootloader (magic-guarded)
 };
 
 //Exception Codes

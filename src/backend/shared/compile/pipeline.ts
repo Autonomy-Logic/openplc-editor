@@ -120,6 +120,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
   coreVersion?: string
+  /** Upload transport for arduino-cli targets. Absent/"serial" (default):
+   *  serial-port upload. "ethernet" (LOGO! 8.2): network upload — the device
+   *  IP is passed as arduino-cli's `--port`. From `target.uploadMethod`. */
+  uploadMethod?: 'serial' | 'ethernet'
   /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
    *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
    *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
@@ -963,6 +967,10 @@ async function runCompilePipelineInner(
       // caller didn't supply one (editor: fall back to the disk-
       // persisted value in `devices/configuration.json`).
       port: communicationPort ?? '',
+      // Upload transport declared by the board's VPP target. Default
+      // "serial"; "ethernet" (LOGO! 8.2) makes the editor pass the
+      // device IP (from configuration runtimeIpAddress) as --port.
+      uploadMethod: boardEntry.uploadMethod,
     },
     makePlatformLog(emit, 'upload'),
   )
