@@ -17,8 +17,13 @@
  * defensive purposes against user-supplied JSON).
  */
 
-import { ARDUINO_CLI_CAPABILITIES, RUNTIME_V4_CAPABILITIES, SIMULATOR_CAPABILITIES } from './presets'
-import type { TargetCapabilities } from './types'
+import {
+  ALL_ADDRESS_PRODUCERS_ACTIVE,
+  ARDUINO_CLI_CAPABILITIES,
+  RUNTIME_V4_CAPABILITIES,
+  SIMULATOR_CAPABILITIES,
+} from './presets'
+import type { AddressProducerCapabilities, TargetCapabilities } from './types'
 
 /** Minimal subset of BoardInfo the resolver consumes. Loosely typed
  *  so callers don't have to pin the full interface from middleware. */
@@ -107,4 +112,39 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   if (!boardInfo.capabilities) return base
 
   return { ...base, ...boardInfo.capabilities }
+}
+
+/** True when nothing in the board info says which producers are active. */
+function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolean {
+  if (!boardInfo) return true
+  if (boardInfo.capabilities) return false
+  return !['simulator', 'arduino-cli', 'openplc-compiler'].includes(boardInfo.compiler ?? '')
+}
+
+/**
+ * Which producers claim IEC addresses — the answer for ADDRESS SPACE, never
+ * for UI or feature gating.
+ *
+ * The difference from `resolveTargetCapabilities` is what happens when the
+ * target says nothing. There, silence has to resolve to `EMPTY_CAPABILITIES`,
+ * because the wrong answer for gating is offering an affordance the target
+ * cannot back. Here that same answer is actively harmful: an all-false block
+ * is indistinguishable from "this target supports no producers", so every
+ * consumer drops out. In the store that froze addresses in place and reported
+ * success (DOPE-440); in the compile-time image sizer it would size every area
+ * to zero and then refuse the build for want of a producer.
+ *
+ * So silence answers `ALL_ADDRESS_PRODUCERS_ACTIVE` instead. Permissive is the
+ * safe direction in both callers: the worst case is an address space sized or
+ * compacted for a producer the eventual target turns out not to support, while
+ * the strict reading refuses work that is fine.
+ *
+ * Silence means a board that did not resolve at all (not in the catalogue: its
+ * VPP package is not installed, the project came from another machine, or the
+ * catalogue has not loaded yet) or an entry carrying neither a capability
+ * block nor a recognised `compiler`.
+ */
+export function resolveAddressProducerCapabilities(boardInfo: BoardInfoLike | undefined): AddressProducerCapabilities {
+  if (saysNothingAboutProducers(boardInfo)) return ALL_ADDRESS_PRODUCERS_ACTIVE
+  return resolveTargetCapabilities(boardInfo)
 }

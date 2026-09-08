@@ -12,7 +12,13 @@ import type { DevicePin } from '@root/middleware/shared/ports/types'
 import type { AddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 import type { PLCProjectData } from '../../types/PLC/open-plc'
-import { computeIoImage } from '../steps/compute-io-image'
+import {
+  computeIoImage,
+  describeUnbackedLocation,
+  describeUnsupportedArea,
+  IMAGE_AREAS_BAREMETAL,
+  IMAGE_AREAS_RUNTIME_V4,
+} from '../steps/compute-io-image'
 
 const ALL_ACTIVE: AddressProducerCapabilities = {
   pinMapping: true,
@@ -81,13 +87,20 @@ const modbusMaster = (...addresses: string[]) => [
   },
 ]
 
+/** Runtime v4's area set unless a case says otherwise: it is the wider of the
+ *  two, so a case about sizing is not accidentally also a case about areas. */
 const compute = (projectData: PLCProjectData, extra: Partial<Parameters<typeof computeIoImage>[0]> = {}) =>
-  computeIoImage({ projectData, capabilities: ALL_ACTIVE, ...extra })
+  computeIoImage({
+    projectData,
+    capabilities: ALL_ACTIVE,
+    areas: IMAGE_AREAS_RUNTIME_V4,
+    ...extra,
+  })
 
 describe('computeIoImage — sizing from producers', () => {
   it('sizes nothing for an empty project', () => {
     // FR21 / BR12: the floor is zero, and zero is expressed by absence.
-    expect(compute(makeProject({}))).toEqual({ sizes: {}, unbacked: [] })
+    expect(compute(makeProject({}))).toEqual({ sizes: {}, unbacked: [], unsupported: [] })
   })
 
   it('sizes an area from the pins that claim it', () => {
@@ -135,8 +148,7 @@ describe('computeIoImage — sizing from producers', () => {
   it('ignores a producer whose kind the target does not support', () => {
     // A target without pin mapping frees that space, so it must not size the
     // image either — the same scoping the store's recalculation applies.
-    const image = computeIoImage({
-      projectData: makeProject({}),
+    const image = compute(makeProject({}), {
       devicePinMapping: pins('%QW9'),
       capabilities: { ...ALL_ACTIVE, pinMapping: false },
     })
@@ -415,7 +427,83 @@ describe('computeIoImage — BR14, an address with no producer', () => {
         },
       ],
     })
-    expect(compute(project)).toEqual({ sizes: {}, unbacked: [] })
+    expect(compute(project)).toEqual({ sizes: {}, unbacked: [], unsupported: [] })
+  })
+})
+
+describe('computeIoImage — areas the target does not have', () => {
+  it('reports %MX on bare metal instead of dropping it in silence', () => {
+    // DOPE-605: openplc.h declares no bool_memory, so today the address is
+    // simply lost. FR24 protects a memory declaration from failing for want of
+    // a producer, and this is a different failure — the area is not there.
+    const image = compute(withLocal('%MX0.1', 'flag'), { areas: IMAGE_AREAS_BAREMETAL })
+    expect(image.unbacked).toEqual([])
+    expect(image.unsupported).toEqual([{ scope: 'main', variableName: 'flag', location: '%MX0.1', prefix: '%MX' }])
+    // And the area is not sized either: there is no macro to emit it under.
+    expect(image.sizes['%MX']).toBeUndefined()
+  })
+
+  it('accepts %MX on Runtime v4, which does have bool_memory', () => {
+    const image = compute(withLocal('%MX0.1'), { areas: IMAGE_AREAS_RUNTIME_V4 })
+    expect(image.unsupported).toEqual([])
+    expect(image.sizes).toEqual({ '%MX': 8 })
+  })
+
+  it('reports a byte-addressed declaration on bare metal', () => {
+    // No byte buffer of any kind in openplc.h.
+    expect(compute(withLocal('%IB4'), { areas: IMAGE_AREAS_BAREMETAL }).unsupported).toEqual([
+      { scope: 'main', variableName: 'v', location: '%IB4', prefix: '%IB' },
+    ])
+  })
+
+  it('reports %MB on Runtime v4, which has byte_input and byte_output but no byte_memory', () => {
+    expect(compute(withLocal('%MB4'), { areas: IMAGE_AREAS_RUNTIME_V4 }).unsupported).toEqual([
+      { scope: 'main', variableName: 'v', location: '%MB4', prefix: '%MB' },
+    ])
+  })
+
+  it('does not size an area the target lacks, even when a producer claims it', () => {
+    // A target switch can leave a producer holding an address the new target
+    // has no buffer for. Sizing it would ask the emitter for a macro that does
+    // not exist.
+    const image = compute(makeProject({}), {
+      devicePinMapping: pins('%QW0'),
+      areas: new Set(['%IX']),
+    })
+    expect(image.sizes).toEqual({})
+  })
+
+  it('prefers the area message over the unbacked one for the same variable', () => {
+    // Both are true of `%IB4` on bare metal; only the area message is useful,
+    // because no producer would fix it.
+    const image = compute(withLocal('%IB4'), { areas: IMAGE_AREAS_BAREMETAL })
+    expect(image.unbacked).toEqual([])
+    expect(image.unsupported).toHaveLength(1)
+  })
+})
+
+describe('the messages', () => {
+  it('names the variable, the slot and what would fix it', () => {
+    const [issue] = compute(withLocal('%QW3859', 'valve')).unbacked
+    const message = describeUnbackedLocation(issue)
+    expect(message).toContain('"valve"')
+    expect(message).toContain('%QW3859')
+    expect(message).toContain('slot 3859')
+    expect(message).toContain('nothing produces that address')
+  })
+
+  it('says which slot an array runs past, since its own address looks legal', () => {
+    const project = makeProject({ pous: [{ name: 'main', variables: [arrayVar('a', '%QW0', 0, 3)] }] })
+    const [issue] = compute(project, { devicePinMapping: pins('%QW0', '%QW1') }).unbacked
+    expect(describeUnbackedLocation(issue)).toContain('4 elements reach past slot 2')
+  })
+
+  it('names the board for an area that does not exist there', () => {
+    const [issue] = compute(withLocal('%MX0.1'), { areas: IMAGE_AREAS_BAREMETAL }).unsupported
+    const message = describeUnsupportedArea(issue, 'Arduino Uno')
+    expect(message).toContain('"Arduino Uno" has no %MX area at all')
+    // Different remedy from the unbacked message: no producer would help.
+    expect(message).not.toContain('nothing produces')
   })
 })
 

@@ -99,11 +99,84 @@ export interface UnbackedLocation {
   slotCount: number
 }
 
+/**
+ * A located declaration in an area the target does not have at all.
+ *
+ * A different user error from `UnbackedLocation` and worth a different
+ * message: there, the area exists and that particular address has nothing
+ * behind it; here, the runtime declares no buffer of that kind whatsoever, so
+ * no address in it could ever work. Bare metal has no `bool_memory`, which is
+ * why `%MX` is silently dropped there today (DOPE-605).
+ */
+export interface UnsupportedArea {
+  /** POU that declares it, or `'Global Variables'` for a config global. */
+  scope: string
+  variableName: string
+  location: string
+  prefix: string
+}
+
 export interface IoImage {
   sizes: IoImageSizes
   /** Empty when every input and output declaration is backed. */
   unbacked: UnbackedLocation[]
+  /** Empty when every declaration names an area the target actually has. */
+  unsupported: UnsupportedArea[]
 }
+
+/**
+ * The areas the bare-metal firmware declares buffers for.
+ *
+ * Read off the `extern` declarations in `resources/sources/arduino/openplc.h`:
+ * `bool_input`, `bool_output`, `int_input`, `int_output`, `real_input`,
+ * `real_output`, `int_memory`, `dint_memory`, `lint_memory`. There is no
+ * byte-addressed buffer of any kind and no bit-addressed MEMORY area, so
+ * `%IB`, `%QB`, `%MB` and `%MX` name storage that does not exist.
+ *
+ * Deliberately the larger of the header's two MCU branches. The small-AVR
+ * branch (ATmega328P and friends) declares no `real_*` and no memory arrays at
+ * all, and telling the two apart would mean mapping an arduino-cli FQBN back
+ * to its MCU define — a mapping the editor does not otherwise keep and that
+ * would silently rot as cores are added. Permissive is the safe direction: the
+ * cost is a variable that stays inert exactly as it does today, while being
+ * strict would refuse to build projects that have been building for years.
+ */
+export const IMAGE_AREAS_BAREMETAL: ReadonlySet<string> = new Set([
+  '%IX',
+  '%QX',
+  '%IW',
+  '%QW',
+  '%ID',
+  '%QD',
+  '%MW',
+  '%MD',
+  '%ML',
+])
+
+/**
+ * The areas Runtime v4 declares tables for — the fourteen of
+ * `core/src/plc_app/image_tables.h`, the same fourteen the S7comm buffer
+ * enumeration in `types/PLC/open-plc.ts` names.
+ *
+ * Note the one gap: there is `byte_input` and `byte_output` but no
+ * `byte_memory`, so `%MB` has no storage on v4 either.
+ */
+export const IMAGE_AREAS_RUNTIME_V4: ReadonlySet<string> = new Set([
+  '%IX',
+  '%QX',
+  '%MX',
+  '%IB',
+  '%QB',
+  '%IW',
+  '%QW',
+  '%MW',
+  '%ID',
+  '%QD',
+  '%MD',
+  '%IL',
+  '%QL',
+  '%ML',
+])
 
 export interface ComputeIoImageInput {
   /** Compile-ready project data — locations already resolved from aliases to
@@ -125,6 +198,20 @@ export interface ComputeIoImageInput {
    * `activeKindsFor`.
    */
   capabilities: AddressProducerCapabilities
+  /**
+   * The areas the target runtime has buffers for — `IMAGE_AREAS_BAREMETAL` or
+   * `IMAGE_AREAS_RUNTIME_V4`.
+   *
+   * Required rather than optional-and-skipped: there is one call site, and an
+   * input that silently disables a compile gate when forgotten is the kind of
+   * hole that stays open for months.
+   *
+   * This is NOT a capacity table per platform — that was considered and
+   * rejected, and the sizes here are still derived from the project. It is the
+   * set of areas that EXIST, which is a fact of each runtime's own source and
+   * not a number anyone maintains.
+   */
+  areas: ReadonlySet<string>
 }
 
 /** `%IX`/`%QX`/`%MX`. */
@@ -332,14 +419,14 @@ function roundBitAreas(sizes: Record<string, number>): void {
 }
 
 /**
- * Size the project's I/O image, and report every input or output declaration
- * with nothing behind it.
+ * Size the project's I/O image, and report every declaration the target
+ * cannot honour.
  *
  * Deterministic: the same project yields the same sizes and the same
  * diagnostics in the same order (FR07). Nothing here reads a clock, a random
  * source, or the order a `Map` happened to be built in — `sizes` is emitted
- * through a sorted key list by the callers that serialise it, and `unbacked`
- * follows declaration order (POUs, then globals).
+ * through a sorted key list by the callers that serialise it, and both
+ * diagnostic lists follow declaration order (POUs, then globals).
  */
 export function computeIoImage(input: ComputeIoImageInput): IoImage {
   const backed = new Map<string, Set<number>>()
@@ -349,7 +436,16 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     claim(sizes, prefix, count)
   }
 
+  // A producer or a server can only have claimed an area the target has, but
+  // project.json is a file on disk and a target switch moves the goalposts, so
+  // never SIZE an area the runtime declares no buffer for — the emitters would
+  // otherwise be asked for a macro or a table key that does not exist.
+  for (const prefix of Object.keys(sizes)) {
+    if (!input.areas.has(prefix)) delete sizes[prefix]
+  }
+
   const unbacked: UnbackedLocation[] = []
+  const unsupported: UnsupportedArea[] = []
 
   for (const { scope, name, location, slotCount } of locatedVariables(input.projectData)) {
     const parsed = parseAddress(location)
@@ -360,6 +456,17 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     if (parsed === null) continue
 
     const prefix = prefixOf(parsed.cls)
+
+    // The area does not exist on this target, so no address in it could work.
+    // Reported ahead of everything else, including for memory: FR24 protects a
+    // memory declaration from failing for want of a PRODUCER, and this is a
+    // different failure. It is also the one case where memory can fail, which
+    // is why `%MX` on bare metal deserves its own message rather than being
+    // dropped in silence as it is today (DOPE-605).
+    if (!input.areas.has(prefix)) {
+      unsupported.push({ scope, variableName: name, location, prefix })
+      continue
+    }
 
     if (directionOf(prefix) === 'M') {
       // Memory is its own producer (BR14), so the declaration SIZES the area
@@ -397,5 +504,44 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
 
   roundBitAreas(sizes)
 
-  return { sizes, unbacked }
+  return { sizes, unbacked, unsupported }
+}
+
+/**
+ * One-line, actionable rendering of a BR14 violation.
+ *
+ * Says which slot has nothing behind it rather than only echoing the address,
+ * because for an array the declared address is usually fine and the LENGTH is
+ * what runs past the producers — pointing at an address that looks perfectly
+ * legal explains nothing.
+ *
+ * "Producer" is spelled out in terms the user configured rather than as
+ * jargon: what they are being asked for is an I/O module, a Modbus point, an
+ * EtherCAT channel, a pin, or an entry in the Modbus server's exposure.
+ */
+export function describeUnbackedLocation(issue: UnbackedLocation): string {
+  const reach =
+    issue.slotCount > 1
+      ? `whose ${issue.slotCount} elements reach past slot ${issue.slot} of ${issue.prefix}`
+      : `which is slot ${issue.slot} of ${issue.prefix}`
+  return (
+    `${issue.scope}: variable "${issue.variableName}" is located at ${issue.location}, ${reach}, ` +
+    'and nothing produces that address — add the I/O module, Modbus point, EtherCAT channel or pin ' +
+    'that drives it, expose it on the Modbus server, or move the variable to a memory address (%M).'
+  )
+}
+
+/**
+ * One-line rendering of a declaration in an area the target does not have.
+ *
+ * Kept separate from `describeUnbackedLocation` because the remedy is
+ * different: no address in this area will ever work on this target, so the
+ * answer is a different area or a different target, never another producer.
+ */
+export function describeUnsupportedArea(issue: UnsupportedArea, boardTarget: string): string {
+  return (
+    `${issue.scope}: variable "${issue.variableName}" is located at ${issue.location}, but ` +
+    `"${boardTarget}" has no ${issue.prefix} area at all — its runtime declares no buffer of that ` +
+    'kind, so no address in it can be read or written. Use a different address area.'
+  )
 }

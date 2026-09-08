@@ -37,7 +37,7 @@ import type {
   BoardInfoLike,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import {
-  ALL_ADDRESS_PRODUCERS_ACTIVE,
+  resolveAddressProducerCapabilities,
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
@@ -301,8 +301,7 @@ function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
  * silently keeps whatever stale addresses each point already had (DOPE-440).
  */
 function allocationCapabilities(live: ProjectSliceRoot): AddressProducerCapabilities {
-  const boardInfo = resolveBoardInfo(live)
-  return boardInfo ? resolveTargetCapabilities(boardInfo) : ALL_ADDRESS_PRODUCERS_ACTIVE
+  return resolveAddressProducerCapabilities(resolveBoardInfo(live))
 }
 
 /**
@@ -350,6 +349,10 @@ function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
  */
 function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefined {
   const boardInfo = resolveBoardInfo(live)
+  /* Not `resolveAddressProducerCapabilities` here: `activeKindsFor` returns a
+     SET, and an empty set means "no producers" while a missing one means
+     "every producer" — so the unresolved case is expressed by `undefined`
+     rather than by a permissive block. Same rule, different encoding. */
   return boardInfo ? activeKindsFor(resolveTargetCapabilities(boardInfo)) : undefined
 }
 
