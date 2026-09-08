@@ -221,9 +221,16 @@ the "Export Project as XML" feature.
 boundary (`src/backend/shared/compile/steps/modbus-defines.ts`):
 
 - the project's Modbus `PLCServer` says **what is served** — the transports,
-  the slave id, the TCP port. On every target, baremetal included.
-- the board's VPP screens say **what it is served over** — the UART's speed,
-  the RS-485 pin, the network. `serial` and `network` sections.
+  the slave id, the TCP port, and the speed of a UART of its own. On every
+  target, baremetal included.
+- the board's VPP screens say **what it is served over** — the default UART's
+  speed, the RS-485 pin, the network. `serial` and `network` sections.
+
+The default UART's speed is the one thing on that line the server does not own,
+because it is the editor's own link and a UART has one speed. `resolveServerBaud`
+in `middleware/shared/utils/modbus-server-profile/baud.ts` decides between the
+two, and the SCREEN calls it as well — a hook cannot import `backend/shared`, and
+two copies of that chain is how a screen ends up disagreeing with the firmware.
 
 A firmware build serves exactly one slave (`modbus.slaveid` is a single global),
 so `selectModbusServer` refuses a build with more than one enabled server and
