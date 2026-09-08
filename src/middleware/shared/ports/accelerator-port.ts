@@ -51,6 +51,10 @@ export interface AcceleratorPort {
   onRetrieveProject(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe
   onExportProject(callback: () => void): Unsubscribe
+  /** File > Print / Ctrl+P (Cmd+P). Preview is an alias into the same
+   *  export-PDF wizard, not a separate accelerator. */
+  onPrint(callback: () => void): Unsubscribe
+  onPageSetup(callback: () => void): Unsubscribe
 
   // --- Editor actions ---
   onCloseTab(callback: () => void): Unsubscribe

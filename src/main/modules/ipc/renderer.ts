@@ -137,6 +137,11 @@ const rendererProcessBridge = {
     xml: string,
   ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
+  exportPdfFile: (
+    defaultFileName: string,
+    bytes: Uint8Array,
+  ): Promise<{ success: boolean; canceled?: boolean; error?: { title: string; description: string } }> =>
+    ipcRenderer.invoke('project:export-pdf-file', defaultFileName, bytes),
   saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:save-file', filePath, content),
   saveFileAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-file-accelerator', callback),
@@ -145,6 +150,8 @@ const rendererProcessBridge = {
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
   saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
   retrieveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:retrieve-accelerator', callback),
+  printAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:print-accelerator', callback),
+  pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
 

@@ -50,6 +50,8 @@ beforeEach(() => {
     saveFileAccelerator: register('saveFile'),
     closeProjectAccelerator: register('closeProject'),
     exportProjectRequest: register('exportProject'),
+    printAccelerator: register('print'),
+    pageSetupAccelerator: register('pageSetup'),
     closeTabAccelerator: register('closeTab'),
     deleteFileAccelerator: register('deleteFile'),
     findInProjectAccelerator: register('findInProject'),
@@ -107,6 +109,8 @@ testAccelerator('onRetrieveProject', 'retrieveProject', 'retrieveProjectAccelera
 testAccelerator('onSaveFile', 'saveFile', 'saveFileAccelerator')
 testAccelerator('onCloseProject', 'closeProject', 'closeProjectAccelerator')
 testAccelerator('onExportProject', 'exportProject', 'exportProjectRequest')
+testAccelerator('onPrint', 'print', 'printAccelerator')
+testAccelerator('onPageSetup', 'pageSetup', 'pageSetupAccelerator')
 testAccelerator('onCloseTab', 'closeTab', 'closeTabAccelerator')
 testAccelerator('onDeleteFile', 'deleteFile', 'deleteFileAccelerator')
 testAccelerator('onFindInProject', 'findInProject', 'findInProjectAccelerator')

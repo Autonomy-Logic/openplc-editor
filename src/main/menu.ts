@@ -163,6 +163,14 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('edit:redo-request')
   }
 
+  handlePrint() {
+    this.mainWindow.webContents.send('project:print-accelerator')
+  }
+
+  handlePageSetup() {
+    this.mainWindow.webContents.send('project:page-setup-accelerator')
+  }
+
   /**
    * --------------------------------------------------------------------------------------------
    */
@@ -279,17 +287,17 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
           accelerator: 'Cmd+Option+P',
-          enabled: false,
+          click: () => this.handlePageSetup(),
         },
         {
           label: i18n.t('menu:file.submenu.preview'),
           accelerator: 'Cmd+Shift+P',
-          enabled: false,
+          click: () => this.handlePrint(),
         },
         {
           label: i18n.t('menu:file.submenu.print'),
           accelerator: 'Cmd+P',
-          enabled: false,
+          click: () => this.handlePrint(),
         },
         { type: 'separator' },
         {
@@ -501,7 +509,7 @@ export default class MenuBuilder {
         // which is the only File menu on Windows while this is the only one on
         // Linux. Deliberate for now, and tracked rather than fixed here:
         //   - native only: New Project, Open Project, Export to CODESYS XML,
-        //     Board Package Manager, Check for Updates
+        //     Board Package Manager
         //   - React only: README, Import PLCopen XML (both capability-gated)
         // Everything either menu offers now WORKS on its platform, which is the
         // part that mattered: Save As was disabled here, so on Linux a
@@ -589,18 +597,18 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.pageSetup'),
-            enabled: false,
             accelerator: 'Ctrl+Alt+P',
+            click: () => this.handlePageSetup(),
           },
           {
             label: i18n.t('menu:file.submenu.preview'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+P',
+            click: () => this.handlePrint(),
           },
           {
             label: i18n.t('menu:file.submenu.print'),
             accelerator: 'Ctrl+P',
-            enabled: false,
+            click: () => this.handlePrint(),
           },
           { type: 'separator' },
           {
