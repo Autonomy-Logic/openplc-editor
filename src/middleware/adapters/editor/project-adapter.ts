@@ -26,6 +26,11 @@ import type {
   UploadProjectResult,
   WriteProjectFiles,
 } from '../../shared/ports/project-port'
+import {
+  CloudFoldersResultSchema,
+  CloudProjectsResultSchema,
+  UploadProjectResultSchema,
+} from '../../shared/ports/project-port'
 import type {
   DeviceConfiguration,
   DevicePin,
@@ -445,9 +450,13 @@ export function createEditorProjectAdapter(): ProjectPort {
         }),
       )
 
-      // Shape-checked, not trusted: a stale main bundle answering with something else must
-      // not become an empty folder list, which would read as "you have no folders".
-      return typeof result === 'object' && result !== null && 'status' in result ? result : { status: 'unreachable' }
+      // Shape-checked, not trusted: a stale main bundle answering with something else
+      // must not become an empty folder list, which would read as "you have no folders".
+      // Validated rather than probed for a `status` key — the `ok` case carries the
+      // folders the picker renders, and half of one is not better than none.
+      const parsed = CloudFoldersResultSchema.safeParse(result)
+
+      return parsed.success ? parsed.data : { status: 'unreachable' }
     },
 
     async uploadProjectToCloud(params: UploadProjectParams): Promise<UploadProjectResult> {
@@ -458,7 +467,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         }
       }
 
-      return window.bridge.edgeUploadProject(params).catch(
+      const answer = await window.bridge.edgeUploadProject(params).catch(
         (error: unknown): UploadProjectResult => ({
           status: 'failed',
           // A rejection here is the IPC call itself failing, which says nothing about
@@ -466,6 +475,18 @@ export function createEditorProjectAdapter(): ProjectPort {
           failure: { reason: 'unreachable', message: error instanceof Error ? error.message : 'The upload failed.' },
         }),
       )
+
+      const parsed = UploadProjectResultSchema.safeParse(answer)
+
+      // Same reasoning as the rejection above, and the same wording: an answer we
+      // cannot read leaves it unknown whether the project was created, and the upload
+      // is not idempotent. Saying "failed" would invite a retry that duplicates it.
+      return parsed.success
+        ? parsed.data
+        : {
+            status: 'failed',
+            failure: { reason: 'unreachable', message: 'Autonomy Edge answered in a way this build cannot read.' },
+          }
     },
 
     listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
@@ -483,13 +504,9 @@ export function createEditorProjectAdapter(): ProjectPort {
       // signed-out user their account is empty. Observed, not imagined: it is what a
       // stale bundle did on the first run of this code.
       return window.bridge.edgeProjectsListRecent(limit).then((result): CloudProjectsResult => {
-        const status = (result as { status?: unknown } | null)?.status
+        const parsed = CloudProjectsResultSchema.safeParse(result)
 
-        if (status === 'ok' || status === 'signed-out' || status === 'unreachable' || status === 'unavailable') {
-          return result
-        }
-
-        return { status: 'unavailable' }
+        return parsed.success ? parsed.data : { status: 'unavailable' }
       })
     },
 

@@ -36,6 +36,7 @@ import {
   MergeConflictError,
   StashConflictError,
   SwitchBranchCarryConflictError,
+  VersionControlResultSchema,
 } from '../../shared/ports/version-control-port'
 
 /**
@@ -47,6 +48,17 @@ import {
  * `Error`, which is what the components' `catch` blocks log and toast.
  */
 function unwrap<T>(result: VersionControlResult<T>): T {
+  // Validated first, because `result` crossed IPC and its declared type checked
+  // nothing on the way. A main process that answered `null` made `result.ok` raise a
+  // TypeError from inside the adapter — which reaches the user as a toast with no
+  // message on it — and a `kind` from a build that has drifted fell through to the
+  // exhaustive branch and stringified itself into the UI.
+  const envelope = VersionControlResultSchema.safeParse(result)
+
+  if (!envelope.success) {
+    throw new Error('Autonomy Edge returned an answer this build of the editor cannot read.')
+  }
+
   if (result.ok) {
     return result.data
   }

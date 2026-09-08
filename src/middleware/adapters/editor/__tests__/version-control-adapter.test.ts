@@ -277,3 +277,38 @@ describe('the merge conflict crosses IPC as itself', () => {
     expect(bridge.edgeVcBranchDiffWithBase).toHaveBeenCalledWith('p1', 'feature', 'main')
   })
 })
+
+/**
+ * The envelope arrives over IPC, where its declared type checked nothing. `unwrap`
+ * reads `result.ok` and then switches on `failure.kind`, and both used to be read off
+ * whatever the main process happened to send.
+ */
+describe('an envelope this build cannot read', () => {
+  it.each([
+    ['nothing at all', null],
+    ['a bare object', {}],
+    ['a failure with no kind', { ok: false, failure: {} }],
+    ['a kind from a build that has drifted', { ok: false, failure: { kind: 'quota-exceeded' } }],
+    ['a failure missing the field its class needs', { ok: false, failure: { kind: 'carry-conflict' } }],
+  ])('fails with something sayable rather than a TypeError: %s', async (_label, answer) => {
+    bridge.edgeVcListBranches.mockResolvedValueOnce(answer)
+
+    // The wording matters here: `result.ok` on `null` raises a TypeError whose message
+    // is about reading a property, which reaches the user as a toast that explains
+    // nothing about Autonomy Edge.
+    await expect(createEditorVersionControlAdapter().listBranches('p1')).rejects.toThrow(
+      'Autonomy Edge returned an answer this build of the editor cannot read.',
+    )
+  })
+
+  it('still lets a well-formed failure through as its own error', async () => {
+    bridge.edgeVcSwitchBranch.mockResolvedValueOnce({
+      ok: false,
+      failure: { kind: 'carry-conflict', conflictedFiles: ['pous/programs/main.st'] },
+    })
+
+    await expect(createEditorVersionControlAdapter().switchBranch('p1', 'feature', 'carry')).rejects.toBeInstanceOf(
+      SwitchBranchCarryConflictError,
+    )
+  })
+})

@@ -25,6 +25,8 @@
  *   - POST   /projects/{id}/stashes/drop         — Drop a stash
  */
 
+import { z } from 'zod'
+
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
@@ -196,6 +198,40 @@ export type VersionControlFailure =
 
 /** A version-control outcome in transportable form. See {@link VersionControlFailure}. */
 export type VersionControlResult<T> = { ok: true; data: T } | { ok: false; failure: VersionControlFailure }
+
+/**
+ * The same outcome, as a runtime check.
+ *
+ * The desktop adapter needs one because its results arrive over IPC, where the
+ * declared type establishes nothing at runtime. `unwrap` reads `result.ok` and then
+ * switches on `failure.kind`: a main process that answered `null` used to raise a
+ * TypeError from inside the adapter, which reaches the user as a blank toast, and a
+ * `kind` from a build that has drifted fell through to the exhaustive branch.
+ *
+ * The payload stays `unknown` on purpose — each caller narrows what it asked for, and
+ * restating nineteen response shapes here would be a second contract to keep in step
+ * with the server.
+ */
+export const VersionControlFailureSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('signed-out') }),
+  z.object({ kind: z.literal('unreachable'), message: z.string() }),
+  z.object({ kind: z.literal('carry-conflict'), conflictedFiles: z.array(z.string()) }),
+  z.object({ kind: z.literal('stash-conflict') }),
+  z.object({ kind: z.literal('merge-conflict'), conflictedFiles: z.array(z.string()), message: z.string() }),
+  z.object({ kind: z.literal('http'), status: z.number(), message: z.string() }),
+]) satisfies z.ZodType<VersionControlFailure>
+
+/**
+ * No `satisfies z.ZodType<VersionControlResult<unknown>>` here, unlike the failure
+ * schema above: a zod key whose type admits `undefined` is inferred as OPTIONAL, so
+ * `data: unknown` comes back as `data?: unknown` and the two types differ on the key's
+ * presence alone. The failure branch — the half with a shape worth checking — carries
+ * the proof instead.
+ */
+export const VersionControlResultSchema = z.union([
+  z.object({ ok: z.literal(true), data: z.unknown() }),
+  z.object({ ok: z.literal(false), failure: VersionControlFailureSchema }),
+])
 
 /**
  * Thrown by `switchBranch` when called with `strategy: 'carry'` and the

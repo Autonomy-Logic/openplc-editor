@@ -130,6 +130,8 @@ beforeEach(() => {
     pickPlcopenImportFile: jest.fn().mockResolvedValue({ success: true, content: '<project/>' }),
     exportPlcopenFile: jest.fn().mockResolvedValue({ success: true }),
     edgeProjectsListRecent: jest.fn().mockResolvedValue({ status: 'ok', projects: [] }),
+    edgeUploadListFolders: jest.fn().mockResolvedValue({ status: 'ok', folders: [] }),
+    edgeUploadProject: jest.fn().mockResolvedValue({ status: 'ok', projectId: 'p1', uploadedFiles: 3 }),
     edgeProjectsRead: jest.fn().mockResolvedValue(mockRawProjectFiles),
     edgeProjectsSaveProject: jest.fn().mockResolvedValue({ success: true }),
     edgeProjectsSaveFile: jest.fn().mockResolvedValue({ success: true }),
@@ -931,6 +933,52 @@ describe('cloud projects', () => {
         success: false,
         error: 'This build of the editor cannot save cloud projects.',
       })
+    })
+  })
+
+  /**
+   * Each of these unions exists because the cases are worded differently on screen, so
+   * a shape that falls through to the wrong branch says something untrue: that a
+   * signed-out account is empty, or that an offline user has no folders.
+   */
+  describe('an answer the renderer cannot read', () => {
+    it('leaves the recents list unavailable rather than claiming the account is empty', async () => {
+      // A bare array is what an older main process answers with. It used to fall
+      // through the section's state machine into "no cloud projects yet".
+      ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce([])
+
+      await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
+    })
+
+    it('rejects an ok list whose rows are not projects', async () => {
+      ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce({
+        status: 'ok',
+        projects: [{ name: 'No id at all' }],
+      })
+
+      // A card with no id does nothing when clicked, and the whole answer is suspect
+      // once one row is wrong — the main process already drops unusable rows itself.
+      await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
+    })
+
+    it('reports folders as unreachable rather than as an empty account', async () => {
+      ;(window.bridge.edgeUploadListFolders as jest.Mock).mockResolvedValueOnce({ status: 'ok' })
+
+      await expect(cloudAdapter.listCloudFolders?.()).resolves.toEqual({ status: 'unreachable' })
+    })
+
+    it('reports an unreadable upload answer as unreachable, never as failed', async () => {
+      ;(window.bridge.edgeUploadProject as jest.Mock).mockResolvedValueOnce({ status: 'ok' })
+
+      // The import is not idempotent: "failed" invites a retry that would create the
+      // project twice, when it may already exist.
+      await expect(
+        cloudAdapter.uploadProjectToCloud?.({
+          projectPath: '/Users/ada/projects/mine',
+          parentFolderId: 'f1',
+          visibility: 'private',
+        }),
+      ).resolves.toMatchObject({ status: 'failed', failure: { reason: 'unreachable' } })
     })
   })
 })

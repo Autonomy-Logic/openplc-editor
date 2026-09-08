@@ -337,6 +337,61 @@ export type UploadProjectResult =
   | { status: 'ok'; projectId: string | null; uploadedFiles: number }
   | { status: 'failed'; failure: UploadProjectFailure }
 
+/**
+ * The three cloud answers, as runtime checks.
+ *
+ * The desktop adapter needs them because each arrives over IPC, where the declared
+ * type checks nothing — and every one of these unions exists precisely because the
+ * cases are worded differently to the user. An unrecognised shape falling through to
+ * the wrong branch is how a signed-out account gets told it has no projects, or an
+ * offline user gets sent to sign in. So an unreadable answer maps to the case that
+ * claims the least.
+ */
+export const CloudProjectsResultSchema = z.union([
+  z.object({
+    status: z.literal('ok'),
+    projects: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        language: z.string().nullish(),
+        updatedAt: z.string(),
+      }),
+    ),
+  }),
+  z.object({ status: z.literal('signed-out') }),
+  z.object({ status: z.literal('unreachable') }),
+  z.object({ status: z.literal('unavailable') }),
+]) satisfies z.ZodType<CloudProjectsResult>
+
+export const CloudFoldersResultSchema = z.union([
+  z.object({
+    status: z.literal('ok'),
+    folders: z.array(z.object({ id: z.string(), name: z.string(), depth: z.number() })),
+  }),
+  z.object({ status: z.literal('signed-out') }),
+  z.object({ status: z.literal('unreachable') }),
+]) satisfies z.ZodType<CloudFoldersResult>
+
+export const UploadProjectResultSchema = z.union([
+  z.object({ status: z.literal('ok'), projectId: z.string().nullable(), uploadedFiles: z.number() }),
+  z.object({
+    status: z.literal('failed'),
+    failure: z.discriminatedUnion('reason', [
+      z.object({ reason: z.literal('no-manifest') }),
+      z.object({ reason: z.literal('empty') }),
+      z.object({ reason: z.literal('too-many-files'), count: z.number() }),
+      z.object({ reason: z.literal('too-deep') }),
+      z.object({ reason: z.literal('file-too-large'), relativePath: z.string(), bytes: z.number() }),
+      z.object({ reason: z.literal('too-large'), bytes: z.number() }),
+      z.object({ reason: z.literal('unreadable'), message: z.string() }),
+      z.object({ reason: z.literal('signed-out') }),
+      z.object({ reason: z.literal('unreachable'), message: z.string() }),
+      z.object({ reason: z.literal('rejected'), status: z.number(), message: z.string() }),
+    ]),
+  }),
+]) satisfies z.ZodType<UploadProjectResult>
+
 export interface UploadProjectParams {
   /** Absolute path of the project directory on this machine. */
   projectPath: string
