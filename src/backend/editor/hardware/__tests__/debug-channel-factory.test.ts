@@ -127,8 +127,19 @@ describe('toDeviceLinkCandidates - legacy slave id', () => {
     expect(candidates[1].speculative).toBe(true)
   })
 
-  it('adds nothing when the project records no old id', () => {
+  it('adds nothing when the declared id is already the one every firmware answers', () => {
     expect(toDeviceLinkCandidates([serial({})], { probeBaudRates: false })).toHaveLength(1)
+  })
+
+  it("adds the editor's id when an old package declares its own", () => {
+    // A pre-4.4.0 package resolves the channel from the screen it still ships,
+    // so the declared id and the legacy id are the same value and there was
+    // nothing left to differ from. A board reflashed by this editor answers only
+    // 1, and used to be unreachable here.
+    const candidates = toDeviceLinkCandidates([serial({ slaveId: 7, legacySlaveId: 7 })], { probeBaudRates: false })
+
+    expect(candidates).toHaveLength(2)
+    expect(candidates[1].speculative).toBe(true)
   })
 
   it('does not pair the old id with the swept baud rates', () => {

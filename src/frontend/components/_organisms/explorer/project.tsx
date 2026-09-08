@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
-import { resolveModbusServerProfile } from '../../../../middleware/shared/utils/modbus-server-profile'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
@@ -86,13 +85,6 @@ const Project = () => {
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
-
-  // The board's Modbus screen is not listed among the vendor screens: since
-  // 4.4.0 a baremetal board's Modbus is a `PLCServer` like any other target's,
-  // rendered by the native screen under Servers. What the package still owns —
-  // Serial, Network — stays in the list, because that is hardware.
-  const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
-  const boardModbusScreen = modbusProfile.vppScreens.modbus
 
   // Persistent Storage is a PROJECT screen: the settings are saved with the
   // project and delivered by the upload, so it is available offline and has
@@ -477,13 +469,18 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Vendor screens from VPP packages — hidden for libraries. The
-           *  Modbus screen is re-homed under Servers below, so it is filtered
-           *  out here rather than listed twice. */}
+          {/* Vendor screens from VPP packages — hidden for libraries.
+           *
+           *  Every screen the package declares is listed, the Modbus one
+           *  included. A package built for 4.4.0 ships none: its Modbus became
+           *  the native screen under Servers. A package built before that still
+           *  ships one, and it is the ONLY place that state can be seen — the
+           *  defines emitter falls back to it whenever the project has no
+           *  server, so filtering it out left settings that reach the firmware
+           *  with no UI anywhere. It was filtered while it was re-homed under
+           *  Servers; that re-homing is gone. */}
           {projectCaps.hasVendorScreens &&
-            vendorScreens
-              .filter((screenName) => screenName !== boardModbusScreen)
-              .map((screenName) => (
+            vendorScreens.map((screenName) => (
                 <ProjectTreeLeaf
                   key={`vendor-${screenName}`}
                   leafLang='vendorScreen'

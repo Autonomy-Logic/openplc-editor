@@ -3,7 +3,7 @@ import type { DebugDeviceIdResult } from '@root/backend/shared/debug/types'
 import {
   classifyDeviceLink,
   FALLBACK_BAUD_RATES,
-  legacySlaveAttempt,
+  planFallbackSlaveIds,
   planBaudAttempts,
   readDeviceIdWithRetries,
 } from '../device-probe'
@@ -34,36 +34,45 @@ const SILENT: DebugDeviceIdResult = { success: false }
 const EMPTY_ID: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([]) }
 
 /**
- * The editor's slave id is a constant now, so a board flashed before that
- * answers only the id its project recorded. Getting this wrong costs a board in
- * the field, and it fails as silence rather than as an error.
+ * The slave ids tried after the declared one goes unanswered. Two upgrades pull
+ * in opposite directions here, and getting it wrong costs a board in the field
+ * that fails as silence rather than as an error.
  */
-describe('legacySlaveAttempt', () => {
-  it("offers the project's old id when it differs from the one being dialled", () => {
-    expect(legacySlaveAttempt(1, 7)).toBe(7)
+describe('planFallbackSlaveIds', () => {
+  it("adds nothing when the declared id is already the editor's and nothing else is recorded", () => {
+    // The overwhelmingly common case. It must cost exactly zero.
+    expect(planFallbackSlaveIds(1, undefined)).toEqual([])
+    expect(planFallbackSlaveIds(1, 1)).toEqual([])
   })
 
-  it('offers nothing when the old id is the one already being dialled', () => {
-    // Every board flashed at the default. Retrying it would double the wait
-    // before Connect gives up, for every project that carries the old field.
-    expect(legacySlaveAttempt(1, 1)).toBeUndefined()
+  it("offers the project's old id when a current package declares the editor's", () => {
+    // Board flashed by a 4.3.x editor at 7; the package now declares 1.
+    expect(planFallbackSlaveIds(1, 7)).toEqual([7])
   })
 
-  it('offers nothing when the project records no old id', () => {
-    expect(legacySlaveAttempt(1, undefined)).toBeUndefined()
+  it("offers the editor's id when an OLD package declares something else", () => {
+    // The mirror case, and the one that used to be missed: a pre-4.4.0 package
+    // resolves the channel from its own screen, so the declared id IS the legacy
+    // id and there was nothing left to differ from. A board reflashed since
+    // answers only 1, so 1 has to be tried even though nothing declares it.
+    expect(planFallbackSlaveIds(7, 7)).toEqual([1])
+  })
+
+  it('offers both, editor first, when all three differ', () => {
+    expect(planFallbackSlaveIds(9, 7)).toEqual([1, 7])
   })
 
   it('ignores a value that is not a usable Modbus address', () => {
     // Screen state is JSON a user's project file carries; it can hold anything.
-    expect(legacySlaveAttempt(1, '7')).toBeUndefined()
-    expect(legacySlaveAttempt(1, 0)).toBeUndefined()
-    expect(legacySlaveAttempt(1, 248)).toBeUndefined()
-    expect(legacySlaveAttempt(1, 7.5)).toBeUndefined()
-    expect(legacySlaveAttempt(1, null)).toBeUndefined()
+    expect(planFallbackSlaveIds(1, '7')).toEqual([])
+    expect(planFallbackSlaveIds(1, 0)).toEqual([])
+    expect(planFallbackSlaveIds(1, 248)).toEqual([])
+    expect(planFallbackSlaveIds(1, 7.5)).toEqual([])
+    expect(planFallbackSlaveIds(1, null)).toEqual([])
   })
 
-  it('still offers the old id when the current one is unknown', () => {
-    expect(legacySlaveAttempt(undefined, 7)).toBe(7)
+  it("still offers the editor's id when the channel declares none at all", () => {
+    expect(planFallbackSlaveIds(undefined, undefined)).toEqual([1])
   })
 })
 

@@ -20,7 +20,7 @@ import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
 
 import { WebSocketDebugTransport } from '../../shared/debug/websocket-debug-transport'
-import { legacySlaveAttempt, planBaudAttempts } from './device-probe'
+import { planBaudAttempts, planFallbackSlaveIds } from './device-probe'
 import type { DeviceDebugCandidate, DeviceLinkCandidate } from './device-session-manager'
 import { buildDeviceModbusTransport, modbusTransportKind } from './device-transport-factory'
 
@@ -123,18 +123,23 @@ export function toDeviceLinkCandidates(
       build(config, attempt.baudRate, attempt.speculative)
     }
 
-    // A board flashed before the editor's id became a constant answers only the
-    // id its project recorded. Added at the DECLARED baud alone: pairing it with
-    // the swept rates would cost five more port opens, and each open resets an
-    // AVR or ESP8266 — restarting the user's program to chase a combination of
-    // two stale values.
+    // The declared slave id is not always the one the board answers: an old
+    // package and a re-flashed board disagree in one direction, a current
+    // package and a board in the field in the other. Both extra ids go at the
+    // DECLARED baud alone — pairing them with the swept rates would cost port
+    // opens, and each open resets an AVR or ESP8266, restarting the user's
+    // program to chase two stale values at once.
+    //
     // RTU only: over TCP the unit id is a gateway routing field, not an address
     // the board filters on, and the simulator is built fresh every time.
-    const legacy =
-      modbusTransportKind(config.connectionType) === 'rtu'
-        ? legacySlaveAttempt(config.connectionParams.slaveId, config.connectionParams.legacySlaveId)
-        : undefined
-    if (legacy !== undefined) build(config, config.connectionParams.baudRate, true, legacy)
+    if (modbusTransportKind(config.connectionType) === 'rtu') {
+      for (const slaveId of planFallbackSlaveIds(
+        config.connectionParams.slaveId,
+        config.connectionParams.legacySlaveId,
+      )) {
+        build(config, config.connectionParams.baudRate, true, slaveId)
+      }
+    }
   }
 
   // The patient budget belongs to the last DECLARED endpoint, not to the last
