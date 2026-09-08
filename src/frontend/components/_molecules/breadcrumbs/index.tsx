@@ -49,15 +49,17 @@ const Breadcrumbs = () => {
 
   const { meta } = editor
 
+  // Data-type derivations only. `configuration` used to live here for the
+  // `meta.name === 'Configuration'` branch that the device trail replaced, and
+  // nothing looked it up once that went.
   const derivationIcons = {
     enumerated: EnumIcon,
     structure: StructureIcon,
     array: ArrayIcon,
-    configuration: ConfigIcon,
   }
 
   const getPouTypeOrDataTypeOrResource = ():
-    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'global-variable-list' | 'device']
+    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'global-variable-list']
     | null => {
     if ('pouType' in meta) {
       return [meta.pouType] as ['program' | 'function' | 'function-block']
@@ -196,8 +198,14 @@ const Breadcrumbs = () => {
           case 'configuration':
           case 'runtime-status':
             return ConfigIcon
+          default: {
+            // A derivation added without an icon would fall through to the
+            // `resource` fallback and be labelled "Resource" — the exact bug
+            // this trail exists to fix.
+            const exhaustive: never = editor.meta.derivation
+            return exhaustive
+          }
         }
-        break
       case 'plc-persistent-storage':
         return ConfigIcon
       case 'plc-user-management':
