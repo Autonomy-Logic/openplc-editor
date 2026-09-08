@@ -8,7 +8,6 @@
 
 import { render, screen } from '@testing-library/react'
 
-
 import { RestoreConfirmationModal } from '../restore-confirmation-modal'
 
 /** `@testing-library/jest-dom` is not wired into this project, so read the property. */
