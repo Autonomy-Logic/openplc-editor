@@ -17,7 +17,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
 import { boolFlag, listFlag, type ParsedArgs, stringFlag } from '../args'
-import { resolveRuntimeCredentials } from '../credentials'
+import { resolveOptionalRuntimeCredentials } from '../credentials'
 import { formatValue, formatVariableList } from '../debug/format'
 import { ErrorCode, type ErrorCodeValue, ExitCode, type ExitCodeValue } from '../exit-codes'
 import { type CliResult, renderTable, type Reporter } from '../output'
@@ -215,9 +215,6 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
     )
   }
 
-  // Credentials are required only by targets controlled over a runtime API. A
-  // board on a serial port has nothing to log in to, and demanding a password
-  // for it would be a rule the editor does not have.
   // The project remembers its board, and `runBuild` already falls back to it.
   // `debug open` did not, so it reached the daemon with `target: ''` and failed
   // with `Board "" is not available` on a project `compile` builds fine.
@@ -232,7 +229,14 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
     )
   }
 
-  const credentials = host ? resolveRuntimeCredentials(args) : { username: '', password: '' }
+  // Credentials are required only by targets controlled over a runtime API
+  // (runtime v4 websocket). A baremetal board reached over Modbus (TCP or RTU)
+  // or a runtime v3 over Modbus TCP has nothing to log in to, and demanding a
+  // password for it would be a rule the editor GUI does not have. We can't tell
+  // which the target is until the daemon resolves its capabilities, so accept
+  // whatever credentials were provided (validating a typo) and let the daemon's
+  // own auth gate (open-session.ts, keyed on the resolved channel) decide.
+  const credentials = resolveOptionalRuntimeCredentials(args)
   if ('error' in credentials) {
     return reporter.failure({ code: ErrorCode.MissingArgument, message: credentials.error }, ExitCode.Usage)
   }
