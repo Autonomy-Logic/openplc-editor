@@ -16,7 +16,8 @@
  *     definition redirects to the Zustand store / graphical
  *     editor.
  *   - Diagnostics mirror onto the `pouvars://` model so var-block
- *     errors surface in the variables editor too.
+ *     errors surface in the variables editor too, replayed when that
+ *     model mounts after the last publish.
  *   - Semantic-tokens viewport clip for the variables-text view.
  *   - The `strucpp/loadStlibBuffer` custom RPC + post-initialize
  *     stlib push, plus the public `refreshStlibs()` method.
@@ -50,6 +51,7 @@ import { parseScopedCompletionType } from './completion-type'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectDefinitionToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
+import { diagnosticsInVarBlocks, pouVarsTokenViewport } from './pouvars-context'
 import { type PrintSemanticTokens, registerPrintSemanticTokensApi } from './print-tokens-api'
 import { getSyncedDocumentText } from './project-sync'
 import { registerScopedQueryApi, type ScopedCompletionItem } from './scoped-query'
@@ -117,6 +119,31 @@ function applyDataTypeDiagnostics(monacoApi: typeof monaco, markerOwner: string,
   }
 }
 
+/** Last diagnostics strucpp published per POU document, keyed by LSP URI. */
+const lastPouDiagnostics = new Map<string, Diagnostic[]>()
+
+/**
+ * Mirror the VAR-block slice of a POU's diagnostics onto its `pouvars://`
+ * model, if mounted. strucpp publishes against the `pou://` / `stub://`
+ * document, so the slice is re-emitted shifted to the view's frame.
+ */
+function applyPouVarsDiagnostics(
+  monacoApi: typeof monaco,
+  pouName: string,
+  markerOwner: string,
+  defaultSource: string,
+): void {
+  const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === pouVarsUri(pouName))
+  if (!model) return
+  const { lspUri } = resolveStLspContext(pouVarsUri(pouName))
+  const diagnostics = diagnosticsInVarBlocks(lastPouDiagnostics.get(lspUri) ?? [], getBodyLineOffset(lspUri))
+  monacoApi.editor.setModelMarkers(
+    model,
+    markerOwner,
+    diagnostics.map((d) => lspDiagnosticToMonaco(d, monacoApi, POU_DECLARATION_LINE_COUNT, defaultSource)),
+  )
+}
+
 export function startStLsp(opts: StLspStartOptions): StLspService {
   const { stlibSource, monaco: monacoApi, workerUrlOverride, onCrash } = opts
 
@@ -168,8 +195,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // registered — see comment in `lsp-shared/providers.ts`.
 
     // Semantic-tokens viewport: variables-text view clips to the
-    // VAR-block region; body editors keep everything from the
-    // body line onwards.
+    // VAR-block region, minus the lines its buffer has drifted on;
+    // body editors keep everything from the body line onwards.
     resolveSemanticTokensViewport: (lspUri, modelUri, lineOffset) => {
       const dtName = parseDtViewUri(modelUri)
       if (dtName !== null) {
@@ -181,11 +208,11 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         }
         return { ...dtViewWindow(span), outputStartLine: DT_VIEW_FRAME_LINE_COUNT }
       }
-      const isVarsView = parsePouVarsUri(modelUri) !== null
-      return {
-        startLine: lineOffset,
-        endLineExclusive: isVarsView ? getBodyLineOffset(lspUri) : Number.POSITIVE_INFINITY,
+      if (parsePouVarsUri(modelUri) !== null) {
+        const model = monacoApi?.editor.getModels().find((m) => m.uri.toString() === modelUri)
+        return pouVarsTokenViewport(model?.getValue(), getSyncedDocumentText(lspUri), getBodyLineOffset(lspUri))
       }
+      return { startLine: lineOffset, endLineExclusive: Number.POSITIVE_INFINITY }
     },
 
     // Diagnostics configuration
@@ -202,26 +229,13 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         applyDataTypeDiagnostics(ctx.monacoApi, ctx.markerOwner, ctx.defaultSource)
         return
       }
-      // Mirror VAR-block diagnostics onto the variables-text editor
-      // for the same POU (if mounted).  The variables editor uses a
-      // separate Monaco model under `pouvars://<name>.st`; strucpp
-      // doesn't publish against that URI directly, so we filter the
-      // body-doc diagnostics down to the VAR region and re-emit
-      // them shifted to the declaration-line frame.
+      // Mirror VAR-block diagnostics onto the variables-text editor for
+      // the same POU. Cached so a `pouvars://` model created after this
+      // publish still gets its markers.
       const parsed = parsePouUri(params.uri)
       if (!parsed) return
-      const varsModel = ctx.monacoApi.editor.getModels().find((m) => m.uri.toString() === pouVarsUri(parsed.name))
-      if (!varsModel) return
-      const varDiagnostics: Diagnostic[] = params.diagnostics.filter(
-        (d) => d.range.start.line >= POU_DECLARATION_LINE_COUNT && d.range.start.line < ctx.bodyOffset,
-      )
-      ctx.monacoApi.editor.setModelMarkers(
-        varsModel,
-        ctx.markerOwner,
-        varDiagnostics.map((d) =>
-          lspDiagnosticToMonaco(d, ctx.monacoApi, POU_DECLARATION_LINE_COUNT, ctx.defaultSource),
-        ),
-      )
+      lastPouDiagnostics.set(params.uri, params.diagnostics)
+      applyPouVarsDiagnostics(ctx.monacoApi, parsed.name, ctx.markerOwner, ctx.defaultSource)
     },
 
     // Lifecycle hooks
@@ -234,14 +248,19 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     ...(onCrash ? { onCrash } : {}),
   })
 
-  // A `.dt` view's colours and markers come from the aggregate document,
-  // so a change there leaves the model's own text untouched and Monaco
+  // A partial view's colours and markers come from a document it does not
+  // own, so a change there leaves the model's own text untouched and Monaco
   // never re-queries on its own. Re-drive both from the store instead.
-  const dtViewSyncDisposables: Array<() => void> = []
+  const viewSyncDisposables: Array<() => void> = []
   if (monacoApi) {
     const api = monacoApi
     const hasDtViewModel = () => api.editor.getModels().some((m) => parseDtViewUri(m.uri.toString()) !== null)
-    dtViewSyncDisposables.push(
+    const mountedPouVarsNames = () =>
+      api.editor
+        .getModels()
+        .map((m) => parsePouVarsUri(m.uri.toString()))
+        .filter((name): name is string => name !== null)
+    viewSyncDisposables.push(
       openPLCStoreBase.subscribe(
         (state) => state.project.data.dataTypes,
         () => {
@@ -252,12 +271,29 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
           applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
         },
       ),
+      openPLCStoreBase.subscribe(
+        (state) => state.project.data.pous,
+        (pous, previous) => {
+          // Every body keystroke lands here too; only a VAR-block change on
+          // a POU whose variables view is mounted is worth the re-tokenise.
+          const varsChanged = mountedPouVarsNames().some((name) => {
+            const pou = pous.find((p) => p.name === name)
+            const prev = previous.find((p) => p.name === name)
+            return (
+              pou?.interface?.variables !== prev?.interface?.variables || pou?.body.language !== prev?.body.language
+            )
+          })
+          if (varsChanged) sharedService.refreshSemanticTokens()
+        },
+      ),
     )
     const onModelAdded = api.editor.onDidCreateModel((model) => {
-      if (parseDtViewUri(model.uri.toString()) === null) return
-      applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+      const uri = model.uri.toString()
+      if (parseDtViewUri(uri) !== null) applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+      const varsPou = parsePouVarsUri(uri)
+      if (varsPou !== null) applyPouVarsDiagnostics(api, varsPou, MARKER_OWNER, DIAGNOSTIC_SOURCE)
     })
-    dtViewSyncDisposables.push(() => onModelAdded.dispose())
+    viewSyncDisposables.push(() => onModelAdded.dispose())
   }
 
   // ---------------------------------------------------------------------------
@@ -522,9 +558,10 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     dispose() {
       registerScopedQueryApi(null)
       registerPrintSemanticTokensApi(null)
-      for (const off of dtViewSyncDisposables) off()
-      dtViewSyncDisposables.length = 0
+      for (const off of viewSyncDisposables) off()
+      viewSyncDisposables.length = 0
       lastDataTypeDiagnostics = []
+      lastPouDiagnostics.clear()
       sharedService.dispose()
     },
   }
