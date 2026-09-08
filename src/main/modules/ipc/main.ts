@@ -189,12 +189,16 @@ interface Md5VerifyReply {
  */
 const retrievedProjectsRoot = (): string => join(app.getPath('userData'), 'retrieved-projects')
 
-/** True for a path inside that scratch root — a retrieval, not a project the
- *  user keeps anywhere. `relative` rather than `startsWith`, so a sibling
- *  directory whose name merely begins the same way is not caught by it. */
+/** True for the scratch root or anything inside it — the retrieval area, not a
+ *  project the user keeps anywhere. `relative` rather than `startsWith`, so a
+ *  sibling directory whose name merely begins the same way is not caught by it.
+ *
+ *  The root ITSELF counts: `relative()` answers '' for it, and excluding that
+ *  made the one directory the whole area is named after the one path this
+ *  returned false for. */
 const isRetrievedProjectPath = (projectPath: string): boolean => {
   const rel = relative(retrievedProjectsRoot(), projectPath)
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -1340,6 +1344,12 @@ class MainProcessBridge implements MainIpcModule {
     // here is written to `projects.json`.
     if (typeof projectPath !== 'string' || projectPath.trim() === '') {
       return { success: false, error: 'A project path is required to track a project.' }
+    }
+    // Absolute, because Recent is read back later and from elsewhere: a
+    // relative path would be resolved against whatever the working directory
+    // happened to be, which is never what the user picked in Save As.
+    if (!isAbsolute(projectPath)) {
+      return { success: false, error: 'A project path must be absolute to be tracked.' }
     }
     if (isRetrievedProjectPath(projectPath)) {
       return { success: false, error: 'A retrieved project is not tracked until it has a location.' }
