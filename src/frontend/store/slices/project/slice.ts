@@ -21,6 +21,7 @@ import {
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
 import {
+  activeKindsFor,
   buildAliasIndex,
   channelKey,
   ethercatConsumerId,
@@ -34,7 +35,6 @@ import {
 import type {
   AddressProducerCapabilities,
   BoardInfoLike,
-  TargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import {
   ALL_ADDRESS_PRODUCERS_ACTIVE,
@@ -283,20 +283,6 @@ function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
   )
 }
 
-/** Map the active target's capabilities to the set of consumer kinds that
- *  participate in allocation. A target without pin mapping / VPP simply
- *  omits those kinds, so their addresses free up and the still-active
- *  producers recompact into the space (project-wide recalc on target
- *  switch). */
-function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
-  const kinds = new Set<string>()
-  if (caps.pinMapping) kinds.add('pin-mapping')
-  if (caps.vppIo) kinds.add('vpp-io')
-  if (caps.modbusTcpRemote) kinds.add('modbus-tcp-remote')
-  if (caps.ethercat) kinds.add('ethercat')
-  return kinds
-}
-
 /** The active target's BoardInfo, or `undefined` when the board id doesn't
  *  resolve — a VPP board whose package isn't installed, a project authored on
  *  another machine, or the catalogue not having loaded yet. */
@@ -359,12 +345,12 @@ function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
  * Only an UNRESOLVED target gets `undefined`. A resolved board that declares
  * `modbusTcpRemote: false` must still deactivate that kind, so its space frees
  * up and the still-active producers compact into it — that's the deliberate
- * target-switch behaviour documented on `activeKindsFromCapabilities`, and the
+ * target-switch behaviour documented on `activeKindsFor`, and the
  * empty Set an unresolved board used to produce is indistinguishable from it.
  */
 function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefined {
   const boardInfo = resolveBoardInfo(live)
-  return boardInfo ? activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo)) : undefined
+  return boardInfo ? activeKindsFor(resolveTargetCapabilities(boardInfo)) : undefined
 }
 
 /**
