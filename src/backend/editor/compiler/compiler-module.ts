@@ -8,6 +8,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
+import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
@@ -25,7 +27,7 @@ type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
-import { parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
+import { type NativePouRef, parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
 import { runProgramBuildPipeline } from '@root/backend/shared/library/program-build-pipeline'
 import { loadStrucpp } from '@root/backend/shared/library/strucpp-runtime'
@@ -37,39 +39,99 @@ import {
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
 
 /**
- * Shared bridge contract between `compileLibrary` and its inner
- * `runVerificationCompile` step.  Both paths talk to the same
- * runtime API and library-resolution helper.  `loadEnabledArchives`
- * resolves project-enabled library names to parsed `.stlib`
- * archives — bundled libs are always-included, user-installed
- * subset is filtered by name, missing-but-enabled names come back
- * for the caller to surface as a pre-compile error.  The same call
- * feeds the program build (`strucpp.compile`'s `libraries:` option)
- * and the library build (`compileStlib`'s dependency list), so
- * there's exactly one resolution path and no chance of the program
- * compile seeing a different library set than the verification
- * compile.
+ * Bridge contract `compileLibrary` needs from the main process.
+ * `loadEnabledArchives` resolves project-enabled library names to
+ * parsed `.stlib` archives — bundled libs are always-included, the
+ * user-installed subset is filtered by name, and missing-but-enabled
+ * names come back for the caller to surface as a pre-compile error.
+ * The same call feeds the program build (`strucpp.compile`'s
+ * `libraries:` option) and the library build (`compileStlib`'s
+ * dependency list), so there's exactly one resolution path.
+ *
+ * It used to carry the runtime-API methods too, because the library
+ * build ran an inner verification compile through `compileProgram`.
+ * That step is gone, so the library path never touches the runtime
+ * and the contract narrows to the one call it actually makes.
  */
 type LibraryCompileBridge = {
-  makeRuntimeApiRequest: <T = void>(
-    ipAddress: string,
-    endpoint: string,
-    responseParser?: (data: string) => T,
-  ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
-  // Required to satisfy compileProgram's bridge contract; never invoked on the
-  // library path (it compiles with runtimeIpAddress=null, so no upload runs).
-  makeRuntimeApiUpload: (opts: {
-    ipAddress: string
-    fileBuffer: Buffer
-    filename: string
-    contentType: string
-    cleanBuild: boolean
-    onUploadAccepted?: (responseBody: string) => void
-  }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
 }
 
-type LibraryVerificationBridge = LibraryCompileBridge
+/**
+ * Validated form of the `compiler:run-compile-library` payload.
+ *
+ * `CompileLibraryIpcArgs` types what OUR renderer sends; this checks what
+ * actually arrived.  The two are not the same statement — anything crossing
+ * IPC is `unknown` at runtime however the sender was typed.
+ */
+type ParsedCompileLibraryArgs = {
+  projectPath: string
+  projectData: PLCProjectData
+  nativePous: NativePouRef[]
+}
+
+/**
+ * Structural guard over the library-build IPC payload.
+ *
+ * Checks exactly the fields the pipeline dereferences before its first
+ * try/catch — `prepareXmlForLibraryBuild` -> `stubProgramFor` spreads
+ * `data.pous` and `data.configuration.resource.{tasks,instances}` with no
+ * guard of its own.  A malformed payload used to throw a TypeError out of
+ * `runLibraryBuildPipeline`, and because `main.ts` invokes this method with
+ * `void`, that rejection surfaced nowhere: the port was never closed and the
+ * renderer's promise never settled.  Failing here posts a result and closes
+ * the port like any other build failure.
+ *
+ * Deliberately structural rather than a full zod parse of `PLCProjectSchema`:
+ * what crosses this channel is `IpcProjectData`, a hand-maintained
+ * restatement of the project model that legitimately drops fields the schema
+ * requires.  Validating against the schema would reject payloads the build
+ * handles correctly today — a worse failure than the hole it closes.
+ */
+function parseCompileLibraryArgs(
+  raw: unknown,
+): { ok: true; value: ParsedCompileLibraryArgs } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.length < 2) {
+    return {
+      ok: false,
+      error: 'Library build failed: malformed request (expected [projectPath, projectData, nativePous]).',
+    }
+  }
+  const [projectPath, projectData, rawNativePous] = raw as unknown[]
+  if (typeof projectPath !== 'string' || projectPath === '') {
+    return { ok: false, error: 'Library build failed: request carried no project path.' }
+  }
+  if (typeof projectData !== 'object' || projectData === null) {
+    return { ok: false, error: 'Library build failed: request carried no project data.' }
+  }
+  const data = projectData as Record<string, unknown>
+  if (!Array.isArray(data.pous)) {
+    return { ok: false, error: 'Library build failed: project data has no POU list.' }
+  }
+  const configuration = data.configuration
+  if (typeof configuration !== 'object' || configuration === null) {
+    return { ok: false, error: 'Library build failed: project data has no configuration.' }
+  }
+  const resource = (configuration as Record<string, unknown>).resource
+  if (typeof resource !== 'object' || resource === null) {
+    return { ok: false, error: 'Library build failed: project configuration has no resource.' }
+  }
+  const { tasks, instances } = resource as Record<string, unknown>
+  if (!Array.isArray(tasks) || !Array.isArray(instances)) {
+    return { ok: false, error: 'Library build failed: project resource has no task or instance list.' }
+  }
+  return {
+    ok: true,
+    value: {
+      projectPath,
+      // Shape-checked above for everything the pipeline reaches for. The
+      // remaining fields are optional to it (`libraries ?? []`,
+      // `dataTypes ?? []`), so a narrower cast here would buy nothing.
+      projectData: projectData as PLCProjectData,
+      nativePous: parseNativePouRefs(rawNativePous),
+    },
+  }
+}
 
 /**
  * Project data with the optional C++ POU sidecar attached. The base
@@ -117,11 +179,13 @@ import {
 } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { app as electronApp, dialog, MessageChannelMain } from 'electron'
+import { app as electronApp, dialog } from 'electron'
 import JSZip from 'jszip'
 
-import type { PlatformOption } from '../../../middleware/shared/ports/types'
+import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
+import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
+import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -133,34 +197,6 @@ interface MethodsResult<T> {
   data?: T
 }
 type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'warning' | 'error') => void
-
-/**
- * Decode a `MessagePortMain` payload back to a string, handling the
- * forms a Node `Buffer` survives V8's structured clone as:
- *
- *   - `string` — passthrough.
- *   - `Uint8Array` / `ArrayBuffer` — typed-array decode (this is the
- *     shape Buffers ride as when the channel stays inside the main
- *     process; `.toString()` on a Uint8Array returns the comma-
- *     separated number list and was the cause of the `[verify]
- *     67,111,109,…` console flood).
- *   - `{ type: 'Buffer', data: number[] }` — Electron's IPC
- *     serialisation form, same shape `decodeMessage` in the
- *     `compiler-adapter` already handles.
- *   - anything else — `String(...)` fallback.
- */
-function decodePortMessage(raw: unknown): string {
-  if (typeof raw === 'string') return raw
-  if (raw instanceof Uint8Array) return new TextDecoder().decode(raw)
-  if (raw instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(raw))
-  if (raw && typeof raw === 'object' && 'type' in raw) {
-    const obj = raw as Record<string, unknown>
-    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
-      return new TextDecoder().decode(new Uint8Array(obj.data as number[]))
-    }
-  }
-  return String(raw)
-}
 
 type CompileArduinoProgramArgs = {
   boardTarget: string
@@ -197,14 +233,6 @@ class CompilerModule {
     'ArduinoJson',
     'Arduino_MachineControl',
     'ArduinoMqttClient',
-    // Backs DEBUG_GET_BOARD_ID (FC 0x48) in modbus_debug.cpp, which includes
-    // <ArduinoUniqueID.h> unless defines.h carries OPENPLC_NO_UNIQUE_ID — i.e.
-    // only on a board whose package declares `isLicensable`, since a unique id
-    // exists solely to bind a paid VPP licence to hardware. Kept in the global
-    // list rather than moved behind that gate: installing a library nothing
-    // includes costs a one-time download and changes no build, whereas a
-    // conditional install is one more way for a licensable board to fail late.
-    'ArduinoUniqueID',
     'AVR_PWM',
     'CAN',
     'CONTROLLINO',
@@ -398,24 +426,6 @@ class CompilerModule {
   // structure so the recipe templates resolve.
   #constructShowPropertiesDummyPath(): string {
     return join(this.sourceDirectoryPath, 'show_properties_dummy')
-  }
-
-  /**
-   * Resolve a board target to the arduino-cli core ID
-   * (`arduino-cli core install` target — e.g. `arduino:avr`).
-   *
-   * Single source of truth: reads from the shared
-   * `backend/shared/firmware/hals.json` bundle, the same file the
-   * renderer's `bridge.getAvailableBoards()` exposes via
-   * `boardInfo.core`.
-   * Used internally by the library-project verification path so a
-   * future hals.json edit (rename, new board, version bump)
-   * propagates to verification automatically — without any code
-   * change here.
-   */
-  async #getBoardCore(board: string): Promise<string | null> {
-    const halsFileContent = await readHalsFile<HalsFile>()
-    return halsFileContent[board]?.['core'] ?? null
   }
 
   /**
@@ -1891,8 +1901,16 @@ class CompilerModule {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
     if (!port) {
-      handleOutputData('No communication port specified', 'error')
-      return
+      // THROW rather than return. `uploadArduinoBoard` only awaits this call
+      // and reports `{ ok: true }` on any normal return, so bailing out here
+      // told the pipeline the board had been flashed when nothing was sent.
+      //
+      // That used to be masked: the error-level log line set the compile
+      // flow's `hasError`, which failed the build for the wrong reason. The
+      // outcome now comes from the pipeline's verdict, so a step that cannot
+      // run has to fail through the channel the verdict is built from — the
+      // catch in `uploadArduinoBoard` turns this into `{ ok: false }`.
+      throw new Error('No communication port specified — select a serial port for this board')
     }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
@@ -2419,6 +2437,46 @@ class CompilerModule {
       const combinedHash = hash.digest('hex')
       await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
 
+      // The package signature, forwarded so the runtime can verify what it is
+      // about to compile.
+      //
+      // `vpp_plugin/` is the only content in an upload that the runtime builds
+      // with a Makefile that came from the upload itself, so the runtime
+      // requires it to be signed by a trusted key. It cannot re-derive the
+      // signature: the plugin tree it receives is a SUBSET of the package
+      // (config_template.json and requirements.txt are dropped above, and
+      // trusted_keys.c / checksum.sha256 are generated here), so only the
+      // original package's detached signature can attest to it.
+      //
+      // `pluginDir` tells the runtime which signed subtree to compare the
+      // upload against — the same relative path this function copied from.
+      //
+      // Without this the runtime refuses every VPP upload with "vpp_signature
+      // .json is missing or unreadable". The contract was written on the
+      // runtime side (webserver/vpp_package_signature.py, whose comment names
+      // this very function as its author) and never implemented here, so no
+      // VPP could be uploaded to a runtime that enforces it.
+      const packageSignaturePath = join(matchingPackagePath, 'signature.json')
+      try {
+        const signatureRaw = await readFile(packageSignaturePath, 'utf-8')
+        await writeFile(
+          join(sourceTargetFolderPath, 'vpp_signature.json'),
+          `${JSON.stringify({ package: JSON.parse(signatureRaw), pluginDir: pluginDirRelPath.split(path.sep).join('/') }, null, 2)}\n`,
+          'utf-8',
+        )
+      } catch (err) {
+        // Non-fatal HERE, and refused THERE. An unsigned package is a normal
+        // thing to have during vendor development (`build.ts --unsigned`), and
+        // failing the local build would make that workflow impossible. The
+        // runtime is the boundary that matters, and it rejects the upload with
+        // a message naming the fix — which is better than this build guessing
+        // whether the target enforces signatures.
+        handleOutputData(
+          `VPP package has no usable signature.json (${getErrorMessage(err)}); a runtime that requires signed plugins will refuse this upload`,
+          'warning',
+        )
+      }
+
       handleOutputData(
         `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
         'info',
@@ -2565,8 +2623,14 @@ class CompilerModule {
         filename: string
         contentType: string
         cleanBuild: boolean
+        snapshotBuffer?: Buffer
+        snapshotMetadata?: string
         onUploadAccepted?: (responseBody: string) => void
       }) => Promise<{ success: true; data: string } | { success: false; error: string }>
+      /** Username of the live runtime session, for attributing the stored
+       *  project to whoever uploaded it. Only the username -- the password
+       *  never leaves the token authority. */
+      getRuntimeUsername?: () => string | null
       /**
        * Resolve a list of project-enabled library names to parsed
        * `.stlib` archives.  Bundled libraries are always-on and
@@ -2950,6 +3014,19 @@ class CompilerModule {
         cleanBuild: cleanBuild ?? false,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
+        // The source project stored on the device beside the artifacts.
+        // Constructed per call for the same reason as getVppRuntimeFloor: the
+        // library pool is read off disk and may have changed since the last
+        // compile.
+        buildUploadSnapshot: async () => {
+          const libraryManager = new LibraryManagerModule()
+          return buildUploadSnapshot({
+            projectPath: normalizedProjectPath,
+            editorVersion: APP_VERSION,
+            uploadedBy: mainProcessBridge.getRuntimeUsername?.() ?? '',
+            readLibraryArchive: (name) => libraryManager.readArchiveText(name),
+          })
+        },
         // VPP runtime floor (DOPE-448). Constructed per call rather than
         // held on the class because the registry is read off disk and may
         // have changed since the last compile (a package installed or
@@ -2997,6 +3074,74 @@ class CompilerModule {
       }
     }
 
+    // Persistent storage (RETAIN) settings for a runtime-v4 upload. Read from
+    // the same `devices/configuration.json` the VPP screen state comes from,
+    // because they live in the same place for the same reason: the project owns
+    // them and they must be available with no device attached.
+    //
+    // Only runtime-v4 targets have a built-in file store to configure. On
+    // baremetal the store is whatever the board's driver provides, and nothing
+    // in the project can configure it — so a retain.conf there would be a file
+    // no one reads.
+    let persistentStorage: PersistentStorageSettings | undefined
+    let targetHidesPersistentStorage = false
+    if (isRuntimeV4) {
+      const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      // Tracked out here, not acted on inside the `try`, so the catch below
+      // cannot swallow the refusal along with the missing-file case it is for.
+      let storageStanzaInvalid = false
+      try {
+        const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+        // Validated, not trusted. `readJSONFile` is `JSON.parse(...) as T`, so a
+        // hand-edited project file with `"path": null` reached
+        // `generateRetainConf` and threw on `.trim()` — a stack trace where a
+        // controlled message belongs. The schema already exists; this is just
+        // applying it at the boundary the guidelines name.
+        const parsedStorage = persistentStorageSchema.safeParse(deviceConfig.persistentStorage)
+        if (parsedStorage.success) {
+          persistentStorage = parsedStorage.data
+        } else if (deviceConfig.persistentStorage !== undefined) {
+          storageStanzaInvalid = true
+        }
+      } catch {
+        // No configuration.json — a project that never configured storage, which
+        // generateRetainConf treats as "emit nothing".
+      }
+
+      // REFUSE THE BUILD rather than carry on without the settings.
+      //
+      // Warning and continuing looked like the cautious choice and was the
+      // opposite: absent settings are not a neutral state here. `retain.conf`
+      // missing from an upload is the signal that switches the built-in store
+      // OFF, and the runtime acts on it by deleting the device's copy — so a
+      // typo in a project file would have turned retention off on the machine
+      // while the compile reported success, with one console line as the only
+      // evidence. That is exactly the silent-loss failure the rest of this
+      // design goes out of its way to make unrepresentable.
+      //
+      // Stopping here costs the user a build they have to fix. Continuing costs
+      // them retained values on a running machine, discovered after a power cut.
+      if (storageStanzaInvalid) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message:
+            'Persistent storage settings in devices/configuration.json could not be read.\n' +
+            'Refusing to build: uploading without them would switch persistent storage OFF on ' +
+            'the device, and retained variables would stop being kept.\n' +
+            'Open the Persistent Storage screen and re-save the setting, then build again.\n' +
+            'Stopping compilation process.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+      // A VPP whose own driver keeps retained values declares this, and the
+      // editor then emits no retain.conf at all — the runtime removes its copy
+      // and the built-in store stands down, leaving the vendor's driver as the
+      // only store. Same declaration that hides the screen in the project tree.
+      const vppDevice = findVppDeviceByBoardName(new PackageManagerModule(), boardTarget)
+      targetHidesPersistentStorage = (vppDevice?.device.hidesNativeScreens ?? []).includes('persistent-storage')
+    }
+
     // For Arduino VPP targets with a modular backplane, bake the
     // per-slot module-configuration bytes into vpp_config.h (the MCU
     // has no runtime JSON to load them from). The synthetic
@@ -3036,6 +3181,8 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
+        ...(persistentStorage ? { persistentStorage } : {}),
+        targetHidesPersistentStorage,
         vendorScreenData: effectiveVendorScreenData,
         // Compared against the `minEditorVersion` a runtime publishes at
         // `/api/capabilities` (DOPE-448). Injected because the pipeline
@@ -3057,8 +3204,13 @@ class CompilerModule {
     // --- Editor-specific epilogue: simulator firmware path + closePort ---
     if (isSimulator) {
       if (compileOnly) {
-        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
-        _mainProcessPort.postMessage({ closePort: true })
+        // Gated on the verdict: this line used to be unconditional, so a
+        // simulator compile-only build whose strucpp step failed printed the
+        // real error and then "Compilation successful." directly under it.
+        if (result.success) {
+          _mainProcessPort.postMessage({ logLevel: 'info', message: 'Compilation successful.' })
+        }
+        _mainProcessPort.postMessage({ closePort: true, success: result.success })
         _mainProcessPort.close()
         return
       }
@@ -3075,15 +3227,16 @@ class CompilerModule {
           logLevel: 'info',
           message: 'Compilation successful. Loading firmware into simulator...',
         })
-        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true })
+        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true, success: true })
         _mainProcessPort.close()
         return
       }
-      // Failure path on simulator — separator + close.
+      // Failure path on simulator — separator + verdict + close.
       _mainProcessPort.postMessage({
         message:
           '-------------------------------------------------------------------------------------------------------------\n',
       })
+      _mainProcessPort.postMessage({ closePort: true, success: false })
       _mainProcessPort.close()
       return
     }
@@ -3099,6 +3252,20 @@ class CompilerModule {
       message:
         '-------------------------------------------------------------------------------------------------------------\n',
     })
+    // The build's verdict, from the layer that owns it. Every step the pipeline
+    // ran reported through a real exit code — arduino-cli's process status, or
+    // the runtime's `/api/compilation-status` exit_code by way of
+    // `deployRuntimeProgram` — and `runCompilePipeline` already reduced those to
+    // one boolean.
+    //
+    // This used to be dropped on the floor here: only the simulator branch read
+    // `result.success`, so the consumer was left to infer an outcome from
+    // whether any log line had arrived at error level. Those are different
+    // questions. A compiler writes warnings to stderr, so a build that merely
+    // warned resolved as a failure — `upload_rejected`, with a bare `^~~~`
+    // caret line as its message, on a build the device had completed and
+    // started.
+    _mainProcessPort.postMessage({ closePort: true, success: result.success })
     setTimeout(() => {
       _mainProcessPort.close()
     }, 25)
@@ -3326,44 +3493,36 @@ class CompilerModule {
    *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
    *      shape `library-manager-module` persists user-installed
    *      archives with) to `<projectPath>/build/<name>.stlib`.
-   *   6. (Phase 8) Run an end-to-end avr-gcc verification compile
-   *      against the OpenPLC Simulator target, gated by an MD5
-   *      cache keyed off the produced program.st.  Verification
-   *      failures surface as warnings on `result.verification`,
-   *      never as build errors — a legitimate user target may have
-   *      more memory than the AVR simulator.  `cleanBuild` skips
-   *      the cache and forces a re-verification.
+   *
+   * The build is target-neutral — no avr-gcc pass, no simulator.
+   * Running a library is a separate action the renderer drives
+   * through `compileProgram` with a generated harness project; see
+   * `composeLibraryDebugHarness`.
    */
   async compileLibrary(
-    args: Array<string | PLCProjectData | boolean>,
+    args: unknown,
     _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: LibraryCompileBridge,
   ): Promise<void> {
     _mainProcessPort.start()
 
-    // IPC args:
-    //   [projectPath, projectData (build-pass), verifyProjectData,
-    //    cleanBuild?, nativePous?]
-    //
-    // `nativePous` is appended rather than derived here: it has to be read
-    // off the RAW project data, and by the time anything arrives over this
-    // channel `preprocessPous` has already lowered every native body to
+    // IPC args: `CompileLibraryIpcArgs` — [projectPath, projectData,
+    // nativePous]. `nativePous` is sent rather than derived here: it has to be
+    // read off the RAW project data, and by the time anything arrives over
+    // this channel `preprocessPous` has already lowered every native body to
     // bridge ST and rewritten its language tag. An older renderer omits it,
     // which degrades to "this project has no native POUs".
-    const [projectPath, projectData, verifyProjectData, cleanBuild = false, rawNativePous] = args as [
-      string,
-      PLCProjectData,
-      PLCProjectData,
-      boolean | undefined,
-      unknown,
-    ]
-
-    // Validated at the boundary rather than trusted: this crosses IPC, so it
-    // arrives as `unknown` whatever the renderer intended. A malformed entry
-    // would otherwise throw inside the pipeline's read loop, and this handler
-    // is invoked with `void` — the renderer would wait for a result that never
-    // arrives. `parseNativePouRefs` drops what it cannot read.
-    const nativePous = parseNativePouRefs(rawNativePous)
+    //
+    // Validated rather than trusted — see `parseCompileLibraryArgs` for why a
+    // throw here would strand the renderer instead of failing the build.
+    const parsed = parseCompileLibraryArgs(args)
+    if (!parsed.ok) {
+      _mainProcessPort.postMessage({ logLevel: 'error', message: parsed.error })
+      _mainProcessPort.postMessage({ libraryBuildResult: { success: false, error: parsed.error } })
+      setTimeout(() => _mainProcessPort.close(), 25)
+      return
+    }
+    const { projectPath, projectData, nativePous } = parsed.value
 
     // Bridge the orchestrator's structured port API onto the desktop
     // platform's existing helpers.  This is the only desktop-specific
@@ -3371,18 +3530,12 @@ class CompilerModule {
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
       loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
-      runVerificationCompile: ({ projectPath: p, verifyProjectData: v, emit }) =>
-        this.runVerificationCompile(p, v as PLCProjectData, mainProcessBridge, (message, logLevel) =>
-          emit(message, logLevel),
-        ),
     })
 
     const result = await runLibraryBuildPipeline(
       {
         projectPath,
         projectData,
-        verifyProjectData,
-        cleanBuild,
         nativePous,
       },
       libraryPort,
@@ -3393,123 +3546,6 @@ class CompilerModule {
     // Same 25ms delay the pre-refactor code used so the result
     // message is delivered before the port closes.
     setTimeout(() => _mainProcessPort.close(), 25)
-  }
-
-  /**
-   * Run an end-to-end verification compile of a synthetic Library
-   * Project against the OpenPLC Simulator target.  Reuses the full
-   * `compileProgram` pipeline (strucpp → arduino-cli → bundled
-   * avr-gcc) by feeding it a private `MessageChannelMain` — verifies
-   * the same way the program build does, against the same binaries,
-   * with zero code duplication.
-   *
-   * `forwardLog` is the caller's drain for the inner pipeline's
-   * message stream.  Streaming the strucpp / arduino-cli output is
-   * the difference between "blank console for 30 seconds while
-   * arduino-cli compiles" and "user sees progress" — and crucially
-   * the difference between "the .stlib generated but verification
-   * failed silently" and "the user knows which C++ line tripped
-   * avr-gcc".  We do keep the first error message internally so the
-   * summary line at the end of the build is succinct, but every log
-   * line still flows through.
-   *
-   * Resolves with `{success, message?}` either when the inner
-   * pipeline posts `closePort: true` (happy path) or when its port
-   * closes without one (the many error paths in `compileProgram`).
-   * Never throws — matches the caller's "verification is advisory"
-   * contract.
-   */
-  private async runVerificationCompile(
-    projectPath: string,
-    verifyData: PLCProjectData,
-    bridge: LibraryVerificationBridge,
-    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
-  ): Promise<{ success: boolean; message?: string }> {
-    // Look up the simulator board's core ID from `hals.json` —
-    // single source of truth shared with the renderer-side
-    // `boardInfo.core` lookup.  Falls back to a sensible default
-    // only if hals.json has been mangled; the resulting compile
-    // would fail at `core install` and surface as a verification
-    // warning, which is the documented advisory behaviour.
-    const SIMULATOR_BOARD = 'OpenPLC Simulator'
-    const boardCore = (await this.#getBoardCore(SIMULATOR_BOARD)) ?? 'arduino:avr'
-
-    return new Promise((resolve) => {
-      const channel = new MessageChannelMain()
-      let firstError: string | null = null
-      let settled = false
-
-      const settle = (result: { success: boolean; message?: string }) => {
-        if (settled) return
-        settled = true
-        try {
-          channel.port1.close()
-        } catch {
-          // Already closed — fine.
-        }
-        resolve(result)
-      }
-
-      channel.port1.on('message', (event) => {
-        const data = event.data as {
-          message?: unknown
-          logLevel?: 'info' | 'warning' | 'error'
-          closePort?: boolean
-        }
-        if (data.message !== undefined) {
-          // `decodePortMessage` returns readable text from the
-          // `Uint8Array` Node `Buffer` payloads survive structured
-          // clone as.  Without it, `.toString()` on a Uint8Array
-          // would render comma-separated byte numbers in the
-          // console.
-          const text = decodePortMessage(data.message)
-          // Forward every line — the caller decides how to render
-          // them (PLC-build path would prepend `[verify]`).  Even
-          // info-level messages matter here: avr-gcc compile can
-          // take 10+ seconds on a large library and the user needs
-          // to see progress.
-          forwardLog(text, data.logLevel)
-          // Keep only the FIRST error string for the summary.  Once
-          // arduino-cli or strucpp errors, the cascade usually
-          // continues with knock-on failures; the first one names
-          // the underlying cause.
-          if (data.logLevel === 'error' && firstError === null) {
-            firstError = text
-          }
-        }
-        if (data.closePort) {
-          settle(firstError ? { success: false, message: firstError } : { success: true })
-        }
-      })
-      // `compileProgram` posts intermediate `closePort: true` messages
-      // on its happy path but jumps straight to `port.close()` on its
-      // many error paths, without an explicit close message.  Listen
-      // for the port's 'close' event so an inner-pipeline error can't
-      // leave the outer library build hanging on an unresolved promise
-      // — same convention the renderer-side adapter uses.
-      channel.port1.on('close', () => {
-        settle(firstError ? { success: false, message: firstError } : { success: true })
-      })
-      channel.port1.start()
-
-      // The boolean slots (compileOnly / cleanBuild) are runtime
-      // values the inner `compileProgram` re-casts off `args as [...]`,
-      const compileArgs: Array<string | null | boolean | undefined | object> = [
-        projectPath,
-        SIMULATOR_BOARD,
-        boardCore,
-        true,
-        verifyData,
-        null,
-        null,
-        true,
-        null,
-        undefined,
-      ]
-      void this.compileProgram(compileArgs, channel.port2, bridge).catch((err) =>
-        settle({ success: false, message: getErrorMessage(err) }),
-      )
-    })
   }
 }
 export { CompilerModule }

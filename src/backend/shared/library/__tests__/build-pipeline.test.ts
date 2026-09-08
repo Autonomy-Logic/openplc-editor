@@ -18,12 +18,7 @@ import type { StrucppRuntime } from '../strucpp-runtime'
 // ---------------------------------------------------------------------------
 
 import { __setStrucppRuntimeForTests } from '../strucpp-runtime'
-import {
-  __TESTING__,
-  composeVerificationProject,
-  libraryBuildFromTranspiledSt,
-  prepareXmlForLibraryBuild,
-} from '../build-pipeline'
+import { __TESTING__, libraryBuildFromTranspiledSt, prepareXmlForLibraryBuild } from '../build-pipeline'
 
 const STUB = __TESTING__
 const { parseLibraryManifest, stubProgramFor } = __TESTING__
@@ -268,7 +263,7 @@ describe('stubProgramFor', () => {
     expect(stubbed.data.configuration.resource.globalVariables[0]?.name).toBe('preExistingGlobal')
   })
 
-  it('keeps meta untouched (the meta type is rewritten only by composeVerificationProject)', () => {
+  it('keeps meta untouched', () => {
     const project = makeLibraryProject()
     const stubbed = stubProgramFor(project)
     expect(stubbed.meta).toEqual(project.meta)
@@ -757,22 +752,5 @@ describe('libraryBuildFromTranspiledSt', () => {
       manifest,
     )
     expect(res.errors).toEqual([])
-  })
-})
-
-// ---------------------------------------------------------------------------
-// composeVerificationProject
-// ---------------------------------------------------------------------------
-
-describe('composeVerificationProject', () => {
-  it('returns a stubbed project tagged plc-project (not plc-library)', () => {
-    const project = makeLibraryProject()
-    const verification = composeVerificationProject(project)
-
-    expect(verification.meta.type).toBe('plc-project')
-    expect(verification.meta.name).toBe(project.meta.name)
-    expect(verification.data.pous).toHaveLength(2)
-    expect(verification.data.configuration.resource.tasks).toHaveLength(1)
-    expect(verification.data.configuration.resource.instances).toHaveLength(1)
   })
 })

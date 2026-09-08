@@ -60,6 +60,11 @@ const TabIcons: Record<string, React.ReactNode> = {
   'library-manager': <LibraryIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
   'user-management': <UsersIcon className='h-4 w-4 flex-shrink-0' />,
+  'persistent-storage': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
+  // Same icon as the tree node for this screen, so the tab and the tree
+  // agree. Without an entry here the tab rendered with no icon at all,
+  // which every other device tab has.
+  'runtime-status': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'diff-viewer': <GitCompare className='h-4 w-4 flex-shrink-0 text-[#0464FB]' />,
 }
 
@@ -85,6 +90,7 @@ const Tab = (props: ITabProps) => {
     | 'configuration'
     | 'pin-mapping'
     | 'orchestrators'
+    | 'runtime-status'
     | 'remote-device'
     | 'server'
     | 'vendor-screen'
@@ -93,6 +99,7 @@ const Tab = (props: ITabProps) => {
     | 'library-manager'
     | 'library-manifest'
     | 'user-management'
+    | 'persistent-storage'
     | 'diff-viewer' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
@@ -134,6 +141,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'user-management') {
     languageOrDerivation = 'user-management'
+  }
+  if (fileDerivation?.type === 'persistent-storage') {
+    languageOrDerivation = 'persistent-storage'
   }
   if (fileDerivation?.type === 'diff-viewer') {
     languageOrDerivation = 'diff-viewer'

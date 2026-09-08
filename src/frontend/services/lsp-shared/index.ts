@@ -65,6 +65,7 @@ export {
 export { createLspTransport, type CreateLspTransportOptions, type LspTransport } from './transport'
 
 // Internal helpers exposed for tests / specialised callers.
+export { clipEditsToWindow, lspLineInWindow, type LspLineWindow } from './internal/line-window'
 export { shiftSemanticTokensToBody } from './internal/semantic-tokens-shift'
 export {
   lspDocumentSymbolToMonaco,

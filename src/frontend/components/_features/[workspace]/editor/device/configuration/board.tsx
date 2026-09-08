@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -22,10 +21,7 @@ import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
 import { DeviceConnectButton } from '../../../../../_molecules/device-connect-button'
-import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
-import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
-import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -99,13 +95,6 @@ const Board = memo(function () {
   const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
-  const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
-  const setIncludeTimingStatsInPolling = useOpenPLCStore(
-    (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
-  )
-  const setIncludeEthercatStatsInPolling = useOpenPLCStore(
-    (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
-  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -478,25 +467,10 @@ const Board = memo(function () {
     deviceBoard,
   ])
 
-  // Enable timing stats in global polling when this screen is visible
-  useEffect(() => {
-    // Set the flag to include timing stats in the global status polling
-    setIncludeTimingStatsInPolling(true)
-
-    // Clear the flag when leaving this screen
-    return () => {
-      setIncludeTimingStatsInPolling(false)
-    }
-  }, [setIncludeTimingStatsInPolling])
-
-  // Only runtime targets expose the EtherCAT endpoint; skip the poll otherwise.
-  useEffect(() => {
-    if (!isOpenPLCRuntimeTarget(currentBoardInfo)) return
-    setIncludeEthercatStatsInPolling(true)
-    return () => {
-      setIncludeEthercatStatsInPolling(false)
-    }
-  }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
+  // Timing and EtherCAT stats polling now belongs to the Runtime Status screen
+  // (RTOP-283), which is where those statistics are displayed. Polling for them
+  // here would fetch data nobody is looking at, and would leave Runtime Status
+  // with nothing to show when opened on its own.
 
   // Settle the licence for a RUNTIME target once its session is up — once per
   // session PER BOARD.
@@ -905,14 +879,6 @@ const Board = memo(function () {
           <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
         </div>
       )}
-      {isOpenPLCRuntimeTarget(currentBoardInfo) && connectionStatus === 'connected' && (
-        <div className='flex w-full flex-col gap-6'>
-          {timingStats && <ScanCycleStats timingStats={timingStats} />}
-          <EtherCATStats />
-          <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
-        </div>
-      )}
-
       <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
         <ModalContent className='h-fit w-[500px]'>
           <ModalHeader>

@@ -49,6 +49,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugExpandedNodes: new Map(),
     fbDebugInstances: new Map(),
     fbSelectedInstance: new Map(),
+    debugHarness: null,
     debugLocalMd5: null,
     debugGraphList: [],
     debugDataStale: false,
@@ -59,6 +60,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectLoadingMessage: '',
     // Persist-permission flag (backend write access on the open project)
     canEdit: true,
+    isEphemeralProject: false,
   },
 
   workspaceActions: {
@@ -154,6 +156,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     clearWorkspace: () => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
+          // A retrieved project's ephemeral marker belongs to the project, not
+          // to the session. Leaving it set would make the NEXT project opened
+          // refuse to save for a reason that no longer applies.
+          workspace.isEphemeralProject = false
           workspace.editingState = 'initial-state'
           workspace.selectedProjectTreeLeaf = { label: '', type: null }
           workspace.isDebuggerVisible = false
@@ -168,6 +174,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugExpandedNodes = new Map()
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
+          workspace.debugHarness = null
           workspace.debugLocalMd5 = null
           workspace.debugGraphList = []
           workspace.debugDataStale = false
@@ -336,6 +343,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugHarness: (harness) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugHarness = harness
+        }),
+      )
+    },
     setFbSelectedInstance: (fbTypeName: string, key: string) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -393,6 +407,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugExpandedNodes = new Map()
           workspace.fbDebugInstances = new Map()
           workspace.fbSelectedInstance = new Map()
+          workspace.debugHarness = null
           workspace.debugLocalMd5 = null
           workspace.debugGraphList = []
           workspace.debugDataStale = false
@@ -433,6 +448,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.canEdit = value
+        }),
+      )
+    },
+    setIsEphemeralProject: (value: boolean) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isEphemeralProject = value
         }),
       )
     },

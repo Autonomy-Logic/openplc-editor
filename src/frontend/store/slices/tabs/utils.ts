@@ -82,7 +82,7 @@ const CreateResourceEditor = (name = 'Resource'): EditorModel => ({
 
 const CreateDeviceEditor = (
   name = 'device',
-  derivation: 'configuration' | 'pin-mapping' | 'orchestrators',
+  derivation: 'configuration' | 'pin-mapping' | 'orchestrators' | 'runtime-status',
 ): EditorModel => {
   if (!derivation) throw new Error('Invalid derivation value')
   return {
@@ -129,6 +129,11 @@ const CreateLibraryManagerEditor = (name = 'Library Manager'): EditorModel => ({
 
 const CreateUserManagementEditor = (name = 'User Management'): EditorModel => ({
   type: 'plc-user-management',
+  meta: { name },
+})
+
+const CreatePersistentStorageEditor = (name = 'Persistent Storage'): EditorModel => ({
+  type: 'plc-persistent-storage',
   meta: { name },
 })
 
@@ -205,6 +210,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateLibraryManifestEditor(name)
     case 'user-management':
       return CreateUserManagementEditor(name)
+    case 'persistent-storage':
+      return CreatePersistentStorageEditor(name)
     case 'diff-viewer':
       return CreateDiffViewerEditor(name, elementType.filePath)
   }
@@ -220,6 +227,7 @@ export {
   CreateLibraryManagerEditor,
   CreateLibraryManifestEditor,
   CreatePackageManagerEditor,
+  CreatePersistentStorageEditor,
   CreatePLCGraphicalObject,
   CreatePLCTextualObject,
   CreateRemoteDeviceEditor,

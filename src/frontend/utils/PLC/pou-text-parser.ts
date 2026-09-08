@@ -36,20 +36,67 @@ const formatParseError = (message: string, lineNumber?: number): string => {
 }
 
 /**
+ * Is `value` the canonical body shape for this graphical language?
+ *
+ * LD is `{ name, rungs: [...] }`; FBD is `{ name, rung: { nodes: [...] } }`
+ * (see `createPouObject`). `JSON.parse` succeeding says nothing about this:
+ * `null`, or an object carrying the *other* language's shape, parses fine and
+ * then fails much later inside a consumer reading `value.rungs` or
+ * `value.rung.nodes`. Checking here keeps the failure nameable, and at the one
+ * place that already owns "is this POU readable at all".
+ */
+export const isGraphicalBodyShape = (value: unknown, language: 'ld' | 'fbd'): boolean => {
+  if (typeof value !== 'object' || value === null) return false
+  if (language === 'ld') return 'rungs' in value && Array.isArray(value.rungs)
+  if (!('rung' in value)) return false
+  const rung = value.rung
+  if (typeof rung !== 'object' || rung === null) return false
+  return 'nodes' in rung && Array.isArray(rung.nodes)
+}
+
+/**
+ * Index at which a graphical POU's JSON body starts, or -1 when there is none.
+ *
+ * `serializeGraphicalPouToString` writes the variable declarations, a blank
+ * line, then `JSON.stringify(body, null, 2)` — so the body always opens with a
+ * brace in **column 0**, and the anchor requires exactly that. A declaration
+ * line may legitimately carry a brace (a struct initial value spilling onto its
+ * own line, a CODESYS-style `{attribute ...}` pragma, an inline `(* ... *)`
+ * comment), but the serializer always indents declarations, so none of them can
+ * be mistaken for the body. Allowing an indented brace here would end the
+ * declaration scan early and report a malformed declaration as invalid body
+ * JSON, pointing the user at the wrong place.
+ */
+export const findGraphicalBodyStartIndex = (content: string, fromIndex: number): number => {
+  const match = content.slice(fromIndex).match(/^\{/m)
+  /* istanbul ignore next -- a matched regex always carries an index */
+  if (match?.index === undefined) return -1
+  return fromIndex + match.index
+}
+
+/**
  * Helper function to find the last END_VAR in the content
  * @param content - The content to search
  * @param startIndex - The index to start searching from
+ * @param stopAtIndex - Optional exclusive upper bound for the search. Graphical
+ *   POUs pass the start of their JSON body: a placed native (C/C++, Python)
+ *   library block carries its authored source in `node.data.variant.body`, and
+ *   that source has its own VAR ... END_VAR. Scanning the whole file would take
+ *   the embedded END_VAR as the end of the declarations and slice the body from
+ *   the middle of the JSON, so the POU failed to parse and the project could
+ *   not be opened at all (DOPE-592).
  * @returns The index after the last END_VAR, or -1 if not found
  */
-export const findLastEndVarIndex = (content: string, startIndex: number): number => {
+export const findLastEndVarIndex = (content: string, startIndex: number, stopAtIndex?: number): number => {
+  const region = stopAtIndex === undefined ? content : content.slice(0, stopAtIndex)
   let lastEndVarIndex = -1
   let searchIndex = startIndex
 
-  let endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+  let endVarMatch = region.slice(searchIndex).match(/\bEND_VAR\b/i)
   while (endVarMatch && endVarMatch.index !== undefined) {
     lastEndVarIndex = searchIndex + endVarMatch.index + endVarMatch[0].length
     searchIndex = lastEndVarIndex
-    endVarMatch = content.slice(searchIndex).match(/\bEND_VAR\b/i)
+    endVarMatch = region.slice(searchIndex).match(/\bEND_VAR\b/i)
   }
 
   return lastEndVarIndex
@@ -298,7 +345,12 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
 
     if (varStartIndex !== -1) {
       const varSectionStart = varStartIndex
-      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
+      const bodyStart = findGraphicalBodyStartIndex(remainingContent, varSectionStart)
+      const lastEndVarIndex = findLastEndVarIndex(
+        remainingContent,
+        varSectionStart,
+        bodyStart === -1 ? undefined : bodyStart,
+      )
 
       if (lastEndVarIndex !== -1) {
         variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
@@ -334,6 +386,24 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
         throw new Error(formatParseError(`Invalid JSON in graphical body: ${jsonError.message}`))
       }
       throw new Error(formatParseError('Invalid JSON in graphical body'))
+    }
+
+    // Deliberately OUTSIDE the catch above. A body that parsed but carries the
+    // wrong shape is not a JSON error, and saying "Invalid JSON" about valid
+    // JSON sends the reader hunting for a syntax error that is not there. That
+    // matters here more than usual: on an unrecoverable POU this text is the
+    // Console line that explains why the project opened empty.
+    // Narrowing (not `as`) gives TypeScript the literal union for free.
+    if ((language === 'ld' || language === 'fbd') && !isGraphicalBodyShape(parsedBody, language)) {
+      throw new Error(
+        formatParseError(
+          `Invalid graphical body shape: ${
+            language === 'ld'
+              ? 'expected an object with a "rungs" array'
+              : 'expected an object with a "rung" object holding a "nodes" array'
+          }`,
+        ),
+      )
     }
 
     // returnType is guaranteed non-empty for functions (validated above)

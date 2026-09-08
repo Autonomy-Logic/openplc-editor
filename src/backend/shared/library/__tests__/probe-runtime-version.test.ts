@@ -16,7 +16,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: true, body: { version: '4.1.2' } }),
       log,
     })
-    expect(result).toEqual({ version: '4.1.2', minEditorVersion: null })
+    expect(result).toEqual({ version: '4.1.2', minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -26,7 +26,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: true, body: { version: '4.0.5' } }),
       log,
     })
-    expect(result).toEqual({ version: '4.0.5', minEditorVersion: null })
+    expect(result).toEqual({ version: '4.0.5', minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   it('returns version=null and logs a warning when the transport fails', async () => {
@@ -35,7 +35,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: false, error: 'ECONNREFUSED' }),
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Could not reach runtime: ECONNREFUSED'), 'warning')
   })
 
@@ -47,7 +47,7 @@ describe('probeRuntimeVersion', () => {
       },
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining('Runtime version probe failed: orchestrator HTTP down'),
       'warning',
@@ -63,7 +63,7 @@ describe('probeRuntimeVersion', () => {
       },
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('plain string failure'), 'warning')
   })
 
@@ -73,7 +73,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: true, body: { otherField: 'noise' } }),
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -83,7 +83,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: true, body: { version: 4 } }),
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   it('returns version=null when the body is null', async () => {
@@ -92,7 +92,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: true, body: null }),
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   it('returns version=null when the body is a primitive (not an object)', async () => {
@@ -101,7 +101,7 @@ describe('probeRuntimeVersion', () => {
       fetchVersion: async () => ({ success: true, body: 'a string' }),
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
   })
 })
 
@@ -127,7 +127,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion,
       log,
     })
-    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: '4.2.1' })
+    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: '4.2.1', supportsProjectSnapshot: false })
     // One round-trip, not two: the capabilities answer is complete.
     expect(fetchVersion).not.toHaveBeenCalled()
     expect(log).not.toHaveBeenCalled()
@@ -145,7 +145,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
         fetchVersion: versionMustNotBeCalled(),
         log,
       })
-      expect(result).toEqual({ version: 'v4.2.0', minEditorVersion })
+      expect(result).toEqual({ version: 'v4.2.0', minEditorVersion, supportsProjectSnapshot: false })
       expect(log).not.toHaveBeenCalled()
     },
   )
@@ -165,7 +165,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: versionMustNotBeCalled(),
       log,
     })
-    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: 'garbage' })
+    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: 'garbage', supportsProjectSnapshot: false })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('unreadable minEditorVersion ("garbage")'), 'warning')
     expect(log).toHaveBeenCalledWith(expect.stringContaining('not being enforced'), 'warning')
   })
@@ -177,7 +177,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: versionMustNotBeCalled(),
       log,
     })
-    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: null })
+    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   it('ignores a non-string minEditorVersion rather than passing it to a comparison', async () => {
@@ -190,7 +190,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: versionMustNotBeCalled(),
       log,
     })
-    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: null })
+    expect(result).toEqual({ version: 'v4.2.0', minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   // The single most important case: this is every runtime currently
@@ -214,7 +214,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: async () => ({ success: true, body: { version: 'v4.1.7' } }),
       log,
     })
-    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null })
+    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -228,7 +228,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: async () => ({ success: true, body: { version: 'v4.1.7' } }),
       log,
     })
-    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null })
+    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -241,7 +241,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: async () => ({ success: true, body: { version: 'v4.1.7' } }),
       log,
     })
-    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null })
+    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).not.toHaveBeenCalled()
   })
 
@@ -261,7 +261,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: async () => ({ success: true, body: { version: 'v4.1.7' } }),
       log,
     })
-    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null })
+    expect(result).toEqual({ version: 'v4.1.7', minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   it('behaves exactly as before when no capabilities transport is wired', async () => {
@@ -272,7 +272,7 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: async () => ({ success: true, body: { version: '4.1.2' } }),
       log,
     })
-    expect(result).toEqual({ version: '4.1.2', minEditorVersion: null })
+    expect(result).toEqual({ version: '4.1.2', minEditorVersion: null, supportsProjectSnapshot: false })
   })
 
   it('still warns about an unreachable device when the fallback also fails', async () => {
@@ -282,7 +282,74 @@ describe('probeRuntimeVersion — capabilities endpoint', () => {
       fetchVersion: async () => ({ success: false, error: 'ECONNREFUSED' }),
       log,
     })
-    expect(result).toEqual({ version: null, minEditorVersion: null })
+    expect(result).toEqual({ version: null, minEditorVersion: null, supportsProjectSnapshot: false })
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Could not reach runtime: ECONNREFUSED'), 'warning')
+  })
+})
+
+// --- the project-snapshot capability ---------------------------------------
+//
+// The upload path uses this to decide whether to build a snapshot at all. A
+// runtime that does not store them discards the archive silently, so sending
+// one costs the user upload time and gives them a device they cannot retrieve
+// from without ever saying so.
+
+describe('supportsProjectSnapshot', () => {
+  const log = () => undefined
+
+  it('is true when the runtime says so', async () => {
+    const result = await probeRuntimeVersion({
+      fetchCapabilities: () =>
+        Promise.resolve({ success: true, body: { runtimeVersion: 'v4.2.0', projectSnapshot: true } }),
+      fetchVersion: () => Promise.resolve({ success: false, error: 'unused' }),
+      log,
+    })
+
+    expect(result.supportsProjectSnapshot).toBe(true)
+  })
+
+  it('is false when the runtime says so', async () => {
+    const result = await probeRuntimeVersion({
+      fetchCapabilities: () =>
+        Promise.resolve({ success: true, body: { runtimeVersion: 'v4.2.0', projectSnapshot: false } }),
+      fetchVersion: () => Promise.resolve({ success: false, error: 'unused' }),
+      log,
+    })
+
+    expect(result.supportsProjectSnapshot).toBe(false)
+  })
+
+  it('is false when the runtime does not mention it', async () => {
+    // Every runtime predating the feature. Absent means no, because one that
+    // stores snapshots says so.
+    const result = await probeRuntimeVersion({
+      fetchCapabilities: () => Promise.resolve({ success: true, body: { runtimeVersion: 'v4.1.0' } }),
+      fetchVersion: () => Promise.resolve({ success: false, error: 'unused' }),
+      log,
+    })
+
+    expect(result.supportsProjectSnapshot).toBe(false)
+  })
+
+  it('is false for a value that is not a boolean', async () => {
+    const result = await probeRuntimeVersion({
+      fetchCapabilities: () =>
+        Promise.resolve({ success: true, body: { runtimeVersion: 'v4.2.0', projectSnapshot: 'yes' } }),
+      fetchVersion: () => Promise.resolve({ success: false, error: 'unused' }),
+      log,
+    })
+
+    expect(result.supportsProjectSnapshot).toBe(false)
+  })
+
+  it('is false for a runtime old enough to have no capabilities endpoint', async () => {
+    const result = await probeRuntimeVersion({
+      fetchCapabilities: () => Promise.resolve({ success: false, error: '401' }),
+      fetchVersion: () => Promise.resolve({ success: true, body: { version: '4.0.9' } }),
+      log,
+    })
+
+    expect(result.version).toBe('4.0.9')
+    expect(result.supportsProjectSnapshot).toBe(false)
   })
 })

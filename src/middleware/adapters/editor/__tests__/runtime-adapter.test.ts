@@ -28,9 +28,31 @@ beforeEach(() => {
       data: { status: 'SUCCESS', logs: [], exit_code: 0 },
     }),
     runtimeClearCredentials: jest.fn().mockResolvedValue({ success: true }),
+    // The bootloader surface (RTOP-283). A separate service on the device
+    // with its own session, reached over the same IPC bridge.
+    bootloaderGetCapabilities: jest.fn().mockResolvedValue({
+      success: true,
+      data: { service: 'openplc-bootloader', state: 'healthy', recovery: false },
+    }),
+    bootloaderLogin: jest.fn().mockResolvedValue({ success: true, data: { role: 'admin' } }),
+    bootloaderGetStatus: jest.fn().mockResolvedValue({ success: true, data: { state: 'healthy' } }),
+    bootloaderGetDeviceInfo: jest.fn().mockResolvedValue({ success: true, data: { hostname: 'slm-rp4' } }),
+    bootloaderGetRuntimeLogs: jest.fn().mockResolvedValue({ success: true, data: { logs: '', available: true } }),
+    bootloaderStartUpdate: jest.fn().mockResolvedValue({ success: true, data: { state: 'pulling' } }),
+    bootloaderGetUpdateProgress: jest.fn().mockResolvedValue({ success: true, data: { state: 'success' } }),
+    bootloaderRestartRuntime: jest.fn().mockResolvedValue({ success: true, data: { state: 'starting' } }),
+    bootloaderClearSession: jest.fn().mockResolvedValue(undefined),
     onRuntimeTokenRefreshed: jest.fn().mockImplementation(() => jest.fn()),
     runtimeDiscoverDevices: jest.fn().mockResolvedValue({ success: true, devices: [] }),
     onRuntimeDeviceDiscovered: jest.fn().mockImplementation(() => jest.fn()),
+    runtimeRetrieveProject: jest.fn().mockResolvedValue({
+      success: true,
+      projectName: 'Traffic Light',
+      libraries: [],
+    }),
+    runtimeInstallRetrievedLibraries: jest
+      .fn()
+      .mockResolvedValue({ success: true, installed: ['oscat-basic'], failed: [] }),
     etherCATGetInterfaces: jest.fn().mockResolvedValue({ success: true, data: [] }),
     etherCATGetStatus: jest.fn().mockResolvedValue({ success: true, data: {} }),
     etherCATScan: jest.fn().mockResolvedValue({ success: true, data: {} }),
@@ -621,5 +643,265 @@ describe('isReadyForDebug', () => {
     await adapter.clearCredentials()
 
     expect(adapter.isReadyForDebug!()).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// stored source project
+// ---------------------------------------------------------------------------
+
+describe('retrieveProject', () => {
+  it('delegates to bridge with the device address', async () => {
+    const result = await adapter.retrieveProject!('192.168.1.100')
+
+    expect(window.bridge.runtimeRetrieveProject).toHaveBeenCalledWith('192.168.1.100')
+    expect(result).toEqual({ success: true, projectName: 'Traffic Light', libraries: [] })
+  })
+
+  it('reports a failed IPC call rather than throwing at the caller', async () => {
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockRejectedValue(new Error('retrieve failed'))
+    const result = await adapter.retrieveProject!('192.168.1.100')
+
+    expect(result).toEqual({ success: false, error: 'retrieve failed' })
+  })
+})
+
+describe('installRetrievedLibraries', () => {
+  it('delegates to bridge with the project path and the names to install', async () => {
+    const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
+      'oscat-basic',
+    ])
+
+    expect(window.bridge.runtimeInstallRetrievedLibraries).toHaveBeenCalledWith('/projects/demo', ['oscat-basic'])
+    expect(result).toEqual({ success: true, installed: ['oscat-basic'], failed: [] })
+  })
+
+  it('reports the failure in the shape the caller renders, not as a thrown error', async () => {
+    // The caller lists failures per library, so a whole-call failure still has
+    // to arrive as one -- an empty name with the reason attached.
+    ;(window.bridge.runtimeInstallRetrievedLibraries as jest.Mock).mockRejectedValue(new Error('install failed'))
+    const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
+      'oscat-basic',
+    ])
+
+    expect(result).toEqual({
+      success: false,
+      installed: [],
+      failed: [{ name: '', error: 'install failed' }],
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// the shared retrieve picker's desktop half
+// ---------------------------------------------------------------------------
+//
+// The picker is one component for both platforms. What these translate is the
+// desktop's answer to "which devices, and how do I address them": a LAN scan,
+// keyed by address.
+
+describe('listRetrievableDevices', () => {
+  it('maps LAN replies into the shape the picker reads', async () => {
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
+      success: true,
+      devices: [
+        {
+          ipAddress: '192.168.1.50',
+          hostname: 'plc-1',
+          projectName: 'Traffic Light',
+          projectTimestamp: '2026-08-31T12:00:00Z',
+        },
+      ],
+    })
+
+    const result = await adapter.listRetrievableDevices!()
+
+    expect(result.success).toBe(true)
+    expect(result.success && result.devices).toEqual([
+      {
+        key: '192.168.1.50',
+        name: '192.168.1.50',
+        location: 'plc-1',
+        answeredScan: true,
+        projectName: 'Traffic Light',
+        projectTimestamp: '2026-08-31T12:00:00Z',
+      },
+    ])
+  })
+
+  it('marks every listed device as having answered', async () => {
+    // On this platform a device is only in the list because it replied to the
+    // scan, so "stores nothing" is always a real answer here -- unlike web,
+    // where the device list and the scan are separate facts.
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
+      success: true,
+      devices: [{ ipAddress: '192.168.1.51', hostname: '' }],
+    })
+
+    const result = await adapter.listRetrievableDevices!()
+    const [device] = result.success ? result.devices : []
+
+    expect(device.answeredScan).toBe(true)
+    expect(device.projectName).toBeUndefined()
+    expect(device.location).toBeUndefined()
+  })
+
+  it('reports a failed scan rather than an empty network', async () => {
+    ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
+      success: false,
+      error: 'no interface',
+    })
+
+    const result = await adapter.listRetrievableDevices!()
+
+    expect(result).toEqual({ success: false, error: 'no interface' })
+  })
+})
+
+describe('connectedRetrievableDeviceKey', () => {
+  it('is empty until a session actually exists', async () => {
+    // A configured address is not a session. Without this the picker would skip
+    // asking for credentials for a device nobody has signed in to.
+    expect(adapter.connectedRetrievableDeviceKey!()).toBe('')
+
+    await adapter.login({ username: 'admin', password: 'secret' })
+
+    expect(adapter.connectedRetrievableDeviceKey!()).toBe('192.168.1.100')
+  })
+})
+
+describe('fetchRetrievableProject', () => {
+  const device = { key: '192.168.1.50', name: '192.168.1.50', answeredScan: true }
+
+  it('carries the scratch directory through as the payload', async () => {
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockResolvedValue({
+      success: true,
+      projectPath: '/scratch/retrieved/Demo-123',
+      projectName: 'Demo',
+      libraries: [{ name: 'oscat-basic', version: '3.3.4', status: 'missing' }],
+    })
+
+    const result = await adapter.fetchRetrievableProject!(device)
+
+    expect(window.bridge.runtimeRetrieveProject).toHaveBeenCalledWith('192.168.1.50')
+    expect(result).toEqual({
+      success: true,
+      project: {
+        projectName: 'Demo',
+        payload: '/scratch/retrieved/Demo-123',
+        libraries: [{ name: 'oscat-basic', version: '3.3.4', status: 'missing' }],
+      },
+    })
+  })
+
+  it('reports a device that returned nothing', async () => {
+    ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockResolvedValue({
+      success: false,
+      error: 'That device is not storing a project.',
+    })
+
+    const result = await adapter.fetchRetrievableProject!(device)
+
+    expect(result).toEqual({ success: false, error: 'That device is not storing a project.' })
+  })
+})
+
+describe('onRetrievableDeviceFound', () => {
+  it('translates each streamed reply as it arrives', () => {
+    // The LAN scan answers progressively, so rows appear while it is still
+    // running rather than all at once when it ends.
+    let emit: ((event: unknown, device: unknown) => void) | undefined
+    const unsubscribe = jest.fn()
+    ;(window.bridge.onRuntimeDeviceDiscovered as jest.Mock).mockImplementation((handler) => {
+      emit = handler as (event: unknown, device: unknown) => void
+      return unsubscribe
+    })
+
+    const seen: Array<{ key: string; projectName?: string }> = []
+    const stop = adapter.onRetrievableDeviceFound!((device) => seen.push(device))
+
+    emit?.({}, { ipAddress: '192.168.1.60', hostname: 'plc-9', projectName: 'Bottling' })
+
+    expect(seen).toEqual([
+      {
+        key: '192.168.1.60',
+        name: '192.168.1.60',
+        location: 'plc-9',
+        answeredScan: true,
+        projectName: 'Bottling',
+        projectTimestamp: undefined,
+      },
+    ])
+
+    stop()
+    expect(unsubscribe).toHaveBeenCalled()
+  })
+})
+
+describe('selectRetrievableDevice', () => {
+  it('moves the target address the adapter authenticates against', async () => {
+    // This has to happen before the login, not with it: the adapter reads its
+    // target from the store to know which device to sign in to.
+    const { openPLCStoreBase } = await import('../../../../frontend/store')
+
+    adapter.selectRetrievableDevice!({ key: '192.168.1.77', name: '192.168.1.77', answeredScan: true })
+
+    expect(openPLCStoreBase.getState().deviceDefinitions.configuration.runtimeIpAddress).toBe('192.168.1.77')
+  })
+})
+
+describe('the bootloader surface', () => {
+  // Every method is a thin pass-through to the IPC bridge, so what is worth
+  // pinning is that each one reaches the right channel with the device address
+  // the adapter was given -- and that a thrown bridge error becomes the
+  // port's failure union rather than escaping to the caller.
+
+  it('reaches the bridge for each call, with the selected device address', async () => {
+    await adapter.bootloader.getCapabilities()
+    expect(window.bridge.bootloaderGetCapabilities).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.login('op', 'op')
+    expect(window.bridge.bootloaderLogin).toHaveBeenCalledWith(mockIpAddress, 'op', 'op')
+
+    await adapter.bootloader.getStatus()
+    expect(window.bridge.bootloaderGetStatus).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.getDeviceInfo()
+    expect(window.bridge.bootloaderGetDeviceInfo).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.getRuntimeLogs(50)
+    expect(window.bridge.bootloaderGetRuntimeLogs).toHaveBeenCalledWith(mockIpAddress, 50)
+
+    await adapter.bootloader.startUpdate('v4.1.10')
+    expect(window.bridge.bootloaderStartUpdate).toHaveBeenCalledWith(mockIpAddress, 'v4.1.10')
+
+    await adapter.bootloader.getUpdateProgress()
+    expect(window.bridge.bootloaderGetUpdateProgress).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.restartRuntime()
+    expect(window.bridge.bootloaderRestartRuntime).toHaveBeenCalledWith(mockIpAddress)
+
+    await adapter.bootloader.clearSession()
+    expect(window.bridge.bootloaderClearSession).toHaveBeenCalledWith(mockIpAddress)
+  })
+
+  it('returns what the bridge returns', async () => {
+    const result = await adapter.bootloader.getDeviceInfo()
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.hostname).toBe('slm-rp4')
+  })
+
+  it('turns a bridge failure into the port failure union', async () => {
+    // A dead IPC channel must not throw past the adapter: every caller in the
+    // Runtime Status screen branches on `success`, and an exception there
+    // would take the screen down instead of showing "no bootloader".
+    ;(window.bridge.bootloaderGetCapabilities as jest.Mock).mockRejectedValue(new Error('ipc gone'))
+
+    const result = await adapter.bootloader.getCapabilities()
+
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error).toMatch(/ipc gone/)
   })
 })

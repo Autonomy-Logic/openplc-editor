@@ -1,6 +1,7 @@
 import * as iecStringModule from '../../generate-iec-string-to-variables'
 import {
   detectLanguageFromExtension,
+  findGraphicalBodyStartIndex,
   findLastEndVarIndex,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
@@ -323,7 +324,7 @@ END_PROGRAM`
   })
 
   it('parses an FBD program', () => {
-    const bodyValue = { nodes: [{ id: '1' }], edges: [] }
+    const bodyValue = { name: 'FbdMain', rung: { nodes: [{ id: '1' }], edges: [] } }
     const content = `PROGRAM FbdMain
 ${JSON.stringify(bodyValue, null, 2)}
 END_PROGRAM`
@@ -337,7 +338,7 @@ END_PROGRAM`
     const content = `(* Graphical doc *)
 
 PROGRAM GfxPou
-{}
+{ "rungs": [] }
 END_PROGRAM`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'program')
@@ -346,7 +347,7 @@ END_PROGRAM`
 
   it('parses a function with return type', () => {
     const content = `FUNCTION GfxFunc : BOOL
-{}
+{ "rungs": [] }
 END_FUNCTION`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'function')
@@ -355,7 +356,7 @@ END_FUNCTION`
 
   it('parses a function-block', () => {
     const content = `FUNCTION_BLOCK GfxFB
-{}
+{ "rungs": [] }
 END_FUNCTION_BLOCK`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'function-block')
@@ -371,7 +372,7 @@ VAR_OUTPUT
   b : INT;
 END_VAR
 
-{}
+{ "rungs": [] }
 END_PROGRAM`
 
     const result = parseGraphicalPouFromString(content, 'ld', 'program')
@@ -543,5 +544,134 @@ describe('detectLanguageFromExtension', () => {
 
   it('throws for unsupported extension', () => {
     expect(() => detectLanguageFromExtension('file.java')).toThrow('Unsupported extension')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DOPE-592: a placed native library block carries its own VAR ... END_VAR
+// ---------------------------------------------------------------------------
+describe('graphical POU holding a native library block', () => {
+  // A C++ library block's authored source, as `node.data.variant.body` used to
+  // carry it. Two details matter and both are what shipped in real projects:
+  // END_VAR is indented (so a space precedes it and the \bEND_VAR\b word
+  // boundary matches, which an escaped newline alone would have blocked), and
+  // the body continues past it with content that is not JSON.
+  const nativeBlockSource = [
+    'FUNCTION_BLOCK TCP_CLIENT',
+    'VAR_INPUT',
+    '  EN : BOOL;',
+    '  END_VAR',
+    'VAR',
+    '  fd : INT;',
+    '  END_VAR',
+    '#ifdef ARDUINO',
+    '#include <WiFi.h>',
+    '#endif',
+  ].join('\n')
+
+  const body = {
+    name: 'main',
+    rungs: [
+      {
+        id: 'rung-1',
+        nodes: [
+          {
+            id: 'block-1',
+            type: 'block',
+            data: { variant: { name: 'TCP_CLIENT', language: 'cpp', body: nativeBlockSource } },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  }
+
+  const content = `PROGRAM main\nVAR\n  x : BOOL;\nEND_VAR\n\n${JSON.stringify(body, null, 2)}\nEND_PROGRAM\n`
+
+  it('parses the body instead of slicing it from the embedded END_VAR', () => {
+    const pou = parseGraphicalPouFromString(content, 'ld', 'program')
+    expect(pou.body.value).toMatchObject({
+      rungs: [{ nodes: [{ data: { variant: { name: 'TCP_CLIENT' } } }] }],
+    })
+  })
+
+  it("still reads the POU's own variables, not the block's", () => {
+    const pou = parseGraphicalPouFromString(content, 'ld', 'program')
+    expect(pou.interface?.variables.map((v) => v.name)).toEqual(['x'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DOPE-592: a wrong shape is not a JSON error
+// ---------------------------------------------------------------------------
+describe('graphical body diagnostics', () => {
+  const wrap = (body: string) => `PROGRAM main\nVAR\nEND_VAR\n\n${body}\nEND_PROGRAM\n`
+
+  const messageFor = (body: string, language: 'ld' | 'fbd' = 'ld'): string => {
+    try {
+      parseGraphicalPouFromString(wrap(body), language, 'program')
+    } catch (error) {
+      return (error as Error).message
+    }
+    return 'PARSED OK'
+  }
+
+  it('reports malformed JSON as a JSON error', () => {
+    const message = messageFor('{ not json')
+    expect(message).toContain('Invalid JSON in graphical body')
+    expect(message).not.toContain('Invalid graphical body shape')
+  })
+
+  it('reports valid JSON of the wrong shape as a SHAPE error, not a JSON one', () => {
+    // Saying "Invalid JSON" about valid JSON sends the reader hunting for a
+    // syntax error that does not exist. On an unrecoverable POU this text is
+    // the Console line explaining why the project opened empty.
+    const message = messageFor('{ "nodes": [], "edges": [] }')
+    expect(message).toContain('Invalid graphical body shape')
+    expect(message).toContain('"rungs" array')
+    expect(message).not.toContain('Invalid JSON')
+  })
+
+  it('names the FBD container when an FBD body has the wrong shape', () => {
+    const message = messageFor('{ "rungs": [] }', 'fbd')
+    expect(message).toContain('Invalid graphical body shape')
+    expect(message).toContain('"rung" object holding a "nodes" array')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findGraphicalBodyStartIndex
+// ---------------------------------------------------------------------------
+describe('findGraphicalBodyStartIndex', () => {
+  it('finds the brace that opens the body in column 0', () => {
+    const content = 'VAR\n  x : BOOL;\nEND_VAR\n\n{\n  "name": "main"\n}\n'
+    expect(findGraphicalBodyStartIndex(content, 0)).toBe(content.indexOf('{'))
+  })
+
+  it('ignores a brace inside a declaration line', () => {
+    // Only a line-initial brace opens a body, so an initial value or an inline
+    // comment carrying one cannot cut the declaration scan short.
+    const content = 'VAR\n  x : STRING := \'{}\'; (* {shape} *)\nEND_VAR\n\n{\n  "name": "m"\n}\n'
+    expect(findGraphicalBodyStartIndex(content, 0)).toBe(content.indexOf('\n{\n') + 1)
+  })
+
+  it('returns -1 when there is no body', () => {
+    expect(findGraphicalBodyStartIndex('VAR\n  x : BOOL;\nEND_VAR\n', 0)).toBe(-1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findLastEndVarIndex bound
+// ---------------------------------------------------------------------------
+describe('findLastEndVarIndex with an upper bound', () => {
+  it('ignores an END_VAR at or past the bound', () => {
+    const content = 'VAR x : INT; END_VAR\n{ "s": "VAR y; END_VAR" }'
+    const bound = content.indexOf('{')
+    expect(findLastEndVarIndex(content, 0, bound)).toBe(content.indexOf('END_VAR') + 'END_VAR'.length)
+  })
+
+  it('returns -1 when the bound excludes every END_VAR', () => {
+    const content = 'VAR x : INT; END_VAR'
+    expect(findLastEndVarIndex(content, 0, 5)).toBe(-1)
   })
 })

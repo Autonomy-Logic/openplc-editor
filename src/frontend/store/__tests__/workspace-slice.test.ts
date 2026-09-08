@@ -403,6 +403,26 @@ describe('createWorkspaceSlice', () => {
     expect(store.getState().workspace.fbSelectedInstance.get('TON')).toBe('PROGRAM0::timer1')
   })
 
+  it('setDebugHarness installs and clears the session overlay', () => {
+    expect(store.getState().workspace.debugHarness).toBeNull()
+
+    const harness = {
+      programPou: {
+        name: 'LIBDBG_MAIN',
+        pouType: 'program' as const,
+        interface: { variables: [] },
+        body: { language: 'st' as const, value: 'PID_I();' },
+        documentation: '',
+      },
+      instances: [{ name: 'LIBDBG_INST', program: 'LIBDBG_MAIN', task: 'LIBDBG_TASK' }],
+    }
+    store.getState().workspaceActions.setDebugHarness(harness)
+    expect(store.getState().workspace.debugHarness).toEqual(harness)
+
+    store.getState().workspaceActions.setDebugHarness(null)
+    expect(store.getState().workspace.debugHarness).toBeNull()
+  })
+
   it('setDebugLocalMd5', () => {
     store.getState().workspaceActions.setDebugLocalMd5('abc123')
     expect(store.getState().workspace.debugLocalMd5).toBe('abc123')
@@ -464,6 +484,16 @@ describe('createWorkspaceSlice', () => {
       ]),
     )
     store.getState().workspaceActions.setFbSelectedInstance('FB', 'K')
+    store.getState().workspaceActions.setDebugHarness({
+      programPou: {
+        name: 'LIBDBG_MAIN',
+        pouType: 'program',
+        interface: { variables: [] },
+        body: { language: 'st', value: 'PID_I();' },
+        documentation: '',
+      },
+      instances: [{ name: 'LIBDBG_INST', program: 'LIBDBG_MAIN', task: 'LIBDBG_TASK' }],
+    })
     store.getState().workspaceActions.setDebugLocalMd5('md5')
     store.getState().workspaceActions.setDebugGraphList(['a'])
     store.getState().workspaceActions.setDebugDataStale(true)
@@ -484,6 +514,7 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.debugExpandedNodes.size).toBe(0)
     expect(workspace.fbDebugInstances.size).toBe(0)
     expect(workspace.fbSelectedInstance.size).toBe(0)
+    expect(workspace.debugHarness).toBeNull()
     expect(workspace.debugLocalMd5).toBeNull()
     expect(workspace.debugGraphList).toEqual([])
     expect(workspace.debugDataStale).toBe(false)

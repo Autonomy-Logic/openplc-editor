@@ -83,7 +83,7 @@ Usage
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
   openplc-cli debug list
-  openplc-cli debug status | list-vars | read | write | force | unforce | start | stop | watch | poll | unwatch
+  openplc-cli debug status | list-vars | read | force | unforce | start | stop | watch | poll | unwatch
   openplc-cli debug close --session <id> | --all [--keep-forces]
   openplc-cli debug repl [--session <id>]                       (interactive; needs a terminal)
   openplc-cli debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)
