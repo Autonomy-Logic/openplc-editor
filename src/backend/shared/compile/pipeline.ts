@@ -60,6 +60,7 @@ import {
 } from './steps/compute-io-image'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
+import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
@@ -688,6 +689,17 @@ async function runCompilePipelineInner(
         level: 'info',
       })
     }
+
+    // The I/O image sizes travel the same way, and unconditionally: unlike
+    // retain.conf there is no meaning in withholding the file, so there is no
+    // branch here. A runtime too old to read it keeps its compiled-in
+    // BUFFER_SIZE, which is today's behaviour.
+    bundle['image.conf'] = generateImageConf(ioImage.sizes)
+    emit({
+      stage: 'runtime-v4-bundle',
+      message: `Generated image.conf (${Object.keys(ioImage.sizes).length} address area(s) sized from the project)`,
+      level: 'info',
+    })
 
     // Write the bundle out BEFORE the compile-only branch, so `compile` and
     // `upload` leave the same artifacts on disk. Until this existed, the bundle

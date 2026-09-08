@@ -457,6 +457,33 @@ describe('runCompilePipeline — I/O image gate', () => {
     expect(result.success).toBe(true)
   })
 
+  it('ships the sizes to the device as image.conf', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MW7'),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    const bundle = jest.mocked(materialize).mock.calls[0][0].bundle
+    // %MW7 is one word past index 7, so the table needs eight.
+    expect(bundle['image.conf']).toContain('int_memory=8')
+    // Unconditional, so every area appears — zero included.
+    expect(bundle['image.conf']).toContain('bool_output=0')
+    expect(events.some((e) => e.message.includes('Generated image.conf'))).toBe(true)
+  })
+
   it('exempts the simulator, which has no producers by construction', async () => {
     // Its capability block hides the pin table and nothing seeds pins, so
     // PINMASK_DIN is empty and simulator.cpp's I/O loops run zero times.
