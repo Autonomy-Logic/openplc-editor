@@ -65,7 +65,7 @@ const RetrieveProjectModal = () => {
   const {
     modals,
     modalActions,
-    sharedWorkspaceActions: { closeProject, hasUnsavedChanges },
+    sharedWorkspaceActions: { hasUnsavedChanges },
   } = useOpenPLCStore()
   const runtime = useRuntime()
 
@@ -267,6 +267,22 @@ const RetrieveProjectModal = () => {
           onAfterAction: () => {
             void completeRetrieve(fetched.project)
           },
+          // A refused save stops the retrieve, and the user has to be told by
+          // something other than the save's own message. It happens by design:
+          // a project already retrieved has no location the user chose, so
+          // saving it refuses and points at Save As -- and retrieving on top of
+          // it used to drop the fetched project with only that toast on screen,
+          // which reads as being about the save.
+          onActionAborted: (reason: 'save-failed' | 'cancelled') => {
+            toast({
+              title: 'Retrieve stopped',
+              description:
+                reason === 'save-failed'
+                  ? 'Your project could not be saved, so nothing was replaced. Retrieve again and choose "Close without saving" to go ahead, or save this project another way first.'
+                  : 'Your project was left as it is and nothing was retrieved.',
+              variant: reason === 'save-failed' ? 'fail' : 'default',
+            })
+          },
         })
         // Out of the way of the dialog it just opened; `completeRetrieve` holds
         // everything still to do.
@@ -274,11 +290,17 @@ const RetrieveProjectModal = () => {
         return
       }
 
-      closeProject()
+      // Nothing to close: `hasUnsavedChanges()` is false, so `closeProject()`
+      // could only take its clean branch -- and the teardown it would do there
+      // is `handleOpenProjectResponse`'s job anyway, which `completeRetrieve`
+      // reaches through the port. Calling it here wiped the workspace BEFORE
+      // the open, so an open that failed left the user on the start screen with
+      // their own project gone and nothing in its place: the exact failure this
+      // flow exists to avoid, on the one path that was supposed to be simple.
       await completeRetrieve(fetched.project)
       close()
     },
-    [close, closeProject, completeRetrieve, hasUnsavedChanges, modalActions, runtime],
+    [close, completeRetrieve, hasUnsavedChanges, modalActions, runtime],
   )
 
   const connectedKey = runtime.connectedRetrievableDeviceKey?.() ?? ''

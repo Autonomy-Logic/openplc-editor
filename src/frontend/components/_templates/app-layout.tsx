@@ -121,6 +121,13 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
                 (modals['save-changes-project'].data as SaveChangeModalProps & { onAfterAction?: () => void })
                   ?.onAfterAction
               }
+              onActionAborted={
+                (
+                  modals['save-changes-project'].data as SaveChangeModalProps & {
+                    onActionAborted?: (reason: 'save-failed') => void
+                  }
+                )?.onActionAborted
+              }
             />
           )}
           {modals?.['save-changes-file']?.open === true && (
