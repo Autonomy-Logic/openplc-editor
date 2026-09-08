@@ -25,9 +25,20 @@ import type { FetchedProject } from '../../shared/ports/runtime-port'
 
 export async function openFetchedProject(
   project: FetchedProject,
-  projectPort: ProjectPort,
+  // Only the one method, so a test needs no stand-in for the rest of the port
+  // and no assertion to pretend it has one.
+  projectPort: Pick<ProjectPort, 'openProjectByPath'>,
 ): Promise<{ success: boolean; error?: string }> {
-  const opened = await projectPort.openProjectByPath(String(project.payload))
+  // `payload` is deliberately opaque on the port -- a scratch path here, raw
+  // archive bytes on web -- so narrow it rather than stringifying it. `String()`
+  // turns an object into '[object Object]' and null into 'null', either of which
+  // would be handed to `openProjectByPath` as though it were a directory.
+  const projectPath = typeof project.payload === 'string' ? project.payload.trim() : ''
+  if (!projectPath) {
+    return { success: false, error: 'The device did not say where the retrieved project was unpacked.' }
+  }
+
+  const opened = await projectPort.openProjectByPath(projectPath)
   // `data` is checked as well as `success`: a response that claims success with
   // nothing to open would otherwise be reported as an open project that is not
   // there, which is the failure this module exists to prevent.

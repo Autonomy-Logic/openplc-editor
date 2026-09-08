@@ -1317,7 +1317,13 @@ class MainProcessBridge implements MainIpcModule {
    * shape as its sibling below, so a caller that wants to know whether the row
    * was written can find out.
    */
-  handleTrackRecentProject = async (_event: unknown, projectPath: string) => {
+  handleTrackRecentProject = async (_event: unknown, projectPath: unknown) => {
+    // `unknown`, then narrowed: a TypeScript annotation on an IPC parameter is
+    // a claim about the caller, not a check on the payload, and what arrives
+    // here is written to `projects.json`.
+    if (typeof projectPath !== 'string' || projectPath.trim() === '') {
+      return { success: false, error: 'A project path is required to track a project.' }
+    }
     if (isRetrievedProjectPath(projectPath)) {
       return { success: false, error: 'A retrieved project is not tracked until it has a location.' }
     }

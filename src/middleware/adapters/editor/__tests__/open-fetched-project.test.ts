@@ -22,9 +22,12 @@ const parsedProject = {
   projectData: { pous: [], dataTypes: [], globalVariableLists: [] },
 }
 
-/** A project port that answers `openProjectByPath` and nothing else. */
-const portReturning = (response: unknown): ProjectPort =>
-  ({ openProjectByPath: jest.fn().mockResolvedValue(response) }) as unknown as ProjectPort
+/** A project port that answers `openProjectByPath` and nothing else — which is
+ *  all the module asks for, so this needs no assertion to stand in for a whole
+ *  `ProjectPort`. */
+const portReturning = (response: unknown): Pick<ProjectPort, 'openProjectByPath'> => ({
+  openProjectByPath: jest.fn().mockResolvedValue(response),
+})
 
 describe('openFetchedProject', () => {
   it('leaves the retrieved project open, not merely parsed', async () => {
@@ -67,6 +70,17 @@ describe('openFetchedProject', () => {
     const result = await openFetchedProject(fetched, port)
 
     expect(result).toEqual({ success: false, error: 'The project directory is unreadable' })
+  })
+
+  it('refuses a payload that is not a path', async () => {
+    // `payload` is opaque on the port — a path here, archive bytes on web — so
+    // stringifying it would hand '[object Object]' to the open as a directory.
+    const port = portReturning({ success: true, data: parsedProject })
+
+    const result = await openFetchedProject({ projectName: 'X', payload: { not: 'a path' } }, port)
+
+    expect(result.success).toBe(false)
+    expect(port.openProjectByPath).not.toHaveBeenCalled()
   })
 
   it('refuses a success that carries no project', async () => {
