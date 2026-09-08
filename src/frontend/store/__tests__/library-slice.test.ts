@@ -446,10 +446,12 @@ describe('createLibrarySlice', () => {
     })
 
     it('orders versions by semver, not lexically', () => {
-      store.getState().libraryActions.setSystemLibraries([
-        makeSystemLibrary({ name: 'lib', version: '0.9.0' }),
-        makeSystemLibrary({ name: 'lib', version: '0.10.0' }),
-      ])
+      store
+        .getState()
+        .libraryActions.setSystemLibraries([
+          makeSystemLibrary({ name: 'lib', version: '0.9.0' }),
+          makeSystemLibrary({ name: 'lib', version: '0.10.0' }),
+        ])
 
       expect(store.getState().libraries.system[0].version).toBe('0.10.0')
     })

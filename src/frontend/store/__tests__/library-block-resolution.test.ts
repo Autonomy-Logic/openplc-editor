@@ -65,9 +65,7 @@ function library(version = '0.1.0', pins = COUNTER_PINS, documentation = 'v1 doc
     version,
     stPath: '',
     cPath: '',
-    pous: [
-      { name: 'COUNTER_FB', type: 'function-block', language: 'st', body: '', documentation, variables: pins },
-    ],
+    pous: [{ name: 'COUNTER_FB', type: 'function-block', language: 'st', body: '', documentation, variables: pins }],
   } as unknown as SystemLibrary
 }
 
@@ -260,7 +258,9 @@ describe('a placed library block after project open', () => {
     const wired = body.rungs[0].nodes.find(
       (n) => (n.data as never as { block?: { handleId?: string } })?.block?.handleId === 'PV',
     )!
-    expect((wired.data as never as { block: { variableType: { type: { value: string } } } }).block.variableType.type.value).toBe('REAL')
+    expect(
+      (wired.data as never as { block: { variableType: { type: { value: string } } } }).block.variableType.type.value,
+    ).toBe('REAL')
 
     // And the project must be marked unsaved, or the refresh is never written
     // back and is redone on the next open.

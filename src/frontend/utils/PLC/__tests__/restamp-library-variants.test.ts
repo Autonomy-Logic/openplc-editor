@@ -1,11 +1,7 @@
 import { produce } from 'immer'
 
 import type { SystemLibrary } from '../../../../middleware/shared/ports/library-types'
-import {
-  type RestampChange,
-  restampFlowLibraryVariants,
-  summariseRestampChanges,
-} from '../restamp-library-variants'
+import { type RestampChange, restampFlowLibraryVariants, summariseRestampChanges } from '../restamp-library-variants'
 
 // ---------------------------------------------------------------------------
 // Factory helpers
@@ -175,9 +171,13 @@ describe('restampFlowLibraryVariants', () => {
     expect(node.data.variant.type).toBe('function')
   })
 
-  it('leaves an extensible block\'s extra pins alone', () => {
+  it("leaves an extensible block's extra pins alone", () => {
     const node = makeStaleAdrNode()
-    node.data.variant.variables.push({ name: 'IN2', class: 'input', type: { definition: 'generic-type', value: 'ANY' } })
+    node.data.variant.variables.push({
+      name: 'IN2',
+      class: 'input',
+      type: { definition: 'generic-type', value: 'ANY' },
+    })
     const libraries = makeSystemLibraries({ extensible: true })
 
     const { changes } = restampFlowLibraryVariants([{ rung: { nodes: [node] } }], libraries, [])
@@ -420,7 +420,9 @@ describe('restampFlowLibraryVariants', () => {
   it('stamps the POU name onto every change when given one', () => {
     const node = makeStaleAdrNode()
 
-    const { changes } = restampFlowLibraryVariants([{ rung: { nodes: [node] } }], makeSystemLibraries(), [], { pou: 'main' })
+    const { changes } = restampFlowLibraryVariants([{ rung: { nodes: [node] } }], makeSystemLibraries(), [], {
+      pou: 'main',
+    })
 
     expect(changes.every((change) => change.pou === 'main')).toBe(true)
   })
@@ -432,7 +434,10 @@ describe('FBD flows', () => {
   // and builds its `(*TYPE*)` label from that. So refreshing the variant is
   // the whole job -- unlike LD, which caches the pin on the variable node.
   const fbdPinTypeAsTheEditorResolvesIt = (
-    rung: { nodes: { id: string; type?: string; data?: never }[]; edges: { source: string; target: string; sourceHandle?: string; targetHandle?: string }[] },
+    rung: {
+      nodes: { id: string; type?: string; data?: never }[]
+      edges: { source: string; target: string; sourceHandle?: string; targetHandle?: string }[]
+    },
     variableNodeId: string,
   ): string | undefined => {
     const edge = rung.edges.find((e) => e.source === variableNodeId || e.target === variableNodeId)!
@@ -445,7 +450,11 @@ describe('FBD flows', () => {
 
   it('updates what the editor resolves for a wired pin, with no cached copy to chase', () => {
     const block = makeStaleAdrNode()
-    const wired = { id: 'VAR_out', type: 'output-variable', data: { variant: 'output-variable', variable: { name: 'X' } } }
+    const wired = {
+      id: 'VAR_out',
+      type: 'output-variable',
+      data: { variant: 'output-variable', variable: { name: 'X' } },
+    }
     const rung = {
       nodes: [block, wired],
       edges: [{ id: 'e1', source: block.id, target: 'VAR_out', sourceHandle: 'OUT', targetHandle: 'input-variable' }],
@@ -539,12 +548,9 @@ describe('pin type transitions', () => {
   it.each(cases)('%s: %s %s -> %s %s', (_label, fromDef, fromValue, toDef, toValue) => {
     const { block, wired } = placed(fromDef, fromValue)
 
-    const report = restampFlowLibraryVariants(
-      [{ rung: { nodes: [block, wired] } }],
-      libWithPin(toDef, toValue),
-      [],
-      { pou: 'main' },
-    )
+    const report = restampFlowLibraryVariants([{ rung: { nodes: [block, wired] } }], libWithPin(toDef, toValue), [], {
+      pou: 'main',
+    })
 
     expect(report.modified).toBe(true)
     expect(kindOf(report.changes, 'type')).toMatchObject({ pin: 'P', from: fromValue, to: toValue, applied: true })

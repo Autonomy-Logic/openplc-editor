@@ -83,10 +83,7 @@ export interface ResolvedVersion {
  * as substituted, so the caller reports the mismatch rather than a project
  * silently building against a version it does not name.
  */
-export function resolveVersion(
-  versions: Record<string, LibraryVersionEntry>,
-  wanted?: string,
-): ResolvedVersion | null {
+export function resolveVersion(versions: Record<string, LibraryVersionEntry>, wanted?: string): ResolvedVersion | null {
   if (wanted && versions[wanted]) return { version: wanted, entry: versions[wanted], substituted: false }
   const newest = versionsNewestFirst(versions)[0]
   if (!newest) return null
