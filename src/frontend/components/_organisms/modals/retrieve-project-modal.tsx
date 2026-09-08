@@ -204,7 +204,17 @@ const RetrieveProjectModal = () => {
    */
   const completeRetrieve = useCallback(
     async (project: FetchedProject) => {
-      const opened = await runtime.openFetchedProject?.(project)
+      // Everything in here is behind a port, so a platform is free to throw
+      // rather than answer. Both callers reach this through `void`, so an
+      // escaping rejection would be an unhandled one AND silent -- the user
+      // would be left looking at a workspace that never changed, with no
+      // explanation for a retrieve they watched succeed.
+      let opened: { success: boolean; error?: string } | undefined
+      try {
+        opened = await runtime.openFetchedProject?.(project)
+      } catch (error) {
+        opened = { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
       if (!opened?.success) {
         toast({
           title: 'The retrieved project could not be opened',
@@ -218,7 +228,18 @@ const RetrieveProjectModal = () => {
       // the far side of the port: both platforms' adapters end there, so the
       // project arrives already marked. Doing it here as well was the same
       // decision made in two places.
-      await offerLibraries(project)
+      // The project IS open by now, so a library failure must not read as the
+      // retrieve having failed. `offerLibraries` reports its own outcome; this
+      // only stops a rejection from swallowing the success below.
+      try {
+        await offerLibraries(project)
+      } catch (error) {
+        toast({
+          title: 'Some libraries could not be installed',
+          description: error instanceof Error ? error.message : String(error),
+          variant: 'fail',
+        })
+      }
 
       toast({
         title: `Retrieved "${project.projectName || 'project'}"`,

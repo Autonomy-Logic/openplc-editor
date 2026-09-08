@@ -5,27 +5,7 @@ import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
-
-/**
- * Validation contexts for save-before-close flows.
- *
- * - 'close-project': Close the current project (both platforms)
- * - 'create-project': Close current, then open create-project dialog (editor)
- * - 'open-project': Close current, then open file picker (editor)
- * - 'open-recent-project': Close current, then open a recent project (editor)
- * - 'open-project-by-path': Close current, then open project at path (editor)
- * - 'close-app': Save before quitting the application (editor)
- * - 'retrieve-project': Close current, then open the project fetched from a
- *   device (both platforms)
- */
-export type ValidationContext =
-  | 'create-project'
-  | 'open-project'
-  | 'open-recent-project'
-  | 'open-project-by-path'
-  | 'close-project'
-  | 'close-app'
-  | 'retrieve-project'
+import type { SaveChangesAbortReason, ValidationContext } from './save-changes-modal-data'
 
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
@@ -48,7 +28,7 @@ export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
    * not tell you what it abandoned: the user had pressed Continue on a retrieve,
    * watched it fetch, and then both dialogs vanished with nothing said.
    */
-  onActionAborted?: (reason: 'save-failed' | 'cancelled') => void
+  onActionAborted?: (reason: SaveChangesAbortReason) => void
 }
 
 const SaveChangesModal = ({

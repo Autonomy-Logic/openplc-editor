@@ -118,6 +118,28 @@ describe('a project with nothing unsaved', () => {
     expect(closeProjectSpy).not.toHaveBeenCalled()
   })
 
+  it('reports a rejected open rather than letting it escape', async () => {
+    // Behind a port, so a platform may throw instead of answering — and both
+    // callers reach `completeRetrieve` through `void`, so an escaping rejection
+    // would be unhandled and silent.
+    openFetchedProject.mockRejectedValue(new Error('the bridge is gone'))
+
+    await continueWithDevice()
+
+    await waitFor(() => expect(toastTitles()).toContain('The retrieved project could not be opened'))
+    expect(closeProjectSpy).not.toHaveBeenCalled()
+  })
+
+  it('keeps the success when only the libraries fail', async () => {
+    // The project is open by this point; a library failure is not a failed
+    // retrieve and must not read as one.
+    installRetrievedLibraries.mockRejectedValue(new Error('registry unreachable'))
+
+    await continueWithDevice()
+
+    await waitFor(() => expect(toastTitles()).toContain('Retrieved "Irrigation Controller"'))
+  })
+
   it('reports a failed open and leaves the workspace alone', async () => {
     openFetchedProject.mockResolvedValue({ success: false, error: 'The archive is unreadable' })
 
