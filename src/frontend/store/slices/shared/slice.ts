@@ -1116,11 +1116,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       return { success: true }
     },
 
-    closeProject: () => {
+    openRetrievedProject: (data) => {
+      getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+      // No location the user chose, so a user-initiated save is refused and
+      // points at Save As. The build's own flush is unaffected -- refusing that
+      // would not protect anything, it would just stop the project compiling.
+      getState().workspaceActions.setIsEphemeralProject(true)
+    },
+
+    hasUnsavedChanges: () => {
       const editingState = getState().workspace.editingState
       const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved()
+      return !isFilesSaved || editingState === 'unsaved'
+    },
 
-      if (!isFilesSaved || editingState === 'unsaved') {
+    closeProject: () => {
+      if (getState().sharedWorkspaceActions.hasUnsavedChanges()) {
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })

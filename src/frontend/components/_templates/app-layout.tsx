@@ -33,8 +33,8 @@ import { QuitApplicationModal } from '../_organisms/modals/quit-application-moda
 import { RuntimeConnectionLostModal } from '../_organisms/modals/runtime-connection-lost-modal'
 import type { SaveChangesFileModalData } from '../_organisms/modals/save-changes-file-modal'
 import { SaveChangesFileModal } from '../_organisms/modals/save-changes-file-modal'
-import type { SaveChangeModalProps } from '../_organisms/modals/save-changes-modal'
 import { SaveChangesModal } from '../_organisms/modals/save-changes-modal'
+import { asSaveChangesModalData } from '../_organisms/modals/save-changes-modal-data'
 import { ServerIpMismatchModal } from '../_organisms/modals/server-ip-mismatch-modal'
 import { TitleBar } from '../_organisms/title-bar'
 import { AcceleratorHandler } from './accelerator-handler'
@@ -46,6 +46,12 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const caps = useCapabilities()
   const [showComponent, setShowComponent] = useState(true)
   const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
+  // Narrowed once, not asserted three times. The store keeps every modal's data
+  // in one `unknown` slot, so what the save-changes dialog was handed has to be
+  // checked rather than declared -- an assertion here promised callbacks that
+  // may not be there, and (after this branch added a second one) a reason union
+  // narrower than what the dialog can actually pass.
+  const saveChangesData = asSaveChangesModalData(modals?.['save-changes-project']?.data)
   const dataTypes = useOpenPLCStore(useCallback((s) => s.project.data.dataTypes, []))
   const { closeModal, onOpenChange } = useOpenPLCStore(useCallback((s) => s.modalActions, []))
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
@@ -116,13 +122,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['save-changes-project']?.open === true && (
             <SaveChangesModal
               isOpen={modals['save-changes-project'].open}
-              validationContext={
-                (modals['save-changes-project'].data as SaveChangeModalProps)?.validationContext ?? 'close-project'
-              }
-              onAfterAction={
-                (modals['save-changes-project'].data as SaveChangeModalProps & { onAfterAction?: () => void })
-                  ?.onAfterAction
-              }
+              validationContext={saveChangesData?.validationContext ?? 'close-project'}
+              onAfterAction={saveChangesData?.onAfterAction}
+              onActionAborted={saveChangesData?.onActionAborted}
             />
           )}
           {modals?.['save-changes-file']?.open === true && (

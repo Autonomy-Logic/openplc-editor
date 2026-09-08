@@ -65,8 +65,7 @@ const RetrieveProjectModal = () => {
   const {
     modals,
     modalActions,
-    workspaceActions,
-    sharedWorkspaceActions: { closeProject },
+    sharedWorkspaceActions: { hasUnsavedChanges },
   } = useOpenPLCStore()
   const runtime = useRuntime()
 
@@ -194,6 +193,63 @@ const RetrieveProjectModal = () => {
     [runtime],
   )
 
+  /**
+   * Everything after the archive is in hand: open it, mark it, offer its
+   * libraries, say so.
+   *
+   * Deliberately touches no picker state. It runs either directly or as the
+   * deferred action of the save-changes dialog, and in the second case this
+   * modal has already closed -- so a failure here is reported by a toast, which
+   * outlives it, rather than by an error line inside a dialog that is gone.
+   */
+  const completeRetrieve = useCallback(
+    async (project: FetchedProject) => {
+      // Everything in here is behind a port, so a platform is free to throw
+      // rather than answer. Both callers reach this through `void`, so an
+      // escaping rejection would be an unhandled one AND silent -- the user
+      // would be left looking at a workspace that never changed, with no
+      // explanation for a retrieve they watched succeed.
+      let opened: { success: boolean; error?: string } | undefined
+      try {
+        opened = await runtime.openFetchedProject?.(project)
+      } catch (error) {
+        opened = { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+      if (!opened?.success) {
+        toast({
+          title: 'The retrieved project could not be opened',
+          description: opened?.error || 'The device sent a project this editor could not open.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      // Marking it as having no location is `openRetrievedProject`'s job, on
+      // the far side of the port: both platforms' adapters end there, so the
+      // project arrives already marked. Doing it here as well was the same
+      // decision made in two places.
+      // The project IS open by now, so a library failure must not read as the
+      // retrieve having failed. `offerLibraries` reports its own outcome; this
+      // only stops a rejection from swallowing the success below.
+      try {
+        await offerLibraries(project)
+      } catch (error) {
+        toast({
+          title: 'Some libraries could not be installed',
+          description: error instanceof Error ? error.message : String(error),
+          variant: 'fail',
+        })
+      }
+
+      toast({
+        title: `Retrieved "${project.projectName || 'project'}"`,
+        description: 'This project has no location yet — use Save As to keep it.',
+        variant: 'default',
+      })
+    },
+    [offerLibraries, runtime],
+  )
+
   /** Fetch, then open. Everything before this is about getting a session. */
   const retrieveAndOpen = useCallback(
     async (device: RetrievableDevice) => {
@@ -215,47 +271,57 @@ const RetrieveProjectModal = () => {
       }
 
       setBusyMessage('Opening the project...')
-      // Close the current project first so its unsaved-changes prompt runs
-      // before anything is replaced, exactly as File -> Close Project does.
+
+      // The open project is replaced, so unsaved work gets its dialog first --
+      // after the fetch, never before, so a device that turns out to have
+      // nothing does not cost anyone their project.
       //
-      // And honour the answer. Opening the prompt was not enough on its own:
-      // the open that followed cleared it again, so the user saw a flicker and
-      // lost the work anyway. When there is something to confirm, this stops
-      // and lets them decide -- retrieving again afterwards costs one click.
-      //
-      // After the fetch, not before: a device that turns out to have nothing
-      // should not cost anyone their open project.
-      const { pendingConfirmation } = closeProject()
-      if (pendingConfirmation) {
-        setError('Save or discard your changes first, then retrieve again.')
-        setBusyMessage('')
-        setStep('pick')
+      // Its own context, not `closeProject()`'s. That one answers with
+      // 'close-project', whose branch clears the workspace and goes back to the
+      // start screen; both of its buttons therefore ended the retrieve there,
+      // with the archive already fetched and then abandoned. 'retrieve-project'
+      // carries the rest of this flow as the dialog's deferred action, so
+      // saving and discarding both arrive at the retrieved project.
+      if (hasUnsavedChanges()) {
+        modalActions.openModal('save-changes-project', {
+          validationContext: 'retrieve-project',
+          onAfterAction: () => {
+            void completeRetrieve(fetched.project)
+          },
+          // A refused save stops the retrieve, and the user has to be told by
+          // something other than the save's own message. It happens by design:
+          // a project already retrieved has no location the user chose, so
+          // saving it refuses and points at Save As -- and retrieving on top of
+          // it used to drop the fetched project with only that toast on screen,
+          // which reads as being about the save.
+          onActionAborted: (reason: 'save-failed' | 'cancelled') => {
+            toast({
+              title: 'Retrieve stopped',
+              description:
+                reason === 'save-failed'
+                  ? 'Your project could not be saved, so nothing was replaced. Retrieve again and choose "Close without saving" to go ahead, or save this project another way first.'
+                  : 'Your project was left as it is and nothing was retrieved.',
+              variant: reason === 'save-failed' ? 'fail' : 'default',
+            })
+          },
+        })
+        // Out of the way of the dialog it just opened; `completeRetrieve` holds
+        // everything still to do.
+        close()
         return
       }
 
-      const opened = await runtime.openFetchedProject(fetched.project)
-      if (!opened.success) {
-        setError(opened.error || 'The retrieved project could not be opened.')
-        setStep('pick')
-        setBusyMessage('')
-        return
-      }
-
-      // No location the user chose, so a user-initiated save is refused and
-      // points at Save As. The build's own flush is unaffected -- refusing that
-      // would not protect anything, it would just stop the project compiling.
-      workspaceActions.setIsEphemeralProject(true)
-
-      await offerLibraries(fetched.project)
-
-      toast({
-        title: `Retrieved "${fetched.project.projectName || 'project'}"`,
-        description: 'This project has no location yet — use Save As to keep it.',
-        variant: 'default',
-      })
+      // Nothing to close: `hasUnsavedChanges()` is false, so `closeProject()`
+      // could only take its clean branch -- and the teardown it would do there
+      // is `handleOpenProjectResponse`'s job anyway, which `completeRetrieve`
+      // reaches through the port. Calling it here wiped the workspace BEFORE
+      // the open, so an open that failed left the user on the start screen with
+      // their own project gone and nothing in its place: the exact failure this
+      // flow exists to avoid, on the one path that was supposed to be simple.
+      await completeRetrieve(fetched.project)
       close()
     },
-    [close, closeProject, offerLibraries, runtime, workspaceActions],
+    [close, completeRetrieve, hasUnsavedChanges, modalActions, runtime],
   )
 
   const connectedKey = runtime.connectedRetrievableDeviceKey?.() ?? ''

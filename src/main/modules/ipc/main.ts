@@ -49,7 +49,7 @@ import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
-import { join, resolve, sep } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
@@ -177,6 +177,28 @@ interface Md5VerifyReply {
   targetMd5?: string
   targetEndian?: 'le' | 'be'
   error?: string
+}
+
+/**
+ * Where a project retrieved from a device is unpacked.
+ *
+ * One definition, used both by the retrieval that writes there and by the read
+ * that has to recognise the result: a second spelling of this path would go
+ * stale silently, and the only symptom would be retrievals reappearing under
+ * Recent.
+ */
+const retrievedProjectsRoot = (): string => join(app.getPath('userData'), 'retrieved-projects')
+
+/** True for the scratch root or anything inside it — the retrieval area, not a
+ *  project the user keeps anywhere. `relative` rather than `startsWith`, so a
+ *  sibling directory whose name merely begins the same way is not caught by it.
+ *
+ *  The root ITSELF counts: `relative()` answers '' for it, and excluding that
+ *  made the one directory the whole area is named after the one path this
+ *  returned false for. */
+const isRetrievedProjectPath = (projectPath: string): boolean => {
+  const rel = relative(retrievedProjectsRoot(), projectPath)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -698,13 +720,25 @@ class MainProcessBridge implements MainIpcModule {
     if (!fetched.success) return { success: false, error: fetched.error }
 
     try {
-      const scratchRoot = join(app.getPath('userData'), 'retrieved-projects')
+      const scratchRoot = retrievedProjectsRoot()
       // Old retrievals go before the new one is written. A retrieved project
       // deliberately stays in scratch until the user runs Save As, so without
       // this an engineer who retrieves a project just to look at it leaves a
       // full copy of its source on disk permanently -- unencrypted, in
       // userData, accumulating one folder per retrieval.
       await pruneRetrievedProjects(scratchRoot, RETAINED_RETRIEVALS)
+      // Retrievals recorded under Recent before they were excluded from it.
+      // Pruning removes the directories; without this their rows outlive them
+      // and the list keeps one dead entry per retrieval anyone ever made.
+      //
+      // Its own try/catch, outside the retrieve's: a `projects.json` that is
+      // locked or unwritable would otherwise turn tidying up after the feature
+      // into a failed retrieve.
+      try {
+        await this.forgetRetrievedProjectsInHistory()
+      } catch (error) {
+        logger.error('Could not drop retrieved projects from history: ' + getErrorMessage(error))
+      }
 
       const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
         scratchRoot,
@@ -806,6 +840,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
+    this.registerHandle('project:track-recent', this.handleTrackRecentProject)
     this.registerHandle('project:delete', this.handleDeleteProject)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -1026,13 +1061,35 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * Drop every Recent entry that points into the retrieval scratch root.
+   *
+   * One read and at most one write. `removeProjectFromHistory` re-reads and
+   * rewrites the whole file per call, so looping it over the matches cost N
+   * round trips to remove N rows.
+   */
+  private forgetRetrievedProjectsInHistory = async (): Promise<void> => {
+    const historyPath = this.projectService.getHistoryProjectsFilePath()
+    const history = await this.projectService.readProjectHistory(historyPath)
+    const kept = history.filter((entry) => !isRetrievedProjectPath(entry.path))
+    if (kept.length === history.length) return
+    await this.projectService.replaceProjectHistory(historyPath, kept)
+  }
+
   handleReadProjectFiles = async (_event: IpcMainInvokeEvent, projectPath: string) => {
     try {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
         this.currentProjectPath = projectPath
-        await this.projectService.updateProjectHistory(projectPath)
+        // Everything except a retrieval, which is not a project the user has
+        // anywhere yet: it lives in scratch, is pruned behind them, and becomes
+        // a real project only when Save As writes it somewhere they chose.
+        // Listing it under Recent offered them a project that deletes itself,
+        // and one more row per retrieval.
+        if (!isRetrievedProjectPath(projectPath)) {
+          await this.projectService.updateProjectHistory(projectPath)
+        }
       }
       return result
     } catch (_error) {
@@ -1269,6 +1326,40 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       logger.error('Error reading history file: ' + getErrorMessage(error))
       return []
+    }
+  }
+
+  /**
+   * Put a project on the recent list without reading it — Save As, which
+   * produces a location the user picked without going through an open.
+   *
+   * Still refuses the scratch root: a Save As target is somewhere the user
+   * chose, so a path in there did not come from this flow. Answers in the same
+   * shape as its sibling below, so a caller that wants to know whether the row
+   * was written can find out.
+   */
+  handleTrackRecentProject = async (_event: unknown, projectPath: unknown) => {
+    // `unknown`, then narrowed: a TypeScript annotation on an IPC parameter is
+    // a claim about the caller, not a check on the payload, and what arrives
+    // here is written to `projects.json`.
+    if (typeof projectPath !== 'string' || projectPath.trim() === '') {
+      return { success: false, error: 'A project path is required to track a project.' }
+    }
+    // Absolute, because Recent is read back later and from elsewhere: a
+    // relative path would be resolved against whatever the working directory
+    // happened to be, which is never what the user picked in Save As.
+    if (!isAbsolute(projectPath)) {
+      return { success: false, error: 'A project path must be absolute to be tracked.' }
+    }
+    if (isRetrievedProjectPath(projectPath)) {
+      return { success: false, error: 'A retrieved project is not tracked until it has a location.' }
+    }
+    try {
+      await this.projectService.updateProjectHistory(projectPath)
+      return { success: true }
+    } catch (error) {
+      logger.error('Error tracking project in history: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
