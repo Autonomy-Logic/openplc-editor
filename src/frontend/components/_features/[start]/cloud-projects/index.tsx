@@ -57,9 +57,12 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudP
   const caps = useCapabilities()
   const edgeAccount = useEdgeAccountPort()
   const project = useProject()
-  const {
-    sharedWorkspaceActions: { handleOpenProjectResponse },
-  } = useOpenPLCStore()
+  // Selected narrowly rather than destructured off the whole store: this section sits
+  // on the start screen, and subscribing it to every slice re-renders the cloud list on
+  // any unrelated state change.
+  const handleOpenProjectResponse = useOpenPLCStore(
+    useCallback((state) => state.sharedWorkspaceActions.handleOpenProjectResponse, []),
+  )
 
   /** `null` until the first answer lands — which is not the same as having none. */
   const [result, setResult] = useState<CloudProjectsResult | null>(null)

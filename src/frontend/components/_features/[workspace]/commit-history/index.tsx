@@ -204,29 +204,52 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Kept apart from `error`, which blanks the whole screen with "Failed to load commit
+   * files". A restore that failed is not a commit that could not be read, and it has to
+   * be said inside the modal the reader is still looking at.
+   */
+  const [restoreError, setRestoreError] = useState<string | null>(null)
   const [files, setFiles] = useState<CommitFile[]>([])
   const [parentFiles, setParentFiles] = useState<CommitFile[]>([])
   const [commit, setCommit] = useState<CommitInfo | null>(null)
 
   const isDark = themePort.getCurrentTheme() === 'dark'
 
-  // Fetch commit files via port
+  // Fetch commit files via port.
+  //
+  // Cancelled on cleanup rather than left to land: this view is updated IN PLACE when
+  // the reader clicks another commit — no `key`, so React keeps the instance and its
+  // state. A slow request for the previous commit would otherwise resolve afterwards
+  // and paint ITS files under the new commit's header, and its `finally` would clear
+  // the loading state of a request still in flight.
   useEffect(() => {
     if (!versionControl) return
+
+    let current = true
+
     setIsLoading(true)
     setError(null)
 
     versionControl
       .getCommitFiles(projectId, commitHash)
       .then((data) => {
+        if (!current) return
         setFiles(data.files)
         setParentFiles(data.parentFiles)
         setCommit(data.commit)
       })
       .catch((err) => {
+        if (!current) return
         setError(err instanceof Error ? err.message : 'Failed to load commit files')
       })
-      .finally(() => setIsLoading(false))
+      .finally(() => {
+        if (current) setIsLoading(false)
+      })
+
+    return () => {
+      current = false
+    }
   }, [projectId, commitHash, versionControl])
 
   const parentFileMap = useMemo(() => new Map(parentFiles.map((f) => [f.path, f.content])), [parentFiles])
@@ -309,13 +332,20 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
   const handleRestore = () => {
     if (!versionControl) return
     setIsRestoring(true)
+    setRestoreError(null)
     versionControl
       .restoreCommit(projectId, commitHash)
       .then(() => {
         setShowRestoreModal(false)
         onRestored()
       })
-      .catch(() => setIsRestoring(false))
+      .catch((err) => {
+        // Said, not discarded. On a failure the modal stays open with the spinner gone
+        // and nothing written anywhere, so the reader cannot tell whether the restore
+        // ran — over an operation that rewrites the working tree.
+        setIsRestoring(false)
+        setRestoreError(err instanceof Error ? err.message : 'Failed to restore commit')
+      })
   }
 
   const goBack = onBack
@@ -488,6 +518,7 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
         isLoading={isRestoring}
         commitHash={commitHash}
         commitMessage={commit?.message ?? ''}
+        error={restoreError}
         onConfirm={handleRestore}
         onCancel={() => setShowRestoreModal(false)}
       />

@@ -144,16 +144,18 @@ const WorkspaceScreen = () => {
   )
 
   // Version control state
-  const { activePanel, pendingChangesCount, historyView, mergeView, rawLoadedContent } = useOpenPLCStore(
-    useShallow((s) => ({
-      activePanel: s.versionControl.activePanel,
-      pendingChangesCount: s.versionControl.pendingChangesCount,
-      historyView: s.versionControl.historyView,
-      mergeView: s.versionControl.mergeView,
-      rawLoadedContent: s.versionControl.rawLoadedContent,
-    })),
-  )
-  const { setActivePanel, closeHistoryView, closeMergeView } = useOpenPLCStore(
+  const { activePanel, pendingChangesCount, historyView, mergeView, rawLoadedContent, loadedSerialized } =
+    useOpenPLCStore(
+      useShallow((s) => ({
+        activePanel: s.versionControl.activePanel,
+        pendingChangesCount: s.versionControl.pendingChangesCount,
+        historyView: s.versionControl.historyView,
+        mergeView: s.versionControl.mergeView,
+        rawLoadedContent: s.versionControl.rawLoadedContent,
+        loadedSerialized: s.versionControl.loadedSerialized,
+      })),
+    )
+  const { setActivePanel, closeHistoryView, closeMergeView, initBaseline } = useOpenPLCStore(
     useCallback((s) => s.versionControlActions, []),
   )
   const sharedWorkspaceActions = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
@@ -202,9 +204,7 @@ const WorkspaceScreen = () => {
       return
     }
 
-    const state = useOpenPLCStore.getState()
-
-    if (Object.keys(state.versionControl.loadedSerialized).length > 0) {
+    if (Object.keys(loadedSerialized).length > 0) {
       return
     }
 
@@ -212,13 +212,13 @@ const WorkspaceScreen = () => {
     // anything differing from it later is a real edit.
     const baselineContent = buildAllProjectFileContentsPure()
 
-    state.versionControlActions.initBaseline({
+    initBaseline({
       initialPending: [],
       baselineContent,
-      rawLoadedContent: state.versionControl.rawLoadedContent,
+      rawLoadedContent,
       loadedSerialized: baselineContent,
     })
-  }, [projectPath, rawLoadedContent])
+  }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline])
 
   // Start global runtime polling for status and logs
   useRuntimePolling()
@@ -375,7 +375,21 @@ const WorkspaceScreen = () => {
   const reloadOpenProject = useCallback(
     async (whenStale: string): Promise<boolean> => {
       if (!projectPath) return false
-      const result = await project.openProjectByPath(projectPath)
+
+      // The rejection is handled HERE, not left to the caller. `openProjectByPath`
+      // rejects on a transport or IPC failure, and two of the three callers discard the
+      // promise with `void` — so a failed reload used to be an unhandled rejection with
+      // nothing said and a workspace quietly showing stale files. The third caught it
+      // and reported "Failed to switch branch", which is the bug the comment above
+      // names: the switch worked, the reload did not.
+      let result: Awaited<ReturnType<typeof project.openProjectByPath>>
+
+      try {
+        result = await project.openProjectByPath(projectPath)
+      } catch {
+        toast({ title: 'Failed to reload project', description: whenStale, variant: 'fail' })
+        return false
+      }
 
       if (result.success && result.data) {
         sharedWorkspaceActions.handleOpenProjectResponse(result.data)

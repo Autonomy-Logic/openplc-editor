@@ -203,6 +203,12 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
           account={edgeAccount}
           reason={accountSignedOutReason}
           onSignedIn={() => {
+            // Cleared, not left standing. The dialog disappears here only because the
+            // `signed-out` guard above unmounts it — the flag stays true, so the next
+            // time this build sees `signed-out` (a session that expires later in the
+            // same run) the dialog reopens on its own. On the desktop that is precisely
+            // what the comment above says must not happen.
+            setSignInDialogOpen(false)
             void refreshAccount()
           }}
         />

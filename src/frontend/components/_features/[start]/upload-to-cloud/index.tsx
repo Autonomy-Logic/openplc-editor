@@ -120,7 +120,16 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
   }, [open, projectName, loadFolders])
 
   const publish = async () => {
-    if (!project.uploadProjectToCloud || !parentFolderId) {
+    if (!parentFolderId) {
+      return
+    }
+
+    // Said, not swallowed. The Upload button is enabled whenever the form is ready, so
+    // returning silently here is a press that does nothing and explains nothing —
+    // `loadFolders` already surfaces the paired missing method rather than going quiet.
+    if (!project.uploadProjectToCloud) {
+      setError('This build of the editor cannot publish to Autonomy Edge.')
+
       return
     }
 

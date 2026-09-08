@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Mail } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -116,8 +116,28 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<SignInValues>({ resolver: zodResolver(signInSchema) })
+
+  /**
+   * Start clean every time the dialog opens.
+   *
+   * The dialog is dismissible now, and the caller keeps this component mounted and
+   * only flips `open` — so everything here survives a close. Someone who mistyped a
+   * password, closed the dialog and opened it again was met by the previous error
+   * message sitting above an empty form, with their password still typed in behind it.
+   */
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    setFormState({ kind: 'idle' })
+    setSubmitting(false)
+    setShowPassword(false)
+    reset()
+  }, [open, reset])
 
   // The editor's own origin. The provider flow opens in a separate tab and lands
   // on `/oauth-complete` there, so this tab — and the unsaved project in it — is
