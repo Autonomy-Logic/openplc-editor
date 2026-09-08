@@ -60,7 +60,7 @@ jest.mock('../project-sync', () => ({
 
 import { startStLsp } from '../index'
 import { getPrintSemanticTokensApi } from '../print-tokens-api'
-import { pouUri, pouVarsUri } from '../types'
+import { pouUri, pouVarsUri, stubUri } from '../types'
 
 function makeStlibSource(): StlibSourcePort {
   return { listStlibs: jest.fn().mockResolvedValue([]), readStlib: jest.fn() }
@@ -193,6 +193,26 @@ describe('pouvars view sync', () => {
     const model = mount(pouVarsUri('main'), PRISTINE_VARS)
 
     expect(setModelMarkers).toHaveBeenCalledWith(model, 'strucpp-lsp', [{ startLineNumber: 3, message: 'line 3' }])
+  })
+
+  it('mirrors a stub:// publish onto the variables view of a graphical POU', () => {
+    openPLCStoreBase.setState((s) => ({
+      project: {
+        ...s.project,
+        data: { ...s.project.data, pous: [{ ...makeStPou('main'), body: { language: 'ld', value: '' } } as PLCPou] },
+      },
+    }))
+    setBodyLineOffset(stubUri('main'), 5)
+    const { api, setModelMarkers, mount } = makeMonacoStub()
+    start(api)
+    const model = mount(pouVarsUri('main'), PRISTINE_VARS)
+
+    mockCapturedOptions?.diagnosticsMirror?.(
+      { uri: stubUri('main'), diagnostics: [diagnosticAt(2), diagnosticAt(7)] },
+      { ...MARKER_CTX, monacoApi: api },
+    )
+
+    expect(setModelMarkers).toHaveBeenCalledWith(model, 'strucpp-lsp', [{ startLineNumber: 2, message: 'line 2' }])
   })
 
   it('leaves a body model mount alone', () => {
