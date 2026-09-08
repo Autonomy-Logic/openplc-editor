@@ -981,4 +981,46 @@ describe('cloud projects', () => {
       ).resolves.toMatchObject({ status: 'failed', failure: { reason: 'unreachable' } })
     })
   })
+
+  /**
+   * The channel guards stop "is not a function" and nothing else. `ipcRenderer.invoke`
+   * rejects on its own account — the main handler threw, the channel is in preload but
+   * not in main, an argument would not structured-clone — and that rejection escapes to
+   * callers that do not catch it. The folder and upload calls already contain theirs.
+   */
+  describe('an IPC call that rejects', () => {
+    it('does not take the start screen down with the recents list', async () => {
+      ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockRejectedValueOnce(new Error('no handler registered'))
+
+      // `unreachable`, not `unavailable`: the question could not be asked, which is a
+      // different thing from this build having no channel for it.
+      await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unreachable' })
+    })
+
+    it('resolves the cloud read as a failure so openProjectByPath always answers', async () => {
+      ;(window.bridge.edgeProjectsRead as jest.Mock).mockRejectedValueOnce(new Error('main process threw'))
+
+      const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(result.success).toBe(false)
+      expect(result.error?.description).toBe('main process threw')
+    })
+
+    it('resolves the project save as a failure the save flow already handles', async () => {
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockRejectedValueOnce(new Error('channel is gone'))
+
+      await expect(
+        cloudAdapter.saveProject({ projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never),
+      ).resolves.toEqual({ success: false, error: 'channel is gone' })
+    })
+
+    it('resolves the single-file save as a failure too', async () => {
+      ;(window.bridge.edgeProjectsSaveFile as jest.Mock).mockRejectedValueOnce(new Error('channel is gone'))
+
+      await expect(cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x;')).resolves.toEqual({
+        success: false,
+        error: 'channel is gone',
+      })
+    })
+  })
 })

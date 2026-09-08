@@ -119,12 +119,16 @@ está funcionando de qualquer forma.
 
 ---
 
-## OBS-3 — `jszip` não declarada no `package.json`
+## OBS-3 — `jszip` não declarada no `package.json` — RESOLVIDO
 
-O empacotamento do projeto para upload usa `jszip`, que está instalada (3.10.1) e já
-era importada pelo compiler, mas **não consta no `package.json`** — dependência
-fantasma pré-existente. Se quem a traz transitivamente deixar de trazer, quebram o
-upload e o compile. Uma linha resolve.
+O empacotamento do projeto para upload usa `jszip`, que estava instalada (3.10.1) e já
+era importada pelo compiler, mas **não constava no `package.json`** — dependência
+fantasma pré-existente. Se quem a trazia transitivamente deixasse de trazer, quebravam
+o upload e o compile.
+
+Fechado neste mesmo PR: `"jszip": "^3.10.1"` está em `dependencies`, e o lockfile a
+promoveu de transitiva de desenvolvimento (`unzip-crx-3`) para dependência de
+produção.
 
 ---
 

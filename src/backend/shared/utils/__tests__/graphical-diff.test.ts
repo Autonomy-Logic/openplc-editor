@@ -268,6 +268,27 @@ describe('computeGraphicalDiff — what it is given', () => {
     expect(result.flows).toEqual([])
   })
 
+  it('does not let a non-numeric dimension turn the rung height into NaN', () => {
+    // `??` rejects only null and undefined, so a dimension that arrived as a string
+    // used to pass through and `y + height` concatenated instead of adding. The result
+    // reached `flows[].originalHeight` as NaN and laid the rung out on it. These bodies
+    // come from historical commits, so this editor is not always the writer.
+    const poisoned = withBody({
+      rungs: [
+        {
+          id: 'r1',
+          edges: [],
+          nodes: [{ id: 'N1', type: 'contact', position: { x: 0, y: 0 }, data: {}, width: '120', height: '40' }],
+        },
+      ],
+    })
+
+    const result = computeGraphicalDiff(poisoned, poisoned, 'pous/programs/main.ld')
+
+    expect(Number.isFinite(result.flows[0].originalHeight)).toBe(true)
+    expect(Number.isFinite(result.flows[0].originalWidth)).toBe(true)
+  })
+
   it('drops a malformed node instead of losing the rung it sits in', () => {
     // A node with no id cannot be keyed, and used to be carried through as if it were
     // a real one. The rest of the rung still diffs.

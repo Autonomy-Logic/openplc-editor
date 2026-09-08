@@ -509,13 +509,25 @@ function computeEdgeDiffMaps(
 // Rung height computation
 // ---------------------------------------------------------------------------
 
+/**
+ * A geometry field off the wire, or the fallback.
+ *
+ * `??` alone is not enough here: it rejects only `null` and `undefined`, so a
+ * dimension that arrived as a string used to pass straight through, `ny + nh`
+ * concatenated instead of adding, and `calcRungHeight` returned `NaN` into the rung
+ * layout. `NodeSchema` checks `id` and no more, deliberately — and these bodies come
+ * from historical commits, so the writer is not always this version of the editor.
+ */
+const finiteOr = (value: unknown, fallback: number): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback
+
 function calcRungHeight(nodes: Node[]): number {
   if (nodes.length === 0) return 80
   let minY = Infinity
   let maxY = -Infinity
   for (const node of nodes) {
-    const ny = node.position?.y ?? 0
-    const nh = (node.measured?.height as number) ?? (node.height as number) ?? 40
+    const ny = finiteOr(node.position?.y, 0)
+    const nh = finiteOr(node.measured?.height ?? node.height, 40)
     if (ny < minY) minY = ny
     if (ny + nh > maxY) maxY = ny + nh
   }
@@ -526,8 +538,8 @@ function calcRungWidth(nodes: Node[]): number {
   if (nodes.length === 0) return 400
   let maxX = 0
   for (const node of nodes) {
-    const nx = node.position?.x ?? 0
-    const nw = (node.measured?.width as number) ?? (node.width as number) ?? 100
+    const nx = finiteOr(node.position?.x, 0)
+    const nw = finiteOr(node.measured?.width ?? node.width, 100)
     if (nx + nw > maxX) maxX = nx + nw
   }
   return maxX + 40

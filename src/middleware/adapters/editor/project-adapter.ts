@@ -217,7 +217,20 @@ async function readCloudProjectFiles(projectId: string): Promise<RawProjectFiles
     }
   }
 
-  return window.bridge.edgeProjectsRead(projectId)
+  // The channel guard above only prevents "is not a function". `ipcRenderer.invoke`
+  // rejects on its own account too — the main handler threw, the channel exists in
+  // preload but not in main, or an argument would not structured-clone — and that
+  // rejection escapes `openProjectByPath` to callers that do not catch it. The folder
+  // and upload calls below already contain theirs for exactly this reason.
+  return window.bridge.edgeProjectsRead(projectId).catch(
+    (error: unknown): RawProjectFiles => ({
+      success: false,
+      error: {
+        title: 'Failed to open project',
+        description: error instanceof Error ? error.message : 'Autonomy Edge could not be reached.',
+      },
+    }),
+  )
 }
 
 /** What a cloud write answers when the channel it needs is not in this build. */
@@ -225,6 +238,18 @@ const NO_CLOUD_WRITE_CHANNEL = {
   success: false,
   error: 'This build of the editor cannot save cloud projects.',
 } as const
+
+/**
+ * What a cloud write answers when the IPC call itself rejected.
+ *
+ * Distinct from the missing-channel case above: the channel was there and the call
+ * failed, which the user can act on. Either way the save flow gets the failure shape
+ * it already handles instead of an escaping rejection.
+ */
+const cloudWriteFailure = (error: unknown): { success: boolean; error?: string } => ({
+  success: false,
+  error: error instanceof Error ? error.message : 'The save could not be sent to Autonomy Edge.',
+})
 
 export function createEditorProjectAdapter(): ProjectPort {
   return {
@@ -352,7 +377,7 @@ export function createEditorProjectAdapter(): ProjectPort {
           return NO_CLOUD_WRITE_CHANNEL
         }
 
-        return window.bridge.edgeProjectsSaveProject(files)
+        return window.bridge.edgeProjectsSaveProject(files).catch(cloudWriteFailure)
       }
 
       const response = (await window.bridge.writeProjectFiles(files)) as { success: boolean; error?: string }
@@ -370,7 +395,7 @@ export function createEditorProjectAdapter(): ProjectPort {
           return NO_CLOUD_WRITE_CHANNEL
         }
 
-        return window.bridge.edgeProjectsSaveFile(filePath, content)
+        return window.bridge.edgeProjectsSaveFile(filePath, content).catch(cloudWriteFailure)
       }
 
       return window.bridge.saveFile(filePath, content)
@@ -503,11 +528,19 @@ export function createEditorProjectAdapter(): ProjectPort {
       // branch of the section's state machine into "no cloud projects yet" — telling a
       // signed-out user their account is empty. Observed, not imagined: it is what a
       // stale bundle did on the first run of this code.
-      return window.bridge.edgeProjectsListRecent(limit).then((result): CloudProjectsResult => {
-        const parsed = CloudProjectsResultSchema.safeParse(result)
+      return (
+        window.bridge
+          .edgeProjectsListRecent(limit)
+          .then((result): CloudProjectsResult => {
+            const parsed = CloudProjectsResultSchema.safeParse(result)
 
-        return parsed.success ? parsed.data : { status: 'unavailable' }
-      })
+            return parsed.success ? parsed.data : { status: 'unavailable' }
+          })
+          // The most exposed of the four: the start screen calls this without a catch, so
+          // a rejected invoke took the whole screen down. `unreachable` is the union
+          // member for it — the question could not be asked, which is not "no projects".
+          .catch((): CloudProjectsResult => ({ status: 'unreachable' }))
+      )
     },
 
     async getRecentProjects(): Promise<RecentProject[]> {

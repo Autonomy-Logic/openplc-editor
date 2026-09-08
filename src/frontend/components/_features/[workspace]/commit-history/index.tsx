@@ -228,6 +228,15 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
 
     let current = true
 
+    // Re-derived per commit, for the same reason the cancellation flag above exists:
+    // there is no `key`, so React keeps this instance and its state when the reader
+    // clicks another commit. `selectedFile` would keep the previous commit's path —
+    // and if that path is absent from the new commit, both sides of the diff fall back
+    // to '' and the panel shows an empty diff under a header naming the old file. The
+    // auto-expand effect only runs while nothing is expanded, so the new commit's
+    // folders would stay collapsed too.
+    setSelectedFile(initialFile ?? null)
+    setExpandedFolders(new Set())
     setIsLoading(true)
     setError(null)
 
@@ -250,7 +259,7 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
     return () => {
       current = false
     }
-  }, [projectId, commitHash, versionControl])
+  }, [projectId, commitHash, versionControl, initialFile])
 
   const parentFileMap = useMemo(() => new Map(parentFiles.map((f) => [f.path, f.content])), [parentFiles])
 
@@ -336,6 +345,12 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
     versionControl
       .restoreCommit(projectId, commitHash)
       .then(() => {
+        // Cleared here too, not only on failure. This component takes `onRestored`
+        // rather than navigating, precisely so the host decides what happens next — so
+        // it cannot assume it is about to be unmounted. A host that reloads the project
+        // in place keeps this instance, and the next open of the modal would show a
+        // disabled "Restoring..." button for good.
+        setIsRestoring(false)
         setShowRestoreModal(false)
         onRestored()
       })

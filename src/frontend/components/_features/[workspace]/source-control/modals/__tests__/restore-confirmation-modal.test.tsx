@@ -58,4 +58,17 @@ describe('RestoreConfirmationModal', () => {
 
     expect(container.firstChild).toBeNull()
   })
+
+  it('offers the way out again once the restore is no longer running', () => {
+    // The caller clears `isLoading` on BOTH paths now. It used to clear it only on
+    // failure, so a host that keeps this instance mounted after a successful restore
+    // reopened the modal on a permanently disabled "Restoring..." button.
+    const { rerender } = render(<RestoreConfirmationModal {...PROPS} isLoading />)
+    expect(button('Restoring...').disabled).toBe(true)
+
+    rerender(<RestoreConfirmationModal {...PROPS} isLoading={false} />)
+
+    expect(button('Restore').disabled).toBe(false)
+    expect(button('Cancel').disabled).toBe(false)
+  })
 })
