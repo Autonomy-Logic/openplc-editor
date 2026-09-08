@@ -497,6 +497,18 @@ export default class MenuBuilder {
     const templateDefault: MenuItemConstructorOptions[] = [
       {
         label: i18n.t('menu:file.label'),
+        // KNOWN DIVERGENCE from the in-app React File menu (`menus/file.tsx`),
+        // which is the only File menu on Windows while this is the only one on
+        // Linux. Deliberate for now, and tracked rather than fixed here:
+        //   - native only: New Project, Open Project, Export to CODESYS XML,
+        //     Board Package Manager, Check for Updates
+        //   - React only: README, Import PLCopen XML (both capability-gated)
+        // Everything either menu offers now WORKS on its platform, which is the
+        // part that mattered: Save As was disabled here, so on Linux a
+        // retrieved project could not be saved at all. Full parity is a bigger
+        // change than this ticket, since some React items are gated on
+        // capabilities the main process does not know about.
+        //
         // Hidden on Windows ONLY, where the in-app React menubar renders its own
         // File menu and a native one beside it would be a duplicate. Linux gets
         // no in-app menubar (`app-layout.tsx` draws no title bar there), so this
@@ -533,9 +545,14 @@ export default class MenuBuilder {
             click: () => this.handleSaveProject(),
           },
           {
+            // Wired, not disabled. Linux has no in-app menubar, so this is its
+            // only Save As -- and a retrieved project can be saved NO other
+            // way: both save paths refuse it and point here. A disabled item
+            // does not fire its accelerator either, so Ctrl+Shift+A was dead
+            // too, and every refusal named an action the platform did not have.
             label: i18n.t('menu:file.submenu.saveAs'),
             accelerator: 'Ctrl+Shift+A',
-            enabled: false,
+            click: () => this.handleSaveProjectAs(),
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
