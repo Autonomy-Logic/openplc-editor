@@ -11,7 +11,7 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
-import type { IoSizes } from '@root/backend/shared/compile/steps/generate-io-sizes'
+import { completeIoSizes, type IoSizes } from '@root/backend/shared/compile/steps/generate-io-sizes'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
@@ -3087,12 +3087,18 @@ class CompilerModule {
     // io_sizes.h, exactly as before.
     let boardIoSizes: { defaults: IoSizes; ceilings?: Partial<IoSizes> } | undefined
     let requestedIoSizes: Partial<IoSizes> | undefined
-    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler' && boardEntry.io) {
-      boardIoSizes = {
-        defaults: boardEntry.io as IoSizes,
-        ...(boardEntry.ioMax ? { ceilings: boardEntry.ioMax } : {}),
+    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
+      // A partially declared block is not a smaller board, it is a package that
+      // said nothing about the rest: clamping against undefined defaults yields
+      // NaN, so the firmware's own `#ifndef` values have to stand instead.
+      const defaults = completeIoSizes(boardEntry.io)
+      if (defaults) {
+        boardIoSizes = {
+          defaults,
+          ...(boardEntry.ioMax ? { ceilings: boardEntry.ioMax } : {}),
+        }
+        requestedIoSizes = (vendorScreenData?.['io_sizes'] ?? undefined) as Partial<IoSizes> | undefined
       }
-      requestedIoSizes = (vendorScreenData?.['io_sizes'] ?? undefined) as Partial<IoSizes> | undefined
     }
 
     // Persistent storage (RETAIN) settings for a runtime-v4 upload. Read from

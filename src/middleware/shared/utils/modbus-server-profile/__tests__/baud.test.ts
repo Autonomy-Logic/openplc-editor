@@ -27,6 +27,24 @@ describe('resolveDefaultPortBaud', () => {
   it('falls back for a project that states nothing', () => {
     expect(resolveDefaultPortBaud({})).toBe(DEFAULT_SERIAL_BAUD)
   })
+
+  it('falls through a value that is not a positive integer', () => {
+    // This is the number the editor dials to reach the debugger, so a bad one
+    // locks the board out with nothing on screen to say why.
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: '' } })).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: 'fast' } })).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: '0' } })).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: '-9600' } })).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: '96.00' } })).toBe(DEFAULT_SERIAL_BAUD)
+  })
+
+  it('takes the next candidate when the first is unusable', () => {
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: '' }, modbus_rtu: { rtu_baud_rate: '9600' } })).toBe('9600')
+  })
+
+  it('normalises surrounding whitespace', () => {
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: ' 115200 ' } })).toBe('115200')
+  })
 })
 
 describe('resolveServerBaud', () => {

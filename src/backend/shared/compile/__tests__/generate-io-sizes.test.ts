@@ -1,4 +1,4 @@
-import { clampIoSizes, generateIoSizesHeader, type IoSizes } from '../steps/generate-io-sizes'
+import { clampIoSizes, completeIoSizes, generateIoSizesHeader, type IoSizes } from '../steps/generate-io-sizes'
 
 /** The large set `openplc.h` compiles for everything that is not a small AVR. */
 const DEFAULTS: IoSizes = {
@@ -10,6 +10,27 @@ const DEFAULTS: IoSizes = {
   memoryDword: 20,
   memoryLword: 20,
 }
+
+describe('completeIoSizes', () => {
+  it('returns null when the board declares no io block at all', () => {
+    expect(completeIoSizes(undefined)).toBeNull()
+  })
+
+  it('returns the sizes when every field is declared', () => {
+    expect(completeIoSizes(DEFAULTS)).toEqual(DEFAULTS)
+  })
+
+  it('rejects a partial block rather than filling the gaps', () => {
+    // Clamping against an undefined default yields NaN, which compares unequal
+    // to everything and emits an override for a macro nobody asked to change.
+    const { memoryLword: _dropped, ...partial } = DEFAULTS
+    expect(completeIoSizes(partial)).toBeNull()
+  })
+
+  it('rejects a non-finite count', () => {
+    expect(completeIoSizes({ ...DEFAULTS, analogInput: Number.NaN })).toBeNull()
+  })
+})
 
 describe('clampIoSizes', () => {
   it('returns the board defaults when the project asked for nothing', () => {

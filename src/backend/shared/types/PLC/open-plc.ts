@@ -343,7 +343,7 @@ const ModbusSlaveConfigSchema = z.object({
   // server, and absent on baremetal when the RTU shares the editor's default
   // port, where the package owns the port's speed.
   serialPort: z.string().optional(),
-  baudRate: z.number().optional(),
+  baudRate: z.number().int().positive().optional(),
   parity: ModbusParitySchema.optional(),
   stopBits: z.number().int().min(1).max(2).optional(),
   dataBits: z.number().int().min(7).max(8).optional(),

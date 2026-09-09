@@ -756,6 +756,23 @@ export interface BoardInfo {
     memoryLword?: number
   }
   /**
+   * Per-field ceilings for `io`, from the manifest's `device.ioMax`.
+   *
+   * `board-info-resolver.ts` and `hardware-module.ts` both forward it and
+   * `resolveModbusServerProfile` reads it to derive `maxCounts`, so the value
+   * was already crossing this boundary at runtime while the contract could not
+   * name it. A field with no ceiling is a field the board cannot grow.
+   */
+  ioMax?: {
+    digitalInput?: number
+    digitalOutput?: number
+    analogInput?: number
+    analogOutput?: number
+    memoryWord?: number
+    memoryDword?: number
+    memoryLword?: number
+  }
+  /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
    * `backend/shared/hardware/debug-spec.ts#resolveDebugConnection`.

@@ -40,9 +40,15 @@ export interface SerialBaudScreenState {
  * nothing stops a new editor meeting an old package, which is what they are for.
  */
 export function resolveDefaultPortBaud(state: SerialBaudScreenState): string {
-  return (
-    state.serial?.baud_rate ?? state.modbus_rtu?.baud_rate ?? state.modbus_rtu?.rtu_baud_rate ?? DEFAULT_SERIAL_BAUD
-  )
+  // `??` alone would return a persisted empty string, and the value is dialled
+  // by the editor to reach the debugger: a bad one locks the board out with no
+  // diagnostic. Anything that is not a positive integer falls through.
+  const candidates = [state.serial?.baud_rate, state.modbus_rtu?.baud_rate, state.modbus_rtu?.rtu_baud_rate]
+  for (const candidate of candidates) {
+    const value = candidate?.trim()
+    if (value && /^[1-9][0-9]*$/.test(value)) return value
+  }
+  return DEFAULT_SERIAL_BAUD
 }
 
 /**

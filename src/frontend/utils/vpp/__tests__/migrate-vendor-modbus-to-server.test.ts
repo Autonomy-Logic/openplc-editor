@@ -84,6 +84,54 @@ describe('planVendorModbusMigration', () => {
     expect(config?.baudRate).toBe(19200)
   })
 
+  it('reads the wiring from the legacy modbus_rtu keys when serial has none', () => {
+    // This runs on project load; `migrate-modbus-serial-fields` folds the old
+    // spellings into `serial` only once the board list resolves, and never at
+    // all for a board whose package was never split. Reading only the new key
+    // dropped the user's UART and baud on exactly the projects being migrated.
+    const original = {
+      modbus_rtu: { enabled: true, rtu_slave_id: 7, rtu_interface: 'Serial2', rtu_baud_rate: '115200' },
+    }
+    const config = planVendorModbusMigration(original, [])?.modbusSlaveConfig
+
+    expect(config?.serialPort).toBe('Serial2')
+    expect(config?.baudRate).toBe(115200)
+  })
+
+  it('reads the intermediate modbus_rtu spelling from the first screen split', () => {
+    const halfway = {
+      modbus_rtu: { enabled: true, serial_port: 'Serial3', baud_rate: '57600' },
+    }
+    const config = planVendorModbusMigration(halfway, [])?.modbusSlaveConfig
+
+    expect(config?.serialPort).toBe('Serial3')
+    expect(config?.baudRate).toBe(57600)
+  })
+
+  it('prefers the serial section over the legacy keys when both are present', () => {
+    // A value under the new key was written through the new screen, so it is
+    // the user's most recent intent; the legacy one is stale by definition.
+    const both = {
+      modbus_rtu: { enabled: true, rtu_interface: 'Serial2', rtu_baud_rate: '115200' },
+      serial: { modbus_port: 'Serial1', modbus_baud_rate: '19200' },
+    }
+    const config = planVendorModbusMigration(both, [])?.modbusSlaveConfig
+
+    expect(config?.serialPort).toBe('Serial1')
+    expect(config?.baudRate).toBe(19200)
+  })
+
+  it('falls through an empty serial value to the legacy key rather than dropping it', () => {
+    const emptied = {
+      modbus_rtu: { enabled: true, rtu_interface: 'Serial2', rtu_baud_rate: '115200' },
+      serial: { modbus_port: '', modbus_baud_rate: '' },
+    }
+    const config = planVendorModbusMigration(emptied, [])?.modbusSlaveConfig
+
+    expect(config?.serialPort).toBe('Serial2')
+    expect(config?.baudRate).toBe(115200)
+  })
+
   it('drops an unreadable number instead of carrying NaN into the emitted config', () => {
     const junk = { modbus_rtu: { enabled: true, rtu_slave_id: 'not a number' }, serial: { modbus_baud_rate: '' } }
     const config = planVendorModbusMigration(junk, [])?.modbusSlaveConfig

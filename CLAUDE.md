@@ -279,7 +279,7 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs
   directory below the floor.
 - **Mocks:** `configs/mocks/` for file stubs; `identity-obj-proxy` for CSS modules
 
-When adding new code to covered directories, you must add corresponding tests to maintain 100% coverage.
+When adding new code to a covered directory, add tests with it: the directory has to stay above its floor, and an untested file is what pushes it under.
 
 ## Code Style
 
@@ -370,7 +370,7 @@ on its `main` push. (Ideally `package.json.version` should be derived from
 1. Create `types.ts`, `slice.ts`, `index.ts` in `src/frontend/store/slices/<name>/`
 2. Add the slice type to `RootState` union in `src/frontend/store/index.ts`
 3. Spread the slice creator in `createOpenPLCStore()`
-4. Add tests to maintain 100% coverage
+4. Add tests with it, so the directory stays above its coverage floor
 
 ### When adding a new POU language or type:
 1. Update project parser (`src/backend/shared/utils/parse-project-files.ts`)

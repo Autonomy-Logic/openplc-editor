@@ -48,8 +48,14 @@ const Toggle = ({
   onChange: (value: boolean) => void
   label: string
 }) => (
-  <label className='relative inline-flex cursor-pointer items-center' aria-label={label}>
-    <input type='checkbox' checked={checked} onChange={(e) => onChange(e.target.checked)} className='peer sr-only' />
+  <label className='relative inline-flex cursor-pointer items-center'>
+    <input
+      type='checkbox'
+      aria-label={label}
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      className='peer sr-only'
+    />
     <div
       className={cn(
         'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',

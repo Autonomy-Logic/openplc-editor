@@ -27,7 +27,7 @@ import type { PLCServer } from '../../../middleware/shared/ports/types'
 /** VPP section ids the pre-4.4.0 shape carried protocol configuration in. */
 const RTU_SECTION = 'modbus_rtu'
 const TCP_SECTION = 'modbus_tcp'
-/** Where the RTU's wiring already lives, after `migrate-modbus-serial-fields`. */
+/** Where the RTU's wiring lands once `migrate-modbus-serial-fields` has run. */
 const SERIAL_SECTION = 'serial'
 
 /** Name the migrated server takes, before any collision suffix. */
@@ -57,6 +57,23 @@ function asNumber(value: unknown): number | undefined {
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * First value that is actually present, in precedence order.
+ *
+ * The RTU's UART and its speed have lived under three spellings: `serial`'s
+ * `modbus_port` / `modbus_baud_rate` today, `modbus_rtu`'s `serial_port` /
+ * `baud_rate` from the first screen split, and `rtu_interface` /
+ * `rtu_baud_rate` from the original single-screen shape.
+ * `migrate-modbus-serial-fields` folds the old spellings forward, but it runs
+ * when the board list resolves and this runs on project load, so the keys are
+ * still under their old names here -- and on a board whose package was never
+ * split it never runs at all. Reading only the new key drops the user's wiring
+ * on exactly the projects this migration exists for.
+ */
+function firstOf(...values: unknown[]): unknown {
+  return values.find((value) => value !== undefined && value !== null && value !== '')
 }
 
 /** A project is already on the new model when any server declares transports. */
@@ -101,8 +118,8 @@ export function planVendorModbusMigration(
   if (transports.length === 0) return null
 
   const slaveId = asNumber(rtu?.rtu_slave_id)
-  const serialPort = asString(serial?.modbus_port)
-  const baudRate = asNumber(serial?.modbus_baud_rate)
+  const serialPort = asString(firstOf(serial?.modbus_port, rtu?.serial_port, rtu?.rtu_interface))
+  const baudRate = asNumber(firstOf(serial?.modbus_baud_rate, rtu?.baud_rate, rtu?.rtu_baud_rate))
 
   return {
     name: freeName(new Set((servers ?? []).map((server) => server.name))),

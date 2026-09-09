@@ -55,6 +55,43 @@ const MACRO_BY_FIELD: Array<[keyof IoSizes, string]> = [
 export const MAX_IO_SIZE = 65535
 
 /**
+ * Narrow a manifest's `io` block to a complete size set, or `null`.
+ *
+ * Every field is optional on the way in, and a block missing one is not a
+ * board with a smaller image: it is a package that did not say. Clamping
+ * against an undefined default produces `NaN`, which then compares unequal to
+ * everything and emits an override for a macro nobody asked to change, so the
+ * incomplete case has to be rejected here rather than filled in.
+ */
+export function completeIoSizes(io: Partial<IoSizes> | undefined): IoSizes | null {
+  if (!io) return null
+  const size = (value: number | undefined): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null
+
+  const digitalInput = size(io.digitalInput)
+  const digitalOutput = size(io.digitalOutput)
+  const analogInput = size(io.analogInput)
+  const analogOutput = size(io.analogOutput)
+  const memoryWord = size(io.memoryWord)
+  const memoryDword = size(io.memoryDword)
+  const memoryLword = size(io.memoryLword)
+
+  if (
+    digitalInput === null ||
+    digitalOutput === null ||
+    analogInput === null ||
+    analogOutput === null ||
+    memoryWord === null ||
+    memoryDword === null ||
+    memoryLword === null
+  ) {
+    return null
+  }
+
+  return { digitalInput, digitalOutput, analogInput, analogOutput, memoryWord, memoryDword, memoryLword }
+}
+
+/**
  * Clamp a requested size set against the board's defaults and ceilings.
  *
  * Returns the sizes that will actually be compiled. Each field is at least the
