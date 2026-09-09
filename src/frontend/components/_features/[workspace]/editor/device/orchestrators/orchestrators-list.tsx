@@ -122,7 +122,7 @@ const OrchestratorsList = () => {
       setError(null)
     } catch (error) {
       console.error('[Orchestrators] Fetch failed', error)
-      setError('Failed to load orchestrators. Please try again.')
+      setError('Failed to load Edge Devices. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -330,18 +330,18 @@ const OrchestratorsList = () => {
   return (
     <div className='flex h-full w-full flex-col'>
       <div className='min-h-0 flex-1'>
-        <DeviceEditorSlot heading='Device Orchestrators'>
+        <DeviceEditorSlot heading='Edge Devices'>
           <div id='orchestrators-container' className='flex h-full w-full flex-col gap-4'>
             <div id='orchestrators-header' className='flex items-center justify-between'>
               <p className='text-sm text-neutral-600 dark:text-neutral-400'>
-                Select a device from your orchestrators to connect to.
+                Select a vPLC from your Edge Devices to connect to.
               </p>
               <button
                 type='button'
                 onClick={() => void handleRefresh()}
                 disabled={isRefreshing}
                 className={cn('group', isRefreshing && 'cursor-not-allowed opacity-50')}
-                aria-label='Refresh orchestrators'
+                aria-label='Refresh Edge Devices'
               >
                 <RefreshIcon size='sm' className={isRefreshing ? 'animate-spin' : ''} />
               </button>
@@ -374,7 +374,7 @@ const OrchestratorsList = () => {
 
             {loading && (
               <div className='flex items-center justify-center py-8'>
-                <p className='text-sm text-neutral-500 dark:text-neutral-400'>Loading orchestrators...</p>
+                <p className='text-sm text-neutral-500 dark:text-neutral-400'>Loading Edge Devices...</p>
               </div>
             )}
 
@@ -386,9 +386,9 @@ const OrchestratorsList = () => {
 
             {!loading && !error && orchestrators.length === 0 && (
               <div className='flex flex-col items-center justify-center gap-2 py-8'>
-                <p className='text-sm text-neutral-500 dark:text-neutral-400'>No orchestrators found.</p>
+                <p className='text-sm text-neutral-500 dark:text-neutral-400'>No Edge Devices found.</p>
                 <p className='text-xs text-neutral-400 dark:text-neutral-500'>
-                  Register an orchestrator in the Autonomy Edge platform to see it here.
+                  Register an Edge Device in the Autonomy Edge platform to see it here.
                 </p>
               </div>
             )}
@@ -433,7 +433,7 @@ const OrchestratorsList = () => {
                           )}
                         </div>
                         <span className='text-xs text-neutral-400 dark:text-neutral-500'>
-                          {orchestrator.devices.length} device{orchestrator.devices.length !== 1 ? 's' : ''}
+                          {orchestrator.devices.length} vPLC{orchestrator.devices.length !== 1 ? 's' : ''}
                         </span>
                       </div>
 
@@ -547,7 +547,7 @@ const OrchestratorsList = () => {
             {/* Device Switch Confirmation Modal */}
             <Modal open={showSwitchConfirmModal} onOpenChange={setShowSwitchConfirmModal}>
               <ModalContent className='flex h-[320px] w-[400px] select-none flex-col items-center justify-evenly rounded-lg'>
-                <ModalTitle className='hidden'>Switch Device</ModalTitle>
+                <ModalTitle className='hidden'>Switch vPLC</ModalTitle>
                 <div className='flex select-none flex-col items-center gap-6 p-4'>
                   <WarningIcon className='h-[60px] w-[60px]' />
                   <div className='text-center'>
@@ -556,7 +556,7 @@ const OrchestratorsList = () => {
                     </p>
                     <p className='mt-2 text-sm text-neutral-600 dark:text-neutral-400'>
                       To connect to <strong>{pendingDeviceSwitch?.deviceName}</strong>, you must disconnect from the
-                      current device first.
+                      current vPLC first.
                     </p>
                   </div>
 
