@@ -11,6 +11,7 @@ import { openPLCStoreBase } from '../../store'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import type { LspContext } from '../lsp-shared/providers'
 import { dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
+import { pouVarsWindow } from './pouvars-context'
 import { DATA_TYPES_URI, parseDtViewUri, parsePouVarsUri, POU_DECLARATION_LINE_COUNT, pouUri, stubUri } from './types'
 
 /**
@@ -38,13 +39,7 @@ export function resolveStLspContext(modelUri: string): LspContext {
     const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === varsPou)
     const isStLanguage = pou?.body.language === 'st'
     const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
-    // Skipped until project-sync registers the body line: an
-    // unpopulated registry reads as 0 and would window the view to nothing.
-    const bodyLine = getBodyLineOffset(lspUri)
-    const varsWindow =
-      bodyLine > POU_DECLARATION_LINE_COUNT
-        ? { startLine: POU_DECLARATION_LINE_COUNT, endLineExclusive: bodyLine }
-        : null
+    const varsWindow = pouVarsWindow(getBodyLineOffset(lspUri))
     return {
       lspUri,
       lineOffset: POU_DECLARATION_LINE_COUNT,

@@ -43,9 +43,12 @@ export {
   type DiagnosticsBridge,
   type DiagnosticsMirror,
 } from './diagnostics'
+export { createLspDocumentMirror, type LspDocumentMirror, lspMirrorUri, parseLspMirrorUri } from './lsp-mirror'
+export { type NavigateToTarget, navTargetForResource, registerDefinitionOpener } from './navigation'
 export {
-  type DefinitionInterceptor,
+  type DefinitionLocationMapper,
   type LspContext,
+  type MappedLocation,
   type ProviderHooks,
   registerLspProviders,
   type RegisterLspProvidersOptions,

@@ -7,6 +7,7 @@ import type { Diagnostic } from 'vscode-languageserver-protocol'
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../../store'
 import { __clearBodyLineOffsetsForTests, getBodyLineOffset, setBodyLineOffset } from '../../lsp-shared/body-offsets'
+import type { NavTarget } from '../../lsp-shared/definition-redirect'
 import type { StartLanguageServiceOptions } from '../../lsp-shared/start-language-service'
 import type { StlibSourcePort } from '../../../../middleware/shared/ports/stlib-source-port'
 
@@ -16,7 +17,9 @@ const mockRequestSemanticTokens = jest.fn()
 const mockGetSemanticTokensLegend = jest.fn()
 const mockRefreshSemanticTokens = jest.fn()
 const mockGetSyncedDocumentText = jest.fn<string | undefined, [string]>()
+const mockMirror = { set: jest.fn(), delete: jest.fn(), dispose: jest.fn() }
 let mockCapturedOptions: StartLanguageServiceOptions | undefined
+let mockCapturedNavigate: ((target: NavTarget) => boolean) | undefined
 
 // `vscode-languageserver-protocol`'s Node entry point is ESM-only and Jest's
 // CJS transform can't parse it; index.ts only needs `CompletionRequest.type`
@@ -51,13 +54,18 @@ jest.mock('../../lsp-shared', () => ({
     message: d.message,
   }),
   shiftSemanticTokensToBody: (data: unknown) => data,
-  suppressNoDefinitionFound: jest.fn(),
+  createLspDocumentMirror: () => mockMirror,
+  registerDefinitionOpener: (_api: unknown, navigate: (target: NavTarget) => boolean) => {
+    mockCapturedNavigate = navigate
+    return { dispose: jest.fn() }
+  },
 }))
 
 jest.mock('../project-sync', () => ({
   getSyncedDocumentText: (uri: string) => mockGetSyncedDocumentText(uri),
 }))
 
+import { mapStDefinitionLocation } from '../definition-locations'
 import { startStLsp } from '../index'
 import { getPrintSemanticTokensApi } from '../print-tokens-api'
 import { pouUri, pouVarsUri, stubUri } from '../types'
@@ -282,5 +290,55 @@ describe('pouvars view sync', () => {
 
     updateMain((p) => ({ ...p, interface: { ...p.interface, variables: [] } }))
     expect(mockRefreshSemanticTokens).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('definition navigation', () => {
+  beforeEach(() => {
+    __clearBodyLineOffsetsForTests()
+    mockMirror.set.mockReset()
+    mockMirror.delete.mockReset()
+    mockCapturedOptions = undefined
+    mockCapturedNavigate = undefined
+    openPLCStoreBase.setState((s) => ({
+      project: { ...s.project, data: { ...s.project.data, pous: [makeStPou('main')] } },
+    }))
+  })
+
+  it('hands the providers the ST target mapper and routes the outline through the store', () => {
+    start(makeMonacoStub().api)
+
+    expect(mockCapturedOptions?.mapDefinitionLocation).toBe(mapStDefinitionLocation)
+    expect(mockCapturedOptions?.navigateOutline).toBeDefined()
+  })
+
+  it('mirrors every document project-sync opens, changes and closes', () => {
+    const service = start(makeMonacoStub().api)
+
+    service.openDocument(pouUri('main'), 'PROGRAM main\nEND_PROGRAM')
+    service.changeDocument(pouUri('main'), 'PROGRAM main\nx := 1;\nEND_PROGRAM', 2)
+    service.closeDocument(pouUri('main'))
+
+    expect(mockMirror.set.mock.calls).toEqual([
+      [pouUri('main'), 'PROGRAM main\nEND_PROGRAM'],
+      [pouUri('main'), 'PROGRAM main\nx := 1;\nEND_PROGRAM'],
+    ])
+    expect(mockMirror.delete).toHaveBeenCalledWith(pouUri('main'))
+  })
+
+  it('registers an opener whose navigation goes through the store, and declines URIs it does not own', () => {
+    start(makeMonacoStub().api)
+
+    expect(mockCapturedNavigate?.({ uri: pouUri('main'), lineLsp: 0, characterLsp: 0 })).toBe(true)
+    expect(openPLCStoreBase.getState().tabs.some((t) => t.name === 'main')).toBe(true)
+    expect(mockCapturedNavigate?.({ uri: 'file:///elsewhere.py', lineLsp: 3, characterLsp: 0 })).toBe(false)
+  })
+
+  it('does not register an opener or a mirror without a Monaco namespace', () => {
+    const service = start()
+
+    expect(mockCapturedNavigate).toBeUndefined()
+    service.openDocument(pouUri('main'), 'PROGRAM main')
+    expect(mockMirror.set).not.toHaveBeenCalled()
   })
 })

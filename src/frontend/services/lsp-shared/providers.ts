@@ -7,10 +7,12 @@
  * the response back into Monaco's expected shape.
  *
  * The shape parameters (`languageId`, trigger characters, optional
- * URI/offset resolver and definition interceptors) come from the
- * caller — see {@link RegisterLspProvidersOptions} below.  Anything
- * language-specific (ST's `pouvars://` URI rewriting, store-driven
- * definition redirects) plugs in via hooks rather than living here.
+ * URI/offset resolver, definition-target mapping and outline routing)
+ * come from the caller — see {@link RegisterLspProvidersOptions} below.
+ * Anything language-specific (ST's `pouvars://` URI rewriting, where a
+ * definition target is shown, where an activation navigates) plugs in
+ * via hooks rather than living here. The providers themselves only
+ * answer questions; navigation runs from `navigation.ts` on activation.
  *
  * Every provider walks the same translation pattern:
  *
@@ -47,7 +49,9 @@ import {
   lspCompletionListToMonaco,
   lspHoverToMonaco,
   lspLocationsToMonaco,
+  lspRangeToMonaco,
   lspSignatureHelpToMonaco,
+  lspSymbolKindToMonaco,
   lspTextEditToMonaco,
   monacoPositionToLsp,
 } from './converters'
@@ -57,12 +61,14 @@ import {
   lspLineInWindow,
   type LspLineWindow,
   modelMatchesDocumentWindow,
+  symbolsBeforeWindow,
 } from './internal/line-window'
 import {
   lspDocumentSymbolToMonaco,
   normaliseLocationResponse,
-  symbolInformationToDocumentSymbol,
+  suppressNoDefinitionFound,
 } from './internal/symbol-helpers'
+import { attachOutlineActivation, bindOutlineTarget, type NavigateToTarget, resetOutlineTargets } from './navigation'
 
 /**
  * Resolved LSP context for a given Monaco model URI.  Default
@@ -83,20 +89,14 @@ export interface LspContext {
 }
 
 /**
- * Definition redirect.  Run in registration order; the first hook
- * to return a non-`undefined` value wins and the LSP response is
- * never converted.  Returning `null` claims the navigation
- * (Monaco's "no definition found" banner is suppressed but no
- * navigation happens here — the redirect does its own thing).
- * Returning `undefined` lets the next hook (or the default LSP
- * conversion) handle the result.
+ * Where a definition target is shown before it is activated: the URI
+ * Monaco resolves for its hover preview and hands to the editor opener,
+ * and the range in that model's own frame. Null drops a target the
+ * editor cannot reach.
  */
-export type DefinitionInterceptor = (
-  locations: LspLocation[],
-  model: monaco.editor.ITextModel,
-  position: monaco.IPosition,
-  monacoApi: typeof monaco,
-) => monaco.languages.Definition | null | undefined
+export type MappedLocation = { uri: string; range: monaco.IRange } | null
+
+export type DefinitionLocationMapper = (loc: LspLocation, source: LspContext & { modelUri: string }) => MappedLocation
 
 export interface ProviderHooks {
   /**
@@ -106,10 +106,16 @@ export interface ProviderHooks {
    */
   resolveLspContext?: (modelUri: string) => LspContext
   /**
-   * Hooks called for each `provideDefinition` result before the
-   * default LSP-to-Monaco conversion runs.  Run in array order.
+   * Map each LSP definition target to the location Monaco shows.
+   * Default: the target as-is, shifted to its model's body view.
    */
-  definitionInterceptors?: DefinitionInterceptor[]
+  mapDefinitionLocation?: DefinitionLocationMapper
+  /**
+   * Route for outline entries that sit before the model's slice — a body
+   * editor's VAR declarations. When set they are listed and bound to it;
+   * when absent they are dropped, as a windowed view's are.
+   */
+  navigateOutline?: NavigateToTarget
   /**
    * Filter the formatting edits returned by the worker before they
    * reach Monaco.  Default: keep edits whose entire range sits at
@@ -149,16 +155,24 @@ const defaultResolveLspContext = (modelUri: string): LspContext => ({
 const defaultFilterFormattingEdits = (edits: LspTextEdit[], offset: number): LspTextEdit[] =>
   edits.filter((e) => e.range.start.line >= offset && e.range.end.line >= offset)
 
+// Location URIs may refer to any document, so the offset is the target's own.
+const defaultMapDefinitionLocation: DefinitionLocationMapper = (loc) => ({
+  uri: loc.uri,
+  range: lspRangeToMonaco(loc.range, getBodyLineOffset(loc.uri)),
+})
+
 export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.IDisposable {
   const { connection, monacoApi, languageId } = opts
   const resolveLspContext = opts.hooks?.resolveLspContext ?? defaultResolveLspContext
-  const definitionInterceptors = opts.hooks?.definitionInterceptors ?? []
+  const mapDefinitionLocation = opts.hooks?.mapDefinitionLocation ?? defaultMapDefinitionLocation
+  const navigateOutline = opts.hooks?.navigateOutline
   const filterFormattingEdits = opts.hooks?.filterFormattingEdits ?? defaultFilterFormattingEdits
   const getLspDocumentText = opts.hooks?.getLspDocumentText
   const completionTriggerCharacters = opts.completionTriggerCharacters ?? []
   const signatureHelpTriggerCharacters = opts.signatureHelpTriggerCharacters ?? []
 
   const disposables: monaco.IDisposable[] = []
+  if (navigateOutline) attachOutlineActivation(monacoApi)
 
   // -------------------------------------------------------------------------
   // Completion
@@ -235,25 +249,30 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerDefinitionProvider(languageId, {
       provideDefinition: async (model, position) => {
-        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
-        const lspPosition = monacoPositionToLsp(position, lineOffset)
-        if (!lspLineInWindow(lspPosition.line, lineWindow)) return null
+        const modelUri = model.uri.toString()
+        const context = resolveLspContext(modelUri)
+        const lspPosition = monacoPositionToLsp(position, context.lineOffset)
+        if (!lspLineInWindow(lspPosition.line, context.lineWindow)) return null
         const result = await connection.sendRequest(DefinitionRequest.type, {
-          textDocument: { uri: lspUri },
+          textDocument: { uri: context.lspUri },
           position: lspPosition,
         })
         // DefinitionRequest may resolve to Location, Location[], or
-        // LocationLink[].  Normalise to Location[] first so the
-        // interceptors see a uniform shape.
+        // LocationLink[].  Normalise to Location[] first so the mapper
+        // sees a uniform shape.
         const normalised = normaliseLocationResponse(result as LspLocation | LspLocation[] | LocationLink[] | null)
         if (!normalised) return null
 
         const locations = Array.isArray(normalised) ? normalised : [normalised]
-        for (const intercept of definitionInterceptors) {
-          const claimed = intercept(locations, model, position, monacoApi)
-          if (claimed !== undefined) return claimed
+        const mapped: monaco.languages.Location[] = []
+        for (const loc of locations) {
+          const shown = mapDefinitionLocation(loc, { ...context, modelUri })
+          if (shown) mapped.push({ uri: monacoApi.Uri.parse(shown.uri), range: shown.range })
         }
-        return lspLocationsToMonaco(normalised, monacoApi) ?? null
+        // Every target unreachable (a typeshed stub, say): still claim the
+        // definition, or Monaco shows its banner and peeks references.
+        if (mapped.length === 0) return suppressNoDefinitionFound(model, position, monacoApi)
+        return mapped
       },
     }),
   )
@@ -285,7 +304,9 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   disposables.push(
     monacoApi.languages.registerDocumentSymbolProvider(languageId, {
       provideDocumentSymbols: async (model) => {
-        const { lspUri, lineOffset, lineWindow } = resolveLspContext(model.uri.toString())
+        const modelUri = model.uri.toString()
+        const { lspUri, lineOffset, lineWindow } = resolveLspContext(modelUri)
+        resetOutlineTargets(modelUri)
         const result = await connection.sendRequest(DocumentSymbolRequest.type, {
           textDocument: { uri: lspUri },
         })
@@ -299,14 +320,44 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
         // hierarchy) or SymbolInformation[] (flat list with
         // containerName).  Monaco's outline view wants
         // DocumentSymbol[] — flat lists get rewrapped.
-        if ('range' in result[0]) {
-          return clipSymbolsToWindow(result as DocumentSymbol[], visible).map((s) =>
-            lspDocumentSymbolToMonaco(s, lineOffset),
-          )
-        }
-        return (result as SymbolInformation[])
-          .filter((s) => lspLineInWindow(s.location.range.start.line, visible))
-          .map((s) => symbolInformationToDocumentSymbol(s, lineOffset))
+        const symbols: DocumentSymbol[] =
+          'range' in result[0]
+            ? (result as DocumentSymbol[])
+            : (result as SymbolInformation[]).map((s) => ({
+                name: s.name,
+                detail: s.containerName,
+                kind: s.kind,
+                range: s.location.range,
+                selectionRange: s.location.range,
+              }))
+        const shown = clipSymbolsToWindow(symbols, visible).map((s) => lspDocumentSymbolToMonaco(s, lineOffset))
+        // A body editor's declarations live before its slice. Listed anyway,
+        // each bound to where it really points, so accepting one navigates
+        // there instead of selecting a line this editor does not have.
+        if (!navigateOutline || lineWindow) return shown
+        const line =
+          monacoApi.editor
+            .getEditors()
+            .find((e) => e.getModel() === model)
+            ?.getPosition()?.lineNumber ?? 1
+        const bound = symbolsBeforeWindow(symbols, visible).map((s): monaco.languages.DocumentSymbol => {
+          const target = {
+            uri: lspUri,
+            lineLsp: s.selectionRange.start.line,
+            characterLsp: s.selectionRange.start.character,
+          }
+          const range = bindOutlineTarget(modelUri, line, target, navigateOutline)
+          return {
+            name: s.name,
+            detail: s.detail ?? '',
+            kind: lspSymbolKindToMonaco(s.kind),
+            range,
+            selectionRange: range,
+            tags: [],
+            children: [],
+          }
+        })
+        return [...bound, ...shown]
       },
     }),
   )

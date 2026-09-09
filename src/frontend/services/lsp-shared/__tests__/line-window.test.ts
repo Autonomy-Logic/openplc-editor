@@ -9,6 +9,7 @@ import {
   lspLineInWindow,
   modelMatchesDocumentLines,
   modelMatchesDocumentWindow,
+  symbolsBeforeWindow,
 } from '../internal/line-window'
 
 // `Motor` occupies lines 2..4 of the aggregate datatypes document, so
@@ -230,5 +231,44 @@ describe('modelMatchesDocumentLines', () => {
   it('normalises CRLF in the model buffer', () => {
     const crlf = PRISTINE_VARS.replace(/\n/g, '\r\n')
     expect(VAR_LINES.map(modelMatchesDocumentLines(crlf, POU_DOC, 1))).toEqual([true, true, true, true])
+  })
+})
+
+describe('symbolsBeforeWindow', () => {
+  // pou://main: 0 declaration, 1 VAR, 2 Level, 3 Enable, 4 END_VAR, body from 5.
+  const BODY = { startLine: 5, endLineExclusive: Number.MAX_SAFE_INTEGER }
+  const leaf = (name: string, line: number): LspDocumentSymbol => ({
+    name,
+    kind: 13,
+    range: { start: { line, character: 2 }, end: { line, character: 12 } },
+    selectionRange: { start: { line, character: 2 }, end: { line, character: 7 } },
+  })
+  const pou: LspDocumentSymbol = {
+    name: 'main',
+    kind: 12,
+    range: { start: { line: 0, character: 0 }, end: { line: 9, character: 0 } },
+    selectionRange: { start: { line: 0, character: 8 }, end: { line: 0, character: 12 } },
+    children: [leaf('Level', 2), leaf('Enable', 3), leaf('State', 7)],
+  }
+
+  it('lists the declarations before the body and not the POU that wraps them', () => {
+    expect(symbolsBeforeWindow([pou], BODY).map((s) => s.name)).toEqual(['Level', 'Enable'])
+  })
+
+  it('leaves what starts inside the window to the window', () => {
+    expect(symbolsBeforeWindow([leaf('State', 7)], BODY)).toEqual([])
+  })
+
+  it('lists the leaves of an earlier container, never the container', () => {
+    const block: LspDocumentSymbol = {
+      ...leaf('VAR_INPUT', 1),
+      range: { start: { line: 1, character: 0 }, end: { line: 4, character: 7 } },
+      children: [leaf('Level', 2), leaf('Enable', 3)],
+    }
+    expect(symbolsBeforeWindow([{ ...pou, children: [block] }], BODY).map((s) => s.name)).toEqual(['Level', 'Enable'])
+  })
+
+  it('is empty for a document with no preamble', () => {
+    expect(symbolsBeforeWindow([leaf('x', 0)], { startLine: 0, endLineExclusive: Number.MAX_SAFE_INTEGER })).toEqual([])
   })
 })
