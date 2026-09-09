@@ -133,7 +133,7 @@ const OrchestratorsList = () => {
   }, [fetchOrchestrators])
 
   // Sync selectedDevice with runtimeConnection.selectedDevice on mount and when connection changes
-  // This ensures the UI shows the connected device when reopening the orchestrators screen
+  // This ensures the UI shows the connected device when reopening the Edge Devices screen
   useEffect(() => {
     if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
       setSelectedDevice({

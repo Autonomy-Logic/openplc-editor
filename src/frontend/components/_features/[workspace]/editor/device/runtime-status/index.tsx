@@ -284,7 +284,7 @@ const RuntimeStatusEditor = () => {
           ) : (
             // Names the source, so a blank kernel/architecture reads as "the
             // agent does not report these" rather than "something is wrong".
-            <InfoField label='Device Agent' value={deviceInfo?.agentVersion} />
+            <InfoField label='Orchestrator agent' value={deviceInfo?.agentVersion} />
           )}
           <InfoField label='Host' value={deviceInfo?.hostname} />
           <InfoField label='Operating system' value={deviceInfo?.system} />

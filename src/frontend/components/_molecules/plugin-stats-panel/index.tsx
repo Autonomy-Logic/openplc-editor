@@ -33,7 +33,7 @@ const renderField = (field: PluginStatsField) => {
  * the device-config screen visually uniform with scan-cycle / EtherCAT
  * (same table chrome, same monospaced metric font, same `min/max` layout
  * when a plugin opts into RangeCell). Used both on the device-board
- * screen (Electron) and the orchestrators screen (web) so VPP packages
+ * screen (Electron) and the Edge Devices screen (web) so VPP packages
  * contribute identical telemetry regardless of how the user navigated to
  * the device.
  */
