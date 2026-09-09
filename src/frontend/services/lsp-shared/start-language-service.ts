@@ -35,7 +35,8 @@ import {
 } from 'vscode-languageserver-protocol'
 
 import { attachDiagnosticsBridge, type DiagnosticsMirror } from './diagnostics'
-import { type DefinitionInterceptor, type LspContext, registerLspProviders } from './providers'
+import type { NavigateToTarget } from './navigation'
+import { type DefinitionLocationMapper, type LspContext, registerLspProviders } from './providers'
 import {
   registerLspSemanticTokens,
   type ResolveSemanticTokensViewport,
@@ -125,7 +126,8 @@ export interface StartLanguageServiceOptions {
   completionTriggerCharacters?: string[]
   signatureHelpTriggerCharacters?: string[]
   resolveLspContext?: (modelUri: string) => LspContext
-  definitionInterceptors?: DefinitionInterceptor[]
+  mapDefinitionLocation?: DefinitionLocationMapper
+  navigateOutline?: NavigateToTarget
   filterFormattingEdits?: (edits: LspTextEdit[], offset: number) => LspTextEdit[]
   getLspDocumentText?: (lspUri: string) => string | undefined
   resolveSemanticTokensViewport?: ResolveSemanticTokensViewport
@@ -204,7 +206,8 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
     completionTriggerCharacters,
     signatureHelpTriggerCharacters,
     resolveLspContext,
-    definitionInterceptors,
+    mapDefinitionLocation,
+    navigateOutline,
     filterFormattingEdits,
     getLspDocumentText,
     resolveSemanticTokensViewport,
@@ -276,7 +279,8 @@ export function startLanguageService(opts: StartLanguageServiceOptions): Languag
         ...(signatureHelpTriggerCharacters ? { signatureHelpTriggerCharacters } : {}),
         hooks: {
           ...(resolveLspContext ? { resolveLspContext } : {}),
-          ...(definitionInterceptors ? { definitionInterceptors } : {}),
+          ...(mapDefinitionLocation ? { mapDefinitionLocation } : {}),
+          ...(navigateOutline ? { navigateOutline } : {}),
           ...(filterFormattingEdits ? { filterFormattingEdits } : {}),
           ...(getLspDocumentText ? { getLspDocumentText } : {}),
         },
