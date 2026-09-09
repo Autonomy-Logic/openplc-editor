@@ -243,16 +243,19 @@ describe('resolveModbusServerProfile', () => {
     expect(profile.vppScreens).toEqual({ serial: 'serial', network: 'NETWORK', modbus: 'modbus' })
   })
 
-  it('reports no counts when the board declares no io block', () => {
+  it('falls back to the firmware defaults when the board declares no io block', () => {
     const profile = resolveModbusServerProfile(arduinoBoard({ io: undefined }))
-    expect(profile.derivedCounts).toBeNull()
+    expect(profile.countsSource).toBe('firmware-default')
+    expect(profile.derivedCounts).not.toBeNull()
   })
 
-  it('reports no counts when the io block is only partly declared', () => {
+  it('treats a half-declared io block as no declaration at all', () => {
     // Filling the gaps with zeros would push every later segment onto the
-    // wrong Modbus offset, and the map would be confidently wrong.
+    // wrong Modbus offset, and the map would be confidently wrong. The
+    // firmware defaults are a coherent set; half a package's set is not.
     const profile = resolveModbusServerProfile(arduinoBoard({ io: { digitalInput: 8, digitalOutput: 8 } }))
-    expect(profile.derivedCounts).toBeNull()
+    expect(profile.countsSource).toBe('firmware-default')
+    expect(profile.derivedCounts).toEqual({ QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 })
   })
 
   it('is still baremetal with no vpp metadata at all', () => {
@@ -262,13 +265,72 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile({ compiler: 'arduino-cli' })
     expect(profile.configurablePort).toBe(false)
     expect(profile.fixedPort).toBe(502)
-    // Nothing declared its firmware sizes, so there is no map to draw.
-    expect(profile.derivedCounts).toBeNull()
+    // Nothing declared its firmware sizes, so the map is drawn from what the
+    // firmware falls back to rather than withheld.
+    expect(profile.countsSource).toBe('firmware-default')
+    expect(profile.derivedCounts).not.toBeNull()
   })
 
   it('treats the Simulator as a plc-server target so a v4 project keeps its config', () => {
     const profile = resolveModbusServerProfile({ compiler: 'simulator' })
     expect(profile.configurablePort).toBe(true)
     expect(profile.transports).toEqual(['tcp'])
+  })
+})
+
+/**
+ * A package published before 4.4.0 declares no `io` block. The screen used to
+ * answer that by showing nothing — no counts, no address map — on a board that
+ * plainly has both, which is what a user hits the moment they upgrade the
+ * editor without updating their packages.
+ */
+describe('resolveModbusServerProfile - sizes the package did not declare', () => {
+  const oldPackage = { compiler: 'arduino-cli', capabilities: { modbusRtuServer: true } }
+
+  it('falls back to the sizes the firmware compiles with, and says so', () => {
+    const profile = resolveModbusServerProfile({ ...oldPackage, vppDeviceId: 'esp32-wroom' })
+
+    expect(profile.countsSource).toBe('firmware-default')
+    expect(profile.derivedCounts).toEqual({ QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 })
+  })
+
+  it('uses the small-AVR branch for the four devices that land in it', () => {
+    // `openplc.h` guards these behind __AVR_ATmega328P__ and friends, and the
+    // giveaway is that they have no %MW, %MD or %ML at all.
+    const profile = resolveModbusServerProfile({ ...oldPackage, vppDeviceId: 'arduino-nano' })
+
+    expect(profile.countsSource).toBe('firmware-default')
+    expect(profile.derivedCounts).toEqual({ QW: 32, MW: 0, MD: 0, ML: 0, QX: 32, MX: 0, IX: 8, IW: 6 })
+  })
+
+  it('offers no ceiling for sizes it inferred', () => {
+    // `ioMax` raises a declared floor. Raising one we guessed would invite the
+    // user to size a buffer against a limit nobody stated.
+    const profile = resolveModbusServerProfile({ ...oldPackage, vppDeviceId: 'arduino-uno' })
+
+    expect(profile.maxCounts).toBeNull()
+  })
+
+  it('prefers what the package declares over any default', () => {
+    const profile = resolveModbusServerProfile({
+      ...oldPackage,
+      vppDeviceId: 'arduino-nano',
+      io: {
+        digitalInput: 1,
+        digitalOutput: 2,
+        analogInput: 3,
+        analogOutput: 4,
+        memoryWord: 5,
+        memoryDword: 6,
+        memoryLword: 7,
+      },
+    })
+
+    expect(profile.countsSource).toBe('package')
+    expect(profile.derivedCounts).toEqual({ QW: 4, MW: 5, MD: 6, ML: 7, QX: 2, MX: 0, IX: 1, IW: 3 })
+  })
+
+  it('still reports nothing for a target that serves no Modbus', () => {
+    expect(resolveModbusServerProfile({ compiler: 'openplc-compiler' }).derivedCounts).toBeNull()
   })
 })

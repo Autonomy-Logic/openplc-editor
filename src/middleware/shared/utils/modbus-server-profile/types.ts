@@ -102,10 +102,22 @@ export interface ModbusServerProfile {
    *  false; otherwise the default for a newly created server. */
   fixedPort: number
 
-  /** Buffer counts to display when `configurableBuffers` is false. `null`
-   *  when the target's sizes are not known — the board's VPP has not declared
-   *  them — in which case the screen says so instead of inventing a map. */
+  /** Buffer counts to display when `configurableBuffers` is false. `null` only
+   *  on a target that serves no Modbus at all; a baremetal board always has
+   *  counts, because the firmware always compiles with some. */
   derivedCounts: ModbusSegmentCounts | null
+
+  /** Where `derivedCounts` came from.
+   *
+   *  `package` — the board's VPP declared them, so they are that board's.
+   *  `firmware-default` — it did not, and these are the `#ifndef` values
+   *  `openplc.h` falls back to. A package published before 4.4.0 declares no
+   *  I/O block at all, and showing nothing left the user with no address map
+   *  on a board that plainly has one. The numbers are still right, because a
+   *  board whose package says nothing is exactly a board compiling with those
+   *  defaults — but the screen says where they came from, because "assumed"
+   *  and "declared" are not the same claim. */
+  countsSource: 'package' | 'firmware-default'
 
   /** The board carries its RTU/TCP hardware settings in VPP screens the
    *  package ships. The unified screen links out to these rather than

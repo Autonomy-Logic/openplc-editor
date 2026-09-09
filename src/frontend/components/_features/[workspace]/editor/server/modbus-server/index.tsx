@@ -638,10 +638,22 @@ const ModbusServerEditor = () => {
                 : 'Sized by the firmware at compile time.'}
             </p>
 
+            {/* A package published before 4.4.0 declares no I/O block, and the
+             *  screen used to answer that by showing nothing at all — no counts,
+             *  no address map — on a board that plainly has both. The firmware
+             *  compiles with `openplc.h`'s own fallbacks in that case, so the map
+             *  is derivable and correct; what it is not is DECLARED, and the
+             *  difference is worth one line. */}
+            {profile.countsSource === 'firmware-default' && (
+              <p className='text-xs text-amber-700 dark:text-amber-400'>
+                This board&apos;s package does not state its firmware I/O sizes, so the map below is built from the
+                defaults every board of this family compiles with. Update the package to read the board&apos;s own.
+              </p>
+            )}
+
             {!profile.configurableBuffers && !profile.derivedCounts && (
               <p className='text-xs text-amber-700 dark:text-amber-400'>
-                The vendor package for this board does not declare its firmware I/O limits, so the address map below
-                cannot be computed. Update the package to see it.
+                This target reports no Modbus buffer sizes, so no address map can be shown.
               </p>
             )}
 
