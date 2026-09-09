@@ -126,14 +126,21 @@ export function attachOutlineActivation(monacoApi: typeof monaco): void {
   activatedApis.add(monacoApi)
   const patch = (editor: monaco.editor.ICodeEditor) => {
     const original = editor.setSelection.bind(editor)
-    editor.setSelection = ((selection: monaco.IRange | monaco.ISelection, source?: string) => {
-      if (source === JUMP_SOURCE && 'startLineNumber' in selection) {
+    editor.setSelection = (
+      selection: monaco.IRange | monaco.Range | monaco.ISelection | monaco.Selection,
+      source?: string,
+    ) => {
+      if (!('startLineNumber' in selection)) {
+        original(selection, source)
+        return
+      }
+      if (source === JUMP_SOURCE) {
         const modelUri = editor.getModel()?.uri.toString()
         const binding = modelUri ? outlineBindingFor(modelUri, selection) : null
         if (binding && binding.navigate(binding.target)) return
       }
-      original(selection as monaco.IRange, source)
-    }) as typeof editor.setSelection
+      original(selection, source)
+    }
   }
   for (const editor of monacoApi.editor.getEditors()) patch(editor)
   monacoApi.editor.onDidCreateEditor(patch)

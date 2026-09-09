@@ -155,6 +155,9 @@ const defaultResolveLspContext = (modelUri: string): LspContext => ({
 const defaultFilterFormattingEdits = (edits: LspTextEdit[], offset: number): LspTextEdit[] =>
   edits.filter((e) => e.range.start.line >= offset && e.range.end.line >= offset)
 
+const isDocumentSymbols = (result: DocumentSymbol[] | SymbolInformation[]): result is DocumentSymbol[] =>
+  result.length === 0 || 'range' in result[0]
+
 // Location URIs may refer to any document, so the offset is the target's own.
 const defaultMapDefinitionLocation: DefinitionLocationMapper = (loc) => ({
   uri: loc.uri,
@@ -320,16 +323,15 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
         // hierarchy) or SymbolInformation[] (flat list with
         // containerName).  Monaco's outline view wants
         // DocumentSymbol[] — flat lists get rewrapped.
-        const symbols: DocumentSymbol[] =
-          'range' in result[0]
-            ? (result as DocumentSymbol[])
-            : (result as SymbolInformation[]).map((s) => ({
-                name: s.name,
-                detail: s.containerName,
-                kind: s.kind,
-                range: s.location.range,
-                selectionRange: s.location.range,
-              }))
+        const symbols: DocumentSymbol[] = isDocumentSymbols(result)
+          ? result
+          : result.map((s) => ({
+              name: s.name,
+              detail: s.containerName,
+              kind: s.kind,
+              range: s.location.range,
+              selectionRange: s.location.range,
+            }))
         const shown = clipSymbolsToWindow(symbols, visible).map((s) => lspDocumentSymbolToMonaco(s, lineOffset))
         // A body editor's declarations live before its slice. Listed anyway,
         // each bound to where it really points, so accepting one navigates
