@@ -158,6 +158,28 @@ describe('provideDocumentSymbols', () => {
     expect(result[2].range).toMatchObject({ startLineNumber: 3, startColumn: 3 })
   })
 
+  it('rewraps a flat SymbolInformation response the same way', async () => {
+    const navigate = jest.fn(() => true)
+    const { model, sendRequest, symbols } = makeHarness({ navigateOutline: navigate }, 2)
+    const flat = (name: string, line: number) => ({
+      name,
+      kind: 13,
+      containerName: 'main',
+      location: { uri: POU, range: { start: { line, character: 2 }, end: { line, character: 12 } } },
+    })
+    sendRequest.mockResolvedValue([flat('Level', 2), flat('State', 7)])
+
+    const result = (await symbols.provideDocumentSymbols(model, token)) as monaco.languages.DocumentSymbol[]
+
+    expect(result.map((s) => [s.name, s.detail])).toEqual([
+      ['Level', 'main'],
+      ['State', 'main'],
+    ])
+    expect(result[0].range).toMatchObject({ startLineNumber: 2, startColumn: OUTLINE_TARGET_COLUMN_BASE })
+    expect(outlineBindingFor(POU, result[0].range)).toMatchObject({ target: { uri: POU, lineLsp: 2, characterLsp: 2 } })
+    expect(result[1].range).toMatchObject({ startLineNumber: 3, startColumn: 3 })
+  })
+
   it('drops them when no outline navigator is configured', async () => {
     const { model, sendRequest, symbols } = makeHarness({})
     sendRequest.mockResolvedValue(document)

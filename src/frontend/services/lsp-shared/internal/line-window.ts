@@ -85,6 +85,7 @@ export function symbolsBeforeWindow(symbols: LspDocumentSymbol[], lineWindow: Ls
       before.push(...symbolsBeforeWindow(sym.children, lineWindow))
       continue
     }
+    if (sym.range.end.line >= lineWindow.startLine) continue
     before.push(sym)
   }
   return before

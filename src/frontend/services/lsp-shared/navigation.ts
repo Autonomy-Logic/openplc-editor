@@ -56,6 +56,8 @@ export function registerDefinitionOpener(monacoApi: typeof monaco, navigate: Nav
     openCodeEditor(source, resource, selectionOrPosition) {
       const resourceUri = resource.toString()
       if (source.getModel()?.uri.toString() === resourceUri) return false
+      // True names the source editor as the target too, so Monaco flashes its
+      // symbol highlight there at the target's range. Cosmetic, inherent to an opener.
       return navigate(navTargetForResource(resourceUri, startOf(selectionOrPosition)))
     },
   })

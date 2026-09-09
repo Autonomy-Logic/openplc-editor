@@ -271,4 +271,9 @@ describe('symbolsBeforeWindow', () => {
   it('is empty for a document with no preamble', () => {
     expect(symbolsBeforeWindow([leaf('x', 0)], { startLine: 0, endLineExclusive: Number.MAX_SAFE_INTEGER })).toEqual([])
   })
+
+  it('never lists a childless POU that reaches into the body, which has nothing to declare', () => {
+    expect(symbolsBeforeWindow([{ ...pou, children: [] }], BODY)).toEqual([])
+    expect(symbolsBeforeWindow([{ ...pou, children: undefined }], BODY)).toEqual([])
+  })
 })
