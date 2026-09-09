@@ -295,7 +295,7 @@ describe('A device with no bootloader', () => {
     expect(screen.getByText('4')).toBeTruthy()
     expect(screen.getByText('1.8 GB')).toBeTruthy()
     // Named as the agent, not as a bootloader that is not there.
-    expect(screen.getByText('Orchestrator agent')).toBeTruthy()
+    expect(screen.getByText('Device Agent')).toBeTruthy()
     expect(screen.getByText('1.6.0')).toBeTruthy()
     expect(screen.getByText('6.12.35-rt10-v8+')).toBeTruthy()
     // And still no version action: nothing on this device can perform a swap.
