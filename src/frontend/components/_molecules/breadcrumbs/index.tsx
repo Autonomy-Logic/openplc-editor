@@ -181,7 +181,7 @@ const Breadcrumbs = () => {
   //
   // Keyed off `editor.type`, never off `meta.name`. The name match this
   // replaced recognised the single string 'Configuration', so every other
-  // screen under the branch — Runtime Status, Orchestrators, Persistent
+  // screen under the branch — Runtime Status, Edge Devices, Persistent
   // Storage, User Management — fell through to the `resource` fallback at the
   // foot of `getPouTypeOrDataTypeOrResource` and was labelled "Resource".
   //
