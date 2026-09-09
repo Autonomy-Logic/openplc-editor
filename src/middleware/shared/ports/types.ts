@@ -564,7 +564,7 @@ export interface ProjectCapabilities {
   hasPrograms: boolean
   /** Show the Resource entry in the project tree. */
   hasResource: boolean
-  /** Show Device / Configuration / Orchestrators entries. */
+  /** Show Device / Configuration / Edge Devices entries. */
   hasDevices: boolean
   /** Show Server entries (Modbus / OPC-UA servers). */
   hasServers: boolean
