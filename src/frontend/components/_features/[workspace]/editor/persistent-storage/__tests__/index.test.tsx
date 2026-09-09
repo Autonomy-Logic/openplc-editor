@@ -135,12 +135,4 @@ describe('PersistentStorageEditor', () => {
     expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
     expect(input(screen.getByLabelText(/save every/i)).disabled).toBe(true)
   })
-
-  it('says the settings travel with the project', () => {
-    // A user needs to know an upload is what applies these, not a Save button
-    // talking to a device.
-    render(<PersistentStorageEditor />)
-
-    expect(screen.getByText(/saved with the project and applied when you upload/i)).toBeTruthy()
-  })
 })

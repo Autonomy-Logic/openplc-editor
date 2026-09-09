@@ -2492,6 +2492,74 @@ describe('createSharedSlice', () => {
     })
 
     // -----------------------------------------------------------------------
+    // openRetrievedProject
+    // -----------------------------------------------------------------------
+    describe('openRetrievedProject', () => {
+      // The shared tail of both platforms' retrieve adapters: the desktop
+      // unpacks an archive to a scratch directory and reads it back, web parses
+      // the same archive in memory, and from here on they are the same two
+      // steps. Written per platform, the desktop's copy shipped without the
+      // load and web's marked the project ephemeral twice.
+      it('loads the project and marks it as having no location yet', () => {
+        store.getState().sharedWorkspaceActions.openRetrievedProject({
+          meta: { name: 'Irrigation Controller', type: 'plc-project', path: '/scratch/retrieved/irrigation' },
+          projectData: {
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+
+        expect(store.getState().project.meta.name).toBe('Irrigation Controller')
+        // What stops the next Save writing into a scratch directory the app
+        // prunes behind the user: it points them at Save As instead.
+        expect(store.getState().workspace.isEphemeralProject).toBe(true)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // hasUnsavedChanges
+    // -----------------------------------------------------------------------
+    describe('hasUnsavedChanges', () => {
+      // The rule `closeProject` applies, asked on its own by a caller that has
+      // to replace the project rather than close it -- retrieving from a
+      // device. The point of sharing it is that the two cannot drift: a caller
+      // that re-derived the condition would start discarding work silently the
+      // day the rule changed.
+      it('is true while the editing state is unsaved', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is true while any file is unsaved, whatever the editing state says', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: false })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is false once everything is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(false)
+      })
+
+      it('agrees with what closeProject does about it', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        const dirty = store.getState().sharedWorkspaceActions.hasUnsavedChanges()
+        const { pendingConfirmation } = store.getState().sharedWorkspaceActions.closeProject()
+
+        expect(pendingConfirmation).toBe(dirty)
+      })
+    })
+
+    // -----------------------------------------------------------------------
     // closeProject
     // -----------------------------------------------------------------------
     describe('closeProject', () => {
