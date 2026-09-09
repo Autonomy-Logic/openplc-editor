@@ -55,7 +55,6 @@ type FormLayoutProps = {
   section: ScreenSection
 }
 
-
 function FormLayout({ section }: FormLayoutProps) {
   const fields = (section.fields ?? []) as FieldDef[]
 

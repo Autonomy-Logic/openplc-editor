@@ -40,7 +40,9 @@ export interface SerialBaudScreenState {
  * nothing stops a new editor meeting an old package, which is what they are for.
  */
 export function resolveDefaultPortBaud(state: SerialBaudScreenState): string {
-  return state.serial?.baud_rate ?? state.modbus_rtu?.baud_rate ?? state.modbus_rtu?.rtu_baud_rate ?? DEFAULT_SERIAL_BAUD
+  return (
+    state.serial?.baud_rate ?? state.modbus_rtu?.baud_rate ?? state.modbus_rtu?.rtu_baud_rate ?? DEFAULT_SERIAL_BAUD
+  )
 }
 
 /**

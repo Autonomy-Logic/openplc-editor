@@ -279,7 +279,7 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     defaultSerial: FALLBACK_DEFAULT_SERIAL,
     fixedPort: DEFAULT_TCP_PORT,
     derivedCounts: null,
-  countsSource: 'package',
+    countsSource: 'package',
     minCounts: null,
     maxCounts: null,
     vppScreens: {},

@@ -500,20 +500,20 @@ const Project = () => {
            *  Servers; that re-homing is gone. */}
           {projectCaps.hasVendorScreens &&
             vendorScreens.map((screenName) => (
-                <ProjectTreeLeaf
-                  key={`vendor-${screenName}`}
-                  leafLang='vendorScreen'
-                  leafType='vendor-screen'
-                  label={screenName}
-                  onClick={() =>
-                    handleCreateTab({
-                      name: screenName,
-                      path: `/vendor-screen/${screenName}`,
-                      elementType: { type: 'vendor-screen', screenName },
-                    })
-                  }
-                />
-              ))}
+              <ProjectTreeLeaf
+                key={`vendor-${screenName}`}
+                leafLang='vendorScreen'
+                leafType='vendor-screen'
+                label={screenName}
+                onClick={() =>
+                  handleCreateTab({
+                    name: screenName,
+                    path: `/vendor-screen/${screenName}`,
+                    elementType: { type: 'vendor-screen', screenName },
+                  })
+                }
+              />
+            ))}
 
           {/* Project Servers tree branch — gated by project type only.
            *  The Servers branch must remain visible on platforms that
