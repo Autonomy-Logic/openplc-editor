@@ -119,6 +119,23 @@ static uint64_t gcd(uint64_t a, uint64_t b)
 
 // ---------------------------------------------------------------------------
 // I/O binding: walk locatedVars[] and bind to openplc.h buffer pointers
+//
+// Every slot write below is range-checked. locatedVars[] is authored from
+// whatever `AT %...` the user typed, and nothing in the descriptor itself
+// says how big this firmware's process image is -- so an address past the
+// end (`%QX7.0` on a 56-output image: byte_index 7 against bool_output[7][8])
+// used to write straight past the array and corrupt whatever followed it.
+// Only the DWord cases were guarded; the rest are now (openplc-editor#296).
+//
+// The editor rejects an out-of-range location before the build gets here,
+// so reaching a skip is not the expected path -- this is the backstop for a
+// hand-written .st, a project moved to a smaller board, or a stale build.
+// Dropping the binding leaves the slot NULL, which every HAL and the Modbus
+// glue already treat as "not wired" and step over.
+//
+// The bit-addressed buffers are declared [MAX/8][8], so the bound to check
+// is the FIRST dimension: an image whose digital count isn't a multiple of 8
+// rounds down, and the slots in the partial byte are unaddressable.
 // ---------------------------------------------------------------------------
 void runtime_bind_located_vars()
 {
@@ -131,10 +148,14 @@ void runtime_bind_located_vars()
         case LocatedArea::Input:
             switch (lv.size) {
             case LocatedSize::Bit:
-                bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                if (lv.byte_index < (MAX_DIGITAL_INPUT / 8) && lv.bit_index < 8) {
+                    bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                }
                 break;
             case LocatedSize::Word:
-                int_input[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                if (lv.byte_index < MAX_ANALOG_INPUT) {
+                    int_input[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                }
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
@@ -159,10 +180,14 @@ void runtime_bind_located_vars()
         case LocatedArea::Output:
             switch (lv.size) {
             case LocatedSize::Bit:
-                bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                if (lv.byte_index < (MAX_DIGITAL_OUTPUT / 8) && lv.bit_index < 8) {
+                    bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                }
                 break;
             case LocatedSize::Word:
-                int_output[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                if (lv.byte_index < MAX_ANALOG_OUTPUT) {
+                    int_output[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                }
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
@@ -185,13 +210,19 @@ void runtime_bind_located_vars()
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             switch (lv.size) {
             case LocatedSize::Word:
-                int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                if (lv.byte_index < MAX_MEMORY_WORD) {
+                    int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                }
                 break;
             case LocatedSize::DWord:
-                dint_memory[lv.byte_index] = (::IEC_UDINT*)lv.pointer;
+                if (lv.byte_index < MAX_MEMORY_DWORD) {
+                    dint_memory[lv.byte_index] = (::IEC_UDINT*)lv.pointer;
+                }
                 break;
             case LocatedSize::LWord:
-                lint_memory[lv.byte_index] = (::IEC_ULINT*)lv.pointer;
+                if (lv.byte_index < MAX_MEMORY_LWORD) {
+                    lint_memory[lv.byte_index] = (::IEC_ULINT*)lv.pointer;
+                }
                 break;
             default: break;
             }
