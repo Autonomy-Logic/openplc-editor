@@ -1545,6 +1545,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           files[s.name] = { type: 'server', filePath: s.name, saved: true }
         })
       }
+      // The migration above created a server that is NOT in `data.projectData`,
+      // which is what this map is built from -- so without this it gets no
+      // registry entry at all, and dirty tracking, the close-project check and
+      // the single-file save all skip it. It is unsaved by construction: it
+      // exists in memory and has never been written.
+      if (migratedModbusServer) {
+        files[migratedModbusServer.name] = {
+          type: 'server',
+          filePath: migratedModbusServer.name,
+          saved: false,
+        }
+      }
       const remoteDevices = data.projectData.remoteDevices
       if (remoteDevices) {
         remoteDevices.forEach((d) => {
@@ -1564,6 +1576,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
+
+      // `handleOpenProjectResponse` opens with `setEditingState('saved')`, so
+      // the migration has to say otherwise here, after the registry is in
+      // place. Otherwise the project looks clean, the user closes it without a
+      // prompt, and the promoted server is never written -- the migration then
+      // runs again on the next open, and the board keeps compiling from screen
+      // sections the editor no longer shows.
+      if (migratedModbusServer) {
+        getState().workspaceActions.setEditingState('unsaved')
+      }
 
       // Open the default tab for the project type:
       //   - Library projects: the manifest (`library.json`) — it's

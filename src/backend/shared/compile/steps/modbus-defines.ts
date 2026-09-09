@@ -134,21 +134,40 @@ interface ModbusServerLike {
  * build for a microcontroller. So the refusal belongs here, at the point where
  * a single answer is actually required, and it names the servers in conflict
  * rather than saying a number.
+ *
+ * Existing and serving are two different questions, and this answers both.
+ * `generateModbusDefines` falls back to the legacy screen sections when it gets
+ * no server, so returning nothing for a server the user switched OFF let the
+ * old `modbus_rtu.enabled` decide -- and on a board whose package was never
+ * split that section is still there, still true, and never cleared. Turning the
+ * server off then compiled RTU anyway. A server that exists and serves nothing
+ * is therefore returned, so the emitter sees an empty transport list rather
+ * than an absence.
+ *
+ * Only a server on the new model can do that, which is what `Array.isArray`
+ * checks. A pre-4.4.0 project can carry a `modbus-tcp` server with no
+ * `transports` at all -- one meant for Runtime v4 -- alongside the baremetal
+ * screen sections; treating that as "serves nothing" would silence a project
+ * that has always compiled its Modbus from those sections.
  */
 export function selectModbusServer(servers: readonly ModbusServerLike[] | undefined): {
   server?: ModbusServerCompileConfig
   conflict?: string[]
 } {
-  const serving = (servers ?? []).filter(
+  const declared = (servers ?? []).filter(
     (entry) =>
-      entry.protocol === 'modbus-tcp' &&
-      entry.modbusSlaveConfig &&
-      entry.modbusSlaveConfig.enabled !== false &&
-      (entry.modbusSlaveConfig.transports?.length ?? 0) > 0,
+      entry.protocol === 'modbus-tcp' && entry.modbusSlaveConfig && Array.isArray(entry.modbusSlaveConfig.transports),
   )
-  if (serving.length === 0) return {}
+  const serving = declared.filter(
+    (entry) => entry.modbusSlaveConfig?.enabled !== false && (entry.modbusSlaveConfig?.transports?.length ?? 0) > 0,
+  )
+
   if (serving.length > 1) return { conflict: serving.map((entry) => entry.name) }
-  return { server: serving[0].modbusSlaveConfig }
+  if (serving.length === 1) return { server: serving[0].modbusSlaveConfig }
+  // Nothing serving, but the project does carry a server: hand it back so the
+  // emitter reads an empty transport list and does not reopen the fallback.
+  if (declared.length > 0) return { server: declared[0].modbusSlaveConfig }
+  return {}
 }
 
 /**

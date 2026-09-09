@@ -423,6 +423,38 @@ describe('generateModbusDefines', () => {
 })
 
 /**
+ * Turning the server off has to actually turn Modbus off, on every board.
+ *
+ * The two halves are wired through `selectModbusServer`, so this asserts them
+ * together: the selector reports the disabled server rather than an absence,
+ * and the emitter reads its empty transport list instead of falling back to
+ * screen sections that a board's unsplit package still leaves switched on.
+ */
+describe('a server the user switched off', () => {
+  const LEGACY_SECTIONS = {
+    modbus_rtu: { enabled: true, rtu_slave_id: 7, rtu_interface: 'Serial1' },
+    modbus_tcp: { enabled: true },
+  }
+
+  it('emits no Modbus, even though the legacy sections still say enabled', () => {
+    const off = [
+      {
+        name: 'mb_baremetal_server',
+        protocol: 'modbus-tcp',
+        modbusSlaveConfig: { enabled: false, transports: ['rtu' as const], slaveId: 7 },
+      },
+    ]
+    const { server } = selectModbusServer(off)
+    expect(generateModbusDefines(LEGACY_SECTIONS, 'Serial', server)).toBe('')
+  })
+
+  it('still emits from the legacy sections when the project has no server at all', () => {
+    const { server } = selectModbusServer([])
+    expect(generateModbusDefines(LEGACY_SECTIONS, 'Serial', server)).toContain('MBSERIAL')
+  })
+})
+
+/**
  * A firmware build serves exactly one Modbus slave. The editor lets a project
  * carry several on purpose -- it moves between targets -- so the refusal has to
  * land where a single answer is actually required, and it has to name the
@@ -440,9 +472,21 @@ describe('selectModbusServer', () => {
     expect(selectModbusServer([])).toEqual({})
   })
 
-  it('ignores a server that serves nothing', () => {
-    expect(selectModbusServer([server('mb1', [])])).toEqual({})
-    expect(selectModbusServer([server('mb1', ['rtu'], false)])).toEqual({})
+  it('returns a server that exists but serves nothing, rather than nothing at all', () => {
+    // The emitter falls back to the legacy screen sections when it gets no
+    // server. Those sections still say `enabled: true` on a board whose package
+    // was never split, so reporting an absence here compiled RTU on a server
+    // the user had switched off.
+    expect(selectModbusServer([server('mb1', [])]).server).toMatchObject({ transports: [] })
+    expect(selectModbusServer([server('mb1', ['rtu'], false)]).server).toMatchObject({ enabled: false })
+  })
+
+  it('reports nothing for a pre-4.4.0 server that never declared transports', () => {
+    // That server is a Runtime v4 one carried by a project whose baremetal
+    // Modbus still lives in the screen sections. Treating it as "serves
+    // nothing" would silence a project that has always compiled from them.
+    const legacy = { name: 'mb1', protocol: 'modbus-tcp', modbusSlaveConfig: { enabled: true, port: 502 } }
+    expect(selectModbusServer([legacy])).toEqual({})
   })
 
   it('ignores a server of another protocol', () => {
@@ -462,6 +506,11 @@ describe('selectModbusServer', () => {
   it('does not count a disabled server towards the conflict', () => {
     const selection = selectModbusServer([server('mb1', ['rtu']), server('mb2', ['tcp'], false)])
     expect(selection.conflict).toBeUndefined()
+    expect(selection.server).toMatchObject({ transports: ['rtu'] })
+  })
+
+  it('prefers the serving one when a disabled server comes first', () => {
+    const selection = selectModbusServer([server('mb1', ['tcp'], false), server('mb2', ['rtu'])])
     expect(selection.server).toMatchObject({ transports: ['rtu'] })
   })
 })
