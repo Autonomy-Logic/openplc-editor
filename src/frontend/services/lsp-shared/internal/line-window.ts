@@ -91,3 +91,21 @@ export function modelMatchesDocumentWindow(
   }
   return true
 }
+
+/**
+ * Per-line form of {@link modelMatchesDocumentWindow}: true for the LSP
+ * lines whose text the model still shows unchanged. Semantic tokens carry
+ * their own line, so an edit only has to cost the lines it moved.
+ */
+export function modelMatchesDocumentLines(
+  modelText: string,
+  documentText: string,
+  lineOffset: number,
+): (lspLine: number) => boolean {
+  const modelLines = modelText.split(/\r?\n/)
+  const documentLines = documentText.split(/\r?\n/)
+  return (lspLine) => {
+    const modelLine = lspLine - lineOffset
+    return modelLine >= 0 && modelLines[modelLine] === documentLines[lspLine]
+  }
+}

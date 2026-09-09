@@ -97,30 +97,20 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       LadderBlockVariant?.variables
         .filter((variable) => (variable.class === 'input' || variable.class === 'inOut') && variable.name !== 'EN')
         .length.toString() || '0',
-    executionOrder: selectedNode.data.executionOrder.toString(),
+    // Ladder has no execution order: rung position IS the order. Any value a
+    // project already carries is dropped on the next edit rather than kept
+    // alive by this dialog (DOPE-606).
+    executionOrder: '0',
     executionControl: selectedNode.data.executionControl,
   })
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
   const isBlockDifferent = selectedNode !== node
 
-  // The execution order this dialog opened with. `useRef` keeps the first
-  // render's value for the life of the dialog, and the modal is mounted
-  // conditionally, so reopening it recaptures a fresh baseline.
-  const initialExecutionOrder = useRef(formState.executionOrder)
-
-  // Execution order is the ONE field `isBlockDifferent` cannot see. Every
-  // other control in this dialog also calls `setNode` -- input count, the
-  // execution-control switch, and a name that resolves to a library block --
-  // which replaces `node` and so already enabled OK. The arrows and the
-  // execution-order field call `setFormState` alone, so the value could be
-  // typed but never applied (DOPE-606).
-  //
-  // Deliberately NOT keyed on `formState.name`: `handleBlockSubmit` builds the
-  // new node from `blockVariant`, never from the typed name, so enabling OK
-  // for a name that resolves to nothing would rebuild the node and discard
-  // what was typed without saying so.
-  const isExecutionOrderDirty = formState.executionOrder !== initialExecutionOrder.current
+  // No execution-order dirty check here, unlike the FBD dialog: a ladder block
+  // has no execution order to edit (see below), so every control that remains
+  // -- input count, the execution-control switch, a resolvable name -- calls
+  // `setNode` and is already covered by `isBlockDifferent`.
 
   useEffect(() => {
     if (!selectedFileKey) return
@@ -190,7 +180,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         ...newNode,
         data: {
           ...newNode.data,
-          executionOrder: Number(formState.executionOrder),
+          executionOrder: 0,
           variable: selectedNode.data.variable,
         },
       })
@@ -326,20 +316,6 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     }))
   }
 
-  const handleExecutionOrderIncrement = () => {
-    setFormState((prevState) => ({
-      ...prevState,
-      executionOrder: String(Math.min(Number(prevState.executionOrder) + 1, maxInputs)),
-    }))
-  }
-
-  const handleExecutionOrderDecrement = () => {
-    setFormState((prevState) => ({
-      ...prevState,
-      executionOrder: String(Math.max(Number(prevState.executionOrder) - 1, 0)),
-    }))
-  }
-
   const handleExecutionControlChange = (checked: boolean) => {
     if (lockExecutionControl) return
 
@@ -397,6 +373,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       return
     }
 
+    // The rung is boolean power flow, so it can only land on BOOL pins. A block
+    // whose top input or top output is not BOOL therefore has to carry EN/ENO.
+    // That rule is NOT re-implemented here: ladder's own
+    // `getBlockVariantAndExecutionControl` already forces execution control on
+    // in exactly that case (and sets `lockExecutionControl`), and
+    // `buildBlockNode` runs it for every block placed on a rung. Passing the
+    // form's value through means the rebuilt block obeys the same rule as a
+    // freshly placed one, with one implementation to drift from.
     const newNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
       posX: selectedNode.position.x,
@@ -408,7 +392,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     })
     newNode.data = {
       ...newNode.data,
-      executionOrder: Number(formState.executionOrder),
+      // Always 0 in ladder: the walker buckets anything > 0 ahead of everything
+      // else GLOBALLY across rungs, so a stale number here would hoist this
+      // block above earlier rungs and silently break rung-order semantics.
+      executionOrder: 0,
     }
 
     const { ladderFlows } = useOpenPLCStore.getState()
@@ -472,29 +459,105 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     // Remap main connector edges (inputConnector/outputConnector) to new block ID.
     // Branch edges are already remapped by reconcileBranches (their IDs changed,
     // so the old edge.id won't match in newEdges).
-    edges.source?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        source: newNode.id,
-        // Backstop. The legacy-in-out refusal above covers the only shape
-        // that reaches here with a missing connector today (an output-less
-        // variant can only be the source of a wire via that stale pin), but a
-        // hard crash here aborts the submit mid-way and silently loses the
-        // edit, so fall back to the handle the edge already has.
-        sourceHandle: newNode.data.outputConnector?.id ?? edge.sourceHandle,
+    // Re-point this node's edges onto the rebuilt node BY PIN NAME, with one
+    // ladder-specific exception.
+    //
+    // Every edge used to be forced onto `inputConnector` / `outputConnector`,
+    // which are just the FIRST pin on each side. That is right for the RUNG
+    // CHAIN -- in ladder the wire entering and leaving a block is power flow,
+    // and it belongs on the connectors -- but it is wrong for the block's data
+    // pins, which were all collapsed onto the first one, losing the wires to
+    // IN2, IN3 ... (DOPE-611).
+    //
+    // So: a pin that still exists on the rebuilt node keeps its wire, which
+    // covers the whole same-variant case and the matching pins of a swap; the
+    // rung chain follows the connectors as before; anything else is dropped
+    // and reported rather than piled onto the first pin.
+    // Handle type taken from the node itself, so this cannot drift from the
+    // builder and needs neither an import nor an assertion.
+    const pinIds = (handles: typeof newNode.data.inputHandles): Set<string> =>
+      new Set((handles ?? []).map((handle) => handle.id).filter((id): id is string => !!id))
+    const newInputPins = pinIds(newNode.data.inputHandles)
+    const newOutputPins = pinIds(newNode.data.outputHandles)
+
+    // The connectors the EXISTING edges ride, read from `selectedNode` and not
+    // from `node`: picking a replacement variant rebuilds `node` with the
+    // REPLACEMENT's connector ids, while the edges being remapped here belong
+    // to `selectedNode.id`. Comparing against the rebuilt copy made the rung
+    // chain unrecognisable on a swap, and it was dropped instead of moved.
+    const oldInputConnector = selectedNode.data.inputConnector?.id
+    const oldOutputConnector = selectedNode.data.outputConnector?.id
+    const newInputConnector = newNode.data.inputConnector?.id
+    const newOutputConnector = newNode.data.outputConnector?.id
+
+    /** The handle this endpoint should ride on the rebuilt node, or false to drop it. */
+    const resolveHandle = (
+      handle: string | null | undefined,
+      pins: Set<string>,
+      oldConnector: string | undefined,
+      newConnector: string | undefined,
+    ): string | null | undefined | false => {
+      // The RUNG CHAIN first, before any pin-name match. An edge riding the old
+      // connector is power flow, and it has to follow the new connector even
+      // when the old connector's NAME survives on the replacement as an
+      // ordinary data pin -- `AND`'s `IN1` connector becoming `ADD`'s `IN1`
+      // data pin, say, where keeping the rung on `IN1` leaves it sharing a pin
+      // with the branch `reconcileBranches` just rebuilt there.
+      if (handle && oldConnector && handle === oldConnector && newConnector) return newConnector
+      if (handle && pins.has(handle)) return handle
+      return false
+    }
+
+    // One pass over the affected edges, keyed by id, so an edge that is BOTH a
+    // source and a target of this block -- a self-loop, which the canvas allows
+    // -- has both endpoints resolved together. Two passes rewrote the id on the
+    // first and then failed to find the edge on the second, leaving the other
+    // endpoint pointing at a node that no longer exists.
+    const affected = new Map<string, (typeof newEdges)[number]>()
+    for (const edge of [...(edges.source ?? []), ...(edges.target ?? [])]) affected.set(edge.id, edge)
+
+    const replacements = new Map<string, (typeof newEdges)[number] | null>()
+    for (const edge of affected.values()) {
+      let next = { ...edge, id: edge.id.replace(node.id, newNode.id) }
+      let drop = false
+
+      if (edge.source === selectedNode.id) {
+        const resolved = resolveHandle(edge.sourceHandle, newOutputPins, oldOutputConnector, newOutputConnector)
+        if (resolved === false) drop = true
+        else next = { ...next, source: newNode.id, sourceHandle: resolved }
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
-    edges.target?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newNode.id),
-        target: newNode.id,
-        targetHandle: newNode.data.inputConnector?.id ?? edge.targetHandle,
+      if (!drop && edge.target === selectedNode.id) {
+        const resolved = resolveHandle(edge.targetHandle, newInputPins, oldInputConnector, newInputConnector)
+        if (resolved === false) drop = true
+        else next = { ...next, target: newNode.id, targetHandle: resolved }
       }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+      replacements.set(edge.id, drop ? null : next)
+    }
+
+    // Replace IN PLACE, never append. `reconcileBranches` above has already
+    // rewritten the branch edges and changed their ids, so an id from `edges`
+    // may no longer be in `newEdges` -- appending it back would resurrect a
+    // stale edge alongside the reconciled one and leave two wires on one pin.
+    let droppedWires = 0
+    newEdges = newEdges.flatMap((edge) => {
+      if (!replacements.has(edge.id)) return [edge]
+      const replacement = replacements.get(edge.id) ?? null
+      if (replacement === null) {
+        droppedWires += 1
+        return []
+      }
+      return [replacement]
     })
+
+    if (droppedWires > 0) {
+      toast({
+        title: `${droppedWires} connection${droppedWires === 1 ? '' : 's'} removed`,
+        description:
+          `The replacement block has no matching pin for ${droppedWires === 1 ? 'it' : 'them'}. ` +
+          'Reconnect to the pins you want.',
+        variant: 'fail',
+      })
+    }
 
     const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
       {
@@ -597,24 +660,6 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 </div>
               </>
             )}
-            <label htmlFor='executionOrder' className={labelStyle}>
-              Execution Order:
-            </label>
-            <div className='flex items-center gap-1'>
-              <InputWithRef
-                id='executionOrder'
-                className={inputStyle}
-                placeholder=''
-                type='number'
-                value={formState.executionOrder}
-                onChange={handleInputChange}
-              />
-              <ArrowButtonGroup
-                onIncrement={() => handleExecutionOrderIncrement()}
-                onDecrement={() => handleExecutionOrderDecrement()}
-              />
-            </div>
-
             <div className='flex items-center gap-2'>
               <label htmlFor='executionControlSwitch' className={labelStyle}>
                 Execution Control:
@@ -663,7 +708,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             className={
               'h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             }
-            disabled={!isFormValid || (!isExecutionOrderDirty && !isBlockDifferent)}
+            disabled={!isFormValid || !isBlockDifferent}
             onClick={handleBlockSubmit}
           >
             Ok

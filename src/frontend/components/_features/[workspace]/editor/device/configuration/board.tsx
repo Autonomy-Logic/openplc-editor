@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -22,10 +21,7 @@ import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
 import { DeviceConnectButton } from '../../../../../_molecules/device-connect-button'
-import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
-import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
-import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -99,13 +95,6 @@ const Board = memo(function () {
   const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
-  const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
-  const setIncludeTimingStatsInPolling = useOpenPLCStore(
-    (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
-  )
-  const setIncludeEthercatStatsInPolling = useOpenPLCStore(
-    (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
-  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -478,25 +467,10 @@ const Board = memo(function () {
     deviceBoard,
   ])
 
-  // Enable timing stats in global polling when this screen is visible
-  useEffect(() => {
-    // Set the flag to include timing stats in the global status polling
-    setIncludeTimingStatsInPolling(true)
-
-    // Clear the flag when leaving this screen
-    return () => {
-      setIncludeTimingStatsInPolling(false)
-    }
-  }, [setIncludeTimingStatsInPolling])
-
-  // Only runtime targets expose the EtherCAT endpoint; skip the poll otherwise.
-  useEffect(() => {
-    if (!isOpenPLCRuntimeTarget(currentBoardInfo)) return
-    setIncludeEthercatStatsInPolling(true)
-    return () => {
-      setIncludeEthercatStatsInPolling(false)
-    }
-  }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
+  // Timing and EtherCAT stats polling now belongs to the Runtime Status screen
+  // (RTOP-283), which is where those statistics are displayed. Polling for them
+  // here would fetch data nobody is looking at, and would leave Runtime Status
+  // with nothing to show when opened on its own.
 
   // Settle the licence for a RUNTIME target once its session is up — once per
   // session PER BOARD.
@@ -864,17 +838,18 @@ const Board = memo(function () {
         </div>
       </div>
       {(() => {
-        // Only draw the divider when there's actually content below it.
-        // Pin mapping renders for any non-simulator target that declares
-        // the pinMapping capability (Arduino boards, and runtime-v4 GPIO
-        // VPP boards like the Raspberry Pi). Runtime targets also render
-        // stats once connected — the two can coexist (a Pi shows the pin
-        // table always and the stats panels when connected).
+        // Only draw the divider when there's actually content below it, which
+        // now means the pin mapping table and nothing else. Pin mapping renders
+        // for any non-simulator target that declares the pinMapping capability
+        // (Arduino boards, and runtime-v4 GPIO VPP boards like the Raspberry Pi).
+        //
+        // A connected runtime target used to draw the divider too, for the stats
+        // panels that sat below it. Those moved to the Runtime Status screen (see
+        // the polling comment above) and the condition stayed, so connecting to a
+        // runtime target with no pin mapping drew a rule across the screen with
+        // nothing underneath it.
         const isSim = isSimulatorTarget(currentBoardInfo)
-        const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
-        const showStats = isRuntime && connectionStatus === 'connected'
-        const showPinMapping = !isSim && pinMappingEnabled
-        const showDivider = showStats || showPinMapping
+        const showDivider = !isSim && pinMappingEnabled
         return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
       })()}
       {!isSimulatorTarget(currentBoardInfo) && pinMappingEnabled && (
@@ -905,14 +880,6 @@ const Board = memo(function () {
           <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
         </div>
       )}
-      {isOpenPLCRuntimeTarget(currentBoardInfo) && connectionStatus === 'connected' && (
-        <div className='flex w-full flex-col gap-6'>
-          {timingStats && <ScanCycleStats timingStats={timingStats} />}
-          <EtherCATStats />
-          <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
-        </div>
-      )}
-
       <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
         <ModalContent className='h-fit w-[500px]'>
           <ModalHeader>

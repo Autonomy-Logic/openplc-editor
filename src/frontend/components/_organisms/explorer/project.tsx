@@ -64,6 +64,10 @@ const Project = () => {
   const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
   const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
+  // Everything on the Runtime Status screen is read from a live device -- scan
+  // statistics, host facts, the bootloader's state -- so the leaf appears only
+  // while connected rather than opening onto an empty screen.
+  const showRuntimeStatus = runtimeConnected
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -432,6 +436,21 @@ const Project = () => {
                       name: 'Orchestrators',
                       path: `/device/orchestrators`,
                       elementType: { type: 'device', derivation: 'orchestrators' },
+                    })
+                  }
+                />
+              )}
+              {showRuntimeStatus && (
+                <ProjectTreeLeaf
+                  key='Runtime Status'
+                  leafLang='devConfig'
+                  leafType='device'
+                  label='Runtime Status'
+                  onClick={() =>
+                    handleCreateTab({
+                      name: 'Runtime Status',
+                      path: `/device/runtime-status`,
+                      elementType: { type: 'device', derivation: 'runtime-status' },
                     })
                   }
                 />

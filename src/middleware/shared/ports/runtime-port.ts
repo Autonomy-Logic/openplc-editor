@@ -227,7 +227,107 @@ export interface FetchedProject {
   libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
 }
 
+/**
+ * Result shape shared by every bootloader call. `error` strings come from the
+ * bootloader itself and are written to be shown to a person.
+ */
+export type BootloaderApiResult<T> = { success: true; data: T } | { success: false; error: string }
+
+/**
+ * The runtime bootloader (RTOP-283): a second service on the device that
+ * starts the runtime container and stays reachable when the runtime will not
+ * run, so a version can be changed or repaired without shell access.
+ *
+ * Reached through the same agent proxy as the runtime, on its own port. A
+ * device with no bootloader -- an orchestrator-managed vPLC, or a native
+ * install -- simply fails getCapabilities, which is the ordinary answer and
+ * not an error to surface.
+ */
+export type BootloaderCapabilities = {
+  service: string
+  bootloaderVersion?: string
+  runtimeVersion?: string
+  state: string
+  recovery: boolean
+}
+
+export type BootloaderStatus = {
+  state: string
+  reason?: string
+  since?: string
+  crashCount?: number
+  healthSource?: string
+  containerId?: string
+  containerName?: string
+  image?: string
+  runtimeVersion?: string
+  recovery?: boolean
+}
+
+export type BootloaderLogs = {
+  logs: string
+  available: boolean
+  reason?: string
+  tail?: number
+}
+
+/**
+ * Update progress. `percent` is absent while the daemon has reported no size
+ * to work from -- for layers it already holds, and before any size is known --
+ * so a UI must treat "no percentage" as indeterminate, never as zero.
+ */
+export type BootloaderUpdateProgress = {
+  state: string
+  from?: string
+  to?: string
+  phase?: string
+  percent?: number | null
+  error?: string
+  startedAt?: string
+  finishedAt?: string | null
+}
+
+/**
+ * Host facts for the Runtime Status header, served by the bootloader.
+ *
+ * The bootloader rather than the runtime, because the bootloader is present on
+ * every device that can be updated at all -- including one running a runtime
+ * far older than this feature. A runtime-served equivalent only answered on
+ * runtimes new enough to have it, which is none of the devices in the field,
+ * so the screen sat empty exactly where it was most needed.
+ *
+ * It is also the better-placed of the two: the bootloader reads these from the
+ * Docker daemon, which runs on the host and answers for it, while a runtime
+ * inside a container can only describe its own namespace.
+ */
+export type RuntimeDeviceInfo = {
+  hostname?: string
+  architecture?: string
+  kernel?: string
+  system?: string
+  cpus?: number
+  memoryBytes?: number
+  dockerVersion?: string
+}
+
+export interface BootloaderPort {
+  getCapabilities(): Promise<BootloaderApiResult<BootloaderCapabilities>>
+  login(username: string, password: string): Promise<BootloaderApiResult<{ role?: string }>>
+  getStatus(): Promise<BootloaderApiResult<BootloaderStatus>>
+  /** Host facts for the Runtime Status header. Authenticated, like status. */
+  getDeviceInfo(): Promise<BootloaderApiResult<RuntimeDeviceInfo>>
+  getRuntimeLogs(tail?: number): Promise<BootloaderApiResult<BootloaderLogs>>
+  /** Upgrade and downgrade are the same call: no direction, no version floor. */
+  startUpdate(version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>>
+  getUpdateProgress(): Promise<BootloaderApiResult<BootloaderUpdateProgress>>
+  restartRuntime(): Promise<BootloaderApiResult<{ state?: string; reason?: string }>>
+  clearSession(): Promise<void>
+}
+
 export interface RuntimePort {
+  /** The bootloader on this device, when one is present. */
+  bootloader: BootloaderPort
+
   /** Set the target device for subsequent API calls. */
   setDeviceContext?(context: { agentId: string; deviceId: string } | null): void
 
@@ -363,44 +463,10 @@ export interface RuntimePort {
 
   // --- stored source project ---
 
-  /**
-   * Retrieve the stored project and unpack it somewhere the editor can open it.
-   *
-   * Desktop only, and it returns a path rather than the archive on purpose:
-   * those are untrusted bytes from a device, and every check deciding whether
-   * they are safe to WRITE belongs beside the write, in the main process,
-   * rather than in the renderer.
-   *
-   * Web implements `retrieveProjectArchive` instead. The split is real rather
-   * than cosmetic: web has no filesystem to unpack onto and imports the project
-   * into its workspace, so forcing both onto one shape would mean one of them
-   * returning a path that does not exist.
-   */
-  retrieveProject?(ipAddress: string): Promise<{
-    success: boolean
-    projectPath?: string
-    projectName?: string
-    metadata?: RuntimeProjectSnapshotMetadata
-    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
-    error?: string
-  }>
-
   /** Username of the live runtime session, for attributing a stored project to
    *  whoever uploaded it. Only the username -- the password stays inside the
    *  token authority. */
   getSessionUsername?(): string | null
-
-  /**
-   * Retrieve the stored project as raw archive bytes.
-   *
-   * Web's counterpart to `retrieveProject`: there is no filesystem to unpack
-   * onto, so the archive is parsed in the browser and imported into the
-   * workspace. The bytes are still untrusted -- the shared parser validates
-   * before yielding any of them.
-   */
-  retrieveProjectArchive?(): Promise<
-    { success: true; archive: Uint8Array; projectName: string } | { success: false; error: string }
-  >
 
   // --- Retrieve Project from PLC ---------------------------------------
   //
@@ -410,6 +476,14 @@ export interface RuntimePort {
   // desktop scans a LAN and unpacks to a scratch directory, web asks an
   // orchestrator and parses into the workspace. Those are the only differences,
   // so those are the only things behind the port.
+  //
+  // And only those. Each platform's own way of pulling the bytes down --
+  // `retrieveProject` on the desktop, `retrieveProjectArchive` on web -- used to
+  // be declared here too, alongside an `importRetrievedProject` nothing ever
+  // called. Nothing shared reached any of them: they are internals of the
+  // adapter that implements `fetchRetrievableProject`, and a port that offers
+  // three ways in when the picker uses one is an invitation to write a second
+  // flow through the other two.
 
   /**
    * The devices this platform can offer, already merged with whatever it knows
@@ -463,21 +537,6 @@ export interface RuntimePort {
 
   /** Make a fetched project the open one. */
   openFetchedProject?(project: FetchedProject): Promise<{ success: boolean; error?: string }>
-
-  /**
-   * Open a retrieved archive as the workspace's project.
-   *
-   * The sibling of `retrieveProjectArchive`, and the reason both exist as port
-   * methods rather than as a direct call: the picker is a shared component, and
-   * how an archive becomes an open project is exactly the part that differs per
-   * platform -- web parses it into the workspace, desktop unpacks it to a
-   * scratch directory first. Reaching into a platform's adapter from the
-   * component would tie the shared picker to one of them.
-   *
-   * Throws on a bad archive, so the caller can report it without replacing the
-   * workspace: the parser validates everything before yielding a single file.
-   */
-  importRetrievedProject?(archive: Uint8Array): Promise<{ projectName: string }>
 
   /**
    * Install libraries a retrieved project brought with it, by name.

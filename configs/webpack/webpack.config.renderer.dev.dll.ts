@@ -41,7 +41,18 @@ const configuration: webpack.Configuration = {
     // source code only consumes them via subpath imports (e.g.
     // `browser-basedpyright` ships only the worker bundle under
     // `dist/` and is loaded through `?url`).
-    renderer: Object.keys(dependencies || {}).filter((name) => name !== 'browser-basedpyright'),
+    //
+    // `pdfjs-dist` DOES resolve (it has `main`), but must be excluded for a
+    // different reason: we `import('pdfjs-dist')` for its main-thread API
+    // *and* load `pdf.worker.min.mjs` separately via `?url` as an
+    // independent Worker. Pre-bundling the main API into the DLL creates a
+    // second, separate module instantiation of pdf.js alongside the one in
+    // the renderer bundle, which breaks the API/Worker handshake pdf.js
+    // relies on internally — surfaces as cryptic runtime errors deep in the
+    // worker (e.g. a hash helper missing a method during fingerprint
+    // computation), not a load failure. Same class of problem as the
+    // browser-basedpyright exclusion above, different root cause.
+    renderer: Object.keys(dependencies || {}).filter((name) => name !== 'browser-basedpyright' && name !== 'pdfjs-dist'),
   },
 
   output: {

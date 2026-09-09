@@ -7,6 +7,7 @@ import {
   clipEditsToWindow,
   clipSymbolsToWindow,
   lspLineInWindow,
+  modelMatchesDocumentLines,
   modelMatchesDocumentWindow,
 } from '../internal/line-window'
 
@@ -197,5 +198,37 @@ describe('modelMatchesDocumentWindow', () => {
 
   it('rejects when the window start precedes the model frame', () => {
     expect(modelMatchesDocumentWindow(PRISTINE_VARS, POU_DOC, 5, { startLine: 1, endLineExclusive: 5 })).toBe(false)
+  })
+})
+
+describe('modelMatchesDocumentLines', () => {
+  // pou:// document: declaration line 0, VAR block lines 1..4, body after.
+  const POU_DOC = ['FUNCTION_BLOCK FB0', 'VAR', '  State : INT;', '  Enable : BOOL;', 'END_VAR', 'ST body line;'].join(
+    '\n',
+  )
+  const PRISTINE_VARS = ['VAR', '  State : INT;', '  Enable : BOOL;', 'END_VAR'].join('\n')
+  const VAR_LINES = [1, 2, 3, 4]
+
+  it('accepts every VAR line of a pristine pouvars buffer', () => {
+    expect(VAR_LINES.map(modelMatchesDocumentLines(PRISTINE_VARS, POU_DOC, 1))).toEqual([true, true, true, true])
+  })
+
+  it('rejects only the line an in-place edit changed', () => {
+    const edited = PRISTINE_VARS.replace('State', 'Status')
+    expect(VAR_LINES.map(modelMatchesDocumentLines(edited, POU_DOC, 1))).toEqual([true, false, true, true])
+  })
+
+  it('rejects the inserted line and everything it pushed down', () => {
+    const inserted = PRISTINE_VARS.replace('  State : INT;', '  State : INT;\n  Count : INT;')
+    expect(VAR_LINES.map(modelMatchesDocumentLines(inserted, POU_DOC, 1))).toEqual([true, true, false, false])
+  })
+
+  it('rejects lines above the model frame', () => {
+    expect(modelMatchesDocumentLines(PRISTINE_VARS, POU_DOC, 1)(0)).toBe(false)
+  })
+
+  it('normalises CRLF in the model buffer', () => {
+    const crlf = PRISTINE_VARS.replace(/\n/g, '\r\n')
+    expect(VAR_LINES.map(modelMatchesDocumentLines(crlf, POU_DOC, 1))).toEqual([true, true, true, true])
   })
 })
