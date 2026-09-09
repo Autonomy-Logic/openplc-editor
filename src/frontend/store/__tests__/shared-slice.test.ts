@@ -1457,7 +1457,25 @@ describe('createSharedSlice', () => {
         addServer('ExistingServer')
         const result = store.getState().serverActions.rename('OldServer', 'ExistingServer')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Server name already exists')
+        expect(result.message).toBe('Server already exists')
+      })
+
+      it('leaves the file registry alone when the rename is refused', () => {
+        addServer('ExistingServer')
+        store.getState().serverActions.rename('OldServer', 'ExistingServer')
+
+        const state = store.getState()
+        expect(state.files['OldServer']).toBeDefined()
+        expect(state.project.data.servers?.map((s) => s.name)).toEqual(['OldServer', 'ExistingServer'])
+      })
+
+      it('refuses a case-only rename, which would overwrite the file on a case-folding disk', () => {
+        expect(store.getState().serverActions.rename('OldServer', 'oldserver').ok).toBe(false)
+      })
+
+      it('treats a rename to the identical name as a no-op', () => {
+        expect(store.getState().serverActions.rename('OldServer', 'OldServer')).toEqual({ ok: true })
+        expect(store.getState().pendingDeletions).toEqual([])
       })
     })
   })
@@ -1602,7 +1620,7 @@ describe('createSharedSlice', () => {
         addRemoteDevice('ExistingDevice')
         const result = store.getState().remoteDeviceActions.rename('OldDevice', 'ExistingDevice')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Device name already exists')
+        expect(result.message).toBe('Remote device already exists')
       })
     })
   })

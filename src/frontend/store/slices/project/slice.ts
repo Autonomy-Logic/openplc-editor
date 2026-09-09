@@ -56,6 +56,7 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
@@ -1049,6 +1050,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // compile time. The legacy `alias` field is unused.
       data = { ...data, ...validated }
 
+      // A global is a top-level symbol next to POUs and types. Checked after the
+      // validator so a cloned row auto-increments away from its own table first.
+      if (scope === 'global') {
+        const collision = elementNameCollision(getState(), data.name, 'resource-global')
+        if (collision) return fail(collision, 'Variable already exists')
+      }
+
       let response: ProjectResponse = { ok: true }
       setState(
         produce((slice: ProjectSlice) => {
@@ -1097,6 +1105,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       if (scope === 'local') {
         const reconcile = reconcileVariablesText(associatedPou, getState, setState)
         if (!reconcile.ok) return reconcile
+      }
+
+      if (scope === 'global' && updates.name !== undefined) {
+        const globals = getState().project.data.configurations.resource.globalVariables
+        const current = getVariableBasedOnRowIdOrVariableId(globals, rowId, variableId)
+        const collision = elementNameCollision(getState(), updates.name, 'resource-global', current?.variable.name)
+        if (collision) return fail(collision, 'Variable already exists')
       }
 
       let response: ProjectResponse = { ok: true }

@@ -9,6 +9,7 @@ import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
+import { elementNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
 import {
   duplicateVariableNameMessage,
@@ -225,7 +226,7 @@ const GlobalVariablesEditor = () => {
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
-      createVariable({
+      const created = createVariable({
         scope: 'global',
         data: {
           name: 'GlobalVar',
@@ -236,6 +237,10 @@ const GlobalVariablesEditor = () => {
           debug: false,
         },
       })
+      if (!created.ok) {
+        toast({ title: created.title ?? 'Error', description: created.message, variant: 'fail' })
+        return
+      }
       updateModelVariables({
         display: 'table',
         selectedRow: 0,
@@ -259,7 +264,11 @@ const GlobalVariablesEditor = () => {
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'global', data: newVarData })
+      const appended = createVariable({ scope: 'global', data: newVarData })
+      if (!appended.ok) {
+        toast({ title: appended.title ?? 'Error', description: appended.message, variant: 'fail' })
+        return
+      }
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -268,11 +277,15 @@ const GlobalVariablesEditor = () => {
       return
     }
 
-    createVariable({
+    const inserted = createVariable({
       scope: 'global',
       data: newVarData,
       rowToInsert: selectedRow + 1,
     })
+    if (!inserted.ok) {
+      toast({ title: inserted.title ?? 'Error', description: inserted.message, variant: 'fail' })
+      return
+    }
     updateModelVariables({
       display: 'table',
       selectedRow: selectedRow + 1,
@@ -341,6 +354,14 @@ const GlobalVariablesEditor = () => {
       const newVariables = parseIecStringToVariables(editorCode)
       const duplicate = findDuplicateVariableName(newVariables)
       if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
+
+      // The text is where a global gets a new name, so the namespace gate sits
+      // here; the setter below also serves undo, which must never be refused.
+      const state = useOpenPLCStore.getState()
+      for (const variable of newVariables) {
+        const collision = elementNameCollision(state, variable.name, 'resource-global')
+        if (collision) throw new Error(`Variable already exists: ${collision}`)
+      }
 
       const response = setGlobalVariables({
         variables: newVariables,

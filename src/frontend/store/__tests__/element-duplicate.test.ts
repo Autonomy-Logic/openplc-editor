@@ -400,3 +400,86 @@ describe('pouActions.duplicate', () => {
     expect(useOpenPLCStore.getState().pouActions.duplicate('Nope', 'Nope_copy').ok).toBe(false)
   })
 })
+
+describe('servers, remote devices and globals share the element namespace', () => {
+  const state = () => useOpenPLCStore.getState()
+
+  it('refuses a server or device named after a POU, and a POU named after either', () => {
+    expect(state().pouActions.create({ type: 'program', name: 'Pump', language: 'st' }).ok).toBe(true)
+    expect(state().serverActions.create({ name: 'pump', protocol: 'modbus-tcp' })).toEqual({
+      ok: false,
+      message: '"pump" is already the name of a POU',
+    })
+    expect(state().remoteDeviceActions.create({ name: 'PUMP', protocol: 'modbus-tcp' }).ok).toBe(false)
+
+    expect(state().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' }).ok).toBe(true)
+    expect(state().remoteDeviceActions.create({ name: 'Dev', protocol: 'modbus-tcp' }).ok).toBe(true)
+    expect(state().pouActions.create({ type: 'program', name: 'srv', language: 'st' })).toEqual({
+      ok: false,
+      message: '"srv" is already the name of a server',
+    })
+    expect(state().pouActions.create({ type: 'program', name: 'dev', language: 'st' })).toEqual({
+      ok: false,
+      message: '"dev" is already the name of a remote device',
+    })
+  })
+
+  it('refuses a server duplicated onto a remote device name, and the reverse', () => {
+    state().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' })
+    state().remoteDeviceActions.create({ name: 'Dev', protocol: 'modbus-tcp' })
+
+    expect(state().serverActions.duplicate('Srv', 'dev').ok).toBe(false)
+    expect(state().remoteDeviceActions.duplicate('Dev', 'srv').ok).toBe(false)
+  })
+
+  it('refuses a global named after a POU instead of auto-renaming it, and a POU named after a global', () => {
+    state().pouActions.create({ type: 'program', name: 'Motor', language: 'st' })
+    const refused = state().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'motor',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+    expect(refused).toMatchObject({
+      ok: false,
+      title: 'Variable already exists',
+      message: '"motor" is already the name of a POU',
+    })
+    expect(state().project.data.configurations.resource.globalVariables).toEqual([])
+
+    state().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'Level',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+    expect(state().pouActions.create({ type: 'program', name: 'level', language: 'st' })).toEqual({
+      ok: false,
+      message: '"level" is already the name of a global variable',
+    })
+  })
+
+  it('lets a global and a server share a name: neither sees the other', () => {
+    state().serverActions.create({ name: 'Modbus', protocol: 'modbus-tcp' })
+    const created = state().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'Modbus',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+    expect(created.ok).toBe(true)
+    expect(state().remoteDeviceActions.create({ name: 'modbus', protocol: 'modbus-tcp' }).ok).toBe(false)
+  })
+})
