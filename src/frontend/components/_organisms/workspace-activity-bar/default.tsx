@@ -327,7 +327,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // arduino-cli needs for a direct-USB upload. Release it before the build so
       // the upload can take the port; reconnect afterwards (auto-reconnect).
       const caps = resolveTargetCapabilities(currentBoardInfo)
-      const willUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false) && caps.directUsbUpload
+      const doUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false)
+      const isEthernetUpload = currentBoardInfo?.uploadMethod === 'ethernet'
+      // Serial handoff (D72): only for a direct-USB upload, never for ethernet.
+      const willUpload = doUpload && caps.directUsbUpload && !isEthernetUpload
       // Release ONLY if the held connection is the serial one arduino-cli needs.
       // A connection over Modbus TCP is untouched, so debugging and run/stop keep
       // working across the upload; disconnecting unconditionally used to throw it
@@ -338,6 +341,22 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           serialWasReleased = await device.releaseSerialPort(
             useOpenPLCStore.getState().deviceDefinitions.configuration.communicationPort ?? null,
           )
+        } catch {
+          // best-effort: never block a build on the handoff.
+        }
+      }
+
+      // Ethernet handoff: the program upload and the debugger's Modbus-TCP status
+      // polls share the one Ethernet link, so leaving the connection up lets the
+      // polls collide with the transfer and fail it. Drop the connection before
+      // the build and reconnect afterwards (to the possibly-changed IP). Only
+      // reconnect if it was connected here; a user who wasn't connected stays so.
+      const willEthUpload = doUpload && isEthernetUpload
+      let ethWasConnected = false
+      if (willEthUpload && useOpenPLCStore.getState().deviceConnection.status === 'connected') {
+        ethWasConnected = true
+        try {
+          await device.disconnect()
         } catch {
           // best-effort: never block a build on the handoff.
         }
@@ -409,6 +428,41 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           // `deferPrompts`: this reconnect is silent and automatic (the user just
           // flashed), so it must never pop an address dialog behind their back. A
           // DHCP-only target simply stays disconnected until they press Connect.
+          const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
+            transports: caps.debuggerTransports,
+            deferPrompts: true,
+          })
+          if (candidates.kind === 'candidates') {
+            try {
+              await device.connect(candidates.candidates.map((candidate) => candidate.config))
+            } catch {
+              // best-effort: the user can press Connect again.
+            }
+          }
+        }
+
+        // Ethernet handoff: after a successful upload the device is now running at
+        // the program's configured IP (which may differ from the address we just
+        // uploaded to). Advance the connect/upload IP to it, so the reconnect —
+        // and every later upload/connect — targets where the device actually is.
+        if (willEthUpload && result.success) {
+          const cfg = useOpenPLCStore.getState().deviceDefinitions.configuration
+          const vsd = (cfg.vendorScreenData ?? {}) as {
+            modbus_tcp?: { ip_address?: string }
+            network?: { ip_address?: string }
+          }
+          const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
+          if (newIp && newIp !== cfg.runtimeIpAddress) {
+            useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(newIp)
+          }
+        }
+        // Reconnect the Ethernet link we dropped for this upload. On success wait
+        // for the bootloader window + app boot before dialing the (new) IP; on a
+        // failed build the device never rebooted, so reconnect to it immediately.
+        if (ethWasConnected) {
+          if (result.success) await new Promise((resolve) => setTimeout(resolve, 6000))
+          const boardTarget = deviceDefinitions.configuration.deviceBoard
+          const spec = currentBoardInfo?.debug
           const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
             transports: caps.debuggerTransports,
             deferPrompts: true,

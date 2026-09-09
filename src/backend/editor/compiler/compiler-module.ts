@@ -3109,16 +3109,38 @@ class CompilerModule {
           vppModbusState?.network?.ip_address ||
           configuredIp ||
           '192.168.2.4'
+        // Ethernet is static-only on these boards (no DHCP — the bootloader's
+        // recovery stack has no DHCP client). Seed a full, sane static config so
+        // the firmware never falls back to the Arduino stack's byte-order-buggy
+        // subnet class-default (which would mis-derive e.g. 255.0.0.0 for a
+        // 192.168.x address and corrupt the persisted network record). Any value
+        // the user set on the Modbus screen is preserved.
+        const gwFromIp = (a: string) => a.replace(/\.\d+$/, '.1')
+        const subnet =
+          vppModbusState?.modbus_tcp?.subnet || vppModbusState?.network?.subnet || '255.255.255.0'
+        const gateway =
+          vppModbusState?.modbus_tcp?.gateway || vppModbusState?.network?.gateway || gwFromIp(ip)
+        const dns = vppModbusState?.modbus_tcp?.dns || vppModbusState?.network?.dns || gateway
         vppModbusState = {
           ...(vppModbusState ?? {}),
           network: {
             ...(vppModbusState?.network ?? {}),
             enabled: true,
             interface: 'Ethernet',
-            enable_dhcp: vppModbusState?.network?.enable_dhcp ?? false,
+            enable_dhcp: false,
             ip_address: ip,
+            subnet,
+            gateway,
+            dns,
           },
-          modbus_tcp: { ...(vppModbusState?.modbus_tcp ?? {}), enabled: true, ip_address: ip },
+          modbus_tcp: {
+            ...(vppModbusState?.modbus_tcp ?? {}),
+            enabled: true,
+            ip_address: ip,
+            subnet,
+            gateway,
+            dns,
+          },
         }
       }
     }
