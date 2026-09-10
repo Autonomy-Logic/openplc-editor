@@ -65,6 +65,10 @@ describe('generateCBlocksCode', () => {
     // swallowed it — every C-block build on a Tiva core died inside <chrono>
     // with an error naming a file the user never wrote. The other three were
     // guarded and this one was not, so the set is now asserted as a set.
+    // `PT` joined it for the same reason from the other direction: it is
+    // Energia's GPIO-port-T index and also the preset-time input of every IEC
+    // timer, so a project holding a TON expanded the generated struct field
+    // into `IEC_TIME 18;`.
     const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
     const code = 'void setup() { }\nvoid loop() { }'
     const result = generateCBlocksCode([{ name: 'B', code, variables }])
@@ -75,12 +79,12 @@ describe('generateCBlocksCode', () => {
 
     // Asserted as a set, and reported as one: a bare index comparison would
     // say "expected -1 to be greater than 123" without naming the macro.
-    const placement = ['min', 'max', 'abs', 'round'].map((name) => {
+    const placement = ['min', 'max', 'abs', 'round', 'PT'].map((name) => {
       const at = result.indexOf(`#undef ${name}`)
       return { name, present: at > -1, afterArduino: at > arduinoIdx, beforeHeader: at > -1 && strucppIdx > at }
     })
     expect(placement).toEqual(
-      ['min', 'max', 'abs', 'round'].map((name) => ({
+      ['min', 'max', 'abs', 'round', 'PT'].map((name) => ({
         name,
         present: true,
         afterArduino: true,
@@ -162,7 +166,7 @@ describe('generateCBlocksCode', () => {
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
     // Strip the baseline's Arduino macro scrubbing (`#undef min` / `max` / `abs`
     // — see baseline) before asserting no per-variable undefs.
-    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs|round)\s*$/gm, '')
+    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs|round|PT)\s*$/gm, '')
     expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 
