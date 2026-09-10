@@ -90,7 +90,19 @@ export interface TranspileVariable {
   /** Raw initial-value text — caller-supplied, no quote-wrapping. */
   initialValue?: string
   documentation?: string
+  /**
+   * IEC block qualifier. Absent = plain `VAR` (IEC's NON_RETAIN default).
+   *
+   * IEC puts the qualifier on the var *block*, not on the declaration, so this
+   * is a bucketing key for emission rather than something printed per line —
+   * see `computeInterface`, which groups by class × located × flag and opens a
+   * `VAR CONSTANT` / `VAR RETAIN` block per group.
+   */
+  flag?: TranspileVariableFlag
 }
+
+/** Mirrors `VariableFlag` in middleware/shared/ports/types.ts. */
+export type TranspileVariableFlag = 'constant' | 'retain'
 
 /* ──────────────────────────── variable type ─────────────────────────────── */
 

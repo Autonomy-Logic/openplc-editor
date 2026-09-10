@@ -10,10 +10,26 @@ import {
 } from '@root/types/IPC/project-service'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
-import { dirname, join, normalize } from 'path'
+import { dirname, join, normalize, relative, resolve, sep } from 'path'
 
 import { fileOrDirectoryExists } from '../../utils'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
+
+/**
+ * True when `filePath` resolves to something strictly under `projectDir`.
+ *
+ * `relative()` on the resolved pair is the check that survives `..` segments
+ * and Windows separators alike: anything escaping the directory comes back
+ * starting with `..`, and a path on another root comes back absolute.
+ */
+function isInsideProjectDirectory(projectDir: string, filePath: string): boolean {
+  const rel = relative(resolve(projectDir), resolve(filePath))
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolutePath(rel)
+}
+
+function isAbsolutePath(candidate: string): boolean {
+  return resolve(candidate) === candidate
+}
 
 class ProjectService {
   /**
@@ -89,6 +105,17 @@ class ProjectService {
     historyData: IProjectRecentHistoryEntry[],
   ): Promise<void> {
     await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
+  }
+
+  /**
+   * Replace the recent list with `entries`.
+   *
+   * For a caller that has already worked out what should survive — dropping
+   * every retrieval from the list needs one write, not one per row, and
+   * `removeProjectFromHistory` re-reads and rewrites the file on each call.
+   */
+  async replaceProjectHistory(projectsFilePath: string, entries: IProjectRecentHistoryEntry[]): Promise<void> {
+    await this.writeProjectHistory(projectsFilePath, entries)
   }
 
   async updateProjectHistory(projectPath: string): Promise<void> {
@@ -498,6 +525,13 @@ class ProjectService {
       // are distinct and mkdir(recursive) is idempotent.
       const writeEntry = async (entry: { relativePath: string; content: string }) => {
         const filePath = join(dir, entry.relativePath)
+        // Defence in depth. Element names are validated where the project is
+        // parsed, but every one of these relative paths is built by
+        // interpolating a name, so a single missed boundary would write outside
+        // the project. Refuse rather than trust the callers.
+        if (!isInsideProjectDirectory(dir, filePath)) {
+          throw new Error(`Refusing to write outside the project directory: ${entry.relativePath}`)
+        }
         await promises.mkdir(dirname(filePath), { recursive: true })
         await promises.writeFile(filePath, entry.content, 'utf-8')
       }

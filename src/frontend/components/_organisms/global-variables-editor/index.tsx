@@ -9,8 +9,13 @@ import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
+import { newGlobalNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import TableActions from '../../_atoms/table-actions'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -221,7 +226,7 @@ const GlobalVariablesEditor = () => {
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
-      createVariable({
+      const created = createVariable({
         scope: 'global',
         data: {
           name: 'GlobalVar',
@@ -232,6 +237,10 @@ const GlobalVariablesEditor = () => {
           debug: false,
         },
       })
+      if (!created.ok) {
+        toast({ title: created.title ?? 'Error', description: created.message, variant: 'fail' })
+        return
+      }
       updateModelVariables({
         display: 'table',
         selectedRow: 0,
@@ -255,7 +264,11 @@ const GlobalVariablesEditor = () => {
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'global', data: newVarData })
+      const appended = createVariable({ scope: 'global', data: newVarData })
+      if (!appended.ok) {
+        toast({ title: appended.title ?? 'Error', description: appended.message, variant: 'fail' })
+        return
+      }
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -264,11 +277,15 @@ const GlobalVariablesEditor = () => {
       return
     }
 
-    createVariable({
+    const inserted = createVariable({
       scope: 'global',
       data: newVarData,
       rowToInsert: selectedRow + 1,
     })
+    if (!inserted.ok) {
+      toast({ title: inserted.title ?? 'Error', description: inserted.message, variant: 'fail' })
+      return
+    }
     updateModelVariables({
       display: 'table',
       selectedRow: selectedRow + 1,
@@ -331,10 +348,24 @@ const GlobalVariablesEditor = () => {
   }
 
   const commitCode = (): boolean => {
+    let title = 'Syntax error'
     try {
       pushToHistory(editor.meta.name)
 
       const newVariables = parseIecStringToVariables(editorCode)
+      const duplicate = findDuplicateVariableName(newVariables)
+      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
+
+      // The text is where a global gets a new name, so the namespace gate sits
+      // here; the setter below also serves undo, which must never be refused.
+      const collision = newGlobalNameCollision(
+        useOpenPLCStore.getState(),
+        newVariables.map((variable) => variable.name),
+      )
+      if (collision) {
+        title = 'Variable already exists'
+        throw new Error(collision)
+      }
 
       const response = setGlobalVariables({
         variables: newVariables,
@@ -352,7 +383,7 @@ const GlobalVariablesEditor = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
       setParseError(message)
-      toast({ title: 'Syntax error', description: message, variant: 'fail' })
+      toast({ title, description: message, variant: 'fail' })
       return false
     }
   }

@@ -1,3 +1,6 @@
+import { webcrypto } from 'node:crypto'
+import { TextDecoder, TextEncoder } from 'node:util'
+
 // Alias `vi` to `jest` so shared test files can use `vi.spyOn()` in both Jest and Vitest
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ;(globalThis as any).vi = jest
@@ -71,4 +74,26 @@ try {
   openPLCStoreBase.getState().libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
 } catch (err) {
   console.warn(`[jest-setup] could not pre-load bundled .stlibs from ${stlibsDir}:`, err)
+}
+
+// jsdom ships neither the TextEncoder/TextDecoder pair nor WebCrypto, both of
+// which Node has had for years and browsers provide as a matter of course.
+// The project-snapshot archive is written against those platform APIs on
+// purpose, so that one implementation runs unchanged in the Electron main
+// process and in the browser; without these it would be untestable here purely
+// because of the environment.
+{
+  const scope = globalThis as unknown as Record<string, unknown>
+
+  if (typeof scope.TextEncoder === 'undefined') scope.TextEncoder = TextEncoder
+  if (typeof scope.TextDecoder === 'undefined') scope.TextDecoder = TextDecoder
+
+  const existing = scope.crypto as { subtle?: unknown } | undefined
+  if (!existing || typeof existing.subtle === 'undefined') {
+    Object.defineProperty(globalThis, 'crypto', {
+      value: webcrypto,
+      writable: true,
+      configurable: true,
+    })
+  }
 }

@@ -25,6 +25,7 @@ import { LibraryManagerEditor } from '../components/_features/[workspace]/editor
 import { LibraryManifestEditor } from '../components/_features/[workspace]/editor/library-manifest'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
 import { PackageManagerEditor } from '../components/_features/[workspace]/editor/package-manager'
+import { PersistentStorageEditor } from '../components/_features/[workspace]/editor/persistent-storage'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
@@ -86,7 +87,16 @@ const WorkspaceScreen = () => {
   // tab switches — no dispose churn, no view-state loss.
   const editors = useOpenPLCStore(useCallback((s) => s.editors, []))
   const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
-  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  const projectPous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  // A library-debug session runs a generated harness program declaring one
+  // instance of every block in the library (see `composeLibraryDebugHarness`).
+  // It is not part of the project, so it joins the POU list here — added, not
+  // substituted, so a debug flag ticked mid-session still takes effect.
+  const debugHarness = useOpenPLCStore(useCallback((s) => s.workspace.debugHarness, []))
+  const pous = useMemo(
+    () => (debugHarness ? [...projectPous, debugHarness.programPou] : projectPous),
+    [projectPous, debugHarness],
+  )
   const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
   const projectType = useOpenPLCStore(useCallback((s) => s.project.meta.type, []))
   // Project-type capability matrix.  Combines with `capabilities`
@@ -588,6 +598,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
+                        {editor['type'] === 'plc-persistent-storage' && <PersistentStorageEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 

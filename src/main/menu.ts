@@ -86,6 +86,18 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
+  handleSaveProjectAs() {
+    this.mainWindow.webContents.send('project:save-as-accelerator')
+  }
+
+  /**
+   * Retrieve Project from PLC. The main process only forwards the request —
+   * the renderer owns the modal, the runtime connection and everything after.
+   */
+  handleRetrieveProject() {
+    this.mainWindow.webContents.send('project:retrieve-accelerator')
+  }
+
   handleSaveFile() {
     this.mainWindow.webContents.send('project:save-file-accelerator')
   }
@@ -153,6 +165,14 @@ export default class MenuBuilder {
   }
   handleRedoRequest() {
     this.mainWindow.webContents.send('edit:redo-request')
+  }
+
+  handlePrint() {
+    this.mainWindow.webContents.send('project:print-accelerator')
+  }
+
+  handlePageSetup() {
+    this.mainWindow.webContents.send('project:page-setup-accelerator')
   }
 
   /**
@@ -239,8 +259,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.saveAs'),
           accelerator: 'Cmd+Shift+A',
-          click: () => {},
-          enabled: false,
+          click: () => this.handleSaveProjectAs(),
         },
         {
           label: i18n.t('menu:file.submenu.closeTab'),
@@ -266,20 +285,27 @@ export default class MenuBuilder {
           click: () => this.handleImportProjectRequest(),
         },
         { type: 'separator' },
+        // Its own group: retrieving is not a save, a close, or an export, and
+        // sitting inside any of those groups reads as a variant of them.
+        {
+          label: i18n.t('menu:file.submenu.retrieveProject'),
+          click: () => this.handleRetrieveProject(),
+        },
+        { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
           accelerator: 'Cmd+Option+P',
-          enabled: false,
+          click: () => this.handlePageSetup(),
         },
         {
           label: i18n.t('menu:file.submenu.preview'),
           accelerator: 'Cmd+Shift+P',
-          enabled: false,
+          click: () => this.handlePrint(),
         },
         {
           label: i18n.t('menu:file.submenu.print'),
           accelerator: 'Cmd+P',
-          enabled: false,
+          click: () => this.handlePrint(),
         },
         { type: 'separator' },
         {
@@ -487,7 +513,29 @@ export default class MenuBuilder {
     const templateDefault: MenuItemConstructorOptions[] = [
       {
         label: i18n.t('menu:file.label'),
-        visible: false,
+        // KNOWN DIVERGENCE from the in-app React File menu (`menus/file.tsx`),
+        // which is the only File menu on Windows while this is the only one on
+        // Linux. Deliberate for now, and tracked rather than fixed here:
+        //   - native only: New Project, Open Project, Export to CODESYS XML,
+        //     Board Package Manager
+        //   - React only: README, Import PLCopen XML (both capability-gated)
+        // Everything either menu offers now WORKS on its platform, which is the
+        // part that mattered: Save As was disabled here, so on Linux a
+        // retrieved project could not be saved at all. Full parity is a bigger
+        // change than this ticket, since some React items are gated on
+        // capabilities the main process does not know about.
+        //
+        // Hidden on Windows ONLY, where the in-app React menubar renders its own
+        // File menu and a native one beside it would be a duplicate. Linux gets
+        // no in-app menubar (`app-layout.tsx` draws no title bar there), so this
+        // menu is the only File menu it has and must stay visible.
+        //
+        // It was a bare `visible: false` before, which read as "Windows and Linux
+        // both hide this" — but Linux shows the menu regardless, so the flag was
+        // describing an intent the platform never applied. Spelling the platform
+        // out keeps the behaviour Linux already has if Electron ever starts
+        // honouring the flag there.
+        visible: process.platform !== 'win32',
         submenu: [
           {
             label: i18n.t('menu:file.submenu.newProject'),
@@ -513,9 +561,14 @@ export default class MenuBuilder {
             click: () => this.handleSaveProject(),
           },
           {
+            // Wired, not disabled. Linux has no in-app menubar, so this is its
+            // only Save As -- and a retrieved project can be saved NO other
+            // way: both save paths refuse it and point here. A disabled item
+            // does not fire its accelerator either, so Ctrl+Shift+A was dead
+            // too, and every refusal named an action the platform did not have.
             label: i18n.t('menu:file.submenu.saveAs'),
             accelerator: 'Ctrl+Shift+A',
-            enabled: false,
+            click: () => this.handleSaveProjectAs(),
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
@@ -545,20 +598,29 @@ export default class MenuBuilder {
           {
             type: 'separator',
           },
+          // Its own group: retrieving is not a save, a close, or an export, and
+          // sitting inside any of those groups reads as a variant of them.
+          {
+            label: i18n.t('menu:file.submenu.retrieveProject'),
+            click: () => this.handleRetrieveProject(),
+          },
+          {
+            type: 'separator',
+          },
           {
             label: i18n.t('menu:file.submenu.pageSetup'),
-            enabled: false,
             accelerator: 'Ctrl+Alt+P',
+            click: () => this.handlePageSetup(),
           },
           {
             label: i18n.t('menu:file.submenu.preview'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+P',
+            click: () => this.handlePrint(),
           },
           {
             label: i18n.t('menu:file.submenu.print'),
             accelerator: 'Ctrl+P',
-            enabled: false,
+            click: () => this.handlePrint(),
           },
           { type: 'separator' },
           {

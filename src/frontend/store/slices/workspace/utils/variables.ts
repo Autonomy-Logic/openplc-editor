@@ -3,12 +3,15 @@ import { WorkspaceResponse } from '../types'
 
 /**
  * This is a validation to check if the variable name already exists.
+ * IEC 61131-3 identifiers are case-insensitive: `Motor` and `motor` are one
+ * variable declared twice.
+ *
+ * `exclude` lets an update skip the variable being renamed so a case-only
+ * rename onto itself is not read as a collision. Reference-equality is enough
+ * since `variables` is the live array and the caller passes the same object.
  **/
-const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
-  return variables.some((variable) => variable.name === name)
-}
-const checkIfGlobalVariableExists = (variables: PLCGlobalVariable[], name: string) => {
-  return variables.some((variable) => variable.name === name)
+const checkIfVariableExists = (variables: PLCVariable[], name: string, exclude?: PLCVariable) => {
+  return variables.some((variable) => variable !== exclude && variable.name.toLowerCase() === name.toLowerCase())
 }
 /**
  * This is a validation to check if the variable name is correct.
@@ -62,7 +65,7 @@ const createVariableValidation = (variables: PLCVariable[], variableName: string
   if (checkIfVariableExists(variables, variableName)) {
     const regex = /_\d+$/
     const filteredVariables = variables.filter((variable: PLCVariable) =>
-      variable.name.includes(variableName.replace(regex, '')),
+      variable.name.toLowerCase().includes(variableName.replace(regex, '').toLowerCase()),
     )
     const sortedVariables = filteredVariables.sort((a, b) => {
       const matchA = a.name.match(regex)
@@ -130,10 +133,10 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
   return response
 }
 const createGlobalVariableValidation = (variables: PLCGlobalVariable[], variableName: string) => {
-  if (checkIfGlobalVariableExists(variables, variableName)) {
+  if (checkIfVariableExists(variables, variableName)) {
     const regex = /_\d+$/
     const filteredVariables = variables.filter((variable: PLCVariable) =>
-      variable.name.includes(variableName.replace(regex, '')),
+      variable.name.toLowerCase().includes(variableName.replace(regex, '').toLowerCase()),
     )
     const sortedVariables = filteredVariables.sort((a, b) => {
       const matchA = a.name.match(regex)
@@ -163,6 +166,7 @@ const createGlobalVariableValidation = (variables: PLCGlobalVariable[], variable
 const updateGlobalVariableValidation = (
   variables: PLCGlobalVariable[],
   dataToBeUpdated: Partial<PLCGlobalVariable>,
+  variableToUpdate?: PLCGlobalVariable,
 ) => {
   let response: WorkspaceResponse = { ok: true }
 
@@ -177,7 +181,7 @@ const updateGlobalVariableValidation = (
       return response
     }
 
-    if (checkIfGlobalVariableExists(variables, name)) {
+    if (checkIfVariableExists(variables, name, variableToUpdate)) {
       response = {
         ok: false,
         title: 'Global Variable already exists',

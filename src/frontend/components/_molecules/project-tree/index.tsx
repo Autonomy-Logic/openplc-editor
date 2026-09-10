@@ -33,9 +33,9 @@ import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
 import { UsersIcon } from '../../../assets/icons/project/Users'
 import { useOpenPLCStore } from '../../../store'
+import { elementNameCollision, type NamedElementKind } from '../../../store/slices/shared/name-collision'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
-import { collectAllSlaveNames } from '../../../utils/unique-slave-name'
 import { isUnsaved, unsavedLabel } from '../../../utils/unsaved-label'
 import { HighlightedText } from '../../_atoms/highlighted-text'
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -306,6 +306,7 @@ const ProjectTreeExpandableLeaf = ({
     const res = renameRemoteDevice(label, renamed)
     if (!res.ok) {
       setNewLabel(label || '')
+      toast({ title: 'Rename failed', description: res.message ?? `"${label}" could not be renamed.`, variant: 'fail' })
       return
     }
     // Soft, unsaved change: renameElement flags the workspace dirty; the rename
@@ -470,6 +471,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'softMotionDrive'
     | 'libraryManifest'
     | 'userManagement'
+    | 'persistentStorage'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   /**
@@ -511,6 +513,7 @@ const LeafSources = {
   // into a library project, so it earns a dedicated mark.
   libraryManifest: { LeafIcon: LibraryManifestIcon },
   userManagement: { LeafIcon: UsersIcon },
+  persistentStorage: { LeafIcon: ConfigIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,
@@ -543,9 +546,6 @@ const ProjectTreeLeaf = ({
     },
     ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
     fileActions: { getFile },
-    project: {
-      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
-    },
   } = useOpenPLCStore()
 
   const [isEditing, setIsEditing] = useState(false)
@@ -610,12 +610,26 @@ const ProjectTreeLeaf = ({
     // No-op: user blurred or hit Enter without changing anything.
     if (newLabel === label) return
 
+    // Snapping the label back is not an explanation: element names share one
+    // namespace, so a refusal usually names a POU, data type or list the user
+    // cannot see from here. A cancelled data type rename is the user's own
+    // choice and reports nothing.
+    const reportFailedRename = (res: { message?: string; cancelled?: boolean }) => {
+      setNewLabel(label || '')
+      if (res.cancelled) return
+      toast({
+        title: 'Rename failed',
+        description: res.message ?? `"${label}" could not be renamed.`,
+        variant: 'fail',
+      })
+    }
+
     // Renames are soft, unsaved changes: renameElement flags the workspace
     // dirty and queues the old path in `pendingDeletions`. Nothing is written
     // to disk until the user saves — identical on web and desktop.
     if (isAPou) {
       const res = renamePou(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
@@ -623,34 +637,34 @@ const ProjectTreeLeaf = ({
       // Async: a referenced type awaits the impact modal before renaming.
       void renameDatatype(label, newLabel)
         .then((res) => {
-          if (!res.ok) setNewLabel(label || '')
+          if (!res.ok) reportFailedRename(res)
         })
-        .catch(() => setNewLabel(label || ''))
+        .catch(() => reportFailedRename({}))
       return
     }
 
     if (isGlobalVariableList) {
       const res = renameGlobalVariableList(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
     if (isServer) {
       const res = renameServer(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
     if (isRemoteDevice) {
       const res = renameRemoteDevice(label, newLabel)
-      if (!res.ok) setNewLabel(label || '')
+      if (!res.ok) reportFailedRename(res)
       return
     }
 
     if (isEthercatDevice && busName && deviceId) {
       const res = renameEthercatDevice(busName, deviceId, newLabel)
       if (!res.ok) {
-        setNewLabel(label || '')
+        reportFailedRename(res)
       }
       // Ethercat device lives inside its parent bus file — the parent will
       // be re-serialized on the next regular save. Skipping auto-save here
@@ -660,41 +674,28 @@ const ProjectTreeLeaf = ({
     }
   }
 
-  /**
-   * Every element name the project has, in one list.
-   *
-   * File state, tabs and editor models are all keyed by raw element name, across kinds,
-   * so a candidate has to be free of ALL of them and not only of its own collection.
-   * Checking same-kind names alone let a duplicated POU called `Pump_copy` take over the
-   * `files['Pump_copy']` entry of a data type that already had that name.
-   */
-  const allElementNames = useMemo(
-    () => [
-      ...pous.map((pou) => pou.name),
-      ...dataTypes.map((dataType) => dataType.name),
-      ...(globalVariableLists ?? []).map((list) => list.name),
-      ...(servers ?? []).map((server) => server.name),
-      ...(remoteDevices ?? []).map((device) => device.name),
-      ...collectAllSlaveNames(remoteDevices),
-    ],
-    [pous, dataTypes, globalVariableLists, servers, remoteDevices],
-  )
+  const copyKind = (): NamedElementKind => {
+    if (isAPou) return 'pou'
+    if (isDatatype) return 'data-type'
+    if (isGlobalVariableList) return 'global-variable-list'
+    if (isServer) return 'server'
+    return 'remote-device'
+  }
 
   /**
-   * `<label>_copy`, then `_copy_2`, `_copy_3`… against every name in use.
-   *
-   * Duplicating twice used to call the action with the same `_copy` name both times;
-   * the second call failed on the collision and the result was discarded, so the menu
-   * item simply did nothing. Picking a free name up front is what makes the second
-   * duplicate behave like the first.
+   * `<label>_copy`, then `_copy_2`, `_copy_3`… — the first name the gate accepts
+   * for this kind, so the duplicate lands on the first try instead of failing on
+   * a name the menu could not know was taken.
    */
   const nextCopyName = (base: string): string => {
-    const used = new Set(allElementNames.map((n) => n.toLowerCase()))
+    const state = useOpenPLCStore.getState()
+    const kind = copyKind()
+    const free = (candidate: string) => elementNameCollision(state, candidate, kind) === null
     const first = `${base}_copy`
-    if (!used.has(first.toLowerCase())) return first
+    if (free(first)) return first
     for (let n = 2; ; n++) {
       const candidate = `${first}_${n}`
-      if (!used.has(candidate.toLowerCase())) return candidate
+      if (free(candidate)) return candidate
     }
   }
 
@@ -864,7 +865,10 @@ const ProjectTreeLeaf = ({
         </span>
       )}
 
-      {leafLang === 'devPin' || leafLang === 'devConfig' || leafLang === 'userManagement' ? null : (
+      {leafLang === 'devPin' ||
+      leafLang === 'devConfig' ||
+      leafLang === 'userManagement' ||
+      leafLang === 'persistentStorage' ? null : (
         <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
             disabled={isDebuggerVisible}

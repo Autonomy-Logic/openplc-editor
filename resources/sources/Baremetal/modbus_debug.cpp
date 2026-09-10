@@ -16,28 +16,22 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "openplc.h"
 #include "openplc_version.h"
 
-// ArduinoUniqueID (ricaun) backs the DEBUG_GET_BOARD_ID (0x48) function code.
-// It supports AVR/megaAVR/SAM/SAMD/STM32/ESP/RP2040/Teensy, and its header
-// `#error`s out on anything else rather than degrading — so a core it does not
-// cover has to be kept out of the translation unit, not handled at runtime.
+// The identity behind DEBUG_GET_DEVICE_ID (0x48) comes from the closed
+// license-core, not from a library compiled into this open firmware.
 //
-// A UNIQUE ID IS ONLY EVER NEEDED TO BIND A PURCHASE TO A BOARD, so the build
-// asks for it only on a target whose board package declares `isLicensable`.
-// Every other target — which today is every target — gets
-// OPENPLC_NO_UNIQUE_ID from defines.h and never includes the library, so a core
-// the library rejects is a non-problem unless someone ships a paid VPP for it.
-// Note the polarity: the flag is the DEFAULT, not the exception. See
-// `generateDefinesContent` for the emitter.
+// It used to come from ArduinoUniqueID (ricaun), included right here, and that
+// had two problems. The library `#error`s out on any core it does not cover
+// (mbed is one, so every Arduino Opta, Portenta Machine Control and Edge
+// Control build failed, DOPE-587), and it made this file read the raw factory
+// serial in order to publish it on a channel with no authentication.
 //
-// Without the library, the board-id handler answers id_len = 0. That is a
-// well-formed SUCCESS reply, and both consumers already read it as one:
-// `device-probe` treats the successful reply (not the id bytes) as proof of
-// firmware, and `resolveLicensingTarget` never asks a non-licensable board for
-// an id in the first place.
-#ifndef OPENPLC_NO_UNIQUE_ID
-    #include <ArduinoUniqueID.h>
-    #define OPENPLC_HAS_UNIQUE_ID
-#endif
+// Now the firmware ASKS: `license_gate_device_id()` reads the silicon inside
+// the closed artifact and hands back the derived device_id, so the anchor never
+// leaves it. On a board with no license-core the weak default answers 0, which
+// is the truthful answer for a board no licence can be bound to. Nothing here
+// derives, normalizes or reformats what it gets: the bytes go on the wire as
+// they arrive, because the editor compares them against what it purchased.
+#include "license_gate.h"
 
 /**
  * @brief Sends a Modbus response frame for the DEBUG_INFO function code.
@@ -427,26 +421,28 @@ void debugGetVersion()
 // PDU request:  [FC]
 // PDU response: [FC, STATUS, id_len:u8, id_bytes...]
 //
-// Returns the unique hardware ID via ArduinoUniqueID. id_len is UniqueIDsize
-// (architecture-dependent: AVR 9-10, ESP8266 4, ESP32 6, SAM/SAMD 16, STM32
-// 12, Teensy 8). On a core without support, id_len = 0 and no bytes follow.
-void debugGetBoardId()
+// Reports this board's device_id: LIC_DEVICE_ID_SIZE bytes on a board that can
+// hold a licence, and id_len = 0 on one that cannot. Both are SUCCESS replies.
+// The empty answer is not an error and must not look like one: `device-probe`
+// reads a successful reply, not the id bytes, as proof that firmware is running
+// (requiring bytes once reported mbed boards as having no firmware at all), and
+// the editor's licensing flow reads a zero-length id as "no licence can be
+// bound to this board" (license-flow.ts, deriveIdentity).
+//
+// The frame is the capacity limit, so it is passed as one: if the id could not
+// fit after [FC][STATUS][id_len], `license_gate_device_id` refuses and reports
+// nothing rather than a truncated identity, which would be a DIFFERENT id and
+// would match no licence ever issued.
+void debugGetDeviceId()
 {
-    mb_frame[1] = MB_FC_DEBUG_GET_BOARD_ID;
+    size_t idLen;
+
+    mb_frame[1] = MB_FC_DEBUG_GET_DEVICE_ID;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-#ifdef OPENPLC_HAS_UNIQUE_ID
-    uint8_t idLen = (uint8_t)UniqueIDsize;
-    // Clamp so [FC][STATUS][id_len][id_bytes...] always fits the frame.
-    if ((uint16_t)(4 + idLen) > MAX_MB_FRAME) idLen = (uint8_t)(MAX_MB_FRAME - 4);
-    mb_frame[3] = idLen;
-    for (uint8_t i = 0; i < idLen; i++)
-        mb_frame[4 + i] = UniqueID[i];
-    mb_frame_len = 4 + idLen;
-#else
-    mb_frame[3] = 0; // no unique-id support on this core
-    mb_frame_len = 4;
-#endif
+    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MAX_MB_FRAME - 4));
+    mb_frame[3] = (uint8_t)idLen;
+    mb_frame_len = 4 + (int)idLen;
 }
 
 // ---------------------------------------------------------------------------
@@ -504,7 +500,7 @@ void debugWriteLicense(uint16_t len, const uint8_t *blob)
 // PDU response (EMPTY/CORRUPT/error): [FC][STATUS]   (no len, no blob)
 //
 // Absolute mb_frame indices (index 0 is the slave id, the PDU starts at 1,
-// exactly like debugGetBoardId): FC@1, STATUS@2, len@3..4 (BIG-ENDIAN), blob@5.
+// exactly like debugGetDeviceId): FC@1, STATUS@2, len@3..4 (BIG-ENDIAN), blob@5.
 //
 // The store reads straight into &mb_frame[5]: the frame IS the static buffer, so
 // there is no malloc on AVR. READ carries no request payload, so writing at [5]

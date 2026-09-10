@@ -1,7 +1,14 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
+import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
+import {
+  materializeRetrievedProject,
+  pruneRetrievedProjects,
+  RETAINED_RETRIEVALS,
+} from '@root/backend/editor/project/materialize-retrieved-project'
 import type {
-  DebugBoardIdResult,
+  DebugAnchorResult,
+  DebugDeviceIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
   DeviceModbusTransport,
@@ -9,10 +16,12 @@ import type {
 } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
+import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type {
@@ -40,7 +49,7 @@ import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
-import { join, resolve, sep } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
@@ -48,9 +57,9 @@ import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/edito
 import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
-  PATIENT_BOARD_ID_PROBE,
-  QUICK_BOARD_ID_PROBE,
-  SPECULATIVE_BOARD_ID_PROBE,
+  PATIENT_DEVICE_ID_PROBE,
+  QUICK_DEVICE_ID_PROBE,
+  SPECULATIVE_DEVICE_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
 import {
   describeLinkCandidate,
@@ -62,15 +71,18 @@ import {
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
+  type DeviceIdentity,
   inspectDeviceLicense,
   type LicenseReadWritable,
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
+import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
   getOpenProjectPath,
+  getPdfExportSavePath,
   getPlcopenExportSavePath,
   getPlcopenImportFilePath,
   getProjectPath,
@@ -87,16 +99,39 @@ interface ChannelUnavailable {
 
 /**
  * What the licensing flow needs from whichever channel carries it: the two
- * license FCs plus the anchor read. `DeviceModbusTransport` satisfies it
+ * license FCs plus the identity read. `DeviceModbusTransport` satisfies it
  * structurally (all three are required there); a debug channel is narrowed into
  * it by `isLicenseChannel`.
+ *
+ * The identity read is EITHER `getDeviceId` (baremetal, an id derived inside the
+ * closed core) OR `getAnchor` (runtime-v4, the raw device-tree serial), never
+ * both, and the union is an XOR so the compiler enforces the "never both" half
+ * rather than only asserting it in prose.
+ *
+ * Be clear about what that does and does not buy, because this exact bug got
+ * through review once: the XOR stops a transport from declaring BOTH reads. It
+ * does NOT protect `isLicenseChannel`, which inspects a `DeviceDebugChannel` at
+ * RUNTIME with `typeof`, where both methods are legitimately optional. That
+ * guard demanded `getDeviceId` after the WebSocket transport had been renamed
+ * to `getAnchor`, cutting off licensing on every runtime-v4 board with `tsc`
+ * perfectly clean. What catches that class of mistake is the handler test
+ * driving the REST branch through a double that has `getAnchor` and no
+ * `getDeviceId` — see device-license.handler.test.ts.
  */
-type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardIdResult> }
+type LicenseChannel = LicenseReadWritable &
+  (
+    | { getDeviceId(): Promise<DebugDeviceIdResult>; getAnchor?: never }
+    | { getAnchor(): Promise<DebugAnchorResult>; getDeviceId?: never }
+  )
 
 /**
- * Whether a debug channel can carry the licensing flow. The three methods are
- * optional on `DeviceDebugChannel` because not every medium implements them; the
- * runtime-v4 WebSocket implements all three. Narrows the client ITSELF rather
+ * Whether a debug channel can carry the licensing flow: the two licence FCs plus
+ * ONE of the two identity reads. The methods are optional on
+ * `DeviceDebugChannel` because not every medium implements them; the runtime-v4
+ * WebSocket implements `getAnchor`, `readLicense` and `writeLicense`, and a
+ * Modbus client implements `getDeviceId` instead. Demanding `getDeviceId` here
+ * is what made runtime-v4 licensing unreachable before this was fixed, so the
+ * check accepts either half deliberately. Narrows the client ITSELF rather
  * than wrapping it, so the flow talks to the same object every other caller
  * holds — and the transport's own send mutex (the Modbus clients'
  * sendRequestMutex; the debug WebSocket's, since review 2026-08-20) keeps
@@ -104,10 +139,26 @@ type LicenseChannel = LicenseReadWritable & { getBoardId(): Promise<DebugBoardId
  */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
-    typeof client.getBoardId === 'function' &&
+    (typeof client.getDeviceId === 'function' || typeof client.getAnchor === 'function') &&
     typeof client.readLicense === 'function' &&
     typeof client.writeLicense === 'function'
   )
+}
+
+/**
+ * Turn a failed identity read into a `check-failed` outcome, carrying the
+ * `retryable` flag when the cause set one.
+ *
+ * `retryable` is only ever written as `false` — absent means retryable, so the
+ * common causes (a dropped link, a timeout) keep the retry they have always
+ * had. Written as one helper because both handlers must agree: a "Try Again"
+ * offered by read-license and withheld by refresh-license for the same board
+ * would be worse than either choice.
+ */
+function checkFailedOutcome(identity: { error: string; retryable?: boolean }): DeviceLicenseReport['outcome'] {
+  return identity.retryable === false
+    ? { state: 'check-failed', error: identity.error, retryable: false }
+    : { state: 'check-failed', error: identity.error }
 }
 
 /** Program-identity comparison, case-insensitively — targets report either case. */
@@ -126,6 +177,28 @@ interface Md5VerifyReply {
   targetMd5?: string
   targetEndian?: 'le' | 'be'
   error?: string
+}
+
+/**
+ * Where a project retrieved from a device is unpacked.
+ *
+ * One definition, used both by the retrieval that writes there and by the read
+ * that has to recognise the result: a second spelling of this path would go
+ * stale silently, and the only symptom would be retrievals reappearing under
+ * Recent.
+ */
+const retrievedProjectsRoot = (): string => join(app.getPath('userData'), 'retrieved-projects')
+
+/** True for the scratch root or anything inside it — the retrieval area, not a
+ *  project the user keeps anywhere. `relative` rather than `startsWith`, so a
+ *  sibling directory whose name merely begins the same way is not caught by it.
+ *
+ *  The root ITSELF counts: `relative()` answers '' for it, and excluding that
+ *  made the one directory the whole area is named after the one path this
+ *  returned false for. */
+const isRetrievedProjectPath = (projectPath: string): boolean => {
+  const rel = relative(retrievedProjectsRoot(), projectPath)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -176,6 +249,13 @@ class MainProcessBridge implements MainIpcModule {
    * channel), so this one goes.
    */
   private runtimeApi = new RuntimeApiClient()
+
+  /**
+   * The runtime bootloader (RTOP-283), on its own port with its own session.
+   * Separate from runtimeApi because the two services share a credential
+   * database, not a token.
+   */
+  private bootloaderApi = new BootloaderApiClient()
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
   // Current project root path used to validate file-watcher IPC calls
@@ -225,6 +305,38 @@ class MainProcessBridge implements MainIpcModule {
       // R1/E2). Channels opened per call already read the manager at create().
       this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
+  }
+
+  // ===================== BOOTLOADER HANDLERS =====================
+  // Thin pass-throughs: the client owns validation and message wording, and
+  // its errors are written to be shown to a person as they are.
+
+  handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getCapabilities(ipAddress)
+
+  handleBootloaderLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
+    this.bootloaderApi.login(ipAddress, username, password)
+
+  handleBootloaderGetStatus = (_event: IpcMainInvokeEvent, ipAddress: string) => this.bootloaderApi.getStatus(ipAddress)
+
+  handleBootloaderGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getDeviceInfo(ipAddress)
+
+  handleBootloaderGetRuntimeLogs = (_event: IpcMainInvokeEvent, ipAddress: string, tail?: number) =>
+    this.bootloaderApi.getRuntimeLogs(ipAddress, tail)
+
+  handleBootloaderStartUpdate = (_event: IpcMainInvokeEvent, ipAddress: string, version: string) =>
+    this.bootloaderApi.startUpdate(ipAddress, version)
+
+  handleBootloaderGetUpdateProgress = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getUpdateProgress(ipAddress)
+
+  handleBootloaderRestartRuntime = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.restartRuntime(ipAddress)
+
+  handleBootloaderClearSession = (_event: IpcMainInvokeEvent, ipAddress?: string) => {
+    this.bootloaderApi.clearSession(ipAddress)
+    return { success: true as const }
   }
 
   // ===================== RUNTIME API HANDLERS =====================
@@ -428,6 +540,10 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
     this.tokens.clear()
     this.runtimeApi.clearSession()
+    // The bootloader keeps its own session, so clearing only the runtime's
+    // left the previous user's bootloader token usable -- and that token can
+    // change the runtime version. Signing out has to mean both.
+    this.bootloaderApi.clearSession()
     return { success: true }
   }
 
@@ -515,9 +631,141 @@ class MainProcessBridge implements MainIpcModule {
     filename: string
     contentType: string
     cleanBuild: boolean
+    snapshotBuffer?: Buffer
+    snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }): Promise<{ success: true; data: string } | { success: false; error: string }> =>
     this.runtimeApi.makeRuntimeApiUpload(opts)
+
+  /** Username of the live runtime session, so an uploaded project can record
+   *  who stored it. Only the username crosses this boundary. */
+  getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
+
+  /**
+   * Install the libraries a retrieved project brought with it.
+   *
+   * The archives are re-read from the project's own archive rather than kept
+   * in memory between calls, so installing is always installing what that
+   * project actually carries. Each goes through the same strucpp validation as
+   * a library the user picked by hand -- an archive off a device earns no extra
+   * trust.
+   */
+  handleInstallRetrievedLibraries = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> => {
+    const archives = this.retrievedLibraries.get(projectPath) ?? []
+    const manager = new LibraryManagerModule()
+    const installed: string[] = []
+    const failed: Array<{ name: string; error: string }> = []
+
+    for (const library of archives) {
+      if (!names.includes(library.name)) continue
+      const result = await manager.installFromText(library.archive)
+      if (result.success) installed.push(library.name)
+      else failed.push({ name: library.name, error: result.error ?? 'Install failed' })
+    }
+    return { success: failed.length === 0, installed, failed }
+  }
+
+  /**
+   * Retrieve the stored project and write it to a scratch directory.
+   *
+   * Fetch and unpack are one IPC call because the archive should not sit in the
+   * renderer at all: it is untrusted bytes from a device, and every check that
+   * decides whether it is safe to write lives next to the write. The renderer
+   * gets back a path and a description, never the archive.
+   *
+   * The scratch location is why this works at all -- see
+   * `materialize-retrieved-project` for what depends on the project having a
+   * real path from the moment it is opened.
+   */
+  /**
+   * Bundled library archives from the most recent retrievals, keyed by the
+   * project they came with.
+   *
+   * Kept here rather than sent to the renderer so the bytes never leave the
+   * process that validates them, and keyed by project path so installing
+   * always installs what THAT project carried rather than whatever was
+   * retrieved most recently.
+   */
+  private retrievedLibraries = new Map<string, Array<{ name: string; archive: string }>>()
+
+  /**
+   * Drop every retrieved project's libraries except the one just retrieved.
+   *
+   * The map exists so installing installs what THAT project carried, which only
+   * needs the project currently open. Keeping the rest held the full text of
+   * every library of every retrieval for the life of the session.
+   */
+  private forgetRetrievedLibrariesExcept(keep: string): void {
+    for (const path of [...this.retrievedLibraries.keys()]) {
+      if (path !== keep) this.retrievedLibraries.delete(path)
+    }
+  }
+
+  handleRuntimeRetrieveProject = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: SnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => {
+    const fetched = await this.runtimeApi.retrieveProjectSnapshot(ipAddress)
+    if (!fetched.success) return { success: false, error: fetched.error }
+
+    try {
+      const scratchRoot = retrievedProjectsRoot()
+      // Old retrievals go before the new one is written. A retrieved project
+      // deliberately stays in scratch until the user runs Save As, so without
+      // this an engineer who retrieves a project just to look at it leaves a
+      // full copy of its source on disk permanently -- unencrypted, in
+      // userData, accumulating one folder per retrieval.
+      await pruneRetrievedProjects(scratchRoot, RETAINED_RETRIEVALS)
+      // Retrievals recorded under Recent before they were excluded from it.
+      // Pruning removes the directories; without this their rows outlive them
+      // and the list keeps one dead entry per retrieval anyone ever made.
+      //
+      // Its own try/catch, outside the retrieve's: a `projects.json` that is
+      // locked or unwritable would otherwise turn tidying up after the feature
+      // into a failed retrieve.
+      try {
+        await this.forgetRetrievedProjectsInHistory()
+      } catch (error) {
+        logger.error('Could not drop retrieved projects from history: ' + getErrorMessage(error))
+      }
+
+      const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
+        scratchRoot,
+      })
+      // Same for the in-memory copy: this map holds the full text of every
+      // library each retrieval carried, and it only ever grew.
+      this.forgetRetrievedLibrariesExcept(materialized.projectPath)
+      this.retrievedLibraries.set(
+        materialized.projectPath,
+        materialized.libraries.map(({ name, archive }) => ({ name, archive })),
+      )
+      return {
+        success: true,
+        projectPath: materialized.projectPath,
+        projectName: materialized.projectName,
+        metadata: materialized.metadata,
+        // Status, not archives. The renderer decides what to offer; the bytes
+        // stay in the main process where the library manager can write them,
+        // and are re-read from the same archive when the user says yes.
+        libraries: await describeRetrievedLibraries(materialized.libraries, (name) =>
+          new LibraryManagerModule().readArchiveText(name),
+        ),
+      }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
 
   private makeRuntimeApiMutation = (
     method: 'POST' | 'PUT' | 'DELETE',
@@ -574,6 +822,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:read-files', this.handleReadProjectFiles)
     this.registerHandle('project:pick-plcopen-import-file', this.handlePickPlcopenImportFile)
     this.registerHandle('project:export-plcopen-file', this.handleExportPlcopenFile)
+    this.registerHandle('project:export-pdf-file', this.handleExportPdfFile)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -591,6 +840,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
+    this.registerHandle('project:track-recent', this.handleTrackRecentProject)
     this.registerHandle('project:delete', this.handleDeleteProject)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -677,6 +927,19 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
+    this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
+    this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
+
+    // ===================== BOOTLOADER =====================
+    this.registerHandle('bootloader:get-capabilities', this.handleBootloaderGetCapabilities)
+    this.registerHandle('bootloader:login', this.handleBootloaderLogin)
+    this.registerHandle('bootloader:get-status', this.handleBootloaderGetStatus)
+    this.registerHandle('bootloader:get-device-info', this.handleBootloaderGetDeviceInfo)
+    this.registerHandle('bootloader:get-runtime-logs', this.handleBootloaderGetRuntimeLogs)
+    this.registerHandle('bootloader:start-update', this.handleBootloaderStartUpdate)
+    this.registerHandle('bootloader:get-update-progress', this.handleBootloaderGetUpdateProgress)
+    this.registerHandle('bootloader:restart-runtime', this.handleBootloaderRestartRuntime)
+    this.registerHandle('bootloader:clear-session', this.handleBootloaderClearSession)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
@@ -798,13 +1061,35 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * Drop every Recent entry that points into the retrieval scratch root.
+   *
+   * One read and at most one write. `removeProjectFromHistory` re-reads and
+   * rewrites the whole file per call, so looping it over the matches cost N
+   * round trips to remove N rows.
+   */
+  private forgetRetrievedProjectsInHistory = async (): Promise<void> => {
+    const historyPath = this.projectService.getHistoryProjectsFilePath()
+    const history = await this.projectService.readProjectHistory(historyPath)
+    const kept = history.filter((entry) => !isRetrievedProjectPath(entry.path))
+    if (kept.length === history.length) return
+    await this.projectService.replaceProjectHistory(historyPath, kept)
+  }
+
   handleReadProjectFiles = async (_event: IpcMainInvokeEvent, projectPath: string) => {
     try {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
         this.currentProjectPath = projectPath
-        await this.projectService.updateProjectHistory(projectPath)
+        // Everything except a retrieval, which is not a project the user has
+        // anywhere yet: it lives in scratch, is pruned behind them, and becomes
+        // a real project only when Save As writes it somewhere they chose.
+        // Listing it under Recent offered them a project that deletes itself,
+        // and one more row per retrieval.
+        if (!isRetrievedProjectPath(projectPath)) {
+          await this.projectService.updateProjectHistory(projectPath)
+        }
       }
       return result
     } catch (_error) {
@@ -841,6 +1126,21 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
     } catch (error) {
       logger.error('Error exporting PLCopen file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
+    }
+  }
+
+  handleExportPdfFile = async (_event: IpcMainInvokeEvent, defaultFileName: string, bytes: Uint8Array) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPdfExportSavePath(windowManager, defaultFileName, bytes)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error exporting PDF file: ' + getErrorMessage(error))
       return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
     }
   }
@@ -1030,6 +1330,40 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
+   * Put a project on the recent list without reading it — Save As, which
+   * produces a location the user picked without going through an open.
+   *
+   * Still refuses the scratch root: a Save As target is somewhere the user
+   * chose, so a path in there did not come from this flow. Answers in the same
+   * shape as its sibling below, so a caller that wants to know whether the row
+   * was written can find out.
+   */
+  handleTrackRecentProject = async (_event: unknown, projectPath: unknown) => {
+    // `unknown`, then narrowed: a TypeScript annotation on an IPC parameter is
+    // a claim about the caller, not a check on the payload, and what arrives
+    // here is written to `projects.json`.
+    if (typeof projectPath !== 'string' || projectPath.trim() === '') {
+      return { success: false, error: 'A project path is required to track a project.' }
+    }
+    // Absolute, because Recent is read back later and from elsewhere: a
+    // relative path would be resolved against whatever the working directory
+    // happened to be, which is never what the user picked in Save As.
+    if (!isAbsolute(projectPath)) {
+      return { success: false, error: 'A project path must be absolute to be tracked.' }
+    }
+    if (isRetrievedProjectPath(projectPath)) {
+      return { success: false, error: 'A retrieved project is not tracked until it has a location.' }
+    }
+    try {
+      await this.projectService.updateProjectHistory(projectPath)
+      return { success: true }
+    } catch (error) {
+      logger.error('Error tracking project in history: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
    * Drop a project entry from `projects.json` (recent list).
    * Disk is untouched — the project's files stay where they are. The
    * renderer-side use case is the start-screen 3-dot menu's "Remove
@@ -1095,7 +1429,7 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
 
-  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData | boolean>) => {
+  handleRunCompileLibrary = (event: IpcMainEvent, args: CompileLibraryIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileLibrary(args, mainProcessPort, this)
   }
@@ -1625,7 +1959,7 @@ class MainProcessBridge implements MainIpcModule {
     context: { isLastCandidate: boolean },
   ): Promise<boolean> {
     // The simulator is in-process: there is no hardware to identify, so the
-    // board-id read is not the right question to ask of it.
+    // device-id read is not the right question to ask of it.
     //
     // Retried because the session is opened the instant the emulator starts, and
     // the sketch inside it still has to reach the point where it services Modbus.
@@ -1653,12 +1987,12 @@ class MainProcessBridge implements MainIpcModule {
     // them. Spending the patient budget on the final guess would put ~32s at the
     // end of a sweep whose whole point is to finish quickly.
     const isPatient = !candidate.speculative && (candidate.patient === true || context.isLastCandidate)
-    const boardIdProbe = candidate.speculative
-      ? SPECULATIVE_BOARD_ID_PROBE
+    const deviceIdProbe = candidate.speculative
+      ? SPECULATIVE_DEVICE_ID_PROBE
       : isPatient
-        ? PATIENT_BOARD_ID_PROBE
-        : QUICK_BOARD_ID_PROBE
-    const result = await classifyDeviceLink(client, { boardIdProbe })
+        ? PATIENT_DEVICE_ID_PROBE
+        : QUICK_DEVICE_ID_PROBE
+    const result = await classifyDeviceLink(client, { deviceIdProbe })
     this.deviceLinkProbe = result
     if (result.status !== 'connected-with-firmware') {
       // Traced only when the endpoint is REJECTED, and then with the budget it was
@@ -1667,7 +2001,7 @@ class MainProcessBridge implements MainIpcModule {
       // the budget up front, as this used to, put the line before the outcome it
       // explains and printed it on every success too.
       this.traceDeviceLink(
-        `  ${candidate.descriptor}: "${result.status}" after up to ${boardIdProbe.attempts} id read(s)` +
+        `  ${candidate.descriptor}: "${result.status}" after up to ${deviceIdProbe.attempts} id read(s)` +
           `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, was patient)' : ''}` +
           `${result.error ? ` — ${result.error}` : ''}`,
       )
@@ -1682,7 +2016,7 @@ class MainProcessBridge implements MainIpcModule {
   /**
    * Per-tick liveness read, and the ONE place baremetal run/stop state is polled.
    *
-   * Prefers the status read (FC 0x46) over the board id (0x48): both prove the
+   * Prefers the status read (FC 0x46) over the device id (0x48): both prove the
    * firmware is answering, but the status frame also carries the run/stop state
    * and the mode-switch position — so a switch flipped by hand at the panel shows
    * up within one interval, with no second timer and no extra traffic.
@@ -1696,7 +2030,7 @@ class MainProcessBridge implements MainIpcModule {
       await this.pushPlcState(client, descriptor, 0)
       return true
     }
-    return (await client.getBoardId()).success
+    return (await client.getDeviceId()).success
   }
 
   /**
@@ -1944,29 +2278,77 @@ class MainProcessBridge implements MainIpcModule {
   private deviceLicenseSequenceInFlight = false
 
   /**
-   * Read the anchor the licensing identity derives from, over the held link.
+   * Read this board's licensing identity over the held link, tagged with which
+   * KIND of value the channel answered (DOPE-589).
    *
-   * Read FRESH on every licensing call rather than cached at connect. The anchor
-   * IS the device identity, and a board swapped on the same serial path would
+   * Baremetal answers an id already derived inside the closed license-core;
+   * runtime-v4 answers the raw device-tree anchor and the editor derives from
+   * it. Both arrive as `[FC][status][len][bytes]` on 0x48, which is exactly why
+   * the kind travels in the return value instead of being inferred downstream.
+   *
+   * Read FRESH on every licensing call rather than cached at connect. The
+   * identity IS the device, and a board swapped on the same serial path would
    * otherwise inherit the previous one's — deciding a license question for
    * hardware that is no longer there. One extra frame on an operation that already
    * spends several is not worth that risk.
    */
-  private async readLicenseAnchor(
+  private async readLicenseIdentity(
     client: LicenseChannel,
-  ): Promise<{ anchor: Uint8Array } | { error: string } | { unsupported: true }> {
-    const board = await client.getBoardId()
-    // The target itself said "no hardware anchor to license against" (0x85 on
-    // 0x48 — a runtime-v4 host without a device-tree serial). Terminal, not
-    // retryable: surface it as the 'unsupported' outcome, never check-failed.
-    if (board.unsupported) return { unsupported: true }
-    if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
-    // Liveness evidence for the CONTROL link's poll. On a REST session this
-    // frame rode the debug WebSocket instead — crediting it here is a no-op,
-    // not a lie: a REST session runs no liveness poll (openRestSession never
-    // starts one), so there is no check for this stamp to suppress.
-    this.deviceSession.noteTraffic()
-    return { anchor: board.boardId ?? new Uint8Array(0) }
+  ): Promise<{ identity: DeviceIdentity } | { error: string; retryable?: boolean }> {
+    // The device-condition half of the reply is identical for both forms, so it
+    // is checked once; only the NAME of the bytes differs, and that is the whole
+    // reason the two are separate methods.
+    const settle = (read: { success: boolean; unsupported?: boolean; error?: string }) => {
+      // The target itself said "no identity to license against" (0x85 on 0x48 —
+      // a runtime-v4 host without a device-tree serial). Terminal, so it must
+      // not offer a retry — but it is NOT the 'unsupported' outcome, which
+      // means "this firmware has no licence STORAGE" and whose whole message is
+      // "this hardware supports it, rebuild and upload". Routing an
+      // identity-less host there told the user their x86 box would work if they
+      // rebuilt, which is false and unactionable. It is a check that could not
+      // conclude, with a cause that will not change: check-failed, retryable
+      // false.
+      if (read.unsupported) {
+        return {
+          error:
+            'this device has no hardware identity a licence can be issued for. ' +
+            'Licensed VPPs require hardware that reports a unique identifier.',
+          retryable: false,
+        } as const
+      }
+      if (!read.success) return { error: read.error ?? 'the device did not answer the identity read' } as const
+      // Liveness evidence for the CONTROL link's poll. On a REST session this
+      // frame rode the debug WebSocket instead — crediting it here is a no-op,
+      // not a lie: a REST session runs no liveness poll (openRestSession never
+      // starts one), so there is no check for this stamp to suppress.
+      this.deviceSession.noteTraffic()
+      return null
+    }
+
+    // Exactly one of the two exists on any real channel: the Modbus clients
+    // implement `getDeviceId`, the runtime-v4 WebSocket implements `getAnchor`.
+    // Narrowed on the CHANNEL rather than on the reply, so each branch knows
+    // statically which kind it is holding.
+    if (client.getDeviceId) {
+      const read = await client.getDeviceId()
+      const bad = settle(read)
+      if (bad) return bad
+      return { identity: { kind: 'device-id', deviceId: read.deviceId ?? new Uint8Array(0) } }
+    }
+
+    if (client.getAnchor) {
+      const read = await client.getAnchor()
+      const bad = settle(read)
+      if (bad) return bad
+      return { identity: { kind: 'anchor', anchor: read.anchor ?? new Uint8Array(0) } }
+    }
+
+    // Neither: a programming error rather than a device condition, so it says so
+    // instead of deriving an identity from nothing.
+    // Permanent: a channel either implements an identity read or it never will.
+    // The comment below calls it a programming error, and a retry button on a
+    // programming error is a loop with a friendly label.
+    return { error: 'This connection cannot read the device identity that licensing needs.', retryable: false }
   }
 
   /**
@@ -1982,6 +2364,10 @@ class MainProcessBridge implements MainIpcModule {
     run: (client: LicenseChannel) => Promise<DeviceLicenseReport>,
   ): Promise<DeviceLicenseReport> {
     const checkFailed = (error: string): DeviceLicenseReport => ({ outcome: { state: 'check-failed', error } })
+    /** Same, for a cause that cannot change by asking again — the UI drops the retry. */
+    const checkFailedTerminal = (error: string): DeviceLicenseReport => ({
+      outcome: { state: 'check-failed', error, retryable: false },
+    })
 
     const control = this.deviceClient()
     if (control) {
@@ -1999,7 +2385,8 @@ class MainProcessBridge implements MainIpcModule {
       what,
       async (client) => {
         if (!isLicenseChannel(client)) {
-          return checkFailed('this connection cannot carry the license protocol')
+          // Permanent for this kind of session, so no retry.
+          return checkFailedTerminal('This connection cannot carry the licensing protocol.')
         }
         return run(client)
       },
@@ -2020,11 +2407,10 @@ class MainProcessBridge implements MainIpcModule {
   ): Promise<DeviceLicenseReport> => {
     return await this.withLicenseChannel('read license', async (client) => {
       try {
-        const anchor = await this.readLicenseAnchor(client)
-        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
-        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
+        const identity = await this.readLicenseIdentity(client)
+        if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        return await inspectDeviceLicense(client, { ...request, anchor: anchor.anchor })
+        return await inspectDeviceLicense(client, { ...request, identity: identity.identity })
       } catch (error) {
         return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
       }
@@ -2048,16 +2434,15 @@ class MainProcessBridge implements MainIpcModule {
         // Reported rather than queued: the caller is a button or a connect, and a
         // second answer arriving later for a question already being answered is
         // noise at best and a contradictory badge at worst.
-        return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
+        return { outcome: { state: 'check-failed', error: 'A licence check is already running on this device.' } }
       }
       this.deviceLicenseSequenceInFlight = true
 
       try {
-        const anchor = await this.readLicenseAnchor(client)
-        if ('unsupported' in anchor) return { outcome: { state: 'unsupported' } }
-        if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
+        const identity = await this.readLicenseIdentity(client)
+        if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        const report = await resolveDeviceLicense(client, { ...request, anchor: anchor.anchor })
+        const report = await resolveDeviceLicense(client, { ...request, identity: identity.identity })
         // The license FCs are device traffic like any other: without noting them the
         // liveness poll can fall due mid-sequence and declare a healthy link lost.
         this.deviceSession.noteTraffic()

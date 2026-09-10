@@ -45,10 +45,14 @@ beforeEach(() => {
     handleOpenProjectRequest: register('openProject'),
     openRecentAccelerator: register('openRecent'),
     saveProjectAccelerator: register('saveProject'),
+    saveProjectAsAccelerator: register('saveProjectAs'),
+    retrieveProjectAccelerator: register('retrieveProject'),
     saveFileAccelerator: register('saveFile'),
     closeProjectAccelerator: register('closeProject'),
     exportProjectRequest: register('exportProject'),
     importProjectRequest: register('importProject'),
+    printAccelerator: register('print'),
+    pageSetupAccelerator: register('pageSetup'),
     closeTabAccelerator: register('closeTab'),
     deleteFileAccelerator: register('deleteFile'),
     findInProjectAccelerator: register('findInProject'),
@@ -101,8 +105,12 @@ function testAccelerator(methodName: keyof AcceleratorPort, handlerKey: string, 
 testAccelerator('onCreateProject', 'createProject', 'createProjectAccelerator')
 testAccelerator('onOpenProject', 'openProject', 'handleOpenProjectRequest')
 testAccelerator('onSaveProject', 'saveProject', 'saveProjectAccelerator')
+testAccelerator('onSaveProjectAs', 'saveProjectAs', 'saveProjectAsAccelerator')
+testAccelerator('onRetrieveProject', 'retrieveProject', 'retrieveProjectAccelerator')
 testAccelerator('onSaveFile', 'saveFile', 'saveFileAccelerator')
 testAccelerator('onCloseProject', 'closeProject', 'closeProjectAccelerator')
+testAccelerator('onPrint', 'print', 'printAccelerator')
+testAccelerator('onPageSetup', 'pageSetup', 'pageSetupAccelerator')
 testAccelerator('onCloseTab', 'closeTab', 'closeTabAccelerator')
 testAccelerator('onDeleteFile', 'deleteFile', 'deleteFileAccelerator')
 testAccelerator('onFindInProject', 'findInProject', 'findInProjectAccelerator')

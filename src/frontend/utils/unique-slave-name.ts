@@ -28,16 +28,19 @@ export function collectAllSlaveNames(remoteDevices: RemoteDeviceForNameCollectio
   return names
 }
 
+export type NameTaken = (name: string) => boolean
+
 /**
  * Return `base` if unused, otherwise the first `${base}_NN` (two-digit padded)
- * not present in `existing`. Two-digit pad doesn't truncate, so 3+ digit
+ * that `existing` does not hold. Two-digit pad doesn't truncate, so 3+ digit
  * indices pass through unchanged.
  */
-export function generateUniqueSlaveName(base: string, existing: Iterable<string>): string {
-  const taken = new Set(existing)
+export function generateUniqueSlaveName(base: string, existing: Iterable<string> | NameTaken): string {
+  const names = typeof existing === 'function' ? null : new Set(existing)
+  const taken: NameTaken = names ? (name) => names.has(name) : (existing as NameTaken)
   let candidate = base
   let i = 0
-  while (taken.has(candidate)) {
+  while (taken(candidate)) {
     i++
     candidate = `${base}_${String(i).padStart(2, '0')}`
   }

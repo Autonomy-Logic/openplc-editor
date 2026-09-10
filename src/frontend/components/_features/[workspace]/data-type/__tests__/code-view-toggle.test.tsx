@@ -5,10 +5,6 @@ vi.mock('@root/frontend/components/_organisms/variables-code-editor', () => ({
   VariablesCodeEditor: () => <div data-testid='variables-code-editor' />,
 }))
 
-vi.mock('@root/frontend/utils/feature-flags', () => ({
-  isDataTypeFilesEnabled: () => true,
-}))
-
 import { useOpenPLCStore } from '@root/frontend/store'
 
 import { DataTypeEditor } from '../index'

@@ -20,6 +20,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'quit-application',
   'runtime-create-user',
   'runtime-discover-devices',
+  'retrieve-project',
   'runtime-login',
   'server-ip-mismatch',
   'runtime-connection-lost',
@@ -31,6 +32,8 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'project-readme',
   'confirm-plcopen-import',
   'create-graphical-variable',
+  'export-pdf',
+  'page-setup',
 ]
 
 function createDefaultModals() {

@@ -98,6 +98,18 @@ export interface ProbeRuntimeVersionResult {
    * that shipping this can't lock those out.
    */
   minEditorVersion: string | null
+  /**
+   * Whether this runtime stores the source project an upload carries, as
+   * declared by `projectSnapshot` at `GET /api/capabilities`.
+   *
+   * `false` for every runtime that predates the feature, including those that
+   * predate the endpoint entirely -- which is the honest default, because a
+   * runtime that does not advertise it will silently discard the archive. The
+   * upload path uses this to skip building one and to say why, rather than
+   * sending several megabytes into a device that will drop them and leaving the
+   * user to wonder later why the project cannot be retrieved.
+   */
+  supportsProjectSnapshot: boolean
 }
 
 /**
@@ -118,13 +130,18 @@ export async function probeRuntimeVersion(opts: ProbeRuntimeVersionOptions): Pro
     const result = await opts.fetchVersion()
     if (!result.success) {
       opts.log(`Could not reach runtime: ${result.error}`, 'warning')
-      return { version: null, minEditorVersion: null }
+      return { version: null, minEditorVersion: null, supportsProjectSnapshot: false }
     }
-    return { version: extractVersionFromBody(result.body), minEditorVersion: null }
+    return {
+      version: extractVersionFromBody(result.body),
+      minEditorVersion: null,
+      // `/api/version` predates the capability, so there is nothing to read.
+      supportsProjectSnapshot: false,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     opts.log(`Runtime version probe failed: ${message}`, 'warning')
-    return { version: null, minEditorVersion: null }
+    return { version: null, minEditorVersion: null, supportsProjectSnapshot: false }
   }
 }
 
@@ -165,7 +182,12 @@ async function tryFetchCapabilities(opts: ProbeRuntimeVersionOptions): Promise<P
         'warning',
       )
     }
-    return { version, minEditorVersion }
+    return {
+      version,
+      minEditorVersion,
+      // Absent or non-boolean means no: a runtime that stores snapshots says so.
+      supportsProjectSnapshot: extractBooleanField(result.body, 'projectSnapshot') === true,
+    }
   } catch {
     return null
   }
@@ -188,6 +210,17 @@ function extractVersionFromBody(body: unknown): string | null {
  * to `null` so callers get one "unknown" value to branch on instead of
  * having to distinguish the ways a body can disappoint them.
  */
+/**
+ * One boolean field off an unknown response body, or null when it is not there
+ * or is not a boolean. A capability the runtime did not clearly claim is one it
+ * does not have.
+ */
+function extractBooleanField(body: unknown, field: string): boolean | null {
+  if (typeof body !== 'object' || body === null) return null
+  const value = (body as Record<string, unknown>)[field]
+  return typeof value === 'boolean' ? value : null
+}
+
 function extractStringField(body: unknown, field: string): string | null {
   if (typeof body !== 'object' || body === null) return null
   if (!(field in body)) return null
