@@ -24,7 +24,7 @@
       "Bluetooth": "No",
       "Ethernet": "No"
     },
-    "cxx_flags": ["-std=gnu++17"],
+    "cxx_flags": ["-std=gnu++17", "-DOPENPLC_SIMULATOR"],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
