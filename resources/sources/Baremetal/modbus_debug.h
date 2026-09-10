@@ -34,5 +34,9 @@ void plcSetState(uint8_t desired);
 // FC 0x4C -- reboot into the device's firmware bootloader (magic-guarded, so a
 // stray frame can't reset a running PLC). `magic` points at the 4 payload bytes.
 void rebootToBootloader(const uint8_t *magic);
+// FC 0x4D -- report the device's programming-lock state. Read-only and
+// side-effect free (unlike 0x4C, which raises the unlock prompt on the device),
+// so the editor can poll it while waiting for the user to unlock.
+void getLockState(void);
 
 #endif

@@ -1942,9 +1942,17 @@ class CompilerModule {
       ])
 
       let stderrData = ''
+      // Tail of stdout, kept for the failure message. An upload tool that
+      // explains itself on stdout (the reason it refused, what the user should
+      // do about it) would otherwise leave the thrown error saying only
+      // "failed with code N" while the actual explanation scrolled past in the
+      // console. Bounded so a chatty tool cannot grow this without limit.
+      const stdoutTail: string[] = []
 
       child.stdout.on('data', (data: Buffer) => {
         handleOutputData(data)
+        stdoutTail.push(data.toString())
+        if (stdoutTail.length > 40) stdoutTail.shift()
       })
       child.stderr.on('data', (data: Buffer) => {
         stderrData += data.toString()
@@ -1955,7 +1963,8 @@ class CompilerModule {
             success: true,
           })
         } else {
-          reject(new Error(`Upload failed with code ${code}\n${stderrData}`))
+          const detail = stderrData.trim() || stdoutTail.join('').trim()
+          reject(new Error(`Upload failed with code ${code}\n${detail}`))
         }
       })
     })

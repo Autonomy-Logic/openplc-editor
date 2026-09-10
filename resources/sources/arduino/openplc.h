@@ -129,6 +129,28 @@ uint8_t hardwareStateSwitch(void);
  * call), so the ack reaches the wire before the link drops. ---------------- */
 void hardwareRebootToBootloader(void);
 
+/* ---- Optional: programming lock ---------------------------------------
+ * A device that can be locked at the panel (the LOGO!'s "Program lock" menu)
+ * reports it here. The runtime consults it before honouring a request that
+ * would replace or interrupt the running program -- today that is the
+ * reboot-to-bootloader FC 0x4C -- and answers MB_REFUSED_LOCKED instead of
+ * carrying it out.
+ *
+ * Weak default in arduino_runtime_glue.cpp returns 0, so a board with no lock
+ * behaves exactly as it did before this interface existed.
+ *
+ * Called from the Modbus handler, so it MUST return quickly and MUST NOT
+ * block: cache the state rather than reading a slow bus here.
+ *
+ * hardwarePromptUnlock() is the paired notification -- "someone just tried to
+ * program you and was refused". A HAL with a display asks the user there
+ * whether to unlock (the LOGO! lights its backlight and puts the question on
+ * the panel). It MUST return immediately: the answer arrives asynchronously as
+ * a later change of hardwareProgrammingLocked(), never as a return value, and
+ * the caller must not be blocked waiting for a human. Weak default: no-op. */
+uint8_t hardwareProgrammingLocked(void);
+void    hardwarePromptUnlock(void);
+
 /* ---- Optional: state indication ----------------------------------------
  * There is no indication callback. The runtime holds the state; a HAL with
  * a status LED reads it inside updateOutputBuffers() (which the runtime

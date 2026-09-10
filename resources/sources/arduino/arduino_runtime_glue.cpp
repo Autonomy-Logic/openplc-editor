@@ -86,6 +86,18 @@ extern "C" __attribute__((weak)) void hardwareRebootToBootloader(void)
 {
 }
 
+// Weak defaults: a board with no programming lock is never locked, so FC 0x4C
+// is never refused and the prompt is never needed. A HAL whose device has a
+// lock (the LOGO! panel) provides strong extern "C" overrides -- see openplc.h.
+extern "C" __attribute__((weak)) uint8_t hardwareProgrammingLocked(void)
+{
+    return 0;
+}
+
+extern "C" __attribute__((weak)) void hardwarePromptUnlock(void)
+{
+}
+
 extern "C" uint8_t runtime_get_plc_state(void)
 {
     return plc_state;

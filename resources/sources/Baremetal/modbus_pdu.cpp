@@ -51,6 +51,8 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
             return 5;                                   // [id][fc][state:1][crc:2]
         case MB_FC_REBOOT_BOOTLOADER:
             return 8;                                   // [id][fc][magic:4][crc:2]
+        case MB_FC_GET_LOCK_STATE:
+            return 4;                                   // [id][fc][crc:2]
         default:
             return -1;                                  // not one of our function codes
     }
@@ -212,6 +214,12 @@ void process_mbpacket()
             // from a stray/probing frame. The device resets into its firmware
             // bootloader so the host can re-flash without a physical power-cycle.
             rebootToBootloader(&mb_frame[2]);
+        break;
+
+        case MB_FC_GET_LOCK_STATE:
+            // PDU: [FC] -- read-only, so no magic guard. The editor polls this
+            // while it waits for the user to clear a programming lock.
+            getLockState();
         break;
 
         default:

@@ -423,12 +423,42 @@ void rebootToBootloader(const uint8_t *magic)
     for (int i = 0; i < 4; i++)
         if (magic[i] != REBOOT_BOOTLOADER_MAGIC[i]) { status = MB_DEBUG_ERROR_OUT_OF_BOUNDS; break; }
 
+    // Programming lock. A locked device must still ANSWER -- silence would be
+    // indistinguishable from an unreachable board and the editor could only
+    // report a timeout. So we reply MB_REFUSED_LOCKED and, because the person
+    // who can clear the lock is standing at the device, raise the unlock prompt
+    // on its own display. The editor keeps asking for a few seconds; if the
+    // user says yes, the very next attempt is accepted and the upload proceeds
+    // with nothing else to do.
+    if (status == MB_DEBUG_SUCCESS && hardwareProgrammingLocked())
+    {
+        status = MB_REFUSED_LOCKED;
+        hardwarePromptUnlock();         // returns immediately; never blocks the scan
+    }
+
     mb_frame[1] = MB_FC_REBOOT_BOOTLOADER;
     mb_frame[2] = status;
     mb_frame_len = 3;
 
     if (status == MB_DEBUG_SUCCESS)
         hardwareRebootToBootloader();   // arms; the actual reset happens post-reply
+}
+
+// PDU request:  [FC]
+// PDU response: [FC][STATUS][locked:u8]     (locked: 0 = unlocked, 1 = locked)
+//
+// Read-only companion to 0x4C. The editor polls it while it waits out a
+// refused reboot, so it can tell "still locked" from "device went away" and
+// say so in its log. Deliberately free of side effects: unlike 0x4C it does
+// NOT raise the on-device prompt, so polling cannot spam the display.
+// A board with no lock reports 0 through the weak default and the editor's
+// retry path is never entered.
+void getLockState(void)
+{
+    mb_frame[1] = MB_FC_GET_LOCK_STATE;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = hardwareProgrammingLocked() ? 1 : 0;
+    mb_frame_len = 4;
 }
 
 // PDU request:  [FC]
