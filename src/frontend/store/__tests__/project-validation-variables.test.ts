@@ -246,6 +246,22 @@ describe('createVariableValidation', () => {
     expect(result.name).toBe('Var2')
   })
 
+  it('steps over names the caller reports as taken outside the table', () => {
+    const taken = new Set(['GlobalVar', 'GlobalVar0'])
+    const result = createVariableValidation([], makeVariable('GlobalVar'), (name) => taken.has(name))
+    expect(result.name).toBe('GlobalVar1')
+  })
+
+  it('walks the table and the caller together to the first free name', () => {
+    const result = createVariableValidation([makeVariable('Motor')], makeVariable('Motor'), (name) => name === 'Motor0')
+    expect(result.name).toBe('Motor1')
+  })
+
+  it('stops at the iteration bound when every candidate is taken', () => {
+    const result = createVariableValidation([], makeVariable('X'), () => true)
+    expect(result.name).toBe('X8191')
+  })
+
   it('returns same location when location is empty and conflicts exist', () => {
     const existing = [makeVariable('Other', 'INT', '')]
     const variable = makeVariable('NewVar', 'INT', '')

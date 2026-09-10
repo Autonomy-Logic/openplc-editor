@@ -9,7 +9,7 @@ import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
-import { elementNameCollision } from '../../../store/slices/shared/name-collision'
+import { newGlobalNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
 import {
   duplicateVariableNameMessage,
@@ -348,6 +348,7 @@ const GlobalVariablesEditor = () => {
   }
 
   const commitCode = (): boolean => {
+    let title = 'Syntax error'
     try {
       pushToHistory(editor.meta.name)
 
@@ -357,10 +358,13 @@ const GlobalVariablesEditor = () => {
 
       // The text is where a global gets a new name, so the namespace gate sits
       // here; the setter below also serves undo, which must never be refused.
-      const state = useOpenPLCStore.getState()
-      for (const variable of newVariables) {
-        const collision = elementNameCollision(state, variable.name, 'resource-global')
-        if (collision) throw new Error(`Variable already exists: ${collision}`)
+      const collision = newGlobalNameCollision(
+        useOpenPLCStore.getState(),
+        newVariables.map((variable) => variable.name),
+      )
+      if (collision) {
+        title = 'Variable already exists'
+        throw new Error(collision)
       }
 
       const response = setGlobalVariables({
@@ -379,7 +383,7 @@ const GlobalVariablesEditor = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
       setParseError(message)
-      toast({ title: 'Syntax error', description: message, variant: 'fail' })
+      toast({ title, description: message, variant: 'fail' })
       return false
     }
   }

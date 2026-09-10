@@ -13,7 +13,7 @@ import { isLegalIdentifier } from '../../../utils/keywords'
 import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
-import { collectAllSlaveNames, generateUniqueSlaveName } from '../../../utils/unique-slave-name'
+import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
@@ -149,7 +149,7 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
  * Everything else — host, port, cycle times, PDO layouts, SDO startup parameters, CiA 402
  * axis config — is what the user duplicated the device for, and is copied verbatim.
  */
-function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames: Set<string>): PLCRemoteDevice {
+function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, slaveNameTaken: NameTaken): PLCRemoteDevice {
   const next: PLCRemoteDevice = { ...device }
 
   if (next.modbusTcpConfig) {
@@ -170,16 +170,17 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames:
 
   if (next.ethercatConfig) {
     // A slave's NAME is its key in tabs, editor models and the file registry — not its
-    // id — so two slaves sharing one means the second silently takes over the first's
-    // entries. `generateUniqueSlaveName` is the same `_01`, `_02`… strategy the add
-    // path uses; `taken` grows as we go so the copies do not collide with each other
-    // either.
-    const taken = new Set(takenSlaveNames)
+    // id. Same `_01`, `_02`… strategy as the add path; `copied` keeps the copies from
+    // colliding with each other.
+    const copied = new Set<string>()
     next.ethercatConfig = {
       ...next.ethercatConfig,
       devices: (next.ethercatConfig.devices ?? []).map((slave) => {
-        const name = generateUniqueSlaveName(slave.name, taken)
-        taken.add(name)
+        const name = generateUniqueSlaveName(
+          slave.name,
+          (candidate) => copied.has(candidate) || slaveNameTaken(candidate),
+        )
+        copied.add(name)
         return {
           ...slave,
           id: newUuid(),
@@ -699,8 +700,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) => {
       const state = getState()
-      // `updateServerName` queues the old file for deletion, so a no-op rename
-      // would mark the server's own file deleted on the next save.
+      // Same name: nothing to rename, and not a duplicate of itself.
       if (oldName === newName) return { ok: true }
 
       const collision = elementNameCollision(state, newName, 'server', oldName)
@@ -787,8 +787,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     rename: (oldName, newName) => {
       const state = getState()
-      // `updateRemoteDeviceName` queues the old file for deletion, so a no-op
-      // rename would mark the device's own file deleted on the next save.
+      // Same name: nothing to rename, and not a duplicate of itself.
       if (oldName === newName) return { ok: true }
 
       const collision = elementNameCollision(state, newName, 'remote-device', oldName)
@@ -811,7 +810,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const copy = {
         ...duplicateRemoteDeviceIdentity(
           structuredClone(source),
-          collectAllSlaveNames(state.project.data.remoteDevices),
+          (name) => elementNameCollision(state, name, 'ethercat-slave') !== null,
         ),
         name: newName,
       }
@@ -883,13 +882,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           message: `"${newName}" is not a valid axis name. Use letters, digits, and underscores, starting with a letter or underscore.`,
         }
       }
-      // Only *rejecting* enforcement of slave-name uniqueness — scan-bus add
-      // auto-suffixes instead. Tabs/editor/file slices are name-keyed and break
-      // silently on duplicates, so new write paths must replicate one strategy.
-      // Same-name rename is allowed (the action stays idempotent).
-      if (newName !== oldName && collectAllSlaveNames(state.project.data.remoteDevices).has(newName)) {
-        return { ok: false, message: `An EtherCAT slave named "${newName}" already exists in this project` }
-      }
+      // Rejecting here; scan-bus add auto-suffixes instead. Same-name rename stays idempotent.
+      const collision = elementNameCollision(state, newName, 'ethercat-slave', oldName)
+      if (collision) return { ok: false, message: collision }
       const updatedDevices = devices.map((d) => (d.id === deviceId ? { ...d, name: newName } : d))
       state.projectActions.updateEthercatConfig(busName, {
         masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {

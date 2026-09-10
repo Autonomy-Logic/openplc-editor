@@ -4,17 +4,13 @@
  * The one place a candidate element name is checked against everything
  * that already owns it.
  *
- * Two namespaces overlap here. IEC puts POUs, derived types, global
- * variables and library symbols in ONE identifier namespace, so a
- * collision across those kinds is a duplicate symbol the compiler reports
- * against a name the user never typed. The workspace keys `files[name]`,
- * tabs, editor models and `undoRedo[name]` by raw element name across
- * every kind that has a tab — POUs, data types, global variable lists,
- * servers and remote devices — so one entry ends up serving two elements
- * and edits land on the wrong one. A kind is checked against every other
- * kind it shares a namespace with, and against nothing else: a server
- * named like a library function compiles, a global variable named like a
- * server saves.
+ * Two namespaces overlap. IEC puts POUs, derived types, global variables
+ * and library symbols in one identifier namespace, so a collision across
+ * those kinds is a duplicate symbol. The workspace keys `files[name]`,
+ * tabs, editor models and `undoRedo[name]` by element name for POUs, data
+ * types, global variable lists, servers, remote devices and EtherCAT slaves,
+ * so one entry would serve two elements. A kind is checked against every other kind it
+ * shares a namespace with, and against nothing else.
  */
 
 import type { LibraryPouType } from '../../../../middleware/shared/ports/library-types'
@@ -38,6 +34,7 @@ export type NamedElementKind =
   | 'global-variable-list'
   | 'server'
   | 'remote-device'
+  | 'ethercat-slave'
   | 'resource-global'
 
 /** Kinds the compiler sees as top-level identifiers. */
@@ -48,6 +45,7 @@ const COMPILER_SYMBOL: Record<NamedElementKind, boolean> = {
   'resource-global': true,
   server: false,
   'remote-device': false,
+  'ethercat-slave': false,
 }
 
 /** Kinds with a tab, and so an entry in the name-keyed workspace registries. */
@@ -57,6 +55,7 @@ const WORKSPACE_ELEMENT: Record<NamedElementKind, boolean> = {
   'global-variable-list': true,
   server: true,
   'remote-device': true,
+  'ethercat-slave': true,
   'resource-global': false,
 }
 
@@ -71,10 +70,11 @@ const OWNS_FILE: Record<NamedElementKind, boolean> = {
   server: true,
   'remote-device': true,
   'global-variable-list': false,
+  'ethercat-slave': false,
   'resource-global': false,
 }
 
-const SAME_KIND_TAKEN: Record<Exclude<NamedElementKind, 'resource-global'>, string> = {
+const SAME_KIND_TAKEN: Record<Exclude<NamedElementKind, 'resource-global' | 'ethercat-slave'>, string> = {
   pou: 'POU name already exists',
   'data-type': 'Data type name already exists',
   'global-variable-list': 'Global variable list name already exists',
@@ -82,13 +82,17 @@ const SAME_KIND_TAKEN: Record<Exclude<NamedElementKind, 'resource-global'>, stri
   'remote-device': 'Remote device already exists',
 }
 
+const sameKindTaken = (kind: Exclude<NamedElementKind, 'resource-global'>, name: string): string =>
+  kind === 'ethercat-slave' ? `An EtherCAT slave named "${name}" already exists in this project` : SAME_KIND_TAKEN[kind]
+
 const KIND_LABEL: Record<NamedElementKind, string> = {
-  pou: 'POU',
-  'data-type': 'data type',
-  'global-variable-list': 'global variable list',
-  server: 'server',
-  'remote-device': 'remote device',
-  'resource-global': 'global variable',
+  pou: 'a POU',
+  'data-type': 'a data type',
+  'global-variable-list': 'a global variable list',
+  server: 'a server',
+  'remote-device': 'a remote device',
+  'ethercat-slave': 'an EtherCAT slave',
+  'resource-global': 'a global variable',
 }
 
 const LIBRARY_SYMBOL_KIND: Record<LibraryPouType, string> = {
@@ -109,6 +113,11 @@ function namedElements(state: NameCollisionState): NamedElement[] {
     ...(globalVariableLists ?? []).map((list): NamedElement => ({ kind: 'global-variable-list', name: list.name })),
     ...(servers ?? []).map((server): NamedElement => ({ kind: 'server', name: server.name })),
     ...(remoteDevices ?? []).map((device): NamedElement => ({ kind: 'remote-device', name: device.name })),
+    ...(remoteDevices ?? []).flatMap((device) =>
+      (device.ethercatConfig?.devices ?? []).map(
+        (slave): NamedElement => ({ kind: 'ethercat-slave', name: slave.name }),
+      ),
+    ),
     ...(configurations.resource.globalVariables ?? []).map(
       (variable): NamedElement => ({ kind: 'resource-global', name: variable.name }),
     ),
@@ -136,11 +145,7 @@ function librarySymbolOwning(state: NameCollisionState, name: string): { library
   return null
 }
 
-/**
- * A raw `datatypes/<Name>.dt` file that failed to parse still owns its name:
- * it is echoed to disk verbatim on save, and it keeps its `files[name]`
- * entry, so any element taking the name would share both.
- */
+/** An unreadable `datatypes/<Name>.dt` keeps its `files[name]` entry, so its name stays taken in the workspace. */
 function unparsedDataTypeFileOwning(state: NameCollisionState, name: string): string | null {
   const collides = state.unparsedDataTypeFiles.some(
     (f) => f.relativePath.split('/').pop()?.replace(/\.dt$/i, '').toLowerCase() === name.toLowerCase(),
@@ -175,10 +180,10 @@ export function elementNameCollision(
     : namedElements(state).filter((element) => !(element.kind === kind && isSelf(element.name)))
 
   if (kind !== 'resource-global' && others.some((o) => o.kind === kind && nameMatches(o.name, name))) {
-    return SAME_KIND_TAKEN[kind]
+    return sameKindTaken(kind, name)
   }
   const taken = others.find((o) => o.kind !== kind && sharesNamespace(kind, o.kind) && nameMatches(o.name, name))
-  if (taken) return `"${name}" is already the name of a ${KIND_LABEL[taken.kind]}`
+  if (taken) return `"${name}" is already the name of ${KIND_LABEL[taken.kind]}`
 
   if (WORKSPACE_ELEMENT[kind]) {
     const unparsed = unparsedDataTypeFileOwning(state, name)
@@ -208,6 +213,9 @@ export function elementNameCollision(
   if (others.some((o) => o.kind === 'pou' && nameMatches(o.name, derived))) {
     return `"${name}" needs the type name "${derived}", which a POU already uses`
   }
+  if (others.some((o) => o.kind === 'resource-global' && nameMatches(o.name, derived))) {
+    return `"${name}" needs the type name "${derived}", which a global variable already uses`
+  }
   // Against the other lists' own names as well as their derived ones: the pair
   // `GVL` / `GVL_TYPE` collides whichever of the two is created first.
   if (lists.some((list) => nameMatches(list.name, derived))) {
@@ -216,14 +224,29 @@ export function elementNameCollision(
   if (lists.some((list) => nameMatches(globalVariableListTypeName(list.name), derived))) {
     return `"${name}" needs the type name "${derived}", which another global variable list already uses`
   }
-  // An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares is
-  // still in the build — the generated struct would be a second declaration of it.
   if (unparsedDataTypeFileOwning(state, derived)) {
     return `"${name}" needs the type name "${derived}", which a data type file already uses`
   }
   const derivedLibrarySymbol = librarySymbolOwning(state, derived)
   if (derivedLibrarySymbol) {
     return `"${name}" needs the type name "${derived}", which is a ${derivedLibrarySymbol.kind} in the ${derivedLibrarySymbol.library} library`
+  }
+  return null
+}
+
+/**
+ * The first collision among `names` that the globals table does not already
+ * hold. Names already in the table were accepted when written; only what a
+ * commit introduces is gated.
+ */
+export function newGlobalNameCollision(state: NameCollisionState, names: string[]): string | null {
+  const held = new Set(
+    (state.project.data.configurations.resource.globalVariables ?? []).map((variable) => variable.name.toLowerCase()),
+  )
+  for (const name of names) {
+    if (held.has(name.toLowerCase())) continue
+    const collision = elementNameCollision(state, name, 'resource-global')
+    if (collision) return collision
   }
   return null
 }

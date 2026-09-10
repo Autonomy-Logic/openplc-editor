@@ -1460,22 +1460,19 @@ describe('createSharedSlice', () => {
         expect(result.message).toBe('Server already exists')
       })
 
-      it('leaves the file registry alone when the rename is refused', () => {
-        addServer('ExistingServer')
-        store.getState().serverActions.rename('OldServer', 'ExistingServer')
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().serverActions.rename('OldServer', 'oldserver')
+        expect(result.ok).toBe(false)
 
         const state = store.getState()
         expect(state.files['OldServer']).toBeDefined()
-        expect(state.project.data.servers?.map((s) => s.name)).toEqual(['OldServer', 'ExistingServer'])
+        expect(state.files['oldserver']).toBeUndefined()
+        expect(state.project.data.servers?.[0].name).toBe('OldServer')
+        expect(state.pendingDeletions).toEqual([])
       })
 
-      it('refuses a case-only rename, which would overwrite the file on a case-folding disk', () => {
-        expect(store.getState().serverActions.rename('OldServer', 'oldserver').ok).toBe(false)
-      })
-
-      it('treats a rename to the identical name as a no-op', () => {
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
         expect(store.getState().serverActions.rename('OldServer', 'OldServer')).toEqual({ ok: true })
-        expect(store.getState().pendingDeletions).toEqual([])
       })
     })
   })
@@ -1622,6 +1619,28 @@ describe('createSharedSlice', () => {
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Remote device already exists')
       })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'olddevice')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldDevice']).toBeDefined()
+        expect(state.files['olddevice']).toBeUndefined()
+        expect(state.project.data.remoteDevices?.[0].name).toBe('OldDevice')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().remoteDeviceActions.rename('OldDevice', 'OldDevice')).toEqual({ ok: true })
+      })
+
+      it('refuses a rename onto a POU name and says so', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+        expect(store.getState().files['OldDevice']).toBeDefined()
+      })
     })
   })
 
@@ -1737,6 +1756,23 @@ describe('createSharedSlice', () => {
       it('allows renaming to the same name (no-op)', () => {
         const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100')
         expect(result).toEqual({ ok: true })
+      })
+
+      it('rejects renaming a slave onto a POU name, and says which', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+      })
+
+      it('keeps a slave name out of reach of the other workspace kinds', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'EK1100', language: 'st' })).toEqual({
+          ok: false,
+          message: '"EK1100" is already the name of an EtherCAT slave',
+        })
+        expect(store.getState().serverActions.create({ name: 'el1809', protocol: 'modbus-tcp' })).toEqual({
+          ok: false,
+          message: '"el1809" is already the name of an EtherCAT slave',
+        })
       })
 
       it('returns error when the bus does not exist', () => {

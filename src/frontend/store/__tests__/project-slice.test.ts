@@ -810,18 +810,19 @@ describe('createProjectSlice', () => {
       expect((result.data as { name: string }).name).not.toBe('gx')
     })
 
-    it('refuses a global named after a POU instead of auto-renaming it', () => {
+    it('steps a new global past a POU name the same way it steps past its own table', () => {
       seedPou(store, makePou('Motor'))
       const result = store.getState().projectActions.createVariable({
         scope: 'global',
         data: makeVariable('motor', 'global'),
       })
-      expect(result).toMatchObject({ ok: false, title: 'Variable already exists' })
-      expect(result.message).toBe('"motor" is already the name of a POU')
-      expect(store.getState().project.data.configurations.resource.globalVariables).toEqual([])
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual([
+        'motor0',
+      ])
     })
 
-    it('checks the auto-incremented name, so a cloned row still lands beside a POU-named global', () => {
+    it('keeps incrementing a clone while the candidate is a POU, a type or a list', () => {
       // A clone of `Motor` auto-increments to `Motor0`, which a POU already owns.
       seedPou(store, makePou('Motor0'))
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('Motor', 'global') })
@@ -829,8 +830,37 @@ describe('createProjectSlice', () => {
         scope: 'global',
         data: makeVariable('Motor', 'global'),
       })
-      expect(result.ok).toBe(false)
-      expect(result.message).toBe('"Motor0" is already the name of a POU')
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual([
+        'Motor',
+        'Motor1',
+      ])
+    })
+
+    it('seeds an empty table even when a POU already holds the default name', () => {
+      seedPou(store, makePou('GlobalVar'))
+      const result = store.getState().projectActions.createVariable({
+        scope: 'global',
+        data: makeVariable('GlobalVar', 'global'),
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual([
+        'GlobalVar0',
+      ])
+    })
+
+    it('leaves a local variable that shares a POU name to the POU validator', () => {
+      seedPou(store, makePou('Motor'))
+      seedPou(store, makePou('Main', 'program', []))
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: makeVariable('Motor'),
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous.find((p) => p.name === 'Main')?.interface?.variables[0].name).toBe(
+        'Motor',
+      )
     })
 
     it('fails for local scope when POU interface is missing', () => {
@@ -1080,6 +1110,15 @@ describe('createProjectSlice', () => {
         .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { name: 'GX' } })
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.configurations.resource.globalVariables[0].name).toBe('GX')
+    })
+
+    it('reports a missing row before judging its new name', () => {
+      seedPou(store, makePou('Motor'))
+      const result = store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gone', data: { name: 'motor' } })
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Variable not found')
     })
 
     it('leaves a local variable rename to the POU validator', () => {

@@ -432,9 +432,22 @@ describe('servers, remote devices and globals share the element namespace', () =
     expect(state().remoteDeviceActions.duplicate('Dev', 'srv').ok).toBe(false)
   })
 
-  it('refuses a global named after a POU instead of auto-renaming it, and a POU named after a global', () => {
+  it("names a duplicated bus's slaves past every element, not only the other slaves", () => {
+    state().pouActions.create({ type: 'program', name: 'EK1100_01', language: 'st' })
+    state().projectActions.createRemoteDevice({ data: { name: 'Bus', protocol: 'ethercat' } })
+    state().projectActions.updateEthercatConfig('Bus', {
+      masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, watchdogTimeoutCycles: 3 },
+      devices: [{ id: 'slave-1', name: 'EK1100' }] as never,
+    })
+
+    expect(state().remoteDeviceActions.duplicate('Bus', 'Bus_copy').ok).toBe(true)
+    const copy = state().project.data.remoteDevices?.find((d) => d.name === 'Bus_copy')
+    expect(copy?.ethercatConfig?.devices?.map((d) => d.name)).toEqual(['EK1100_02'])
+  })
+
+  it('steps a new global past a POU name, and refuses a POU named after a global', () => {
     state().pouActions.create({ type: 'program', name: 'Motor', language: 'st' })
-    const refused = state().projectActions.createVariable({
+    const stepped = state().projectActions.createVariable({
       scope: 'global',
       data: {
         name: 'motor',
@@ -444,12 +457,8 @@ describe('servers, remote devices and globals share the element namespace', () =
         documentation: '',
       },
     })
-    expect(refused).toMatchObject({
-      ok: false,
-      title: 'Variable already exists',
-      message: '"motor" is already the name of a POU',
-    })
-    expect(state().project.data.configurations.resource.globalVariables).toEqual([])
+    expect(stepped.ok).toBe(true)
+    expect(state().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual(['motor0'])
 
     state().projectActions.createVariable({
       scope: 'global',
