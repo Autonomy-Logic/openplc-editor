@@ -107,6 +107,17 @@ class ProjectService {
     await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
   }
 
+  /**
+   * Replace the recent list with `entries`.
+   *
+   * For a caller that has already worked out what should survive — dropping
+   * every retrieval from the list needs one write, not one per row, and
+   * `removeProjectFromHistory` re-reads and rewrites the file on each call.
+   */
+  async replaceProjectHistory(projectsFilePath: string, entries: IProjectRecentHistoryEntry[]): Promise<void> {
+    await this.writeProjectHistory(projectsFilePath, entries)
+  }
+
   async updateProjectHistory(projectPath: string): Promise<void> {
     const historyProjectsFilePath = this.getHistoryProjectsFilePath()
 

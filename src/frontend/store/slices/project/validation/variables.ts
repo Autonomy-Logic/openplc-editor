@@ -329,6 +329,7 @@ const MAX_AUTO_INCREMENT_ITERATIONS = 8192
 const createVariableValidation = (
   variables: PLCVariable[],
   variable: PLCVariable,
+  nameTaken: (name: string) => boolean = () => false,
 ): { name: string; location: string } => {
   const { name: variableName } = variable
   // Interface-class variables cannot carry a physical location — the ST
@@ -338,9 +339,14 @@ const createVariableValidation = (
   const variableLocation = DISALLOWED_LOCATION_CLASSES.includes(variable.class) ? '' : variable.location
   const response = { name: variableName, location: variableLocation }
 
-  if (checkIfVariableExists(variables, variableName)) {
+  const taken = (name: string) => checkIfVariableExists(variables, name) || nameTaken(name)
+  if (taken(variableName)) {
     const { name: variableNameWithoutNumber, number } = checkVariableName(variables, variableName)
-    response.name = `${variableNameWithoutNumber}${number}`
+    let candidate = `${variableNameWithoutNumber}${number}`
+    for (let i = 1; taken(candidate) && i < MAX_AUTO_INCREMENT_ITERATIONS; i++) {
+      candidate = `${variableNameWithoutNumber}${number + i}`
+    }
+    response.name = candidate
   }
 
   const slots = slotsClaimedBy(variable)

@@ -37,4 +37,12 @@ describe('shiftSemanticTokensToBody', () => {
   it('returns an empty stream when the window selects nothing', () => {
     expect(Array.from(shiftSemanticTokensToBody(AGGREGATE, 9, 12))).toEqual([])
   })
+
+  it('drops the lines keepLine rejects and re-encodes the survivors as one delta stream', () => {
+    // Lines 1..4 kept by the window; `speed` (line 3) rejected, so `END_STRUCT`
+    // follows `Motor` with a delta of two lines.
+    expect(Array.from(shiftSemanticTokensToBody(AGGREGATE, 1, 5, 0, (line) => line !== 3))).toEqual([
+      0, 2, 6, 0, 0, 1, 2, 5, 0, 0, 2, 2, 10, 0, 0,
+    ])
+  })
 })

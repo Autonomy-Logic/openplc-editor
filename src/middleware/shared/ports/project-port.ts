@@ -29,6 +29,9 @@
  *   - Project state in Zustand store
  */
 
+import type * as PdfJsLib from 'pdfjs-dist'
+
+import type { PrintRequest } from './print-types'
 import type { DeviceConfiguration, DevicePin, PLCProjectData, ProjectMeta, RecentProject, Unsubscribe } from './types'
 
 /**
@@ -303,6 +306,21 @@ export interface ProjectPort {
   removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
 
   /**
+   * Record `projectPath` in the recent-projects list.
+   *
+   * Opening a project tracks it as a side effect of reading it, which covers
+   * every project that has a location. Save As is the one flow that produces a
+   * location without a read: it writes a project the user has open to a folder
+   * they just picked. That matters for a retrieved project, which is
+   * deliberately NOT tracked while it sits in scratch — Save As is what makes
+   * it a project they keep, so it is also what puts it on the list.
+   *
+   * Optional: a platform whose recent list is not a list of paths simply does
+   * not implement it.
+   */
+  trackRecentProject?(projectPath: string): Promise<{ success: boolean; error?: string }>
+
+  /**
    * Recursively delete a project directory and drop its entry from
    * the recent list. Destructive — the editor surfaces a confirmation
    * modal before invoking this. Implementations gate the recursive
@@ -413,4 +431,48 @@ export interface ProjectPort {
    * Web: triggers a browser download of the blob.
    */
   exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Persist a rendered PDF as a file the user can access.
+   * Editor: native save-file dialog, writes to disk.
+   * Web: triggers a browser download of the blob.
+   * `canceled` distinguishes a dismissed save dialog from a real write
+   * failure, so callers can skip the error toast on cancel.
+   */
+  exportPdfFile(
+    defaultFileName: string,
+    bytes: Uint8Array,
+  ): Promise<{ success: boolean; canceled?: boolean; error?: string }>
+
+  /**
+   * Render a print/export-to-PDF request to bytes, using the shared
+   * platform-agnostic engine (`backend/shared/print`).
+   * Web: runs it in a Worker (Vite bundles the in-repo `.worker.ts` natively).
+   * Editor: runs it on the renderer's main thread — the same in-repo-worker
+   * approach would need `import.meta.url`, which this repo's single,
+   * CommonJS-targeted tsconfig (shared with the Electron main process) can't
+   * compile; a render normally completes well under a second, so a second
+   * build target just for this was judged disproportionate.
+   * Rejects on render failure; callers catch and toast.
+   */
+  renderPdf(request: PrintRequest): Promise<Uint8Array>
+
+  /**
+   * Configure pdf.js's rendering backend before opening a document with it
+   * (the export-to-PDF wizard's preview step). Idempotent — safe to call on
+   * every preview open; each implementation only does real work once.
+   * Web: points `GlobalWorkerOptions.workerSrc` at pdf.js's bundled worker
+   * asset so parsing/rendering runs in a real Worker, off the main thread.
+   * Editor: deliberately does NOT use a Worker. It registers the worker
+   * module on `globalThis.pdfjsWorker` — pdf.js's own documented hook for
+   * running that same code in-process instead — which sidesteps two
+   * Electron-only problems at once: this app's CSP (`script-src 'self'
+   * 'unsafe-inline'`, no `worker-src`) leaves a `blob:`-constructed Worker
+   * an open question, and pdf.js's worker code calls the native
+   * `Uint8Array.prototype.toHex()` to compute PDF fingerprints, which is
+   * missing from Electron's bundled V8 — running main-thread lets the
+   * polyfill for it apply directly in this realm instead of reaching into
+   * a separate Worker global scope.
+   */
+  preparePdfPreviewWorker(pdfjsLib: typeof PdfJsLib): Promise<void>
 }

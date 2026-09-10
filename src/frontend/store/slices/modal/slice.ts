@@ -31,6 +31,8 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'project-readme',
   'confirm-plcopen-import',
   'create-graphical-variable',
+  'export-pdf',
+  'page-setup',
 ]
 
 function createDefaultModals() {
