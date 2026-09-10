@@ -36,10 +36,7 @@ import type {
   AddressProducerCapabilities,
   BoardInfoLike,
 } from '../../../../middleware/shared/utils/target-capabilities'
-import {
-  resolveAddressProducerCapabilities,
-  resolveTargetCapabilities,
-} from '../../../../middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import {
   duplicateVariableNameMessage,
@@ -349,11 +346,20 @@ function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
  */
 function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefined {
   const boardInfo = resolveBoardInfo(live)
-  /* Not `resolveAddressProducerCapabilities` here: `activeKindsFor` returns a
-     SET, and an empty set means "no producers" while a missing one means
-     "every producer" — so the unresolved case is expressed by `undefined`
-     rather than by a permissive block. Same rule, different encoding. */
-  return boardInfo ? activeKindsFor(resolveTargetCapabilities(boardInfo)) : undefined
+  /* `resolveAddressProducerCapabilities`, the same resolver
+     `allocationCapabilities` uses, and NOT `resolveTargetCapabilities`.
+     Those two answer differently for a board that IS in the catalogue but
+     declares neither a capability block nor a recognised `compiler`: the
+     producer resolver is permissive, the target resolver answers
+     EMPTY_CAPABILITIES. Using the target resolver here made
+     `buildAddressPool` see every producer while `recalculateRegistry` saw
+     none — two answers to the same question, which is the drift
+     `activeKindsFor` was extracted to prevent.
+
+     `undefined` is kept for a genuinely ABSENT boardInfo, because a missing
+     Set means "every kind" to `allocateAddresses` while an empty one means
+     "no producers", and those must not be confused. */
+  return boardInfo ? activeKindsFor(resolveAddressProducerCapabilities(boardInfo)) : undefined
 }
 
 /**

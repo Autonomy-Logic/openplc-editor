@@ -260,10 +260,34 @@ function markBacked(backed: Map<string, Set<number>>, prefix: string, from: numb
  * the image is a contiguous buffer, so a producer at slot 9 alone still needs
  * ten slots — but slots 0 through 8 have nothing behind them.
  */
+/**
+ * The VPP backplane's channels, or none.
+ *
+ * `vendorScreenData` is `devices/configuration.json` read off disk, so its
+ * shape is whatever the user — or an older editor — last wrote there. Asserting
+ * it into `PoolVppIoInput` and handing it straight to `migrateToRegistry` trusts
+ * that; a non-iterable `entries` makes its `for…of` throw, and the compile dies
+ * with a TypeError naming a file the user never edited on purpose.
+ *
+ * The same reasoning `declaredSlotCount` already applies to a missing variable
+ * type: a malformed project file must produce a diagnostic or a harmless
+ * default, never a crash. Here the harmless default is no VPP channels, which
+ * simply sizes those areas from the other producers.
+ */
+function vppEntries(vendorScreenData: Record<string, unknown> | undefined): PoolVppIoInput {
+  const mapping = vendorScreenData?.['io-mapping']
+  if (typeof mapping !== 'object' || mapping === null) return { entries: [] }
+
+  const entries = (mapping as { entries?: unknown }).entries
+  if (!Array.isArray(entries)) return { entries: [] }
+
+  return { entries } as PoolVppIoInput
+}
+
 function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<number>>): Record<string, number> {
   const registry = migrateToRegistry({
     pinMapping: { pins: input.devicePinMapping ?? [] },
-    vendorIoMapping: (input.vendorScreenData?.['io-mapping'] as PoolVppIoInput | undefined) ?? { entries: [] },
+    vendorIoMapping: vppEntries(input.vendorScreenData),
     remoteDevices: input.projectData.remoteDevices,
   })
 

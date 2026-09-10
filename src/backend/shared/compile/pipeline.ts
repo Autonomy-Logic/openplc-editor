@@ -448,9 +448,7 @@ async function runCompilePipelineInner(
     // NOT `targetCapabilities`: that answers `EMPTY_CAPABILITIES` for an entry
     // that declares nothing, which reads as "no producers at all" and would
     // size every area to zero and then refuse the build.
-    capabilities: resolveAddressProducerCapabilities(
-      boardEntry as Parameters<typeof resolveAddressProducerCapabilities>[0],
-    ),
+    capabilities: resolveAddressProducerCapabilities(boardEntry),
     areas: isRuntimeV4 ? IMAGE_AREAS_RUNTIME_V4 : IMAGE_AREAS_BAREMETAL,
   })
 

@@ -11,7 +11,7 @@
 import type { DevicePin } from '@root/middleware/shared/ports/types'
 import type { AddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
-import type { PLCProjectData } from '../../types/PLC/open-plc'
+import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 import {
   computeIoImage,
   describeUnbackedLocation,
@@ -27,22 +27,31 @@ const ALL_ACTIVE: AddressProducerCapabilities = {
   ethercat: true,
 }
 
-type TestVariable = { name: string; location: string; type?: unknown }
-
-/** A located `ARRAY [start..end] OF <base>` variable. */
-const arrayVar = (name: string, location: string, start: number, end: number, base = 'WORD'): TestVariable => ({
+/** A located variable, with the fields `PLCVariable` requires filled in.
+ *  Typed rather than cast: only `name`, `type`, `location` and `documentation`
+ *  are required, so a real one costs nothing and the fixture cannot drift from
+ *  the schema. */
+const variable = (name: string, location: string, type?: PLCVariable['type']): PLCVariable => ({
   name,
   location,
-  type: {
-    definition: 'array',
-    value: `ARRAY [${start}..${end}] OF ${base}`,
-    data: { baseType: { definition: 'base-type', value: base }, dimensions: [{ dimension: `${start}..${end}` }] },
-  },
+  documentation: '',
+  type: type ?? { definition: 'base-type', value: 'BOOL' },
 })
 
+/** A located `ARRAY [start..end] OF <base>` variable. */
+const arrayVar = (name: string, location: string, start: number, end: number, base = 'WORD'): PLCVariable =>
+  variable(name, location, {
+    definition: 'array',
+    value: `ARRAY [${start}..${end}] OF ${base}`,
+    data: {
+      baseType: { definition: 'base-type', value: base as 'WORD' },
+      dimensions: [{ dimension: `${start}..${end}` }],
+    },
+  })
+
 function makeProject(options: {
-  pous?: Array<{ name: string; variables: TestVariable[] }>
-  globals?: TestVariable[]
+  pous?: Array<{ name: string; variables: PLCVariable[] }>
+  globals?: PLCVariable[]
   servers?: unknown[]
   remoteDevices?: unknown[]
 }): PLCProjectData {
@@ -58,15 +67,28 @@ function makeProject(options: {
       },
     })),
     dataTypes: [],
-    servers: options.servers,
-    remoteDevices: options.remoteDevices,
+    // Required on PLCProjectData (`.default([])` makes it optional on input and
+    // present on output), and nothing here reads it. Spelled out rather than
+    // left to the cast, so the fixture does not quietly drift from the type.
+    libraries: [],
+    /* The one assertion in this fixture, and it sits on a genuine disagreement
+     * between two definitions of the same shape rather than on laziness.
+     * `ports/types.ts` declares every `bufferMapping` field OPTIONAL; the zod
+     * schema behind `PLCProjectData` declares all four sections and all their
+     * fields REQUIRED. The Modbus server screen persists
+     * `{ [section]: { [field]: n } }` — one section, one key — so what the app
+     * actually writes satisfies the port type and violates the schema, and the
+     * partial mappings these cases use are the realistic ones. `serverExposure`
+     * reads through the optional shape deliberately, for that reason. */
+    servers: options.servers as PLCProjectData['servers'],
+    remoteDevices: options.remoteDevices as PLCProjectData['remoteDevices'],
     configuration: { resource: { tasks: [], instances: [], globalVariables: options.globals ?? [] } },
-  } as unknown as PLCProjectData
+  }
 }
 
 /** A local `VAR … AT` in one POU — the common shape in these tests. */
 const withLocal = (location: string, name = 'v') =>
-  makeProject({ pous: [{ name: 'main', variables: [{ name, location }] }] })
+  makeProject({ pous: [{ name: 'main', variables: [variable(name, location)] }] })
 
 /** A pin-mapping producer at each of `addresses`. */
 const pins = (...addresses: string[]): DevicePin[] =>
@@ -145,6 +167,22 @@ describe('computeIoImage — sizing from producers', () => {
     expect(image.sizes).toEqual({ '%IW': 4 })
   })
 
+  it.each([
+    ['no io-mapping at all', {}],
+    ['io-mapping that is not an object', { 'io-mapping': 42 }],
+    ['io-mapping that is null', { 'io-mapping': null }],
+    ['entries that is not an array', { 'io-mapping': { entries: 'nope' } }],
+    ['entries missing', { 'io-mapping': {} }],
+  ])('survives vendorScreenData with %s', (_label, vendorScreenData) => {
+    // devices/configuration.json is a file on disk, so its shape is whatever
+    // was last written there. A non-iterable `entries` would make
+    // migrateToRegistry's for-of throw and kill the compile with a TypeError
+    // naming a file the user never edited on purpose.
+    expect(compute(makeProject({}), { vendorScreenData: vendorScreenData as Record<string, unknown> }).sizes).toEqual(
+      {},
+    )
+  })
+
   it('ignores a producer whose kind the target does not support', () => {
     // A target without pin mapping frees that space, so it must not size the
     // image either — the same scoping the store's recalculation applies.
@@ -178,10 +216,7 @@ describe('computeIoImage — sizing from producers', () => {
 
   it('skips a global with no location', () => {
     const project = makeProject({
-      globals: [
-        { name: 'g', location: '' },
-        { name: 'h', location: '%MW1' },
-      ],
+      globals: [variable('g', ''), variable('h', '%MW1')],
     })
     expect(compute(project).sizes).toEqual({ '%MW': 2 })
   })
@@ -189,7 +224,7 @@ describe('computeIoImage — sizing from producers', () => {
   it('is deterministic', () => {
     // FR07: same project, same bytes.
     const project = makeProject({
-      pous: [{ name: 'main', variables: [{ name: 'm', location: '%MW7' }] }],
+      pous: [{ name: 'main', variables: [variable('m', '%MW7')] }],
       remoteDevices: modbusMaster('%IX0.0'),
     })
     const first = compute(project, { devicePinMapping: pins('%QW3') })
@@ -257,7 +292,7 @@ describe('computeIoImage — server exposure', () => {
     // A %QW the server publishes has something reading it, which is what
     // BR14 asks of an output.
     const project = makeProject({
-      pous: [{ name: 'main', variables: [{ name: 'v', location: '%QW5' }] }],
+      pous: [{ name: 'main', variables: [variable('v', '%QW5')] }],
       servers: serverWith({ holdingRegisters: { qwCount: 10 } }),
     })
     expect(compute(project).unbacked).toEqual([])
@@ -329,7 +364,7 @@ describe('computeIoImage — memory is its own producer', () => {
     // BR15: the union, not whichever was read last.
     const bigServer = compute(
       makeProject({
-        pous: [{ name: 'main', variables: [{ name: 'v', location: '%MW3' }] }],
+        pous: [{ name: 'main', variables: [variable('v', '%MW3')] }],
         servers: [
           {
             name: 'mb',
@@ -343,7 +378,7 @@ describe('computeIoImage — memory is its own producer', () => {
 
     const bigProgram = compute(
       makeProject({
-        pous: [{ name: 'main', variables: [{ name: 'v', location: '%MW99' }] }],
+        pous: [{ name: 'main', variables: [variable('v', '%MW99')] }],
         servers: [
           {
             name: 'mb',
@@ -357,7 +392,7 @@ describe('computeIoImage — memory is its own producer', () => {
   })
 
   it('walks configuration globals as well as POU locals', () => {
-    const project = makeProject({ globals: [{ name: 'g', location: '%MW4' }] })
+    const project = makeProject({ globals: [variable('g', '%MW4')] })
     expect(compute(project).sizes).toEqual({ '%MW': 5 })
   })
 })
@@ -404,8 +439,8 @@ describe('computeIoImage — BR14, an address with no producer', () => {
 
   it('names the scope of a global as well as of a POU', () => {
     const project = makeProject({
-      pous: [{ name: 'pump', variables: [{ name: 'a', location: '%QW0' }] }],
-      globals: [{ name: 'b', location: '%QW1' }],
+      pous: [{ name: 'pump', variables: [variable('a', '%QW0')] }],
+      globals: [variable('b', '%QW1')],
     })
     expect(compute(project).unbacked.map((issue) => [issue.scope, issue.variableName])).toEqual([
       ['pump', 'a'],
@@ -420,10 +455,7 @@ describe('computeIoImage — BR14, an address with no producer', () => {
       pous: [
         {
           name: 'main',
-          variables: [
-            { name: 'plain', location: '' },
-            { name: 'orphan', location: 'SomeAlias' },
-          ],
+          variables: [variable('plain', ''), variable('orphan', 'SomeAlias')],
         },
       ],
     })
@@ -508,13 +540,23 @@ describe('the messages', () => {
 })
 
 describe('computeIoImage — array extents that cannot be read', () => {
-  const oneSlot = (type: unknown) => {
-    const project = makeProject({ pous: [{ name: 'main', variables: [{ name: 'a', location: '%MW10', type }] }] })
+  /**
+   * These cases feed `declaredSlotCount` shapes the type system says cannot
+   * exist, which is the whole point of them: project.json is a file on disk,
+   * and the user or an older editor can have written any of these. The
+   * assertion is the test's premise rather than a shortcut around a type
+   * error — a well-typed variable could not exercise the fallbacks at all.
+   */
+  const oneSlot = (malformedType: unknown) => {
+    const v = variable('a', '%MW10', malformedType as PLCVariable['type'])
+    const project = makeProject({ pous: [{ name: 'main', variables: [v] }] })
     // A single slot at %MW10 means the area stops at 11.
     expect(compute(project).sizes).toEqual({ '%MW': 11 })
   }
 
   it('falls back to one slot for a missing type', () => oneSlot(undefined))
+  // `variable()` substitutes a BOOL for an absent type, which is itself a
+  // non-array and therefore the same one-slot answer the fallback gives.
 
   it('falls back to one slot for a non-array type', () => oneSlot({ definition: 'base-type', value: 'WORD' }))
 
