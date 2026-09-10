@@ -12,9 +12,8 @@ import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../util
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
-import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
-import { collectAllSlaveNames, generateUniqueSlaveName } from '../../../utils/unique-slave-name'
+import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
@@ -27,6 +26,7 @@ import {
   LIBRARY_MANIFEST_TAB_NAME,
 } from '../tabs/utils'
 import { cancelFlowWriteBacks, flushFlowWriteBacks } from './flow-writeback'
+import { elementNameCollision, nameMatches } from './name-collision'
 import type { PouHistorySnapshot, SharedRootState, SharedSlice } from './types'
 import {
   createDatatypeObject,
@@ -75,32 +75,6 @@ function deleteElement(
 function validateElementName(name: string): { ok: true } | { ok: false; message: string } {
   const [legal, reason] = isLegalIdentifier(name)
   return legal ? { ok: true } : { ok: false, message: `'${name}' ${reason}` }
-}
-
-/**
- * Element names are compared case-insensitively: a data type becomes a
- * `datatypes/<Name>.dt` path and a POU a `pous/<folder>/<Name><ext>` one,
- * and macOS/Windows fold filename case, so `Foo` and `foo` would silently
- * overwrite each other on save. IEC identifiers are case-insensitive anyway.
- */
-const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
-
-/**
- * A raw datatypes/<Name>.dt file that failed to parse still owns its
- * name: letting a new data type take it would make the save emit two
- * specs for one path (and the raw echo would win). Case-insensitive —
- * the file name is the identity and common filesystems fold case.
- */
-function collidesWithUnparsedDataTypeFile(state: SharedRootState, name: string): { ok: boolean; message?: string } {
-  const collides = state.unparsedDataTypeFiles.some(
-    (f) => f.relativePath.split('/').pop()?.replace(/\.dt$/i, '').toLowerCase() === name.toLowerCase(),
-  )
-  return collides
-    ? {
-        ok: false,
-        message: `A data type file named "${name}.dt" exists on disk but could not be read — fix or remove it first`,
-      }
-    : { ok: true }
 }
 
 /**
@@ -156,100 +130,6 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
   }
 }
 
-type NamedElementKind = 'pou' | 'data-type' | 'global-variable-list'
-
-const SAME_KIND_TAKEN: Record<NamedElementKind, string> = {
-  pou: 'POU name already exists',
-  'data-type': 'Data type name already exists',
-  'global-variable-list': 'Global variable list name already exists',
-}
-
-/**
- * Why an element of `kind` may not be called `name`, or `null` when it may.
- *
- * POUs, data types and Global Variable Lists share ONE identifier namespace — IEC gives
- * types and variables the same one — and a list occupies TWO symbols in it: the instance
- * keeps the user's name, the struct backing it takes `<name>_TYPE`. Checking each
- * collection only against itself covered a third of a rule with three parts.
- *
- * The workspace makes a collision worse than the duplicate symbol the compiler would
- * report: `files[name]`, tabs, editor models and `undoRedo[name]` are keyed by raw
- * element name, so one entry ends up serving two elements and edits land on the wrong one.
- *
- * `ignoring` is the element being renamed, so it does not collide with itself. It is
- * matched EXACTLY for POUs and data types: each owns a file path
- * (`pous/<folder>/<Name><ext>`, `datatypes/<Name>.dt`) and macOS/Windows fold filename
- * case, so a case-only rename writes the new file over the old one. Refusing that means
- * the element's own entry has to stay eligible to collide. A list has no file of its
- * own, so it matches case-insensitively and a case-only rename remains a no-op.
- */
-function elementNameCollision(
-  state: SharedRootState,
-  name: string,
-  kind: NamedElementKind,
-  ignoring?: string,
-): string | null {
-  const renamedOntoItself = kind === 'global-variable-list' ? nameMatches(name, ignoring ?? '') : name === ignoring
-  if (ignoring !== undefined && renamedOntoItself) return null
-
-  const { pous, dataTypes } = state.project.data
-  const allLists = state.project.data.globalVariableLists ?? []
-  const lists =
-    kind === 'global-variable-list' ? allLists.filter((list) => !nameMatches(list.name, ignoring ?? '')) : allLists
-
-  const takenBySameKind =
-    kind === 'pou'
-      ? pous.some((pou) => nameMatches(pou.name, name))
-      : kind === 'data-type'
-        ? dataTypes.some((dataType) => nameMatches(dataType.name, name))
-        : lists.some((list) => nameMatches(list.name, name))
-  if (takenBySameKind) return SAME_KIND_TAKEN[kind]
-
-  if (kind !== 'pou' && pous.some((pou) => nameMatches(pou.name, name))) {
-    return `"${name}" is already the name of a POU`
-  }
-  if (kind !== 'data-type' && dataTypes.some((dataType) => nameMatches(dataType.name, name))) {
-    return `"${name}" is already the name of a data type`
-  }
-  if (kind !== 'global-variable-list' && lists.some((list) => nameMatches(list.name, name))) {
-    return `"${name}" is already the name of a global variable list`
-  }
-  // A `.dt` that failed to parse still owns its `files[name]` entry — the registry is
-  // keyed by raw name across every kind — so any element taking that name would share
-  // the entry and misroute its save.
-  const unparsedCollision = collidesWithUnparsedDataTypeFile(state, name)
-  if (!unparsedCollision.ok) return unparsedCollision.message ?? `"${name}" is already taken by a data type file`
-
-  const listOwningTheName = lists.find((list) => nameMatches(globalVariableListTypeName(list.name), name))
-  if (listOwningTheName) {
-    return `"${name}" is the type name of global variable list "${listOwningTheName.name}"`
-  }
-
-  if (kind !== 'global-variable-list') return null
-
-  const derived = globalVariableListTypeName(name)
-  if (dataTypes.some((dataType) => nameMatches(dataType.name, derived))) {
-    return `"${name}" needs the type name "${derived}", which a data type already uses`
-  }
-  if (pous.some((pou) => nameMatches(pou.name, derived))) {
-    return `"${name}" needs the type name "${derived}", which a POU already uses`
-  }
-  // Against the other lists' own names as well as their derived ones: the pair
-  // `GVL` / `GVL_TYPE` collides whichever of the two is created first.
-  if (lists.some((list) => nameMatches(list.name, derived))) {
-    return `"${name}" needs the type name "${derived}", which a global variable list already uses`
-  }
-  if (lists.some((list) => nameMatches(globalVariableListTypeName(list.name), derived))) {
-    return `"${name}" needs the type name "${derived}", which another global variable list already uses`
-  }
-  // An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares is
-  // still in the build — the generated struct would be a second declaration of it.
-  if (!collidesWithUnparsedDataTypeFile(state, derived).ok) {
-    return `"${name}" needs the type name "${derived}", which a data type file already uses`
-  }
-  return null
-}
-
 /**
  * Give a duplicated remote device its own identity.
  *
@@ -269,7 +149,7 @@ function elementNameCollision(
  * Everything else — host, port, cycle times, PDO layouts, SDO startup parameters, CiA 402
  * axis config — is what the user duplicated the device for, and is copied verbatim.
  */
-function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames: Set<string>): PLCRemoteDevice {
+function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, slaveNameTaken: NameTaken): PLCRemoteDevice {
   const next: PLCRemoteDevice = { ...device }
 
   if (next.modbusTcpConfig) {
@@ -290,16 +170,17 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, takenSlaveNames:
 
   if (next.ethercatConfig) {
     // A slave's NAME is its key in tabs, editor models and the file registry — not its
-    // id — so two slaves sharing one means the second silently takes over the first's
-    // entries. `generateUniqueSlaveName` is the same `_01`, `_02`… strategy the add
-    // path uses; `taken` grows as we go so the copies do not collide with each other
-    // either.
-    const taken = new Set(takenSlaveNames)
+    // id. Same `_01`, `_02`… strategy as the add path; `copied` keeps the copies from
+    // colliding with each other.
+    const copied = new Set<string>()
     next.ethercatConfig = {
       ...next.ethercatConfig,
       devices: (next.ethercatConfig.devices ?? []).map((slave) => {
-        const name = generateUniqueSlaveName(slave.name, taken)
-        taken.add(name)
+        const name = generateUniqueSlaveName(
+          slave.name,
+          (candidate) => copied.has(candidate) || slaveNameTaken(candidate),
+        )
+        copied.add(name)
         return {
           ...slave,
           id: newUuid(),
@@ -401,7 +282,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.tabsActions.setSelectedTab(name)
       state.editorActions.setEditor(editorModel)
 
-      state.libraryActions.addLibrary(name, type === 'program' ? 'function' : type)
+      // Programs are instantiated by the Resource, never called from another
+      // POU, so they are not library blocks. Registering them as `function`
+      // put them in the block pickers, and project load drops them again
+      // (see the hydration below), so a placed one referenced a library entry
+      // that no longer existed after a reopen (DOPE-606).
+      if (type !== 'program') {
+        state.libraryActions.addLibrary(name, type)
+      }
 
       // Mark project as unsaved
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
@@ -489,6 +377,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const editorModel = createEditorObjectForPou(newName, sourcePou.pouType, language)
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
+
+      // Register the copy as a user library, exactly as the create path does.
+      // `libraries.user` is what backs the "User-defined POUs" explorer tree,
+      // the FBD/LD block pickers and Monaco's completion list, so a duplicate
+      // that skips this exists in the project but cannot be placed in a
+      // diagram or completed in ST (DOPE-606). Programs are excluded for the
+      // same reason as on the create path.
+      if (sourcePou.pouType !== 'program') {
+        state.libraryActions.addLibrary(newName, sourcePou.pouType)
+      }
 
       // Persist only on save: flag the new POU dirty instead of auto-saving.
       state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
@@ -771,9 +669,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   serverActions: {
     create: ({ name, protocol }) => {
       const state = getState()
-      /* istanbul ignore next -- defensive: servers is always initialized as [] */
-      const servers = state.project.data.servers ?? []
-      if (servers.some((s) => s.name === name)) return { ok: false, message: 'Server already exists' }
+      const collision = elementNameCollision(state, name, 'server')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
@@ -801,17 +698,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteServer(n)),
 
-    rename: (oldName, newName) =>
-      renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateServerName(o, n)),
+    rename: (oldName, newName) => {
+      const state = getState()
+      // Same name: nothing to rename, and not a duplicate of itself.
+      if (oldName === newName) return { ok: true }
+
+      const collision = elementNameCollision(state, newName, 'server', oldName)
+      if (collision) return { ok: false, message: collision }
+
+      return renameElement(state, oldName, newName, (o, n) => state.projectActions.updateServerName(o, n))
+    },
 
     duplicate: (sourceName, newName) => {
       const state = getState()
       const source = (state.project.data.servers ?? []).find((s) => s.name === sourceName)
       if (!source) return { ok: false, message: 'Server not found' }
 
-      if ((state.project.data.servers ?? []).some((s) => nameMatches(s.name, newName))) {
-        return { ok: false, message: 'Server name already exists' }
-      }
+      const collision = elementNameCollision(state, newName, 'server')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
@@ -837,9 +741,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   remoteDeviceActions: {
     create: ({ name, protocol }) => {
       const state = getState()
-      /* istanbul ignore next -- defensive: remoteDevices is always initialized as [] */
-      const devices = state.project.data.remoteDevices ?? []
-      if (devices.some((d) => d.name === name)) return { ok: false, message: 'Remote device already exists' }
+      const collision = elementNameCollision(state, name, 'remote-device')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
@@ -882,17 +785,24 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       return deleteElement(getState(), name, (n) => getState().projectActions.deleteRemoteDevice(n))
     },
 
-    rename: (oldName, newName) =>
-      renameElement(getState(), oldName, newName, (o, n) => getState().projectActions.updateRemoteDeviceName(o, n)),
+    rename: (oldName, newName) => {
+      const state = getState()
+      // Same name: nothing to rename, and not a duplicate of itself.
+      if (oldName === newName) return { ok: true }
+
+      const collision = elementNameCollision(state, newName, 'remote-device', oldName)
+      if (collision) return { ok: false, message: collision }
+
+      return renameElement(state, oldName, newName, (o, n) => state.projectActions.updateRemoteDeviceName(o, n))
+    },
 
     duplicate: (sourceName, newName) => {
       const state = getState()
       const source = (state.project.data.remoteDevices ?? []).find((d) => d.name === sourceName)
       if (!source) return { ok: false, message: 'Remote device not found' }
 
-      if ((state.project.data.remoteDevices ?? []).some((d) => nameMatches(d.name, newName))) {
-        return { ok: false, message: 'Remote device name already exists' }
-      }
+      const collision = elementNameCollision(state, newName, 'remote-device')
+      if (collision) return { ok: false, message: collision }
 
       const nameCheck = validateElementName(newName)
       if (!nameCheck.ok) return nameCheck
@@ -900,7 +810,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const copy = {
         ...duplicateRemoteDeviceIdentity(
           structuredClone(source),
-          collectAllSlaveNames(state.project.data.remoteDevices),
+          (name) => elementNameCollision(state, name, 'ethercat-slave') !== null,
         ),
         name: newName,
       }
@@ -972,13 +882,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           message: `"${newName}" is not a valid axis name. Use letters, digits, and underscores, starting with a letter or underscore.`,
         }
       }
-      // Only *rejecting* enforcement of slave-name uniqueness — scan-bus add
-      // auto-suffixes instead. Tabs/editor/file slices are name-keyed and break
-      // silently on duplicates, so new write paths must replicate one strategy.
-      // Same-name rename is allowed (the action stays idempotent).
-      if (newName !== oldName && collectAllSlaveNames(state.project.data.remoteDevices).has(newName)) {
-        return { ok: false, message: `An EtherCAT slave named "${newName}" already exists in this project` }
-      }
+      // Rejecting here; scan-bus add auto-suffixes instead. Same-name rename stays idempotent.
+      const collision = elementNameCollision(state, newName, 'ethercat-slave', oldName)
+      if (collision) return { ok: false, message: collision }
       const updatedDevices = devices.map((d) => (d.id === deviceId ? { ...d, name: newName } : d))
       state.projectActions.updateEthercatConfig(busName, {
         masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
@@ -1066,11 +972,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       return { success: true }
     },
 
-    closeProject: () => {
+    openRetrievedProject: (data) => {
+      getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+      // No location the user chose, so a user-initiated save is refused and
+      // points at Save As. The build's own flush is unaffected -- refusing that
+      // would not protect anything, it would just stop the project compiling.
+      getState().workspaceActions.setIsEphemeralProject(true)
+    },
+
+    hasUnsavedChanges: () => {
       const editingState = getState().workspace.editingState
       const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved()
+      return !isFilesSaved || editingState === 'unsaved'
+    },
 
-      if (!isFilesSaved || editingState === 'unsaved') {
+    closeProject: () => {
+      if (getState().sharedWorkspaceActions.hasUnsavedChanges()) {
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })
@@ -1180,6 +1097,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Raw .dt files that failed to parse — stashed so saves echo
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
+      // A pre-DOPE-385 project owes a migration to `datatypes/*.dt`. Always set,
+      // so reopening a project that has since migrated clears the flag.
+      getState().projectActions.setDataTypesNeedMigration(data.dataTypesNeedMigration ?? false)
 
       // Unreadable files have no PLCDataType, so no tree leaf to click.
       const unparsedDataTypes = (data.unparsedDataTypeFiles ?? []).flatMap((file) => {

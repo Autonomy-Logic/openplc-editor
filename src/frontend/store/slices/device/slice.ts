@@ -106,6 +106,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     plcStatus: null,
     switchPosition: null,
     ipAddress: null,
+    runtimeUpdateInProgress: false,
     runtimeVersion: null,
     selectedDevice: null,
     storedCredentials: null,
@@ -596,6 +597,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
           runtimeConnection.includeTimingStatsInPolling = include
+        }),
+      )
+    },
+    setRuntimeUpdateInProgress: (inProgress): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.runtimeUpdateInProgress = inProgress
         }),
       )
     },

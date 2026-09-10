@@ -41,7 +41,11 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
@@ -52,6 +56,7 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
@@ -611,6 +616,8 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
+    const duplicate = findDuplicateVariableName(parsed)
+    if (duplicate) return fail(duplicateVariableNameMessage(duplicate), 'Variable already exists')
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)
@@ -809,6 +816,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
   },
   pendingDeletions: [],
   unparsedDataTypeFiles: [],
+  dataTypesNeedMigration: false,
   iecAliasMemory: {},
 
   projectActions: {
@@ -845,6 +853,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           }
           slice.pendingDeletions = []
           slice.unparsedDataTypeFiles = []
+          slice.dataTypesNeedMigration = false
           // Session alias-memory is per-project; drop it on a fresh slate so
           // one project's remembered aliases can't leak into the next.
           slice.iecAliasMemory = {}
@@ -1034,12 +1043,24 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // to the next free slot to avoid duplicate-address compile errors
       // (forum thread "openplc-420-teething-bugs", v4.2.0).
       const sourceVariables = scopedVariables(getState().project.data, scope, associatedPou, dto.associatedList) ?? []
-      const validated = createVariableValidation(sourceVariables, data)
+      // A global is a top-level symbol next to POUs and types, so its clone has
+      // to step over those names too, not only its own table.
+      const nameTaken =
+        scope === 'global'
+          ? (name: string) => elementNameCollision(getState(), name, 'resource-global') !== null
+          : undefined
+      const validated = createVariableValidation(sourceVariables, data, nameTaken)
       // Single-field location model: `location` is the binding itself — an
       // alias name OR a literal `%addr`. It is stored verbatim (no
       // address→alias auto-adoption); alias→address resolution happens at
       // compile time. The legacy `alias` field is unused.
       data = { ...data, ...validated }
+
+      if (scope === 'global') {
+        const collision = elementNameCollision(getState(), data.name, 'resource-global')
+        /* istanbul ignore next -- only when every auto-increment candidate is taken */
+        if (collision) return fail(collision, 'Variable already exists')
+      }
 
       let response: ProjectResponse = { ok: true }
       setState(
@@ -1089,6 +1110,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       if (scope === 'local') {
         const reconcile = reconcileVariablesText(associatedPou, getState, setState)
         if (!reconcile.ok) return reconcile
+      }
+
+      if (scope === 'global' && updates.name !== undefined) {
+        const globals = getState().project.data.configurations.resource.globalVariables
+        const current = getVariableBasedOnRowIdOrVariableId(globals, rowId, variableId)
+        if (current) {
+          const collision = elementNameCollision(getState(), updates.name, 'resource-global', current.variable.name)
+          if (collision) return fail(collision, 'Variable already exists')
+        }
       }
 
       let response: ProjectResponse = { ok: true }
@@ -1439,9 +1469,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     deleteDatatype: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
-          // Harmless while the file doesn't exist yet (flag off): the
-          // editor's deletion pass is existence-checked, the web's
-          // relies on delete-by-omission.
+          // Harmless when the file was never written (a type created and
+          // deleted before any save): the editor's deletion pass is
+          // existence-checked, the web's relies on delete-by-omission.
           slice.pendingDeletions.push(`datatypes/${name}.dt`)
           slice.project.data.dataTypes = slice.project.data.dataTypes.filter((d) => d.name !== name)
         }),
@@ -1534,6 +1564,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           slice.unparsedDataTypeFiles = files
+        }),
+      )
+    },
+    setDataTypesNeedMigration: (needsMigration) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.dataTypesNeedMigration = needsMigration
         }),
       )
     },

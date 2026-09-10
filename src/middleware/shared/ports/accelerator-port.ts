@@ -45,8 +45,16 @@ export interface AcceleratorPort {
    *  unsubscribe like its other accelerators. */
   onSaveProjectAs(callback: () => void): Unsubscribe
   onSaveFile(callback: () => void): Unsubscribe
+  /** Retrieve Project from PLC. Desktop only in practice: the web build reaches
+   *  the same modal from its own File menu, which it always renders, so its
+   *  adapter returns a no-op unsubscribe like the other accelerators. */
+  onRetrieveProject(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe
   onExportProject(callback: () => void): Unsubscribe
+  /** File > Print / Ctrl+P (Cmd+P). Preview is an alias into the same
+   *  export-PDF wizard, not a separate accelerator. */
+  onPrint(callback: () => void): Unsubscribe
+  onPageSetup(callback: () => void): Unsubscribe
 
   // --- Editor actions ---
   onCloseTab(callback: () => void): Unsubscribe

@@ -39,11 +39,16 @@ import type { PLCDataType, PLCGlobalVariableList } from '../../../middleware/sha
 import { sanitizeAxisName, softMotionAxisNames } from '../../../middleware/shared/utils/ethercat'
 import { openPLCStoreBase } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
-import { isDataTypeFilesEnabled } from '../../utils/feature-flags'
 import { dataTypeLineSpans } from '../../utils/PLC/data-type-serializer'
 import { serializeGlobalVariableListsToTypes } from '../../utils/PLC/global-variable-list-serializer'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
-import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
+import {
+  type NavTarget,
+  normaliseLocation,
+  routeToPou,
+  routeToPouBody,
+  routeToPouPreamble,
+} from '../lsp-shared/definition-redirect'
 import {
   DATA_TYPES_URI,
   DT_VIEW_FRAME_LINE_COUNT,
@@ -114,12 +119,10 @@ function openDataTypeEditor(dataType: PLCDataType): boolean {
 
 /**
  * Open the type's tab in code mode at a Monaco position in its `.dt`
- * view. Falls back to the form tab when the code view isn't built into
- * this release.
+ * view.
  */
 function routeToDataTypeCodeView(dataType: PLCDataType, monacoLine: number, monacoColumn: number): boolean {
   if (!openDataTypeEditor(dataType)) return false
-  if (!isDataTypeFilesEnabled()) return true
   const {
     editorActions: { setEditorCursor, updateModelStructureForName },
   } = openPLCStoreBase.getState()
@@ -290,8 +293,11 @@ function redirectGlobalVariableList(lineLsp: number): boolean {
 }
 
 export function redirectDefinitionToStore(loc: Location | LocationLink): boolean {
-  const target = normaliseLocation(loc)
+  return redirectNavTargetToStore(normaliseLocation(loc))
+}
 
+/** Route a target in LSP coordinates through the store; false when nothing here owns its URI. */
+export function redirectNavTargetToStore(target: NavTarget): boolean {
   // Resource-globals doc → open the Resource editor (globals table) rather than
   // the synthesised (non-editable) CONFIGURATION declaration.
   if (target.uri === RESOURCE_GLOBALS_URI) {

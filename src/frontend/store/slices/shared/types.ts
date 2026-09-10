@@ -184,6 +184,10 @@ export type OpenProjectResponseData = {
   /** `datatypes/*.dt` files that failed to parse on load, preserved
    *  raw so the save flow echoes them back verbatim. */
   unparsedDataTypeFiles?: RawProjectFile[]
+  /** True when the project still carries its data types inline in
+   *  `project.json` with no `datatypes/*.dt` on disk — it predates DOPE-385
+   *  and still owes a migration. */
+  dataTypesNeedMigration?: boolean
   /**
    * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
    * `false` puts the workspace in read-only mode; `true` / `undefined`
@@ -207,6 +211,17 @@ export type SharedWorkspaceActions = {
    * (e.g. host navigation) until the modal resolves.
    */
   closeProject: () => { pendingConfirmation: boolean }
+  /**
+   * Whether closing the project right now would lose work.
+   *
+   * The rule `closeProject` applies, exposed on its own for a caller that has
+   * to REPLACE the project rather than merely close it — retrieving from a
+   * device — and so needs its own save-changes context to come back to. Asking
+   * this instead of re-deriving the condition is what keeps the two in step: a
+   * caller that spelled the rule out again would silently start discarding work
+   * the day the rule changes.
+   */
+  hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
   /**
@@ -214,6 +229,21 @@ export type SharedWorkspaceActions = {
    * Sets project state, device config, files, libraries, flows, and opens main POU tab.
    */
   handleOpenProjectResponse: (data: OpenProjectResponseData) => void
+  /**
+   * Load a project retrieved from a device.
+   *
+   * The shared tail of both platforms' retrieve adapters. What differs between
+   * them is only where the files come from — the desktop unpacks an archive to
+   * a scratch directory and reads it back, web parses the same archive straight
+   * into memory — and both then have to do exactly this: load the parsed
+   * project, and mark it as having no location the user chose.
+   *
+   * Written twice, it went wrong twice: the desktop's tail shipped missing the
+   * load, and web's marked the project ephemeral a second time after the picker
+   * had already done it. Same shape as `build-upload-snapshot`, where two thin
+   * platform readers meet one shared builder.
+   */
+  openRetrievedProject: (data: OpenProjectResponseData) => void
 }
 
 export type SharedSlice = {

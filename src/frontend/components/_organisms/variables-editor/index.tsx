@@ -14,7 +14,11 @@ import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
@@ -771,6 +775,8 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       if (!language) return false
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
+      const duplicate = findDuplicateVariableName(newVariables)
+      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
 
       const renamedPairs = tableData.flatMap((previousVariable) => {
         const variableStillExists = newVariables.some(

@@ -327,3 +327,168 @@ describe('globalVariableListActions.duplicate', () => {
     expect(useOpenPLCStore.getState().globalVariableListActions.duplicate('Nope', 'Nope_copy').ok).toBe(false)
   })
 })
+
+/**
+ * Duplicating a POU.
+ *
+ * `libraries.user` is what backs the "User-defined POUs" explorer tree, the FBD/LD
+ * block pickers and Monaco's completion list. The create path registered the new POU
+ * there; the duplicate path did not, so a duplicated function block existed in the
+ * project but could not be placed in a diagram or completed in ST (DOPE-606).
+ */
+describe('pouActions.duplicate', () => {
+  it('copies the POU under a new name', () => {
+    useOpenPLCStore.getState().pouActions.create({ type: 'function-block', name: 'SetBit', language: 'st' })
+
+    const result = useOpenPLCStore.getState().pouActions.duplicate('SetBit', 'SetBit_copy')
+
+    expect(result.ok).toBe(true)
+    const names = useOpenPLCStore.getState().project.data.pous.map((p) => p.name)
+    expect(names).toEqual(['SetBit', 'SetBit_copy'])
+  })
+
+  it('registers the copy as a user library so it can be placed and completed', () => {
+    useOpenPLCStore.getState().pouActions.create({ type: 'function-block', name: 'SetBit', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('SetBit', 'SetBit_copy')
+
+    const userLibraries = useOpenPLCStore.getState().libraries.user
+    expect(userLibraries.map((l) => l.name)).toContain('SetBit_copy')
+    expect(userLibraries.find((l) => l.name === 'SetBit_copy')?.type).toBe('function-block')
+  })
+
+  it('registers a duplicated function as a function', () => {
+    // Not `Scale`: the test harness seeds the real bundled libraries, and SCALE is a
+    // function in oscat-basic and plcopen-softmotion, so the create is refused.
+    useOpenPLCStore.getState().pouActions.create({ type: 'function', name: 'Scaler', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('Scaler', 'Scaler_copy')
+
+    expect(useOpenPLCStore.getState().libraries.user.find((l) => l.name === 'Scaler_copy')?.type).toBe('function')
+  })
+
+  it('does not register a duplicated program as a library block', () => {
+    // A program is instantiated by the Resource, never called from another POU,
+    // so it is not a library block. Registering it put programs in the block
+    // pickers, and project load drops them again, so a placed one referenced a
+    // library entry that no longer existed after a reopen.
+    useOpenPLCStore.getState().pouActions.create({ type: 'program', name: 'main', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('main', 'main_copy')
+
+    const names = useOpenPLCStore.getState().libraries.user.map((l) => l.name)
+    expect(names).not.toContain('main_copy')
+    // The create path agrees, so a reopen cannot disagree with either.
+    expect(names).not.toContain('main')
+  })
+
+  it('still copies a duplicated program into the project', () => {
+    // Excluding it from the library must not stop the duplicate itself.
+    useOpenPLCStore.getState().pouActions.create({ type: 'program', name: 'main', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('main', 'main_copy')
+
+    expect(useOpenPLCStore.getState().project.data.pous.map((p) => p.name)).toContain('main_copy')
+  })
+
+  it('registers the copy so it can be opened and saved', () => {
+    useOpenPLCStore.getState().pouActions.create({ type: 'function-block', name: 'SetBit', language: 'st' })
+    useOpenPLCStore.getState().pouActions.duplicate('SetBit', 'SetBit_copy')
+
+    const after = useOpenPLCStore.getState()
+    expect(after.files['SetBit_copy']).toBeDefined()
+    expect(after.files['SetBit_copy']?.saved).toBe(false)
+  })
+
+  it('reports a missing source instead of failing silently', () => {
+    expect(useOpenPLCStore.getState().pouActions.duplicate('Nope', 'Nope_copy').ok).toBe(false)
+  })
+})
+
+describe('servers, remote devices and globals share the element namespace', () => {
+  const state = () => useOpenPLCStore.getState()
+
+  it('refuses a server or device named after a POU, and a POU named after either', () => {
+    expect(state().pouActions.create({ type: 'program', name: 'Pump', language: 'st' }).ok).toBe(true)
+    expect(state().serverActions.create({ name: 'pump', protocol: 'modbus-tcp' })).toEqual({
+      ok: false,
+      message: '"pump" is already the name of a POU',
+    })
+    expect(state().remoteDeviceActions.create({ name: 'PUMP', protocol: 'modbus-tcp' }).ok).toBe(false)
+
+    expect(state().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' }).ok).toBe(true)
+    expect(state().remoteDeviceActions.create({ name: 'Dev', protocol: 'modbus-tcp' }).ok).toBe(true)
+    expect(state().pouActions.create({ type: 'program', name: 'srv', language: 'st' })).toEqual({
+      ok: false,
+      message: '"srv" is already the name of a server',
+    })
+    expect(state().pouActions.create({ type: 'program', name: 'dev', language: 'st' })).toEqual({
+      ok: false,
+      message: '"dev" is already the name of a remote device',
+    })
+  })
+
+  it('refuses a server duplicated onto a remote device name, and the reverse', () => {
+    state().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' })
+    state().remoteDeviceActions.create({ name: 'Dev', protocol: 'modbus-tcp' })
+
+    expect(state().serverActions.duplicate('Srv', 'dev').ok).toBe(false)
+    expect(state().remoteDeviceActions.duplicate('Dev', 'srv').ok).toBe(false)
+  })
+
+  it("names a duplicated bus's slaves past every element, not only the other slaves", () => {
+    state().pouActions.create({ type: 'program', name: 'EK1100_01', language: 'st' })
+    state().projectActions.createRemoteDevice({ data: { name: 'Bus', protocol: 'ethercat' } })
+    state().projectActions.updateEthercatConfig('Bus', {
+      masterConfig: { networkInterface: 'eth0', cycleTimeUs: 1000, watchdogTimeoutCycles: 3 },
+      devices: [{ id: 'slave-1', name: 'EK1100' }] as never,
+    })
+
+    expect(state().remoteDeviceActions.duplicate('Bus', 'Bus_copy').ok).toBe(true)
+    const copy = state().project.data.remoteDevices?.find((d) => d.name === 'Bus_copy')
+    expect(copy?.ethercatConfig?.devices?.map((d) => d.name)).toEqual(['EK1100_02'])
+  })
+
+  it('steps a new global past a POU name, and refuses a POU named after a global', () => {
+    state().pouActions.create({ type: 'program', name: 'Motor', language: 'st' })
+    const stepped = state().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'motor',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+    expect(stepped.ok).toBe(true)
+    expect(state().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual(['motor0'])
+
+    state().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'Level',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+    expect(state().pouActions.create({ type: 'program', name: 'level', language: 'st' })).toEqual({
+      ok: false,
+      message: '"level" is already the name of a global variable',
+    })
+  })
+
+  it('lets a global and a server share a name: neither sees the other', () => {
+    state().serverActions.create({ name: 'Modbus', protocol: 'modbus-tcp' })
+    const created = state().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'Modbus',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+    expect(created.ok).toBe(true)
+    expect(state().remoteDeviceActions.create({ name: 'modbus', protocol: 'modbus-tcp' }).ok).toBe(false)
+  })
+})

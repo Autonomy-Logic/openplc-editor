@@ -52,27 +52,20 @@ const PersistentStorageEditor = () => {
         <h2 className='text-xl font-semibold text-neutral-1000 dark:text-white'>Persistent Storage</h2>
         <p className='mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400'>
           Where the device keeps the values of <span className='font-medium'>RETAIN</span> variables so they survive a
-          restart. With storage off, retained variables start at their initial values every time. These settings are
-          saved with the project and applied when you upload it.
+          restart. With storage off, retained variables start at their initial values every time.
         </p>
       </div>
 
       <div className='flex max-w-2xl flex-col gap-6'>
-        <label className='flex items-start gap-3'>
+        <label className='flex items-center gap-3'>
           <input
             type='checkbox'
             checked={enabled}
             onChange={(e) => setPersistentStorage({ enabled: e.target.checked })}
-            className='mt-1 h-4 w-4 accent-brand'
-            aria-describedby='retain-enabled-help'
+            className='h-4 w-4 accent-brand'
           />
-          <span>
-            <span className='text-sm font-medium text-neutral-1000 dark:text-white'>
-              Keep retained variables on the device
-            </span>
-            <span id='retain-enabled-help' className='mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400'>
-              Off by default. Turning it on makes the runtime write to the storage below at the interval you choose.
-            </span>
+          <span className='text-sm font-medium text-neutral-1000 dark:text-white'>
+            Keep retained variables on the device
           </span>
         </label>
 
@@ -91,8 +84,7 @@ const PersistentStorageEditor = () => {
             className='h-9 rounded-md border border-neutral-300 px-3 font-mono text-sm disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
           />
           <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-            An absolute path on the device. Leave it empty and the runtime uses its own default location — the editor
-            does not need to know the device&apos;s filesystem layout.
+            An absolute path on the device. Leave it empty and the runtime uses its own default location.
           </p>
         </div>
 
@@ -125,8 +117,7 @@ const PersistentStorageEditor = () => {
             </p>
           )}
           <p id='retain-flush-help' className='text-xs text-neutral-500 dark:text-neutral-400'>
-            How much recent change a power cut can cost. Saving more often keeps less at risk and works the storage
-            harder — on an SD card or flash, that shortens its life.
+            Saving more often keeps less at risk, but on an SD card or flash will shorten its life.
           </p>
         </div>
       </div>

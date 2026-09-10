@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCProjectData, PLCVariable } from '../../../middleware/shared/ports/types'
 import { createAISlice } from '../slices/ai'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
@@ -88,11 +88,11 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('Main')
         expect(state.selectedTab).toBe('Main')
 
-        // Library slice: user library added
-        expect(state.libraries.user).toHaveLength(1)
-        expect(state.libraries.user[0].name).toBe('Main')
-        // program maps to 'function' library type
-        expect(state.libraries.user[0].type).toBe('function')
+        // Library slice: a program is NOT a library block. It is instantiated by
+        // the Resource, never called from another POU, and project load excludes
+        // programs when rebuilding `libraries.user` -- so registering one here
+        // would put it in the block pickers until the next reopen (DOPE-606).
+        expect(state.libraries.user).toHaveLength(0)
       })
 
       it('creates an LD function-block', () => {
@@ -135,7 +135,8 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous).toHaveLength(3)
         expect(state.tabs).toHaveLength(3)
         expect(Object.keys(state.files)).toHaveLength(3)
-        expect(state.libraries.user).toHaveLength(3)
+        // Two, not three: the program is excluded from the library.
+        expect(state.libraries.user.map((library) => library.name)).toEqual(['Func1', 'FB1'])
       })
 
       it('seeds ladderFlows when creating an LD POU', () => {
@@ -233,7 +234,8 @@ describe('createSharedSlice', () => {
         expect(state.files['NewName']).toBeDefined()
         expect(state.files['OldName']).toBeUndefined()
         expect(state.tabs[0].name).toBe('NewName')
-        expect(state.libraries.user[0].name).toBe('NewName')
+        // The POU here is a program, so it never entered `libraries.user`.
+        expect(state.libraries.user).toHaveLength(0)
       })
 
       it('flags the workspace dirty after rename (persist only on save)', () => {
@@ -1197,6 +1199,159 @@ describe('createSharedSlice', () => {
         })
       })
     })
+
+    /**
+     * The bundled archives are always in the build, so their symbols are taken before
+     * the user creates anything: reusing one emits a duplicate declaration that only
+     * surfaces as a C++ error in a generated file.
+     */
+    describe('against library symbols', () => {
+      const librarySymbol = (name: string, type: 'function' | 'function-block') => ({
+        name,
+        type,
+        language: 'st' as const,
+        variables: [],
+        body: '',
+        documentation: '',
+      })
+
+      const seedLibraries = () =>
+        store.getState().libraryActions.setSystemLibraries([
+          {
+            name: 'oscat-basic',
+            author: 'OSCAT',
+            version: '3.3.4',
+            stPath: '',
+            cPath: '',
+            pous: [librarySymbol('MATRIX', 'function-block'), librarySymbol('LIMITS_TYPE', 'function-block')],
+          },
+          {
+            name: 'iec-std-functions',
+            author: 'IEC',
+            version: '1.0.0',
+            stPath: '',
+            cPath: '',
+            pous: [librarySymbol('SIN', 'function')],
+          },
+        ])
+
+      beforeEach(() => {
+        seedLibraries()
+      })
+
+      it('refuses a POU create, naming the library and the symbol kind', () => {
+        const result = store.getState().pouActions.create({ type: 'program', name: 'Matrix', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Matrix" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous).toHaveLength(0)
+      })
+
+      it('refuses a data type create, case-insensitively', () => {
+        const result = store.getState().datatypeActions.create({ name: 'matrix', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"matrix" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('names a library function as a function', () => {
+        const result = store.getState().pouActions.create({ type: 'function', name: 'Sin', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Sin" is a function in the iec-std-functions library')
+      })
+
+      it('refuses a global variable list create', () => {
+        const result = store.getState().globalVariableListActions.create('MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('refuses a global variable list whose derived type name a library symbol owns', () => {
+        const result = store.getState().globalVariableListActions.create('Limits')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe(
+          '"Limits" needs the type name "Limits_TYPE", which is a function block in the oscat-basic library',
+        )
+      })
+
+      it('refuses a POU rename onto a library symbol', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      it('refuses a data type rename onto a library symbol', async () => {
+        seedDatatype('Motor')
+        const result = await store.getState().datatypeActions.rename('Motor', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes[0].name).toBe('Motor')
+      })
+
+      it('refuses a global variable list rename onto a library symbol', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.rename('GVL', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('refuses a POU duplicate onto a library symbol', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.duplicate('Pump', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous).toHaveLength(1)
+      })
+
+      it('refuses a data type duplicate onto a library symbol', () => {
+        seedDatatype('Motor')
+        const result = store.getState().datatypeActions.duplicate('Motor', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes).toHaveLength(1)
+      })
+
+      it('refuses a global variable list duplicate onto a library symbol', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.duplicate('GVL', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('allows a name no library symbol owns', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'Matrices', language: 'st' })).toEqual({
+          ok: true,
+        })
+      })
+
+      /**
+       * The gate is entry-point only: a project saved before it existed still opens,
+       * and the offending element can still be renamed out of the collision.
+       */
+      it('still opens a project that already carries a colliding name', () => {
+        const projectData: PLCProjectData = {
+          dataTypes: [],
+          pous: [
+            {
+              name: 'MATRIX',
+              pouType: 'program',
+              interface: { variables: [] },
+              body: { language: 'st', value: '' },
+              documentation: '',
+            },
+          ],
+          configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
+          meta: { name: 'TestProject', type: 'plc-project', path: '/test/path' },
+          projectData,
+        })
+
+        expect(store.getState().project.data.pous.map((pou) => pou.name)).toEqual(['MATRIX'])
+        expect(store.getState().pouActions.rename('MATRIX', 'Matrices')).toEqual({ ok: true })
+      })
+    })
   })
 
   // =========================================================================
@@ -1302,7 +1457,22 @@ describe('createSharedSlice', () => {
         addServer('ExistingServer')
         const result = store.getState().serverActions.rename('OldServer', 'ExistingServer')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Server name already exists')
+        expect(result.message).toBe('Server already exists')
+      })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().serverActions.rename('OldServer', 'oldserver')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldServer']).toBeDefined()
+        expect(state.files['oldserver']).toBeUndefined()
+        expect(state.project.data.servers?.[0].name).toBe('OldServer')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().serverActions.rename('OldServer', 'OldServer')).toEqual({ ok: true })
       })
     })
   })
@@ -1447,7 +1617,29 @@ describe('createSharedSlice', () => {
         addRemoteDevice('ExistingDevice')
         const result = store.getState().remoteDeviceActions.rename('OldDevice', 'ExistingDevice')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Device name already exists')
+        expect(result.message).toBe('Remote device already exists')
+      })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'olddevice')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldDevice']).toBeDefined()
+        expect(state.files['olddevice']).toBeUndefined()
+        expect(state.project.data.remoteDevices?.[0].name).toBe('OldDevice')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().remoteDeviceActions.rename('OldDevice', 'OldDevice')).toEqual({ ok: true })
+      })
+
+      it('refuses a rename onto a POU name and says so', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+        expect(store.getState().files['OldDevice']).toBeDefined()
       })
     })
   })
@@ -1564,6 +1756,23 @@ describe('createSharedSlice', () => {
       it('allows renaming to the same name (no-op)', () => {
         const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100')
         expect(result).toEqual({ ok: true })
+      })
+
+      it('rejects renaming a slave onto a POU name, and says which', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+      })
+
+      it('keeps a slave name out of reach of the other workspace kinds', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'EK1100', language: 'st' })).toEqual({
+          ok: false,
+          message: '"EK1100" is already the name of an EtherCAT slave',
+        })
+        expect(store.getState().serverActions.create({ name: 'el1809', protocol: 'modbus-tcp' })).toEqual({
+          ok: false,
+          message: '"el1809" is already the name of an EtherCAT slave',
+        })
       })
 
       it('returns error when the bus does not exist', () => {
@@ -2333,6 +2542,74 @@ describe('createSharedSlice', () => {
         expect(store.getState().editors.find((e) => e.meta.name === 'A')).toBeUndefined()
         // And the next tab took over cleanly.
         expect(store.getState().editor.meta.name).toBe('B')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // openRetrievedProject
+    // -----------------------------------------------------------------------
+    describe('openRetrievedProject', () => {
+      // The shared tail of both platforms' retrieve adapters: the desktop
+      // unpacks an archive to a scratch directory and reads it back, web parses
+      // the same archive in memory, and from here on they are the same two
+      // steps. Written per platform, the desktop's copy shipped without the
+      // load and web's marked the project ephemeral twice.
+      it('loads the project and marks it as having no location yet', () => {
+        store.getState().sharedWorkspaceActions.openRetrievedProject({
+          meta: { name: 'Irrigation Controller', type: 'plc-project', path: '/scratch/retrieved/irrigation' },
+          projectData: {
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+
+        expect(store.getState().project.meta.name).toBe('Irrigation Controller')
+        // What stops the next Save writing into a scratch directory the app
+        // prunes behind the user: it points them at Save As instead.
+        expect(store.getState().workspace.isEphemeralProject).toBe(true)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // hasUnsavedChanges
+    // -----------------------------------------------------------------------
+    describe('hasUnsavedChanges', () => {
+      // The rule `closeProject` applies, asked on its own by a caller that has
+      // to replace the project rather than close it -- retrieving from a
+      // device. The point of sharing it is that the two cannot drift: a caller
+      // that re-derived the condition would start discarding work silently the
+      // day the rule changed.
+      it('is true while the editing state is unsaved', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is true while any file is unsaved, whatever the editing state says', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: false })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is false once everything is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(false)
+      })
+
+      it('agrees with what closeProject does about it', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        const dirty = store.getState().sharedWorkspaceActions.hasUnsavedChanges()
+        const { pendingConfirmation } = store.getState().sharedWorkspaceActions.closeProject()
+
+        expect(pendingConfirmation).toBe(dirty)
       })
     })
 

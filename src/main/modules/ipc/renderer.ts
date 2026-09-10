@@ -39,6 +39,15 @@ import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-serv
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
+} from '../../../backend/editor/runtime/bootloader-api-client'
+
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
 /**
@@ -128,6 +137,11 @@ const rendererProcessBridge = {
     xml: string,
   ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
+  exportPdfFile: (
+    defaultFileName: string,
+    bytes: Uint8Array,
+  ): Promise<{ success: boolean; canceled?: boolean; error?: { title: string; description: string } }> =>
+    ipcRenderer.invoke('project:export-pdf-file', defaultFileName, bytes),
   saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:save-file', filePath, content),
   saveFileAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-file-accelerator', callback),
@@ -135,6 +149,9 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:write-files', files),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
   saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
+  retrieveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:retrieve-accelerator', callback),
+  printAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:print-accelerator', callback),
+  pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
 
@@ -219,6 +236,10 @@ const rendererProcessBridge = {
    *  start screen's "Remove from list" action. */
   removeProjectFromRecent: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:remove-from-recent', projectPath),
+  /** Add a project to the recent list without reading it — see
+   *  `ProjectPort.trackRecentProject`. */
+  trackRecentProject: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:track-recent', projectPath),
   /** Recursively delete a project directory AND drop it from the recent
    *  list. Gated by the main-process service's `project.json` safety
    *  check — see `ProjectService.deleteProject`. */
@@ -582,6 +603,33 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
+
+  // ===================== BOOTLOADER (RTOP-283) =====================
+  // The bootloader is a separate service on port 8445 with its own session.
+  // Results are the client's discriminated union, so a caller checks `success`
+  // and shows `error` verbatim -- its messages are written for a person.
+  bootloaderGetCapabilities: (ipAddress: string): Promise<BootloaderApiResult<BootloaderCapabilities>> =>
+    ipcRenderer.invoke('bootloader:get-capabilities', ipAddress),
+  bootloaderLogin: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<BootloaderApiResult<{ role?: string }>> =>
+    ipcRenderer.invoke('bootloader:login', ipAddress, username, password),
+  bootloaderGetStatus: (ipAddress: string): Promise<BootloaderApiResult<BootloaderStatus>> =>
+    ipcRenderer.invoke('bootloader:get-status', ipAddress),
+  bootloaderGetDeviceInfo: (ipAddress: string): Promise<BootloaderApiResult<RuntimeDeviceInfo>> =>
+    ipcRenderer.invoke('bootloader:get-device-info', ipAddress),
+  bootloaderGetRuntimeLogs: (ipAddress: string, tail?: number): Promise<BootloaderApiResult<BootloaderLogs>> =>
+    ipcRenderer.invoke('bootloader:get-runtime-logs', ipAddress, tail),
+  bootloaderStartUpdate: (ipAddress: string, version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:start-update', ipAddress, version),
+  bootloaderGetUpdateProgress: (ipAddress: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:get-update-progress', ipAddress),
+  bootloaderRestartRuntime: (ipAddress: string): Promise<BootloaderApiResult<{ state?: string; reason?: string }>> =>
+    ipcRenderer.invoke('bootloader:restart-runtime', ipAddress),
+  bootloaderClearSession: (ipAddress?: string): Promise<{ success: true }> =>
+    ipcRenderer.invoke('bootloader:clear-session', ipAddress),
   runtimeGetCompilationStatus: (
     ipAddress: string,
   ): Promise<{

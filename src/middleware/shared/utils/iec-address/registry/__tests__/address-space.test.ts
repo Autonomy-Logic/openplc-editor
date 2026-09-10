@@ -1,4 +1,4 @@
-import { formatAddress, isBitClass, isIecAddress, parseAddress, prefixOf } from '../address-space'
+import { formatAddress, isBitClass, isIecAddress, parseAddress, prefixOf, slotRangesOverlap } from '../address-space'
 import type { AddressClass } from '../types'
 
 describe('address-space', () => {
@@ -61,6 +61,58 @@ describe('address-space', () => {
       expect(isIecAddress('%IW4')).toBe(true)
       expect(isIecAddress('relay')).toBe(false)
       expect(isIecAddress('')).toBe(false)
+    })
+  })
+
+  // An ARRAY at a physical address occupies one slot PER ELEMENT, laid out
+  // consecutively (openplc-editor#565), so "do these two collide" stops being
+  // a string comparison and becomes a range question.
+  describe('slotRangesOverlap', () => {
+    /** Non-null parse, so the tests read as addresses rather than as guards. */
+    const at = (address: string) => {
+      const parsed = parseAddress(address)
+      if (!parsed) throw new Error(`not an address: ${address}`)
+      return parsed
+    }
+
+    it('detects a scalar landing inside an array', () => {
+      // The case from the issue discussion: ARRAY [0..9] OF BOOL at %QX0.0
+      // covers %QX0.0-%QX1.1, so a BOOL at %QX0.6 is inside it — and the two
+      // address strings are different, which is why equality missed it.
+      expect(slotRangesOverlap(at('%QX0.0'), 10, at('%QX0.6'), 1)).toBe(true)
+      expect(slotRangesOverlap(at('%QX0.6'), 1, at('%QX0.0'), 10)).toBe(true)
+    })
+
+    it('lets a scalar sit immediately past the end of an array', () => {
+      // %MW0 + 4 slots ends at %MW3.
+      expect(slotRangesOverlap(at('%MW0'), 4, at('%MW3'), 1)).toBe(true)
+      expect(slotRangesOverlap(at('%MW0'), 4, at('%MW4'), 1)).toBe(false)
+    })
+
+    it('detects two arrays that straddle each other', () => {
+      expect(slotRangesOverlap(at('%IW0'), 4, at('%IW3'), 4)).toBe(true)
+      expect(slotRangesOverlap(at('%IW0'), 4, at('%IW4'), 4)).toBe(false)
+    })
+
+    it('walks bit ranges across the byte boundary', () => {
+      // %QX0.6 + 4 slots -> %QX0.6, %QX0.7, %QX1.0, %QX1.1.
+      expect(slotRangesOverlap(at('%QX0.6'), 4, at('%QX1.1'), 1)).toBe(true)
+      expect(slotRangesOverlap(at('%QX0.6'), 4, at('%QX1.2'), 1)).toBe(false)
+    })
+
+    it('never collides across classes — each prefix is its own space', () => {
+      // %MW0 and %MD0 index different runtime arrays; same index, unrelated
+      // storage. Direction separates %IW0 from %QW0 for the same reason.
+      expect(slotRangesOverlap(at('%MW0'), 8, at('%MD0'), 8)).toBe(false)
+      expect(slotRangesOverlap(at('%IW0'), 8, at('%QW0'), 8)).toBe(false)
+    })
+
+    it('reads a slot count below 1 as 1', () => {
+      // getArrayTotalElements answers 0 for a shape it cannot read. Claiming
+      // nothing would make a malformed array collide with nobody; it must
+      // still hold the address it names.
+      expect(slotRangesOverlap(at('%MW5'), 0, at('%MW5'), 1)).toBe(true)
+      expect(slotRangesOverlap(at('%MW5'), 0, at('%MW6'), 1)).toBe(false)
     })
   })
 })

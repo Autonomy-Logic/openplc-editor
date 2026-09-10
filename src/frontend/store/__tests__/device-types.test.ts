@@ -106,6 +106,7 @@ describe('Device slice types', () => {
         includeTimingStatsInPolling: false,
         ethercatStatus: null,
         includeEthercatStatsInPolling: false,
+        runtimeUpdateInProgress: false,
       }
       expect(conn.jwtToken).toBeNull()
       expect(conn.connectionStatus).toBe('disconnected')
@@ -154,6 +155,7 @@ describe('Device slice types', () => {
         includeTimingStatsInPolling: true,
         ethercatStatus: null,
         includeEthercatStatsInPolling: false,
+        runtimeUpdateInProgress: false,
       }
       expect(conn.jwtToken).toBe('token')
       expect(conn.connectionStatus).toBe('connected')
@@ -191,6 +193,7 @@ describe('Device slice types', () => {
           includeTimingStatsInPolling: false,
           ethercatStatus: null,
           includeEthercatStatsInPolling: false,
+          runtimeUpdateInProgress: false,
         },
         deviceConnection: { status: 'disconnected', port: null, transport: null, debugTransport: null },
         deviceLicense: { phase: 'idle', report: null, awaitingPurchaseUntil: null },

@@ -36,6 +36,23 @@ import type {
 } from '../../shared/ports/runtime-port'
 import type { SerialPort, Unsubscribe } from '../../shared/ports/types'
 
+/**
+ * Ask the main process for the stored project on `ipAddress`, unpacked.
+ *
+ * An internal of `fetchRetrievableProject`, which is the one way in that shared
+ * code uses. It was a port method until nothing outside this file turned out to
+ * call it: the desktop pulls a path out of a scratch directory and web pulls
+ * bytes out of an orchestrator response, and neither shape is any use to the
+ * shared picker, which is why both are hidden behind one method that is.
+ */
+async function retrieveProjectFromDevice(ipAddress: string) {
+  try {
+    return await window.bridge.runtimeRetrieveProject(ipAddress)
+  } catch (err) {
+    return { success: false as const, error: getErrorMessage(err) }
+  }
+}
+
 export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimePort {
   // Whether a runtime session is active. The token itself lives in the main
   // process; this only gates isReadyForDebug.
@@ -50,6 +67,81 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
   return {
     isReadyForDebug() {
       return getIpAddress() !== '' && loggedIn
+    },
+
+    /**
+     * The bootloader on the currently targeted device.
+     *
+     * A nested object rather than eight more top-level methods: it is a
+     * different service on a different port with its own session, and keeping
+     * that boundary visible at the call site stops it being mistaken for the
+     * runtime's API.
+     */
+    bootloader: {
+      async getCapabilities() {
+        try {
+          return await window.bridge.bootloaderGetCapabilities(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async login(username: string, password: string) {
+        try {
+          return await window.bridge.bootloaderLogin(requireIp(), username, password)
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getStatus() {
+        try {
+          return await window.bridge.bootloaderGetStatus(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getDeviceInfo() {
+        try {
+          return await window.bridge.bootloaderGetDeviceInfo(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getRuntimeLogs(tail?: number) {
+        try {
+          return await window.bridge.bootloaderGetRuntimeLogs(requireIp(), tail)
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async startUpdate(version: string) {
+        try {
+          return await window.bridge.bootloaderStartUpdate(requireIp(), version)
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async getUpdateProgress() {
+        try {
+          return await window.bridge.bootloaderGetUpdateProgress(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async restartRuntime() {
+        try {
+          return await window.bridge.bootloaderRestartRuntime(requireIp())
+        } catch (err) {
+          return { success: false as const, error: getErrorMessage(err) }
+        }
+      },
+      async clearSession() {
+        try {
+          await window.bridge.bootloaderClearSession(requireIp())
+        } catch {
+          // Best effort: a session the main process may already have dropped
+          // is not worth surfacing to anybody.
+        }
+      },
     },
 
     async login(params: LoginParams): Promise<LoginResult> {
@@ -256,14 +348,6 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
 
     // --- stored source project ---
 
-    async retrieveProject(ipAddress: string) {
-      try {
-        return await window.bridge.runtimeRetrieveProject(ipAddress)
-      } catch (err) {
-        return { success: false, error: getErrorMessage(err) }
-      }
-    },
-
     async installRetrievedLibraries(project: FetchedProject, names: string[]) {
       try {
         return await window.bridge.runtimeInstallRetrievedLibraries(String(project.payload), names)
@@ -306,7 +390,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     },
 
     async fetchRetrievableProject(device: RetrievableDevice) {
-      const retrieved = await this.retrieveProject!(device.key)
+      const retrieved = await retrieveProjectFromDevice(device.key)
       if (!retrieved.success || !retrieved.projectPath) {
         return { success: false as const, error: retrieved.error || 'The device did not return a project.' }
       }

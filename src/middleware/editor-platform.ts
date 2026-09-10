@@ -20,6 +20,7 @@ import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
+import { openFetchedProject } from './adapters/editor/open-fetched-project'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
@@ -55,18 +56,11 @@ const editorProject = createEditorProjectAdapter()
 const editorRuntime = createEditorRuntimeAdapter(() => _runtimeIpAddress)
 
 /**
- * Opening a fetched project is the one retrieve step that needs two ports.
- *
- * The runtime adapter unpacks the archive into a scratch directory; turning
- * that directory into the open project is the project port's job. Wired here
- * rather than inside either adapter, which is where both are already in scope.
+ * Opening a fetched project is the one retrieve step that needs two ports, so
+ * it is composed here where both are in scope. The work itself lives in its own
+ * module, where a test can reach it — see `open-fetched-project.ts`.
  */
-editorRuntime.openFetchedProject = async (project) => {
-  const opened = await editorProject.openProjectByPath(String(project.payload))
-  return opened.success
-    ? { success: true }
-    : { success: false, error: opened.error?.description ?? 'The retrieved project could not be opened.' }
-}
+editorRuntime.openFetchedProject = (project) => openFetchedProject(project, editorProject)
 
 export const editorPorts: PlatformPorts = {
   compiler: createEditorCompilerAdapter(),
