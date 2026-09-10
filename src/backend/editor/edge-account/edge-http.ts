@@ -87,7 +87,7 @@ export interface EdgeHttpResponse {
 }
 
 export interface EdgeRequestInit {
-  method?: 'GET' | 'POST' | 'DELETE'
+  method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'
   /** Serialised and sent as `application/json`. */
   json?: unknown
   /**
@@ -110,6 +110,59 @@ export interface EdgeRequestInit {
 }
 
 /**
+ * Everything a request needs, assembled once.
+ *
+ * Shared by the buffered and the streaming path so the two cannot drift on the parts
+ * that matter for correctness — the confidentiality guard, the Content-Length measured
+ * on the bytes that actually go out, and the bearer header.
+ */
+function prepareRequest(
+  path: string,
+  init: EdgeRequestInit,
+  accept: string,
+): { url: URL; options: https.RequestOptions; payload: Buffer | undefined } {
+  const url = new URL(path.startsWith('/') ? path : `/${path}`, `${getEdgeApiBaseUrl()}/`)
+
+  // Before anything is serialised: a body built here may hold a password.
+  assertTransportIsConfidential(url)
+
+  const json = init.json === undefined ? undefined : JSON.stringify(init.json)
+  // Bytes either way, so one write path serves both. A JSON string is encoded here
+  // rather than by `req.write`'s default so its Content-Length below is measured on
+  // exactly what goes out.
+  const payload = json !== undefined ? Buffer.from(json, 'utf-8') : init.raw?.body
+
+  const headers: Record<string, string> = {
+    Accept: accept,
+    'User-Agent': 'OpenPLC-Editor/edge-account',
+  }
+
+  if (payload !== undefined) {
+    // Byte length, not string length. A password with non-ASCII characters makes
+    // the two differ, and a short Content-Length truncates the body server-side
+    // into a validation error that reads like a wrong password.
+    headers['Content-Type'] = json !== undefined ? 'application/json' : (init.raw?.contentType ?? 'application/json')
+    headers['Content-Length'] = String(payload.length)
+  }
+
+  if (init.accessToken) {
+    headers.Authorization = `Bearer ${init.accessToken}`
+  }
+
+  return {
+    url,
+    options: {
+      hostname: url.hostname,
+      port: url.port || defaultPortFor(url),
+      path: url.pathname + url.search,
+      method: init.method ?? 'GET',
+      headers,
+    },
+    payload,
+  }
+}
+
+/**
  * One request to the Edge API.
  *
  * Resolves for every HTTP answer, including 4xx and 5xx — read `status` to decide
@@ -119,41 +172,7 @@ export interface EdgeRequestInit {
  */
 export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<EdgeHttpResponse> {
   return new Promise((resolve, reject) => {
-    const url = new URL(path.startsWith('/') ? path : `/${path}`, `${getEdgeApiBaseUrl()}/`)
-
-    // Before anything is serialised: a body built here may hold a password.
-    assertTransportIsConfidential(url)
-
-    const json = init.json === undefined ? undefined : JSON.stringify(init.json)
-    // Bytes either way, so one write path serves both. A JSON string is encoded here
-    // rather than by `req.write`'s default so its Content-Length below is measured on
-    // exactly what goes out.
-    const payload = json !== undefined ? Buffer.from(json, 'utf-8') : init.raw?.body
-
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-      'User-Agent': 'OpenPLC-Editor/edge-account',
-    }
-
-    if (payload !== undefined) {
-      // Byte length, not string length. A password with non-ASCII characters makes
-      // the two differ, and a short Content-Length truncates the body server-side
-      // into a validation error that reads like a wrong password.
-      headers['Content-Type'] = json !== undefined ? 'application/json' : (init.raw?.contentType ?? 'application/json')
-      headers['Content-Length'] = String(payload.length)
-    }
-
-    if (init.accessToken) {
-      headers.Authorization = `Bearer ${init.accessToken}`
-    }
-
-    const options: https.RequestOptions = {
-      hostname: url.hostname,
-      port: url.port || defaultPortFor(url),
-      path: url.pathname + url.search,
-      method: init.method ?? 'GET',
-      headers,
-    }
+    const { url, options, payload } = prepareRequest(path, init, 'application/json')
 
     // Scheme-driven, so OPENPLC_EDGE_API_URL can point at the dev backend on
     // http://localhost:3333 without sending a TLS handshake to a plain socket.
@@ -182,6 +201,180 @@ export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<E
 
     req.end()
   })
+}
+
+// ---------------------------------------------------------------------------
+// Streaming
+// ---------------------------------------------------------------------------
+
+/**
+ * Idle budget for a streamed response, not a total one.
+ *
+ * `setTimeout` on a request arms the SOCKET, and the socket is quiet only while nothing
+ * is arriving — so a generation that runs for five minutes never trips this, while one
+ * that stalls does. A total budget would be wrong here: an answer is allowed to take as
+ * long as the model takes, and the failure worth catching is a connection that has gone
+ * silent.
+ */
+const STREAM_IDLE_TIMEOUT_MS = 60_000
+
+/**
+ * Refusals are written before a single token is generated, so they are short. The cap
+ * is here for the server that is not behaving — a 500 that pours HTML down the socket
+ * must not grow a string in the main process without bound.
+ */
+const MAX_ERROR_BODY_CHARS = 64 * 1024
+
+/**
+ * A streamed request that got an answer, and the answer was a refusal.
+ *
+ * The status alone is not enough. The 402 Edge's credit guard raises carries the
+ * structured billing payload the exhaustion modal is built from — the remaining ACU,
+ * the amount required, the reactivate link — and the modal is the only screen that
+ * explains to the user why the request was refused. Losing that body to a generic
+ * "request failed" would leave them with no way to act, so it travels with the status.
+ */
+export class EdgeStreamHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(`Autonomy Edge answered ${status}.`)
+    this.name = 'EdgeStreamHttpError'
+  }
+}
+
+/**
+ * Where a streamed body is delivered, chunk by chunk.
+ *
+ * Exactly one of {@link onEnd} and {@link onError} is called, once, and nothing is
+ * called after it — including after {@link EdgeStreamHandle.cancel}, because a caller
+ * that asked to stop is not waiting to be told the stop happened.
+ */
+export interface EdgeStreamSink {
+  /**
+   * Body text as it arrives. Chunk boundaries are whatever the network produced and
+   * carry no meaning: framing is the caller's job.
+   */
+  onChunk(text: string): void
+  /** The HTTP status, once the headers are in and before any chunk. */
+  onStatus(status: number): void
+  onEnd(): void
+  onError(error: Error): void
+}
+
+export interface EdgeStreamHandle {
+  /**
+   * Drop the request. Nothing further reaches the sink, and the socket is torn down so
+   * the server stops generating — an abandoned AI stream that is left open is billed
+   * for tokens nobody will read.
+   */
+  cancel(): void
+}
+
+/**
+ * One request to the Edge API whose body is consumed as it arrives.
+ *
+ * The buffered {@link edgeRequest} cannot serve a token stream: its promise resolves
+ * only once the body is complete, which for an AI answer is after the whole thing has
+ * been generated, and the point of streaming is that the user reads the first sentence
+ * while the last one is still being written.
+ *
+ * A non-2xx is NOT streamed. The body is buffered and handed to `onError` on an
+ * {@link EdgeStreamHttpError} instead, because a refusal is a short structured document
+ * that the caller has to read whole to act on — see that class for what is at stake.
+ *
+ * Nothing throws out of this call, the confidentiality refusal included: a caller
+ * driving a push API needs one place to handle failure, not two.
+ */
+export function edgeStreamRequest(path: string, init: EdgeRequestInit, sink: EdgeStreamSink): EdgeStreamHandle {
+  let closed = false
+  let abort = (): void => {
+    closed = true
+  }
+
+  /** Deliver a terminal callback, at most once for the life of the request. */
+  const settle = (report: () => void): void => {
+    if (closed) {
+      return
+    }
+
+    closed = true
+    report()
+  }
+
+  try {
+    const { url, options, payload } = prepareRequest(path, init, 'text/event-stream')
+
+    const req = httpModuleFor(url).request(options, (res) => {
+      if (closed) {
+        // Cancelled while the request was in flight. Nothing is owed to the sink, but
+        // the socket still has to go.
+        res.destroy()
+
+        return
+      }
+
+      const status = res.statusCode ?? 0
+
+      // A StringDecoder, not a per-chunk `toString`: a multi-byte character split
+      // across two TCP segments would otherwise decode as two replacement characters
+      // in the middle of the user's answer.
+      res.setEncoding('utf-8')
+      sink.onStatus(status)
+
+      if (status < 200 || status >= 300) {
+        let body = ''
+
+        res.on('data', (chunk: string) => {
+          if (body.length < MAX_ERROR_BODY_CHARS) {
+            body += chunk
+          }
+        })
+        res.on('end', () => settle(() => sink.onError(new EdgeStreamHttpError(status, body))))
+        res.on('error', (error: Error) => settle(() => sink.onError(error)))
+
+        return
+      }
+
+      res.on('data', (chunk: string) => {
+        if (!closed) {
+          sink.onChunk(chunk)
+        }
+      })
+      res.on('end', () => settle(() => sink.onEnd()))
+      // A connection dropped mid-answer. The caller keeps the text it already has and
+      // is told the rest is not coming, which is not the same as a refusal.
+      res.on('error', (error: Error) => settle(() => sink.onError(error)))
+    })
+
+    const timeoutMs = init.timeoutMs ?? STREAM_IDLE_TIMEOUT_MS
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`Edge stream went quiet for ${timeoutMs}ms`))
+    })
+
+    req.on('error', (error: Error) => settle(() => sink.onError(error)))
+
+    abort = () => {
+      closed = true
+      req.destroy()
+    }
+
+    if (payload !== undefined) {
+      req.write(payload)
+    }
+
+    req.end()
+  } catch (error) {
+    settle(() => sink.onError(error instanceof Error ? error : new Error(String(error))))
+  }
+
+  return {
+    cancel() {
+      abort()
+    },
+  }
 }
 
 /**

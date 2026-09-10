@@ -1,3 +1,15 @@
+import type {
+  createConversation,
+  deleteConversation,
+  EdgeAiFailure,
+  EdgeAiResult,
+  fetchAiCredits,
+  fetchAiEntitlements,
+  fetchAiUsage,
+  getConversation,
+  listConversations,
+  renameConversation,
+} from '@root/backend/editor/edge-ai'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import type {
@@ -5,6 +17,7 @@ import type {
   RuntimeLogEntry,
   RuntimeProjectSnapshotMetadata,
 } from '@root/middleware/shared/ports'
+import type { AISSEEvent, AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type {
   DeviceConnectionStatusPayload,
   DeviceLicenseReport,
@@ -86,6 +99,16 @@ const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void
     ipcRenderer.removeListener(channel, listener)
   }
 }
+
+/**
+ * What an `edge-ai:*` channel answers, read off the main-process function behind
+ * it.
+ *
+ * These bridge methods are pass-throughs, so restating the payload shapes here
+ * would be a second declaration of the same contract — and the copy that goes
+ * quietly stale when the module on the other side changes.
+ */
+type EdgeAiReply<Fn extends (...args: never[]) => unknown> = Promise<Awaited<ReturnType<Fn>>>
 
 /** Data posted through the MessagePort by the compiler module.
  *  `compileError` carries strucpp's structured `CompileError` (pouName,
@@ -335,6 +358,75 @@ const rendererProcessBridge = {
     commitMessage?: string
     resolutions?: Record<string, string>
   }): Promise<VersionControlResult<MergeResult>> => ipcRenderer.invoke('edge-vc:merge-branches', params),
+  // ----- Edge AI -----
+  // The desktop holds its own Edge session in the main process, exactly as the
+  // account and version-control channels do, so every AI request crosses the
+  // boundary rather than being made from the renderer. Warm and telemetry answer
+  // the same `EdgeAiResult` union as the rest even though the module behind them
+  // answers nothing, so a caller handles one shape for the whole surface.
+  edgeAiFetchEntitlements: (): EdgeAiReply<typeof fetchAiEntitlements> => ipcRenderer.invoke('edge-ai:entitlements'),
+  edgeAiFetchUsage: (): EdgeAiReply<typeof fetchAiUsage> => ipcRenderer.invoke('edge-ai:usage'),
+  edgeAiFetchCredits: (): EdgeAiReply<typeof fetchAiCredits> => ipcRenderer.invoke('edge-ai:credits'),
+  edgeAiWarm: (): Promise<EdgeAiResult<null>> => ipcRenderer.invoke('edge-ai:warm'),
+  edgeAiSendTelemetry: (event: AITelemetryEventName, data: Record<string, unknown>): Promise<EdgeAiResult<null>> =>
+    ipcRenderer.invoke('edge-ai:telemetry', event, data),
+  edgeAiListConversations: (
+    options: { projectId?: string; limit?: number; offset?: number } = {},
+  ): EdgeAiReply<typeof listConversations> => ipcRenderer.invoke('edge-ai:conversations-list', options),
+  edgeAiGetConversation: (conversationId: string): EdgeAiReply<typeof getConversation> =>
+    ipcRenderer.invoke('edge-ai:conversations-get', conversationId),
+  // The bodies are `Record<string, unknown>` rather than the module's `unknown`:
+  // main refuses anything that is not an object, so the looser type would only
+  // promise a caller something the channel then turns down.
+  edgeAiCreateConversation: (body: Record<string, unknown>): EdgeAiReply<typeof createConversation> =>
+    ipcRenderer.invoke('edge-ai:conversations-create', body),
+  edgeAiRenameConversation: (
+    conversationId: string,
+    body: Record<string, unknown>,
+  ): EdgeAiReply<typeof renameConversation> => ipcRenderer.invoke('edge-ai:conversations-rename', conversationId, body),
+  edgeAiDeleteConversation: (conversationId: string): EdgeAiReply<typeof deleteConversation> =>
+    ipcRenderer.invoke('edge-ai:conversations-delete', conversationId),
+
+  // ----- Edge AI streaming -----
+  // `invoke` is request/response, so a streamed answer is a handshake: this call
+  // opens the request and comes back with the id every event below carries. Hold
+  // onto that id — it is the only way to abort the request, and the only way to
+  // tell two answers running at once apart.
+  edgeAiStreamStart: (request: {
+    kind: 'chat' | 'completion'
+    body: Record<string, unknown>
+  }): Promise<EdgeAiResult<{ streamId: string }>> => ipcRenderer.invoke('edge-ai:stream-start', request),
+  /** Cancels the upstream request. No further event follows, and aborting a finished stream is a no-op. */
+  edgeAiStreamAbort: (streamId: string): Promise<EdgeAiResult<null>> =>
+    ipcRenderer.invoke('edge-ai:stream-abort', streamId),
+  /**
+   * One frame of the answer, structured.
+   *
+   * Not just text: a `tool_use` frame is how the model asks to act on the project,
+   * and the agentic loop reads it here. Flattening this to prose at the boundary
+   * would leave the loop unable to see a tool call at all.
+   */
+  onEdgeAiStreamEvent: (callback: (payload: { streamId: string; event: AISSEEvent }) => void): (() => void) => {
+    const listener = (_event: unknown, payload: { streamId: string; event: AISSEEvent }) => callback(payload)
+    ipcRenderer.on('edge-ai:event', listener)
+    return () => ipcRenderer.removeListener('edge-ai:event', listener)
+  },
+  /** The answer is complete. Exactly one of end and error arrives per stream, and never after an abort. */
+  onEdgeAiStreamEnd: (callback: (payload: { streamId: string }) => void): (() => void) => {
+    const listener = (_event: unknown, payload: { streamId: string }) => callback(payload)
+    ipcRenderer.on('edge-ai:end', listener)
+    return () => ipcRenderer.removeListener('edge-ai:end', listener)
+  },
+  /**
+   * The stream failed. `failure` is the same union the non-streaming channels
+   * answer with, so the sign-in prompt, the offline notice and the ACU
+   * exhaustion modal are chosen from one discriminant.
+   */
+  onEdgeAiStreamError: (callback: (payload: { streamId: string; failure: EdgeAiFailure }) => void): (() => void) => {
+    const listener = (_event: unknown, payload: { streamId: string; failure: EdgeAiFailure }) => callback(payload)
+    ipcRenderer.on('edge-ai:error', listener)
+    return () => ipcRenderer.removeListener('edge-ai:error', listener)
+  },
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)

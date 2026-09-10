@@ -188,7 +188,7 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasStLSP: true,
   hasUndoRedoHistory: true,
   hasFileWatcher: true,
-  hasAIAssistant: false,
+  hasAIAssistant: true,
   hasProxiedRuntimeConnection: false,
   hasDirectProgramUpload: false,
   hasPackageManager: true,

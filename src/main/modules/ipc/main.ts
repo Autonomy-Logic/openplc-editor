@@ -5,6 +5,23 @@ import {
   signIn as signInToEdge,
   signOut as signOutOfEdge,
 } from '@root/backend/editor/edge-account/edge-account-service'
+import {
+  type AiStreamHandle,
+  type AiStreamSink,
+  createConversation,
+  deleteConversation,
+  type EdgeAiResult,
+  fetchAiCredits,
+  fetchAiEntitlements,
+  fetchAiUsage,
+  getConversation,
+  listConversations,
+  renameConversation,
+  sendAiTelemetry,
+  streamAiChat,
+  streamAiCompletion,
+  warmAi,
+} from '@root/backend/editor/edge-ai'
 import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
 import {
   listRecentCloudProjects,
@@ -57,6 +74,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
@@ -88,7 +106,7 @@ import type { VersionControlResult } from '@root/middleware/shared/ports/version
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
@@ -219,6 +237,49 @@ interface Md5VerifyReply {
   targetMd5?: string
   targetEndian?: 'le' | 'be'
   error?: string
+}
+
+/**
+ * A live AI stream, as the bridge sees it: what cancels the request, where its
+ * tokens are going, and how to unhook the listener watching for that window to
+ * go away.
+ */
+interface AiStream {
+  cancel: () => void
+  sender: WebContents
+  release: () => void
+}
+
+/**
+ * The telemetry events the renderer may send, as values rather than as a type.
+ *
+ * `satisfies` keeps the list honest in one direction only: a renamed or deleted
+ * event breaks the build here, but a NEW one has to be added here as well or it
+ * is silently dropped. That is the better half of the trade — an unchecked
+ * string from the renderer becomes an analytics event name, and a bug that
+ * produced `undefined` would write a bucket nobody can query out again.
+ */
+const AI_TELEMETRY_EVENTS = [
+  'completion_requested',
+  'completion_shown',
+  'completion_accepted',
+  'completion_dismissed',
+  'completion_error',
+  'completion_timeout',
+  'completion_empty',
+  'chat_message',
+  'chat_rating',
+  'conversation_created',
+  'conversation_loaded',
+  'conversation_renamed',
+  'conversation_deleted',
+  'acu_exhausted',
+  'upgrade_cta_clicked',
+] as const satisfies readonly AITelemetryEventName[]
+
+/** The telemetry event the renderer named, when this build knows it. */
+function toAiTelemetryEvent(value: unknown): AITelemetryEventName | undefined {
+  return AI_TELEMETRY_EVENTS.find((name) => name === value)
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -879,6 +940,22 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-vc:drop-stash', this.handleEdgeVcDropStash)
     this.registerHandle('edge-vc:branch-diff-with-base', this.handleEdgeVcBranchDiffWithBase)
     this.registerHandle('edge-vc:merge-branches', this.handleEdgeVcMergeBranches)
+    // ----- Edge AI (chat, inline completion, billing surface, conversations) -----
+    // The last two are a pair: `stream-start` answers with an id, and everything
+    // the model produces arrives under it on `edge-ai:event` / `edge-ai:end` /
+    // `edge-ai:error`.
+    this.registerHandle('edge-ai:entitlements', this.handleEdgeAiEntitlements)
+    this.registerHandle('edge-ai:usage', this.handleEdgeAiUsage)
+    this.registerHandle('edge-ai:credits', this.handleEdgeAiCredits)
+    this.registerHandle('edge-ai:warm', this.handleEdgeAiWarm)
+    this.registerHandle('edge-ai:telemetry', this.handleEdgeAiTelemetry)
+    this.registerHandle('edge-ai:conversations-list', this.handleEdgeAiConversationsList)
+    this.registerHandle('edge-ai:conversations-get', this.handleEdgeAiConversationsGet)
+    this.registerHandle('edge-ai:conversations-create', this.handleEdgeAiConversationsCreate)
+    this.registerHandle('edge-ai:conversations-rename', this.handleEdgeAiConversationsRename)
+    this.registerHandle('edge-ai:conversations-delete', this.handleEdgeAiConversationsDelete)
+    this.registerHandle('edge-ai:stream-start', this.handleEdgeAiStreamStart)
+    this.registerHandle('edge-ai:stream-abort', this.handleEdgeAiStreamAbort)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -1715,6 +1792,306 @@ class MainProcessBridge implements MainIpcModule {
     const stashRef = MainProcessBridge.vcString(ref)
 
     return id && stashRef ? dropStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  // -------------------------------------------------------------------------
+  // Edge AI
+  // -------------------------------------------------------------------------
+  //
+  // Same discipline as the version-control channels above — every argument is
+  // narrowed before it becomes an HTTP request, because the renderer is not a
+  // trusted caller — plus the one thing those channels never had to do: chat
+  // and completion STREAM.
+  //
+  // `ipcMain.handle` is request/response, so a stream cannot be a single call.
+  // `edge-ai:stream-start` opens the upstream request and answers with an id;
+  // everything after that arrives as pushed events (`edge-ai:event`,
+  // `edge-ai:end`, `edge-ai:error`), each tagged with that id so a renderer
+  // running an inline completion and a chat answer at once can tell them apart.
+  //
+  // `edge-ai:event` carries the model's frames structured rather than as text,
+  // because a `tool_use` frame IS the feature: flattened to prose it disappears,
+  // and an assistant that cannot be seen asking to act reads as one that
+  // answered and then did nothing.
+  //
+  // `edge-ai:error` carries the module's `EdgeAiFailure` whole rather than a
+  // flattened message: signed-out, unreachable, billing and http are four
+  // different things to say to the user, and the non-streaming channels answer
+  // with that same union — so the renderer reads ONE failure shape everywhere.
+
+  /**
+   * The live streams, by id. This map is the only thing holding an open upstream
+   * request, so every way a stream can end has to remove its entry: the model
+   * finishing, the request failing, the renderer aborting, and the window going
+   * away mid-answer. An entry left behind is a socket nobody is reading and
+   * nobody will ever close.
+   */
+  private readonly aiStreams = new Map<string, AiStream>()
+
+  /**
+   * Narrows an IPC argument to a request body.
+   *
+   * Deliberately not `vcRecord`, which answers `{}` for anything unusable: an
+   * empty object is a well-formed body that would be POSTed as a request with
+   * no messages and come back from Edge as a confusing 400, instead of as the
+   * local mistake it is.
+   */
+  private static aiBody(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value))
+      : undefined
+  }
+
+  /** A count the API will accept, or nothing — never `NaN`, never negative. */
+  private static aiCount(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
+  }
+
+  private static readonly AI_BAD_REQUEST = {
+    ok: false,
+    failure: { kind: 'http', status: 400, message: 'The editor made an invalid AI request.' },
+  } as const satisfies EdgeAiResult<never>
+
+  handleEdgeAiEntitlements = () => fetchAiEntitlements()
+
+  handleEdgeAiUsage = () => fetchAiUsage()
+
+  handleEdgeAiCredits = () => fetchAiCredits()
+
+  /**
+   * Warm the prompt cache. `warmAi` resolves either way and answers nothing, so
+   * the result is manufactured here: every `edge-ai:*` channel answering the
+   * same union is what lets the renderer handle them all the same way.
+   */
+  handleEdgeAiWarm = async (): Promise<EdgeAiResult<null>> => {
+    await warmAi()
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Telemetry, refused unless the event is one this build knows.
+   *
+   * The name is written into an analytics record, so forwarding whatever string
+   * the renderer sent would let a bug — a template literal that produced
+   * `undefined`, say — create event names nobody can query out again.
+   */
+  handleEdgeAiTelemetry = async (
+    _event: IpcMainInvokeEvent,
+    name: unknown,
+    data: unknown,
+  ): Promise<EdgeAiResult<null>> => {
+    const telemetryEvent = toAiTelemetryEvent(name)
+
+    if (!telemetryEvent) {
+      // Loud, because the likeliest cause is not a malicious renderer but a new
+      // event added to the port's union and not to the list here — and a dropped
+      // analytics event is invisible by nature: nobody notices a graph that was
+      // never drawn. Logged and refused, never thrown: telemetry that fails must
+      // not take the request that carried it down.
+      logger.warn(`Refused an unknown AI telemetry event: ${typeof name === 'string' ? name : `(${typeof name})`}`)
+
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    await sendAiTelemetry(telemetryEvent, MainProcessBridge.vcRecord(data))
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * List conversations. Every option is narrowed rather than forwarded, because
+   * each one is stringified into the query: an object arriving as `limit` would
+   * ask Edge for `limit=[object Object]`, where a dropped option asks for the
+   * default the caller wanted anyway.
+   */
+  handleEdgeAiConversationsList = (_event: IpcMainInvokeEvent, options: unknown) => {
+    const source = MainProcessBridge.vcRecord(options)
+
+    return listConversations({
+      projectId: MainProcessBridge.vcString(source.projectId),
+      limit: MainProcessBridge.aiCount(source.limit),
+      offset: MainProcessBridge.aiCount(source.offset),
+    })
+  }
+
+  handleEdgeAiConversationsGet = (_event: IpcMainInvokeEvent, conversationId: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+
+    return id ? getConversation(id) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsCreate = (_event: IpcMainInvokeEvent, body: unknown) => {
+    const payload = MainProcessBridge.aiBody(body)
+
+    return payload ? createConversation(payload) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsRename = (_event: IpcMainInvokeEvent, conversationId: unknown, body: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+    const payload = MainProcessBridge.aiBody(body)
+
+    return id && payload ? renameConversation(id, payload) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsDelete = (_event: IpcMainInvokeEvent, conversationId: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+
+    return id ? deleteConversation(id) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  /**
+   * Open a stream and answer with the id its events will carry.
+   *
+   * The id is generated here rather than accepted from the renderer: it is the
+   * key of the cancellation map, and a renderer that reused one — two chat
+   * panels, or a remount — would abort somebody else's answer.
+   */
+  handleEdgeAiStreamStart = (event: IpcMainInvokeEvent, params: unknown): EdgeAiResult<{ streamId: string }> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const kind = source.kind
+    const body = MainProcessBridge.aiBody(source.body)
+
+    if ((kind !== 'chat' && kind !== 'completion') || !body) {
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    const streamId = randomUUID()
+    const sender = event.sender
+
+    // A window can be closed with an answer half-written, and the request would
+    // go on being read for as long as the model kept talking. Hooking teardown
+    // here — rather than only noticing when the next chunk fails to send — ends
+    // it at once, including for a stream that has produced nothing yet.
+    const onSenderDestroyed = () => this.abortAiStream(streamId)
+
+    sender.once('destroyed', onSenderDestroyed)
+
+    // Registered BEFORE the request starts, because the sink can fire on this
+    // same tick: a chunk delivered before the entry existed would be dropped on
+    // the floor, and a failure raised synchronously would leave an entry nothing
+    // ever removes. `cancel` is late-bound for the same reason — the handle that
+    // does the cancelling only exists once the call has returned.
+    let handle: AiStreamHandle | null = null
+    let cancelled = false
+
+    this.aiStreams.set(streamId, {
+      cancel: () => {
+        cancelled = true
+        handle?.cancel()
+      },
+      sender,
+      release: () => sender.removeListener('destroyed', onSenderDestroyed),
+    })
+
+    // `onStatus` is left unimplemented on purpose: it is optional and diagnostic,
+    // and a refusal never produces a chunk — whatever a consumer would do about
+    // the upstream status already reaches it as an `edge-ai:error` failure. A
+    // channel carrying it would be one more event with nothing on the far end.
+    const sink: AiStreamSink = {
+      // The frame crosses whole. Flattening to text here would strip `tool_use`,
+      // and a renderer that cannot see a tool call has no way to run it — the
+      // assistant would appear to answer and then do nothing.
+      onEvent: (event) => this.sendAiStreamEvent(streamId, 'edge-ai:event', { event }),
+      onEnd: () => {
+        this.sendAiStreamEvent(streamId, 'edge-ai:end', {})
+        this.forgetAiStream(streamId)
+      },
+      onFailure: (failure) => {
+        this.sendAiStreamEvent(streamId, 'edge-ai:error', { failure })
+        this.forgetAiStream(streamId)
+      },
+    }
+
+    try {
+      // The body crosses as the object the renderer sent, narrowed no further:
+      // what a chat or completion request must contain belongs to the edge-ai
+      // module and to the route behind it. A second copy of that shape here is
+      // the one nobody would remember to update.
+      handle = kind === 'chat' ? streamAiChat(body, sink) : streamAiCompletion(body, sink)
+    } catch (error) {
+      // Failures are supposed to arrive through the sink, so a throw here is the
+      // request never having been made at all. The entry and the window hook are
+      // already in place by this point, and leaving them would be a stream
+      // nothing can ever end — so they go before the failure is reported.
+      this.forgetAiStream(streamId)
+
+      return { ok: false, failure: { kind: 'unreachable', message: getErrorMessage(error) } }
+    }
+
+    // An abort that arrived while the request was being opened still has to
+    // land — at that point `cancel` above could only set the flag.
+    if (cancelled) {
+      handle.cancel()
+    }
+
+    return { ok: true, data: { streamId } }
+  }
+
+  /**
+   * Cancel a stream on the renderer's behalf.
+   *
+   * An id that is no longer live is answered as success rather than as an error:
+   * the user pressing stop races the model finishing, and both orders are
+   * ordinary. Cancelling emits no event — the module calls neither `onEnd` nor
+   * `onFailure` for a cancelled stream, and the renderer already knows.
+   */
+  handleEdgeAiStreamAbort = (_event: IpcMainInvokeEvent, streamId: unknown): EdgeAiResult<null> => {
+    const id = MainProcessBridge.vcString(streamId)
+
+    if (!id) {
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    this.abortAiStream(id)
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Push one event of a live stream to the window that asked for it.
+   *
+   * `send` on a destroyed `webContents` throws, and a stream whose reader is
+   * gone has no reason to keep running — so a destroyed target ends the stream
+   * rather than merely skipping the frame.
+   */
+  private sendAiStreamEvent(streamId: string, channel: string, payload: Record<string, unknown>) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    if (stream.sender.isDestroyed()) {
+      this.abortAiStream(streamId)
+      return
+    }
+
+    stream.sender.send(channel, { streamId, ...payload })
+  }
+
+  /** Forget a stream that has already finished: the map entry and the window hook go together. */
+  private forgetAiStream(streamId: string) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    this.aiStreams.delete(streamId)
+    stream.release()
+  }
+
+  /** Forget a stream that has NOT finished, cancelling the request it holds open. */
+  private abortAiStream(streamId: string) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    this.forgetAiStream(streamId)
+    stream.cancel()
   }
 
   handleCatalogList = async (

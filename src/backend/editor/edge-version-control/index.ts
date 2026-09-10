@@ -28,7 +28,8 @@ import { z } from 'zod'
 
 import type { VersionControlFailure, VersionControlResult } from '../../../middleware/shared/ports/version-control-port'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
-import { parseJsonBodyAs } from '../edge-account/edge-http'
+import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
+import { logger } from '../services'
 
 /**
  * Git work against a whole project is not an auth round trip. Matches the web build's
@@ -81,6 +82,9 @@ const FailureBodySchema = z.object({ message: z.union([z.string(), z.array(z.str
  * (`branch`, `conflicts`, `total`) stay strict.
  */
 const CaptionSchema = z.string().catch('')
+
+/** A counter the server may omit. Absent reads as zero rather than as a failure. */
+const CountSchema = z.number().catch(0)
 
 /** The top-level 409 body shared by the carry rejection and the merge refusal. */
 const ConflictBodySchema = z.object({
@@ -163,17 +167,30 @@ async function call<Schema extends z.ZodTypeAny>(
     return { ok: false, failure: { kind: 'http', status, message: messageFromBody(body, status) } }
   }
 
-  const envelope = parseJsonBodyAs(body, edgeEnvelopeOf(schema))
+  const envelope = edgeEnvelopeOf(schema).safeParse(parseJsonBody(body))
 
-  if (!envelope || envelope.data === undefined) {
+  if (!envelope.success || envelope.data.data === undefined) {
     // A 2xx whose body we cannot read is not a success we can hand to the UI.
+    //
+    // Logged with the field that failed, because the message alone is a dead end: a
+    // developer facing "unreadable response" on a 200 has no way to tell a server that
+    // changed its shape from a schema here that is stricter than the server ever was.
+    // Both have happened; the second one cost an afternoon.
+    logger.warn(
+      `Unreadable ${path} response: ${
+        envelope.success
+          ? 'the envelope carried no data'
+          : envelope.error.issues.map((issue) => `${issue.path.join('.') || '(root)'} ${issue.message}`).join('; ')
+      }`,
+    )
+
     return {
       ok: false,
       failure: { kind: 'http', status, message: 'Autonomy Edge returned an unreadable response.' },
     }
   }
 
-  return { ok: true, data: envelope.data }
+  return { ok: true, data: envelope.data.data }
 }
 
 /** For the routes whose answer the caller ignores (delete, discard, drop). */
@@ -279,7 +296,11 @@ export function listCommits(projectId: string, options: { limit?: number; offset
 
   return call(
     `/projects/${projectId}/commits${query ? `?${query}` : ''}`,
-    z.object({ commits: z.array(z.unknown()), total: z.number(), page: z.number() }),
+    // `total` and `page` are the pagination counters, and the server does not always
+    // send them. The port types them `number`, so they default rather than fail: a
+    // history that arrived without its page counter is still a history, and refusing
+    // it would blank the History tab over a field nothing on screen depends on.
+    z.object({ commits: z.array(z.unknown()), total: CountSchema, page: CountSchema }),
   )
 }
 

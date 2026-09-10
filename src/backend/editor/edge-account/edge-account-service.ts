@@ -207,7 +207,7 @@ async function usableAccessToken(): Promise<string | null> {
 export async function edgeAuthedRequest(
   path: string,
   init: {
-    method?: 'GET' | 'POST' | 'DELETE'
+    method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'
     json?: unknown
     raw?: { body: Buffer; contentType: string }
     timeoutMs?: number
@@ -230,6 +230,31 @@ export async function edgeAuthedRequest(
   }
 
   return edgeRequest(path, { ...init, accessToken })
+}
+
+/**
+ * The bearer for a caller that cannot go through {@link edgeAuthedRequest}.
+ *
+ * A streamed response has no buffered body to hand back, so the streaming transport
+ * has to carry the token itself. That is the ONLY reason this is exported: renewal,
+ * the single-flight guard and the expiry margin stay here, and a caller that
+ * reimplemented any of them would race the rotation this module exists to serialise.
+ *
+ * `forceRenewal` is the streaming half of the one retry `edgeAuthedRequest` performs.
+ * A token can be refused despite a future `exp` — revoked from another device, or
+ * invalidated by a password change — and only the caller can see the 401 that says so,
+ * because by then the response is already being streamed to it.
+ *
+ * Resolves null when no session could be obtained, and REJECTS on a transport failure,
+ * for the same reason `edgeAuthedRequest` does: "denied" and "unreachable" are not the
+ * same answer.
+ */
+export async function edgeAccessToken({ forceRenewal = false } = {}): Promise<string | null> {
+  if (!forceRenewal) {
+    return usableAccessToken()
+  }
+
+  return (await renew()) ? accessToken : null
 }
 
 // ---------------------------------------------------------------------------

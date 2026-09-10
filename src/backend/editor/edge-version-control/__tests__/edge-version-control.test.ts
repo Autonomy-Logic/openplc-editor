@@ -36,6 +36,14 @@ import {
   switchBranch,
 } from '..'
 
+// The module logs an unreadable response through winston, and the logger service
+// reads `app.getPath('userData')` when it loads — `electron` has no `app` under jest,
+// so importing it for real takes the whole suite down before a single test runs. Same
+// stub the IPC handler tests use, for the same reason.
+jest.mock('../../services', () => ({
+  logger: { debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
+}))
+
 jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAuthedRequest: jest.fn(),
 }))

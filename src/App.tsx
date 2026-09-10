@@ -11,6 +11,7 @@ import './backend/shared/styles/globals.css'
 // without the body editor) saw Monaco's default vs-dark theme.
 import './frontend/components/_features/[workspace]/editor/monaco/configs'
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 // Resolve basedpyright's worker bundle URL through the host
 // bundler.  Editor uses webpack with an `asset/resource` rule on
 // `?url`; web uses Vite's native `?url` query.  The shared
@@ -19,17 +20,22 @@ import './frontend/components/_features/[workspace]/editor/monaco/configs'
 // `App.tsx` keeps the shared zone clean.  See
 // `setPythonLspWorkerUrl` in monaco/python-lsp/index.ts.
 import pyrightWorkerUrl from 'browser-basedpyright/dist/pyright.worker.js?url'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
+import { AIChatPanel } from './frontend/components/_features/[workspace]/ai-chat'
+import { AcuExhaustionModal } from './frontend/components/_features/[workspace]/ai-settings-panel'
 import { setPythonLspWorkerUrl } from './frontend/components/_features/[workspace]/editor/monaco/python-lsp'
 import { AppLayout } from './frontend/components/_templates/app-layout'
 import { StartScreen } from './frontend/screens/start-screen'
 import { WorkspaceScreen } from './frontend/screens/workspace-screen'
+import { trackAcuExhausted, trackUpgradeCtaClicked } from './frontend/services/ai/telemetry'
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
+import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
+import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
 import { editorPorts, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
-import { PlatformProvider } from './middleware/shared/providers'
+import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
 
 /**
  * Load every installed library (bundled + user-installed) at startup
@@ -71,6 +77,107 @@ editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
 // `monaco/python-lsp/initPythonLSP` when Monaco mounts.
 setPythonLspWorkerUrl(pyrightWorkerUrl)
 
+// Seed the AI slice from the platform config before the first render, so the chat
+// entry point and the inline-completion provider see the real consent state instead of
+// the store's conservative default and then flipping a frame later.
+if (editorPorts.ai) {
+  const { setAIEnabled, setAIConsented } = openPLCStoreBase.getState().aiActions
+  setAIEnabled(editorPorts.ai.isFeatureEnabled)
+  setAIConsented(editorPorts.ai.hasUserConsented)
+}
+
+/**
+ * One client for the whole app, created at module scope.
+ *
+ * Only the conversation hooks (`frontend/services/ai/conversations`) use react-query in
+ * this build, so the provider below wraps nothing but the chat panel. Creating the
+ * client inside a component instead would throw the conversation list away every time
+ * the panel remounted — which it does on every open and close.
+ */
+const aiQueryClient = new QueryClient()
+
+/**
+ * The chat panel, with the desktop's ST transpiler and its react-query scope bound in.
+ *
+ * Declared at module scope so the component keeps its identity across renders of `App`:
+ * an inline arrow would be a new component type every render, and React would remount
+ * the whole conversation each time.
+ *
+ * The transpiler is the reason a graphical POU reaches the model as Structured Text
+ * rather than as a bag of React Flow nodes. Omit it and LD / FBD questions get answered
+ * against a program the assistant cannot actually read.
+ *
+ * The `QueryClientProvider` sits HERE rather than at the app root deliberately. Nothing
+ * outside the AI conversation hooks uses react-query, the panel is the only subtree that
+ * calls them, and it only mounts once the user opens the chat — so the narrowest scope
+ * that works is also the one that costs a user who never opens the panel nothing.
+ */
+const EditorChatPanel = () => (
+  <QueryClientProvider client={aiQueryClient}>
+    <AIChatPanel transpileProject={transpileProjectStInProcess} />
+  </QueryClientProvider>
+)
+
+/**
+ * The ACU exhaustion modal, subscribed to the slice the whole AI surface reports into.
+ *
+ * Mounted once, outside the panel, because a 402 does not only come from chat: an inline
+ * completion can spend the last of someone's credits, and the block has to be explained
+ * wherever it happened. Without this the `billing` payload the adapter carefully carries
+ * across IPC has nowhere to be shown, and running out of credits looks like a generic
+ * error.
+ */
+const AiBillingNotice = () => {
+  const ai = editorPorts.ai
+  const billingError = useOpenPLCStore((state) => state.ai.billingError)
+  const planSlug = useOpenPLCStore((state) => state.ai.planSlug)
+  const setBillingError = useOpenPLCStore((state) => state.aiActions.setBillingError)
+
+  const dismiss = useCallback(() => setBillingError(null), [setBillingError])
+  const onUpgradeClick = useCallback(() => {
+    if (ai) trackUpgradeCtaClicked(ai, { source: 'modal' })
+  }, [ai])
+
+  // Fired once per modal-open. The ref dedupes re-renders of the same payload — a
+  // parallel entitlements refresh updates `planSlug` and would otherwise count the same
+  // block twice. `code + message` is identity enough: the user has to dismiss before the
+  // next 402 can land a new payload.
+  const lastTrackedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!ai) return
+    if (!billingError) {
+      lastTrackedRef.current = null
+      return
+    }
+
+    const key = `${billingError.code}:${billingError.message}`
+    if (lastTrackedRef.current === key) return
+    lastTrackedRef.current = key
+
+    trackAcuExhausted(ai, {
+      source:
+        billingError.code === 'subscription_inactive'
+          ? 'subscription'
+          : billingError.code === 'rate_limit_exceeded'
+            ? 'rate_limit'
+            : 'usage_limit',
+      planSlug,
+      remaining: billingError.remaining ?? null,
+    })
+  }, [ai, billingError, planSlug])
+
+  return (
+    <AcuExhaustionModal
+      billingError={billingError}
+      onDismiss={dismiss}
+      // Deep-links to Edge's `Profile -> Usage` page, where ACU is topped up and a
+      // lapsed subscription is reactivated.
+      upgradeUrl={`${getEdgeWebUrl()}/profile/settings?tab=usage`}
+      onUpgradeClick={onUpgradeClick}
+    />
+  )
+}
+
 // Pre-warm the STruC++ LSP worker so the first ST POU opens with
 // completion + diagnostics already streaming.  `bootStLsp` returns
 // null when the capability flag is off (web build before its
@@ -102,7 +209,12 @@ export default function App() {
 
   return (
     <PlatformProvider ports={editorPorts}>
-      <AppLayout>{path === '' ? <StartScreen /> : <WorkspaceScreen />}</AppLayout>
+      <AiBillingNotice />
+      {/* The workspace screen reads the panel out of this context; without the provider
+          `useChatPanel()` answers null and the chat button opens nothing. */}
+      <ExtensionPanelProvider panels={{ ChatPanel: EditorChatPanel }}>
+        <AppLayout>{path === '' ? <StartScreen /> : <WorkspaceScreen />}</AppLayout>
+      </ExtensionPanelProvider>
     </PlatformProvider>
   )
 }
