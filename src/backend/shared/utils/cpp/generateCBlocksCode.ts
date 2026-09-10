@@ -55,6 +55,15 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 #undef min
 #undef max
 #undef abs
+// \`round\` is the same story and bites in the same header: Energia defines it
+// as a macro (\`Energia.h\`), and \`<chrono>\` declares \`chrono::round<ToDur>()\`.
+// The macro swallows the call and the header fails to parse with
+// \`expected primary-expression before '__t0'\` — from a file the user never
+// wrote, so it reads as a toolchain fault rather than a name collision.
+// Undef'd here rather than left to the user: the include that trips over it is
+// in this preamble, so nothing user code does afterwards can help.
+// \`std::round\` / \`::round\` from <cmath> remain available.
+#undef round
 #endif
 
 // The C block interface — the \`<POU>_VARS\` struct for every C++ POU in this
