@@ -30,6 +30,7 @@ Design notes that outlive the skeleton:
 
 #if OPCUA_ENABLED
 
+#include "opcua_arena.h"
 #include "opcua_net.h"
 #include "opcua_types.h"
 
@@ -46,42 +47,10 @@ Design notes that outlive the skeleton:
 
 namespace {
 
-/** The arena every OPC-UA allocation comes from.
- *
- *  A fixed array is the point: it makes the server's footprint a link-time
- *  fact (an overflow is an `arduino-cli` error in the same line the user
- *  already reads, not a field failure), it cannot fragment the newlib heap the
- *  user program allocates from, and it caps the feature by construction
- *  instead of by hope.
- *
- *  `used` is load-bearing, not decoration.  The core builds with
- *  `-fdata-sections` and links with `--gc-sections`, and until the allocator
- *  lands nothing READS this array — so the optimiser drops the initialising
- *  store as dead, the array becomes unreferenced, and the linker discards the
- *  whole 32 KB.  That was the observed behaviour: the OPC-UA layer linked and
- *  the arena did not appear in `.bss` at all, which would have let an
- *  over-budget configuration build cleanly and only fail on the device — the
- *  exact failure this arena exists to make impossible. */
-__attribute__((used)) uint8_t g_arena[OPCUA_ARENA_SIZE];
-
 bool     g_started = false;
 uint32_t g_overruns = 0;
 
 } // namespace
-
-/** Base of the OPC-UA arena.
- *
- *  External linkage so the allocator (and, right now, the linker) has a real
- *  reference to the storage rather than relying on an attribute alone. */
-uint8_t* opcua_arena_base()
-{
-    return g_arena;
-}
-
-size_t opcua_arena_size()
-{
-    return sizeof(g_arena);
-}
 
 uint32_t opcua_overrun_count()
 {
@@ -93,22 +62,11 @@ void opcua_init()
     if (g_started)
         return;
 
-    // Reserve the arena, for real.
-    //
-    // This looks like a no-op and is not.  The core builds with
-    // `-fdata-sections` / `--gc-sections`, and until the allocator lands
-    // nothing reads `g_arena`.  `__attribute__((used))` only stops the
-    // COMPILER from dropping it; the LINKER's gc-sections pass still discards
-    // it (and `retain` is GCC 11+, while this toolchain is 8.3).  Measured:
-    // without a reference from a reachable path the whole 32 KB vanished from
-    // `.bss` — an over-budget configuration would have linked cleanly and
-    // failed only on the device, which is precisely what the arena exists to
-    // prevent.  `opcua_init()` is called from Baremetal.ino, so a volatile
-    // touch here is a reference the optimiser cannot elide and gc-sections
-    // cannot follow past.  It goes away when the allocator starts using the
-    // arena in earnest.
-    volatile uint8_t* arena_probe = g_arena;
-    *arena_probe = 0;
+    // Reset the arena. This is also the reachable reference that keeps the
+    // arena in .bss at all — see the note in opcua_arena.cpp about
+    // --gc-sections discarding a static array nothing demonstrably reads.
+    opcua_arena_reset();
+
 
     if (!opcua_net::begin(OPCUA_PORT))
         return;
@@ -149,10 +107,6 @@ void opcuatask()
 void opcua_init() {}
 void opcuatask() {}
 uint32_t opcua_overrun_count() { return 0; }
-// No arena on a target with no server — nothing allocates, so nothing is
-// reserved. Returning null/0 rather than omitting these keeps the header one
-// declaration set for both cases.
-uint8_t* opcua_arena_base() { return nullptr; }
-size_t opcua_arena_size() { return 0; }
+
 
 #endif // OPCUA_ENABLED

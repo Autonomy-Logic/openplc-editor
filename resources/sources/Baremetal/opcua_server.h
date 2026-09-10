@@ -16,13 +16,6 @@ include unconditionally.
 
 #include "opcua_config.h"
 
-/** Base and size of the static arena every OPC-UA allocation comes from.
- *
- *  Exposed so the allocator has a real, external reference to the storage —
- *  see the note in opcua_server.cpp about the linker discarding it otherwise. */
-uint8_t* opcua_arena_base();
-size_t   opcua_arena_size();
-
 /** Bring the server up.  Safe to call when OPC-UA is disabled (no-op).
  *  Call AFTER the network layer is configured — see opcua_net.h. */
 void opcua_init();
