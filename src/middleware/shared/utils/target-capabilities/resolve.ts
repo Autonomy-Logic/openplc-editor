@@ -17,8 +17,13 @@
  * defensive purposes against user-supplied JSON).
  */
 
-import { ARDUINO_CLI_CAPABILITIES, RUNTIME_V4_CAPABILITIES, SIMULATOR_CAPABILITIES } from './presets'
-import type { TargetCapabilities } from './types'
+import {
+  ARDUINO_CLI_CAPABILITIES,
+  DEFAULT_OPCUA_PROFILE,
+  RUNTIME_V4_CAPABILITIES,
+  SIMULATOR_CAPABILITIES,
+} from './presets'
+import type { OpcUaTargetProfile, TargetCapabilities } from './types'
 
 /** Minimal subset of BoardInfo the resolver consumes. Loosely typed
  *  so callers don't have to pin the full interface from middleware. */
@@ -100,11 +105,44 @@ function inferFromCompiler(boardInfo: BoardInfoLike): TargetCapabilities {
  * Pure function — same input always produces the same output. Safe to
  * call from any hot path; expected cost is O(1).
  */
+/**
+ * Fill an OPC-UA profile from `DEFAULT_OPCUA_PROFILE`, so a VPP manifest can
+ * declare only what it raises (`{ maxSessions: 2 }` and nothing else).
+ *
+ * Merged one level deep plus `hw`, because a manifest that sets
+ * `hw: { trng: true }` means "this part has a TRNG", not "and it has no
+ * SHA-256 accelerator either" — a shallow spread would silently drop the
+ * unmentioned hardware facts to `undefined` and the generated header would
+ * emit them as absent rather than false.
+ */
+function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined): OpcUaTargetProfile {
+  if (!declared) return DEFAULT_OPCUA_PROFILE
+  return {
+    ...DEFAULT_OPCUA_PROFILE,
+    ...declared,
+    hw: { ...DEFAULT_OPCUA_PROFILE.hw, ...(declared.hw ?? {}) },
+  }
+}
+
 export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined): TargetCapabilities {
   if (!boardInfo) return EMPTY_CAPABILITIES
 
   const base = inferFromCompiler(boardInfo)
   if (!boardInfo.capabilities) return base
 
-  return { ...base, ...boardInfo.capabilities }
+  const merged = { ...base, ...boardInfo.capabilities }
+
+  // The OPC-UA profile is the one nested block in the matrix, so the shallow
+  // spread above is not enough: a manifest declaring `opcua: { maxSessions: 2 }`
+  // would otherwise replace the whole profile with a one-field object and the
+  // generated `opcua_config.h` would be missing every other define.
+  //
+  // Only materialised when the target actually reports `opcuaServer` — a
+  // profile on a target that cannot host a server is noise, and leaving it
+  // `undefined` keeps `EMPTY_CAPABILITIES` genuinely empty.
+  if (merged.opcuaServer) {
+    merged.opcua = resolveOpcUaProfile(boardInfo.capabilities.opcua)
+  }
+
+  return merged
 }

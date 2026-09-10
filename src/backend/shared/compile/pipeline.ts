@@ -20,6 +20,7 @@
  * `emit` callback (progress events).  No disk I/O, no globals.
  */
 
+import { buildOpcUaRuntimeConfig, generateOpcUaHeaderContent } from '../../../frontend/utils/opcua'
 import { isVersionAtLeast } from '../../../frontend/utils/semver'
 import type {
   CompilerPlatformPort,
@@ -882,6 +883,42 @@ async function runCompilePipelineInner(
   // place (drivers can still `#include "vpp_config.h"` unconditionally).
   const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
 
+  // OPC-UA config header — emitted only for baremetal targets whose VPP
+  // flips `opcuaServer: true`.  Reuses the SAME resolved address space the
+  // Runtime v4 branch above hands to `generateRuntimeConfs`, so a variable
+  // resolves to one `(arr, elem)` pair regardless of which runtime is being
+  // built; two resolvers would be two chances to serve the wrong value for
+  // the right name.
+  //
+  // A project with no enabled OPC-UA server still gets a header (a disabled
+  // one) rather than none, because the runtime includes it unconditionally.
+  let opcuaConfigH: string | undefined
+  if (targetCapabilities.opcuaServer && targetCapabilities.opcua) {
+    try {
+      const resolvedOpcUa = buildOpcUaRuntimeConfig(
+        processedData.servers as never,
+        debugMapJson,
+        processedData.configuration.resource.instances.map((inst: { name: string; task: string; program: string }) => ({
+          name: inst.name,
+          task: inst.task,
+          program: inst.program,
+        })),
+        (message: string) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      )
+      opcuaConfigH = generateOpcUaHeaderContent({
+        resolved: resolvedOpcUa,
+        profile: targetCapabilities.opcua,
+        buildEpochSeconds: Math.floor(Date.now() / 1000),
+      })
+    } catch (error) {
+      return bailError(
+        emit,
+        'firmware-bundle',
+        `Error generating OPC-UA config header: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
@@ -893,6 +930,7 @@ async function runCompilePipelineInner(
     cBlocks,
     definesH,
     vppConfigH,
+    opcuaConfigH,
     firmwareSkeleton,
   })
 

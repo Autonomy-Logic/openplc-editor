@@ -10,7 +10,7 @@
  * updated yet.
  */
 
-import type { AddressProducerCapabilities, TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, TargetCapabilities } from './types'
 
 /**
  * Every address producer active. NOT a target preset — no board reports this,
@@ -33,6 +33,43 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
   vppIo: true,
   modbusTcpRemote: true,
   ethercat: true,
+}
+
+/**
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only
+ * the fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ *
+ * The numbers are deliberately the SAFE end of every axis, because the failure
+ * mode of guessing high is a device that links but dies in the field:
+ *
+ *   - `maxSessions: 1` — each session is 16 KB of protocol-mandated buffers
+ *     (Part 6 §6.7.1's 8192-byte floor, both directions). This is the one
+ *     setting where a plausible-looking manifest value silently multiplies the
+ *     arena, so the safe value is the default and raising it is deliberate.
+ *   - `arenaBytes: 32 KB` — one session's buffers plus channel/session state
+ *     plus the node scratch pool, with margin. Revise from a measured build,
+ *     never from this comment.
+ *   - `security: 'none'`, `certificates: false` — the honest default for a
+ *     part whose crypto abilities are unknown, and it keeps mbedTLS out of
+ *     the link. `hw` is all-false for the same reason.
+ *   - The operation limits are sized so a single Read never needs more
+ *     scratch than `nodePoolSlots` covers.
+ */
+export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
+  arenaBytes: 32 * 1024,
+  maxNodes: 256,
+  maxSessions: 1,
+  nodePoolSlots: 8,
+  maxNodesPerRead: 20,
+  maxNodesPerWrite: 20,
+  maxNodesPerBrowse: 10,
+  maxReferencesPerNode: 32,
+  maxArrayLength: 256,
+  security: 'none',
+  certificates: false,
+  subscriptions: false,
+  kdfIterations: 100_000,
+  hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
 }
 
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {

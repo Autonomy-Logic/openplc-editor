@@ -36,6 +36,12 @@
 #include "ModbusSlave.h"
 #endif
 
+// OPC-UA server. Included unconditionally: the facade is defined either way
+// and the whole implementation compiles out when the target's VPP does not
+// declare `opcuaServer` (OPCUA_ENABLED 0 in the generated opcua_config.h), so
+// no board-conditional is needed at the call sites below.
+#include "opcua_server.h"
+
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets that declare SUPPORTS_UDP_SCAN (e.g. via a VPP's HAL flags) pull
 // it in; unrelated to Modbus.
@@ -261,6 +267,11 @@ void setup()
 
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
+
+        // OPC-UA listens on top of the interface Modbus just configured, so it
+        // has to come after mbconfig_*_iface() and must not re-init the link
+        // itself (see opcua_net.h). No-op when OPC-UA is disabled.
+        opcua_init();
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
@@ -486,6 +497,11 @@ void scheduler()
         // sync (modbusTask's mirror loops) because there are no operation buffers.
         mbtask();
     #endif
+
+    // OPC-UA gets the tail of the cycle, after the PLC logic and Modbus have
+    // had theirs, and is time-boxed inside opcuatask() so it can only ever
+    // borrow the slack rather than extend the cycle. No-op when disabled.
+    opcuatask();
 
     if (!first_cycle)
     {

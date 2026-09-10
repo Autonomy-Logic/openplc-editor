@@ -31,6 +31,109 @@
  */
 export type DebuggerTransport = 'modbus-serial' | 'modbus-tcp' | 'websocket'
 
+/**
+ * Per-target OPC-UA server dimensions for the BAREMETAL runtime.
+ *
+ * Why this is a capability block and not constants in the runtime: the
+ * baremetal OPC-UA server is one implementation compiled to fit the part,
+ * and only the VPP knows the silicon. A TM4C1294 has no crypto accelerator,
+ * no TRNG and no RTC, so it builds with encryption and certificates out —
+ * which is not a smaller feature set for its own sake, it is ~60-100 KB of
+ * flash, ~20-40 KB of RAM and the whole software-RSA CPU cost never entering
+ * the image. An ESP32 has all three in hardware and turns them on. Neither
+ * fact belongs in a `#ifdef BOARD_*` — see `logo-code-placement`: capability
+ * defines, never board names.
+ *
+ * Every field lands in the generated `src/opcua_config.h` as an `OPCUA_*`
+ * define, so the runtime reads only what it was told.
+ *
+ * RAM accounting, because it is the whole reason these numbers are declared
+ * rather than inferred: OPC-UA Part 6 §6.7.1 requires a conformant server to
+ * accept and emit an 8192-byte chunk, so each concurrent session costs
+ * 8 KB receive + 8 KB send = **16 KB**, and nothing else in the design comes
+ * close. `maxSessions` is therefore the expensive dimension and defaults to
+ * **1**; a VPP must opt in to more, with that cost in mind.
+ */
+export interface OpcUaTargetProfile {
+  /** Bytes of the static arena that backs `UA_malloc` / `UA_free`.
+   *
+   *  A fixed arena rather than the newlib heap for three reasons: it is a hard
+   *  cap by construction, it fails at LINK time (it is a `static` array, so
+   *  `arduino-cli` reports the overflow in the same line the user already
+   *  reads) rather than in the field, and it cannot fragment the heap the user
+   *  program is allocating from over months of uptime. */
+  arenaBytes: number
+
+  /** Ceiling on nodes in the generated address space, enforced by the editor
+   *  before the build rather than discovered on a device that stops answering.
+   *
+   *  This is a FLASH budget, not a RAM one: the address space is served from
+   *  `const` flash tables and materialised into `nodePoolSlots` on demand, so
+   *  a four-figure value is reasonable even on a 248 KB part. */
+  maxNodes: number
+
+  /** Concurrent OPC-UA sessions. 16 KB of protocol-mandated buffers each —
+   *  the dominant RAM term. Default 1. */
+  maxSessions: number
+
+  /** RAM slots for materialising flash-resident nodes on demand. What has to
+   *  be in RAM is not the node count but how many nodes are held at once,
+   *  which the operation limits below already bound. */
+  nodePoolSlots: number
+
+  /** OPC-UA `ServerCapabilities.OperationLimits`, published so conformant
+   *  clients split their own requests, and enforced so the rest get
+   *  `Bad_TooManyOperations` instead of exhausting the arena. This is the
+   *  protocol's own answer to "the client asked for 1000 nodes at once" —
+   *  the same discipline the Modbus debugger gets from a 253-byte PDU, only
+   *  negotiated instead of implicit. */
+  maxNodesPerRead: number
+  maxNodesPerWrite: number
+  maxNodesPerBrowse: number
+  /** References returned per node before the client must continue with
+   *  `BrowseNext` and a continuation point. */
+  maxReferencesPerNode: number
+  /** Longest array a single node may expose. An array node is the one case
+   *  where a value must be materialised whole (a 1000-element DINT is 4 KB),
+   *  so unlike every other node it needs a real bound. */
+  maxArrayLength: number
+
+  /** Highest security mode the target can actually sustain. `'none'` keeps
+   *  mbedTLS out of the link entirely. Anything above it requires
+   *  `hw.trng` — shipping SignAndEncrypt on a weak RNG is worse than
+   *  shipping None honestly. */
+  security: 'none' | 'sign' | 'sign-and-encrypt'
+
+  /** X.509 server certificate + client trust list. Requires `hw.rtc`:
+   *  `notBefore` / `notAfter` cannot be checked against an uptime counter. */
+  certificates: boolean
+
+  /** Data-change subscriptions (the Micro Embedded Device profile's addition
+   *  over Nano). Off means Nano only — clients must poll. */
+  subscriptions: boolean
+
+  /** PBKDF2-HMAC-SHA256 work factor for username/password auth.
+   *
+   *  The editor hashes at 600 000 iterations, which is right for a Linux
+   *  runtime and ~15 s of software SHA-256 on a 120 MHz Cortex-M4 — long
+   *  enough to stall the scan through an entire ActivateSession. The runtime
+   *  chunks the KDF across scan cycles regardless, so this only sets how much
+   *  login LATENCY the target pays: parts with `hw.sha256` keep 600 000. */
+  kdfIterations: number
+
+  /** Hardware facts about the part. These gate the fields above; they are
+   *  not user preferences. */
+  hw: {
+    sha256: boolean
+    aes: boolean
+    /** Public-key accelerator (RSA / ECC). Without it a Basic256Sha256
+     *  handshake is software RSA-2048. */
+    pk: boolean
+    trng: boolean
+    rtc: boolean
+  }
+}
+
 export interface TargetCapabilities {
   /* ---------------------------------------------------------------
    * Address producers — sources that allocate IEC addresses and
@@ -65,6 +168,14 @@ export interface TargetCapabilities {
   modbusTcpServer: boolean
   opcuaServer: boolean
   s7Server: boolean
+
+  /** Baremetal OPC-UA server dimensions. Meaningful only where
+   *  `opcuaServer` is true AND the target compiles the baremetal runtime —
+   *  Runtime v4 and the Simulator host OPC-UA through entirely different
+   *  machinery and ignore this. Optional so a VPP declares only what it
+   *  overrides; `resolveTargetCapabilities` fills the rest from
+   *  `DEFAULT_OPCUA_PROFILE`. */
+  opcua?: OpcUaTargetProfile
 
   /* ---------------------------------------------------------------
    * Build / runtime behavior
