@@ -5,9 +5,10 @@ import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-da
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
 import { cn } from '@root/frontend/utils/cn'
 import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
-import { collectAllSlaveNames, generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
+import { generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
   ESIDeviceRef,
@@ -421,9 +422,10 @@ const EtherCATEditor = () => {
     const unmatched: ScannedDeviceMatch['device'][] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
     const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
-    // Names already taken across every master — extended as we add each
-    // device so the batch can't collide with itself either.
-    const takenNames = collectAllSlaveNames(project.data.remoteDevices)
+    // Every element name in the project, plus the batch so it cannot collide with itself.
+    const batch = new Set<string>()
+    const nameTaken = (name: string) =>
+      batch.has(name) || elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -454,8 +456,8 @@ const EtherCATEditor = () => {
       // SoftMotion drive names become axis variable names — keep them valid.
       const rawName = getShortDeviceName(bestMatch.esiDevice)
       const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
-      const uniqueName = generateUniqueSlaveName(baseName, takenNames)
-      takenNames.add(uniqueName)
+      const uniqueName = generateUniqueSlaveName(baseName, nameTaken)
+      batch.add(uniqueName)
 
       newDevices.push({
         id: uuidv4(),
@@ -530,7 +532,10 @@ const EtherCATEditor = () => {
       // code, so it must be a valid IEC identifier from the start.
       const rawName = getShortDeviceName(device)
       const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
-      const uniqueName = generateUniqueSlaveName(baseName, collectAllSlaveNames(project.data.remoteDevices))
+      const uniqueName = generateUniqueSlaveName(
+        baseName,
+        (name) => elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null,
+      )
 
       const newDevice: ConfiguredEtherCATDevice = {
         id: uuidv4(),

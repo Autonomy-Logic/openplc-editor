@@ -37,7 +37,13 @@ const buildColumns = ({
   includeDebug = true,
   includeLocation = true,
   skipReferenceImpact = false,
-}: { includeDebug?: boolean; includeLocation?: boolean; skipReferenceImpact?: boolean } = {}) => [
+  isResourceGlobal = true,
+}: {
+  includeDebug?: boolean
+  includeLocation?: boolean
+  skipReferenceImpact?: boolean
+  isResourceGlobal?: boolean
+} = {}) => [
   columnHelper.display({
     id: 'rowNumber',
     header: '#',
@@ -53,7 +59,9 @@ const buildColumns = ({
     size: 300,
     minSize: 150,
     maxSize: 300,
-    cell: (props) => <EditableNameCell {...props} skipReferenceImpact={skipReferenceImpact} />,
+    cell: (props) => (
+      <EditableNameCell {...props} skipReferenceImpact={skipReferenceImpact} isResourceGlobal={isResourceGlobal} />
+    ),
   }),
   columnHelper.accessor('class', {
     header: 'Class',
@@ -107,7 +115,12 @@ const buildColumns = ({
 const resourceColumns = buildColumns()
 
 /** A list's columns: no address, no debugger watch, no bare-name reference rewriting. */
-const listColumns = buildColumns({ includeDebug: false, includeLocation: false, skipReferenceImpact: true })
+const listColumns = buildColumns({
+  includeDebug: false,
+  includeLocation: false,
+  skipReferenceImpact: true,
+  isResourceGlobal: false,
+})
 
 type PLCVariablesTableProps = {
   tableData: PLCGlobalVariable[]
