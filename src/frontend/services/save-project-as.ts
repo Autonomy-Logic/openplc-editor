@@ -112,6 +112,20 @@ export async function executeSaveProjectAs(
   // ephemeral, so an ordinary Save works from here on.
   state.projectActions.updateMetaPath(picked.path)
   state.workspaceActions.setIsEphemeralProject(false)
+  // And onto the recent list. Opening a project tracks it as a side effect of
+  // reading it; this is the one flow that gives a project a location without a
+  // read, and it is how a retrieved project — untracked while it sits in
+  // scratch — becomes one the user keeps.
+  //
+  // Best effort, and deliberately not awaited into the success path: the files
+  // are already written and the project has already adopted its new location by
+  // this point, so a bookkeeping failure must not cost the user the toast that
+  // tells them the save worked. Both call sites use `void`, so a rejection here
+  // would have been an unhandled one.
+  void projectPort.trackRecentProject?.(picked.path)?.catch(() => {
+    // Nothing to tell the user: the save succeeded, and the row reappears the
+    // next time they open the project.
+  })
 
   toast({
     title: 'Project saved',

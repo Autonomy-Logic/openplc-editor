@@ -29,12 +29,17 @@
  * When `startLine === 0` and `endLineExclusive === ∞` (e.g. early
  * boot before the registry is populated) the function is a copy;
  * cheap enough that the dead branch isn't worth special-casing.
+ *
+ * `keepLine` drops the tokens of any line it rejects. A partial view
+ * whose buffer drifted from the document on some lines keeps colours
+ * only where the text still matches.
  */
 export function shiftSemanticTokensToBody(
   data: number[],
   startLine: number,
   endLineExclusive: number = Number.POSITIVE_INFINITY,
   outputStartLine: number = 0,
+  keepLine?: (lspLine: number) => boolean,
 ): Uint32Array {
   // Decode to absolute positions.
   const abs: Array<{ line: number; col: number; len: number; type: number; mods: number }> = []
@@ -57,6 +62,7 @@ export function shiftSemanticTokensToBody(
   for (const t of abs) {
     if (t.line < startLine) continue
     if (t.line >= endLineExclusive) continue
+    if (keepLine && !keepLine(t.line)) continue
     const shiftedLine = t.line - startLine + outputStartLine
     const dLine = shiftedLine - prevLine
     const dStart = dLine === 0 ? t.col - prevCol : t.col

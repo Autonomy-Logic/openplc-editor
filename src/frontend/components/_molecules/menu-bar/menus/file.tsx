@@ -8,12 +8,14 @@ import { executeExportPlcopen } from '../../../../services/export-actions'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
 import { executeSaveProjectAs } from '../../../../services/save-project-as'
 import { useOpenPLCStore } from '../../../../store'
+import { canExportPdf } from '../../../../utils/print-availability'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const projectPort = useProject()
   const capabilities = useCapabilities()
   const {
+    project,
     editor: activeEditor,
     workspace: { editingState },
     readme: { savedContent: readmeSavedContent },
@@ -69,6 +71,13 @@ export const FileMenu = () => {
     openModal('retrieve-project', null)
   }
 
+  const canPrint = canExportPdf(project.data.pous)
+
+  const handlePrint = () => {
+    if (!canPrint) return
+    openModal('export-pdf', null)
+  }
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
@@ -88,9 +97,6 @@ export const FileMenu = () => {
           <MenuPrimitive.Item className={ITEM} onClick={handleCloseTab}>
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} data-testid='menu-retrieve-project' onClick={handleRetrieveProject}>
-            <span>{i18n.t('menu:file.submenu.retrieveProject')}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
@@ -120,16 +126,23 @@ export const FileMenu = () => {
               )}
             </>
           )}
+          {/* Its own group, after the export items: retrieving is not a save, a
+              close, or an export, and sitting inside any of those groups reads
+              as a variant of them. */}
           <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} data-testid='menu-retrieve-project' onClick={handleRetrieveProject}>
+            <span>{i18n.t('menu:file.submenu.retrieveProject')}</span>
+          </MenuPrimitive.Item>
+          <MenuPrimitive.Separator className={SEPARATOR} />
+          <MenuPrimitive.Item className={ITEM} onClick={() => openModal('page-setup', null)}>
             <span>{i18n.t('menu:file.submenu.pageSetup')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Alt + P'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={handlePrint} disabled={!canPrint}>
             <span>{i18n.t('menu:file.submenu.preview')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + P'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={handlePrint} disabled={!canPrint}>
             <span>{i18n.t('menu:file.submenu.print')}</span>
             <span className={ACCELERATOR}>{'Ctrl + P'}</span>
           </MenuPrimitive.Item>
