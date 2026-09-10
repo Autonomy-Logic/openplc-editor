@@ -347,7 +347,24 @@ function serverExposure(servers: PLCServer[] | undefined, backed: Map<string, Se
     // Each IEC segment is laid out from index 0 of its own prefix space; only
     // the Modbus offsets are sequential across segments. `address-mapping.ts`
     // is the authority on that layout, and it agrees with the runtime plugin.
-    const counts: Array<[string, number | undefined]> = [
+    // EXPOSURE SIZES EVERY SEGMENT, BUT ONLY BACKS THE WRITABLE ONES.
+    //
+    // Backing means "something on the other side gives this address meaning",
+    // which for BR14 is what the area needs to not be inert. Holding registers
+    // and coils are writable by the master, so a `%QW` or `%QX` the server
+    // publishes has a counterpart: the master reads what the program wrote, or
+    // writes it itself. Either way it is drained.
+    //
+    // Discrete inputs and input registers are READ-ONLY to the master. Nothing
+    // writes `%IX` or `%IW` through them — the server only publishes whatever
+    // is already there. So exposing them cannot make an input backed, and
+    // treating it as if it did would let `AT %IW7 : INT` pass the gate with no
+    // pin, no master point and no EtherCAT channel anywhere, which is exactly
+    // the declaration BR14 exists to catch.
+    //
+    // They still SIZE, because the server has to have the storage to read
+    // from; they just do not vouch for anything living in it.
+    const sizing: Array<[string, number | undefined]> = [
       ['%QW', mapping.holdingRegisters?.qwCount],
       ['%MW', mapping.holdingRegisters?.mwCount],
       ['%MD', mapping.holdingRegisters?.mdCount],
@@ -357,14 +374,15 @@ function serverExposure(servers: PLCServer[] | undefined, backed: Map<string, Se
       ['%IX', mapping.discreteInputs?.ixBits],
       ['%IW', mapping.inputRegisters?.iwCount],
     ]
+    const WRITABLE_BY_THE_MASTER = new Set(['%QW', '%MW', '%MD', '%ML', '%QX', '%MX'])
 
-    for (const [prefix, count] of counts) {
+    for (const [prefix, count] of sizing) {
       // A count of zero is the `%MX` default and a legitimate answer: the
       // segment exists and is switched off, so it exposes nothing and sizes
       // nothing.
       if (count === undefined || count <= 0) continue
       claim(sizes, prefix, count)
-      markBacked(backed, prefix, 0, count)
+      if (WRITABLE_BY_THE_MASTER.has(prefix)) markBacked(backed, prefix, 0, count)
     }
   }
 
@@ -497,8 +515,13 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
       // and is never reported unbacked (FR24). Without this a program using
       // scratch memory and no Modbus server would be handed zero memory words
       // (BR15).
+      // No `markBacked` here, deliberately. `backed` is read only on the
+      // input/output path below, so marking memory slots was dead — and it was
+      // dead at a cost: the loop ran once per declared element, so
+      // `AT %MW0 : ARRAY [0..10000000] OF WORD` inserted ten million Set
+      // entries in the main process before the platform compiler ever got to
+      // refuse the size.
       claim(sizes, prefix, parsed.linear + slotCount)
-      markBacked(backed, prefix, parsed.linear, slotCount)
       continue
     }
 

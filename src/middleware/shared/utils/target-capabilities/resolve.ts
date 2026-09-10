@@ -114,11 +114,21 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   return { ...base, ...boardInfo.capabilities }
 }
 
-/** True when nothing in the board info says which producers are active. */
+/**
+ * True when nothing in the board info says which producers are active.
+ *
+ * Derived from `inferFromCompiler` rather than by listing the compilers again:
+ * that function already owns which strings it recognises, and it answers
+ * `EMPTY_CAPABILITIES` — the very object, so reference equality holds — for the
+ * ones it does not. A second copy of the list would rot the moment a compiler
+ * is added to the switch and not here, and the failure would be silent in the
+ * dangerous direction: an unrecognised target would be read as "says nothing"
+ * and get every producer active.
+ */
 function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolean {
   if (!boardInfo) return true
   if (boardInfo.capabilities) return false
-  return !['simulator', 'arduino-cli', 'openplc-compiler'].includes(boardInfo.compiler ?? '')
+  return inferFromCompiler(boardInfo) === EMPTY_CAPABILITIES
 }
 
 /**

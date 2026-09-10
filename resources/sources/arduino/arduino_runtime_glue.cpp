@@ -441,9 +441,18 @@ static bool     retain_available  = false;
 
 // This program's identity, handed to the driver on every read so it can tell
 // whether what it is holding belongs to the program now running. Supplied by
-// the sketch from PROGRAM_MD5 rather than read from defines.h here: defines.h
-// has no include guard and must reach a translation unit through exactly one
-// path (modbus_config.h), which this file is deliberately not on.
+// the sketch from PROGRAM_MD5 rather than read from defines.h here, which
+// keeps the value flowing on one path and the sketch as its only source.
+//
+// This comment used to say defines.h "must reach a translation unit through
+// exactly one path (modbus_config.h), which this file is deliberately not on".
+// That stopped being true with DOPE-615: openplc.h now includes defines.h from
+// inside its own guard, so every TU that sees openplc.h sees defines.h,
+// including this one. Re-inclusion is safe — defines.h holds nothing but
+// object-like macros, and redefining a macro to an identical token sequence is
+// permitted (C11 6.10.3p2) — and nothing here or in modbus_debug.cpp,
+// Arduino_OpenPLC.h or mega_due_bkp.cpp changes behaviour as a result. The
+// single-path rule is simply gone; do not restore it from memory.
 static const char *retain_program_md5 = nullptr;
 
 static uint16_t retain_read_leaf(uint8_t arr, uint16_t elem, uint8_t* dest) {

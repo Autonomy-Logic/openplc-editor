@@ -414,7 +414,7 @@ async function runCompilePipelineInner(
   // BoardInfoLike, but the runtime shape (capabilities + compiler +
   // optional vpp flag) is compatible — the resolver only reads
   // those fields and treats unknowns as missing.
-  const targetCapabilities = resolveTargetCapabilities(boardEntry as Parameters<typeof resolveTargetCapabilities>[0])
+  const targetCapabilities = resolveTargetCapabilities(boardEntry)
 
   // ---------------------------------------------------------------------
   // Step 0a: Size the I/O image from the project, and refuse a located
@@ -597,6 +597,7 @@ async function runCompilePipelineInner(
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
       confs = generateRuntimeConfs({
+        imageSizes: ioImage.sizes,
         servers: processedData.servers as never,
         remoteDevices: processedData.remoteDevices as never,
         instances: processedData.configuration.resource.instances.map(

@@ -288,6 +288,31 @@ describe('computeIoImage — server exposure', () => {
     })
   })
 
+  it('does NOT back an input it merely publishes', () => {
+    // Discrete inputs and input registers are read-only to the master:
+    // nothing writes %IX or %IW through them, so exposing them cannot give
+    // the address a producer. Treating exposure as backing here would let a
+    // declaration with no pin, no master point and no EtherCAT channel pass
+    // the very gate BR14 exists for.
+    const project = makeProject({
+      pous: [{ name: 'main', variables: [variable('sensor', '%IW7')] }],
+      servers: serverWith({ inputRegisters: { iwCount: 64 } }),
+    })
+    const image = compute(project)
+    // Still sized — the server needs the storage to read from.
+    expect(image.sizes['%IW']).toBe(64)
+    // But the declaration is unbacked, which is the point.
+    expect(image.unbacked.map((u) => u.location)).toEqual(['%IW7'])
+  })
+
+  it('does NOT back a discrete input either', () => {
+    const project = makeProject({
+      pous: [{ name: 'main', variables: [variable('di', '%IX0.1')] }],
+      servers: serverWith({ discreteInputs: { ixBits: 64 } }),
+    })
+    expect(compute(project).unbacked.map((u) => u.location)).toEqual(['%IX0.1'])
+  })
+
   it('backs the outputs it exposes', () => {
     // A %QW the server publishes has something reading it, which is what
     // BR14 asks of an output.
@@ -332,6 +357,17 @@ describe('computeIoImage — server exposure', () => {
 })
 
 describe('computeIoImage — memory is its own producer', () => {
+  it('does not walk a huge array element by element', () => {
+    // The memory path used to mark every declared slot as backed, which was
+    // dead work — `backed` is only read on the input/output path — and
+    // unbounded: ten million elements meant ten million Set inserts in the
+    // main process before the platform compiler could refuse the size.
+    const project = makeProject({ pous: [{ name: 'main', variables: [arrayVar('huge', '%MW0', 0, 10_000_000)] }] })
+    const started = Date.now()
+    expect(compute(project).sizes).toEqual({ '%MW': 10_000_001 })
+    expect(Date.now() - started).toBeLessThan(1000)
+  })
+
   it('sizes a memory area from a declaration with nothing else configured', () => {
     // BR15 / TC13: without this, a program using scratch memory and no
     // Modbus server would be handed zero memory words.
