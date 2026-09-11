@@ -15,6 +15,7 @@ import { FBDFlowType } from '@root/frontend/store/slices'
 import { Edge, Position } from '@xyflow/react'
 
 import { readExecuteStCode } from '../../execute-plcopen'
+import { executeStCodeKey } from '../parse-xml-document'
 import { extractXhtmlText } from '../variable-xml'
 import { asArray, asRecord, asString } from '../xml-node'
 import type { XyPosition } from './geometry'
@@ -257,9 +258,12 @@ function soleOutputHandleId(node: FbdNode | undefined): string | undefined {
   if (!node) return undefined
   const data: unknown = node.data
   if (typeof data !== 'object' || data === null || !('outputHandles' in data)) return undefined
-  const { outputHandles } = data as { outputHandles?: { id?: string }[] }
-  if (outputHandles?.length !== 1) return undefined
-  return outputHandles[0].id
+  const { outputHandles } = data as { outputHandles?: unknown }
+  if (!Array.isArray(outputHandles) || outputHandles.length !== 1) return undefined
+  const handle: unknown = outputHandles[0]
+  if (typeof handle !== 'object' || handle === null) return undefined
+  const id = (handle as { id?: unknown }).id
+  return typeof id === 'string' ? id : undefined
 }
 
 function parseInVariableXml(entry: Record<string, unknown>): VariableNode {
@@ -443,7 +447,7 @@ export function parseFbdXml(
   pouName: string,
   fbdXml: unknown,
   /**
-   * Untrimmed `<STCode>` payloads by `@localId`, from a second parse — see
+   * Untrimmed `<STCode>` payloads keyed by POU name and `@localId`, from a second parse — see
    * `parse-xml-document.ts`. The main parse trims text nodes, which would eat
    * an Execute snippet's first-line indentation. Absent (tests, callers that
    * don't care) falls back to the trimmed text.
@@ -461,7 +465,10 @@ export function parseFbdXml(
     // An Execute element rides in as a <block typeName="EXECUTE">, so it has
     // to be split out before the generic block path claims it.
     const trimmedCode = readExecuteStCode(record)
-    const executeCode = trimmedCode === null ? null : (executeStCode.get(asString(record['@localId'])) ?? trimmedCode)
+    const executeCode =
+      trimmedCode === null
+        ? null
+        : (executeStCode.get(executeStCodeKey(pouName, asString(record['@localId']))) ?? trimmedCode)
     const { node, pendingEdges: edges } =
       executeCode === null ? parseBlockXml(record) : parseExecuteXml(record, executeCode)
     nodes.push(node)

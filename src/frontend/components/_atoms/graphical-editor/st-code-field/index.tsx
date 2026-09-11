@@ -197,8 +197,15 @@ export const StCodeField = ({
 
   // Going inactive unmounts Monaco, leaving the refs on a disposed editor.
   // Cleared in an effect rather than during render.
+  //
+  // Commit first. The field itself stays mounted, so the cleanup above only
+  // runs when `commit` changes identity — deselection without a pointerdown
+  // outside the field (a keyboard or programmatic selection change) leaves the
+  // buffer dirty, the store on the old snippet, and the `<pre>` showing the
+  // newer draft.
   useEffect(() => {
     if (active) return
+    commitRef.current()
     editorRef.current = null
     monacoRef.current = null
     setEditorMounted(false)

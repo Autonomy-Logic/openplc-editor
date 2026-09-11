@@ -40,7 +40,15 @@ export function parseExecuteStDocumentUri(uri: string): { pouName: string; nodeI
  * `serializePouScopeForBody`). Sanitised because node ids may contain
  * characters that are illegal in an IEC identifier; stable because that is
  * what keeps an edit a `didChange` rather than a close/reopen pair.
+ *
+ * Each illegal character becomes `_<hex>_` rather than a bare `_`, so two ids
+ * never collapse onto one id. Two open snippets sharing a shell name declare
+ * the same symbol, and the duplicate definition stalls the LSP worker.
  */
 export function executeStScopeId(nodeId: string): string {
-  return `execute_${nodeId.replace(/[^A-Za-z0-9_]/g, '_')}`
+  let encoded = ''
+  for (const char of nodeId) {
+    encoded += /[A-Za-z0-9]/.test(char) ? char : `_${char.codePointAt(0)?.toString(16) ?? ''}_`
+  }
+  return `execute_${encoded}`
 }

@@ -492,6 +492,77 @@ describe('parseLadderXml', () => {
     expect(execute?.height).toBeGreaterThan(0)
   })
 
+  // `parseConnectionXml` resolves a consumer's sourceHandle from an empty
+  // formalParameter to 'OUT', so the producing handle has to be named the same
+  // way or the ENO wire points at a handle that does not exist.
+  it('names an Execute output declared with an empty formalParameter the way its consumers resolve it', () => {
+    const { body } = parseLadderXml('p', {
+      block: [
+        {
+          '@localId': '2',
+          '@typeName': 'EXECUTE',
+          position: { '@x': '50', '@y': '0' },
+          outputVariables: {
+            variable: [{ '@formalParameter': '', connectionPointOut: { relPosition: { '@x': '80', '@y': '20' } } }],
+          },
+          addData: { data: { '@name': 'http://openplc.org/plcopenxml/stcode', STCode: 'x := 1;' } },
+        },
+      ],
+      coil: [
+        {
+          '@localId': '3',
+          variable: 'done',
+          position: { '@x': '200', '@y': '0' },
+          connectionPointIn: {
+            relPosition: { '@x': '0', '@y': '20' },
+            connection: [{ '@refLocalId': '2', '@formalParameter': '' }],
+          },
+        },
+      ],
+    })
+
+    const execute = body.rungs[0].nodes.find((node) => node.type === 'execute')
+    const handles = (execute?.data as { outputHandles: { id: string }[] }).outputHandles
+    const edge = body.rungs[0].edges.find((e) => e.source === execute?.id)
+
+    expect(handles.map((h) => h.id)).toEqual(['OUT'])
+    expect(edge?.sourceHandle).toBe('OUT')
+  })
+
+  // An empty rung is two rails wired to each other — what `startLadderRung`
+  // creates the moment a rung is added. It reads as "no elements", so the
+  // unwired-rail filter used to drop it and the rung vanished on every reload.
+  it('keeps an empty rung — a left and right rail wired to each other', () => {
+    const { body, warnings } = parseLadderXml('p', {
+      leftPowerRail: [
+        {
+          '@localId': '1',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '0', '@y': '80' },
+          connectionPointOut: { '@formalParameter': '', relPosition: { '@x': '3', '@y': '20' } },
+        },
+      ],
+      rightPowerRail: [
+        {
+          '@localId': '2',
+          '@width': '3',
+          '@height': '40',
+          position: { '@x': '1000', '@y': '80' },
+          connectionPointIn: {
+            relPosition: { '@x': '3', '@y': '20' },
+            connection: [{ '@refLocalId': '1', '@formalParameter': 'left-rail' }],
+          },
+        },
+      ],
+    })
+
+    expect(warnings).toEqual([])
+    expect(body.rungs).toHaveLength(1)
+    expect(body.rungs[0].nodes.map((node) => node.type)).toEqual(['powerRail', 'powerRail'])
+    expect(body.rungs[0].edges).toHaveLength(1)
+  })
+
   // A component holding nothing but power rails is a rail the file left
   // unwired — CODESYS writes its <rightPowerRail> with an empty
   // <connectionPointIn>. It would otherwise import as a rung the editor cannot

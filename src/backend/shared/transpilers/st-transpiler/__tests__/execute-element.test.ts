@@ -103,6 +103,20 @@ describe('Execute element — rung gating', () => {
     expect(bodySt).toBe('\n  counter := counter + 1;\n')
   })
 
+  it('skips an LD box with no power input, and says so', () => {
+    // No rail, no contact: nothing can switch it. Emitting it bare would run
+    // the snippet every scan, which is the opposite of what the diagram shows.
+    const body = ldBody(
+      [rail('L', 'left', 0), execute('X', 'counter := counter + 1;', 200), rail('R', 'right', 400)],
+      [],
+    )
+
+    const { bodySt, warnings } = emitLdBody(body)
+
+    expect(bodySt).toBe('\n')
+    expect(warnings).toEqual(['Execute block "X" has no power input and was not emitted.'])
+  })
+
   it('emits the snippet bare in FBD when EN is left unwired', () => {
     const { bodySt, warnings } = emitFbdBody({
       rung: fbdRung([execute('X', 'myNewVarFBD := myNewVarFBD + 222;', 0)], []),

@@ -1718,7 +1718,7 @@ describe('buildActiveIndexSet', () => {
       expect(activeIndexes).toContain(20)
     })
 
-    it('ignores an Execute node with an empty or missing snippet', () => {
+    it('ignores an Execute node with an empty, missing or malformed snippet', () => {
       const pou = makePou('Main', 'program', [makeVariable('COUNTER')], 'ld')
       const indexMap = new Map([['Main:COUNTER', 10]])
       const ldFlow = {
@@ -1728,6 +1728,11 @@ describe('buildActiveIndexSet', () => {
             nodes: [
               { type: 'execute', data: { code: '' } },
               { type: 'execute', data: {} },
+              // `data` absent or null: reading `.code` off it threw, and the
+              // whole polling pass went with it.
+              { type: 'execute' },
+              { type: 'execute', data: null },
+              { type: 'execute', data: { code: 42 } },
             ],
           },
         ],

@@ -352,6 +352,17 @@ function computeVisibleVariableKeys(
 /**
  * Collect composite keys for variables visible on a Ladder Diagram.
  */
+/**
+ * Snippet text of an Execute node, or null when it carries none. Guards the
+ * read: a node arriving with `data` null or absent would otherwise throw
+ * before the type check, taking the whole polling pass with it.
+ */
+function executeNodeCode(node: { data?: unknown }): string | null {
+  if (typeof node.data !== 'object' || node.data === null) return null
+  const code = (node.data as { code?: unknown }).code
+  return typeof code === 'string' && code !== '' ? code : null
+}
+
 function collectLdVisibleKeys(
   state: DebugPollingState,
   makeKey: (name: string) => string | null,
@@ -370,10 +381,8 @@ function collectLdVisibleKeys(
         // binding one, so scan the snippet the same way a textual POU
         // body is scanned. Skipping this leaves its inline debug badges
         // showing `?` forever.
-        const code = (node.data as { code?: string }).code
-        if (typeof code === 'string' && code !== '') {
-          collectKeysFromSourceText(code, variables, makeKey, addLeavesWithPrefix, keys)
-        }
+        const code = executeNodeCode(node)
+        if (code !== null) collectKeysFromSourceText(code, variables, makeKey, addLeavesWithPrefix, keys)
       } else if (node.type === 'contact' || node.type === 'coil') {
         const nodeData = node.data as { variable?: { name?: string } }
         const varName = nodeData.variable?.name
@@ -412,10 +421,8 @@ function collectFbdVisibleKeys(
   for (const node of currentFlow.rung.nodes) {
     if (node.type === 'execute') {
       // Same as LD — see `collectLdVisibleKeys`.
-      const code = (node.data as { code?: string }).code
-      if (typeof code === 'string' && code !== '') {
-        collectKeysFromSourceText(code, variables, makeKey, addLeavesWithPrefix, keys)
-      }
+      const code = executeNodeCode(node)
+      if (code !== null) collectKeysFromSourceText(code, variables, makeKey, addLeavesWithPrefix, keys)
     } else if (node.type === 'input-variable' || node.type === 'output-variable' || node.type === 'inout-variable') {
       const nodeData = node.data as { variable?: { name?: string } }
       const varName = nodeData.variable?.name

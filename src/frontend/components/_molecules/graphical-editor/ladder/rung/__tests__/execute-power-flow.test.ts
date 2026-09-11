@@ -74,3 +74,48 @@ describe('Execute element — debug power flow', () => {
     expect(edgeStates.get('e3')).toBe(true)
   })
 })
+
+describe('cycles in the graph', () => {
+  // The editor never builds a cyclic rung, but an imported or hand-edited
+  // PLCopen file can close a loop. Both walkers cached only after recursing,
+  // so a loop recursed until the stack gave out and took the renderer with it.
+  it('returns instead of recursing on a two-node loop', () => {
+    const nodes: Nodes = [contact('A', 'gate'), contact('B', 'gate')]
+    const edges: Edges = [edge('e1', 'A', 'B'), edge('e2', 'B', 'A')]
+
+    const { edgeStates, nodeInputStates } = computeRungDebugStates(nodes, edges, ctx)
+
+    // Nothing reaches a rail, so nothing is energized.
+    expect(edgeStates.get('e1')).toBe(false)
+    expect(edgeStates.get('e2')).toBe(false)
+    expect(nodeInputStates.get('A')).toBe(false)
+    expect(nodeInputStates.get('B')).toBe(false)
+  })
+
+  it('returns instead of recursing on a self-loop', () => {
+    const nodes: Nodes = [contact('A', 'gate')]
+    const edges: Edges = [edge('e1', 'A', 'A')]
+
+    const { edgeStates, nodeInputStates } = computeRungDebugStates(nodes, edges, ctx)
+
+    expect(edgeStates.get('e1')).toBe(false)
+    expect(nodeInputStates.get('A')).toBe(false)
+  })
+
+  it('still energizes a rung that carries a loop off to one side', () => {
+    // leftRail -> contact(gate) -> coil, plus a detached A <-> B loop.
+    const nodes: Nodes = [
+      rail('L', 'left'),
+      contact('C', 'gate'),
+      coil('K', 'done'),
+      contact('A', 'gate'),
+      contact('B', 'gate'),
+    ]
+    const edges: Edges = [edge('e1', 'L', 'C'), edge('e2', 'C', 'K'), edge('e3', 'A', 'B'), edge('e4', 'B', 'A')]
+
+    const { edgeStates } = computeRungDebugStates(nodes, edges, ctx)
+
+    expect(edgeStates.get('e2')).toBe(true)
+    expect(edgeStates.get('e3')).toBe(false)
+  })
+})

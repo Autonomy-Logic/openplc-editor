@@ -467,9 +467,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   // `enabled` keeps badges to the active tab and the textual ST/IL surfaces;
   // `expectedUri` covers the window during a tab switch where
   // @monaco-editor/react has not swapped the model yet.
+  //
+  // `Uri.parse`, not `Uri.file`: IL hands `uniqueMonacoPath` to
+  // @monaco-editor/react, which builds the model URI with `Uri.parse(path)`.
+  // The two spellings differ, and the guard then rejects IL's own model.
   const debugDecorationUri = useMemo(() => {
     if (!editorMounted || !monacoRef.current) return undefined
-    return language === 'st' ? editorModelPath : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
+    return language === 'st' ? editorModelPath : monacoRef.current.Uri.parse(uniqueMonacoPath).toString()
   }, [editorMounted, language, editorModelPath, uniqueMonacoPath])
 
   useStDebugDecorations({

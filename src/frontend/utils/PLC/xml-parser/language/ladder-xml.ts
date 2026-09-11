@@ -16,6 +16,7 @@ import { LadderFlowType } from '@root/frontend/store/slices'
 import { Edge, Position } from '@xyflow/react'
 
 import { readExecuteStCode } from '../../execute-plcopen'
+import { executeStCodeKey } from '../parse-xml-document'
 import { asArray, asRecord, asString } from '../xml-node'
 import type { XyPosition } from './geometry'
 import { makeHandle, parsePositionXml, toNumber } from './geometry'
@@ -395,14 +396,27 @@ function parseExecuteXml(
     }
   }
 
+  // Same empty-formalParameter translation `parseBlockXml` applies, because
+  // `parseConnectionXml` already resolves a consumer's sourceHandle that way.
+  // Without it a foreign file declaring the output as formalParameter="" gets
+  // a handle named '' and an ENO edge pointing at nothing, so the wire that
+  // the file clearly draws does not render.
   const outputHandles: ExecuteNode['data']['outputHandles'] = asArray(asRecord(entry.outputVariables).variable).map(
     (varRaw) => {
       const v = asRecord(varRaw)
+      const raw = asString(v['@formalParameter'])
       const connOut = asRecord(v.connectionPointOut)
-      return makeHandle(asString(v['@formalParameter']), 'source', Position.Right, position, connOut.relPosition, {
-        top: DEFAULT_EXECUTE_CONNECTOR_Y,
-        right: 0,
-      })
+      return makeHandle(
+        raw === '' ? UNNAMED_FUNCTION_RETURN_HANDLE : raw,
+        'source',
+        Position.Right,
+        position,
+        connOut.relPosition,
+        {
+          top: DEFAULT_EXECUTE_CONNECTOR_Y,
+          right: 0,
+        },
+      )
     },
   )
 
@@ -668,7 +682,7 @@ export function parseLadderXml(
   pouName: string,
   ldXml: unknown,
   /**
-   * Untrimmed `<STCode>` payloads by `@localId`, from a second parse — see
+   * Untrimmed `<STCode>` payloads keyed by POU name and `@localId`, from a second parse — see
    * `parse-xml-document.ts`. The main parse trims text nodes, which would
    * eat an Execute snippet's first-line indentation and trailing newline.
    * Absent (tests, callers that don't care) falls back to the trimmed text.
@@ -710,7 +724,10 @@ export function parseLadderXml(
     // typeName="EXECUTE" — the shape CODESYS itself writes — so it has to be
     // split out here before the generic block path claims it as a function call.
     const trimmedCode = readExecuteStCode(record)
-    const executeCode = trimmedCode === null ? null : (executeStCode.get(asString(record['@localId'])) ?? trimmedCode)
+    const executeCode =
+      trimmedCode === null
+        ? null
+        : (executeStCode.get(executeStCodeKey(pouName, asString(record['@localId']))) ?? trimmedCode)
     const { node, pendingEdges: edges } =
       executeCode === null ? parseBlockXml(record) : parseExecuteXml(record, executeCode)
     nodes.push(node)
@@ -776,16 +793,21 @@ export function parseLadderXml(
     }
   }
 
-  // A component of nothing but power rails carries no logic — it is a rail the
-  // file left unwired (CODESYS emits its <rightPowerRail> with an empty
-  // <connectionPointIn>, so it lands in a component of its own). Turning that
-  // into a rung yields one the editor cannot lay out or add to, so drop it and
-  // say so rather than shipping a broken rung.
+  // A component of nothing but power rails is one of two things. A left and a
+  // right rail wired to each other is an empty rung — what `startLadderRung`
+  // creates, and what the user sees after adding a rung and not yet filling it
+  // in; dropping it loses the rung on every reload. A rail on its own is one
+  // the file left unwired (CODESYS emits its <rightPowerRail> with an empty
+  // <connectionPointIn>, so it lands in a component of its own), which would
+  // import as a rung the editor cannot lay out or add to.
+  //
+  // The forest is unioned only across edges, so a rail-only component holding
+  // more than one node is necessarily a wired pair.
   const componentOrder: string[] = []
   let skippedEmptyNetworks = 0
   for (const root of allComponents) {
     const group = componentNodes.get(root) ?? []
-    if (group.some((node) => node.type !== 'powerRail')) componentOrder.push(root)
+    if (group.some((node) => node.type !== 'powerRail') || group.length > 1) componentOrder.push(root)
     else skippedEmptyNetworks += 1
   }
   if (skippedEmptyNetworks > 0) {

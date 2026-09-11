@@ -61,12 +61,20 @@ function readStCodeText(node: Record<string, unknown>): string | null {
 }
 
 /**
- * Map every Execute element's `@localId` to its untrimmed ST snippet.
+ * Key for one Execute snippet. `@localId` is unique only within a POU, so a
+ * bare localId lets one POU's snippet overwrite another's when ids repeat.
+ */
+export function executeStCodeKey(pouName: string, localId: string): string {
+  return `${pouName}\u0000${localId}`
+}
+
+/**
+ * Map every Execute element to its untrimmed ST snippet, keyed by POU name and
+ * `@localId` — the pair both this pass and the main parse can name.
  *
- * Keyed by localId because that is the only identifier shared between this
- * pass and the main parse. A document with no Execute elements yields an
- * empty map and costs one extra parse; that is the price of fast-xml-parser
- * having no per-tag whitespace control.
+ * A document with no Execute elements yields an empty map and costs one extra
+ * parse; that is the price of fast-xml-parser having no per-tag whitespace
+ * control.
  */
 export function collectExecuteStCode(xml: string): Map<string, string> {
   const found = new Map<string, string>()
@@ -79,21 +87,31 @@ export function collectExecuteStCode(xml: string): Map<string, string> {
     return found
   }
 
-  const walk = (value: unknown): void => {
+  const walk = (value: unknown, pouName: string): void => {
     if (Array.isArray(value)) {
-      for (const item of value) walk(item)
+      for (const item of value) walk(item, pouName)
       return
     }
     if (!isRecord(value)) return
     if (value['@typeName'] === EXECUTE_TYPE_NAME) {
       const localId = value['@localId']
       const code = readStCodeText(value)
-      if (typeof localId === 'string' && code !== null) found.set(localId, code)
+      if (typeof localId === 'string' && code !== null) found.set(executeStCodeKey(pouName, localId), code)
     }
-    for (const child of Object.values(value)) walk(child)
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== 'pou') {
+        walk(child, pouName)
+        continue
+      }
+      // Entering a POU: everything below it is named by this POU.
+      for (const entry of Array.isArray(child) ? child : [child]) {
+        const name = isRecord(entry) && typeof entry['@name'] === 'string' ? entry['@name'] : pouName
+        walk(entry, name)
+      }
+    }
   }
 
-  walk(tree)
+  walk(tree, '')
   return found
 }
 

@@ -105,6 +105,9 @@ interface WalkerState {
   warnings: string[]
   /** Pin types from computeConnectionTypes; empty without a TypeContext. */
   connTypes: Map<string, string>
+  /** Which entry point built this state. LD nodes take power from a rail,
+   *  FBD nodes do not, so an absent incoming edge means different things. */
+  language: 'ld' | 'fbd'
 }
 
 function rungHeight(rung: RFRung): number {
@@ -155,7 +158,7 @@ function isVariableNode(node: RFNode): boolean {
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
-export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult {
+export function emitLdBody(body: RFBody, typeContext?: TypeContext, language: 'ld' | 'fbd' = 'ld'): EmitResult {
   // POU name doesn't influence body emission today (it's only the
   // first element of the `Location` tuples used for source-map back-
   // references).  Hard-code a sentinel; the orchestrator can pass a
@@ -178,6 +181,7 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
     yOffset: new Map(),
     warnings: [],
     connTypes: typeContext ? computeConnectionTypes(body, typeContext) : new Map(),
+    language,
   }
 
   // Index every node + edge from every rung up front.  Sinks are then
@@ -596,10 +600,14 @@ function reindentSnippet(code: string, indent: string): string[] {
  * Emit an Execute ("ST Block") element: the user's raw ST snippet, gated by
  * the rung condition reaching its `EN` input.
  *
- * Gating is skipped when that condition is trivially true — no incoming edge
- * (FBD with `EN` unwired) or a single path resolving to `TRUE` (an LD box on
- * the left rail). Both mean "runs every scan", and emitting the body bare
- * keeps the generated ST readable instead of burying it in `IF TRUE THEN`.
+ * Gating is skipped when that condition is trivially true — an unwired FBD
+ * `EN`, or a single path resolving to `TRUE` (an LD box on the left rail).
+ * Both mean "runs every scan", and emitting the body bare keeps the generated
+ * ST readable instead of burying it in `IF TRUE THEN`.
+ *
+ * In LD there is no such thing as an unwired `EN`: power comes from a rail, so
+ * no incoming edge means the box is floating. It warns and emits nothing
+ * rather than silently running every scan.
  *
  * The snippet is emitted verbatim apart from re-indentation; strucpp is what
  * judges its validity.
@@ -621,6 +629,12 @@ function emitExecuteNode(state: WalkerState, node: RFNode): void {
 
   const info: Location = [state.tagName, 'execute', locId(node)]
   const paths = pathsFromIncoming(state, node.id, /*order=*/ false)
+
+  if (paths.length === 0 && state.language === 'ld') {
+    state.warnings.push(`Execute block "${node.id}" has no power input and was not emitted.`)
+    return
+  }
+
   const gated = paths.length > 0 && !(paths.length === 1 && paths[0].kind === 'true')
 
   if (gated) {

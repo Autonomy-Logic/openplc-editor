@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { EXECUTE_STCODE_URI_OPENPLC, readExecuteStCode } from '../../execute-plcopen'
 import { parsePlcopenXml } from '../index'
-import { collectExecuteStCode } from '../parse-xml-document'
+import { collectExecuteStCode, executeStCodeKey } from '../parse-xml-document'
 
 // Fixture is a REAL export from CODESYS V3.5 SP22 Patch 1, not a hand-written
 // approximation — it is the authority for the Execute ("ST Block") wire shape:
@@ -96,13 +96,35 @@ describe('collectExecuteStCode — whitespace fidelity', () => {
   // code payload that silently rewrites the user's source, so a second
   // untrimmed parse recovers it.
   it('preserves leading indentation and blank lines the trimmed parse would eat', () => {
-    const xml = `<?xml version="1.0"?><project><types><pous><pou><body><LD>
+    const xml = `<?xml version="1.0"?><project><types><pous><pou name="Main"><body><LD>
       <block localId="9" typeName="EXECUTE">
         <addData><data name="http://openplc.org/plcopenxml/stcode"
           ><STCode>    x := 1;\n\n    y := 2;\n</STCode></data></addData>
       </block></LD></body></pou></pous></types></project>`
 
-    expect(collectExecuteStCode(xml).get('9')).toBe('    x := 1;\n\n    y := 2;\n')
+    expect(collectExecuteStCode(xml).get(executeStCodeKey('Main', '9'))).toBe('    x := 1;\n\n    y := 2;\n')
+  })
+
+  it('keeps two POUs apart when they reuse a local id', () => {
+    // `@localId` is unique only within a POU. A flat map let the second POU
+    // overwrite the first, and the import handed one POU the other's source.
+    const xml = `<?xml version="1.0"?><project><types><pous>
+      <pou name="Alpha"><body><LD>
+        <block localId="1" typeName="EXECUTE">
+          <addData><data name="http://openplc.org/plcopenxml/stcode"
+            ><STCode>alpha := 1;</STCode></data></addData>
+        </block></LD></body></pou>
+      <pou name="Beta"><body><FBD>
+        <block localId="1" typeName="EXECUTE">
+          <addData><data name="http://openplc.org/plcopenxml/stcode"
+            ><STCode>beta := 2;</STCode></data></addData>
+        </block></FBD></body></pou>
+    </pous></types></project>`
+
+    const found = collectExecuteStCode(xml)
+
+    expect(found.get(executeStCodeKey('Alpha', '1'))).toBe('alpha := 1;')
+    expect(found.get(executeStCodeKey('Beta', '1'))).toBe('beta := 2;')
   })
 
   it('returns an empty map for a document with no Execute elements', () => {

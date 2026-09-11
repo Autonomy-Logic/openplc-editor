@@ -48,10 +48,18 @@ describe('executeStScopeId', () => {
   })
 
   it('sanitises characters that are not legal in an IEC identifier', () => {
-    expect(executeStScopeId('EXECUTE-a1/b2 c')).toBe('execute_EXECUTE_a1_b2_c')
+    expect(executeStScopeId('EXECUTE-a1/b2 c')).toBe('execute_EXECUTE_2d_a1_2f_b2_20_c')
   })
 
   it('distinguishes two different nodes', () => {
     expect(executeStScopeId('n1')).not.toBe(executeStScopeId('n2'))
+  })
+
+  it('keeps ids apart that differ only in which character is illegal', () => {
+    // A bare `_` for every illegal character collapsed these onto one shell
+    // name. Two snippets open at once then declared the same symbol, and the
+    // duplicate definition stalled the worker.
+    const ids = ['a-b', 'a/b', 'a b', 'a_b', 'a.b']
+    expect(new Set(ids.map(executeStScopeId)).size).toBe(ids.length)
   })
 })

@@ -26,5 +26,5 @@ export interface RFFbdBody {
 }
 
 export function emitFbdBody(body: RFFbdBody, typeContext?: TypeContext): EmitResult {
-  return emitLdBody({ rungs: [body.rung] }, typeContext)
+  return emitLdBody({ rungs: [body.rung] }, typeContext, 'fbd')
 }
