@@ -13,6 +13,7 @@
   },
   "testEnvironment": "jsdom",
   "workerIdleMemoryLimit": "1GB",
+  "workerIdleMemoryLimit": "1GB",
   "testEnvironmentOptions": {
     "url": "http://localhost/"
   },
@@ -39,7 +40,9 @@
     "src/frontend/store/slices/**/*.ts",
     "src/frontend/utils/**/*.ts",
     "src/backend/shared/**/*.ts",
+    "src/middleware/shared/**/*.ts",
     "src/middleware/adapters/editor/**/*.ts",
+    "src/frontend/hooks/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/**/*.{test,spec}.{ts,tsx}",
@@ -74,6 +77,18 @@
       "functions": 87,
       "lines": 85,
       "statements": 85
+    },
+    "src/middleware/shared/": {
+      "branches": 88,
+      "functions": 89,
+      "lines": 76,
+      "statements": 78
+    },
+    "src/frontend/hooks/": {
+      "branches": 30,
+      "functions": 30,
+      "lines": 35,
+      "statements": 35
     }
   }
 }

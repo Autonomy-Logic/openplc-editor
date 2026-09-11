@@ -175,6 +175,12 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
         // applied to debugger frames (CRC is deliberately skipped on debug FCs
         // for performance — those function codes are private and well-formed).
         const bool editor_only = (buf[0] != slaveid) && (buf[0] == editorid);
+        // The same split seen from the other side. Without it the routing runs
+        // one way only: an editor function code arriving on the SERVER's public
+        // id was dispatched like any other, which is the opposite of what this
+        // firmware documents. Not applicable when the user set the server to the
+        // editor's own id -- one id, one meaning.
+        const bool public_only = (buf[0] == slaveid) && (buf[0] != editorid);
 
         if (buf[0] != slaveid && !editor_only)
         {
@@ -220,7 +226,11 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
         //    Standard FCs are validated by CRC (the arbiter that makes resync
         //    trustworthy); a mismatch means corruption or misalignment, so we
         //    slide one byte and retry instead of discarding the whole buffer.
-        if (!mb_pdu_skips_crc(mb_frame[1]))
+        // CRC is skipped only on the EDITOR's id, where the private codes are
+        // well-formed by construction. On the public id every frame is validated,
+        // including an editor code -- otherwise the exception below would be
+        // answered to a frame nobody checked, on a bus with other slaves on it.
+        if (!editor_only || !mb_pdu_skips_crc(mb_frame[1]))
         {
             mb_frame_len = (uint16_t)expected;
             packet_crc = ((mb_frame[expected - 2] << 8) | mb_frame[expected - 1]);
@@ -234,7 +244,18 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
         // 4) Accepted. Hand the PDU (CRC stripped) to the shared processor,
         //    which builds the response back into mb_frame.
         mb_frame_len = (uint16_t)expected - 2;
-    process_mbpacket();
+
+    if (public_only && mb_pdu_is_editor_fc(mb_frame[1]))
+    {
+        // Refused rather than ignored: this IS the address the frame asked for,
+        // and a slave that drops a request to its own id leaves the master
+        // waiting out its timeout with nothing to say why.
+        exceptionResponse(mb_frame[1], MB_EX_ILLEGAL_FUNCTION);
+    }
+    else
+    {
+        process_mbpacket();
+    }
 
     //Add CRC
     //Check if response message is too big for this device

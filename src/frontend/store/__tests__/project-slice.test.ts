@@ -1874,6 +1874,20 @@ describe('createProjectSlice', () => {
       expect(servers[0].modbusSlaveConfig?.port).toBe(502)
     })
 
+    it('seeds transports, so the new server is visible to the build', () => {
+      // `selectModbusServer` only considers a server that declares `transports`
+      // -- one without it is the pre-4.4.0 shape whose Modbus still lives in the
+      // board's screen sections. Seeding none made a freshly created server
+      // invisible to the compile, which then fell back to those sections; on a
+      // 4.4.0 package there are none, so the firmware came out with Modbus
+      // entirely off while the screen said "Serving Modbus TCP".
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
     it('creates an s7comm server with default config', () => {
       const result = store.getState().projectActions.createServer({
         data: { name: 'S7Server', protocol: 's7comm' },

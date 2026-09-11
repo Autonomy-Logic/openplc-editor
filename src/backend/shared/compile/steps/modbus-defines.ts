@@ -29,7 +29,10 @@
 
 import {
   DEFAULT_SERIAL_BAUD,
+  isDefaultPort,
   resolveDefaultPortBaud,
+  resolveRs485Pin,
+  resolveRtuPort,
   resolveServerBaud,
 } from '../../../../middleware/shared/utils/modbus-server-profile'
 
@@ -181,7 +184,7 @@ export function selectModbusServer(servers: readonly ModbusServerLike[] | undefi
  * quietly disagreeing with the firmware is the failure this area keeps
  * producing.
  */
-export { DEFAULT_SERIAL_BAUD, resolveDefaultPortBaud }
+export { DEFAULT_SERIAL_BAUD, isDefaultPort, resolveDefaultPortBaud, resolveRs485Pin, resolveRtuPort }
 
 /**
  * Slave id the always-on debugger answers on, and therefore the one the editor
@@ -300,9 +303,12 @@ export function generateModbusDefines(
   lines.push('//Comms Configuration')
 
   if (rtuOn) {
-    // Which UART is the server's; that UART's speed is the package's.
-    const iface = server?.serialPort || state.serial?.modbus_port || defaultSerial
-    const onDefaultPort = iface === defaultSerial
+    // Which UART is the server's; that UART's speed is the package's. Both the
+    // port and the "is it the default one" question come from the shared
+    // resolver, because the screen asks the same two and a disagreement puts a
+    // read-only baud on screen while the build emits MBSERIAL_ON_SECONDARY.
+    const iface = resolveRtuPort(state, server?.serialPort, defaultSerial)
+    const onDefaultPort = isDefaultPort(iface, defaultSerial)
     // The default port's speed is the editor's line and the package's to state;
     // a UART of its own belongs to the server. One UART has one speed, and
     // unlike the slave id no amount of firmware routing changes that.
@@ -323,9 +329,8 @@ export function generateModbusDefines(
     } else {
       lines.push('#define MBSERIAL_ON_SECONDARY')
     }
-    const rs485On = state.serial?.enable_rs485_en_pin
-    const rs485Pin = state.serial?.rs485_en_pin
-    if (rs485On === true && rs485Pin) {
+    const rs485Pin = resolveRs485Pin(state)
+    if (rs485Pin) {
       lines.push(`#define MBSERIAL_TXPIN ${rs485Pin}`)
     }
     lines.push('#define MBSERIAL')

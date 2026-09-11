@@ -78,7 +78,7 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile(arduinoBoard())
 
     it('reads and writes the board-scoped vendor screen state', () => {
-      expect(profile.configurablePort).toBe(false)
+      expect(profile.configurablePort).toBe(true)
     })
 
     it('offers both transports', () => {
@@ -90,10 +90,13 @@ describe('resolveModbusServerProfile', () => {
       expect(profile.segments).toEqual(['QW', 'MW', 'MD', 'ML', 'QX', 'IX', 'IW'])
     })
 
-    it('keeps buffers, port and bind address out of the user hands', () => {
+    it('keeps buffers and bind address out of the user hands, but not the port', () => {
       expect(profile.configurableBuffers).toBe(false)
-      expect(profile.configurablePort).toBe(false)
       expect(profile.configurableBindAddress).toBe(false)
+      // The firmware reads MBTCP_PORT and only falls back to 502 when nothing
+      // defines it, so the port is the project's to set.
+      expect(profile.configurablePort).toBe(true)
+      expect(profile.fixedPort).toBe(502)
     })
 
     it('reports the port modbus_tcp.cpp hard-codes', () => {
@@ -147,7 +150,7 @@ describe('resolveModbusServerProfile', () => {
     // would read an empty PLCServer and present a board whose Modbus is
     // configured as though it were not.
     const profile = resolveModbusServerProfile(arduinoBoard({ capabilities: { modbusTcpServer: true } }))
-    expect(profile.configurablePort).toBe(false)
+    expect(profile.configurablePort).toBe(true)
   })
 
   it('offers only RTU when the board declares no TCP', () => {
@@ -173,7 +176,7 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { Modbus: {} } } }))
 
     it('still resolves as a baremetal target', () => {
-      expect(profile.configurablePort).toBe(false)
+      expect(profile.configurablePort).toBe(true)
     })
 
     it('reports no serial or network screen to link to', () => {
@@ -195,7 +198,7 @@ describe('resolveModbusServerProfile', () => {
     // the package happens to ship would stop being baremetal the day that
     // screen had nothing left to hold.
     const profile = resolveModbusServerProfile({ compiler: 'arduino-cli' })
-    expect(profile.configurablePort).toBe(false)
+    expect(profile.configurablePort).toBe(true)
     expect(profile.fixedPort).toBe(502)
     expect(profile.derivedCounts).toBeNull()
   })
@@ -213,3 +216,29 @@ describe('resolveModbusServerProfile', () => {
  * plainly has both, which is what a user hits the moment they upgrade the
  * editor without updating their packages.
  */
+
+/**
+ * The capability says the firmware CAN serve Modbus TCP. Whether the board has
+ * a carrier to serve it over is a different question, and `networkInterfaces`
+ * is the declaration this demand introduced to answer it.
+ */
+describe('a baremetal board with no network hardware', () => {
+  it('does not offer TCP when the package declares an empty carrier list', () => {
+    // Offering it emits MBTCP / MBTCP_ETHERNET into a firmware with no stack:
+    // on an ESP32 with no RMII PHY that compiles to ETH.begin() and never links.
+    const profile = resolveModbusServerProfile(arduinoBoard({ networkInterfaces: [] }))
+    expect(profile.transports).toEqual(['rtu'])
+  })
+
+  it('keeps TCP on offer when the package says nothing, which is not the same as empty', () => {
+    // Most boards can take a W5x00 shield, so silence must not remove a carrier.
+    expect(resolveModbusServerProfile(arduinoBoard()).transports).toEqual(['rtu', 'tcp'])
+  })
+
+  it('offers TCP for a board that declares a carrier', () => {
+    expect(resolveModbusServerProfile(arduinoBoard({ networkInterfaces: ['Wi-Fi'] })).transports).toEqual([
+      'rtu',
+      'tcp',
+    ])
+  })
+})

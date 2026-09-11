@@ -332,13 +332,20 @@ const ModbusSlaveConfigSchema = z.object({
    */
   transports: z.array(ModbusTransportTypeSchema).optional(),
   networkInterface: z.string(),
-  port: z.number(),
+  // Reaches `#define MBTCP_PORT` verbatim, so it is bounded like every sibling
+  // port in this file. A project file not authored by the screen -- the very
+  // population the migration exists for -- is the only way an unbounded value
+  // could arrive.
+  port: z.number().int().min(1).max(65535),
   /**
    * Slave id this server answers to. Meaningful on RTU, where it is the only
    * addressing there is; on TCP the MBAP unit id is a gateway routing field and
    * is deliberately not filtered on.
+   *
+   * 1-247 is the addressable range the screen enforces. `0` is the broadcast
+   * address, which a server must never answer on, and 248-255 are reserved.
    */
-  slaveId: z.number().int().min(0).max(255).optional(),
+  slaveId: z.number().int().min(1).max(247).optional(),
   // RTU wiring, mirroring the master's serial half. Absent on a TCP-only
   // server, and absent on baremetal when the RTU shares the editor's default
   // port, where the package owns the port's speed.

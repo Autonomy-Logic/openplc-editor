@@ -55,6 +55,22 @@ function asNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+/**
+ * Keep only a value the project schema would accept back.
+ *
+ * A screen field is free text, so a legacy project can carry `rtu_slave_id: 300`
+ * or a fractional baud. Persisting one produces a server that
+ * `ModbusSlaveConfigSchema` rejects on the NEXT load, where the parser skips it
+ * with a warning nobody reads -- and `alreadyMigrated` is then false again, so
+ * the server the user can see in the tree disappears on every open, the project
+ * is dirty every time, and the compile quietly falls back to the screen
+ * sections. Dropping the bad field migrates everything else and ends the loop.
+ */
+function inRange(value: number | undefined, min: number, max: number): number | undefined {
+  if (value === undefined) return undefined
+  return Number.isInteger(value) && value >= min && value <= max ? value : undefined
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
@@ -117,9 +133,9 @@ export function planVendorModbusMigration(
   // package ships them on every board.
   if (transports.length === 0) return null
 
-  const slaveId = asNumber(rtu?.rtu_slave_id)
+  const slaveId = inRange(asNumber(rtu?.rtu_slave_id), 1, 247)
   const serialPort = asString(firstOf(serial?.modbus_port, rtu?.serial_port, rtu?.rtu_interface))
-  const baudRate = asNumber(firstOf(serial?.modbus_baud_rate, rtu?.baud_rate, rtu?.rtu_baud_rate))
+  const baudRate = inRange(asNumber(firstOf(serial?.modbus_baud_rate, rtu?.baud_rate, rtu?.rtu_baud_rate)), 1, 4000000)
 
   return {
     name: freeName(new Set((servers ?? []).map((server) => server.name))),

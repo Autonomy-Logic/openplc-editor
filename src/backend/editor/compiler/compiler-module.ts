@@ -2714,10 +2714,12 @@ class CompilerModule {
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
-    // Baremetal serves Modbus too since 4.4.0, so the warning is for the
-    // targets that genuinely ignore a server: Runtime v3 and the openplc
-    // compiler, which ship no Modbus slave at all.
-    const targetIgnoresServers = boardRuntime === 'openplc-compiler'
+    // Baremetal serves Modbus too since 4.4.0, so the warning is for the targets
+    // that genuinely ignore a server. `openplc-compiler` is the Runtime v3
+    // toolchain, which ships no Modbus slave; the simulator has one but takes
+    // its configuration from the fixed MODBUS_ENABLED block rather than from
+    // the project.
+    const targetIgnoresServers = boardRuntime === 'openplc-compiler' || boardRuntime === 'simulator'
     if (!isRuntimeV4 && targetIgnoresServers && hasServers) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',

@@ -11,13 +11,7 @@
  * Pure — no store, no I/O.
  */
 
-/**
- * A `disabled` option is shown and not selectable. It exists so a picker can
- * say WHY a choice is unavailable instead of quietly omitting it — the Modbus
- * RTU port picker lists the board's default UART greyed out, because that line
- * carries the editor connection.
- */
-export type FieldOption = string | { value: string; label: string; disabled?: boolean }
+export type FieldOption = string | { value: string; label: string }
 
 export interface FieldOptionSource {
   options?: FieldOption[]
@@ -25,11 +19,11 @@ export interface FieldOptionSource {
 }
 
 /** Walk a dotted path (`a.b.c`) into a context object; undefined on any miss. */
-function lookupPath(path: string, context: Record<string, unknown>): unknown {
+function lookupPath(path: string, context: unknown): unknown {
   let cursor: unknown = context
   for (const part of path.split('.')) {
     if (cursor === null || cursor === undefined || typeof cursor !== 'object') return undefined
-    cursor = (cursor as Record<string, unknown>)[part]
+    cursor = Object.hasOwn(cursor, part) ? Reflect.get(cursor, part) : undefined
   }
   return cursor
 }
@@ -40,10 +34,13 @@ function isFieldOption(value: unknown): value is FieldOption {
 
 export function resolveFieldOptions(
   field: FieldOptionSource,
-  context: { board?: Record<string, unknown> | undefined },
+  // `unknown` rather than a Record: the caller hands over a `BoardInfo`, which
+  // has no index signature, and widening here is what keeps an assertion out of
+  // every call site.
+  context: { board?: unknown },
 ): FieldOption[] {
   if (field.optionsRef) {
-    const resolved = lookupPath(field.optionsRef, context as Record<string, unknown>)
+    const resolved = lookupPath(field.optionsRef, context)
     if (Array.isArray(resolved)) {
       const opts = resolved.filter(isFieldOption)
       if (opts.length > 0) return opts

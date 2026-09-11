@@ -28,8 +28,10 @@ import type {
   ModbusServerTransport,
 } from '../../middleware/shared/utils/modbus-server-profile'
 import {
+  isDefaultPort,
   readSerialBaudState,
   resolveModbusServerProfile,
+  resolveRtuPort,
   resolveServerBaud,
 } from '../../middleware/shared/utils/modbus-server-profile'
 import { useOpenPLCStore } from '../store'
@@ -141,7 +143,15 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
 
     // Empty means "wherever the board defaults to", which is the default UART.
     const serialPort = config?.serialPort ?? ''
-    const onDefaultPort = serialPort === '' || serialPort === profile.defaultSerial
+    // Resolved the way the emitter resolves it, from the same function. Deriving
+    // it here independently is how the screen ends up showing a read-only baud
+    // for the default port while the build emits MBSERIAL_ON_SECONDARY for
+    // another one -- the divergence this whole module exists to prevent.
+    const baudState = readSerialBaudState(vendorScreenData)
+    const onDefaultPort = isDefaultPort(
+      resolveRtuPort(baudState, config?.serialPort, profile.defaultSerial),
+      profile.defaultSerial,
+    )
 
     return {
       profile,
@@ -152,7 +162,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       baudRate: resolveServerBaud({
         onDefaultPort,
         serverBaud: config?.baudRate,
-        state: readSerialBaudState(vendorScreenData),
+        state: baudState,
       }),
       baudRateEditable: !onDefaultPort,
       port: profile.configurablePort ? (config?.port ?? profile.fixedPort) : profile.fixedPort,

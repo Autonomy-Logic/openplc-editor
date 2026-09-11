@@ -454,7 +454,13 @@ async function runCompilePipelineInner(
   // "only one server is allowed" leaves the user to guess which to turn off.
   // ---------------------------------------------------------------------
   const modbusSelection = selectModbusServer(processedData.servers as never)
-  if (!isRuntimeV4 && modbusSelection.conflict) {
+  // Only a target that actually builds this firmware can be in conflict. The
+  // simulator and the openplc-compiler runtimes never read the selection, so
+  // refusing their build over two enabled servers would block work on a project
+  // that is merely passing through -- which is the same "a project moves
+  // between targets" reasoning that put the refusal here instead of at creation.
+  const targetServesOneSlave = !isRuntimeV4 && !isSimulator && boardRuntime !== 'openplc-compiler'
+  if (targetServesOneSlave && modbusSelection.conflict) {
     return bailError(
       emit,
       'validate',

@@ -67,22 +67,7 @@ function FormLayout({ section }: FormLayoutProps) {
 
   // Board context for `optionsRef`. `modbusSerialPorts` is derived rather than
   // declared by the package: it is the board's UART list with the default one
-  // greyed out, because that port carries the editor connection — the
-  // always-on debugger, status and licensing all answer there, and a second
-  // Modbus master cannot share the line. Shown-but-disabled rather than
-  // omitted, so the picker explains itself.
-  const boardContext = useMemo(() => {
-    if (!currentBoardInfo) return undefined
-    const ports = currentBoardInfo.serialPorts
-    if (!ports || ports.length === 0) return currentBoardInfo as unknown as Record<string, unknown>
-    const defaultSerial = currentBoardInfo.defaultSerial ?? 'Serial'
-    return {
-      ...currentBoardInfo,
-      modbusSerialPorts: ports.map((port) =>
-        port === defaultSerial ? { value: port, label: `${port} (editor connection)`, disabled: true } : port,
-      ),
-    } as unknown as Record<string, unknown>
-  }, [currentBoardInfo])
+
   // Single-source-of-truth for the per-section storage key — see
   // `getSectionPersistenceKey` in ../index.tsx.  Every layout that
   // persists must derive its key through this helper so the
@@ -168,21 +153,14 @@ function FormLayout({ section }: FormLayoutProps) {
                         align='center'
                         side='bottom'
                       >
-                        {resolveFieldOptions(field, { board: boardContext }).map((opt) => {
+                        {resolveFieldOptions(field, { board: currentBoardInfo }).map((opt) => {
                           const value = typeof opt === 'string' ? opt : opt.value
                           const label = typeof opt === 'string' ? opt : opt.label
-                          const disabled = typeof opt === 'string' ? false : opt.disabled === true
                           return (
                             <SelectItem
                               key={value}
                               value={value}
-                              disabled={disabled}
-                              className={cn(
-                                'flex w-full items-center px-2 py-[6px] outline-none',
-                                disabled
-                                  ? 'cursor-not-allowed opacity-50'
-                                  : 'cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                              )}
+                              className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
                             >
                               <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
                                 {label}

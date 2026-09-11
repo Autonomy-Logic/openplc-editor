@@ -514,3 +514,45 @@ describe('selectModbusServer', () => {
     expect(selection.server).toMatchObject({ transports: ['rtu'] })
   })
 })
+
+/**
+ * The compiler reads the project from disk; `migrate-modbus-serial-fields` runs
+ * in the store. So the emitter meets the pre-split spellings routinely -- before
+ * the first save, always in a CLI process, and permanently on a board whose
+ * package was never split -- and has to honour them.
+ */
+describe('a pre-4.4.0 project whose wiring is still under the old keys', () => {
+  const legacy = {
+    modbus_rtu: {
+      enabled: true,
+      rtu_slave_id: 7,
+      rtu_interface: 'Serial2',
+      rtu_baud_rate: '19200',
+      enable_rs485_en_pin: true,
+      rtu_rs485_en_pin: '17',
+    },
+  }
+
+  it('drives the RS-485 enable pin instead of leaving the transceiver mute', () => {
+    // Losing this emits no MBSERIAL_TXPIN, the DE pin is never asserted, and the
+    // board receives every request and answers none.
+    expect(generateModbusDefines(legacy, 'Serial')).toContain('#define MBSERIAL_TXPIN 17')
+  })
+
+  it('puts the RTU on the UART the project named, not on the default one', () => {
+    const out = generateModbusDefines(legacy, 'Serial')
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+  })
+
+  it('still prefers the new keys when the fold has already run', () => {
+    const folded = {
+      modbus_rtu: { enabled: true, rtu_interface: 'Serial2', rtu_rs485_en_pin: '17' },
+      serial: { modbus_port: 'Serial1', enable_rs485_en_pin: true, rs485_en_pin: '4' },
+    }
+    const out = generateModbusDefines(folded, 'Serial')
+    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
+    expect(out).toContain('#define MBSERIAL_TXPIN 4')
+  })
+})

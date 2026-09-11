@@ -17,6 +17,9 @@ export type ModbusBoardInfoLike = {
   compiler?: string
   capabilities?: Record<string, unknown>
   vpp?: { screens?: Record<string, unknown> } | null
+  /** TCP carriers the board can actually bring up, from `device.networkInterfaces`.
+   *  Absent means the package did not say, which keeps both on offer. */
+  networkInterfaces?: string[]
   serialPorts?: string[]
   defaultSerial?: string
 }
@@ -116,7 +119,17 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     // on it together (`MBSERIAL_SHARES_DEBUG_SERIAL`); which of the two the
     // user talks to at a given moment is theirs to arrange, not ours to refuse.
     if (caps.modbusRtuServer) transports.push('rtu')
-    if (caps.modbusTcpServer) transports.push('tcp')
+    // The capability says the firmware CAN serve Modbus TCP; `networkInterfaces`
+    // says whether this board has a carrier to serve it over. Declaring one is
+    // how a package removes a carrier it cannot bring up -- an ESP32 with no
+    // RMII PHY compiles `MBTCP_ETHERNET` to `ETH.begin()` and never links -- so
+    // an empty list is a board that answers nothing, and offering TCP there
+    // would emit a stack the firmware has no hardware for.
+    //
+    // Absent is not empty: a package that says nothing keeps both carriers on
+    // offer, which is right for any board that can take a W5x00 shield.
+    const hasNetwork = board.networkInterfaces === undefined || board.networkInterfaces.length > 0
+    if (caps.modbusTcpServer && hasNetwork) transports.push('tcp')
     if (transports.length === 0) return NO_SERVER
 
     return {
@@ -128,7 +141,13 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
       // rather than a Modbus setting, so both sizing them and reporting them
       // belong to DOPE-615, which derives the image from the project.
       configurableBuffers: false,
-      configurablePort: false,
+      // The firmware reads `MBTCP_PORT` and falls back to 502 only when nothing
+      // defines it (`modbus_tcp.cpp:12`), so the port IS the project's. It was
+      // hard-coded in three places before this demand, and the screen still said
+      // so -- which would have shown 502 for a project carrying 8502 and flashed
+      // a board listening on the number the screen never displayed.
+      configurablePort: true,
+      // One network interface on a microcontroller; there is nothing to bind to.
       configurableBindAddress: false,
       serialPorts: board.serialPorts ?? [],
       defaultSerial: board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL,

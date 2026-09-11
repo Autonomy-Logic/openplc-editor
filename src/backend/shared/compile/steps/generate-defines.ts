@@ -22,7 +22,9 @@ import {
   DEBUG_SLAVE,
   generateModbusDefines,
   type ModbusServerCompileConfig,
+  isDefaultPort,
   resolveDefaultPortBaud,
+  resolveRtuPort,
   type VppModbusScreenState,
 } from './modbus-defines'
 
@@ -226,7 +228,12 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     // port's speed. Ignoring it compiled a firmware listening at 115200 while
     // the editor dialled the other value, and the board answered nothing
     // ("No Firmware Detected" on a healthy board).
-    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDefaultPortBaud(vppModbusState ?? {})}\n`
+    // The RTU's own speed only describes THIS port when the RTU is on it. A
+    // project running RTU on Serial1 at 9600 must not bring the USB port up at
+    // 9600, or the editor dials a speed nothing answers on.
+    const rtuPort = resolveRtuPort(vppModbusState ?? {}, modbusServer?.serialPort, defaultSerial ?? 'Serial')
+    const rtuOnDefaultPort = isDefaultPort(rtuPort, defaultSerial ?? 'Serial')
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDefaultPortBaud(vppModbusState ?? {}, rtuOnDefaultPort)}\n`
     // A constant, unlike the baud: the firmware answers it alongside the Modbus
     // server's id and routes by function code, so nothing the user configures can
     // move the editor's link off it.

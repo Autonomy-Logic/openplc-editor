@@ -140,6 +140,36 @@ describe('planVendorModbusMigration', () => {
     expect(config).not.toHaveProperty('baudRate')
   })
 
+  it('drops a value the project schema would reject, instead of persisting it', () => {
+    // A screen field is free text. Persisting `rtu_slave_id: 300` produces a
+    // server that fails `safeParse` on the NEXT load, where the parser skips it
+    // with a warning nobody reads -- so `alreadyMigrated` is false again, the
+    // server vanishes from the tree on every open, and the compile quietly
+    // falls back to the screen sections. Everything else still migrates.
+    const outOfRange = {
+      modbus_rtu: { enabled: true, rtu_slave_id: 300, rtu_interface: 'Serial2', rtu_baud_rate: '-9600' },
+    }
+    const config = planVendorModbusMigration(outOfRange, [])?.modbusSlaveConfig
+
+    expect(config).not.toHaveProperty('slaveId')
+    expect(config).not.toHaveProperty('baudRate')
+    expect(config?.serialPort).toBe('Serial2')
+    expect(config?.transports).toEqual(['rtu'])
+  })
+
+  it('rejects the broadcast address and the reserved range', () => {
+    // A server must never answer on 0, and 248-255 are reserved by the spec.
+    for (const id of [0, 248, 255]) {
+      const config = planVendorModbusMigration(
+        { modbus_rtu: { enabled: true, rtu_slave_id: id } },
+        [],
+      )?.modbusSlaveConfig
+      expect(config).not.toHaveProperty('slaveId')
+    }
+    const ok = planVendorModbusMigration({ modbus_rtu: { enabled: true, rtu_slave_id: 247 } }, [])?.modbusSlaveConfig
+    expect(ok?.slaveId).toBe(247)
+  })
+
   it('does nothing on a project already on the new model', () => {
     // Reopening must not accumulate mb_baremetal_server_2, _3, and so on.
     const migrated: PLCServer[] = [

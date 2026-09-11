@@ -132,7 +132,13 @@ function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
   if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
     return {
       ...serverData,
-      modbusSlaveConfig: { enabled: false, networkInterface: '0.0.0.0', port: 502 },
+      // `transports` has to be a real array from the start. `selectModbusServer`
+      // only considers a server that declares one -- a server without it is a
+      // pre-4.4.0 shape whose Modbus still lives in the board's screen sections
+      // -- so seeding nothing made a newly created server invisible to the
+      // build while the screen, defaulting the same field to `['tcp']`, said it
+      // was serving Modbus TCP.
+      modbusSlaveConfig: { enabled: false, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 },
     }
   }
   if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
