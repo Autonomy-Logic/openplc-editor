@@ -16,8 +16,8 @@
  */
 
 import { transpileToSt } from '../../../backend/shared/transpilers/st-transpiler'
+import { fromPortShape } from '../../../backend/shared/transpilers/transpile-from-port'
 import type { PLCProjectData } from '../../shared/ports/types'
-import { fromPortShape } from './transpile-from-port'
 
 /**
  * Satisfies the shared `ProjectStTranspiler` structurally rather than by importing it:

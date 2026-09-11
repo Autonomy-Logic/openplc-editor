@@ -1,35 +1,12 @@
 /**
- * Project the renderer's port-shape `PLCProjectData`
- * (`middleware/shared/ports/types.ts`) into the JSON transpiler's
- * minimal IR.
+ * Project the renderer's port-shape `PLCProjectData` (`middleware/shared/ports/types.ts`)
+ * into the JSON transpiler's minimal IR.
  *
- * Lives under `middleware/adapters/editor/` rather than alongside the
- * transpiler itself so importing port-shape types — which are
- * middleware-scoped — doesn't violate the inward-only layer rule
- * (`backend/shared/` modules can't depend on `middleware/`).  Its twin
- * sits at `middleware/adapters/web/transpile-from-port.ts`: the
- * projection is the same on both builds because the store shape is,
- * but it cannot live on the shared surface for the layer reason above.
- *
- * The companion schema adapter — the one the main process uses on the
- * compile path, against the shape its IPC payload arrives in — lives at
- * `backend/shared/transpilers/st-transpiler/from-schema.ts`.
+ * Shared by both builds: the store shape is the same on each, so the projection is too.
+ * The companion schema adapter — the one the main process uses on the compile path,
+ * against the shape its IPC payload arrives in — is `st-transpiler/from-schema.ts`.
  */
 
-import type {
-  TranspileBody,
-  TranspileBodyLanguage,
-  TranspileDataType,
-  TranspileInstance,
-  TranspilePou,
-  TranspilePouKind,
-  TranspileProject,
-  TranspileTask,
-  TranspileVariable,
-  TranspileVariableType,
-} from '../../../backend/shared/transpilers/st-transpiler/types'
-import type { RFFbdBody } from '../../../backend/shared/transpilers/st-transpiler/walker/fbd'
-import type { RFBody, RFEdge, RFNode, RFRung } from '../../../backend/shared/transpilers/st-transpiler/walker/types'
 import {
   globalVariableListIsReferencedIn,
   globalVariableListTypeName,
@@ -47,7 +24,20 @@ import type {
   PLCVariable,
   PLCVariableType,
   VariableClass,
-} from '../../shared/ports/types'
+} from '../../../middleware/shared/ports/types'
+import type {
+  TranspileBody,
+  TranspileBodyLanguage,
+  TranspileDataType,
+  TranspileInstance,
+  TranspilePou,
+  TranspileProject,
+  TranspileTask,
+  TranspileVariable,
+  TranspileVariableType,
+} from './st-transpiler/types'
+import type { RFFbdBody } from './st-transpiler/walker/fbd'
+import type { RFBody, RFEdge, RFNode, RFRung } from './st-transpiler/walker/types'
 
 /* ─────────────────────────── public entry ───────────────────────────────── */
 
@@ -55,9 +45,8 @@ export function fromPortShape(data: PLCProjectData): TranspileProject {
   const resource = data.configurations?.resource
   // A Global Variable List has no IEC equivalent, so it is compiled as the shape STruC++
   // resolves qualified member access through: a STRUCT type, one global instance named
-  // after the list, and a `VAR_EXTERNAL` in each POU that mentions it. `GVL.Output1` then
-  // type-checks exactly as it did in CODESYS. An empty list is skipped — an empty STRUCT
-  // is not a legal type, so there would be nothing to instantiate.
+  // after the list, and a `VAR_EXTERNAL` in each POU that mentions it. An empty list is
+  // skipped — an empty STRUCT is not a legal type, so there would be nothing to instantiate.
   const lists = (data.globalVariableLists ?? []).filter((list) => list.variables.length > 0)
 
   return {
@@ -73,19 +62,10 @@ export function fromPortShape(data: PLCProjectData): TranspileProject {
 
 /* ──────────────────── global variable lists (GVLs) ──────────────────────── */
 
-/*
- * The two rules with no compiler diagnostic behind them — the `_TYPE` suffix and
- * what counts as a reference — are imported from the serialiser, not restated
- * here. They also govern the ST text output and the schema→IR projection in
- * `backend/shared/transpilers/st-transpiler/from-schema.ts`; a private copy in
- * any one of the three would let the struct type stop matching its instance and
- * its `VAR_EXTERNAL` silently.
- */
+// The `_TYPE` suffix and what counts as a reference are imported from the serialiser, not
+// restated: a private copy would let the struct type stop matching its instance silently.
 
-/** The struct backing a list. Member ADDRESSES are dropped deliberately: a struct member
- *  cannot be bound to I/O today — the compiler accepts an `AT` there and silently
- *  discards it — so emitting one would imply a binding that does not exist. The address
- *  stays on the project model for the trip back to CODESYS. */
+/** The struct backing a list. Member addresses are dropped: a struct member cannot be bound to I/O. */
 function globalListStruct(list: PLCGlobalVariableList): TranspileDataType {
   return {
     name: globalVariableListTypeName(list.name),
@@ -106,17 +86,10 @@ function globalListInstance(list: PLCGlobalVariableList): TranspileVariable {
   }
 }
 
-/**
- * Declare, in this POU, the lists its body actually references.
- *
- * STruC++ reaches a configuration-level global only through a matching `VAR_EXTERNAL`;
- * without one `GVL.Output1` fails with "Undeclared variable 'GVL'".
- */
+/** Declare, in this POU, the lists its body actually references — STruC++ needs a `VAR_EXTERNAL`. */
 function withGlobalListExternals(pou: TranspilePou, lists: PLCGlobalVariableList[]): TranspilePou {
-  // Scan the WHOLE projected POU, not just its body: a ladder or FBD body is a node
-  // graph, and the reference lives in a node's variable name rather than in any text the
-  // body exposes. `referenceSearchText` — not `JSON.stringify` — because JSON escaping
-  // hides every reference that starts a line; see the note on that function.
+  // The whole projected POU is scanned, not just its body: a ladder or FBD reference lives
+  // in a node's variable name rather than in any text the body exposes.
   const searchText = referenceSearchText(pou)
   const referenced = lists.filter((list) => globalVariableListIsReferencedIn(list.name, searchText))
   if (referenced.length === 0) return pou
@@ -138,7 +111,7 @@ function projectPou(pou: PLCPou): TranspilePou {
   const variables = (pou.interface?.variables ?? []).map(projectVariable)
   return {
     name: pou.name,
-    pouType: pou.pouType as TranspilePouKind,
+    pouType: pou.pouType,
     documentation: pou.documentation ?? '',
     interface: {
       variables,
@@ -156,97 +129,69 @@ function projectBody(body: PLCBody): TranspileBody {
     case 'python':
     case 'cpp':
       return { language, value: String(body.value ?? '') }
-    case 'ld': {
-      const flow = body.value as { rungs: unknown[] }
-      return { language: 'ld', value: projectLdBody(flow.rungs) }
-    }
-    case 'fbd': {
-      const flow = body.value as { rung: unknown }
-      return { language: 'fbd', value: projectFbdBody(flow.rung) }
-    }
+    case 'ld':
+      return { language: 'ld', value: projectLdBody(body.value) }
+    case 'fbd':
+      return { language: 'fbd', value: projectFbdBody(body.value) }
     case 'sfc':
-      // SFC isn't ported yet — fall back to ST passthrough so the
-      // transpiler doesn't crash on legacy SFC fixtures.
+      // SFC is not ported yet: ST passthrough so legacy fixtures do not crash the transpiler.
       return { language: 'st', value: String(body.value ?? '') }
-    default: {
-      // Exhaustiveness check — required so TS sees the switch
-      // covers every `TranspileBodyLanguage` variant and the function
-      // returns on every path.
-      const _exhaustive: never = language
-      throw new Error(`Unhandled body language: ${String(_exhaustive)}`)
-    }
   }
 }
 
 /* ─── React Flow body projection ─────────────────────────────────── */
 
-interface PortRung {
-  id?: unknown
-  comment?: unknown
-  reactFlowViewport?: unknown
-  nodes: unknown[]
-  edges: unknown[]
+// A graphical body is `unknown` on the port, so every field is read through a guard.
+
+function projectLdBody(value: unknown): RFBody {
+  const rungs = isRecord(value) ? asArray(value.rungs) : []
+  return { rungs: rungs.map(projectRung) }
 }
 
-interface PortNode {
-  id: unknown
-  type: unknown
-  position?: { x?: unknown; y?: unknown }
-  data?: unknown
-}
-
-interface PortEdge {
-  id: unknown
-  source: unknown
-  target: unknown
-  sourceHandle?: unknown
-  targetHandle?: unknown
-}
-
-function projectLdBody(rungs: readonly unknown[]): RFBody {
-  return { rungs: rungs.map((r) => projectRung(r as PortRung)) }
-}
-
-function projectFbdBody(rung: unknown): RFFbdBody {
-  const r = rung as PortRung
+function projectFbdBody(value: unknown): RFFbdBody {
+  const rung = isRecord(value) && isRecord(value.rung) ? value.rung : {}
   return {
     rung: {
-      comment: asString(r.comment) ?? '',
-      nodes: (r.nodes ?? []).map((n) => projectNode(n as PortNode)),
-      edges: (r.edges ?? []).map((e) => projectEdge(e as PortEdge)),
+      comment: asString(rung.comment) ?? '',
+      nodes: asArray(rung.nodes).map(projectNode),
+      edges: asArray(rung.edges).map(projectEdge),
     },
   }
 }
 
-function projectRung(rung: PortRung): RFRung {
+function projectRung(value: unknown): RFRung {
+  const rung = isRecord(value) ? value : {}
   return {
     id: asString(rung.id) ?? '',
     comment: asString(rung.comment) ?? '',
     reactFlowViewport: rung.reactFlowViewport,
-    nodes: (rung.nodes ?? []).map((n) => projectNode(n as PortNode)),
-    edges: (rung.edges ?? []).map((e) => projectEdge(e as PortEdge)),
+    nodes: asArray(rung.nodes).map(projectNode),
+    edges: asArray(rung.edges).map(projectEdge),
   }
 }
 
-function projectNode(n: PortNode): RFNode {
+function projectNode(value: unknown): RFNode {
+  const node = isRecord(value) ? value : {}
+  const position = isRecord(node.position) ? node.position : {}
   return {
-    id: asString(n.id) ?? '',
-    type: asString(n.type) ?? '',
+    id: asString(node.id) ?? '',
+    type: asString(node.type) ?? '',
     position: {
-      x: asNumber(n.position?.x) ?? 0,
-      y: asNumber(n.position?.y) ?? 0,
+      x: asNumber(position.x) ?? 0,
+      y: asNumber(position.y) ?? 0,
     },
-    data: isRecord(n.data) ? n.data : {},
+    data: isRecord(node.data) ? node.data : {},
   }
 }
 
-function projectEdge(e: PortEdge): RFEdge {
+function projectEdge(value: unknown): RFEdge {
+  const edge = isRecord(value) ? value : {}
   return {
-    id: asString(e.id) ?? '',
-    source: asString(e.source) ?? '',
-    target: asString(e.target) ?? '',
-    sourceHandle: asString(e.sourceHandle) ?? null,
-    targetHandle: asString(e.targetHandle) ?? null,
+    id: asString(edge.id) ?? '',
+    source: asString(edge.source) ?? '',
+    target: asString(edge.target) ?? '',
+    sourceHandle: asString(edge.sourceHandle) ?? null,
+    targetHandle: asString(edge.targetHandle) ?? null,
   }
 }
 
@@ -256,6 +201,10 @@ function asString(v: unknown): string | null {
 
 function asNumber(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+function asArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : []
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -276,9 +225,8 @@ function projectVariable(v: PLCVariable): TranspileVariable {
 }
 
 function projectStructureVariable(v: PLCStructureVariable): TranspileVariable {
-  // Port-shape structure variables hide initial value inside
-  // `{ simpleValue: { value: ... } }`; the IR flattens that to a
-  // bare string for symmetry with the PLCVariable projection above.
+  // The port hides a structure member's initial value inside `{ simpleValue: { value } }`;
+  // the IR flattens that to a bare string, as the PLCVariable projection above does.
   const initial = v.initialValue?.simpleValue?.value
   return {
     name: v.name,
@@ -310,10 +258,8 @@ function projectDataType(dt: PLCDataType): TranspileDataType {
       name: dt.name,
       derivation: 'array',
       dimensions: dt.dimensions.map((d) => ({ dimension: d.dimension })),
-      // PLCDataType's array baseType is a PLCVariableType (object);
-      // collapse to either a string (elementary tag like "INT") or
-      // a single-field wrapper so the IR carries the same scalar
-      // shape the schema side does.
+      // The port's array baseType is a PLCVariableType; the IR carries the same scalar
+      // shape the schema side does — a bare name for a nested array, a wrapper otherwise.
       baseType: dt.baseType.definition === 'array' ? dt.baseType.value : { value: dt.baseType.value },
       ...(dt.initialValue ? { initialValue: dt.initialValue } : {}),
     }
@@ -326,7 +272,6 @@ function projectDataType(dt: PLCDataType): TranspileDataType {
       ...(dt.initialValue ? { initialValue: dt.initialValue } : {}),
     }
   }
-  // structure
   return {
     name: dt.name,
     derivation: 'structure',
@@ -351,33 +296,16 @@ function projectInstance(inst: PLCInstance): TranspileInstance {
   }
 }
 
-function normalizeLanguage(language: string): TranspileBodyLanguage {
-  // Port shape accepts uppercase variants ('IL', 'ST', …) on the
-  // body.language type union; the IR canonicalises to lowercase so
-  // downstream code can switch on a single case.
+const BODY_LANGUAGES: readonly TranspileBodyLanguage[] = ['st', 'il', 'ld', 'fbd', 'sfc', 'python', 'cpp']
+
+/** The port accepts uppercase variants (`'IL'`, `'ST'`, …); the IR switches on lowercase only. */
+function normalizeLanguage(language: PLCBody['language']): TranspileBodyLanguage {
   const lower = language.toLowerCase()
-  if (
-    lower === 'st' ||
-    lower === 'il' ||
-    lower === 'ld' ||
-    lower === 'fbd' ||
-    lower === 'sfc' ||
-    lower === 'python' ||
-    lower === 'cpp'
-  ) {
-    return lower
-  }
-  // Fallback: treat unknown languages as ST passthrough so the
-  // transpiler doesn't crash on legacy fixtures.
-  return 'st'
+  return BODY_LANGUAGES.find((known) => known === lower) ?? 'st'
 }
 
+/** The port's 'global' class has no IR equivalent (globals live under the configuration). */
 function normalizeVarClass(cls: VariableClass): TranspileVariable['class'] {
-  // Port shape has a 'global' class that the IR doesn't (global vars
-  // live under configuration.globalVariables, not in a POU
-  // interface).  Map it onto 'local' for the projection; this only
-  // matters when a global slips into the interface variables list,
-  // which the renderer prevents at the editor level.
   if (cls === 'global') return 'local'
   return cls
 }

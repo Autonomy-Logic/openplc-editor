@@ -10,8 +10,8 @@
  * it; `null` means "no ST for this diagram", which every caller already handles.
  */
 
+import { fromPortShape } from '../../../../backend/shared/transpilers/transpile-from-port'
 import type { PLCProjectData, PLCPou, PLCVariable } from '../../../shared/ports/types'
-import { fromPortShape } from '../transpile-from-port'
 import { transpileProjectStInProcess } from '../transpile-project-st'
 
 function variable(overrides: Partial<PLCVariable> & { name: string }): PLCVariable {
@@ -389,14 +389,21 @@ describe('the transpiler the chat panel is handed', () => {
     warn.mockRestore()
   })
 
-  it('answers null when the projection itself blows up on a malformed body', async () => {
+  it('answers null when the projection itself blows up', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // A ladder body with no `rungs` at all: the projection reads straight through it, so
-    // this is the throwing path rather than the error-collecting one.
+    // The projection guards every graphical field, so the throwing path is reached with a
+    // POU whose body cannot even be read — the error-collecting path is the case above.
+    const hostile: PLCPou = {
+      name: 'Broken',
+      pouType: 'program',
+      get body(): PLCPou['body'] {
+        throw new Error('unreadable')
+      },
+    }
     const result = await transpileProjectStInProcess({
       dataTypes: [],
-      pous: [pou({ name: 'Broken', body: { language: 'ld', value: null } })],
+      pous: [hostile],
       configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
     })
 
