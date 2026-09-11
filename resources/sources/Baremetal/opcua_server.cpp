@@ -46,6 +46,18 @@ Design notes that outlive the skeleton:
 /** Microseconds of each scan cycle the server may consume.  Declared here
  *  rather than in the generated header because it is a runtime scheduling
  *  policy, not project configuration. */
+/** What one UA_Server_run_iterate() may cost in the worst case.
+ *
+ *  Not a budget that gets enforced mid-call -- there is no way to interrupt
+ *  open62541 -- but the admission threshold: with less slack than this left in
+ *  the cycle, the server is not run at all. Measured worst case on a LOGO! 8.2
+ *  under sustained load is 4,816 us (session establishment, whose response is
+ *  by far the largest message the server ever encodes), so this carries margin
+ *  over it rather than tracking it exactly. */
+#ifndef OPCUA_WORST_CASE_US
+#define OPCUA_WORST_CASE_US 6000u
+#endif
+
 #ifndef OPCUA_SCAN_BUDGET_US
 #define OPCUA_SCAN_BUDGET_US 1000u
 #endif
@@ -54,6 +66,18 @@ namespace {
 
 bool       g_started  = false;
 uint32_t   g_overruns = 0;
+/* Worst and total time opcuatask() has spent inside UA_Server_run_iterate.
+ * The overrun COUNT alone cannot answer "by how much" -- a budget missed by
+ * 10 us and one missed by 10 ms are the same event to it, and only the second
+ * threatens a 20 ms scan. */
+uint32_t   g_max_us   = 0;
+uint32_t   g_calls    = 0;
+/* Scans in which there was not enough slack to run at all. A large number here
+ * is not a fault -- it is the PLC keeping its cycle, which is the priority --
+ * but it does mean OPC-UA is being starved and the scan interval is too tight
+ * for the two to coexist comfortably. Worth surfacing to the user. */
+uint32_t   g_skipped  = 0;
+uint64_t   g_total_us = 0;
 UA_Server* g_server   = nullptr;
 
 /** Apply everything the VPP declared, then CHECK it.
@@ -221,7 +245,7 @@ void opcua_init()
     OPCUA_LOG("[ua] LISTENING on %d", (int)OPCUA_PORT);
 }
 
-void opcuatask()
+void opcuatask(uint32_t slack_us)
 {
     // Before the g_started guard, deliberately: the debug log is most needed
     // exactly when init FAILED, and servicing it only on the happy path is
@@ -243,19 +267,50 @@ void opcuatask()
             OPCUA_LOG("[arena] inuse=%lu hw=%lu fail=%lu largest=%lu",
                       (unsigned long)st.in_use, (unsigned long)st.high_water,
                       (unsigned long)st.failures, (unsigned long)st.largest_free);
+            OPCUA_LOG("[scan] budget=%luus overruns=%lu max=%luus avg=%luus calls=%lu",
+                      (unsigned long)OPCUA_SCAN_BUDGET_US, (unsigned long)g_overruns,
+                      (unsigned long)g_max_us,
+                      (unsigned long)(g_calls ? (g_total_us / g_calls) : 0),
+                      (unsigned long)g_calls);
+            OPCUA_LOG("[scan] skipped=%lu (no slack)", (unsigned long)g_skipped);
         }
     }
 
     if (!g_started)
         return;
 
+    // Admission control. The PLC cycle comes first: if what is left of it
+    // cannot absorb a worst-case iteration, do not start one. Skipping costs a
+    // few milliseconds of OPC-UA latency; overrunning costs scan-cycle
+    // integrity, which is the thing the PLC exists to provide.
+    if (slack_us < OPCUA_WORST_CASE_US)
+    {
+        g_skipped++;
+        return;
+    }
+
     const unsigned long deadline = micros() + OPCUA_SCAN_BUDGET_US;
 
     // Non-blocking by construction: our EventLoop's run() ignores the timeout
     // because sleeping here would stop the PLC logic. One iterate per scan;
     // pending work waits for the next one.
+    const unsigned long t0 = micros();
     if (g_server != nullptr)
         UA_Server_run_iterate(g_server, 0);
+    const unsigned long t1 = micros();
+    const uint32_t spent = (uint32_t)(t1 - t0);
+    // Catch a pathological iteration in the act. A 20 ms cycle cannot absorb
+    // anything near this, so if it is real we need to see what it was doing;
+    // and if it is a micros() discontinuity rather than real work, the raw
+    // endpoints will say so.
+    if (spent > 50000u)
+        OPCUA_LOG("[scan] SPIKE %luus  t0=%lu t1=%lu arena_inuse=%lu",
+                  (unsigned long)spent, (unsigned long)t0, (unsigned long)t1,
+                  (unsigned long)({ opcua_arena_stats_t _s; opcua_arena_get_stats(&_s); _s.in_use; }));
+    if (spent > g_max_us)
+        g_max_us = spent;
+    g_total_us += spent;
+    g_calls++;
 
     // Signed comparison so the wrap of micros() (every ~71 minutes) reads as
     // a small negative rather than a huge positive, which would otherwise
@@ -270,7 +325,7 @@ void opcuatask()
 // still defined so Baremetal.ino needs no #ifdef around the call site — one
 // less place for a board-conditional to accumulate.
 void opcua_init() {}
-void opcuatask() {}
+void opcuatask(uint32_t) {}
 uint32_t opcua_overrun_count() { return 0; }
 
 

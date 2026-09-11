@@ -484,6 +484,17 @@ void modbusTask()
 // =============================================================================
 // SCHEDULER
 // =============================================================================
+/** How much of the current scan cycle is still unspent.
+ *
+ *  Zero once the cycle is already over budget, so a late caller is told there
+ *  is no room rather than being handed a huge number from unsigned wraparound.
+ *  OPC-UA uses this to decide whether it may run at all; see opcuatask(). */
+static inline uint32_t cycle_slack_us()
+{
+    const unsigned long used = micros() - last_run;
+    return (used >= scan_cycle) ? 0u : (uint32_t)(scan_cycle - used);
+}
+
 void scheduler()
 {
     runtime_plc_cycle();
@@ -501,9 +512,10 @@ void scheduler()
     #endif
 
     // OPC-UA gets the tail of the cycle, after the PLC logic and Modbus have
-    // had theirs, and is time-boxed inside opcuatask() so it can only ever
-    // borrow the slack rather than extend the cycle. No-op when disabled.
-    opcuatask();
+    // had theirs. It is handed what remains of the cycle and declines to run
+    // unless that covers its worst case, so it can only ever spend slack and
+    // never extend the cycle. No-op when disabled.
+    opcuatask(cycle_slack_us());
 
     if (!first_cycle)
     {
@@ -543,6 +555,16 @@ void loop()
         mbtask();
     }
     #endif
+
+    // OPC-UA gets the same inter-cycle slack Modbus does.
+    //
+    // Servicing it only from scheduler() capped it at one message per scan
+    // while Modbus was polled twice per cycle, so an OPC-UA exchange took
+    // systematically longer than a Modbus one for no reason other than where
+    // the call sat. No 10 ms guard is needed here: opcuatask() is given the
+    // real remaining slack and decides for itself, which is a tighter test
+    // than a fixed threshold and the same one scheduler() uses.
+    opcuatask(cycle_slack_us());
 
     #ifdef SIMULATOR_MODE
     __asm volatile("sleep");

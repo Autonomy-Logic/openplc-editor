@@ -28,7 +28,20 @@ void opcua_init();
  *  work is picked up next scan; the protocol is request/response over TCP and
  *  tolerates that latency, whereas a PLC whose cycle time wanders does not.
  */
-void opcuatask();
+/** Service the OPC-UA server for at most one event-loop iteration.
+ *
+ *  `slack_us` is how much of the current scan cycle is still unspent. The
+ *  server runs ONLY if that exceeds its worst-case iteration cost, which is
+ *  what keeps it from ever pushing a cycle past its deadline.
+ *
+ *  This is admission control, not a time-box, and the distinction is the whole
+ *  point: `UA_Server_run_iterate()` is not preemptible, so a budget checked
+ *  after the call can report an overrun but can never prevent one. Measured on
+ *  a LOGO! 8.2, a single Read costs ~20 us on average but up to ~4.8 ms in the
+ *  worst case, against a 20 ms cycle -- far too much to start speculatively
+ *  near the end of a cycle. Deciding BEFORE the call is the only thing that
+ *  actually bounds the damage. */
+void opcuatask(uint32_t slack_us);
 
 /** Scans in which opcuatask() hit its time budget and returned early.
  *

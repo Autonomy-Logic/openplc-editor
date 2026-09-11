@@ -152,6 +152,19 @@ Client* accept();
 /** Hand a client slot back.  Closes the connection if still open. */
 void release(Client* client);
 
+/** Can `need` bytes be queued on `client` right now WITHOUT blocking?
+ *
+ *  Arduino's abstract `Client` has no such query -- `availableForWrite()` is
+ *  declared on the concrete classes, not on the base -- so the seam has to ask
+ *  on the caller's behalf. That is exactly the kind of per-family knowledge
+ *  this file exists to contain.
+ *
+ *  It matters because `write()` blocks: Energia's spins on `delay(1)` until
+ *  lwIP's send buffer drains, which inside a scan cycle is unbounded. Measured
+ *  as a 1.27 SECOND stall in one iteration against a 20 ms cycle. Nothing in a
+ *  PLC may wait on a remote peer's ACK. */
+bool can_send(const Client* client, size_t need);
+
 /** Service the stack.  A no-op on cores whose driver is interrupt-driven;
  *  the hook exists for stacks that need cooperative polling, so callers never
  *  have to know which kind they are on. */

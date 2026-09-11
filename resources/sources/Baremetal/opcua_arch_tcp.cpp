@@ -196,18 +196,40 @@ UA_StatusCode cm_send(UA_ConnectionManager* cm, uintptr_t connectionId,
         return UA_STATUSCODE_BADCONNECTIONCLOSED;
     }
 
+    const size_t want = buf->length;
+
+    // Refuse rather than block.
+    //
+    // Client::write() waits for lwIP's send buffer to drain when it is full --
+    // Energia's spins on delay(1) -- and inside a PLC scan cycle that is
+    // unbounded blocking on a remote peer's ACK. Measured as a 1.27 SECOND
+    // stall in a single iteration against a 20 ms cycle, which is a scan
+    // violation of a completely different order from the microseconds the rest
+    // of this file costs.
+    //
+    // So the message goes out only if it fits in the space available right
+    // now. It normally does: the send buffer is 6*MSS = 9,000 B and
+    // tcpMaxMsgSize is 8,192 with maxChunks = 1, so a full-size message fits
+    // with room to spare, and this only trips against a peer that has stopped
+    // reading. Dropping such a connection is the correct answer anyway -- it
+    // is a client that cannot keep up, and a real one reconnects.
     size_t sent = 0;
-    while (sent < buf->length)
+    if (c->client->connected() && opcua_net::can_send(c->client, want))
     {
-        if (!c->client->connected())
-            break;
-        const size_t n = c->client->write(buf->data + sent, buf->length - sent);
-        if (n == 0)
-            break;   // would block; the peer is not draining
-        sent += n;
+        while (sent < want)
+        {
+            const size_t n = c->client->write(buf->data + sent, want - sent);
+            if (n == 0)
+                break;
+            sent += n;
+        }
+    }
+    else
+    {
+        OPCUA_LOG("[cm] send REFUSED id=%lu need=%u (peer not draining)",
+                  (unsigned long)connectionId, (unsigned)want);
     }
 
-    const size_t want = buf->length;
     // open62541 hands ownership of the buffer to send(), success or not.
     cm->freeNetworkBuffer(cm, connectionId, buf);
     if (sent != want)

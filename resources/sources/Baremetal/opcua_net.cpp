@@ -101,6 +101,23 @@ Client* accept()
     return nullptr;
 }
 
+bool can_send(const Client* client, size_t need)
+{
+    if (client == nullptr)
+        return false;
+    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
+    {
+        if (g_slots[i].in_use &&
+            static_cast<const Client*>(&g_slots[i].client) == client)
+        {
+            // The concrete type is the whole reason this lives here.
+            const int room = g_slots[i].client.availableForWrite();
+            return room > 0 && (size_t)room >= need;
+        }
+    }
+    return false;
+}
+
 void release(Client* client)
 {
     if (client == nullptr)
