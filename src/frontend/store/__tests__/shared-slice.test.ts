@@ -948,6 +948,94 @@ describe('createSharedSlice', () => {
       })
     })
 
+    describe('deleteRequest with references (impact modal)', () => {
+      beforeEach(() => {
+        store.getState().datatypeActions.create({ name: 'OldDT', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Chassis', derivation: 'structure' })
+        store.getState().projectActions.updateDatatype('Chassis', {
+          name: 'Chassis',
+          derivation: 'structure',
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+        store.getState().projectActions.setPouVariables({
+          pouName: 'Main',
+          variables: [
+            {
+              name: 'motor',
+              class: 'local',
+              type: { definition: 'user-data-type', value: 'olddt' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        })
+      })
+
+      const dataTypeNames = () => store.getState().project.data.dataTypes.map((d) => d.name)
+
+      it('parks a pending delete instead of opening the confirm modal', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        const pending = store.getState().pendingDatatypeDelete
+        expect(pending?.name).toBe('OldDT')
+        expect(pending?.impact.totalReferences).toBe(2)
+        expect(Array.from(pending?.impact.byPou.entries() ?? [])).toEqual([
+          ['Main', 1],
+          ['Chassis', 1],
+        ])
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('confirm deletes the type and leaves the references in place', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.respondToPendingDelete(true)
+
+        const state = store.getState()
+        expect(state.pendingDatatypeDelete).toBeNull()
+        expect(dataTypeNames()).toEqual(['Chassis'])
+        expect(state.pendingDeletions).toContain('datatypes/OldDT.dt')
+        expect(state.files['OldDT']).toBeUndefined()
+        expect(state.project.data.pous[0].interface?.variables[0].type.value).toBe('olddt')
+        expect(state.project.data.dataTypes[0]).toMatchObject({
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+      })
+
+      it('cancel leaves the store untouched', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.respondToPendingDelete(false)
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+        expect(store.getState().pendingDeletions).toHaveLength(0)
+      })
+
+      it('ignores a second request while one is awaiting confirmation', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.deleteRequest('Chassis')
+
+        expect(store.getState().pendingDatatypeDelete?.name).toBe('OldDT')
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+      })
+
+      it('respondToPendingDelete without a pending request is a no-op', () => {
+        store.getState().datatypeActions.respondToPendingDelete(true)
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('skips the modal when nothing references the type', () => {
+        store.getState().datatypeActions.deleteRequest('Chassis')
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').data).toEqual({
+          name: 'Chassis',
+          elementType: 'datatype',
+        })
+      })
+    })
+
     // -----------------------------------------------------------------------
     // duplicate
     // -----------------------------------------------------------------------

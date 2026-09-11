@@ -109,6 +109,13 @@ export type PendingDatatypeRename = {
   resolve: (confirmed: boolean) => void
 }
 
+/** A delete waiting on the reference-impact modal. Nothing awaits it, so
+ *  no resolver: confirm runs `datatypeActions.delete`, cancel drops it. */
+export type PendingDatatypeDelete = {
+  name: string
+  impact: DataTypeReferenceImpactAnalysis
+}
+
 /** Global Variable Lists — the object CODESYS calls a GVL. */
 export type GlobalVariableListActions = {
   /** Create the list and open its tab, as every other + button element does. */
@@ -122,13 +129,17 @@ export type GlobalVariableListActions = {
 
 export type DatatypeActions = {
   create: (args: { name: string; derivation: 'array' | 'enumerated' | 'structure' }) => SharedResponse
+  /** Opens the confirm modal — or the reference-impact modal when the type is still referenced. */
   deleteRequest: (name: string) => void
+  /** Unconditional; the reference gate lives in `deleteRequest`. */
   delete: (name: string) => SharedResponse
   /** Async: a rename of a referenced type awaits the impact modal before
    *  propagating the new name into every reference. Cancel = no state change. */
   rename: (oldName: string, newName: string) => Promise<DatatypeRenameResponse>
   /** Confirm (`true`) or cancel (`false`) the pending rename's impact modal. */
   respondToPendingRename: (confirmed: boolean) => void
+  /** Confirm (`true`) or cancel (`false`) the pending delete's impact modal. */
+  respondToPendingDelete: (confirmed: boolean) => void
   duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
@@ -249,6 +260,7 @@ export type SharedWorkspaceActions = {
 export type SharedSlice = {
   undoRedo: Record<string, PouHistory>
   pendingDatatypeRename: PendingDatatypeRename | null
+  pendingDatatypeDelete: PendingDatatypeDelete | null
   pouActions: PouActions
   datatypeActions: DatatypeActions
   globalVariableListActions: GlobalVariableListActions

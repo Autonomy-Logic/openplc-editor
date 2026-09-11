@@ -243,6 +243,7 @@ function renameElement(
 const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (setState, getState) => ({
   undoRedo: {},
   pendingDatatypeRename: null,
+  pendingDatatypeDelete: null,
 
   pouActions: {
     create: ({ type, name, language }) => {
@@ -574,7 +575,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     deleteRequest: (name) => {
-      getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'datatype' })
+      const state = getState()
+      if (state.pendingDatatypeDelete) return
+      const impact = findAllReferencesToDataType(
+        name,
+        state.project.data.pous,
+        state.project.data.configurations.resource.globalVariables,
+        state.project.data.dataTypes,
+        state.project.data.globalVariableLists ?? [],
+      )
+      if (impact.totalReferences > 0) {
+        setState({ pendingDatatypeDelete: { name, impact } })
+        return
+      }
+      state.modalActions.openModal('confirm-delete-element', { name, elementType: 'datatype' })
     },
 
     delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteDatatype(n)),
@@ -637,6 +651,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!pending) return
       setState({ pendingDatatypeRename: null })
       pending.resolve(confirmed)
+    },
+
+    respondToPendingDelete: (confirmed) => {
+      const pending = getState().pendingDatatypeDelete
+      if (!pending) return
+      setState({ pendingDatatypeDelete: null })
+      if (confirmed) getState().datatypeActions.delete(pending.name)
     },
 
     duplicate: (sourceName, newName) => {
