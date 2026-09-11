@@ -36,6 +36,17 @@
 #include "ModbusSlave.h"
 #endif
 
+// Network device-discovery responder ("Search" in the editor). Feature-gated so
+// only targets that declare SUPPORTS_UDP_SCAN (e.g. via a VPP's HAL flags) pull
+// it in; unrelated to Modbus.
+#if defined(SUPPORTS_UDP_SCAN)
+#include "udp_scan.h"
+// Weak NULL default for the discovery brand/type string. A VPP declares its
+// identity by defining a strong OPLC_DEVICE_NAME in its HAL, which overrides
+// this; a build with no VPP identity stays generic.
+extern "C" { const char *OPLC_DEVICE_NAME __attribute__((weak)) = 0; }
+#endif
+
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
 #ifndef MBTCP
     #if defined(BOARD_ESP8266)
@@ -261,6 +272,24 @@ void setup()
         modbus.slaveid = DEBUG_SLAVE;
     #endif
 
+#if defined(SUPPORTS_UDP_SCAN)
+    // Network is up now; start answering editor discovery probes.
+    udp_scan_begin();
+#endif
+
+#if defined(BOARD_LOGO8)
+    // The LOGO! core defers its SysTick/millis() time base (its reset path skips
+    // the Energia _init that would start it, because that must not run before the
+    // network stack is up). Start it here -- the network is now initialised, so it
+    // is safe -- and BEFORE setupCycleDelay() so the scan-cycle baseline (last_run)
+    // is captured from a running micros(); otherwise the first cycle underflows and
+    // the scan runs unthrottled. 1 ms tick at 120 MHz; the 120 MHz PLL and global
+    // interrupts are already set up by the board init and the network stack.
+    (*(volatile uint32_t *)0xE000E014u) = (F_CPU / 1000U) - 1U;  /* SYST_RVR */
+    (*(volatile uint32_t *)0xE000E018u) = 0U;                    /* SYST_CVR */
+    (*(volatile uint32_t *)0xE000E010u) = 0x00000007U;           /* SYST_CSR: CLK|TICKINT|EN */
+#endif
+
     setupCycleDelay(base_tick_ns);
 
     #ifdef USE_ARDUINO_SKETCH
@@ -471,6 +500,12 @@ void scheduler()
 // =============================================================================
 void loop()
 {
+#if defined(SUPPORTS_UDP_SCAN)
+    // Answer editor discovery probes every iteration, independent of the scan
+    // cycle, so Search stays responsive even with a long task interval.
+    udp_scan_poll();
+#endif
+
     if ((micros() - last_run) >= scan_cycle)
     {
         scheduler();

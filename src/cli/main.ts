@@ -221,6 +221,10 @@ function buildDebugContext(): DebugContext {
       registryDir: dir,
       execPath: process.execPath,
       execArgs: daemonSpawnArgs(),
+      // This process was already aligned to the editor's (or --user-data's)
+      // userData before `debug` runs; forward it so the daemon resolves the
+      // same installed VPP packages.
+      userData: app.getPath('userData'),
       uploadProgram: async ({ projectPath, target, host, username, password, port, onLine }) => {
         // A reporter whose progress forwards to the caller and whose result is
         // discarded — `debug open` reports the outcome itself.
@@ -326,9 +330,12 @@ async function main(): Promise<void> {
   const isDaemon = process.argv.includes('--cli-daemon')
   installNeverHangGuards({ exitWhenOutputClosed: !isDaemon })
 
-  // The daemon reads its config from stdin and never parses argv.
+  // The daemon reads its config from stdin and never parses argv. It cannot see
+  // the parent's --user-data flag, so the parent forwards the resolved userData
+  // dir via OPENPLC_USER_DATA — align to it here so installed VPP boards (e.g.
+  // the LOGO) resolve the same way they did for the parent's compile/upload.
   if (isDaemon) {
-    alignUserDataWithEditor(undefined)
+    alignUserDataWithEditor(process.env.OPENPLC_USER_DATA || undefined)
     await runDaemonFromStdin()
     return
   }

@@ -1870,6 +1870,7 @@ class CompilerModule {
     arduinoPlatform,
     compilationPath,
     communicationPort,
+    uploadMethod,
     handleOutputData,
   }: {
     projectPath: string
@@ -1883,16 +1884,28 @@ class CompilerModule {
      * legacy disk read so older invocation paths still work.
      */
     communicationPort?: string
+    /**
+     * Upload transport declared by the board's VPP target. Absent/"serial"
+     * (default): `--port` is a serial device. "ethernet" (LOGO! 8.2): the
+     * board's core does a network upload, so `--port` carries the device IP,
+     * sourced from the persisted `runtimeIpAddress`. arduino-cli accepts a
+     * network address as `--port`; the core's platform.txt upload recipe
+     * consumes it as `{upload.port.address}`.
+     */
+    uploadMethod?: 'serial' | 'ethernet'
     handleOutputData: HandleOutputDataCallback
   }) {
-    let port = communicationPort
+    const isEthernet = uploadMethod === 'ethernet'
+    // For serial, `--port` is the serial device (from the picker, else disk).
+    // For ethernet, `--port` is the device IP (from persisted runtimeIpAddress).
+    let port = isEthernet ? undefined : communicationPort
     if (!port) {
       const devicesDirectoryPath = join(projectPath, 'devices')
       const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
       try {
-        const { communicationPort: persistedPort } =
+        const { communicationPort: persistedPort, runtimeIpAddress } =
           await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
-        port = persistedPort
+        port = isEthernet ? runtimeIpAddress : persistedPort
       } catch {
         // No devices/configuration.json yet — drop into the
         // "no port specified" branch below for a clear user message.
@@ -1910,7 +1923,11 @@ class CompilerModule {
       // outcome now comes from the pipeline's verdict, so a step that cannot
       // run has to fail through the channel the verdict is built from — the
       // catch in `uploadArduinoBoard` turns this into `{ ok: false }`.
-      throw new Error('No communication port specified — select a serial port for this board')
+      throw new Error(
+        isEthernet
+          ? 'No device IP specified — set the device IP address in Board Settings'
+          : 'No communication port specified — select a serial port for this board',
+      )
     }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
@@ -1925,9 +1942,17 @@ class CompilerModule {
       ])
 
       let stderrData = ''
+      // Tail of stdout, kept for the failure message. An upload tool that
+      // explains itself on stdout (the reason it refused, what the user should
+      // do about it) would otherwise leave the thrown error saying only
+      // "failed with code N" while the actual explanation scrolled past in the
+      // console. Bounded so a chatty tool cannot grow this without limit.
+      const stdoutTail: string[] = []
 
       child.stdout.on('data', (data: Buffer) => {
         handleOutputData(data)
+        stdoutTail.push(data.toString())
+        if (stdoutTail.length > 40) stdoutTail.shift()
       })
       child.stderr.on('data', (data: Buffer) => {
         stderrData += data.toString()
@@ -1938,7 +1963,8 @@ class CompilerModule {
             success: true,
           })
         } else {
-          reject(new Error(`Upload failed with code ${code}\n${stderrData}`))
+          const detail = stderrData.trim() || stdoutTail.join('').trim()
+          reject(new Error(`Upload failed with code ${code}\n${detail}`))
         }
       })
     })
@@ -3055,11 +3081,17 @@ class CompilerModule {
     // never enables Modbus — at which point the debugger can't
     // talk to it (failing MD5 verification after retries).
     let vppModbusState: VppModbusScreenState | undefined
+    // Ethernet-upload boards (e.g. Siemens LOGO! 8.2) reach the editor ONLY over
+    // the network. Known before the config read so the mandate below applies even
+    // when there is no configuration.json.
+    const uploadsOverEthernet = (boardEntry as { uploadMethod?: string } | undefined)?.uploadMethod === 'ethernet'
     if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
+      let configuredIp: string | undefined
       try {
         const deviceConfig = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         const vendorScreenData = deviceConfig.vendorScreenData ?? {}
+        configuredIp = deviceConfig.runtimeIpAddress
         vppModbusState = {
           serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
@@ -3067,10 +3099,58 @@ class CompilerModule {
           modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
         }
       } catch {
-        // No configuration.json — leave undefined so the shared
-        // pipeline skips the Modbus block entirely (matches the
-        // pre-VPP behaviour for boards that never had a comms
-        // config persisted).
+        // No configuration.json — leave state undefined; for ethernet boards the
+        // mandate below still forces Modbus TCP on, and for serial boards the
+        // shared pipeline skips the Modbus block entirely (pre-VPP behaviour).
+      }
+
+      // Modbus TCP is MANDATORY on ethernet-upload boards and CANNOT be turned
+      // off: it is the device's only comms path (disabling it makes the LOGO
+      // unreachable), it is how the debugger connects and the upload flow reboots
+      // the device, and MODBUS_ENABLED is what makes the firmware allocate its I/O
+      // buffers — without it Baremetal.ino skips mapEmptyBuffers() and the HAL
+      // dereferences NULL input pointers on the first scan. So FORCE it on for
+      // every ethernet target, overriding any screen value and seeding it when the
+      // project never configured one, preserving only the IP the user set.
+      if (uploadsOverEthernet) {
+        const ip =
+          vppModbusState?.modbus_tcp?.ip_address ||
+          vppModbusState?.network?.ip_address ||
+          configuredIp ||
+          '192.168.2.4'
+        // Ethernet is static-only on these boards (no DHCP — the bootloader's
+        // recovery stack has no DHCP client). Seed a full, sane static config so
+        // the firmware never falls back to the Arduino stack's byte-order-buggy
+        // subnet class-default (which would mis-derive e.g. 255.0.0.0 for a
+        // 192.168.x address and corrupt the persisted network record). Any value
+        // the user set on the Modbus screen is preserved.
+        const gwFromIp = (a: string) => a.replace(/\.\d+$/, '.1')
+        const subnet =
+          vppModbusState?.modbus_tcp?.subnet || vppModbusState?.network?.subnet || '255.255.255.0'
+        const gateway =
+          vppModbusState?.modbus_tcp?.gateway || vppModbusState?.network?.gateway || gwFromIp(ip)
+        const dns = vppModbusState?.modbus_tcp?.dns || vppModbusState?.network?.dns || gateway
+        vppModbusState = {
+          ...(vppModbusState ?? {}),
+          network: {
+            ...(vppModbusState?.network ?? {}),
+            enabled: true,
+            interface: 'Ethernet',
+            enable_dhcp: false,
+            ip_address: ip,
+            subnet,
+            gateway,
+            dns,
+          },
+          modbus_tcp: {
+            ...(vppModbusState?.modbus_tcp ?? {}),
+            enabled: true,
+            ip_address: ip,
+            subnet,
+            gateway,
+            dns,
+          },
+        }
       }
     }
 

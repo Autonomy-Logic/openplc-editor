@@ -15,6 +15,13 @@ back — no knowledge of the function-code set.
 
 //Platform specific defines and includes
 #ifdef MBTCP_ETHERNET
+#if defined(BOARD_LOGO8)
+    // Siemens LOGO! 8: Ethernet is the on-chip 10/100 EMAC+PHY, driven by the
+    // Energia lwIP <Ethernet.h> — there is no SPI Ethernet shield, and the core's
+    // <SPI.h> hard-errors on this variant, so it must NOT be pulled in here.
+    // Same EthernetServer/EthernetClient API as the WIZnet path.
+    #include <Ethernet.h>
+#else
 #include <SPI.h>
 #ifdef BOARD_ESP32
     // I²C-address of Ethernet PHY (0 or 1 for LAN8720, 31 for TLK110)
@@ -33,6 +40,7 @@ back — no knowledge of the function-code set.
     #include <WiFi.h>
 #else
     #include <Ethernet.h>
+#endif
 #endif
 #endif
 

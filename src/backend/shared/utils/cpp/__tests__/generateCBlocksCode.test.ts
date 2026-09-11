@@ -53,25 +53,45 @@ describe('generateCBlocksCode', () => {
     expect(result).not.toMatch(/typedef\s+struct\s+\{[\s\S]*?body\[[\s\S]*?\]\s*;[\s\S]*?\}\s+IEC_STRING;/)
   })
 
-  it("undefines Arduino.h's min/max macros before pulling in strucpp/std headers", () => {
-    // Regression guard: Arduino.h defines `min` / `max` as preprocessor
-    // macros that wreck `<algorithm>` / `<limits>` (pulled in transitively by
-    // the strucpp headers behind c_blocks.h). Order must be:
-    //   include <Arduino.h>  ->  #undef min/max  ->  #include "c_blocks.h"
+  it("undefines Arduino.h's macros that shadow std names, before the std headers", () => {
+    // Regression guard: Arduino/Energia define `min` / `max` / `abs` / `round`
+    // as preprocessor macros that wreck `<algorithm>` / `<limits>` / `<chrono>`
+    // (pulled in transitively by the strucpp headers behind c_blocks.h).
+    // Order must be:
+    //   include <Arduino.h>  ->  #undef ...  ->  #include "c_blocks.h"
+    //
+    // `round` is listed because it actually shipped broken: Energia defines
+    // `round(x)`, `<chrono>` declares `chrono::round<ToDur>()`, and the macro
+    // swallowed it — every C-block build on a Tiva core died inside <chrono>
+    // with an error naming a file the user never wrote. The other three were
+    // guarded and this one was not, so the set is now asserted as a set.
+    // Energia's GPIO port letters `PA`..`PT` joined for the same reason from
+    // the other direction: `PT` is also the preset-time input of every IEC
+    // timer, so a project holding a TON expanded the generated struct field
+    // into `IEC_TIME 18;`, and `PR` did the same to a block instance named for
+    // a pulse relay. Asserted as a family, since any of them can collide.
     const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
     const code = 'void setup() { }\nvoid loop() { }'
     const result = generateCBlocksCode([{ name: 'B', code, variables }])
 
     const arduinoIdx = result.indexOf('#include <Arduino.h>')
-    const undefMinIdx = result.indexOf('#undef min')
-    const undefMaxIdx = result.indexOf('#undef max')
     const strucppIdx = result.indexOf('#include "c_blocks.h"')
-
     expect(arduinoIdx).toBeGreaterThan(-1)
-    expect(undefMinIdx).toBeGreaterThan(arduinoIdx)
-    expect(undefMaxIdx).toBeGreaterThan(arduinoIdx)
-    expect(strucppIdx).toBeGreaterThan(undefMinIdx)
-    expect(strucppIdx).toBeGreaterThan(undefMaxIdx)
+
+    // Asserted as a set, and reported as one: a bare index comparison would
+    // say "expected -1 to be greater than 123" without naming the macro.
+    const placement = ['min', 'max', 'abs', 'round', 'PA', 'PB', 'PC', 'PD', 'PE', 'PF', 'PG', 'PH', 'PJ', 'PK', 'PL', 'PM', 'PN', 'PP', 'PQ', 'PR', 'PS', 'PT'].map((name) => {
+      const at = result.indexOf(`#undef ${name}`)
+      return { name, present: at > -1, afterArduino: at > arduinoIdx, beforeHeader: at > -1 && strucppIdx > at }
+    })
+    expect(placement).toEqual(
+      ['min', 'max', 'abs', 'round', 'PA', 'PB', 'PC', 'PD', 'PE', 'PF', 'PG', 'PH', 'PJ', 'PK', 'PL', 'PM', 'PN', 'PP', 'PQ', 'PR', 'PS', 'PT'].map((name) => ({
+        name,
+        present: true,
+        afterArduino: true,
+        beforeHeader: true,
+      })),
+    )
   })
 
   it('generates struct, extern declarations, defines, code, and undefs for a pou', () => {
@@ -147,7 +167,7 @@ describe('generateCBlocksCode', () => {
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
     // Strip the baseline's Arduino macro scrubbing (`#undef min` / `max` / `abs`
     // — see baseline) before asserting no per-variable undefs.
-    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs)\s*$/gm, '')
+    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs|round|PA|PB|PC|PD|PE|PF|PG|PH|PJ|PK|PL|PM|PN|PP|PQ|PR|PS|PT)\s*$/gm, '')
     expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 

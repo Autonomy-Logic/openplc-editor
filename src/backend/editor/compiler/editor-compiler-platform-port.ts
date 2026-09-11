@@ -497,6 +497,7 @@ export function createEditorCompilerPlatformPort(
           arduinoPlatform: args.fqbn,
           compilationPath: context.compilationPath,
           communicationPort: args.port || undefined,
+          uploadMethod: args.uploadMethod,
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')

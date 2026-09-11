@@ -55,6 +55,45 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 #undef min
 #undef max
 #undef abs
+// \`round\` is the same story and bites in the same header: Energia defines it
+// as a macro (\`Energia.h\`), and \`<chrono>\` declares \`chrono::round<ToDur>()\`.
+// The macro swallows the call and the header fails to parse with
+// \`expected primary-expression before '__t0'\` — from a file the user never
+// wrote, so it reads as a toolchain fault rather than a name collision.
+// Undef'd here rather than left to the user: the include that trips over it is
+// in this preamble, so nothing user code does afterwards can help.
+// \`std::round\` / \`::round\` from <cmath> remain available.
+#undef round
+// Energia numbers the GPIO ports as the macros \`PA\` through \`PT\`
+// (\`Energia.h\`), and every one of them is two letters a PLC program is likely
+// to want for something else. \`PT\` is the preset-time input of every IEC
+// standard timer, so a project holding a TON, TOF or TP expanded the struct
+// strucpp emits for it — reached from \`generated.hpp\` through the include
+// below — into \`IEC_TIME 18;\`; \`PR\` did the same to a function block instance
+// named for a pulse relay. Both failed on a declaration the user never wrote,
+// pointing into a core header.
+//
+// The whole family goes rather than the two names that happened to bite: they
+// are hazardous as a set, and a port letter is not how anything addresses a
+// pin from a C block — the Arduino API takes pin numbers.
+#undef PA
+#undef PB
+#undef PC
+#undef PD
+#undef PE
+#undef PF
+#undef PG
+#undef PH
+#undef PJ
+#undef PK
+#undef PL
+#undef PM
+#undef PN
+#undef PP
+#undef PQ
+#undef PR
+#undef PS
+#undef PT
 #endif
 
 // The C block interface — the \`<POU>_VARS\` struct for every C++ POU in this

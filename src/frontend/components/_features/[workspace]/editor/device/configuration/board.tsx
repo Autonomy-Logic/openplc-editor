@@ -13,7 +13,12 @@ import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
-import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import {
+  isEthernetUploadTarget,
+  isOpenPLCRuntimeTarget,
+  isSimulatorTarget,
+  validateRuntimeVersion,
+} from '../../../../../../utils/device'
 import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
 import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
@@ -707,6 +712,50 @@ const Board = memo(function () {
                 {/* Same affordance as the serial connect row below: renders
                     nothing at all unless this board's VPP is sold licensed AND a
                     check has landed, so a plain runtime's row is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+              </DeviceConnectButton>
+            </>
+          ) : isEthernetUploadTarget(currentBoardInfo) ? (
+            // Baremetal board programmed over Ethernet (e.g. Siemens LOGO! 8.2):
+            // a device-IP target + Search like a runtime board, but the baremetal
+            // Connect (Modbus TCP), not the v4 REST connect.
+            <>
+              <div id='device-ip-address-field' className='flex w-full items-center justify-start gap-1'>
+                <Label className='whitespace-pre text-xs text-neutral-950 dark:text-white'>IP Address</Label>
+                <input
+                  type='text'
+                  value={runtimeIpAddress}
+                  onChange={(e) => setRuntimeIpAddress(e.target.value)}
+                  placeholder='192.168.2.4'
+                  className='flex h-[30px] min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <button
+                  type='button'
+                  aria-label='Search for devices'
+                  title='Search for devices on the local network'
+                  onClick={() => openModal('runtime-discover-devices', null)}
+                  className='flex h-[30px] items-center gap-1 rounded-md bg-neutral-100 px-3 font-caption text-cp-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+                >
+                  <MagnifierIcon size='sm' className='h-4 w-4 stroke-neutral-1000 dark:stroke-neutral-100' />
+                  Search
+                </button>
+              </div>
+              <DeviceConnectButton
+                containerId='device-connect-button-container'
+                status={deviceLinkStatus}
+                onConnect={connectDevice}
+                onDisconnect={disconnectDevice}
+              >
                 {licensing.isLicensable ? (
                   <DeviceLicenseStatus
                     report={licensing.report}
