@@ -18,7 +18,7 @@ import {
   describeSource,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 type UseDeviceConfigurationParams = {
@@ -148,7 +148,7 @@ export function useDeviceConfiguration({
           vendorIoMapping: { entries: ioMapping },
           remoteDevices: state.project.data.remoteDevices,
         },
-        resolveTargetCapabilities(boardInfo),
+        resolveAddressProducerCapabilities(boardInfo),
       )
       const registry = buildAliasRegistry(pool)
       const validation = validateAliasEdit(registry, alias, sourceRef)

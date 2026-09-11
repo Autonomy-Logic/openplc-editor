@@ -11,7 +11,7 @@ import {
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from '../index'
@@ -72,7 +72,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       remoteDevices: state.project.data.remoteDevices ?? [],
       pinMappingPins:
         state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? [],
-      capabilities: resolveTargetCapabilities(boardInfo),
+      capabilities: resolveAddressProducerCapabilities(boardInfo),
     }
   }, [persistenceKey])
 
@@ -201,7 +201,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
         vendorIoMapping: { entries },
         remoteDevices: state.project.data.remoteDevices,
       },
-      resolveTargetCapabilities(boardInfo),
+      resolveAddressProducerCapabilities(boardInfo),
     )
     const registry = buildAliasRegistry(pool)
     const validation = validateAliasEdit(registry, alias, sourceRef)
