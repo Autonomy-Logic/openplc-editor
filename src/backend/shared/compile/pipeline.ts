@@ -52,6 +52,7 @@ import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
+import { selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
 // ---------------------------------------------------------------------------
@@ -444,6 +445,29 @@ async function runCompilePipelineInner(
     }
     return bailError(emit, 'validate', 'Compilation aborted: name all variable blocks and try again.')
   }
+
+  // ---------------------------------------------------------------------
+  // A firmware build serves exactly one Modbus slave: `modbus.slaveid` is a
+  // single global and `init_mbregs` is called once. The editor lets a project
+  // carry several on purpose, because a project moves between targets, so the
+  // refusal lands here rather than at creation — and it names them, because
+  // "only one server is allowed" leaves the user to guess which to turn off.
+  // ---------------------------------------------------------------------
+  const modbusSelection = selectModbusServer(processedData.servers as never)
+  // Only a target that actually builds this firmware can be in conflict. The
+  // simulator and the openplc-compiler runtimes never read the selection, so
+  // refusing their build over two enabled servers would block work on a project
+  // that is merely passing through -- which is the same "a project moves
+  // between targets" reasoning that put the refusal here instead of at creation.
+  const targetServesOneSlave = !isRuntimeV4 && !isSimulator && boardRuntime !== 'openplc-compiler'
+  if (targetServesOneSlave && modbusSelection.conflict) {
+    return bailError(
+      emit,
+      'validate',
+      `Compilation aborted: this target serves one Modbus server, and ${modbusSelection.conflict.join(', ')} are all enabled. Turn off all but one.`,
+    )
+  }
+  const modbusServer = modbusSelection.server
 
   // ---------------------------------------------------------------------
   // Step 1: Transpile the project IR straight to Structured Text via
@@ -865,6 +889,7 @@ async function runCompilePipelineInner(
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
+    ...(modbusServer !== undefined ? { modbusServer } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
   })
 

@@ -1,6 +1,12 @@
 import type { DebugDeviceIdResult } from '@root/backend/shared/debug/types'
 
-import { classifyDeviceLink, FALLBACK_BAUD_RATES, planBaudAttempts, readDeviceIdWithRetries } from '../device-probe'
+import {
+  classifyDeviceLink,
+  FALLBACK_BAUD_RATES,
+  planFallbackSlaveIds,
+  planBaudAttempts,
+  readDeviceIdWithRetries,
+} from '../device-probe'
 
 /**
  * A channel that answers the board-id read (FC 0x48) according to a script, so
@@ -26,6 +32,49 @@ const SILENT: DebugDeviceIdResult = { success: false }
 /** Answered the frame but reported no identity (no license-core linked, or an
  *  architecture the closed reader refuses: AVR, RP2040). */
 const EMPTY_ID: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([]) }
+
+/**
+ * The slave ids tried after the declared one goes unanswered. Two upgrades pull
+ * in opposite directions here, and getting it wrong costs a board in the field
+ * that fails as silence rather than as an error.
+ */
+describe('planFallbackSlaveIds', () => {
+  it("adds nothing when the declared id is already the editor's and nothing else is recorded", () => {
+    // The overwhelmingly common case. It must cost exactly zero.
+    expect(planFallbackSlaveIds(1, undefined)).toEqual([])
+    expect(planFallbackSlaveIds(1, 1)).toEqual([])
+  })
+
+  it("offers the project's old id when a current package declares the editor's", () => {
+    // Board flashed by a 4.3.x editor at 7; the package now declares 1.
+    expect(planFallbackSlaveIds(1, 7)).toEqual([7])
+  })
+
+  it("offers the editor's id when an OLD package declares something else", () => {
+    // The mirror case, and the one that used to be missed: a pre-4.4.0 package
+    // resolves the channel from its own screen, so the declared id IS the legacy
+    // id and there was nothing left to differ from. A board reflashed since
+    // answers only 1, so 1 has to be tried even though nothing declares it.
+    expect(planFallbackSlaveIds(7, 7)).toEqual([1])
+  })
+
+  it('offers both, editor first, when all three differ', () => {
+    expect(planFallbackSlaveIds(9, 7)).toEqual([1, 7])
+  })
+
+  it('ignores a value that is not a usable Modbus address', () => {
+    // Screen state is JSON a user's project file carries; it can hold anything.
+    expect(planFallbackSlaveIds(1, '7')).toEqual([])
+    expect(planFallbackSlaveIds(1, 0)).toEqual([])
+    expect(planFallbackSlaveIds(1, 248)).toEqual([])
+    expect(planFallbackSlaveIds(1, 7.5)).toEqual([])
+    expect(planFallbackSlaveIds(1, null)).toEqual([])
+  })
+
+  it("still offers the editor's id when the channel declares none at all", () => {
+    expect(planFallbackSlaveIds(undefined, undefined)).toEqual([1])
+  })
+})
 
 describe('planBaudAttempts', () => {
   it('leads with the configured rate, then sweeps the rest', () => {

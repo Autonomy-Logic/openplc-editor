@@ -67,4 +67,36 @@ const SidebarTooltipContent = ({
   )
 }
 
-export { SidebarTooltipContent, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger }
+/**
+ * The "what is this field" glyph, revealing its help text on hover or focus.
+ *
+ * Field help lives behind this rather than beside the control on purpose: a
+ * sentence printed next to every row turns a settings screen into a wall of
+ * prose, and the rows stop lining up. It is one component so the native
+ * screens and the VPP-declared ones behave identically -- the user should not
+ * be able to tell which kind of screen they are on.
+ *
+ * Needs a `TooltipProvider` above it.
+ */
+const FieldHelpIcon = ({ text }: { text: string }) => (
+  <Tooltip delayDuration={150}>
+    <TooltipTrigger asChild>
+      <span
+        tabIndex={0}
+        aria-label='Field help'
+        className='inline-flex h-3.5 w-3.5 shrink-0 cursor-help select-none items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 focus:outline-none focus-visible:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
+      >
+        <svg viewBox='0 0 16 16' fill='none' className='h-3.5 w-3.5'>
+          <circle cx='8' cy='8' r='7' stroke='currentColor' strokeWidth='1.5' />
+          <path d='M8 7.25v4.25' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
+          <circle cx='8' cy='4.75' r='0.85' fill='currentColor' />
+        </svg>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent side='right' align='start' sideOffset={6} className='text-xs'>
+      {text}
+    </TooltipContent>
+  </Tooltip>
+)
+
+export { FieldHelpIcon, SidebarTooltipContent, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger }

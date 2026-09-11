@@ -133,7 +133,13 @@ function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
   if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
     return {
       ...serverData,
-      modbusSlaveConfig: { enabled: false, networkInterface: '0.0.0.0', port: 502 },
+      // `transports` has to be a real array from the start. `selectModbusServer`
+      // only considers a server that declares one -- a server without it is a
+      // pre-4.4.0 shape whose Modbus still lives in the board's screen sections
+      // -- so seeding nothing made a newly created server invisible to the
+      // build while the screen, defaulting the same field to `['tcp']`, said it
+      // was serving Modbus TCP.
+      modbusSlaveConfig: { enabled: false, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 },
     }
   }
   if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
@@ -1745,8 +1751,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           const server = slice.project.data.servers?.find((s) => s.name === name)
           if (!server?.modbusSlaveConfig) return
           if (config.enabled !== undefined) server.modbusSlaveConfig.enabled = config.enabled
+          if (config.transports !== undefined) server.modbusSlaveConfig.transports = config.transports
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
+          if (config.slaveId !== undefined) server.modbusSlaveConfig.slaveId = config.slaveId
+          if (config.serialPort !== undefined) server.modbusSlaveConfig.serialPort = config.serialPort
+          if (config.baudRate !== undefined) server.modbusSlaveConfig.baudRate = config.baudRate
+          if (config.parity !== undefined) server.modbusSlaveConfig.parity = config.parity
+          if (config.stopBits !== undefined) server.modbusSlaveConfig.stopBits = config.stopBits
+          if (config.dataBits !== undefined) server.modbusSlaveConfig.dataBits = config.dataBits
           if (config.bufferMapping) {
             const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
             server.modbusSlaveConfig.bufferMapping = {

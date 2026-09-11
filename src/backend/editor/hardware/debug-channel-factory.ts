@@ -20,7 +20,7 @@ import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpoint'
 
 import { WebSocketDebugTransport } from '../../shared/debug/websocket-debug-transport'
-import { planBaudAttempts } from './device-probe'
+import { planBaudAttempts, planFallbackSlaveIds } from './device-probe'
 import type { DeviceDebugCandidate, DeviceLinkCandidate } from './device-session-manager'
 import { buildDeviceModbusTransport, modbusTransportKind } from './device-transport-factory'
 
@@ -71,14 +71,19 @@ export function toDeviceLinkCandidates(
   // TCP address is a better next try than a rate nobody asked for.
   const speculative: DeviceLinkCandidate[] = []
 
-  const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
+  const build = (
+    config: DebugConnectionConfig,
+    baudRate: number | undefined,
+    isGuess: boolean,
+    slaveId: number | undefined = config.connectionParams.slaveId,
+  ): void => {
     const kind = modbusTransportKind(config.connectionType)
     if (kind === null) return
     const params = {
       connectionType: config.connectionType,
       port: config.connectionParams.port,
       baudRate,
-      slaveId: config.connectionParams.slaveId,
+      slaveId,
       host: config.connectionParams.ipAddress,
     }
     // Only the simulator needs an in-process serial port; building one for a real
@@ -116,6 +121,24 @@ export function toDeviceLinkCandidates(
     // end into a connection. Serial only; a TCP address is either right or not.
     for (const attempt of planBaudAttempts(config.connectionParams.baudRate, { sweep: opts.probeBaudRates })) {
       build(config, attempt.baudRate, attempt.speculative)
+    }
+
+    // The declared slave id is not always the one the board answers: an old
+    // package and a re-flashed board disagree in one direction, a current
+    // package and a board in the field in the other. Both extra ids go at the
+    // DECLARED baud alone — pairing them with the swept rates would cost port
+    // opens, and each open resets an AVR or ESP8266, restarting the user's
+    // program to chase two stale values at once.
+    //
+    // RTU only: over TCP the unit id is a gateway routing field, not an address
+    // the board filters on, and the simulator is built fresh every time.
+    if (modbusTransportKind(config.connectionType) === 'rtu') {
+      for (const slaveId of planFallbackSlaveIds(
+        config.connectionParams.slaveId,
+        config.connectionParams.legacySlaveId,
+      )) {
+        build(config, config.connectionParams.baudRate, true, slaveId)
+      }
     }
   }
 

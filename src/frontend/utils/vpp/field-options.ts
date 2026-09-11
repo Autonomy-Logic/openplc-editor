@@ -19,11 +19,15 @@ export interface FieldOptionSource {
 }
 
 /** Walk a dotted path (`a.b.c`) into a context object; undefined on any miss. */
-function lookupPath(path: string, context: Record<string, unknown>): unknown {
+function lookupPath(path: string, context: unknown): unknown {
   let cursor: unknown = context
   for (const part of path.split('.')) {
     if (cursor === null || cursor === undefined || typeof cursor !== 'object') return undefined
-    cursor = (cursor as Record<string, unknown>)[part]
+    // `hasOwnProperty` via call, not `Object.hasOwn`: the web build's `lib` is
+    // below es2022. The guard itself matters -- without it an `optionsRef` of
+    // `board.constructor` would walk the prototype chain and resolve.
+    if (!Object.prototype.hasOwnProperty.call(cursor, part)) return undefined
+    cursor = Reflect.get(cursor, part)
   }
   return cursor
 }
@@ -34,10 +38,13 @@ function isFieldOption(value: unknown): value is FieldOption {
 
 export function resolveFieldOptions(
   field: FieldOptionSource,
-  context: { board?: Record<string, unknown> | undefined },
+  // `unknown` rather than a Record: the caller hands over a `BoardInfo`, which
+  // has no index signature, and widening here is what keeps an assertion out of
+  // every call site.
+  context: { board?: unknown },
 ): FieldOption[] {
   if (field.optionsRef) {
-    const resolved = lookupPath(field.optionsRef, context as Record<string, unknown>)
+    const resolved = lookupPath(field.optionsRef, context)
     if (Array.isArray(resolved)) {
       const opts = resolved.filter(isFieldOption)
       if (opts.length > 0) return opts

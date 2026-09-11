@@ -77,6 +77,15 @@ bool mb_pdu_skips_crc(uint8_t fc)
     }
 }
 
+// The editor's function codes as a contiguous range. Kept separate from
+// mb_pdu_skips_crc() on purpose: that set answers "does this frame carry a CRC",
+// this one answers "is this the editor talking", and MB_FC_PLC_SET_STATE belongs
+// to the second but not the first.
+bool mb_pdu_is_editor_fc(uint8_t fc)
+{
+    return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_PLC_SET_STATE;
+}
+
 void process_mbpacket()
 {
     uint8_t fcode  = mb_frame[1];

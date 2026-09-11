@@ -31,4 +31,10 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n);
 // transport decide CRC handling without hardcoding the debug FC list.
 bool mb_pdu_skips_crc(uint8_t fc);
 
+// True for the editor's private function codes, 0x41-0x4B. Deliberately NOT the
+// same set as mb_pdu_skips_crc(): that one excludes MB_FC_PLC_SET_STATE, which
+// does carry a CRC, and reusing it here would leave run/stop unreachable on the
+// editor's own slave id.
+bool mb_pdu_is_editor_fc(uint8_t fc);
+
 #endif

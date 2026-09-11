@@ -78,6 +78,11 @@ const VendorScreenEditor = () => {
     )
   }
 
+  // The Modbus screen is rendered by the native server editor rather than the
+  // generic form layout, so a baremetal board and a Runtime v4 target present
+  // the same Modbus UI. The tab, the persistence keys and the dirty/save path
+  // are unchanged — only the renderer differs, which is what keeps this from
+  // needing a project migration.
   return (
     <div className='flex min-h-0 flex-1 flex-col overflow-y-auto p-4'>
       <VendorScreenRenderer screenDefinition={screenDefinition} moduleSystem={moduleSystem} />

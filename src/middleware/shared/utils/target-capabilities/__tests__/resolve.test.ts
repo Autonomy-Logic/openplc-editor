@@ -142,11 +142,23 @@ describe('preset shapes', () => {
     expect(RUNTIME_V4_CAPABILITIES.hasRuntimeStats).toBe(true)
   })
 
-  it('Arduino-CLI has only pin mapping and Arduino API completions', () => {
+  it('Arduino-CLI has pin mapping, Arduino API completions and both Modbus server transports', () => {
     expect(ARDUINO_CLI_CAPABILITIES.pinMapping).toBe(true)
     expect(ARDUINO_CLI_CAPABILITIES.arduinoApiCompletions).toBe(true)
-    expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(false)
+    // The baremetal firmware has always served both — `ModbusSlave.cpp`
+    // compiles a serial transport under MBSERIAL and a TCP one under MBTCP.
+    // These read `false` until DOPE-442 only because the configuration lived
+    // in a vendor screen the Servers UX could not see.
+    expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(true)
+    expect(ARDUINO_CLI_CAPABILITIES.modbusRtuServer).toBe(true)
     expect(ARDUINO_CLI_CAPABILITIES.pythonFunctionBlocks).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.debuggerTransports).toEqual(['modbus-serial', 'modbus-tcp'])
+  })
+
+  it('is the only preset that serves Modbus RTU — every runtime slave is TCP-only', () => {
+    expect(SIMULATOR_CAPABILITIES.modbusRtuServer).toBe(false)
+    expect(RUNTIME_V3_CAPABILITIES.modbusRtuServer).toBe(false)
+    expect(RUNTIME_V4_CAPABILITIES.modbusRtuServer).toBe(false)
+    expect(ARDUINO_CLI_CAPABILITIES.modbusRtuServer).toBe(true)
   })
 })

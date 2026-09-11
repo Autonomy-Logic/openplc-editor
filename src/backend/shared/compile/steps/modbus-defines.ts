@@ -1,6 +1,11 @@
 /**
- * Emit the `//Comms Configuration` block in `defines.h` from a board's
- * persisted VPP Modbus screen state.
+ * Emit the `//Comms Configuration` block in `defines.h`.
+ *
+ * Two sources, split along the ownership boundary: the project's Modbus
+ * `PLCServer` says WHAT is served -- the transports, the slave id, the TCP
+ * port -- and the board's VPP screens say what it is served OVER: the UART's
+ * speed, the RS-485 pin, the network. Protocol is the editor's, the physical
+ * layer is the package's, and this function is where the two meet.
  *
  * The screen is declared in `packages/com.openplc.arduino/screens/modbus.json`
  * (shared across all Arduino-family VPP packages); its values land in
@@ -22,18 +27,40 @@
  * for fishing `modbus_rtu` and `modbus_tcp` out of `vendorScreenData`.
  */
 
+import {
+  DEFAULT_SERIAL_BAUD,
+  isDefaultPort,
+  resolveDefaultPortBaud,
+  resolveRs485Pin,
+  resolveRtuPort,
+  resolveServerBaud,
+} from '../../../../middleware/shared/utils/modbus-server-profile'
+
 /**
  * Subset of the persisted screen state this emitter reads. Mirrors the
  * field IDs declared in `screens/modbus.json` — keep in sync if the
  * VPP screen field set evolves.
  */
 export interface VppModbusScreenState {
-  /** Phase 2 Serial section — always-on serial baud (debugger + RTU on the
-   *  default port). */
+  /** Serial-port section. Owns everything about the physical line: the
+   *  default port's speed (the debugger's, and Modbus RTU's when they share
+   *  it), which UART Modbus RTU answers on, that UART's own speed, and the
+   *  RS485 driver-enable pin.
+   *
+   *  These four moved here from `modbus_rtu` when the unified Modbus server
+   *  screen took that section over: the native screen renders `modbus_rtu`
+   *  itself, so any field left in it had nowhere to appear. The old spellings
+   *  are still read as a fallback -- see the `modbus_rtu` members below. */
   serial?: {
     baud_rate?: string
+    modbus_port?: string
+    modbus_baud_rate?: string
+    enable_rs485_en_pin?: boolean
+    rs485_en_pin?: string
   }
-  /** Phase 2 Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp. */
+  /** Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp by the
+   *  screen split. Its `enabled` gates the TCP transport: a project that
+   *  declares this section and explicitly turns it off emits no MBTCP. */
   network?: {
     enabled?: boolean
     interface?: 'Ethernet' | 'Wi-Fi'
@@ -46,24 +73,23 @@ export interface VppModbusScreenState {
     subnet?: string
     dns?: string
   }
+  /** Pre-4.4.0 protocol state, kept only as a fallback for a project whose
+   *  baremetal Modbus has not yet been promoted to a `PLCServer` -- one saved
+   *  by an older editor and compiled without being opened. The wiring fields
+   *  that used to live here are gone: `migrate-modbus-serial-fields` moves
+   *  them into `serial`, so reading them would be reading a value the editor
+   *  no longer writes. */
   modbus_rtu?: {
     enabled?: boolean
-    /** Phase 2: chosen serial port. Legacy projects use `rtu_interface`. */
-    serial_port?: string
-    rtu_interface?: string
-    /** Phase 2: baud for RTU on a secondary port. On the default port the
-     *  Serial section's baud is used. Legacy projects use `rtu_baud_rate`. */
+    rtu_slave_id?: number
     baud_rate?: string
     rtu_baud_rate?: string
-    rtu_slave_id?: number
-    enable_rs485_en_pin?: boolean
-    rtu_rs485_en_pin?: string
   }
   modbus_tcp?: {
     enabled?: boolean
-    unit_id?: number
-    // Legacy network fields (pre-Phase-2 projects still on the old screen).
-    // Read as a fallback when the `network` section is absent.
+    // Legacy network fields, still read: nothing migrates them into `network`,
+    // and dropping the fallback would lose a pre-split project's Wi-Fi
+    // credentials on upgrade. The protocol fields beside them are gone.
     tcp_interface?: 'Ethernet' | 'Wi-Fi'
     tcp_mac_address?: string
     tcp_wifi_ssid?: string
@@ -76,78 +102,107 @@ export interface VppModbusScreenState {
   }
 }
 
-/** Baud the always-on debugger falls back to when nothing else says otherwise. */
-export const DEFAULT_DEBUG_BAUD = '115200'
+/**
+ * The protocol half, taken from the project's Modbus `PLCServer`.
+ *
+ * Optional throughout, because a project that has not been opened by an editor
+ * new enough to promote its baremetal Modbus to a server still has to compile
+ * to the same firmware it compiled to yesterday.
+ */
+export interface ModbusServerCompileConfig {
+  enabled?: boolean
+  transports?: ('rtu' | 'tcp')[]
+  slaveId?: number
+  serialPort?: string
+  /** Speed of the UART the server answers on. Read only when that UART is not
+   *  the default one, whose speed is the editor's line and the package's. */
+  baudRate?: number
+  port?: number
+}
+
+/** Shape of a project server this selector reads. */
+interface ModbusServerLike {
+  name: string
+  protocol: string
+  modbusSlaveConfig?: ModbusServerCompileConfig
+}
+
+/**
+ * The one Modbus server a firmware build can honour, or the conflict to refuse.
+ *
+ * A baremetal firmware serves exactly one slave: `modbus.slaveid` is a single
+ * global and `init_mbregs` is called once. The editor still lets a project
+ * carry several, on purpose -- a project moves between targets, and a server
+ * that a Runtime v4 build serves happily should not have to be deleted to
+ * build for a microcontroller. So the refusal belongs here, at the point where
+ * a single answer is actually required, and it names the servers in conflict
+ * rather than saying a number.
+ *
+ * Existing and serving are two different questions, and this answers both.
+ * `generateModbusDefines` falls back to the legacy screen sections when it gets
+ * no server, so returning nothing for a server the user switched OFF let the
+ * old `modbus_rtu.enabled` decide -- and on a board whose package was never
+ * split that section is still there, still true, and never cleared. Turning the
+ * server off then compiled RTU anyway. A server that exists and serves nothing
+ * is therefore returned, so the emitter sees an empty transport list rather
+ * than an absence.
+ *
+ * Only a server on the new model can do that, which is what `Array.isArray`
+ * checks. A pre-4.4.0 project can carry a `modbus-tcp` server with no
+ * `transports` at all -- one meant for Runtime v4 -- alongside the baremetal
+ * screen sections; treating that as "serves nothing" would silence a project
+ * that has always compiled its Modbus from those sections.
+ */
+export function selectModbusServer(servers: readonly ModbusServerLike[] | undefined): {
+  server?: ModbusServerCompileConfig
+  conflict?: string[]
+} {
+  const declared = (servers ?? []).filter(
+    (entry) =>
+      entry.protocol === 'modbus-tcp' && entry.modbusSlaveConfig && Array.isArray(entry.modbusSlaveConfig.transports),
+  )
+  const serving = declared.filter(
+    (entry) => entry.modbusSlaveConfig?.enabled !== false && (entry.modbusSlaveConfig?.transports?.length ?? 0) > 0,
+  )
+
+  if (serving.length > 1) return { conflict: serving.map((entry) => entry.name) }
+  if (serving.length === 1) return { server: serving[0].modbusSlaveConfig }
+  // Nothing serving, but the project does carry a server: hand it back so the
+  // emitter reads an empty transport list and does not reopen the fallback.
+  if (declared.length > 0) return { server: declared[0].modbusSlaveConfig }
+  return {}
+}
 
 /**
  * Baud rate the DEFAULT serial port comes up at — the one the always-on debugger
- * answers on, and therefore the one the editor must dial to reach it.
+ * answers on, and therefore the one the editor must dial to reach it. It belongs
+ * to the package, not to any Modbus server: it is a property of the editor's
+ * link, and the debugger answers on it whether or not a server exists.
  *
- * The two sides derive this independently (the firmware from here, the editor
- * from the board's `debug` spec), so they have to agree or the port opens and
- * decodes nothing. What the editor dials is
- * `screens.modbus_rtu.rtu_baud_rate` — ALWAYS, whether or not the RTU is
- * enabled, because a spec's `params` are read independently of its
- * `enabledWhen`. This function mirrors that:
- *
- *  1. A `serial` section, when a package declares one — it exists precisely to
- *     configure this port, and a package that has it also points its debug spec
- *     at it.
- *  2. Otherwise the RTU's baud, which for a package published today is the only
- *     serial speed the project states at all. This holds even when the RTU is
- *     DISABLED: the rate is then unused by Modbus, but the editor still dials it,
- *     so the firmware had better listen there.
- *  3. `115200` only when the RTU is enabled on a SECOND UART — the one case where
- *     that rate genuinely belongs to a different port and the debugger keeps the
- *     default one to itself. Nothing states that port's speed, so this is a
- *     guess, and it is exactly the case the connect flow's baud sweep exists for.
+ * Re-exported rather than defined here because the SCREEN resolves it through
+ * the same function. The two sides used to derive it independently, and a screen
+ * quietly disagreeing with the firmware is the failure this area keeps
+ * producing.
  */
-export function resolveDebugBaud(state: VppModbusScreenState, defaultSerial: string = 'Serial'): string {
-  const declared = state.serial?.baud_rate
-  if (declared) return declared
-
-  const rtu = state.modbus_rtu
-  if (!rtu) return DEFAULT_DEBUG_BAUD
-
-  // An enabled RTU on its own UART takes its baud with it; the debugger is then
-  // on a port whose speed the project never mentions.
-  if (rtu.enabled === true) {
-    const iface = rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
-    if (iface !== defaultSerial) return DEFAULT_DEBUG_BAUD
-  }
-
-  return rtu.baud_rate ?? rtu.rtu_baud_rate ?? DEFAULT_DEBUG_BAUD
-}
-
-/** Slave id the always-on debugger frames on when the project states none. */
-export const DEFAULT_DEBUG_SLAVE = 1
+export { DEFAULT_SERIAL_BAUD, isDefaultPort, resolveDefaultPortBaud, resolveRs485Pin, resolveRtuPort }
 
 /**
- * Modbus slave id the always-on debugger answers on — and therefore the id the
- * editor must address to reach it.
+ * Slave id the always-on debugger answers on, and therefore the one the editor
+ * dials. A constant, not a setting.
  *
- * The same two-sided agreement `resolveDebugBaud` describes, and the same failure
- * when it breaks: `handle_serial_port` drops any frame whose first byte is not
- * this id, and that check is the ONLY validation applied to debug function codes
- * (CRC is skipped on them). A mismatch is therefore total silence on a healthy
- * board — reported as "No Firmware Detected".
+ * The firmware answers it IN ADDITION to whatever the Modbus server is set to,
+ * routing by function code (`mb_pdu_is_editor_fc`, `0x41`-`0x4B`), so the two
+ * never compete for the same UART and the server's id is the user's to pick on
+ * every port. That makes an editor-side id a control that changes nothing:
+ * whatever value it held would have to match a firmware the user cannot see, and
+ * a mismatch reads as a healthy board that answers nothing. It was briefly a
+ * package field (`screens.serial.slave_id`) and is now gone from the packages.
  *
- * What the editor addresses is `screens.modbus_rtu.rtu_slave_id`, ALWAYS: a
- * spec's `params` are read independently of its `enabledWhen`, so an RTU screen
- * left at slave id 7 with the RTU toggle OFF still sends id 7 down the cable.
- * So this returns that id unconditionally — including when the RTU runs on a
- * SECOND UART, where it is not a conflict but the same number on two distinct
- * ports.
- *
- * Deliberately NOT the `resolveDebugBaud` shape of "guess 115200 for a secondary
- * port": a wrong baud is recoverable, because Connect sweeps the plausible rates.
- * There is no sweep for slave ids, so this has to match exactly rather than
- * approximately.
+ * A board flashed before this change may still answer on another id. That is
+ * Connect's problem, not the emitter's: it tries this id first and the project's
+ * legacy one after.
  */
-export function resolveDebugSlave(state: VppModbusScreenState): number {
-  const slave = state.modbus_rtu?.rtu_slave_id
-  return typeof slave === 'number' ? slave : DEFAULT_DEBUG_SLAVE
-}
+export const DEBUG_SLAVE = 1
 
 /**
  * `aa:bb:cc:dd:ee:ff` → `0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff` so it can
@@ -187,13 +242,16 @@ function formatIpForDefine(raw: string): string {
 // to compile (ModbusSlave.cpp uses them as object/literal values).
 // Keep these in sync if the screen schema's defaults change.
 const RTU_DEFAULTS = {
-  rtu_baud_rate: '115200',
   rtu_slave_id: 1,
 } as const
 
 const TCP_DEFAULTS = {
   tcp_interface: 'Ethernet' as const,
 }
+
+/** The IANA Modbus port, and what the firmware listened on unconditionally
+ *  before the port became the server's to state. */
+const BAREMETAL_DEFAULT_TCP_PORT = 502
 
 /**
  * Build the `//Comms Configuration` block. Returns an empty string when
@@ -208,12 +266,36 @@ const TCP_DEFAULTS = {
  * The output always ends with a trailing newline so callers can
  * concatenate without adding their own.
  */
-export function generateModbusDefines(state: VppModbusScreenState, defaultSerial: string = 'Serial'): string {
+export function generateModbusDefines(
+  state: VppModbusScreenState,
+  defaultSerial: string = 'Serial',
+  server?: ModbusServerCompileConfig,
+): string {
   const rtu = state.modbus_rtu ?? {}
   const tcp = state.modbus_tcp ?? {}
   const net = state.network ?? {}
-  const rtuOn = rtu.enabled === true
-  const tcpOn = tcp.enabled === true
+
+  // The project's server is authoritative about what is served. A project that
+  // predates it -- never opened by an editor that promotes the screen state --
+  // still says so in the screen sections, and must keep compiling to the same
+  // firmware it compiled to yesterday.
+  // `null` means no server at all -- fall back to the sections. An empty array
+  // means a server that exists and serves nothing, which is not the same thing
+  // and must not reopen the fallback.
+  const served = server ? (server.enabled === false ? [] : (server.transports ?? [])) : null
+  const rtuOn = served ? served.includes('rtu') : rtu.enabled === true
+  // Modbus TCP needs a network, and after the screen split the network is a
+  // section of its own with its own switch. Serving TCP over a network the
+  // project says to leave down produced firmware that compiled MBTCP, called
+  // mbconfig_ethernet_iface, and never linked — a healthy board that answers
+  // nothing, which reads as broken hardware.
+  //
+  // Only an EXPLICIT `false` blocks. The form layout persists just the fields
+  // the user touched, so a project where someone typed an SSID and never
+  // touched the toggle has no `enabled` at all; refusing to build that would
+  // trade one silent failure for another. A pre-split project has no `network`
+  // section whatsoever and keeps building exactly as it did.
+  const tcpOn = (served ? served.includes('tcp') : tcp.enabled === true) && net.enabled !== false
 
   if (!rtuOn && !tcpOn) return ''
 
@@ -221,16 +303,20 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
   lines.push('//Comms Configuration')
 
   if (rtuOn) {
-    // Phase 2: RTU picks a serial port (`serial_port`); legacy projects carry
-    // `rtu_interface`. On the default port the RTU shares the always-on Serial
-    // baud; on a secondary port it uses its own (`baud_rate`), with the legacy
-    // `rtu_baud_rate` as a fallback for pre-migration projects.
-    const iface = rtu.serial_port ?? rtu.rtu_interface ?? defaultSerial
-    const onDefaultPort = iface === defaultSerial
-    const baud = onDefaultPort
-      ? (state.serial?.baud_rate ?? rtu.rtu_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
-      : (rtu.baud_rate ?? rtu.rtu_baud_rate ?? RTU_DEFAULTS.rtu_baud_rate)
-    const slave = typeof rtu.rtu_slave_id === 'number' ? rtu.rtu_slave_id : RTU_DEFAULTS.rtu_slave_id
+    // Which UART is the server's; that UART's speed is the package's. Both the
+    // port and the "is it the default one" question come from the shared
+    // resolver, because the screen asks the same two and a disagreement puts a
+    // read-only baud on screen while the build emits MBSERIAL_ON_SECONDARY.
+    const iface = resolveRtuPort(state, server?.serialPort, defaultSerial)
+    const onDefaultPort = isDefaultPort(iface, defaultSerial)
+    // The default port's speed is the editor's line and the package's to state;
+    // a UART of its own belongs to the server. One UART has one speed, and
+    // unlike the slave id no amount of firmware routing changes that.
+    const baud = resolveServerBaud({ onDefaultPort, serverBaud: server?.baudRate, state })
+    // The server's id, on every port. On the default port the firmware answers
+    // DEBUG_SLAVE alongside it for the editor's function codes, so the two share
+    // the UART without sharing an address.
+    const slave = server?.slaveId ?? rtu.rtu_slave_id ?? RTU_DEFAULTS.rtu_slave_id
     lines.push(`#define MBSERIAL_IFACE ${iface}`)
     lines.push(`#define MBSERIAL_BAUD ${baud}`)
     lines.push(`#define MBSERIAL_SLAVE ${slave}`)
@@ -243,8 +329,9 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
     } else {
       lines.push('#define MBSERIAL_ON_SECONDARY')
     }
-    if (rtu.enable_rs485_en_pin === true && rtu.rtu_rs485_en_pin) {
-      lines.push(`#define MBSERIAL_TXPIN ${rtu.rtu_rs485_en_pin}`)
+    const rs485Pin = resolveRs485Pin(state)
+    if (rs485Pin) {
+      lines.push(`#define MBSERIAL_TXPIN ${rs485Pin}`)
     }
     lines.push('#define MBSERIAL')
   }
@@ -282,6 +369,7 @@ export function generateModbusDefines(state: VppModbusScreenState, defaultSerial
     } else {
       lines.push('#define MBTCP_ETHERNET')
     }
+    lines.push(`#define MBTCP_PORT ${server?.port ?? BAREMETAL_DEFAULT_TCP_PORT}`)
     lines.push('#define MBTCP')
   }
 

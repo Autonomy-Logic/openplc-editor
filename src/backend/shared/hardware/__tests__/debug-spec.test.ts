@@ -636,3 +636,58 @@ describe('resolveDebugConnection', () => {
     })
   })
 })
+
+/**
+ * The legacy slave id is the one connection param that does NOT come from the
+ * manifest. It cannot: the packages' own ref check rejects a `$ref` pointing at
+ * a screen they no longer ship, and `modbus_rtu` is exactly such a screen.
+ */
+describe('resolveDebugConnection - the legacy slave id', () => {
+  const spec: DebugSpec = {
+    channels: [{ label: 'Modbus RTU', channel: 'rtu', enabledWhen: true, params: { port: 'COM3', slaveId: 1 } }],
+  }
+
+  it('carries the id a pre-4.4.0 project left on the Modbus screen', () => {
+    const outcome = resolveDebugConnection(
+      spec,
+      makeContext({ state: { screens: { modbus_rtu: { rtu_slave_id: 7 } } } }),
+    )
+
+    expect(outcome.kind).toBe('config')
+    if (outcome.kind !== 'config') return
+    expect(outcome.config.connectionParams.legacySlaveId).toBe(7)
+  })
+
+  it('carries nothing for a project that never had that screen', () => {
+    const outcome = resolveDebugConnection(spec, makeContext({ state: { screens: {} } }))
+
+    expect(outcome.kind).toBe('config')
+    if (outcome.kind !== 'config') return
+    expect(outcome.config.connectionParams).not.toHaveProperty('legacySlaveId')
+  })
+
+  it('ignores a value the screen state stored as something other than a number', () => {
+    const outcome = resolveDebugConnection(
+      spec,
+      makeContext({ state: { screens: { modbus_rtu: { rtu_slave_id: '7' } } } }),
+    )
+
+    expect(outcome.kind).toBe('config')
+    if (outcome.kind !== 'config') return
+    expect(outcome.config.connectionParams).not.toHaveProperty('legacySlaveId')
+  })
+
+  it('does not attach it to a TCP channel', () => {
+    const tcpSpec: DebugSpec = {
+      channels: [{ label: 'Modbus TCP', channel: 'tcp', enabledWhen: true, params: { ipAddress: '10.0.0.2' } }],
+    }
+    const outcome = resolveDebugConnection(
+      tcpSpec,
+      makeContext({ state: { screens: { modbus_rtu: { rtu_slave_id: 7 } } } }),
+    )
+
+    expect(outcome.kind).toBe('config')
+    if (outcome.kind !== 'config') return
+    expect(outcome.config.connectionParams).not.toHaveProperty('legacySlaveId')
+  })
+})
