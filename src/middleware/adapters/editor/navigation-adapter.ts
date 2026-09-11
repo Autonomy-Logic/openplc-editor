@@ -116,7 +116,10 @@ export function createEditorNavigationAdapter(): NavigationPort {
       // through here — and a real window is the right answer for it. An in-app path is
       // the same missing-screen case as above: a `BrowserWindow` pointed at it shows an
       // empty page in development and a missing `file://` in a packaged build.
-      if (/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+      // http(s) only. The old test accepted ANY URI scheme, which would have handed a
+      // `file:` or `javascript:` path straight to `window.open` — nothing in this build
+      // produces one, and that is a reason to refuse them, not to leave the door open.
+      if (/^https?:/i.test(path)) {
         // `noopener,noreferrer`, not just `_blank`: without it the opened page keeps a
         // live `window.opener` back into the renderer, and the renderer is where the
         // whole editor lives. Nothing in this build sends a hostile URL here today —

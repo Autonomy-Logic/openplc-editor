@@ -29,6 +29,7 @@ import { AppLayout } from './frontend/components/_templates/app-layout'
 import { StartScreen } from './frontend/screens/start-screen'
 import { WorkspaceScreen } from './frontend/screens/workspace-screen'
 import { trackAcuExhausted, trackUpgradeCtaClicked } from './frontend/services/ai/telemetry'
+import { configureSaveResume } from './frontend/services/resume-save-after-sign-in'
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
@@ -84,6 +85,15 @@ if (editorPorts.ai) {
   const { setAIEnabled, setAIConsented } = openPLCStoreBase.getState().aiActions
   setAIEnabled(editorPorts.ai.isFeatureEnabled)
   setAIConsented(editorPorts.ai.hasUserConsented)
+}
+
+// The save flow asks this before every write whether the session it would write with
+// has already ended, and queues the save for replay after sign-in if so. The web wires
+// it here in its own composition root; the desktop never did, so `save-actions` took
+// the raw-401 branch on every expired session and nothing was ever queued — the user
+// signed back in to find their save had simply not happened. Same call, same place.
+if (editorPorts.edgeAccount) {
+  configureSaveResume(editorPorts.edgeAccount.session)
 }
 
 /**

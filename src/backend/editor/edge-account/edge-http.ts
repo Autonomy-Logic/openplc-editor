@@ -69,7 +69,7 @@ function isLoopbackHost(hostname: string): boolean {
  * contract above: nothing was established about the session, which is exactly what a
  * transport failure means.
  */
-function assertTransportIsConfidential(url: URL): void {
+export function assertTransportIsConfidential(url: URL): void {
   if (url.protocol === 'https:' || isLoopbackHost(url.hostname)) {
     return
   }

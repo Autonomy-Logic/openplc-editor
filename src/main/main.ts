@@ -28,6 +28,17 @@ import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 
+/** True for an `http(s):` URL — the only kind `shell.openExternal` is handed. */
+function isWebUrl(candidate: string): boolean {
+  try {
+    const { protocol } = new URL(candidate)
+
+    return protocol === 'https:' || protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
 enableMapSet()
 
 class AppUpdater {
@@ -310,7 +321,14 @@ const createMainWindow = async () => {
       return { action: 'deny' }
     }
 
-    void shell.openExternal(edata.url)
+    // Only web links leave the app. A renderer-supplied `file:` or custom-scheme URL
+    // handed to the OS would run whatever is registered for it.
+    if (isWebUrl(edata.url)) {
+      void shell.openExternal(edata.url)
+    } else {
+      log.warn(`[main] refused to open external URL with scheme ${edata.url.split(':')[0] || '(none)'}`)
+    }
+
     return { action: 'deny' }
   })
 

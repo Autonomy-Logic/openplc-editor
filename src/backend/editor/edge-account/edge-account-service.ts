@@ -18,6 +18,7 @@
 import { z } from 'zod'
 
 import type { EdgeSignInOutcome, EdgeUser, EdgeUserRead } from '../../../middleware/shared/ports/edge-account-port'
+import { logger } from '../services'
 import { edgeRequest, parseJsonBodyAs } from './edge-http'
 import { clearRefreshToken, readRefreshToken, saveRefreshToken } from './session-store'
 
@@ -101,7 +102,19 @@ function adoptTokens(pair: TokenPair): boolean {
 
   accessToken = pair.accessToken
   accessTokenExpiresAtMs = readJwtExpiryMs(pair.accessToken)
-  saveRefreshToken(pair.refreshToken)
+
+  // The answer used to be thrown away. `persisted: false` means the OS keychain refused
+  // and the token lives in memory only — this session ends with the process, and the
+  // user will be asked to sign in again next launch with no idea why. The UI already
+  // reads `isSessionPersistent()` to say so on screen; this is the trace for the
+  // developer reading the log after the fact, which the screen cannot leave.
+  const { persisted } = saveRefreshToken(pair.refreshToken)
+
+  if (!persisted) {
+    logger.warn(
+      'Edge refresh token kept in memory only: the OS keychain is unavailable, so this session will not survive a restart.',
+    )
+  }
 
   return true
 }
@@ -144,8 +157,12 @@ function forgetSession(): void {
  * refusal case the stored token is dropped, so the next launch does not repeat a
  * request that can only fail.
  *
- * REJECTS on a transport failure, deliberately. Offline is not signed out, and a
- * caller that cannot tell them apart will prompt someone whose session is fine.
+ * REJECTS when the renewal could not be completed — a transport failure, or a server
+ * that answered without deciding (a 5xx, a proxy's 502 during a deploy). Offline is
+ * not signed out, and a caller that cannot tell them apart will prompt someone whose
+ * session is fine. Rejecting for a 5xx as well as for no answer is what keeps
+ * `edgeAuthedRequest`'s contract in one sentence: null means no session, a rejection
+ * means nothing was established.
  */
 async function renewNow(): Promise<boolean> {
   const stored = readRefreshToken()
@@ -165,8 +182,9 @@ async function renewNow(): Promise<boolean> {
   }
 
   if (response.status < 200 || response.status >= 300) {
-    // A 5xx says nothing about whether the token is valid, so keep it.
-    return false
+    // Says nothing about whether the token is valid, so it is kept — and nothing was
+    // learned about the session either, so this is reported like a transport failure.
+    throw new Error(`Autonomy Edge could not renew the session (answered ${response.status}).`)
   }
 
   return adoptTokens(parseJsonBodyAs(response.body, RefreshResponseSchema)?.data ?? {})
@@ -201,8 +219,10 @@ async function usableAccessToken(): Promise<string | null> {
  *
  * Exported because the cloud-project layer needs exactly this treatment. Renewal, the
  * single-flight guard and the one retry belong here rather than being reimplemented per
- * caller. Resolves null when no session could be obtained, and REJECTS on a transport
- * failure — callers have to keep "denied" apart from "unreachable".
+ * caller. Resolves null when there is definitely no session — nothing to renew with, or
+ * a renewal the server refused — and REJECTS when that could not be established: a
+ * transport failure, or a renewal the server failed to complete. Callers have to keep
+ * "denied" apart from "unreachable".
  */
 export async function edgeAuthedRequest(
   path: string,
@@ -272,8 +292,23 @@ export async function fetchUser(): Promise<EdgeUserRead> {
   try {
     const response = await edgeAuthedRequest('/auth/me')
 
-    if (!response || response.status < 200 || response.status >= 300) {
+    // Null is "no token could be obtained": nothing to ask with, so no session.
+    if (!response) {
       return { status: 'no-session' }
+    }
+
+    // 401 and 403 are the server saying no to the credentials it was shown — that IS
+    // the answer "nobody is signed in". Anything else that is not a 2xx is the server
+    // failing to answer the question: a 500, a 502 from a proxy, a 503 during a deploy.
+    // Reading those as `no-session` is exactly what the docstring above forbids, and it
+    // is what this branch used to do — every non-2xx collapsed into a sign-out, so a
+    // deploy of the Edge API signed the desktop out.
+    if (response.status === 401 || response.status === 403) {
+      return { status: 'no-session' }
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      return { status: 'unknown' }
     }
 
     const user = parseJsonBodyAs(response.body, MeResponseSchema)?.data?.user
@@ -371,13 +406,20 @@ async function completeSignIn(known: EdgeUser | undefined): Promise<EdgeSignInOu
 
   const read = await fetchUser()
 
-  if (read.status !== 'signed-in') {
-    forgetSession()
-
-    return { status: 'failed' }
+  if (read.status === 'signed-in') {
+    return { status: 'signed-in', user: read.user }
   }
 
-  return { status: 'signed-in', user: read.user }
+  // Only a definitive "no session" throws the tokens away. `unknown` means the profile
+  // read never got an answer — and the tokens it would have confirmed were adopted a
+  // moment ago from a sign-in that WORKED. Forgetting them over a blip discarded a
+  // successful provider sign-in and sent the user back through the browser for nothing;
+  // kept, the next read of the account restores it without anyone doing anything.
+  if (read.status === 'no-session') {
+    forgetSession()
+  }
+
+  return { status: 'failed' }
 }
 
 /**

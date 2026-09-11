@@ -27,7 +27,7 @@
 import { BrowserWindow, session } from 'electron'
 
 import type { EdgeOAuthProviderId } from '../../../middleware/shared/ports/edge-account-port'
-import { getEdgeApiBaseUrl } from './edge-http'
+import { assertTransportIsConfidential, getEdgeApiBaseUrl } from './edge-http'
 
 /**
  * A current desktop Chrome UA. Electron's default advertises `Electron/x.y` and the
@@ -51,6 +51,87 @@ export type OAuthFlowResult =
 
 /** The providers, as they appear in Edge's own `/auth/{provider}` routes. */
 const PROVIDER_IDS: readonly EdgeOAuthProviderId[] = ['google', 'microsoft', 'apple']
+
+/**
+ * Where each provider's sign-in may legitimately take the window. Kept short on
+ * purpose: a host missing from here costs a blocked navigation that is easy to see and
+ * add, while a host too many lets a provider page walk the window anywhere.
+ */
+const PROVIDER_HOSTS: Record<EdgeOAuthProviderId, readonly string[]> = {
+  google: ['accounts.google.com', 'accounts.youtube.com'],
+  microsoft: ['login.microsoftonline.com', 'login.live.com', 'login.microsoft.com', 'account.live.com'],
+  apple: ['appleid.apple.com', 'idmsa.apple.com'],
+}
+
+/**
+ * Same default and override as the renderer's `getEdgeWebUrl`, restated here because
+ * that helper lives in the adapters layer, which the main process may not import.
+ */
+const DEFAULT_EDGE_WEB_URL = 'https://edge.autonomylogic.com'
+
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/** The Edge hosts a flow starts on and returns to. */
+function edgeHosts(): string[] {
+  const web = process.env.OPENPLC_EDGE_WEB_URL?.trim()
+
+  return [getEdgeApiBaseUrl(), web && web.length > 0 ? web : DEFAULT_EDGE_WEB_URL].flatMap((url) => {
+    const host = hostnameOf(url)
+
+    return host ? [host] : []
+  })
+}
+
+function isHostOrSubdomain(hostname: string, allowed: string): boolean {
+  return hostname === allowed || hostname.endsWith(`.${allowed}`)
+}
+
+/**
+ * Whether the sign-in window may follow a navigation to `url`.
+ *
+ * The window renders a third party's pages with a desktop-Chrome user agent, and a link
+ * on one of them could take it anywhere. Anywhere is too far for a window titled "Sign
+ * in to Autonomy Edge": only Edge's own hosts and the provider's are allowed.
+ */
+export function isAllowedOAuthNavigation(url: string, provider: EdgeOAuthProviderId): boolean {
+  let parsed: URL
+
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return false
+  }
+
+  const hostname = parsed.hostname.toLowerCase()
+
+  return (
+    edgeHosts().some((host) => hostname === host) ||
+    PROVIDER_HOSTS[provider].some((host) => isHostOrSubdomain(hostname, host))
+  )
+}
+
+/**
+ * Whether a cookie was set for Edge's host — the host itself or a parent domain of it,
+ * which is how a domain cookie is scoped. A provider's own cookie, or one a page on the
+ * way through managed to set for another site, does not match.
+ */
+export function cookieBelongsToEdge(cookieDomain: string | undefined, edgeHost: string): boolean {
+  if (!cookieDomain) {
+    return false
+  }
+
+  return isHostOrSubdomain(edgeHost.toLowerCase(), cookieDomain.replace(/^\./, '').toLowerCase())
+}
 
 /**
  * Recognise a provider sign-in link the renderer asked to open.
@@ -86,7 +167,13 @@ export function edgeOAuthProviderFromUrl(url: string): EdgeOAuthProviderId | nul
  * our own jar rather than from wherever it points.
  */
 function providerUrl(provider: EdgeOAuthProviderId): string {
-  return `${getEdgeApiBaseUrl()}/auth/${provider}?state=editor`
+  const url = new URL(`${getEdgeApiBaseUrl()}/auth/${provider}?state=editor`)
+
+  // The callback sets the session cookies on this origin; over cleartext to a remote
+  // host they would be readable on the path, exactly like a password would.
+  assertTransportIsConfidential(url)
+
+  return url.toString()
 }
 
 /**
@@ -97,6 +184,15 @@ function providerUrl(provider: EdgeOAuthProviderId): string {
  * not an exception to propagate.
  */
 export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowResult> {
+  let startUrl: string
+
+  try {
+    startUrl = providerUrl(provider)
+  } catch (error) {
+    // Refused before a window exists: nothing to show, nothing to clean up.
+    return Promise.resolve({ status: 'failed', reason: error instanceof Error ? error.message : 'invalid-api-url' })
+  }
+
   return new Promise((resolve) => {
     // Unique per attempt, and without the `persist:` prefix so it dies with the
     // window rather than remembering the provider account.
@@ -122,6 +218,10 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
     })
 
     win.setMenuBarVisibility(false)
+
+    // No pop-ups: a provider page that opens a new window would get one this process
+    // does not watch, outside every check below.
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
     let settled = false
 
@@ -162,7 +262,13 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
       }
 
       try {
-        const cookies = await oauthSession.cookies.get({})
+        // Scoped to Edge's own origin. The partition is private to this flow, but the
+        // provider's pages set cookies of their own on the way through, and an unscoped
+        // read would sweep those up with ours. Only Edge sets the two this looks for.
+        const edgeHost = new URL(startUrl).hostname
+        const cookies = (await oauthSession.cookies.get({ url: startUrl })).filter((cookie) =>
+          cookieBelongsToEdge(cookie.domain, edgeHost),
+        )
         const refreshToken = cookies.find((cookie) => cookie.name === 'refreshToken')?.value
         const accessToken = cookies.find((cookie) => cookie.name === 'accessToken')?.value
 
@@ -186,10 +292,17 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
 
     // Edge sends a failed flow to the editor's `/unauthorized?reason=oauth_failed`.
     // Recognising it lets the user see a real message instead of a window that sits
-    // there until the timeout.
-    win.webContents.on('will-navigate', (_event, url) => {
+    // there until the timeout. Everything else is held to the allowlist; server-side
+    // redirects do not pass through here, so the callback's own redirect is unaffected.
+    win.webContents.on('will-navigate', (event, url) => {
       if (url.includes('reason=oauth_failed')) {
         finish({ status: 'failed', reason: 'provider-declined' })
+
+        return
+      }
+
+      if (!isAllowedOAuthNavigation(url, provider)) {
+        event.preventDefault()
       }
     })
 
@@ -197,7 +310,7 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
       finish({ status: 'cancelled' })
     })
 
-    win.loadURL(providerUrl(provider), { userAgent: DESKTOP_USER_AGENT }).catch(() => {
+    win.loadURL(startUrl, { userAgent: DESKTOP_USER_AGENT }).catch(() => {
       finish({ status: 'failed', reason: 'could-not-open-provider' })
     })
   })

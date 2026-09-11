@@ -26,6 +26,12 @@ import { clearRefreshToken, readRefreshToken, saveRefreshToken } from '../sessio
 // Only the transport is stubbed. The parsing and validation helpers are the real
 // ones, so a response shape the service should reject is rejected here too rather
 // than being waved through by a permissive double.
+// The logger service reads `app.getPath('userData')` at load and `electron` has no
+// `app` under jest — same stub the IPC handler tests use, for the same reason.
+jest.mock('../../services', () => ({
+  logger: { debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
+}))
+
 jest.mock('../edge-http', () => ({
   ...jest.requireActual<typeof import('../edge-http')>('../edge-http'),
   edgeRequest: jest.fn(),
@@ -205,12 +211,33 @@ describe('fetchUser', () => {
     expect(clearStored).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the token when the renewal fails with a 5xx', async () => {
+  it('says unknown, and keeps the token, when the renewal fails with a 5xx', async () => {
     readStored.mockReturnValue('stored-r')
     request.mockResolvedValueOnce({ status: 503, body: '' })
 
-    await expect(fetchUser()).resolves.toEqual({ status: 'no-session' })
+    // A 503 during a deploy of the Edge API used to sign the desktop out: renewal
+    // answered false, the request answered null, and null read as "no session".
+    await expect(fetchUser()).resolves.toEqual({ status: 'unknown' })
     // A 5xx says nothing about whether the token is valid.
+    expect(clearStored).not.toHaveBeenCalled()
+  })
+
+  it.each([401, 403])('says no-session when the renewal is refused with a %i', async (status) => {
+    readStored.mockReturnValue('revoked-r')
+    request.mockResolvedValueOnce({ status, body: '{}' })
+
+    await expect(fetchUser()).resolves.toEqual({ status: 'no-session' })
+    expect(clearStored).toHaveBeenCalledTimes(1)
+  })
+
+  it('says unknown when a forced renewal after a refused token cannot be completed', async () => {
+    readStored.mockReturnValue('stored-r')
+    request
+      .mockResolvedValueOnce(ok({ accessToken: LIVE_TOKEN, refreshToken: 'r2' }))
+      .mockResolvedValueOnce({ status: 401, body: '{}' })
+      .mockResolvedValueOnce({ status: 502, body: '<html>bad gateway</html>' })
+
+    await expect(fetchUser()).resolves.toEqual({ status: 'unknown' })
     expect(clearStored).not.toHaveBeenCalled()
   })
 

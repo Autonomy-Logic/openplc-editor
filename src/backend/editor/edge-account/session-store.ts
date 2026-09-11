@@ -28,10 +28,19 @@ let inMemoryRefreshToken: string | null = null
  * Whether the OS can encrypt. Probed through a function rather than a module-level
  * constant because `safeStorage` is only meaningful once the app is ready, and this
  * module can be imported before that.
+ *
+ * On Linux without a keyring Electron still answers `isEncryptionAvailable() === true`
+ * while its backend is `basic_text` — a hardcoded key, which is obfuscation rather than
+ * encryption. That is treated as no encryption at all.
  */
 function canEncrypt(): boolean {
   try {
-    return safeStorage.isEncryptionAvailable()
+    if (!safeStorage.isEncryptionAvailable()) {
+      return false
+    }
+
+    // `getSelectedStorageBackend` exists on Linux only and throws elsewhere.
+    return process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'
   } catch {
     return false
   }
@@ -49,6 +58,8 @@ export function saveRefreshToken(token: string): { persisted: boolean } {
   inMemoryRefreshToken = token
 
   if (!canEncrypt()) {
+    forgetStoredSession()
+
     return { persisted: false }
   }
 
@@ -59,7 +70,24 @@ export function saveRefreshToken(token: string): { persisted: boolean } {
   } catch {
     // Encryption was advertised but failed. Treated exactly like no encryption:
     // never fall back to writing the raw token.
+    forgetStoredSession()
+
     return { persisted: false }
+  }
+}
+
+/**
+ * Drop what is on disk, keeping the in-memory copy.
+ *
+ * Called when a rotation could not be persisted: the entry on disk would then hold the
+ * token the server just retired, and the next launch would begin with a request that
+ * can only fail.
+ */
+function forgetStoredSession(): void {
+  try {
+    store.delete('edge_session')
+  } catch {
+    // A store that cannot delete cannot be repaired from here.
   }
 }
 
@@ -100,13 +128,7 @@ export function readRefreshToken(): string | null {
  */
 export function clearRefreshToken(): void {
   inMemoryRefreshToken = null
-
-  try {
-    store.delete('edge_session')
-  } catch {
-    // A store that cannot delete cannot be repaired from here, and the in-memory
-    // copy is already gone.
-  }
+  forgetStoredSession()
 }
 
 /** Whether a session on this machine survives a restart. Surfaced to the UI. */
