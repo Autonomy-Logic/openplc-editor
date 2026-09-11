@@ -11,11 +11,13 @@
  */
 
 import type * as PdfJsLib from 'pdfjs-dist'
+import { z } from 'zod'
 
 import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import { buildProjectResponseFromPlcopenParse } from '../../../frontend/utils/PLC/build-plcopen-project-response'
 import { parsePlcopenXml } from '../../../frontend/utils/PLC/xml-parser'
+import type { EdgeAccountPort } from '../../shared/ports/edge-account-port'
 import type { PrintRequest } from '../../shared/ports/print-types'
 import type {
   CloudFoldersResult,
@@ -24,8 +26,10 @@ import type {
   CreateProjectParams,
   ProjectPort,
   ProjectResponse,
+  RawProjectFile,
   RawProjectFiles,
   RenamePouParams,
+  SaveResult,
   UploadProjectParams,
   UploadProjectResult,
   WriteProjectFiles,
@@ -48,6 +52,7 @@ import type {
   Unsubscribe,
 } from '../../shared/ports/types'
 import { isRemoteProjectPath } from '../../shared/ports/types'
+import { editorEdgeAccountPort } from './edge-account-adapter'
 import { applyPdfJsEnginePolyfills } from './services/pdf-export/pdfjs-engine-polyfills'
 
 /** Editor IPC POU shape (discriminated union). */
@@ -190,6 +195,80 @@ function mapIpcResponse(
   }
 }
 
+const RawProjectFileSchema = z.object({
+  relativePath: z.string(),
+  content: z.string(),
+}) satisfies z.ZodType<RawProjectFile>
+
+/**
+ * The raw files as the main process answers them, checked rather than asserted: the bridge
+ * type is a description of what it is meant to send, and a skewed main bundle used to be
+ * read straight through into the parser. `dataTypeFiles` falls back to none — a main
+ * process that predates `.dt` files sends nothing, and must not stop the project opening.
+ */
+const RawProjectFilesSchema = z.object({
+  success: z.boolean(),
+  data: z
+    .object({
+      projectPath: z.string(),
+      projectJson: z.string(),
+      deviceConfig: z.string(),
+      pinMapping: z.string(),
+      libraryManifest: z.string(),
+      pouFiles: z.array(RawProjectFileSchema),
+      serverFiles: z.array(RawProjectFileSchema),
+      remoteDeviceFiles: z.array(RawProjectFileSchema),
+      dataTypeFiles: z.array(RawProjectFileSchema).catch([]),
+      canEdit: z.boolean().optional(),
+      readme: z.string().nullish(),
+      pendingPlcopenSource: z.string().optional(),
+      rawLoadedFiles: z.record(z.string()).optional(),
+    })
+    .optional(),
+  error: z.object({ title: z.string(), description: z.string(), status: z.number().optional() }).optional(),
+})
+
+const UNREADABLE_PROJECT_FILES: RawProjectFiles = {
+  success: false,
+  error: {
+    title: 'Failed to open project',
+    description: 'The project files arrived in a shape this build of the editor cannot read.',
+  },
+}
+
+/** Validate a raw-files answer from either reader, or refuse it as unreadable. */
+function readRawProjectFiles(answer: unknown): RawProjectFiles {
+  const parsed = RawProjectFilesSchema.safeParse(answer)
+
+  return parsed.success ? parsed.data : UNREADABLE_PROJECT_FILES
+}
+
+/** The envelope a cloud write answers with. The main process reports a failure as text only. */
+const CloudWriteAnswerSchema = z.object({ success: z.boolean(), error: z.string().optional() })
+
+/**
+ * Turn a cloud write's answer into the result the save flow branches on.
+ *
+ * The main process says only THAT a write failed. Whether a session still exists is
+ * what the save flow needs to know — queue for sign-in, or keep the work locally — and
+ * asking the account is what answers it. A `no-session` read also marks the session gone
+ * for every consumer of the account, which is what puts the sign-in control back on screen.
+ */
+async function classifyCloudWrite(answer: unknown, account: EdgeAccountPort): Promise<SaveResult> {
+  const parsed = CloudWriteAnswerSchema.safeParse(answer)
+  const result: SaveResult = parsed.success
+    ? parsed.data
+    : { success: false, error: 'Autonomy Edge answered in a way this build cannot read.' }
+
+  if (result.success) {
+    return result
+  }
+
+  const read = await account.fetchUser()
+
+  return { ...result, reason: read.status === 'no-session' ? 'signed-out' : 'unreachable' }
+}
+
 /**
  * Whether an identifier names a project on Autonomy Edge rather than one on disk.
  *
@@ -227,7 +306,8 @@ async function readCloudProjectFiles(projectId: string): Promise<RawProjectFiles
   // preload but not in main, or an argument would not structured-clone — and that
   // rejection escapes `openProjectByPath` to callers that do not catch it. The folder
   // and upload calls below already contain theirs for exactly this reason.
-  return window.bridge.edgeProjectsRead(projectId).catch(
+  return window.bridge.edgeProjectsRead(projectId).then(
+    readRawProjectFiles,
     (error: unknown): RawProjectFiles => ({
       success: false,
       error: {
@@ -251,12 +331,13 @@ const NO_CLOUD_WRITE_CHANNEL = {
  * failed, which the user can act on. Either way the save flow gets the failure shape
  * it already handles instead of an escaping rejection.
  */
-const cloudWriteFailure = (error: unknown): { success: boolean; error?: string } => ({
+const cloudWriteFailure = (error: unknown): SaveResult => ({
   success: false,
   error: error instanceof Error ? error.message : 'The save could not be sent to Autonomy Edge.',
 })
 
-export function createEditorProjectAdapter(): ProjectPort {
+/** `account` is what a failed cloud write asks whether a session still exists; the editor's own port by default. */
+export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdgeAccountPort): ProjectPort {
   return {
     async createProject(params: CreateProjectParams): Promise<ProjectResponse> {
       const response = (await window.bridge.createProject({
@@ -277,7 +358,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         return { success: false, error: pickResult.error ?? { title: 'Cancelled', description: 'No project selected' } }
       }
       // Read raw files and parse on the frontend
-      const raw = (await window.bridge.readProjectFiles(pickResult.path)) as RawProjectFiles
+      const raw = readRawProjectFiles(await window.bridge.readProjectFiles(pickResult.path))
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
@@ -290,9 +371,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // Array guard: the IPC payload is a cast, not validated — a
-        // version-skewed main process must not crash project open.
-        Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+        raw.data.dataTypeFiles,
       )
       return { success: true, data: parsed }
     },
@@ -303,7 +382,7 @@ export function createEditorProjectAdapter(): ProjectPort {
       // cloud reader returning the same `RawProjectFiles` the filesystem one does.
       const raw = isCloudProjectId(projectPath)
         ? await readCloudProjectFiles(projectPath)
-        : ((await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles)
+        : readRawProjectFiles(await window.bridge.readProjectFiles(projectPath))
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
@@ -342,9 +421,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // Array guard: the IPC payload is a cast, not validated — a
-        // version-skewed main process must not crash project open.
-        Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+        raw.data.dataTypeFiles,
       )
       return {
         success: true,
@@ -377,16 +454,16 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async readProjectFiles(projectPath: string): Promise<RawProjectFiles> {
-      return (await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles
+      return readRawProjectFiles(await window.bridge.readProjectFiles(projectPath))
     },
 
-    async saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
+    async saveProject(files: WriteProjectFiles): Promise<SaveResult> {
       if (isCloudProjectId(files.projectPath)) {
         if (typeof window.bridge.edgeProjectsSaveProject !== 'function') {
           return NO_CLOUD_WRITE_CHANNEL
         }
 
-        return window.bridge.edgeProjectsSaveProject(files).catch(cloudWriteFailure)
+        return classifyCloudWrite(await window.bridge.edgeProjectsSaveProject(files).catch(cloudWriteFailure), account)
       }
 
       const response = (await window.bridge.writeProjectFiles(files)) as { success: boolean; error?: string }
@@ -396,7 +473,7 @@ export function createEditorProjectAdapter(): ProjectPort {
       return { success: true }
     },
 
-    async saveFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> {
+    async saveFile(filePath: string, content: unknown): Promise<SaveResult> {
       // `projectId/relative/path` for a cloud project, an absolute path for a local one.
       // Both arrive here from the same shared save flow.
       if (isCloudProjectId(filePath)) {
@@ -404,7 +481,10 @@ export function createEditorProjectAdapter(): ProjectPort {
           return NO_CLOUD_WRITE_CHANNEL
         }
 
-        return window.bridge.edgeProjectsSaveFile(filePath, content).catch(cloudWriteFailure)
+        return classifyCloudWrite(
+          await window.bridge.edgeProjectsSaveFile(filePath, content).catch(cloudWriteFailure),
+          account,
+        )
       }
 
       return window.bridge.saveFile(filePath, content)

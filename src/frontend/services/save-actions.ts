@@ -12,7 +12,12 @@
  */
 
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
-import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
+import type {
+  ProjectPort,
+  RawProjectFile,
+  SaveResult,
+  WriteProjectFiles,
+} from '../../middleware/shared/ports/project-port'
 import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
 import type { LadderFlowType } from '../store/slices/ladder'
@@ -31,6 +36,7 @@ import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
 import { collectScreenPersistenceKeys } from '../utils/vpp/persistence-keys'
 import { isSaveBlockedByEndedSession, resumeSaveAfterEdgeSignIn } from './resume-save-after-sign-in'
+import { executeSaveProjectAs } from './save-project-as'
 
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
@@ -456,6 +462,36 @@ function refusedForHavingNoLocation(reason: SaveReason): boolean {
   return true
 }
 
+/**
+ * Whether a failed write means the session is gone.
+ *
+ * The write's own verdict comes first: the session layer only learns of an expiry from a
+ * request it made itself, and on the desktop the save is not one of those.
+ */
+function writeFailedForSignedOut(result: SaveResult): boolean {
+  return result.reason === 'signed-out' || isSaveBlockedByEndedSession()
+}
+
+/**
+ * Keep the work on disk when Autonomy Edge cannot be reached (DOPE-388, AC4).
+ *
+ * Only where there is a disk to write to. The web build has nothing but the server, so
+ * there the failure is reported and the work stays in memory.
+ */
+function canFallBackToSaveAs(result: SaveResult, capabilities: PlatformCapabilities): boolean {
+  return result.reason === 'unreachable' && capabilities.hasLocalFilesystem
+}
+
+async function fallBackToSaveAs(projectPort: ProjectPort, capabilities: PlatformCapabilities): Promise<boolean> {
+  toast({
+    title: 'Autonomy Edge could not be reached',
+    description: 'Choose a folder to keep a local copy of the project, so nothing you did is lost.',
+    variant: 'warn',
+  })
+  const saved = await executeSaveProjectAs(projectPort, capabilities)
+  return saved.success
+}
+
 export async function executeSaveProject(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
@@ -653,7 +689,7 @@ export async function executeSaveProject(
           variant: 'default',
         })
       }
-    } else if (isSaveBlockedByEndedSession()) {
+    } else if (writeFailedForSignedOut(res)) {
       // A dead session is not a save error, and reporting it as one ("API error:
       // 401 Unauthorized") told the user nothing they could act on. Say what
       // happened, say the work is safe, and queue the save so signing in finishes
@@ -671,6 +707,9 @@ export async function executeSaveProject(
         description: 'Sign in again and this save finishes on its own. Everything you typed is still open here.',
         variant: 'fail',
       })
+    } else if (canFallBackToSaveAs(res, capabilities)) {
+      setEditingState('unsaved')
+      return { success: (await fallBackToSaveAs(projectPort, capabilities)) && staleFlows.length === 0 }
     } else {
       setEditingState('unsaved')
       toast({
@@ -731,7 +770,7 @@ async function migrateDataTypesToFiles(
   projectPath: string,
   projectPort: ProjectPort,
   state: StoreState,
-): Promise<{ success: boolean; error?: string; written: ProjectFileSpec[] }> {
+): Promise<SaveResult & { written: ProjectFileSpec[] }> {
   const written: ProjectFileSpec[] = []
   for (const dt of state.project.data.dataTypes) {
     const spec = buildDataTypeSpec(dt)
@@ -800,13 +839,13 @@ export async function executeSaveFile(
    * invalid graphical body was told to sign in again instead of being told the one
    * thing they could act on.
    */
-  const failedWrite = (description: string): { success: false } => {
+  const failedWrite = async (result: SaveResult): Promise<{ success: boolean }> => {
     setEditingState('unsaved')
 
     // An expired session is not a file error, and the raw 401 text is useless to
     // the reader. Queue the save so signing in completes it rather than leaving the
     // file dirty and the user unaware.
-    if (isSaveBlockedByEndedSession()) {
+    if (writeFailedForSignedOut(result)) {
       if (!endedSessionCanBeRestored(capabilities)) {
         toast({ ...ENDED_SESSION_NO_RETURN, variant: 'fail' })
         return { success: false }
@@ -824,7 +863,12 @@ export async function executeSaveFile(
       return { success: false }
     }
 
-    toast({ title: 'Error saving file', description, variant: 'fail' })
+    // One file of a cloud project cannot be kept on its own; the whole project is.
+    if (canFallBackToSaveAs(result, capabilities)) {
+      return { success: await fallBackToSaveAs(projectPort, capabilities) }
+    }
+
+    toast({ title: 'Error saving file', description: result.error ?? 'Save failed', variant: 'fail' })
     return { success: false }
   }
 
@@ -858,24 +902,25 @@ export async function executeSaveFile(
       const folder = getFolderFromPouType(pou.pouType)
       const ext = getExtensionFromLanguage(pou.body.language)
       const res = await projectPort.saveFile(joinPath(projectPath, 'pous', folder, `${fileName}${ext}`), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'device') {
       const config = specs.find((s) => s.category === 'device-config')
       const pin = specs.find((s) => s.category === 'pin-mapping')
       if (!config || !pin) return fail('Save failed')
       const configRes = await projectPort.saveFile(joinPath(projectPath, 'devices/configuration.json'), config.content)
       const pinRes = await projectPort.saveFile(joinPath(projectPath, 'devices/pin-mapping.json'), pin.content)
-      if (!configRes.success || !pinRes.success) return failedWrite('Save failed')
+      if (!configRes.success) return failedWrite(configRes)
+      if (!pinRes.success) return failedWrite(pinRes)
     } else if (file.type === 'server') {
       const spec = specs[0]
       if (!spec) return fail(`Server "${fileName}" not found.`)
       const res = await projectPort.saveFile(joinPath(projectPath, 'devices/servers', `${fileName}.json`), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'remote-device') {
       const spec = specs[0]
       if (!spec) return fail(`Remote device "${fileName}" not found.`)
       const res = await projectPort.saveFile(joinPath(projectPath, 'devices/remote', `${fileName}.json`), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'ethercat-device') {
       // Slave devices live inside the parent bus file. filePath holds the bus name.
       const spec = specs[0]
@@ -884,7 +929,7 @@ export async function executeSaveFile(
         joinPath(projectPath, 'devices/remote', `${file.filePath}.json`),
         spec.content,
       )
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'library-manager') {
       // Surgical save: read project.json from disk and replace only
       // the `data.libraries` field with the current in-memory list.
@@ -892,7 +937,7 @@ export async function executeSaveFile(
       // unsaved project-level changes (data types, resource config,
       // debug snapshot) that the user hasn't touched in this tab.
       const res = await saveLibraryManagerOnly(projectPath, projectPort, state)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'vendor-screen') {
       // Surgical save: read devices/configuration.json from disk and
       // replace only the `vendorScreenData` keys this screen owns
@@ -902,7 +947,7 @@ export async function executeSaveFile(
       // serialised owned slice so the screen definition isn't needed
       // here.
       const res = await saveVendorScreenOnly(projectPath, projectPort, state, fileName)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'library-manifest') {
       // Single-file save for the manifest tab: write the in-store
       // content (`project.data.libraryManifest`) to `library.json`.
@@ -911,7 +956,7 @@ export async function executeSaveFile(
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'library.json'), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     } else if (file.type === 'data-type') {
       const spec = specs[0]
       if (!spec) {
@@ -937,11 +982,11 @@ export async function executeSaveFile(
         // Report every file that landed, even on a failure: the version-control
         // slice's `changedPaths` would otherwise still list them as dirty.
         recordedSpecs = migration.written
-        if (!migration.success) return failedWrite(migration.error ?? 'Save failed')
+        if (!migration.success) return failedWrite(migration)
         state.projectActions.setDataTypesNeedMigration(false)
       } else {
         const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
-        if (!res.success) return failedWrite(res.error ?? 'Save failed')
+        if (!res.success) return failedWrite(res)
       }
     } else {
       // resource: lives in project.json (legacy whole-file write) —
@@ -950,7 +995,7 @@ export async function executeSaveFile(
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'project.json'), spec.content)
-      if (!res.success) return failedWrite(res.error ?? 'Save failed')
+      if (!res.success) return failedWrite(res)
     }
 
     // Tell the version-control slice exactly which paths/content were just

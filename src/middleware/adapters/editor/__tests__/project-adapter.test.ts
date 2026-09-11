@@ -1,3 +1,4 @@
+import type { EdgeAccountPort, EdgeUserRead } from '../../../shared/ports/edge-account-port'
 import type { ProjectPort } from '../../../shared/ports/project-port'
 import {
   createEditorProjectAdapter,
@@ -113,6 +114,7 @@ const mockRawProjectFiles = {
       compileOnly: false,
     }),
     pinMapping: JSON.stringify([{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }]),
+    libraryManifest: '',
     pouFiles: [
       {
         relativePath: 'pous/programs/main.st',
@@ -159,9 +161,36 @@ beforeEach(() => {
     edgeProjectsRead: jest.fn().mockResolvedValue(mockRawProjectFiles),
     edgeProjectsSaveProject: jest.fn().mockResolvedValue({ success: true }),
     edgeProjectsSaveFile: jest.fn().mockResolvedValue({ success: true }),
+    // What a failed cloud write asks. `unknown` leaves the adapter's session state alone.
+    edgeAccountFetchUser: jest.fn().mockResolvedValue({ status: 'unknown' }),
     exportPdfFile: jest.fn().mockResolvedValue({ success: true }),
   } as unknown as typeof window.bridge
 })
+
+/** An account port that answers one fixed read; everything else is out of bounds here. */
+function accountAnswering(read: EdgeUserRead): EdgeAccountPort {
+  const unreachable = () => {
+    throw new Error('the project adapter must not call this')
+  }
+  return {
+    frontendBaseUrl: 'https://edge.test',
+    oauthProviders: [],
+    oauthUrl: unreachable,
+    fetchUser: () => Promise.resolve(read),
+    fetchPlanCaption: unreachable,
+    signIn: unreachable,
+    signOut: unreachable,
+    session: {
+      isExpired: () => false,
+      isAbsent: () => false,
+      onExpired: () => () => undefined,
+      onRestored: () => () => undefined,
+      markRestored: () => undefined,
+    },
+  }
+}
+
+const UNREADABLE_DESCRIPTION = 'The project files arrived in a shape this build of the editor cannot read.'
 
 describe('createEditorProjectAdapter', () => {
   let adapter: ProjectPort
@@ -421,6 +450,56 @@ describe('createEditorProjectAdapter', () => {
       expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/home/user/projects/my-project')
       expect(result.success).toBe(true)
       expect(result.data?.projectPath).toBe('/home/user/projects/my-project')
+    })
+  })
+
+  /**
+   * The bridge type is a description of what the main process is meant to send, and it
+   * checks nothing once a value has crossed IPC. An answer from a skewed main bundle used
+   * to be read straight through into the parser.
+   */
+  describe('raw project files this build cannot read', () => {
+    const unreadable = { success: true, data: { ...mockRawProjectFiles.data, pouFiles: 'not a list' } }
+
+    it('are refused by readProjectFiles', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue(null)
+
+      await expect(adapter.readProjectFiles('/p')).resolves.toEqual({
+        success: false,
+        error: { title: 'Failed to open project', description: UNREADABLE_DESCRIPTION },
+      })
+    })
+
+    it('are refused by openProject', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue(unreadable)
+
+      const result = await adapter.openProject()
+
+      expect(result.success).toBe(false)
+      expect(result.error?.description).toBe(UNREADABLE_DESCRIPTION)
+    })
+
+    it('are refused by openProjectByPath, from disk and from the cloud alike', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue(unreadable)
+      ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValue(unreadable)
+
+      const local = await adapter.openProjectByPath('/p')
+      const cloud = await adapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(local).toMatchObject({ success: false, error: { description: UNREADABLE_DESCRIPTION } })
+      expect(cloud).toMatchObject({ success: false, error: { description: UNREADABLE_DESCRIPTION } })
+    })
+
+    it('still carries the optional fields a cloud read answers with', async () => {
+      ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValue({
+        success: true,
+        data: { ...mockRawProjectFiles.data, canEdit: false, rawLoadedFiles: { 'project.json': '{}' } },
+      })
+
+      const result = await adapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(result.data?.canEdit).toBe(false)
+      expect(result.data?.rawLoadedFiles).toEqual({ 'project.json': '{}' })
     })
   })
 
@@ -1128,7 +1207,7 @@ describe('cloud projects', () => {
 
       await expect(
         cloudAdapter.saveProject({ projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never),
-      ).resolves.toEqual({ success: false, error: 'channel is gone' })
+      ).resolves.toEqual({ success: false, error: 'channel is gone', reason: 'unreachable' })
     })
 
     it('resolves the single-file save as a failure too', async () => {
@@ -1137,6 +1216,81 @@ describe('cloud projects', () => {
       await expect(cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x;')).resolves.toEqual({
         success: false,
         error: 'channel is gone',
+        reason: 'unreachable',
+      })
+    })
+  })
+
+  it('cannot publish through a bridge that predates the upload channel', async () => {
+    Object.assign(window.bridge, { edgeUploadProject: undefined })
+
+    await expect(
+      cloudAdapter.uploadProjectToCloud?.({
+        projectPath: '/Users/ada/projects/mine',
+        parentFolderId: 'f1',
+        visibility: 'private',
+      }),
+    ).resolves.toEqual({
+      status: 'failed',
+      failure: { reason: 'unreadable', message: 'This build of the editor cannot publish to Autonomy Edge.' },
+    })
+  })
+
+  /**
+   * The main process reports a failed write as text only, and the save flow needs to know
+   * whether a session still exists: queue the save for sign-in, or keep the work locally.
+   * Asking the account is what answers it.
+   */
+  describe('why a cloud write failed', () => {
+    const files = { projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never
+    const failed = { success: false, error: 'Not signed in to Autonomy Edge.' }
+
+    it('is signed-out when the account has no session, for a project and a file alike', async () => {
+      const signedOut = createEditorProjectAdapter(accountAnswering({ status: 'no-session' }))
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValueOnce(failed)
+      ;(window.bridge.edgeProjectsSaveFile as jest.Mock).mockResolvedValueOnce(failed)
+
+      await expect(signedOut.saveProject(files)).resolves.toEqual({ ...failed, reason: 'signed-out' })
+      await expect(signedOut.saveFile('cmt7n5ke2077o07jofjr3dgr0/project.json', '{}')).resolves.toEqual({
+        ...failed,
+        reason: 'signed-out',
+      })
+    })
+
+    it('is unreachable when the session could not be checked or is fine', async () => {
+      const offline = createEditorProjectAdapter(accountAnswering({ status: 'unknown' }))
+      const signedIn = createEditorProjectAdapter(
+        accountAnswering({
+          status: 'signed-in',
+          user: { id: 'u1', name: 'Ada', email: 'ada@example.com', username: 'ada' },
+        }),
+      )
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValue({
+        success: false,
+        error: 'Autonomy Edge answered 503.',
+      })
+
+      await expect(offline.saveProject(files)).resolves.toMatchObject({ reason: 'unreachable' })
+      await expect(signedIn.saveProject(files)).resolves.toMatchObject({ reason: 'unreachable' })
+    })
+
+    it('is never asked for a write that succeeded', async () => {
+      const account = accountAnswering({ status: 'no-session' })
+      const fetchUser = jest.spyOn(account, 'fetchUser')
+
+      await expect(createEditorProjectAdapter(account).saveProject(files)).resolves.toEqual({ success: true })
+      expect(fetchUser).not.toHaveBeenCalled()
+    })
+
+    it('treats an answer the renderer cannot read as a failed write', async () => {
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValueOnce(null)
+
+      await expect(
+        createEditorProjectAdapter(accountAnswering({ status: 'unknown' })).saveProject(files),
+      ).resolves.toEqual({
+        success: false,
+        error: 'Autonomy Edge answered in a way this build cannot read.',
+        reason: 'unreachable',
       })
     })
   })

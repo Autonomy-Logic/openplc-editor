@@ -183,6 +183,19 @@ export const WriteProjectFilesSchema = z.object({
   deletions: z.array(z.string()),
 }) satisfies z.ZodType<WriteProjectFiles>
 
+/**
+ * Why a write did not land, when the platform can tell. `signed-out` is a session the
+ * server refused (401/403 or none at all); `unreachable` is a server that never answered
+ * or answered 5xx. Absent when the failure is neither — a bad request, a full disk.
+ */
+export type SaveFailureReason = 'signed-out' | 'unreachable'
+
+export interface SaveResult {
+  success: boolean
+  error?: string
+  reason?: SaveFailureReason
+}
+
 export interface CreatePouParams {
   name: string
   pouType: PouType
@@ -434,14 +447,14 @@ export interface ProjectPort {
   openProjectByPath(projectPath: string): Promise<ProjectResponse>
 
   /** Save the entire project. All files are pre-serialized by the frontend. */
-  saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }>
+  saveProject(files: WriteProjectFiles): Promise<SaveResult>
 
   /**
    * Save a single file within the project.
    * Editor: writes to disk.
    * Web: updates in-memory state and/or syncs to backend.
    */
-  saveFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }>
+  saveFile(filePath: string, content: unknown): Promise<SaveResult>
 
   /** Create a new POU file. */
   createPou(params: CreatePouParams): Promise<{ success: boolean; data?: unknown; error?: string }>

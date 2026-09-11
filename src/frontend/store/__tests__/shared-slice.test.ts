@@ -2757,6 +2757,20 @@ describe('createSharedSlice', () => {
         expect(errors.some((log) => log.message.includes('read-only'))).toBe(true)
       })
 
+      // The bytes as loaded are what the save flow echoes back for files the user did
+      // not touch. A project on disk has none, which must clear the previous project's.
+      it('stashes the raw loaded files for the save flow, and clears them on a reopen without any', () => {
+        const rawLoadedFiles = { 'project.json': '{"meta":{}}', 'pous/programs/main.st': 'PROGRAM main\nEND_PROGRAM' }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
+          ...makeMinimalProjectResponse(),
+          rawLoadedFiles,
+        })
+        expect(store.getState().versionControl.rawLoadedContent).toEqual(rawLoadedFiles)
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(makeMinimalProjectResponse())
+        expect(store.getState().versionControl.rawLoadedContent).toEqual({})
+      })
+
       it('still opens normally when the failure is only a recoverable warning', () => {
         const data = { ...makeMinimalProjectResponse(), warnings: ['POU "main" could not be fully parsed'] }
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)

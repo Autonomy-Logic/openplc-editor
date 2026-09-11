@@ -55,6 +55,21 @@ describe('createVersionControlSlice', () => {
     })
   })
 
+  describe('setRawLoadedContent', () => {
+    it('stores a copy of the loaded bytes', () => {
+      const loaded = { 'project.json': '{}', 'pous/programs/Main.st': 'PROGRAM Main\nEND_PROGRAM' }
+      actions().setRawLoadedContent(loaded)
+      expect(vc().rawLoadedContent).toEqual(loaded)
+      expect(vc().rawLoadedContent).not.toBe(loaded)
+    })
+
+    it('replaces the map wholesale, so a reopen never inherits the previous project', () => {
+      actions().setRawLoadedContent({ 'a.st': 'old' })
+      actions().setRawLoadedContent({})
+      expect(vc().rawLoadedContent).toEqual({})
+    })
+  })
+
   describe('mergeHeadContent', () => {
     it('creates the snapshot from null', () => {
       actions().mergeHeadContent({ 'a.st': 'head-a' })
