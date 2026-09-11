@@ -399,3 +399,116 @@ describe('collectProjectContext', () => {
     expect(result).not.toContain('(* ... *)')
   })
 })
+
+// -- non-IEC dialects ---------------------------------------------------------
+
+/**
+ * A Python or C++ POU gets the whole project described in its own comment
+ * syntax. Emitting IEC syntax there would put `VAR_INPUT` blocks and
+ * `TYPE … END_TYPE` declarations into a Python prompt, which the model reads as
+ * code and continues in the wrong language.
+ */
+describe('collectProjectContext in Python and C++', () => {
+  const variables = [
+    { name: 'a', class: 'input', type: { value: 'INT' } },
+    { name: 'b', class: 'output', type: { value: 'BOOL' } },
+    { name: 'c', class: 'inOut', type: { value: 'REAL' } },
+    { name: 'd', class: 'external', type: { value: 'DINT' } },
+    { name: 'e', class: 'temp', type: { value: 'STRING' } },
+    { name: 'f', class: 'local', type: { value: 'TIME' } },
+    { name: 'g', type: { value: 'WORD' } },
+  ]
+
+  const dataTypes = [
+    { name: 'Mode', derivation: 'enumerated', values: [{ description: 'IDLE' }, { description: 'RUN' }] },
+    { name: 'Motor', derivation: 'structure', variable: [{ name: 'speed', type: { value: 'INT' } }] },
+    {
+      name: 'Grid',
+      derivation: 'array',
+      baseType: { value: 'REAL' },
+      dimensions: [{ dimension: '0..9' }],
+    },
+    { name: 'Odd', derivation: 'unknown-derivation' },
+  ]
+
+  function projectState() {
+    return makeState({
+      pous: [
+        { name: 'Main', pouType: 'program', interface: { variables }, body: { language: 'python', value: 'x = 1' } },
+        {
+          name: 'Helper',
+          pouType: 'function',
+          interface: { variables: [] },
+          body: { language: 'python', value: 'y = 2' },
+        },
+      ],
+      dataTypes,
+      globalVariables: [{ name: 'flag', type: { value: 'BOOL' } }],
+    })
+  }
+
+  it('groups Python variables by section as type-hinted comments', () => {
+    const result = collectProjectContext(projectState(), 'Main', 5000, 'python')
+
+    expect(result).toContain('# Current POU: Main [program]')
+    expect(result).toContain('# Inputs:\n#   a: INT')
+    expect(result).toContain('# Outputs:\n#   b: BOOL')
+    expect(result).toContain('# In/Out:\n#   c: REAL')
+    expect(result).toContain('# External:\n#   d: DINT')
+    expect(result).toContain('# Temp:\n#   e: STRING')
+    // A declared local and one with no class share the Local section.
+    expect(result).toContain('# Local:\n#   f: TIME\n#   g: WORD')
+    expect(result).not.toContain('VAR_INPUT')
+  })
+
+  it('renders Python globals and every data type derivation as comments', () => {
+    const result = collectProjectContext(projectState(), 'Main', 5000, 'python')
+
+    expect(result).toContain('# flag: BOOL')
+    expect(result).toContain('# Enum Mode: IDLE, RUN')
+    expect(result).toContain('# Struct Motor: { speed: INT }')
+    expect(result).toContain('# Array Grid: REAL[0..9]')
+    // A derivation this build does not know is dropped, not rendered blank.
+    expect(result).not.toContain('Odd')
+  })
+
+  it('groups C++ variables by section as comments', () => {
+    const result = collectProjectContext(projectState(), 'Main', 5000, 'cpp')
+
+    expect(result).toContain('// Current POU: Main [program]')
+    expect(result).toContain('// Inputs:\n//   a: INT')
+    expect(result).toContain('// Local:\n//   f: TIME\n//   g: WORD')
+    expect(result).not.toContain('VAR_INPUT')
+  })
+
+  it('renders C++ globals and every data type derivation as comments', () => {
+    const result = collectProjectContext(projectState(), 'Main', 5000, 'cpp')
+
+    expect(result).toContain('// flag: BOOL')
+    expect(result).toContain('// Enum Mode: IDLE, RUN')
+    expect(result).toContain('// Struct Motor: { speed: INT }')
+    expect(result).toContain('// Array Grid: REAL[0..9]')
+    expect(result).not.toContain('Odd')
+  })
+
+  it.each([
+    ['python', '# ...'],
+    ['cpp', '// ...'],
+  ] as const)('truncates a long sibling body with a %s comment marker', (language, marker) => {
+    // The marker has to be a comment in the target language; an IEC `(* ... *)`
+    // in a Python prompt is a syntax error the model may copy.
+    const state = makeState({
+      pous: [
+        { name: 'Main', pouType: 'program', interface: { variables: [] }, body: { language, value: '' } },
+        {
+          name: 'Long',
+          pouType: 'function',
+          interface: { variables: [] },
+          body: { language, value: 'z = 1\n'.repeat(100) },
+        },
+      ],
+    })
+
+    expect(collectProjectContext(state, 'Main', 5000, language)).toContain(marker)
+  })
+})

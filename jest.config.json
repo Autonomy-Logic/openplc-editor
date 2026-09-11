@@ -39,6 +39,7 @@
     "src/frontend/utils/**/*.ts",
     "src/backend/shared/**/*.ts",
     "src/middleware/adapters/editor/**/*.ts",
+    "src/frontend/services/ai/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/**/*.{test,spec}.{ts,tsx}",
@@ -73,6 +74,12 @@
       "functions": 87,
       "lines": 85,
       "statements": 85
+    },
+    "src/frontend/services/ai/": {
+      "branches": 0,
+      "functions": 97,
+      "lines": 98,
+      "statements": 97
     }
   }
 }
