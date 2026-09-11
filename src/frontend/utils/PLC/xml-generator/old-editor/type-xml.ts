@@ -1,6 +1,7 @@
 import { PLCVariable } from '@root/middleware/shared/ports/open-plc-types'
 
-import { baseTypeTag } from '../base-type-tag'
+import { isGenericType } from '../../generic-types'
+import { baseTypeElementBody, baseTypeTag } from '../base-type-tag'
 
 type VariableType = PLCVariable['type']
 
@@ -24,10 +25,18 @@ export const convertTypeToXml = (type: VariableType): Record<string, unknown> =>
         }),
         baseType: {
           [baseTypeKey]:
-            type.data!.baseType.definition === 'user-data-type' ? { '@name': type.data!.baseType.value } : '',
+            type.data!.baseType.definition === 'user-data-type'
+              ? { '@name': type.data!.baseType.value }
+              : baseTypeElementBody(type.data!.baseType.value),
         },
       },
     }
+  }
+
+  // A generic has an element of its own in the schema's elementaryTypes group.
+  // `<derived name="ANY"/>` would name a user-defined type called ANY instead.
+  if (isGenericType(type.value)) {
+    return { [type.value.trim().toUpperCase()]: '' }
   }
 
   if (type.definition === 'derived' || type.definition === 'user-data-type') {
@@ -38,8 +47,9 @@ export const convertTypeToXml = (type: VariableType): Record<string, unknown> =>
     }
   }
 
-  // base-type
+  // base-type. A declared string length rides on the element as TC6's `length`
+  // attribute — `<string length="23"/>` — so it survives a save/load round trip.
   return {
-    [baseTypeTag(type.value)]: '',
+    [baseTypeTag(type.value)]: baseTypeElementBody(type.value),
   }
 }

@@ -92,6 +92,15 @@ export interface GenerateDefinesInput {
    *  console on a microcontroller to report it, so the check has to happen at
    *  build time or not at all. */
   retainBlobSize?: number
+
+  /** Headers for the libraries a resource library declares in `depends=`.
+   *
+   *  A resource library's sources are precompiled into an archive and moved
+   *  aside before the sketch is linked, so arduino-cli's include scan never
+   *  sees what they need. Naming those libraries here puts an `#include` where
+   *  the scan does reach, which is what makes arduino-cli build them. Without
+   *  it the archive compiles and then fails to link. */
+  resourceLibraryDepends?: readonly string[]
 }
 
 /**
@@ -123,6 +132,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     vppModbusState,
     defaultSerial,
     retainBlobSize,
+    resourceLibraryDepends,
   } = input
 
   let DEFINES_CONTENT = ''
@@ -312,6 +322,17 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   if (retainBlobSize !== undefined && retainBlobSize > 0) {
     DEFINES_CONTENT += '\n//Retain\n'
     DEFINES_CONTENT += `#define OPLC_RETAIN_BLOB_SIZE ${retainBlobSize}\n`
+  }
+
+  // 7. Libraries the installed libraries depend on. The sketch includes this
+  //    header, so an include here is one arduino-cli's scan can follow — see
+  //    `resourceLibraryDepends`.
+  const depends = [...new Set(resourceLibraryDepends ?? [])].sort()
+  if (depends.length > 0) {
+    DEFINES_CONTENT += '\n//Libraries the installed libraries need\n'
+    for (const name of depends) {
+      DEFINES_CONTENT += `#include <${name}>\n`
+    }
   }
 
   return DEFINES_CONTENT

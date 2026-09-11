@@ -37,11 +37,11 @@ const enumRegex = /^(?<name>\w+)\s*:\s*\((?<values>[^)]*)\)\s*(?::=\s*(?<initial
 
 // Name : ARRAY [d1, d2] OF Base := Initial ;
 const arrayRegex =
-  /^(?<name>\w+)\s*:\s*(?<type>ARRAY\s*\[[^\]]+\]\s+OF\s+[A-Za-z_][\w.]*)\s*(?::=\s*(?<initial>[^;]+?))?\s*;$/i
+  /^(?<name>\w+)\s*:\s*(?<type>ARRAY\s*\[[^\]]+\]\s+OF\s+[A-Za-z_][\w.]*(?:\s*[([]\s*\d+\s*[)\]])?)\s*(?::=\s*(?<initial>[^;]+?))?\s*;$/i
 
 // FieldName : Type := Initial ; (* documentation *)
 const fieldRegex =
-  /^(?<name>\w+)\s*:\s*(?<type>[\w\s[\],.]+?)\s*(?::=\s*(?<initial>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^(?<name>\w+)\s*:\s*(?<type>[\w\s[\](),.]+?)\s*(?::=\s*(?<initial>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'

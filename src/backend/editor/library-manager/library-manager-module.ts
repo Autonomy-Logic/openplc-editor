@@ -1,10 +1,16 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { basename, extname, join } from 'path'
+import { basename, dirname, extname, join } from 'path'
 
 import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
-import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
+import type {
+  EnabledArchives,
+  InstalledLibrary,
+  LibraryInstallResult,
+  LibraryRef,
+  VersionSubstitution,
+} from '../../../middleware/shared/ports/library-types'
 import type { PublicLibrary } from '../../../middleware/shared/ports/public-catalog-types'
 import { bundledArchiveToInstalledRow, userArchiveToInstalledRow } from '../../shared/library/installed-library-rows'
 import {
@@ -16,6 +22,13 @@ import { downloadPublicLibrary } from '../../shared/library/public-catalog-clien
 import { validatePathId } from '../../shared/utils/path-safety'
 import { assertPathContained } from '../utils/path-containment'
 import { createDesktopCatalogTransport } from './desktop-catalog-transport'
+import {
+  migrateRegistry,
+  REGISTRY_FORMAT_VERSION,
+  resolveVersion,
+  versionDirName,
+  versionsNewestFirst,
+} from './registry-versions'
 import type { LibraryRegistry } from './types'
 
 /**
@@ -168,16 +181,27 @@ export class LibraryManagerModule {
     const registry = this.readRegistry()
     const userEntries = Object.entries(registry.libraries).sort(([a], [b]) => a.localeCompare(b))
     for (const [name, info] of userEntries) {
-      const archive = this.readUserArchive(name, info.stlibPath)
-      if (!archive) continue
-      out.push(
-        userArchiveToInstalledRow(archive, {
-          name,
-          version: info.version,
-          installedAt: info.installedAt,
-          origin: info.origin,
-        }),
+      // One row per library, not per version: the row names the newest and
+      // lists the rest, so the manager can offer them without duplicate rows.
+      // Only versions whose archive is actually readable are listed -- and a
+      // missing newest must not hide the ones that are still here.
+      const readable = versionsNewestFirst(info.versions).filter(
+        (version) => this.readUserArchive(name, info.versions[version].stlibPath) !== null,
       )
+      const newest = readable[0]
+      if (!newest) continue
+      const entry = info.versions[newest]
+      const archive = this.readUserArchive(name, entry.stlibPath)
+      if (!archive) continue
+      out.push({
+        ...userArchiveToInstalledRow(archive, {
+          name,
+          version: newest,
+          installedAt: entry.installedAt,
+          origin: entry.origin,
+        }),
+        versions: readable,
+      })
     }
     return out
   }
@@ -196,25 +220,33 @@ export class LibraryManagerModule {
    * surface a single "install or remove" error before strucpp runs,
    * instead of strucpp's per-symbol "function not found" cascade.
    */
-  loadEnabledArchives(enabledNames: string[]): { archives: StlibArchiveDTO[]; missing: string[] } {
+  loadEnabledArchives(refs: ReadonlyArray<LibraryRef>): EnabledArchives<StlibArchiveDTO> {
     const archives: StlibArchiveDTO[] = []
     for (const archive of this.readBundledArchives()) archives.push(archive)
     const registry = this.readRegistry()
     const missing: string[] = []
-    for (const name of enabledNames) {
-      const entry = registry.libraries[name]
-      if (!entry) {
-        missing.push(name)
+    const substituted: VersionSubstitution[] = []
+    for (const ref of refs) {
+      const installed = registry.libraries[ref.name]
+      const resolved = installed ? resolveVersion(installed.versions, ref.version) : null
+      if (!resolved) {
+        missing.push(ref.name)
         continue
       }
-      const archive = this.readUserArchive(name, entry.stlibPath)
+      const archive = this.readUserArchive(ref.name, resolved.entry.stlibPath)
       if (!archive) {
-        missing.push(name)
+        missing.push(ref.name)
         continue
+      }
+      // Reported rather than fatal: refusing to build a project whose pinned
+      // version is not on this machine would strand it, and the substitution
+      // is exactly what the caller needs to tell the user about.
+      if (resolved.substituted && ref.version) {
+        substituted.push({ name: ref.name, wanted: ref.version, used: resolved.version })
       }
       archives.push(archive)
     }
-    return { archives, missing }
+    return { archives, missing, substituted }
   }
 
   /**
@@ -230,12 +262,14 @@ export class LibraryManagerModule {
    * User-installed wins over bundled, matching `loadAll`'s precedence: a
    * library someone installed deliberately is the one the project means.
    */
-  readArchiveText(name: string): string | null {
-    const entry = this.readRegistry().libraries[name]
-    if (entry) {
+  readArchiveText(name: string, version?: string): string | null {
+    const installed = this.readRegistry().libraries[name]
+    const resolved = installed ? resolveVersion(installed.versions, version) : null
+    if (resolved) {
+      const { stlibPath } = resolved.entry
       try {
-        assertPathContained(this.librariesDir, entry.stlibPath, `library[${name}].stlibPath`)
-        if (existsSync(entry.stlibPath)) return readFileSync(entry.stlibPath, 'utf-8')
+        assertPathContained(this.librariesDir, stlibPath, `library[${name}].stlibPath`)
+        if (existsSync(stlibPath)) return readFileSync(stlibPath, 'utf-8')
       } catch {
         // Fall through to the bundled copy. A registry entry pointing outside
         // the libraries directory is exactly what that guard exists to stop.
@@ -267,8 +301,13 @@ export class LibraryManagerModule {
     const registry = this.readRegistry()
     const userEntries = Object.entries(registry.libraries).sort(([a], [b]) => a.localeCompare(b))
     for (const [name, info] of userEntries) {
-      const archive = this.readUserArchive(name, info.stlibPath)
-      if (archive) out.push(archive)
+      // Every installed version, newest first. The renderer narrows this to
+      // the one the open project pins; the pool itself carries them all so
+      // that choice can be made without another round trip.
+      for (const version of versionsNewestFirst(info.versions)) {
+        const archive = this.readUserArchive(name, info.versions[version].stlibPath)
+        if (archive) out.push(archive)
+      }
     }
     return out
   }
@@ -358,7 +397,7 @@ export class LibraryManagerModule {
    * — those are always-on (the caller should disable them at the
    * project level instead).
    */
-  uninstall(name: string): { success: boolean; error?: string } {
+  uninstall(name: string, version?: string): { success: boolean; error?: string } {
     try {
       validatePathId(name, 'name')
       if (this.isBundled(name)) {
@@ -366,13 +405,41 @@ export class LibraryManagerModule {
       }
 
       const registry = this.readRegistry()
-      const entry = registry.libraries[name]
-      if (!entry) {
+      const installed = registry.libraries[name]
+      if (!installed) {
         return { success: false, error: `Library '${name}' is not installed` }
       }
 
       const libraryDir = join(this.librariesDir, name)
       assertPathContained(this.librariesDir, libraryDir, 'library install path')
+
+      // One version, or the whole library when none is named.
+      if (version !== undefined) {
+        const entry = installed.versions[version]
+        if (!entry) {
+          return { success: false, error: `Library '${name}' version ${version} is not installed` }
+        }
+        // The folder comes from the entry, never from the version string.
+        // `persistPrepared` sanitises a version into a folder name, so a
+        // version legally installed as `1.0.0+sha.abc` does not name its own
+        // directory and cannot be validated as a path id.
+        const entryDir = dirname(entry.stlibPath)
+        // A version migrated from the old layout keeps its archive directly in
+        // the library folder, shared with its siblings — remove just the archive.
+        const target = entryDir === libraryDir ? entry.stlibPath : entryDir
+        assertPathContained(this.librariesDir, target, 'library install path')
+        if (existsSync(target)) rmSync(target, { recursive: true })
+        delete installed.versions[version]
+        if (Object.keys(installed.versions).length === 0) {
+          delete registry.libraries[name]
+          // Last version gone: take the library folder with it rather than
+          // leaving an empty directory behind.
+          if (existsSync(libraryDir)) rmSync(libraryDir, { recursive: true })
+        }
+        this.writeRegistry(registry)
+        return { success: true }
+      }
+
       if (existsSync(libraryDir)) {
         rmSync(libraryDir, { recursive: true })
       }
@@ -455,15 +522,26 @@ export class LibraryManagerModule {
       }
     }
 
-    const libraryDir = join(this.librariesDir, prepared.name)
-    assertPathContained(this.librariesDir, libraryDir, 'library install path')
-    mkdirSync(libraryDir, { recursive: true })
-    const stlibPath = join(libraryDir, `${prepared.name}.stlib`)
+    const registry = this.readRegistry()
+    // Versions live side by side; installing one leaves the others alone, and
+    // re-installing the same one replaces only itself -- so it keeps the folder
+    // it already has rather than being given a fresh one.
+    const installed = (registry.libraries[prepared.name] ??= { versions: {} })
+    const existing = installed.versions[prepared.version]
+    const folder = existing
+      ? basename(dirname(existing.stlibPath))
+      : versionDirName(
+          prepared.version,
+          Object.values(installed.versions).map((entry) => basename(dirname(entry.stlibPath))),
+        )
+
+    const versionDir = join(this.librariesDir, prepared.name, folder)
+    assertPathContained(this.librariesDir, versionDir, 'library install path')
+    mkdirSync(versionDir, { recursive: true })
+    const stlibPath = join(versionDir, `${prepared.name}.stlib`)
     writeFileSync(stlibPath, prepared.archive, 'utf-8')
 
-    const registry = this.readRegistry()
-    registry.libraries[prepared.name] = {
-      version: prepared.version,
+    installed.versions[prepared.version] = {
       installedAt: new Date().toISOString(),
       stlibPath,
       origin: prepared.origin,
@@ -552,14 +630,15 @@ export class LibraryManagerModule {
     return raw as StlibArchiveDTO
   }
 
+  /** Always returned in the current format; a v1 file is migrated on read. */
   private readRegistry(): LibraryRegistry {
     if (!existsSync(this.registryPath)) {
-      return { formatVersion: '1.0', libraries: {} }
+      return { formatVersion: REGISTRY_FORMAT_VERSION, libraries: {} }
     }
     try {
-      return JSON.parse(readFileSync(this.registryPath, 'utf-8')) as LibraryRegistry
+      return migrateRegistry(JSON.parse(readFileSync(this.registryPath, 'utf-8')))
     } catch {
-      return { formatVersion: '1.0', libraries: {} }
+      return { formatVersion: REGISTRY_FORMAT_VERSION, libraries: {} }
     }
   }
 

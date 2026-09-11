@@ -18,9 +18,11 @@
  */
 
 import { HardwareModule } from '@root/backend/editor/hardware'
+import { LibraryManagerModule } from '@root/backend/editor/library-manager'
 import { ProjectService } from '@root/backend/editor/services'
 import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
 import { openPLCStoreBase } from '@root/frontend/store'
+import { stlibsToSystemLibraries } from '@root/frontend/utils/stlib-to-system-library'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
 export interface LoadedProject {
@@ -38,6 +40,32 @@ export interface LoadedProject {
 }
 
 export type LoadProjectResult = { success: true; project: LoadedProject } | { success: false; error: string }
+
+/**
+ * Load the installed libraries into the store, returning any warning rather
+ * than throwing: a project that references no library still compiles, so a
+ * damaged library store must not stop the build.
+ *
+ * Two reads, as the renderer does: `loadAll` carries the POU lists the pool is
+ * built from, `listInstalled` carries the bundled flag the archive shape has no
+ * room for.
+ */
+function hydrateLibraries(): string[] {
+  try {
+    const libraries = new LibraryManagerModule()
+    const actions = openPLCStoreBase.getState().libraryActions
+    actions.setSystemLibraries(stlibsToSystemLibraries(libraries.loadAll()))
+    actions.setBundledLibraryNames(
+      libraries
+        .listInstalled()
+        .filter((library) => library.bundled)
+        .map((library) => library.name),
+    )
+    return []
+  } catch (err) {
+    return [`warning: could not read the installed libraries: ${err instanceof Error ? err.message : String(err)}`]
+  }
+}
 
 export async function loadProject(projectPath: string): Promise<LoadProjectResult> {
   // The main process's own reader, so the CLI sees exactly the file set the
@@ -72,6 +100,13 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
     .getState()
     .deviceActions.setAvailableOptions({ availableBoards: await new HardwareModule().getAvailableBoards() })
 
+  // The library pool, before `handleOpenProjectResponse`: that action reads
+  // `libraries.system` and restamps every placed block against it in the same
+  // call, so hydrating afterwards leaves the restamp with an empty pool and the
+  // project's missing/outdated lists empty. Mirrors `hydrateLibraries` in
+  // App.tsx, which is the renderer's equivalent.
+  const libraryWarnings = hydrateLibraries()
+
   // The SHARED singleton, not a private instance. Everything the editor's own
   // resolvers read comes off it — `buildDeviceResolverContext` reads the device
   // configuration and runtime connection from `useOpenPLCStore.getState()`, and
@@ -92,7 +127,7 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
       board: state.deviceDefinitions.configuration.deviceBoard,
       vendorScreenData: state.deviceDefinitions.configuration.vendorScreenData,
       communicationPort: state.deviceDefinitions.configuration.communicationPort,
-      warnings: parsed.warnings ?? [],
+      warnings: [...libraryWarnings, ...(parsed.warnings ?? [])],
     },
   }
 }

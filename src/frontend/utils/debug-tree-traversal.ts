@@ -16,6 +16,7 @@ import {
   findDebugVariableForField,
 } from './debug-variable-finder'
 import {
+  findArrayDataType,
   findFunctionBlockExternalVariables,
   findFunctionBlockVariables,
   findStructureVariables,
@@ -269,6 +270,14 @@ function traverseNestedNode<T>(
 
     return visitor.visitComplex(name, fullPath, compositeKey, typeName, children)
   } else if (typeDefinition === 'user-data-type') {
+    // An array data type (`TYPE A_PROFILE : ARRAY [0..7] OF REAL`) is a user
+    // data type by name and an array by shape, and STruC++ emits its elements
+    // as `NAME[i]` like any other array. Without this it collapses to one leaf.
+    const arrayDataType = findArrayDataType(typeName, dataTypes)
+    if (arrayDataType) {
+      return traverseNestedNode(name, fullPath, compositeKey, typeName, 'array', context, visitor, arrayDataType)
+    }
+
     // Structure type — STruC++ emits struct fields as `PARENT.FIELD`
     // (same convention as FB fields), no `.value.` shim.
     const structVariables = findStructureVariables(typeName, dataTypes)

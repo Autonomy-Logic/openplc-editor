@@ -77,6 +77,15 @@ export interface ExportXmlArgs {
 export interface CompileLibraryArgs {
   projectData: PLCProjectData
   projectPath: string
+  /**
+   * Skip the verification-result cache for this run.  The cache normally
+   * short-circuits the verification compile when nothing it was keyed on has
+   * changed since the last run; `cleanBuild: true` forces a fresh one.
+   *
+   * Pure UX gate — the artefact build itself is always fresh; only the
+   * verification step is cached.
+   */
+  cleanBuild?: boolean
 }
 
 export interface CompilerPort {
@@ -115,10 +124,11 @@ export interface CompilerPort {
    * `projectCapabilities(meta).hasLibraryBuild`.
    *
    * Returns the artefact path on success, or an error string the
-   * console renders directly.  The build is target-neutral: it runs
-   * strucpp and nothing else, so a library that could never link on
-   * one particular board still produces a valid archive.  Executing
-   * the library is a separate action — see `composeLibraryDebugHarness`.
+   * console renders directly.  A verification compile against the target the
+   * manifest names runs alongside it and reports through `verification`;
+   * failing it never fails the build, because the archive carries source and
+   * the consumer compiles it for its own board.  Executing the library is a
+   * separate action — see `composeLibraryDebugHarness`.
    */
   compileLibrary?(
     args: CompileLibraryArgs,

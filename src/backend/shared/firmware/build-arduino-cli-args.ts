@@ -39,6 +39,12 @@ export interface BuildArduinoCliCompileArgsOptions {
    */
   prebuiltLibraryPath?: string
   /**
+   * Further `--library` directories, one per library materialised from an
+   * enabled `.stlib`.  Each carries a `library.properties`, so arduino-cli
+   * reads it as 1.5-format and compiles the sources under its `src/`.
+   */
+  resourceLibraryPaths?: readonly string[]
+  /**
    * Filesystem path to the avr-libstdcpp include directory.  Appended
    * as `-I<path>` onto `compiler.cpp.extra_flags` when the board's
    * `core` starts with `arduino:avr`.  Required there because the AVR
@@ -104,6 +110,9 @@ export function buildArduinoCliCompileArgs(
   args.push('--library', options.libraryPath)
   if (options.prebuiltLibraryPath) {
     args.push('--library', options.prebuiltLibraryPath)
+  }
+  for (const resourceLibrary of options.resourceLibraryPaths ?? []) {
+    args.push('--library', resourceLibrary)
   }
   args.push('--export-binaries', '-b', entry.platform, options.sketchPath)
 

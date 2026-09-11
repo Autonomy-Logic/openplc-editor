@@ -203,8 +203,8 @@ const rendererProcessBridge = {
     | { success: true; canceled: true }
     | { success: false; error: string }
   > => ipcRenderer.invoke('libraries:install-from-file'),
-  uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('libraries:uninstall', name),
+  uninstallLibrary: (name: string, version?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('libraries:uninstall', name, version),
   // ----- Public-library catalog (autonomy-edge) -----
   queryPublicCatalog: (
     args: ListPublicLibrariesArgs,
@@ -779,6 +779,23 @@ const rendererProcessBridge = {
     ipcRenderer.on('simulator:stopped', listener)
     return () => ipcRenderer.removeListener('simulator:stopped', listener)
   },
+
+  // ===================== LIBRARY RESOURCES METHODS =====================
+  // A library project's `resources/` folders. The main process derives every
+  // path from the open project, so none is passed from here.
+  libraryResourcesList: (): Promise<{
+    success: boolean
+    folders?: Array<{ name: string; files: string[] }>
+    error?: string
+  }> => ipcRenderer.invoke('library-resources:list'),
+  libraryResourcesAdd: (): Promise<{
+    success: boolean
+    canceled?: boolean
+    folder?: { name: string; files: string[] }
+    error?: string
+  }> => ipcRenderer.invoke('library-resources:add'),
+  libraryResourcesRemove: (folderName: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('library-resources:remove', folderName),
 
   // ===================== FILE WATCHER METHODS =====================
   fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>

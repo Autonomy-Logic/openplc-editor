@@ -106,6 +106,20 @@ export interface StlibArchiveDTO {
    *  is the deliverable and an archive without it is unbuildable.
    *  Located via a function block's `sourceFile`. */
   sources?: Array<{ fileName: string; source: string; category?: string }>
+  /** Files the library ships for its blocks to compile against —
+   *  headers they `#include`, `.cpp` units they need linked.  The
+   *  consumer's program build materialises them into its own build
+   *  tree, so a library and its sources cannot drift apart.  `path`
+   *  is reproduced verbatim from the library's `resources/` tree.
+   *  Absent on libraries that ship none. */
+  resources?: Array<{
+    path: string
+    content: string
+    /** `'base64'` when `content` carries bytes rather than text — see
+     *  `LibraryResource`. Absent on a text file, so an archive of source-only
+     *  libraries is unchanged. */
+    encoding?: 'base64'
+  }>
 }
 
 export interface LibraryPort {
@@ -138,8 +152,11 @@ export interface LibraryPort {
    * Remove a user-installed library from the system pool.  Refuses
    * for bundled libraries — those are always-on; the caller should
    * disable them via project membership instead.
+   *
+   * `version` removes just that one build; omitted removes every
+   * installed version of the library.
    */
-  uninstall(name: string): Promise<Result>
+  uninstall(name: string, version?: string): Promise<Result>
 
   /**
    * Subscribe to system-pool change events fired after install /

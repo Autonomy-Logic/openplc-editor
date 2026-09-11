@@ -386,6 +386,11 @@ function parsePouFile(
           pouType: ipcPou.type as PLCPou['pouType'],
           interface: {
             returnType: ipcPou.data.returnType as string | undefined,
+            // Emitted verbatim as `EXTENDS <value>`, so anything but a name
+            // would be written into the generated ST as `[object Object]`.
+            ...(typeof ipcPou.data.extends === 'string' && ipcPou.data.extends.trim() !== ''
+              ? { extends: ipcPou.data.extends }
+              : {}),
             variables: (ipcPou.data.variables as PLCVariable[]) ?? [],
           },
           body: ipcPou.data.body as PLCPou['body'],

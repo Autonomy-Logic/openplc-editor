@@ -7,17 +7,21 @@ import { getLanguageFromExtension } from './pou-file-extensions'
  * @param content - The content to extract documentation from
  * @returns Object with documentation and remaining content
  */
-const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
-  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
-  if (docMatch) {
-    return {
-      documentation: docMatch[1].trim(),
-      remainingContent: content.slice(docMatch[0].length),
-    }
+export const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
+  // A comment is legal wherever whitespace is, so a header may be written as
+  // several consecutive blocks.  Taking only the first leaves the rest in
+  // front of the declaration, which the declaration regex then fails to match.
+  const blocks: string[] = []
+  let remainingContent = content
+  for (;;) {
+    const docMatch = remainingContent.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
+    if (!docMatch) break
+    blocks.push(docMatch[1].trim())
+    remainingContent = remainingContent.slice(docMatch[0].length)
   }
   return {
-    documentation: '',
-    remainingContent: content,
+    documentation: blocks.join('\n\n'),
+    remainingContent,
   }
 }
 
@@ -125,7 +129,13 @@ export const parseTextualPouFromString = (content: string, language: string, typ
       throw new Error(formatParseError(`Unsupported POU type: ${type}`))
     }
 
-    const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
+    // Captures the EXTENDS clause: anything between the POU name and the first
+    // VAR block fell outside `declarationMatch[0]` and was dropped, so a derived
+    // block reached the compiler with no base.
+    const declarationRegex = new RegExp(
+      `^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?(?:\\s+EXTENDS\\s+(\\w+))?`,
+      'i',
+    )
     const declarationMatch = remainingContent.match(declarationRegex)
 
     if (!declarationMatch) {
@@ -134,6 +144,7 @@ export const parseTextualPouFromString = (content: string, language: string, typ
 
     const pouName = declarationMatch[2]
     const returnType = declarationMatch[3] // Only present for functions
+    const baseBlock = declarationMatch[4] // Only present with EXTENDS
 
     if (type === 'function' && !returnType) {
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
@@ -185,6 +196,7 @@ export const parseTextualPouFromString = (content: string, language: string, typ
       pouType: type as PouType,
       interface: {
         ...(type === 'function' ? { returnType: resolvedReturnType } : {}),
+        ...(baseBlock ? { extends: baseBlock } : {}),
         variables,
       },
       body: {
@@ -224,7 +236,13 @@ export const parseHybridPouFromString = (content: string, language: string, type
       throw new Error(formatParseError(`Unsupported POU type: ${type}`))
     }
 
-    const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
+    // Captures the EXTENDS clause: anything between the POU name and the first
+    // VAR block fell outside `declarationMatch[0]` and was dropped, so a derived
+    // block reached the compiler with no base.
+    const declarationRegex = new RegExp(
+      `^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?(?:\\s+EXTENDS\\s+(\\w+))?`,
+      'i',
+    )
     const declarationMatch = remainingContent.match(declarationRegex)
 
     if (!declarationMatch) {
@@ -233,6 +251,7 @@ export const parseHybridPouFromString = (content: string, language: string, type
 
     const pouName = declarationMatch[2]
     const returnType = declarationMatch[3] // Only present for functions
+    const baseBlock = declarationMatch[4] // Only present with EXTENDS
 
     if (type === 'function' && !returnType) {
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
@@ -282,6 +301,7 @@ export const parseHybridPouFromString = (content: string, language: string, type
       pouType: type as PouType,
       interface: {
         ...(type === 'function' ? { returnType: resolvedReturnType } : {}),
+        ...(baseBlock ? { extends: baseBlock } : {}),
         variables,
       },
       body: {
@@ -322,7 +342,13 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
       throw new Error(formatParseError(`Unsupported POU type: ${type}`))
     }
 
-    const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
+    // Captures the EXTENDS clause: anything between the POU name and the first
+    // VAR block fell outside `declarationMatch[0]` and was dropped, so a derived
+    // block reached the compiler with no base.
+    const declarationRegex = new RegExp(
+      `^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?(?:\\s+EXTENDS\\s+(\\w+))?`,
+      'i',
+    )
     const declarationMatch = remainingContent.match(declarationRegex)
 
     if (!declarationMatch) {
@@ -331,6 +357,7 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
 
     const pouName = declarationMatch[2]
     const returnType = declarationMatch[3]
+    const baseBlock = declarationMatch[4] // Only present with EXTENDS
 
     if (type === 'function' && !returnType) {
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
@@ -415,6 +442,7 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
       pouType: type as PouType,
       interface: {
         ...(type === 'function' ? { returnType: resolvedReturnType } : {}),
+        ...(baseBlock ? { extends: baseBlock } : {}),
         variables,
       },
       body: {

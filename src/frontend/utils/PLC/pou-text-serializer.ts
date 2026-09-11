@@ -17,6 +17,10 @@ const buildDeclaration = (pou: SerializablePou): string => {
   if (pou.pouType === 'function' && pou.interface?.returnType) {
     return `${startKeyword} ${pou.name} : ${pou.interface.returnType}\n`
   }
+  // The base must survive the round trip, or saving a derived POU un-derives it.
+  if (pou.interface?.extends) {
+    return `${startKeyword} ${pou.name} EXTENDS ${pou.interface.extends}\n`
+  }
   return `${startKeyword} ${pou.name}\n`
 }
 

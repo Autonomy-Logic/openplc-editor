@@ -93,18 +93,25 @@ const createProjectDefaultStructure = (
     }
   }
 
-  // 5. Library-only: emit the `library.json` manifest template.  No
-  //    POUs are created for libraries — the manifest is the single
-  //    "open this by default" entry.
+  // 5. Library-only: emit the `library.json` manifest template and the
+  //    `resources/` directory its blocks compile against.  No POUs are
+  //    created for libraries — the manifest is the single "open this by
+  //    default" entry.  `resources/` is not in `projectDefaultDirectories`
+  //    because a program project has no use for it.
   if (isLibrary && built.libraryManifest !== undefined) {
     try {
       writeFileSync(`${basePath}/library.json`, built.libraryManifest, 'utf-8')
+      const resourcesPath = `${basePath}/resources`
+      if (!fileOrDirectoryExists(resourcesPath)) createDirectory(resourcesPath)
+      if (built.libraryResourcesReadme !== undefined) {
+        writeFileSync(`${resourcesPath}/README.md`, built.libraryResourcesReadme, 'utf-8')
+      }
     } catch (error) {
       return {
         success: false,
         error: {
-          title: 'Error creating library manifest',
-          description: `Failed to create library.json at ${basePath}`,
+          title: 'Error creating library files',
+          description: `Failed to create library.json or resources/ at ${basePath}`,
           error,
         },
       }

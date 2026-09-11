@@ -18,7 +18,7 @@ import { useOpenPLCStore } from '@root/frontend/store'
 import { buildLibraryTree, type LibraryTreeNode } from '@root/frontend/utils/library-tree'
 import type { InstalledLibrary, SystemLibrary } from '@root/middleware/shared/ports/library-types'
 import { useLibrary } from '@root/middleware/shared/providers/platform-context'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface SystemLibrariesTabProps {
   installed: InstalledLibrary[]
@@ -29,8 +29,19 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
   const library = useLibrary()
   const systemPool = useOpenPLCStore((s) => s.libraries.system)
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
+  const outdated = useOpenPLCStore((s) => s.outdatedLibraries)
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
+  const wasOutdated = useRef(outdated.length)
+
+  // Installing a newer version is what makes an open project outdated, so react
+  // to that rather than to the install call: the pool refreshes asynchronously
+  // and a timer fired from the install handler races it.
+  useEffect(() => {
+    const had = wasOutdated.current
+    wasOutdated.current = outdated.length
+    if (had === 0 && outdated.length > 0) openModal('library-updates')
+  }, [outdated, openModal])
 
   // Auto-select the first row when the catalogue first arrives so the
   // details pane has something to render — mirrors the package
@@ -69,25 +80,30 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
     openModal('public-catalog-browser')
   }, [openModal])
 
-  const handleUninstall = useCallback(async () => {
-    if (!library || !selectedName) return
-    const target = installed.find((l) => l.name === selectedName)
-    if (!target || target.bundled) return // bundled is non-disableable
-    const result = await library.uninstall(selectedName)
-    if (result.success) {
-      onRefresh()
-    } else {
-      openModal('debugger-message', {
-        type: 'error',
-        title: 'Uninstall failed',
-        message: result.error ?? 'Unknown error',
-        buttons: ['OK'],
-        onResponse: () => {},
-      })
-    }
-  }, [library, selectedName, installed, onRefresh, openModal])
+  const handleUninstall = useCallback(
+    async (version?: string) => {
+      if (!library || !selectedName) return
+      const target = installed.find((l) => l.name === selectedName)
+      if (!target || target.bundled) return // bundled is non-disableable
+      const result = await library.uninstall(selectedName, version)
+      if (result.success) {
+        onRefresh()
+      } else {
+        openModal('debugger-message', {
+          type: 'error',
+          title: 'Uninstall failed',
+          message: result.error ?? 'Unknown error',
+          buttons: ['OK'],
+          onResponse: () => {},
+        })
+      }
+    },
+    [library, selectedName, installed, onRefresh, openModal],
+  )
 
   const selectedRow = selectedName ? installed.find((l) => l.name === selectedName) : null
+  /** Installed versions of the selected library, newest first. */
+  const selectedVersions = selectedRow?.versions ?? []
   const selectedArchive = selectedName ? systemPool.find((l) => l.name === selectedName) : null
   const canUninstall = !!selectedRow && !selectedRow.bundled
 
@@ -173,6 +189,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                   </span>
                   <span className='text-[11px] text-neutral-500 dark:text-neutral-400'>
                     v{lib.version}
+                    {(lib.versions?.length ?? 0) > 1 ? ` · ${lib.versions?.length ?? 0} versions` : ''}
                     {lib.bundled ? ' · bundled' : lib.origin === 'codesys' ? ' · CODESYS import' : ''}
                   </span>
                 </div>
@@ -198,7 +215,30 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
             </h3>
             <div className='flex flex-col gap-3'>
               <DetailRow label='Identifier' value={selectedRow.name} />
-              <DetailRow label='Version' value={selectedRow.version} />
+              {selectedVersions.length > 1 ? (
+                <div className='flex flex-col gap-0.5'>
+                  <span className='text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400'>
+                    Versions
+                  </span>
+                  {selectedVersions.map((version) => (
+                    <div key={version} className='flex items-center justify-between gap-2'>
+                      <span className='break-words font-caption text-[11px] text-neutral-800 dark:text-neutral-300'>
+                        {version}
+                      </span>
+                      <button
+                        type='button'
+                        onClick={() => void handleUninstall(version)}
+                        title={`Remove version ${version}`}
+                        className='shrink-0 cursor-pointer text-[10px] text-neutral-500 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white'
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <DetailRow label='Version' value={selectedRow.version} />
+              )}
               <DetailRow
                 label='Source'
                 value={

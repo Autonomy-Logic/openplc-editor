@@ -8,10 +8,10 @@
  * primitives the orchestrator cannot perform itself because they
  * cross the platform boundary (filesystem ↔ HTTP, etc.).
  *
- * The port used to carry a `verifyCompile` primitive that drove the
- * library through avr-gcc against the OpenPLC Simulator board on
- * every build.  It is gone: the build is target-neutral, and running
- * a library is now an explicit action driven from the renderer
+ * `verifyCompile` drives the library through the toolchain the
+ * manifest's `build` block names, so a block that does not compile is
+ * reported at build time rather than by whoever installs the archive.
+ * Running a library is a separate action driven from the renderer
  * through `CompilerPort.compileProgram` with a generated harness
  * project (`composeLibraryDebugHarness`).
  *
@@ -38,6 +38,20 @@
 import type { TranspileToStArgs, TranspileToStResult } from './compiler-platform-port'
 
 /**
+ * Outcome of an attempted verification compile.  Verification is
+ * advisory: a `success: false`
+ * surfaces as a warning on the build result, never as a fatal error
+ * (the `.stlib` still ships).  See `runLibraryBuildPipeline` for the
+ * cache + skip-on-md5-match flow that wraps this.
+ */
+export interface LibraryVerificationResult {
+  success: boolean
+  /** Human-readable summary of the failure, surfaced as a console
+   *  warning when `success` is false.  Undefined on success. */
+  message?: string
+}
+
+/**
  * Library-enabled archives the project pulls in for the strucpp
  * compile.  `archives` carries the bundled IEC standard set PLUS any
  * user-installed `.stlib`s the project's `data.libraries` list
@@ -54,18 +68,65 @@ export interface LibraryArchiveLookupArgs {
   projectLibraryRefs: ReadonlyArray<{ name: string; version: string }>
 }
 
+/**
+ * Which toolchain a library is verified with.  Authored in `library.json`'s
+ * `build` block through the Build Settings dialog; the orchestrator reads it
+ * and hands it to the port, which owns the catalogue lookup that turns a core
+ * into something its platform can compile.
+ */
+export interface LibraryVerifyTarget {
+  /**
+   * `arduino` compiles the library's C++ with the Arduino toolchain for
+   * `core` — the only mode that checks the C++.  `runtime` transpiles and
+   * composes a Runtime v4 bundle, which checks the ST and the bundle but not
+   * the C++, because a runtime compiles its own upload.  `off` skips
+   * verification.
+   */
+  mode: 'arduino' | 'runtime' | 'off'
+  /** Arduino core to compile against (`esp32:esp32`).  Absent leaves the
+   *  choice to the port. */
+  core?: string
+}
+
+export interface VerifyCompileArgs {
+  /** Project root path on the host platform.  Same value the build
+   *  orchestrator received; the port impl knows how to interpret it. */
+  projectPath: string
+  /**
+   * Verification-pass project data — Python POUs already lowered to
+   * no-op stubs (the AVR simulator has no Python interpreter).  The
+   * orchestrator preprocesses this separately from the build pass
+   * and hands the result through.
+   *
+   * Typed as `unknown` on purpose: the architecture rule forbids the
+   * port from importing `backend/shared` types.  The orchestrator
+   * lives in `backend/shared` and produces shape-correct data; the
+   * port impl casts to its platform's expected shape (port-shape on
+   * web before invoking `runCompilePipeline`, schema-shape on editor
+   * before threading into the IPC envelope).
+   */
+  verifyProjectData: unknown
+  /** Toolchain to verify against, resolved from the manifest by the
+   *  orchestrator.  The port maps it onto its own board catalogue. */
+  target: LibraryVerifyTarget
+  /** Caller log callback.  Every line the inner compile emits is
+   *  forwarded here; the orchestrator prefixes them with `[verify]`
+   *  before forwarding to its own caller. */
+  emit: (message: string, level: 'info' | 'warning' | 'error') => void
+}
+
 export interface LibraryBuildPort {
   // -------------------------------------------------------------------------
-  // Transpile (same signature `CompilerPlatformPort` uses for the
-  // program build — declared here too so the orchestrator takes a
-  // single port object instead of two.  Each impl is free to delegate
-  // to whatever its program-build path uses internally; the contract
-  // is just that bytes in match bytes out.)
-  //
-  // There was a `computeMd5` primitive here as well, hashing
-  // `program.st` to key the verification cache.  Both went out with
-  // the verification stage.
+  // Cryptography + transpile (same signatures `CompilerPlatformPort`
+  // uses for the program build — declared here too so the orchestrator
+  // takes a single port object instead of two.  Each impl is free to
+  // delegate to whatever its program-build path uses internally; the
+  // contract is just that bytes in match bytes out.)
   // -------------------------------------------------------------------------
+
+  /** MD5 hex digest.  Editor wires it to Node's `crypto`; web wires
+   *  it to `spark-md5`.  Both byte-identical. */
+  computeMd5(input: string): Promise<string>
 
   /**
    * Transpile the project IR directly to ST via the in-process
@@ -99,6 +160,31 @@ export interface LibraryBuildPort {
   writeBuildFile(projectPath: string, relPath: string, content: string): Promise<void>
 
   /**
+   * List every file under a project-relative directory, recursively.  Paths
+   * are relative to `relPath`, `/`-separated and sorted, so the result is
+   * identical across platforms.  Returns `[]` when the directory is absent.
+   */
+  listProjectFiles(projectPath: string, relPath: string): Promise<string[]>
+
+  /**
+   * Names of the directories directly inside a project-relative directory,
+   * sorted.  Returns `[]` when the directory is absent.
+   *
+   * One level, not recursive: a caller listing the library folders under
+   * `resources/` never descends into an author's `build/` or `.git/`.
+   */
+  listProjectDirs(projectPath: string, relPath: string): Promise<string[]>
+
+  /**
+   * Read a project-relative file as raw bytes, base64-encoded, or `null` when
+   * it is absent.
+   *
+   * `readBuildFile` decodes as UTF-8 and cannot carry a precompiled `.a`.
+   * Text still goes through `readBuildFile`; this is for what is not text.
+   */
+  readBuildFileBase64(projectPath: string, relPath: string): Promise<string | null>
+
+  /**
    * Recursively remove a project-relative subtree.  No-op when the
    * subtree doesn't exist.  Implementations MUST scope deletion to
    * the named subtree — wiping anything outside it is a contract
@@ -120,4 +206,17 @@ export interface LibraryBuildPort {
    * the build with a clear "Library Manager" message.
    */
   loadLibraryArchives(args: LibraryArchiveLookupArgs): Promise<LibraryArchiveLookup>
+
+  /**
+   * Run a verification compile of `verifyProjectData` against `target`.
+   * Both platform impls internally drive the shared `runCompilePipeline` —
+   * the only thing they own is the platform-specific arg assembly (board
+   * entry, hals data, firmware skeleton) and the transport.  Failures are
+   * advisory: the orchestrator surfaces them as a warning on the build
+   * result, never as a fatal error.
+   *
+   * Never called with `target.mode === 'off'` — the orchestrator skips
+   * verification entirely in that case.
+   */
+  verifyCompile(args: VerifyCompileArgs): Promise<LibraryVerificationResult>
 }

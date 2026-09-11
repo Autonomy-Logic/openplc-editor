@@ -296,28 +296,112 @@ describe('parseIecStringToVariables', () => {
     expect(result[0].type).toEqual({ definition: 'user-data-type', value: 'Motor' })
   })
 
+  // A standalone comment inside a VAR block is legal ST and is how a long
+  // declaration list is given section headings. It used to be a syntax error,
+  // so a readable program failed to load with "No variable defined".
+  describe('a comment on a line of its own', () => {
+    it('is skipped inside a VAR block', () => {
+      const result = parseIecStringToVariables(
+        'VAR\n' +
+          '  (* --- the node --- *)\n' +
+          '  node : DINT;\n' +
+          '\n' +
+          '  (* --- the plant --- *)\n' +
+          '  level : REAL;\n' +
+          'END_VAR',
+      )
+      expect(result.map((v) => v.name)).toEqual(['node', 'level'])
+    })
+
+    it('leaves a trailing comment with its declaration', () => {
+      const result = parseIecStringToVariables('VAR\n  level : REAL; (* tank A *)\nEND_VAR')
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe('level')
+      expect(result[0].documentation).toBe('tank A')
+    })
+
+    it('skips a comment spread over several lines', () => {
+      const result = parseIecStringToVariables(
+        'VAR\n' +
+          '  (* ==========================\n' +
+          '     WHAT WE WATCH\n' +
+          '     ========================== *)\n' +
+          '  level : REAL;\n' +
+          'END_VAR',
+      )
+      expect(result.map((v) => v.name)).toEqual(['level'])
+    })
+
+    it('reads the declaration that follows a multi-line comment', () => {
+      const result = parseIecStringToVariables(
+        'VAR\n  (* one\n     two *)\n  a : INT;\n  (* three *)\n  b : BOOL;\nEND_VAR',
+      )
+      expect(result.map((v) => v.name)).toEqual(['a', 'b'])
+    })
+  })
+
   describe('a declared string length', () => {
-    // Legal IEC and legal CODESYS, and STruC++ does not accept it. Left alone it
-    // was not even recognised as a string: it became a user data type literally
-    // named "STRING[20]", emitted verbatim into the generated ST, where the
-    // compiler failed with `Expected Semicolon, found [` on a line the user
-    // never wrote.
-    it('is refused, naming the type and what to use instead', () => {
-      expect(() => parseIecStringToVariables('VAR\n  s : STRING[20];\nEND_VAR')).toThrow(
-        /A declared length is not supported on STRING — use plain STRING, which carries up to 126 characters/,
+    // STruC++ emits `IECStringVar<23>` — 54 bytes against 518 for the
+    // unqualified type.
+    it('is accepted in the standard parenthesised form', () => {
+      const result = parseIecStringToVariables('VAR\n  s : STRING(23);\nEND_VAR')
+
+      expect(result[0].type).toEqual({ definition: 'base-type', value: 'STRING(23)' })
+    })
+
+    it('accepts WSTRING too', () => {
+      const result = parseIecStringToVariables('VAR\n  s : WSTRING(8);\nEND_VAR')
+
+      expect(result[0].type).toEqual({ definition: 'base-type', value: 'WSTRING(8)' })
+    })
+
+    // Square brackets are long-established in the field, so they are read and
+    // normalised rather than refused — a project stores one spelling whichever
+    // the user typed.
+    it('normalises the bracket form to the standard one', () => {
+      const result = parseIecStringToVariables('VAR\n  s : STRING[20];\nEND_VAR')
+
+      expect(result[0].type).toEqual({ definition: 'base-type', value: 'STRING(20)' })
+    })
+
+    it('is read whatever the spacing and case', () => {
+      const result = parseIecStringToVariables('VAR\n  s : string ( 12 );\nEND_VAR')
+
+      expect(result[0].type).toEqual({ definition: 'base-type', value: 'STRING(12)' })
+    })
+
+    it('accepts the bounds themselves', () => {
+      const one = parseIecStringToVariables('VAR\n  s : STRING(1);\nEND_VAR')
+      const max = parseIecStringToVariables('VAR\n  s : STRING(254);\nEND_VAR')
+
+      expect(one[0].type.value).toBe('STRING(1)')
+      expect(max[0].type.value).toBe('STRING(254)')
+    })
+
+    // Writing the shape is what commits you to a length. Each of these would
+    // otherwise become a user data type literally named "STRING[]", persisted
+    // and emitted verbatim into the generated ST, where the compiler fails at a
+    // column the user never wrote.
+    it.each([
+      ['an empty length', 'STRING[]'],
+      ['a non-numeric length', 'STRING(abc)'],
+      ['zero', 'STRING(0)'],
+      ['past the implementation maximum', 'STRING(255)'],
+    ])('is refused for %s, rather than becoming a stranger type', (_label, declared) => {
+      expect(() => parseIecStringToVariables(`VAR\n  s : ${declared};\nEND_VAR`)).toThrow(
+        /takes a length from 1 to 254/,
       )
     })
 
-    it('is refused for WSTRING too', () => {
-      expect(() => parseIecStringToVariables('VAR\n  s : WSTRING[8];\nEND_VAR')).toThrow(/not supported on WSTRING/)
-    })
+    // The element form needs `parseArrayType` to admit a length after `OF`;
+    // without it this matched nothing and fell through to the compiler, which
+    // reported `Expected Semicolon, found [` at a column the user never wrote.
+    it('carries a length on an ARRAY element type', () => {
+      const result = parseIecStringToVariables('VAR\n  tags : ARRAY[0..3] OF STRING(23);\nEND_VAR')
 
-    it('is refused whatever the spacing and case', () => {
-      expect(() => parseIecStringToVariables('VAR\n  s : string [ 12 ];\nEND_VAR')).toThrow(/not supported on STRING/)
-    })
-
-    it('is refused when the length is empty, rather than becoming a stranger type', () => {
-      expect(() => parseIecStringToVariables('VAR\n  s : STRING[];\nEND_VAR')).toThrow(/not supported on STRING/)
+      expect(result[0].type.definition).toBe('array')
+      expect(result[0].type.data?.baseType).toEqual({ definition: 'base-type', value: 'STRING(23)' })
+      expect(result[0].type.data?.dimensions).toEqual([{ dimension: '0..3' }])
     })
 
     it('still accepts a plain STRING', () => {
@@ -614,6 +698,52 @@ describe('parseIecStringToVariables', () => {
     const result = parseIecStringToVariables(input)
 
     expect(result[0].class).toBe('input')
+  })
+
+  // ---- variable-length arrays ----
+
+  it('parses a variable-length array, the bound a VLA carries', () => {
+    // `ARRAY [*] OF INT`, legal as a function block's in-out variable. The type
+    // group excluded `*`, so the line matched nothing and the POU loaded with no
+    // variables at all.
+    const result = parseIecStringToVariables('VAR_IN_OUT\n  values : ARRAY [*] OF INT;\nEND_VAR')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('values')
+    expect(result[0].class).toBe('inOut')
+    expect(result[0].type).toEqual({
+      definition: 'array',
+      value: 'ARRAY [*] OF INT',
+      data: {
+        baseType: { definition: 'base-type', value: 'INT' },
+        dimensions: [{ dimension: '*' }],
+      },
+    })
+  })
+
+  it('parses a two-dimensional variable-length array', () => {
+    const result = parseIecStringToVariables('VAR_IN_OUT\n  grid : ARRAY [*,*] OF REAL;\nEND_VAR')
+
+    expect(result[0].type.data?.dimensions).toEqual([{ dimension: '*' }, { dimension: '*' }])
+  })
+
+  it('does not read an empty bound as a variable-length one', () => {
+    // `*` is a bound; nothing is not. `ARRAY []` still declines to parse as an
+    // array — it carries no dimension for the array path to read — so it lands
+    // as a named type rather than being mistaken for `ARRAY [*]`.
+    const result = parseIecStringToVariables('VAR\n  bad : ARRAY [] OF INT;\nEND_VAR')
+
+    expect(result[0].type.definition).not.toBe('array')
+    expect(result[0].type.value).toBe('ARRAY [] OF INT')
+  })
+
+  it('does not mistake a comment for a type', () => {
+    // `(` stays outside the type character class, so widening it for `*` could
+    // not let a `(*` comment be read as one.
+    const result = parseIecStringToVariables('VAR\n  count : INT; (* how many *)\nEND_VAR')
+
+    expect(result[0].type).toEqual({ definition: 'base-type', value: 'INT' })
+    expect(result[0].documentation).toBe('how many')
   })
 })
 

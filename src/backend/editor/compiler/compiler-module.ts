@@ -1,13 +1,15 @@
 import { spawn } from 'node:child_process'
-import crypto, { createHash } from 'node:crypto'
+import crypto, { createHash, randomUUID } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import { existsSync, promises as fs } from 'node:fs'
-import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
+import { HardwareModule } from '@root/backend/editor/hardware'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
@@ -26,6 +28,7 @@ import { runWithConcurrencyLimit } from './run-with-concurrency'
 type StrucppCompileError = import('strucpp').CompileError
 
 import { buildArduinoCliCompileArgs } from '@root/backend/shared/firmware/build-arduino-cli-args'
+import { projectAndLibraryTypeNames } from '@root/backend/shared/library/inject-library-blocks'
 import { runLibraryBuildPipeline } from '@root/backend/shared/library/library-build-orchestrator'
 import { type NativePouRef, parseNativePouRefs } from '@root/backend/shared/library/native-pou-list'
 import { buildKnownPous, emitCompileErrorEvents } from '@root/backend/shared/library/program-build-helpers'
@@ -37,6 +40,13 @@ import {
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
+import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
+import type { EnabledArchives, LibraryRef, VersionSubstitution } from '@root/middleware/shared/ports/library-types'
+import {
+  pickVerifyBoard,
+  SIMULATOR_BOARD,
+  SIMULATOR_CORE,
+} from '@root/middleware/shared/utils/library/pick-verify-board'
 
 /**
  * Bridge contract `compileLibrary` needs from the main process.
@@ -48,14 +58,29 @@ import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
  * `libraries:` option) and the library build (`compileStlib`'s
  * dependency list), so there's exactly one resolution path.
  *
- * It used to carry the runtime-API methods too, because the library
- * build ran an inner verification compile through `compileProgram`.
- * That step is gone, so the library path never touches the runtime
- * and the contract narrows to the one call it actually makes.
+ * The runtime-API methods ride along because the verification compile
+ * reaches `compileProgram`, whose bridge contract names them.  Neither
+ * is invoked on the library path: it compiles with
+ * `runtimeIpAddress=null`, so no upload runs.
  */
 type LibraryCompileBridge = {
-  loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+  makeRuntimeApiRequest: <T = void>(
+    ipAddress: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ) => Promise<{ success: true; data?: T } | { success: false; error: string }>
+  makeRuntimeApiUpload: (opts: {
+    ipAddress: string
+    fileBuffer: Buffer
+    filename: string
+    contentType: string
+    cleanBuild: boolean
+    onUploadAccepted?: (responseBody: string) => void
+  }) => Promise<{ success: true; data: string } | { success: false; error: string }>
+  loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
 }
+
+type LibraryVerificationBridge = LibraryCompileBridge
 
 /**
  * Validated form of the `compiler:run-compile-library` payload.
@@ -67,6 +92,8 @@ type LibraryCompileBridge = {
 type ParsedCompileLibraryArgs = {
   projectPath: string
   projectData: PLCProjectData
+  verifyProjectData: PLCProjectData
+  cleanBuild: boolean
   nativePous: NativePouRef[]
 }
 
@@ -91,46 +118,68 @@ type ParsedCompileLibraryArgs = {
 function parseCompileLibraryArgs(
   raw: unknown,
 ): { ok: true; value: ParsedCompileLibraryArgs } | { ok: false; error: string } {
-  if (!Array.isArray(raw) || raw.length < 2) {
+  if (!Array.isArray(raw) || raw.length < 3) {
     return {
       ok: false,
-      error: 'Library build failed: malformed request (expected [projectPath, projectData, nativePous]).',
+      error:
+        'Library build failed: malformed request ' +
+        '(expected [projectPath, projectData, verifyProjectData, cleanBuild, nativePous]).',
     }
   }
-  const [projectPath, projectData, rawNativePous] = raw as unknown[]
+  const [projectPath, projectData, verifyProjectData, cleanBuild, rawNativePous] = raw as unknown[]
   if (typeof projectPath !== 'string' || projectPath === '') {
     return { ok: false, error: 'Library build failed: request carried no project path.' }
   }
-  if (typeof projectData !== 'object' || projectData === null) {
-    return { ok: false, error: 'Library build failed: request carried no project data.' }
-  }
-  const data = projectData as Record<string, unknown>
-  if (!Array.isArray(data.pous)) {
-    return { ok: false, error: 'Library build failed: project data has no POU list.' }
-  }
-  const configuration = data.configuration
-  if (typeof configuration !== 'object' || configuration === null) {
-    return { ok: false, error: 'Library build failed: project data has no configuration.' }
-  }
-  const resource = (configuration as Record<string, unknown>).resource
-  if (typeof resource !== 'object' || resource === null) {
-    return { ok: false, error: 'Library build failed: project configuration has no resource.' }
-  }
-  const { tasks, instances } = resource as Record<string, unknown>
-  if (!Array.isArray(tasks) || !Array.isArray(instances)) {
-    return { ok: false, error: 'Library build failed: project resource has no task or instance list.' }
-  }
+  const project = narrowProjectData(projectData, 'project data')
+  if ('error' in project) return { ok: false, error: project.error }
+  // The verification pass runs the same pipeline over its own payload, so it
+  // is held to the same shape. It used to be checked only for being an object,
+  // on the reasoning that it is the same project — but it arrives as a
+  // separate argument, and `{}` passed.
+  const verify = narrowProjectData(verifyProjectData, 'verification project data')
+  if ('error' in verify) return { ok: false, error: verify.error }
+
   return {
     ok: true,
     value: {
       projectPath,
-      // Shape-checked above for everything the pipeline reaches for. The
-      // remaining fields are optional to it (`libraries ?? []`,
-      // `dataTypes ?? []`), so a narrower cast here would buy nothing.
-      projectData: projectData as PLCProjectData,
+      projectData: project.value,
+      verifyProjectData: verify.value,
+      cleanBuild: cleanBuild === true,
       nativePous: parseNativePouRefs(rawNativePous),
     },
   }
+}
+
+/**
+ * Narrow one IPC project payload to the shape the pipeline reaches for.
+ *
+ * Everything checked here is read unconditionally downstream; the rest is
+ * optional to it (`libraries ?? []`, `dataTypes ?? []`), so checking more would
+ * reject payloads the build handles today. `what` names the payload in the
+ * message, because two of them cross this call.
+ */
+function narrowProjectData(value: unknown, what: string): { value: PLCProjectData } | { error: string } {
+  if (typeof value !== 'object' || value === null) {
+    return { error: `Library build failed: request carried no ${what}.` }
+  }
+  const data = value as Record<string, unknown>
+  if (!Array.isArray(data.pous)) {
+    return { error: `Library build failed: ${what} has no POU list.` }
+  }
+  const configuration = data.configuration
+  if (typeof configuration !== 'object' || configuration === null) {
+    return { error: `Library build failed: ${what} has no configuration.` }
+  }
+  const resource = (configuration as Record<string, unknown>).resource
+  if (typeof resource !== 'object' || resource === null) {
+    return { error: `Library build failed: ${what} configuration has no resource.` }
+  }
+  const { tasks, instances } = resource as Record<string, unknown>
+  if (!Array.isArray(tasks) || !Array.isArray(instances)) {
+    return { error: `Library build failed: ${what} resource has no task or instance list.` }
+  }
+  return { value: value as PLCProjectData }
 }
 
 /**
@@ -156,6 +205,9 @@ type ProjectDataWithCppPous = PLCProjectData & {
 const POST_BUILD_START_TIMEOUT_MS = 5000
 const POST_BUILD_START_POLL_INTERVAL_MS = 150
 
+/** The runtime a `build.verify: "runtime"` target resolves to. */
+const RUNTIME_V4_BOARD = 'OpenPLC Runtime v4'
+
 import { assertPathContained } from '@root/backend/editor/utils/path-containment'
 import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
 import { runCompilePipeline } from '@root/backend/shared/compile/pipeline'
@@ -179,13 +231,14 @@ import {
 } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { app as electronApp, dialog } from 'electron'
+import { app as electronApp, dialog, MessageChannelMain } from 'electron'
 import JSZip from 'jszip'
 
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
+import type { AvailableBoards } from '../hardware/types'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
@@ -197,6 +250,34 @@ interface MethodsResult<T> {
   data?: T
 }
 type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'warning' | 'error') => void
+
+/**
+ * Decode a `MessagePortMain` payload back to a string, handling the
+ * forms a Node `Buffer` survives V8's structured clone as:
+ *
+ *   - `string` — passthrough.
+ *   - `Uint8Array` / `ArrayBuffer` — typed-array decode (this is the
+ *     shape Buffers ride as when the channel stays inside the main
+ *     process; `.toString()` on a Uint8Array returns the comma-
+ *     separated number list and was the cause of the `[verify]
+ *     67,111,109,…` console flood).
+ *   - `{ type: 'Buffer', data: number[] }` — Electron's IPC
+ *     serialisation form, same shape `decodeMessage` in the
+ *     `compiler-adapter` already handles.
+ *   - anything else — `String(...)` fallback.
+ */
+function decodePortMessage(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (raw instanceof Uint8Array) return new TextDecoder().decode(raw)
+  if (raw instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(raw))
+  if (raw && typeof raw === 'object' && 'type' in raw) {
+    const obj = raw as Record<string, unknown>
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return new TextDecoder().decode(new Uint8Array(obj.data as number[]))
+    }
+  }
+  return String(raw)
+}
 
 type CompileArduinoProgramArgs = {
   boardTarget: string
@@ -426,6 +507,199 @@ class CompilerModule {
   // structure so the recipe templates resolve.
   #constructShowPropertiesDummyPath(): string {
     return join(this.sourceDirectoryPath, 'show_properties_dummy')
+  }
+
+  /**
+   * Absolute paths to the library folders the firmware bundle materialised
+   * under `<compilationPath>/libraries/`.  arduino-cli compiles a library's
+   * `src/` only when the folder is named with its own `--library`, so each
+   * has to reach the command line.
+   */
+  /**
+   * The `-I` flags arduino-cli itself would use for this sketch.
+   *
+   * The pre-compile pass invokes the toolchain directly, so it never gets
+   * arduino-cli's library discovery — and that discovery is not something to
+   * reimplement. It is transitive (`WiFi.h` pulls `Network.h` from a second
+   * library), it honours `depends=` in `library.properties`, and it resolves
+   * conditional includes by preprocessing, so a header behind `#ifdef ESP8266`
+   * costs nothing on an ESP32. Every hand-rolled approximation of that gets
+   * one layer further and stops.
+   *
+   * So the answer is asked for rather than guessed: `--only-compilation-database`
+   * runs discovery and writes the command line it would have used, without
+   * compiling anything. This MUST run before the TUs are stashed out of `src/`
+   * — discovery walks the library's sources, and a stashed file's `#include`
+   * is a file arduino-cli never sees.
+   *
+   * Returns `[]` when the database cannot be produced. The pass then compiles
+   * with the core, variant and build-tree includes alone, which is what it did
+   * before — a TU needing no library still builds, and one that does fails
+   * naming the header it wanted.
+   */
+  async #discoverIncludeFlags({
+    fqbn,
+    sketchPath,
+    libraryPaths,
+  }: {
+    fqbn: string
+    sketchPath: string
+    libraryPaths: readonly string[]
+  }): Promise<string[]> {
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
+
+    // A build path of its own: the database run must not disturb the tree the
+    // real compile is about to use.
+    const databasePath = join(os.tmpdir(), `openplc-cdb-${randomUUID()}`)
+    try {
+      await execRecipeArgv(
+        [
+          binaryPath,
+          'compile',
+          '--fqbn',
+          fqbn,
+          '--only-compilation-database',
+          '--build-path',
+          databasePath,
+          ...libraryPaths.flatMap((libraryPath) => ['--library', libraryPath]),
+          sketchPath,
+          ...this.arduinoCliBaseParameters,
+        ],
+        { maxBuffer: 16 * 1024 * 1024 },
+      )
+
+      const raw = await readFile(join(databasePath, 'compile_commands.json'), 'utf-8')
+      const entries = JSON.parse(raw) as Array<{ arguments?: string[]; command?: string }>
+
+      // Order is preserved and duplicates dropped: arduino-cli emits the same
+      // include set per TU, and `-I` order decides which of two same-named
+      // headers wins.
+      const seen = new Set<string>()
+      const flags: string[] = []
+      for (const entry of entries) {
+        // `command` is one shell line, so it quotes any path holding a space.
+        // Splitting on whitespace would hand the compiler half a path; the
+        // recipe tokenizer already knows the quoting rules.
+        for (const token of entry.arguments ?? (entry.command ? tokenizeRecipe(entry.command) : [])) {
+          if (!token.startsWith('-I') || token.length === 2) continue
+          if (seen.has(token)) continue
+          seen.add(token)
+          flags.push(token)
+        }
+      }
+      return flags
+    } catch {
+      return []
+    } finally {
+      await rm(databasePath, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
+
+  /**
+   * Every `.cpp` a resource library ships, with the object name each will take.
+   *
+   * A `.stlib` carries the C/C++ libraries its blocks compile against, and
+   * something has to build them. arduino-cli will not: it compiles a library
+   * only when it discovers an include for it, and the one translation unit
+   * that includes these is moved out of its view before it runs. Putting that
+   * include back into the sketch is worse than the disease — a library's
+   * macros then land in the sketch's own translation unit, where an
+   * object-like `#define` silently rewrites an enum constant of the same name
+   * in unrelated code.
+   *
+   * So the pre-compile pass builds them, exactly as the Runtime v4 Makefile
+   * does for the same archive: it finds every `.cpp` under the generated tree,
+   * which sweeps up each resource library's sources. Both consumers compile
+   * the resource tree themselves rather than asking a build system to infer
+   * it.
+   *
+   * Object names are derived from the path below `libraries/`, not the file
+   * name: two libraries may each ship a `util.cpp`, and a flat object
+   * directory would have the second overwrite the first.
+   */
+  async #resourceLibrarySources(compilationPath: string): Promise<Array<{ sourcePath: string; objectName: string }>> {
+    const root = join(compilationPath, 'libraries')
+    const found: Array<{ sourcePath: string; objectName: string }> = []
+
+    const walk = async (dir: string): Promise<void> => {
+      let entries: Dirent[]
+      try {
+        entries = await readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        // Symlinks are not followed: the archive must hold what the library
+        // shipped, not whatever a link happened to point at.
+        if (entry.isSymbolicLink()) continue
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          await walk(full)
+        } else if (entry.name.endsWith('.cpp')) {
+          const objectName = path.relative(root, full).split(path.sep).join('__')
+          found.push({ sourcePath: full, objectName })
+        }
+      }
+    }
+
+    await walk(root)
+    return found.sort((a, b) => a.objectName.localeCompare(b.objectName))
+  }
+
+  async #resourceLibraryDirs(compilationPath: string): Promise<string[]> {
+    const root = join(compilationPath, 'libraries')
+    try {
+      const entries = await readdir(root, { withFileTypes: true })
+      return entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(root, entry.name))
+        .sort()
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * The board a library's verify target compiles against.
+   *
+   * A target names a core, not a board, because that is what a library
+   * targets — but arduino-cli needs an FQBN, so one installed board of that
+   * core stands in for it.  `pickVerifyBoard` owns that choice, shared with
+   * Build Settings so the screen names the board the build will use.
+   *
+   * Falls back to the simulator when the target names no core, or names one
+   * with no board installed: verification is advisory and the `.stlib` still
+   * builds, so this warns rather than fails.
+   */
+  async #resolveVerifyBoard(
+    target: LibraryVerifyTarget,
+    warn: (message: string) => void,
+  ): Promise<{ board: string; core: string | null }> {
+    if (target.mode === 'runtime') {
+      return { board: RUNTIME_V4_BOARD, core: null }
+    }
+    if (!target.core) {
+      return { board: SIMULATOR_BOARD, core: SIMULATOR_CORE }
+    }
+
+    let boards: AvailableBoards
+    try {
+      boards = await new HardwareModule().getAvailableBoards()
+    } catch (error) {
+      warn(`Could not read the board catalogue (${getErrorMessage(error)}) — verifying against ${SIMULATOR_BOARD}.`)
+      return { board: SIMULATOR_BOARD, core: SIMULATOR_CORE }
+    }
+
+    const chosen = pickVerifyBoard(
+      [...boards.entries()].map(([name, info]) => ({ name, core: info.core, compiler: info.compiler })),
+      target.core,
+    )
+    if (!chosen) {
+      warn(`No board is installed for core "${target.core}" — verifying against ${SIMULATOR_BOARD}.`)
+      return { board: SIMULATOR_BOARD, core: SIMULATOR_CORE }
+    }
+    return { board: chosen, core: target.core }
   }
 
   /**
@@ -1257,6 +1531,12 @@ class CompilerModule {
     projectData: ProjectDataWithCppPous,
     sourceTargetFolderPath: string,
     handleOutputData: HandleOutputDataCallback,
+    /** Every data type in scope — the project's own and the enabled libraries'.
+     *  Tells a structure or enumeration, which strucpp aliases as `IEC_<NAME>`,
+     *  from a function block instance, a bare `class <NAME>`; the variable
+     *  alone cannot say. Built by `projectAndLibraryTypeNames`, which is why it
+     *  is passed rather than derived: only the caller holds the archives. */
+    typeNames: string[],
   ) {
     const originalCppPous = projectData.originalCppPous || []
 
@@ -1270,11 +1550,7 @@ class CompilerModule {
       variables: pou.variables,
     })) as CppPouDataHeader[]
 
-    // The project's data-type names let the generator tell a structure or
-    // enumeration (which strucpp aliases as `IEC_<NAME>`) from a function block
-    // instance (a bare `class <NAME>`), which the variable alone cannot say.
-    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-    const headerContent: string = generateCBlocksHeader(cppPous, userTypeNames)
+    const headerContent: string = generateCBlocksHeader(cppPous, typeNames)
     const headerFilePath = join(sourceTargetFolderPath, 'c_blocks.h')
 
     try {
@@ -1294,6 +1570,12 @@ class CompilerModule {
     // future runtime might branch off this discriminator again.
     _boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
+    /** Every data type in scope — the project's own and the enabled libraries'.
+     *  Tells a structure or enumeration, which strucpp aliases as `IEC_<NAME>`,
+     *  from a function block instance, a bare `class <NAME>`; the variable
+     *  alone cannot say. Built by `projectAndLibraryTypeNames`, which is why it
+     *  is passed rather than derived: only the caller holds the archives. */
+    typeNames: string[],
   ) {
     const originalCppPous = projectData.originalCppPous || []
 
@@ -1307,10 +1589,7 @@ class CompilerModule {
     // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
     // strucpp-free and is compiled by arduino-cli in the core's native
     // standard.
-    // Every data type the project declares is aliased into the block's scope,
-    // including ones reachable only through a structure member.
-    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-    const codeContent = generateCBlocksCode(cppPous, userTypeNames)
+    const codeContent = generateCBlocksCode(cppPous, typeNames)
     const codeFilePath = join(compilationPath, 'src', 'c_blocks_code.cpp')
 
     try {
@@ -1428,13 +1707,28 @@ class CompilerModule {
     fqbn: string
     extraCxxFlags?: string[]
     handleOutputData: HandleOutputDataCallback
-  }): Promise<{ archivePath: string; archCandidates: string[]; objectFiles: string[] }> {
+  }): Promise<{
+    archivePath: string
+    archCandidates: string[]
+    objectFiles: string[]
+  }> {
     const tcProps = await this.extractToolchainProperties(fqbn)
 
     const srcDir = join(compilationPath, 'src')
     const baremetalDir = join(compilationPath, 'examples', 'Baremetal')
     const sourcesStash = join(compilationPath, 'precompile', 'sources')
     const objDir = join(compilationPath, 'precompile', 'obj')
+
+    // Ask arduino-cli what it would put on the include path, BEFORE the TUs
+    // leave `src/`. Its discovery walks the library's sources, so a file
+    // already stashed is one it never sees — and its answer is what makes a
+    // block's `#include <WiFi.h>` resolve here, transitive dependencies and
+    // all. See `#discoverIncludeFlags`.
+    const discoveredIncludes = await this.#discoverIncludeFlags({
+      fqbn,
+      sketchPath: baremetalDir,
+      libraryPaths: [srcDir, join(srcDir, 'lib'), ...(await this.#resourceLibraryDirs(compilationPath))],
+    })
 
     // Stash strucpp-emitted .cpp out of src/ BEFORE compile, then read the
     // stash to discover the TU set. Two reasons:
@@ -1469,6 +1763,9 @@ class CompilerModule {
     // Sorted for deterministic archive-member ordering downstream.
     const stashEntries = (await readdir(sourcesStash)).filter((name) => name.endsWith('.cpp')).sort()
     const sources = stashEntries.map((name) => join(sourcesStash, name))
+
+    // The resource libraries build here too — see `#resourceLibrarySources`.
+    const resourceSources = await this.#resourceLibrarySources(compilationPath)
 
     if (sources.length === 0) {
       throw new Error(`handlePrecompileUserLib: no .cpp sources found under ${srcDir} or ${sourcesStash}`)
@@ -1524,6 +1821,7 @@ class CompilerModule {
       ...(variantPath ? [`-I${variantPath}`] : []),
       `-I${srcDir}`,
       `-I${baremetalDir}`,
+      ...discoveredIncludes,
     ]
     const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
 
@@ -1558,7 +1856,11 @@ class CompilerModule {
     // pou_MAIN 457), which overflowed the segment and failed the link with
     // "section `.text1' will not fit in region `iram1_0_seg'" — a message that
     // names neither this archive nor the reason.
-    const objectFiles = sources.map((sourcePath) => join(objDir, `${path.basename(sourcePath)}.o`))
+    const compileUnits = [
+      ...sources.map((sourcePath) => ({ sourcePath, objectName: path.basename(sourcePath) })),
+      ...resourceSources,
+    ]
+    const objectFiles = compileUnits.map(({ objectName }) => join(objDir, `${objectName}.o`))
 
     // Cap concurrent toolchain spawns at the host's logical core count.
     // An unbounded `sources.map(async …)` was dispatching one g++ per TU
@@ -1569,7 +1871,7 @@ class CompilerModule {
     // covers environments where `os.cpus()` reports zero.
     const compileConcurrency = os.cpus().length
 
-    await runWithConcurrencyLimit(sources, compileConcurrency, async (sourcePath, idx) => {
+    await runWithConcurrencyLimit(compileUnits, compileConcurrency, async ({ sourcePath }, idx) => {
       const objectPath = objectFiles[idx]
 
       const argv = [
@@ -1826,6 +2128,7 @@ class CompilerModule {
       ...buildArduinoCliCompileArgs(compileEntry, {
         sketchPath: join(baremetalPath, 'Baremetal.ino'),
         libraryPath: join(compilationPath, 'src'),
+        resourceLibraryPaths: await this.#resourceLibraryDirs(compilationPath),
         avrLibStdCppInclude,
         cleanBuild,
       }),
@@ -2638,7 +2941,7 @@ class CompilerModule {
        * name.  Missing names (enabled but not installed) come back so
        * the caller can abort with a clear error before strucpp runs.
        */
-      loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+      loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
     },
   ): Promise<void> {
     _mainProcessPort.start()
@@ -2771,6 +3074,7 @@ class CompilerModule {
     let devicePinMapping: DevicePin[]
     let libraryArchives: unknown[]
     let missingLibraries: string[]
+    let substitutedLibraries: VersionSubstitution[]
     let avrLibStdCppInclude = ''
     try {
       firmwareSkeleton = await this.loadFirmwareSkeletonInMemory(boardRuntime)
@@ -2978,10 +3282,10 @@ class CompilerModule {
         // empty PINMASK_* entries in that case.
         devicePinMapping = []
       }
-      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
-      const archives = mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
+      const archives = mainProcessBridge.loadEnabledArchives(projectData.libraries ?? [])
       libraryArchives = archives.archives
       missingLibraries = archives.missing
+      substitutedLibraries = archives.substituted
       const coreId = typeof boardEntry?.core === 'string' ? boardEntry.core : ''
       if (coreId.startsWith('arduino:avr')) {
         avrLibStdCppInclude = await this.ensureAvrLibStdCppCache()
@@ -3170,6 +3474,7 @@ class CompilerModule {
         compileOnly: compileOnly ?? false,
         libraryArchives,
         missingLibraries,
+        substitutedLibraries,
         firmwareSkeleton,
         strucppRuntimeHeaders,
         avrLibStdCppInclude,
@@ -3275,7 +3580,7 @@ class CompilerModule {
     args: Array<string | null | PLCProjectData>,
     _mainProcessPort: CompileProgressChannel,
     mainProcessBridge: {
-      loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+      loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
     },
   ): Promise<void> {
     _mainProcessPort.start()
@@ -3391,13 +3696,18 @@ class CompilerModule {
       return
     }
 
+    // Resolved once, outside the compile step: the C-blocks header and code
+    // below need the same archives, to spell a pin typed by a library's own
+    // data type the way strucpp declared it.
+    const { archives: libraries, missing: missingLibraries } = mainProcessBridge.loadEnabledArchives(
+      projectData.libraries ?? [],
+    )
+    const typeNames = projectAndLibraryTypeNames(projectData, libraries)
+
     // Compile ST to C++ with STruC++ (replaces iec2c + debug + glue generation)
     try {
       const hasCBlocks = ((projectData as ProjectDataWithCppPous).originalCppPous?.length ?? 0) > 0
       const knownPous = buildKnownPous(projectData.pous)
-      const enabledLibraryNames = (projectData.libraries ?? []).map((ref) => ref.name)
-      const { archives: libraries, missing: missingLibraries } =
-        mainProcessBridge.loadEnabledArchives(enabledLibraryNames)
       await this.handleCompileSTtoCpp(
         sourceTargetFolderPath,
         (data, logLevel, compileError) => {
@@ -3424,9 +3734,14 @@ class CompilerModule {
 
     // Generate C/C++ blocks header file
     try {
-      await this.handleGenerateCBlocksHeader(projectData, sourceTargetFolderPath, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      await this.handleGenerateCBlocksHeader(
+        projectData,
+        sourceTargetFolderPath,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        typeNames,
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -3442,9 +3757,15 @@ class CompilerModule {
 
     // Generate C/C++ blocks code file
     try {
-      await this.handleGenerateCBlocksCode(projectData, compilationPath, boardRuntime, (data, logLevel) => {
-        _mainProcessPort.postMessage({ logLevel, message: data })
-      })
+      await this.handleGenerateCBlocksCode(
+        projectData,
+        compilationPath,
+        boardRuntime,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+        typeNames,
+      )
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -3493,10 +3814,16 @@ class CompilerModule {
    *   5. Write the archive (same `JSON.stringify(archive, null, 2)`
    *      shape `library-manager-module` persists user-installed
    *      archives with) to `<projectPath>/build/<name>.stlib`.
+   *   6. Run an end-to-end verification compile against the target the
+   *      manifest's `build` block names, gated by an MD5 cache keyed off
+   *      the verified sources and that target.  Verification failures
+   *      surface as warnings on `result.verification`, never as build
+   *      errors — the `.stlib` carries source and the consumer compiles it
+   *      for its own board.  `cleanBuild` skips the cache and forces a
+   *      re-verification.
    *
-   * The build is target-neutral — no avr-gcc pass, no simulator.
-   * Running a library is a separate action the renderer drives
-   * through `compileProgram` with a generated harness project; see
+   * Running a library is a separate action the renderer drives through
+   * `compileProgram` with a generated harness project; see
    * `composeLibraryDebugHarness`.
    */
   async compileLibrary(
@@ -3507,8 +3834,8 @@ class CompilerModule {
     _mainProcessPort.start()
 
     // IPC args: `CompileLibraryIpcArgs` — [projectPath, projectData,
-    // nativePous]. `nativePous` is sent rather than derived here: it has to be
-    // read off the RAW project data, and by the time anything arrives over
+    // verifyProjectData, cleanBuild, nativePous]. `nativePous` is sent rather
+    // than derived here: it has to be read off the RAW project data, and by the time anything arrives over
     // this channel `preprocessPous` has already lowered every native body to
     // bridge ST and rewritten its language tag. An older renderer omits it,
     // which degrades to "this project has no native POUs".
@@ -3522,20 +3849,26 @@ class CompilerModule {
       setTimeout(() => _mainProcessPort.close(), 25)
       return
     }
-    const { projectPath, projectData, nativePous } = parsed.value
+    const { projectPath, projectData, verifyProjectData, cleanBuild, nativePous } = parsed.value
 
     // Bridge the orchestrator's structured port API onto the desktop
     // platform's existing helpers.  This is the only desktop-specific
     // glue the library build needs — every stage decision lives in
     // the shared orchestrator from here on.
     const libraryPort = createDesktopLibraryBuildPort({
-      loadEnabledArchives: (names) => mainProcessBridge.loadEnabledArchives(names),
+      loadEnabledArchives: (refs) => mainProcessBridge.loadEnabledArchives(refs),
+      runVerificationCompile: ({ projectPath: p, verifyProjectData: v, target, emit }) =>
+        this.runVerificationCompile(p, v as PLCProjectData, target, mainProcessBridge, (message, logLevel) =>
+          emit(message, logLevel),
+        ),
     })
 
     const result = await runLibraryBuildPipeline(
       {
         projectPath,
         projectData,
+        verifyProjectData,
+        cleanBuild,
         nativePous,
       },
       libraryPort,
@@ -3546,6 +3879,123 @@ class CompilerModule {
     // Same 25ms delay the pre-refactor code used so the result
     // message is delivered before the port closes.
     setTimeout(() => _mainProcessPort.close(), 25)
+  }
+
+  /**
+   * Run an end-to-end verification compile of a synthetic Library
+   * Project against the manifest's verify target.  Reuses the full
+   * `compileProgram` pipeline (strucpp → arduino-cli → the core's
+   * toolchain) by feeding it a private `MessageChannelMain` — verifies
+   * the same way the program build does, against the same binaries,
+   * with zero code duplication.
+   *
+   * `forwardLog` is the caller's drain for the inner pipeline's
+   * message stream.  Streaming the strucpp / arduino-cli output is
+   * the difference between "blank console for 30 seconds while
+   * arduino-cli compiles" and "user sees progress" — and crucially
+   * the difference between "the .stlib generated but verification
+   * failed silently" and "the user knows which C++ line tripped
+   * avr-gcc".  We do keep the first error message internally so the
+   * summary line at the end of the build is succinct, but every log
+   * line still flows through.
+   *
+   * Resolves with `{success, message?}` either when the inner
+   * pipeline posts `closePort: true` (happy path) or when its port
+   * closes without one (the many error paths in `compileProgram`).
+   * Never throws — matches the caller's "verification is advisory"
+   * contract.
+   */
+  private async runVerificationCompile(
+    projectPath: string,
+    verifyData: PLCProjectData,
+    target: LibraryVerifyTarget,
+    bridge: LibraryVerificationBridge,
+    forwardLog: (message: string, logLevel?: 'info' | 'warning' | 'error') => void,
+  ): Promise<{ success: boolean; message?: string }> {
+    const { board, core: boardCore } = await this.#resolveVerifyBoard(target, (message) =>
+      forwardLog(message, 'warning'),
+    )
+    // Name the board, not just the core: which board stands in for a core
+    // decides the FQBN and the defines, so a compile error that only that
+    // board produces is otherwise unattributable.
+    forwardLog(`Verifying against ${board}${boardCore ? ` (${boardCore})` : ''}.`, 'info')
+
+    return new Promise((resolve) => {
+      const channel = new MessageChannelMain()
+      let firstError: string | null = null
+      let settled = false
+
+      const settle = (result: { success: boolean; message?: string }) => {
+        if (settled) return
+        settled = true
+        try {
+          channel.port1.close()
+        } catch {
+          // Already closed — fine.
+        }
+        resolve(result)
+      }
+
+      channel.port1.on('message', (event) => {
+        const data = event.data as {
+          message?: unknown
+          logLevel?: 'info' | 'warning' | 'error'
+          closePort?: boolean
+        }
+        if (data.message !== undefined) {
+          // `decodePortMessage` returns readable text from the
+          // `Uint8Array` Node `Buffer` payloads survive structured
+          // clone as.  Without it, `.toString()` on a Uint8Array
+          // would render comma-separated byte numbers in the
+          // console.
+          const text = decodePortMessage(data.message)
+          // Forward every line — the caller decides how to render
+          // them (PLC-build path would prepend `[verify]`).  Even
+          // info-level messages matter here: avr-gcc compile can
+          // take 10+ seconds on a large library and the user needs
+          // to see progress.
+          forwardLog(text, data.logLevel)
+          // Keep only the FIRST error string for the summary.  Once
+          // arduino-cli or strucpp errors, the cascade usually
+          // continues with knock-on failures; the first one names
+          // the underlying cause.
+          if (data.logLevel === 'error' && firstError === null) {
+            firstError = text
+          }
+        }
+        if (data.closePort) {
+          settle(firstError ? { success: false, message: firstError } : { success: true })
+        }
+      })
+      // `compileProgram` posts intermediate `closePort: true` messages
+      // on its happy path but jumps straight to `port.close()` on its
+      // many error paths, without an explicit close message.  Listen
+      // for the port's 'close' event so an inner-pipeline error can't
+      // leave the outer library build hanging on an unresolved promise
+      // — same convention the renderer-side adapter uses.
+      channel.port1.on('close', () => {
+        settle(firstError ? { success: false, message: firstError } : { success: true })
+      })
+      channel.port1.start()
+
+      // The boolean slots (compileOnly / cleanBuild) are runtime
+      // values the inner `compileProgram` re-casts off `args as [...]`,
+      const compileArgs: Array<string | null | boolean | undefined | object> = [
+        projectPath,
+        board,
+        boardCore,
+        true,
+        verifyData,
+        null,
+        null,
+        true,
+        null,
+        undefined,
+      ]
+      void this.compileProgram(compileArgs, channel.port2, bridge).catch((err) =>
+        settle({ success: false, message: getErrorMessage(err) }),
+      )
+    })
   }
 }
 export { CompilerModule }

@@ -8,7 +8,7 @@
  *   Editor: src/types/PLC/units/library.ts
  *   Web:    src/store/types/PLC/units/library.ts
  */
-import { BASE_TYPE_NAMES } from '@root/frontend/utils/iec-types-registry'
+import { BASE_TYPE_NAMES, parseStringLength } from '@root/frontend/utils/iec-types-registry'
 import z from 'zod'
 
 /**
@@ -29,7 +29,27 @@ import z from 'zod'
  * names — and don't need to round-trip mixed-case input.
  */
 const baseTypeEnum = z.enum(BASE_TYPE_NAMES as unknown as [string, ...string[]])
-const baseTypeSchema = z.preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), baseTypeEnum)
+
+/**
+ * A length-qualified string — `STRING(23)`, `WSTRING(8)`. Square brackets are
+ * accepted on input and normalised to the parenthesised form.
+ *
+ * Beside the enum rather than in it: `baseTypeEnum` is also exported for
+ * `.options` / `.extract()`, and a dropdown lists type names, not declarations.
+ */
+const sizedStringSchema = z.string().transform((value, ctx) => {
+  const { base, length, valid } = parseStringLength(value)
+  if (length === undefined || !valid) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Invalid base type: ${value}` })
+    return z.NEVER
+  }
+  return `${base}(${length})`
+})
+
+const baseTypeSchema = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v),
+  z.union([baseTypeEnum, sizedStringSchema]),
+)
 
 const genericTypeSchema = z.object({
   ANY: z.union([

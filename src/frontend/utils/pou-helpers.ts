@@ -89,11 +89,43 @@ const LIBRARY_FB_INTERFACE_CLASSES: ReadonlySet<string> = new Set(['input', 'out
 const USER_FB_PERSISTENT_CLASSES: ReadonlySet<string> = new Set(['input', 'output', 'inOut', 'local'])
 
 /**
+ * Find a user-defined function block POU by type name.
+ */
+const findProjectFunctionBlock = (typeName: string, projectPous: PLCPou[]): PLCPou | undefined => {
+  const typeNameUpper = typeName.toUpperCase()
+  const pou = projectPous.find(
+    (p) => normalizeTypeString(p.pouType) === 'functionblock' && p.name.toUpperCase() === typeNameUpper,
+  )
+  return pou?.pouType === 'function-block' ? pou : undefined
+}
+
+/**
+ * The `EXTENDS` chain above a user-defined function block, derived first.
+ * Stops at a base that is not a project POU; `visited` bounds a cycle.
+ */
+const functionBlockChain = (typeName: string, projectPous: PLCPou[]): PLCPou[] => {
+  const chain: PLCPou[] = []
+  const visited = new Set<string>()
+  let cursor = findProjectFunctionBlock(typeName, projectPous)
+  while (cursor && !visited.has(cursor.name.toUpperCase())) {
+    visited.add(cursor.name.toUpperCase())
+    chain.push(cursor)
+    const base = cursor.interface?.extends
+    if (!base) break
+    cursor = findProjectFunctionBlock(base, projectPous)
+  }
+  return chain
+}
+
+/**
  * Find a function block definition by name.
  * Searches BOTH the built-in library AND project POUs.
  * Returns the variables array from the FB definition, filtered to
  * match the debugger's variable-enumeration contract (see comment on
  * LIBRARY_FB_INTERFACE_CLASSES). Returns null if not found.
+ *
+ * For a user-defined FB the result spans the whole `EXTENDS` chain, base
+ * members first, with a derived declaration hiding a base one of the same name.
  */
 export const findFunctionBlockVariables = (
   typeName: string,
@@ -123,16 +155,22 @@ export const findFunctionBlockVariables = (
 
   // Check project POUs (user-defined FBs) — interface + locals,
   // dropping temp / external.
-  const customFB = projectPous.find(
-    (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
-  )
-  if (customFB && customFB.pouType === 'function-block') {
-    return ((customFB.interface?.variables ?? []) as PouVariable[]).filter((v) =>
-      v.class === undefined ? true : USER_FB_PERSISTENT_CLASSES.has(v.class),
-    )
-  }
+  const chain = functionBlockChain(typeName, projectPous)
+  if (chain.length === 0) return null
 
-  return null
+  // Claim derived-first so a redeclaration wins, emit base-first.
+  const claimed = new Set<string>()
+  const perLevel = chain.map((pou) =>
+    ((pou.interface?.variables ?? []) as PouVariable[]).filter((v) => {
+      if (v.class !== undefined && !USER_FB_PERSISTENT_CLASSES.has(v.class)) return false
+      const key = v.name.toUpperCase()
+      if (claimed.has(key)) return false
+      claimed.add(key)
+      return true
+    }),
+  )
+
+  return perLevel.reverse().flat()
 }
 
 /**
@@ -151,16 +189,21 @@ export const findFunctionBlockVariables = (
  *
  * Returns full PLCVariable objects (not the narrowed PouVariable view) so the
  * debug traversal can hand them straight to traverseVariable.
+ *
+ * The `EXTENDS` chain is walked too, deduped by name: every level resolves to
+ * the same canonical `Config0:<name>` node.
  */
 export const findFunctionBlockExternalVariables = (typeName: string, projectPous: PLCPou[]): PLCVariable[] => {
-  const typeNameUpper = typeName.toUpperCase()
-  const customFB = projectPous.find(
-    (pou) => normalizeTypeString(pou.pouType) === 'functionblock' && pou.name.toUpperCase() === typeNameUpper,
+  const seen = new Set<string>()
+  return functionBlockChain(typeName, projectPous).flatMap((pou) =>
+    (pou.interface?.variables ?? []).filter((v) => {
+      if (v.class !== 'external') return false
+      const key = v.name.toUpperCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }),
   )
-  if (customFB && customFB.pouType === 'function-block') {
-    return (customFB.interface?.variables ?? []).filter((v) => v.class === 'external')
-  }
-  return []
 }
 
 /**
@@ -191,6 +234,33 @@ export const findStructureVariables = (typeName: string, dataTypes: PLCDataType[
  */
 export const isStructureType = (typeName: string, dataTypes: PLCDataType[]): boolean => {
   return findStructureVariables(typeName, dataTypes) !== null
+}
+
+/**
+ * Find an array data type by name — `TYPE A_PROFILE : ARRAY [0..7] OF REAL`.
+ * Returns the element type and bounds in the same shape an inline
+ * `ARRAY [..] OF ..` carries in `type.data`. Null for anything else.
+ */
+export const findArrayDataType = (
+  typeName: string,
+  dataTypes: PLCDataType[],
+): {
+  baseType: { definition: 'base-type' | 'user-data-type'; value: string }
+  dimensions: Array<{ dimension: string }>
+} | null => {
+  const dataType = dataTypes.find((dt) => dt.name.toLowerCase() === typeName.toLowerCase())
+  if (dataType?.derivation !== 'array') return null
+
+  // `baseType` is a full PLCVariableType, wider than the array walk accepts.
+  // `derived` names an FB, which the walk resolves by name anyway; a nested
+  // `array` element needs a second subscript this shape cannot carry.
+  const { definition, value } = dataType.baseType
+  if (definition !== 'base-type' && definition !== 'user-data-type' && definition !== 'derived') return null
+
+  return {
+    baseType: { definition: definition === 'derived' ? 'user-data-type' : definition, value },
+    dimensions: dataType.dimensions,
+  }
 }
 
 /**

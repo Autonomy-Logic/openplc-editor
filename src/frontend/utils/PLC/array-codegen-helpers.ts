@@ -1,38 +1,26 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { IEC_BASE_TYPES, parseStringLength } from '../iec-types-registry'
 import { parseDimensionRange } from './dimension-range'
 
-const BASE_TYPE_TO_IEC: Record<string, string> = {
-  bool: 'IEC_BOOL',
-  sint: 'IEC_SINT',
-  int: 'IEC_INT',
-  dint: 'IEC_DINT',
-  lint: 'IEC_LINT',
-  usint: 'IEC_USINT',
-  uint: 'IEC_UINT',
-  udint: 'IEC_UDINT',
-  ulint: 'IEC_ULINT',
-  byte: 'IEC_BYTE',
-  word: 'IEC_WORD',
-  dword: 'IEC_DWORD',
-  lword: 'IEC_LWORD',
-  real: 'IEC_REAL',
-  lreal: 'IEC_LREAL',
-  string: 'IEC_STRING',
-  wstring: 'IEC_WSTRING',
-
-  // Duration and calendar types. Absent until DOPE-584's type sweep: a C++
-  // block declaring `TIME` emitted `strucpp::TIME`, which names nothing, and the
-  // build failed on generated code the user never wrote. The aliases these map
-  // to are the ones strucpp declares (`IEC_TIME = IECVar<TIME_t>`, and so on).
-  time: 'IEC_TIME',
-  date: 'IEC_DATE',
-  tod: 'IEC_TOD',
-  dt: 'IEC_DT',
-
-  // The long spellings IEC 61131-3 also allows for the same two types.
-  time_of_day: 'IEC_TOD',
-  date_and_time: 'IEC_DT',
-}
+/**
+ * IEC elementary type name (lower-cased) to the `IEC_*` alias STruC++ declares
+ * for it in `iec_var.hpp` — `IEC_BOOL`, `IEC_TIME`, and so on.
+ *
+ * Derived from the registry rather than restated, so a type added there is
+ * mapped here without a second edit. This used to be a hand-written list, which
+ * is how `TIME` came to emit `strucpp::TIME` — a name that does not exist — and
+ * failed the build on generated code the user never wrote.
+ *
+ * Aliases resolve to their canonical type's spelling (`time_of_day` →
+ * `IEC_TOD`). The leading underscores of `__XWORD` are dropped, because
+ * STruC++ spells that one `IEC_XWORD`.
+ */
+const BASE_TYPE_TO_IEC: Record<string, string> = Object.fromEntries(
+  IEC_BASE_TYPES.flatMap((type) => {
+    const alias = `IEC_${type.name.replace(/^_+/, '')}`
+    return [type.name, ...type.aliases].map((spelling) => [spelling.toLowerCase(), alias])
+  }),
+)
 
 /**
  * Check if a PLCVariable has an array type definition.
@@ -90,9 +78,54 @@ const getArrayBaseTypeValue = (variable: PLCVariable): string => {
  * This is the spelling for a variable that IS the type. An element INSIDE an
  * array is spelled differently — see `mapArrayElementTypeToIEC`.
  */
+/**
+ * The generic type names a native block may declare on a VAR_INPUT, and the one
+ * runtime type they all resolve to.
+ *
+ * All seven share a representation — the `IEC_ANY` descriptor
+ * `{ typeclass, pvalue, diSize }`. The family constrains what the caller may
+ * pass, which the compiler checks at the call site, not what the block receives.
+ */
+const GENERIC_TYPE_TO_IEC: Record<string, string> = {
+  // Not a generic: the descriptor a generic carries, declarable in its own
+  // right so a block can keep what it was handed. Same runtime type.
+  '__SYSTEM.ANYTYPE': 'IEC_ANY',
+
+  ANY: 'IEC_ANY',
+  ANY_BIT: 'IEC_ANY',
+  ANY_DATE: 'IEC_ANY',
+  ANY_NUM: 'IEC_ANY',
+  ANY_REAL: 'IEC_ANY',
+  ANY_INT: 'IEC_ANY',
+  ANY_STRING: 'IEC_ANY',
+}
+
+/**
+ * Whether a pin's declared type is a generic (or the descriptor it carries),
+ * and so resolves to the runtime's `IEC_ANY` rather than to a project type.
+ */
+const isDescriptorPinType = (typeName: string): boolean => GENERIC_TYPE_TO_IEC[typeName.toUpperCase()] !== undefined
+
 const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>): string => {
   const upper = typeName.toUpperCase()
+  const generic = GENERIC_TYPE_TO_IEC[upper]
+  if (generic) return generic
   return userTypeNames?.has(upper) ? `IEC_${upper}` : upper
+}
+
+/**
+ * strucpp wrapper for a length-qualified string, or `null` for anything else.
+ *
+ * `IEC_STRING` / `IEC_WSTRING` are fixed aliases for the 254-character
+ * wrappers, so a declared length names the template directly. Must match what
+ * STruC++ emits for the same declaration (`IECStringVar<23>`): `<POU>_VARS`
+ * points at the member the function block declares, so a mismatch is an ABI
+ * bug, not a compile error.
+ */
+const sizedStringIECType = (baseType: string): string | null => {
+  const { base, length, valid } = parseStringLength(baseType)
+  if (length === undefined || !valid) return null
+  return base === 'WSTRING' ? `IECWStringVar<${length}>` : `IECStringVar<${length}>`
 }
 
 /**
@@ -123,11 +156,19 @@ const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>)
  * type the name refers to, so the name alone decides.
  */
 const mapArrayElementTypeToIEC = (baseType: string): string => {
+  const sized = sizedStringIECType(baseType)
+  if (sized) return sized
   const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
-  return elementary ?? baseType.toUpperCase()
+  if (elementary) return elementary
+  // A generic and the descriptor it carries are one runtime type, and that
+  // spelling is the same in element position — the bare name is not a C++ type
+  // at all. Everything else user-defined is bare here; see the note above.
+  return GENERIC_TYPE_TO_IEC[baseType.toUpperCase()] ?? baseType.toUpperCase()
 }
 
 const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>): string => {
+  const sized = sizedStringIECType(baseType)
+  if (sized) return sized
   const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
   if (elementary) return elementary
   // Not elementary: a type the map does not know. It takes the scalar spelling
@@ -201,6 +242,42 @@ const multiDimensionalContainerType = (variable: PLCVariable): string | null => 
   return `Array${dimensions.length}D<strucpp::${elementType}, ${bounds.join(', ')}>`
 }
 
+/** The bound a variable-length array dimension carries. */
+const VARIABLE_LENGTH_BOUND = '*'
+
+/**
+ * strucpp view type for a variable-length array, or `null` for anything else.
+ *
+ * A VLA pin (`ARRAY [*] OF INT`) has no bounds until it is called, so it cannot
+ * be a pointer to its first element: nothing would carry the element count or
+ * the lower bound. strucpp passes `ArrayView<n>D<T>` — data pointer plus runtime
+ * bounds — reached through `lower_bound()` / `upper_bound()` / `at()`, so the
+ * struct holds a pointer to the view itself.
+ *
+ * Rank one and two only: the runtime declares `ArrayView1D` and `ArrayView2D`
+ * and nothing beyond. A mixed shape like `ARRAY [*, 0..3]` is not legal and
+ * falls to the fixed-array path.
+ */
+const variableLengthViewType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string | null => {
+  if (variable.type.definition !== 'array' || !variable.type.data) return null
+
+  const dimensions = variable.type.data.dimensions
+  if (dimensions.length < 1 || dimensions.length > 2) return null
+  if (!dimensions.every((dimension) => dimension.dimension.trim() === VARIABLE_LENGTH_BOUND)) return null
+
+  // Scalar spelling, not the element one: a view's parameter goes through
+  // strucpp's ordinary variable-type mapping, so an enumeration keeps its
+  // `IEC_` wrapper here even though it loses it inside `Array1D`.
+  const elementType = mapBaseTypeToIEC(variable.type.data.baseType.value, userTypeNames)
+  return `ArrayView${dimensions.length}D<strucpp::${elementType}>`
+}
+
+/**
+ * Whether a variable is a variable-length array, and so is passed as a view
+ * rather than as a pointer to its first element.
+ */
+const isVariableLengthArray = (variable: PLCVariable): boolean => variableLengthViewType(variable) !== null
+
 /**
  * Generate a C struct member declaration for a variable.
  * Both scalars and arrays use pointers:
@@ -225,6 +302,9 @@ const multiDimensionalContainerType = (variable: PLCVariable): string | null => 
  */
 const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   const name = variable.name.toUpperCase()
+  const variableLength = variableLengthViewType(variable, userTypeNames)
+  if (variableLength) return `  strucpp::${variableLength} *${name};\n`
+
   const multiDimensional = multiDimensionalContainerType(variable)
   if (multiDimensional) return `  strucpp::${multiDimensional} *${name};\n`
 
@@ -239,6 +319,8 @@ export {
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
+  isDescriptorPinType,
+  isVariableLengthArray,
   mapArrayElementTypeToIEC,
   mapBaseTypeToIEC,
   mapUserTypeToIEC,

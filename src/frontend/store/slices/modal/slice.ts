@@ -25,6 +25,7 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'debugger-message',
   'debugger-ip-input',
   'missing-libraries',
+  'library-updates',
   'public-catalog-browser',
   'confirm-install-libraries',
   'project-readme',

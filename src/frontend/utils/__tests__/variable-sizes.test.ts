@@ -567,11 +567,28 @@ describe('encodeForceValue', () => {
     expect(() => encodeForceValue('10', 'TIME')).toThrow(/Invalid TIME value/)
   })
 
-  it('encodes STRING as a length byte followed by ASCII', () => {
-    expect(Array.from(encodeForceValue('hi', 'STRING'))).toEqual([2, 0x68, 0x69])
+  it('encodes STRING as a length byte followed by ASCII, in the full wire window', () => {
+    // The window is fixed at `1 + DEBUG_STRING_CAP`, not `1 + text.length`.
+    // `handle_set` in the runtime compares the received length against
+    // `type_ops[tag].size` and answers STATUS_DATA_TOO_LARGE below it, so a
+    // variable-length buffer made every string force a silent no-op: the flag
+    // showed as set from the session's own bookkeeping, and the value never
+    // moved.
+    const WIRE = 1 + 126
+
+    const hi = encodeForceValue('hi', 'STRING')
+    expect(hi.length).toBe(WIRE)
+    expect(Array.from(hi.subarray(0, 3))).toEqual([2, 0x68, 0x69])
+    // The tail is zero — the reader decodes `min(length, CAP)` and ignores it.
+    expect(Array.from(hi.subarray(3)).every((b) => b === 0)).toBe(true)
+
     // IEC literal quotes are unwrapped — and are how spaces survive trimming.
-    expect(Array.from(encodeForceValue("' hi '", 'STRING'))).toEqual([4, 0x20, 0x68, 0x69, 0x20])
-    expect(Array.from(encodeForceValue("''", 'STRING'))).toEqual([0])
+    const spaced = encodeForceValue("' hi '", 'STRING')
+    expect(Array.from(spaced.subarray(0, 5))).toEqual([4, 0x20, 0x68, 0x69, 0x20])
+
+    const empty = encodeForceValue("''", 'STRING')
+    expect(empty.length).toBe(WIRE)
+    expect(Array.from(empty).every((b) => b === 0)).toBe(true)
   })
 
   it('rejects STRING values that are non-ASCII or over the protocol cap', () => {

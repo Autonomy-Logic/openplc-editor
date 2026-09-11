@@ -169,6 +169,12 @@ export interface PLCPou {
   pouType: PouType
   interface?: {
     returnType?: string
+    /**
+     * Base function block, from `FUNCTION_BLOCK X EXTENDS Y`; undefined when
+     * the POU derives from nothing. On the interface because the clause changes
+     * the block's pins and methods, as `returnType` does for a FUNCTION.
+     */
+    extends?: string
     variables: PLCVariable[]
   }
   body: PLCBody
@@ -1378,14 +1384,12 @@ export interface DebugCompileResult {
  * shape of `CompileResult` (success / error) plus the artefact path
  * the console surfaces so the user can find the produced archive.
  *
- * There is deliberately no verification field.  The build used to run
- * the library through avr-gcc against the simulator target and report
- * the outcome here, which judged every library by whether it links on
- * an ATmega2560 — a target most libraries never run on.  Executing a
- * library is now its own action: the debug harness
- * (`composeLibraryDebugHarness`) instantiates every block and runs it
- * on the simulator when the author asks for it.  strucpp's
- * `compileStlib` remains the build's correctness gate.
+ * The verification step (compiling the synthetic project against the
+ * manifest's verify target) reports its outcome through `verification`:
+ * missing means it did not run — `build.verify: "off"`; `success: true`
+ * means it ran clean; `success: false` does NOT fail the build, the warning
+ * surfaces to the console instead, because the `.stlib` carries source and
+ * the consumer compiles it for its own board.
  */
 export interface CompileLibraryResult {
   success: boolean
@@ -1394,6 +1398,10 @@ export interface CompileLibraryResult {
   /** Manifest name extracted from `library.json`. */
   libraryName?: string
   error?: string
+  verification?: {
+    success: boolean
+    message?: string
+  }
 }
 
 // ---------------------------------------------------------------------------

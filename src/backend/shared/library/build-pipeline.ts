@@ -31,6 +31,8 @@
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { checkPathId } from '@root/backend/shared/utils/path-safety'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
+import type { LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
+import { parseVerifyTarget } from '@root/middleware/shared/utils/library/manifest-build-block'
 
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
@@ -55,6 +57,9 @@ export interface LibraryBuildManifest {
   name: string
   version: string
   namespace: string
+  /** Toolchain the library is verified with, from the manifest's `build`
+   *  block.  Defaults to `{ mode: 'arduino' }` when the block is absent. */
+  verifyTarget: LibraryVerifyTarget
   /** Whatever else was in the JSON.  Forwarded to strucpp's
    *  compileStlib via the spread in `composeStlibInputs`, so
    *  upstream additions don't require an editor change. */
@@ -107,6 +112,9 @@ function parseLibraryManifest(json: string): ManifestParseResult {
     )
   }
 
+  const verify = parseVerifyTarget(obj)
+  if ('errors' in verify) errors.push(...verify.errors)
+
   if (errors.length > 0) return { ok: false, errors }
 
   return {
@@ -115,6 +123,7 @@ function parseLibraryManifest(json: string): ManifestParseResult {
       name: obj.name as string,
       version: obj.version as string,
       namespace: obj.namespace as string,
+      verifyTarget: (verify as { target: LibraryVerifyTarget }).target,
       extra: obj,
     },
   }
@@ -312,6 +321,26 @@ export interface LibraryNativeSource {
   source: string
 }
 
+/**
+ * One file from the library project's `resources/` directory, carried verbatim
+ * through the `.stlib` so a library and the sources it was built against ship
+ * together.
+ *
+ * `resources/` holds library folders, so `path` is relative to `resources/`
+ * and its first segment names the library the file belongs to.  The consumer
+ * reproduces the layout and resolves each folder as a library.
+ */
+export interface LibraryResource {
+  path: string
+  /** UTF-8 text, or the file's bytes base64-encoded when `encoding` says so. */
+  content: string
+  /** Absent for text.  `'base64'` marks a file that is not UTF-8 — a library
+   *  that declares `precompiled=true` ships `.a` files beside its headers, and
+   *  those are part of the library.  The archive is JSON, so they ride
+   *  encoded and the consumer writes the decoded bytes. */
+  encoding?: 'base64'
+}
+
 export interface LibraryBuildAux {
   pouDocs?: Record<string, string>
   dependencyArchives?: unknown[]
@@ -321,6 +350,9 @@ export interface LibraryBuildAux {
    *  bridge ST is filtered out of the strucpp input in exchange —
    *  see `LibraryNativeSource`. */
   nativeSources?: LibraryNativeSource[]
+  /** Files from the library project's `resources/` tree.  Stamped onto the
+   *  archive's `resources` field for the consumer to materialise. */
+  resources?: LibraryResource[]
 }
 
 /**
@@ -453,6 +485,7 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
       types?: Array<{ name: string; documentation?: string }>
     }
     dependencies?: Array<{ name: string; version: string }>
+    resources?: LibraryResource[]
   }
   if (!arch.manifest) return
 
@@ -490,6 +523,13 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
   if (aux?.dependencyRefs && aux.dependencyRefs.length > 0) {
     arch.dependencies = aux.dependencyRefs.map((ref) => ({ name: ref.name, version: ref.version }))
   }
+
+  // Resources ride through the archive verbatim.  The field stays absent on
+  // libraries that ship none, so such an archive still loads in an editor
+  // without them.
+  if (aux?.resources && aux.resources.length > 0) {
+    arch.resources = aux.resources.map((r) => ({ path: r.path, content: r.content }))
+  }
 }
 
 /**
@@ -506,6 +546,30 @@ function inferCategory(fileName: string): string | undefined {
   // this to group functions vs function-blocks in the manifest, but
   // accepts `undefined` and falls back to detecting from the body.
   return undefined
+}
+
+// ---------------------------------------------------------------------------
+// Stage 4: verification project (Phase 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a transient PLCProject the verification compile path
+ * consumes.  Same stub-program shape as `stubProgramFor`, but
+ * tagged `plc-project` so the existing `compileProgram` flow
+ * (Phase 8) doesn't try to recurse back into the library branch.
+ *
+ * Verification runs the resulting project through the standard
+ * ST→C++→arduino-cli pipeline against the manifest's verify target.
+ * Compile failures there are surfaced as warnings — the `.stlib` is still
+ * produced, because it carries source and the consumer compiles it for its
+ * own board.
+ */
+export function composeVerificationProject(project: PLCProject): PLCProject {
+  const stubbed = stubProgramFor(project)
+  return {
+    meta: { ...project.meta, type: 'plc-project' },
+    data: stubbed.data,
+  }
 }
 
 // Exposed for test ergonomics only — keeps the stub-name constants

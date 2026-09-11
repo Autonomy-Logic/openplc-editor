@@ -12,7 +12,11 @@ import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../util
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
-import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
+import {
+  type RestampChange,
+  restampFlowLibraryVariants,
+  summariseRestampChanges,
+} from '../../../utils/PLC/restamp-library-variants'
 import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
@@ -1142,7 +1146,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // no-op when the libraries haven't loaded yet or nothing is stale.
       const systemLibraries = getState().libraries.system
       const userPouNames = pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
-      let restampedCount = 0
+      const restampChanges: RestampChange[] = []
+      let restampPoolEmpty = false
+      let restampModified = false
       // POUs holding a block still drawn with the old two-sided VAR_IN_OUT pin. Counted, never
       // converted: the fix rewires the diagram, so it belongs to the block's update badge and
       // not to project load. Reporting it here is the only signal the user would otherwise get,
@@ -1170,23 +1176,52 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           // The loaded project data is frozen, so clone before re-stamping
           // (which mutates variant types in place) and hand the store the copy.
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
-          restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
+          const report = restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames, { pou: pou.name })
+          restampChanges.push(...report.changes)
+          restampPoolEmpty = restampPoolEmpty || report.poolEmpty
           for (const rung of bodyValue.rungs ?? []) scanLegacyInOut(rung.nodes, pou.name)
           getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
+          // The canvas reads the flow, but everything that persists or compiles
+          // reads `pou.body.value`. Without this the refresh is thrown away on
+          // save and re-reported on every open.
+          if (report.modified) {
+            restampModified = true
+            getState().projectActions.updatePou({ name: pou.name, content: { language: 'ld', value: bodyValue } })
+          }
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
-          restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
+          const report = restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames, { pou: pou.name })
+          restampChanges.push(...report.changes)
+          restampPoolEmpty = restampPoolEmpty || report.poolEmpty
           scanLegacyInOut(bodyValue.rung?.nodes, pou.name)
           getState().fbdFlowActions.addFBDFlow({ ...bodyValue, name: pou.name })
+          if (report.modified) {
+            restampModified = true
+            getState().projectActions.updatePou({ name: pou.name, content: { language: 'fbd', value: bodyValue } })
+          }
         }
       })
 
-      if (restampedCount > 0) {
+      // An empty pool means nothing could be checked -- say so rather than
+      // reporting a clean project.
+      if (restampPoolEmpty) {
         getState().consoleActions.addLog({
-          level: 'info',
-          message: `Refreshed ${restampedCount} library block pin type(s) from the current library definitions.`,
+          level: 'warning',
+          message:
+            'No libraries were loaded when this project opened, so its placed library blocks were not ' +
+            'checked against their definitions.',
         })
+      }
+
+      for (const line of summariseRestampChanges(restampChanges)) {
+        getState().consoleActions.addLog({ level: line.severity, message: line.message })
+      }
+
+      // The flows in the store now differ from the files on disk. Saving
+      // writes every POU, so one save persists the refresh.
+      if (restampModified) {
+        getState().workspaceActions.setEditingState('unsaved')
       }
 
       if (convertibleInOutPous.size > 0) {
@@ -1237,6 +1272,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // a clear error if they don't install the missing pieces.
       if (getState().missingLibraries.length > 0) {
         getState().modalActions.openModal('missing-libraries')
+      } else if (getState().outdatedLibraries.length > 0) {
+        // Only when nothing is missing: installing what the project cannot
+        // resolve comes before choosing between versions it can.
+        getState().modalActions.openModal('library-updates')
       }
 
       // Reclassify ALL POUs' variables with full context.

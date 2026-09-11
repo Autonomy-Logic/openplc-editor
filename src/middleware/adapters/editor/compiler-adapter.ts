@@ -55,6 +55,7 @@ export interface IpcProjectData {
       name: string
       variables: unknown[]
       returnType?: string
+      extends?: string
       body: { language: string; value: unknown }
       documentation: string
     }
@@ -74,6 +75,9 @@ function portPouToIpcPou(pou: PLCPou) {
       name: pou.name,
       variables: (pou.interface?.variables ?? []) as unknown[],
       ...(pou.interface?.returnType ? { returnType: pou.interface.returnType } : {}),
+      // Restated field by field, so anything unnamed is dropped — `extends`
+      // included, and the derived block then reaches the compiler with no base.
+      ...(pou.interface?.extends ? { extends: pou.interface.extends } : {}),
       body: pou.body as { language: string; value: unknown },
       documentation: pou.documentation ?? '',
     },
@@ -143,6 +147,10 @@ export type CompileLibraryIpcArgs = [
   projectPath: string,
   /** Build-pass project data, `preprocessPous` with `isSimulator: false`. */
   projectData: IpcProjectData,
+  /** Verification-pass project data, `preprocessPous` with `isSimulator: true`. */
+  verifyProjectData: IpcProjectData,
+  /** Skip the verification cache and verify again. */
+  cleanBuild: boolean,
   /**
    * Native (C/C++, Python) POUs collected from the RAW project data before
    * preprocessing lowered every native body to bridge ST — the main process
@@ -281,11 +289,14 @@ export function createEditorCompilerAdapter(): CompilerPort {
       // build.  The `.stlib` ships real Python code, usable by any
       // consumer that targets a Python-capable runtime.
       //
-      // There used to be a second `isSimulator: true` pass feeding an
-      // avr-gcc verification compile, which stubbed Python POUs to
-      // no-ops because the AVR simulator has no interpreter.  The
-      // verification stage is gone: the build is target-neutral, and
-      // running a library goes through the debug harness instead.
+      // A second `isSimulator: true` pass feeds the verification compile.  It
+      // stubs Python POUs to no-ops, because the toolchain behind a
+      // verification compile has no interpreter — what verification proves is
+      // that the library's ST, IL and data types compile cleanly, not that its
+      // Python runs.
+      //
+      // Only the build pass's preprocess output reaches `onProgress`, so the
+      // console does not carry every "Found Python POU…" line twice.
       //
       // Taken BEFORE preprocessing: that step lowers every native body to
       // bridge ST and rewrites the language tag with it, leaving nothing to
@@ -320,7 +331,30 @@ export function createEditorCompilerAdapter(): CompilerPort {
             'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
         }
       }
+      const verifyResult = preprocessPous(
+        args.projectData,
+        true,
+        () => {
+          // Silent — the build pass above already logged this project.
+        },
+        undefined,
+        fbSources,
+      )
+      // Checked rather than ignored, matching the build pass above. Both passes
+      // get the same project and the same FB pin sources, so they agree today —
+      // but handing an un-lowered project to the verify compile would fail it on
+      // `python_block_loader` instead of reporting the refusal, and that is not
+      // a difference worth leaving to luck.
+      if (verifyResult.validationFailed) {
+        return {
+          success: false,
+          error:
+            verifyResult.validationError ??
+            'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
+        }
+      }
       const ipcDataForBuild = toIpcProjectData(buildResult.projectData)
+      const ipcDataForVerify = toIpcProjectData(verifyResult.projectData)
 
       return new Promise<CompileLibraryResult>((resolve) => {
         let finalResult: CompileLibraryResult | undefined
@@ -339,7 +373,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
         //     `'close'` event — that's the sole "build done"
         //     signal the adapter resolves on.
         window.bridge.runCompileLibrary(
-          [args.projectPath, ipcDataForBuild, nativePous],
+          [args.projectPath, ipcDataForBuild, ipcDataForVerify, args.cleanBuild ?? false, nativePous],
           (data: Record<string, unknown>) => {
             if (data.libraryBuildResult) {
               finalResult = data.libraryBuildResult as CompileLibraryResult

@@ -6,6 +6,7 @@ import { BaseXml } from '@root/middleware/shared/ports/xml-types/codesys'
 import { InterfaceXML } from '@root/middleware/shared/ports/xml-types/codesys/pous/interface/interface-diagram'
 import { VariableXML } from '@root/middleware/shared/ports/xml-types/codesys/variable/variable-diagram'
 
+import { isGenericType } from '../../generic-types'
 import { baseTypeTag } from '../base-type-tag'
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
@@ -42,6 +43,10 @@ export const codeSysParseInterface = (pou: PLCPou) => {
           },
         },
       }
+    } else if (isGenericType(variable.type.value)) {
+      // A generic is its own element in the schema's elementaryTypes group;
+      // `<derived name="ANY"/>` would name a user type called ANY instead.
+      vType = { [variable.type.value.trim().toUpperCase()]: '' }
     } else if (variable.type.definition === 'derived' || variable.type.definition === 'user-data-type') {
       vType = {
         derived: {
@@ -81,7 +86,11 @@ export const codeSysParseInterface = (pou: PLCPou) => {
       if (!xml.returnType) xml.returnType = {}
 
       const isBaseType = baseTypes.includes(returnType)
-      xml.returnType = isBaseType ? { [baseTypeTag(returnType)]: '' } : { ['derived']: { '@name': returnType } }
+      xml.returnType = isGenericType(returnType)
+        ? { [returnType.trim().toUpperCase()]: '' }
+        : isBaseType
+          ? { [baseTypeTag(returnType)]: '' }
+          : { ['derived']: { '@name': returnType } }
     }
 
     switch (variable.class) {

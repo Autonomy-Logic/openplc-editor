@@ -26,6 +26,7 @@ import type {
   PlatformDeviceContext,
   PlatformLog,
 } from '../../../middleware/shared/ports/compiler-platform-port'
+import type { VersionSubstitution } from '../../../middleware/shared/ports/library-types'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
@@ -38,6 +39,7 @@ import {
   describeVppRuntimeMismatch,
   isStrucppCompatibleRuntime,
 } from '../firmware/runtime-version-gate'
+import { projectAndLibraryTypeNames } from '../library/inject-library-blocks'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
 import type { DevicePin } from '../types/PLC/devices'
@@ -47,6 +49,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
+import { isSafeRelativePath } from '../utils/path-safety'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
@@ -189,6 +192,9 @@ export interface RunCompilePipelineArgs {
    *  Strucpp's pre-compile gate fails fast on these with a clear
    *  message. */
   missingLibraries: string[]
+  /** Libraries resolved to a version the project does not pin.  Reported so a
+   *  build against something other than what the project names is visible. */
+  substitutedLibraries?: VersionSubstitution[]
   /** Firmware skeleton — bundled `Baremetal.ino`, Arduino HAL,
    *  strucpp runtime headers, simulator HAL adapter.  Editor: from
    *  filesystem; web: from `import.meta.glob`.  Contents byte-
@@ -347,6 +353,128 @@ function bailError(
  * shape — `success`, `errors`, `binary`, `md5`, `uploaded` — that
  * adapters surface to their `CompilerPort` callers.
  */
+/**
+ * The libraries the enabled `.stlib` archives carry in `resources/`, grouped by
+ * folder.  Each folder is an ordinary library — `library.properties` beside a
+ * `src/` directory — and is materialised as one.
+ *
+ * Filtered by the project's enabled libraries: the resolved archive set also
+ * holds the bundled ones.  A file not inside a folder is skipped.  On a
+ * same-named folder from two archives the later wins, and archive order is
+ * fixed.
+ */
+function collectLibraryResources(
+  projectData: PLCProjectData,
+  libraryArchives: unknown[],
+): Array<{ name: string; files: Array<{ path: string; content: string }> }> {
+  const enabled = new Set((projectData.libraries ?? []).map((ref) => ref.name))
+
+  const byLibrary = new Map<string, Map<string, string>>()
+
+  /**
+   * One source's folders, kept apart until that source is fully collected.
+   *
+   * Merging as we go would mix two versions of the same third-party library —
+   * a header from one and the source from the other, which is a link error at
+   * best and the wrong behaviour at worst. Two libraries bundling the same
+   * Arduino dependency is ordinary, so the later folder replaces the earlier
+   * one whole.
+   */
+  const collect = (resources: readonly unknown[]): void => {
+    const staged = new Map<string, Map<string, string>>()
+    for (const resource of resources) {
+      // An archive is external data; a record missing its path or content is
+      // skipped rather than allowed to abort the compile.
+      if (typeof resource !== 'object' || resource === null) continue
+      const { path, content } = resource as { path?: unknown; content?: unknown }
+      if (typeof path !== 'string' || typeof content !== 'string') continue
+      // These paths come off an installed archive and become files under the
+      // build directory, so they are checked before they are used as one.
+      if (!isSafeRelativePath(path)) continue
+      // The first segment names the library folder the file belongs to.
+      const separator = path.indexOf('/')
+      if (separator <= 0) continue
+      const name = path.slice(0, separator)
+      let files = staged.get(name)
+      if (!files) {
+        files = new Map<string, string>()
+        staged.set(name, files)
+      }
+      files.set(path.slice(separator + 1), content)
+    }
+    for (const [name, files] of staged) byLibrary.set(name, files)
+  }
+
+  for (const archive of enabled.size === 0 ? [] : libraryArchives) {
+    if (typeof archive !== 'object' || archive === null) continue
+    const { manifest, resources } = archive as { manifest?: unknown; resources?: unknown }
+    const archiveName = (manifest as { name?: unknown } | undefined)?.name
+    if (typeof archiveName !== 'string' || !enabled.has(archiveName)) continue
+    collect(Array.isArray(resources) ? resources : [])
+  }
+
+  // A library project does not list itself, so its own resources arrive here
+  // directly when it verifies.
+  const own = (projectData as { ownLibraryResources?: unknown }).ownLibraryResources
+  collect(Array.isArray(own) ? own : [])
+
+  return [...byLibrary].map(([name, files]) => ({
+    name,
+    files: [...files].map(([path, content]) => ({ path, content })),
+  }))
+}
+
+/**
+ * The libraries the resource libraries declare in `depends=`.
+ *
+ * Read from each folder's `library.properties`, which is the Arduino-native
+ * way for a library to say what it needs. It is taken from the declaration
+ * rather than by scanning the sources, because a source's `#include` may sit
+ * behind a platform guard — emitting `<ESP8266WiFi.h>` on an ESP32 build would
+ * break a sketch that was fine.
+ */
+function resourceLibraryDepends(
+  libraries: ReadonlyArray<{ files: ReadonlyArray<{ path: string; content: string }> }>,
+): string[] {
+  const field = (content: string, key: string): string | undefined => {
+    for (const line of content.split(/\r?\n/)) {
+      const match = new RegExp(`^\\s*${key}\\s*=\\s*(.+)$`).exec(line)
+      if (match) return match[1].trim()
+    }
+    return undefined
+  }
+
+  // A library's own name is not its header. `includes=` is where a library
+  // says what to include, so it is read from the depended library when that
+  // library is one of ours. For a platform library — Wire, Preferences — its
+  // properties are not here to read, and `<Name>.h` is the convention those
+  // follow.
+  const headerByName = new Map<string, string>()
+  for (const library of libraries) {
+    for (const file of library.files) {
+      if (!file.path.endsWith('library.properties')) continue
+      const name = field(file.content, 'name')
+      const includes = field(file.content, 'includes')
+      if (name && includes) headerByName.set(name, includes.split(',')[0].trim())
+    }
+  }
+
+  const headers: string[] = []
+  for (const library of libraries) {
+    for (const file of library.files) {
+      if (!file.path.endsWith('library.properties')) continue
+      const depends = field(file.content, 'depends')
+      if (!depends) continue
+      for (const entry of depends.split(',')) {
+        const name = entry.split('(')[0].trim()
+        if (!name) continue
+        headers.push(headerByName.get(name) ?? `${name.replace(/\s+/g, '')}.h`)
+      }
+    }
+  }
+  return headers
+}
+
 export async function runCompilePipeline(
   args: RunCompilePipelineArgs,
   port: CompilerPlatformPort,
@@ -383,6 +511,7 @@ async function runCompilePipelineInner(
     compileOnly,
     libraryArchives,
     missingLibraries,
+    substitutedLibraries,
     firmwareSkeleton,
     strucppRuntimeHeaders,
     avrLibStdCppInclude,
@@ -423,6 +552,7 @@ async function runCompilePipelineInner(
     originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
   }
   const originalCppPous = processedData.originalCppPous ?? []
+  const libraryResources = collectLibraryResources(projectData, libraryArchives)
 
   // ---------------------------------------------------------------------
   // Step 0b: Reject blank FBD variable blocks before XML generation.
@@ -431,6 +561,19 @@ async function runCompilePipelineInner(
   // transpiler to emit, producing invalid code downstream.  Catch it
   // here and tell the user exactly which POU to fix.
   // ---------------------------------------------------------------------
+  // A pinned version that is not installed resolves to the newest one instead,
+  // rather than stranding the project. Say so: the program being built is not
+  // the one the project names.
+  for (const substitution of substitutedLibraries ?? []) {
+    emit({
+      stage: 'validate',
+      message:
+        `Library "${substitution.name}": the project pins ${substitution.wanted}, which is not installed. ` +
+        `Building against ${substitution.used}.`,
+      level: 'warning',
+    })
+  }
+
   const emptyVariables = findEmptyFbdVariables(processedData)
   if (emptyVariables.length > 0) {
     for (const variable of emptyVariables) {
@@ -558,12 +701,16 @@ async function runCompilePipelineInner(
     }
 
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
-    const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-    const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
+    // The enabled libraries' data types count as well as the project's: a pin
+    // typed by one has to be spelled the way strucpp declared it.
+    const userTypeNames = projectAndLibraryTypeNames(projectData, libraryArchives)
+    const ownTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+    const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames, ownTypeNames)
     const bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
       strucppFiles: strucppFilesMap,
+      libraryResources,
       cBlocks: { header: cBlocks.header, code: cBlocks.code },
       strucppRuntimeHeaders,
       confs: {
@@ -866,6 +1013,7 @@ async function runCompilePipelineInner(
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    resourceLibraryDepends: resourceLibraryDepends(libraryResources),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose
@@ -882,10 +1030,16 @@ async function runCompilePipelineInner(
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
   emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
-  const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
-  const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
+  // The enabled libraries' data types count as well as the project's, exactly
+  // as on the Runtime v4 path above: a pin typed by one has to be spelled the
+  // way strucpp declared it, or the struct field is the bare enumeration while
+  // the POU member is the wrapper around it.
+  const userTypeNames = projectAndLibraryTypeNames(projectData, libraryArchives)
+  const ownTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+  const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames, ownTypeNames)
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
+    libraryResources,
     cBlocks,
     definesH,
     vppConfigH,
@@ -898,6 +1052,8 @@ async function runCompilePipelineInner(
   const arduinoArgs = buildArduinoCliCompileArgs(boardEntry, {
     sketchPath: 'examples/Baremetal/Baremetal.ino',
     libraryPath: 'src',
+    // Relative to the compilation root, matching `libraryPath` / `sketchPath`.
+    resourceLibraryPaths: libraryResources.map((library) => `libraries/${library.name}`),
     avrLibStdCppInclude,
     parallel: arduinoCliParallel,
     // Prebuilt arduino-hal: link the precompiled vendor library alongside the

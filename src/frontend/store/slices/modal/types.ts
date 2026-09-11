@@ -30,6 +30,8 @@ export type ModalTypes =
   | 'debugger-message'
   | 'debugger-ip-input'
   | 'missing-libraries'
+  /** Offer newer installed versions of the libraries this project pins. */
+  | 'library-updates'
   /** Browse the autonomy-edge public library catalog.  Replaces the
    *  "Coming Soon" placeholder in the Library Manager's System tab.
    *  Multi-select; the install confirmation pops up on top. */
