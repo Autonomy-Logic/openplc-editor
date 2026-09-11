@@ -15,7 +15,9 @@ cruzada com a API. Onde eu **não** consegui verificar, está dito.
 
 ## Resumo
 
-| # | Cenário | Resultado | Print |
+> **Capturas de tela.** A coluna *Captura* numera os prints tirados durante o run (`01`–`28`). Eles **não estão no repositório** — 5,9 MB de PNG foram removidos a pedido do review para não onerar o clone para sempre; ficam com o autor da validação e podem ser anexados ao ticket DOPE-388 se necessário. O que cada um mostrava está descrito na linha correspondente.
+
+| # | Cenário | Resultado | Captura |
 |---|---|---|---|
 | A1 | Tela inicial renderiza com seção cloud | passou | `01` |
 | A2 | Estado deslogado mostra o convite (não lista vazia) | passou | `01` |
@@ -70,7 +72,7 @@ interceptada como `window.location.href = ...`. No renderer do Electron isso
 | `location.href` | `.../index.html` | `.../merge?project_id=…&source=main` |
 | projeto aberto | sim | **não — voltou para a tela inicial** |
 
-![bug do merge](shots/28-bug-merge.png)
+*(captura `28`: tela inicial vazia com a URL `/merge` na barra — não incluída no repositório)*
 
 **Impacto:** o usuário clica "Merge" no menu de uma branch e perde o projeto aberto,
 incluindo alterações não salvas. Não há confirmação e não há como voltar.
@@ -100,7 +102,7 @@ Enquanto isso não for resolvido, **eu não colocaria essa branch na mão de um 
 
 ## OBS-1 — Diagrama do diff gráfico fica cortado à direita
 
-![diff grafico](shots/17-diff-grafico.png)
+*(captura `17`: seção Diagram com blocos clipados à direita — não incluída no repositório)*
 
 Na seção "Diagram", os blocos ficam clipados na borda do container ("Main I…",
 "Irrigat…") e não há rolagem horizontal aparente. **Não é regressão minha:** a captura

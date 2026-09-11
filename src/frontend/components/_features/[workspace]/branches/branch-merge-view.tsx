@@ -44,6 +44,14 @@ import { TextConflictResolver } from './merge-text-conflict-resolver'
 
 type FileStatus = 'A' | 'M' | 'D' | 'U' | 'C' | 'R'
 
+type MergeFileEntry = {
+  path: string
+  sourceContent: string
+  targetContent: string
+  baseContent: string | null
+  status: FileStatus
+}
+
 const FILE_STATUS_CONFIG: Record<FileStatus, { label: string; color: string }> = {
   A: { label: 'Added', color: 'text-green-500' },
   M: { label: 'Modified', color: 'text-yellow-500' },
@@ -356,15 +364,8 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
   // Build per-file status: target is the "original" (we're merging INTO target),
   // source is the "modified" (changes coming from source branch).
   // Also marks files as 'C' (conflict) when listed in data.conflicts.
-  const filesWithStatus = useMemo(() => {
-    if (!data)
-      return [] as Array<{
-        path: string
-        sourceContent: string
-        targetContent: string
-        baseContent: string | null
-        status: FileStatus
-      }>
+  const filesWithStatus = useMemo<MergeFileEntry[]>(() => {
+    if (!data) return []
 
     const sourceFiles = data.source.files.filter((f) => f.type === 'file')
     const targetFiles = data.target.files.filter((f) => f.type === 'file')
@@ -375,13 +376,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     const baseMap = new Map(baseFiles.map((f) => [f.path, f.content]))
     const allPaths = new Set<string>([...sourceMap.keys(), ...targetMap.keys()])
 
-    const result: Array<{
-      path: string
-      sourceContent: string
-      targetContent: string
-      baseContent: string | null
-      status: FileStatus
-    }> = []
+    const result: MergeFileEntry[] = []
 
     for (const path of allPaths) {
       if (path.startsWith('.git/')) continue
@@ -489,10 +484,13 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
         // The server still sees unresolved conflicts. Usually drift: the branches moved
         // since this screen loaded, so reloading is the honest advice rather than letting
         // the user re-press a button that will refuse again.
-        setMergeError(
-          `Conflicts remain in: ${err.conflictedFiles.join(', ')}. ` +
-            `The branches may have changed since you opened this page — please reload.`,
-        )
+        // Edge's 409 body names no files, so the list is empty there and the message is
+        // what the server actually said.
+        const summary =
+          err.conflictedFiles.length > 0
+            ? `Conflicts remain in: ${err.conflictedFiles.join(', ')}.`
+            : err.message || 'The merge has conflicts.'
+        setMergeError(`${summary} The branches may have changed since you opened this page — please reload.`)
         return
       }
 
