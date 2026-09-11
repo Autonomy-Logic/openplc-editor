@@ -44,3 +44,14 @@ export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
 export { FBD_VARIABLE_NODE_TYPES } from '../../../../../utils/graphical/types'
+
+// execute ("ST Block")
+
+// Same connector geometry as an FBD block, so wires meet the box on the
+// block pin row rather than at an arbitrary height of its own.
+export const DEFAULT_EXECUTE_WIDTH = 260
+export const DEFAULT_EXECUTE_HEIGHT = 120
+export const DEFAULT_EXECUTE_CONNECTOR_Y = DEFAULT_BLOCK_CONNECTOR_Y
+export const DEFAULT_EXECUTE_CONNECTOR_X = DEFAULT_EXECUTE_WIDTH
+/** Top of the code area — clears the title row and the EN/ENO pin row. */
+export const DEFAULT_EXECUTE_BODY_TOP = DEFAULT_EXECUTE_CONNECTOR_Y + 16

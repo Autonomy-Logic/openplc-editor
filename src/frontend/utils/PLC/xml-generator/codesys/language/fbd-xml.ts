@@ -17,10 +17,69 @@ import {
   InVariableFbdXML,
   OutVariableFbdXML,
 } from '@root/middleware/shared/ports/xml-types/codesys/pous/languages/fbd-diagram'
+import type { Node as FlowNode } from '@xyflow/react'
+
+import { buildExecuteAddData, EXECUTE_TYPE_NAME, isBlockLikeNodeType } from '../../../execute-plcopen'
 
 /**
  * Translate react flow nodes to XML
  */
+
+/**
+ * Serialize an FBD Execute ("ST Block") in the CODESYS dialect.
+ *
+ * Without this the element was dropped from the CODESYS FBD export entirely,
+ * which also dangled any connection into it — an outVariable fed by its ENO
+ * kept a `refLocalId` pointing at a block that was never written, and the
+ * importer reported "connection references unknown localId".
+ *
+ * Shape matches CODESYS: `<block typeName="EXECUTE">` with EN/ENO formal
+ * parameters, plus the three FBD-only descriptor addData entries alongside
+ * the snippet — see `buildExecuteAddData`.
+ */
+const executeToXml = (node: FlowNode<BasicNodeData & { code: string }>, rung: FBDRungState) => {
+  const inputVariables = node.data.inputHandles
+    .flatMap((handle) => {
+      const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
+      if (edges.length === 0) {
+        return [{ '@formalParameter': handle.id || 'EN', connectionPointIn: { connection: [] } }]
+      }
+      return edges.map((edge) => {
+        const sourceNode = rung.nodes.find((candidate) => candidate.id === edge.source)
+        if (!sourceNode) return undefined
+        return {
+          '@formalParameter': handle.id || 'EN',
+          connectionPointIn: {
+            connection: [
+              {
+                '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
+                '@formalParameter': isBlockLikeNodeType(sourceNode.type) ? (edge.sourceHandle as string) : undefined,
+              },
+            ],
+          },
+        }
+      })
+    })
+    .filter((variable) => variable !== undefined)
+
+  return {
+    '@localId': node.data.numericId,
+    '@typeName': EXECUTE_TYPE_NAME,
+    ...(node.data.executionOrder ? { '@executionOrderId': node.data.executionOrder } : {}),
+    '@width': node.width as number,
+    '@height': node.height as number,
+    position: { '@x': node.position.x, '@y': node.position.y },
+    inputVariables: { variable: inputVariables },
+    inOutVariables: '',
+    outputVariables: {
+      variable: node.data.outputHandles.map((handle) => ({
+        '@formalParameter': handle.id || 'ENO',
+        connectionPointOut: { expression: undefined },
+      })),
+    },
+    addData: buildExecuteAddData(node.data.code, 'codesys', 'fbd'),
+  }
+}
 
 const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbdXML => {
   const inputVariables: BlockFbdXML['inputVariables']['variable'] = node.data.inputHandles
@@ -44,12 +103,11 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
             connection: [
               {
                 '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-                '@formalParameter':
-                  sourceNode.type === 'block'
-                    ? (edge.sourceHandle as string) === 'OUT'
-                      ? '   '
-                      : (edge.sourceHandle as string)
-                    : undefined,
+                '@formalParameter': isBlockLikeNodeType(sourceNode.type)
+                  ? (edge.sourceHandle as string) === 'OUT'
+                    ? '   '
+                    : (edge.sourceHandle as string)
+                  : undefined,
               },
             ],
           },
@@ -143,12 +201,11 @@ const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariabl
               ? (sourceNode?.data as BasicNodeData).numericId
               : 'undefined'
             : 'undefined',
-          '@formalParameter':
-            sourceNode?.type === 'block'
-              ? (edge.sourceHandle as string) === 'OUT'
-                ? '   '
-                : (edge.sourceHandle as string)
-              : undefined,
+          '@formalParameter': isBlockLikeNodeType(sourceNode?.type)
+            ? (edge.sourceHandle as string) === 'OUT'
+              ? '   '
+              : (edge.sourceHandle as string)
+            : undefined,
         }
       })
       .filter((connection) => connection['@refLocalId'] !== 'undefined'),
@@ -190,12 +247,11 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter':
-            sourceNode.type === 'block'
-              ? (edge.sourceHandle as string) === 'OUT'
-                ? '   '
-                : (edge.sourceHandle as string)
-              : undefined,
+          '@formalParameter': isBlockLikeNodeType(sourceNode.type)
+            ? (edge.sourceHandle as string) === 'OUT'
+              ? '   '
+              : (edge.sourceHandle as string)
+            : undefined,
         }
       })
       .filter((connection) => connection !== undefined),
@@ -300,6 +356,11 @@ const fbdToXml = (rung: FBDRungState) => {
         break
       case 'comment':
         fbdXML.body.FBD.comment.push(commentToXml(node as CommentNode))
+        break
+      case 'execute':
+        fbdXML.body.FBD.block.push(
+          executeToXml(node as FlowNode<BasicNodeData & { code: string }>, rung) as BlockFbdXML,
+        )
         break
       default:
         break

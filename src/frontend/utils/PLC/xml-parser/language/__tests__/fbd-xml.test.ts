@@ -217,6 +217,35 @@ describe('parseFbdXml', () => {
     expect(warnings).toEqual(['POU "p": 1 FBD inOutVariable node(s) are not supported, skipped'])
   })
 
+  // Mirrors the ladder importer: a file may declare typeName="EXECUTE" without
+  // the EN/ENO formal parameters we always write, and the node still has to
+  // come out with usable connectors.
+  it('gives an Execute element EN and ENO even when the file declares neither', () => {
+    const { body } = parseFbdXml('p', {
+      block: [
+        {
+          '@localId': '3',
+          '@typeName': 'EXECUTE',
+          position: { '@x': '10', '@y': '20' },
+          addData: { data: { '@name': 'http://openplc.org/plcopenxml/stcode', STCode: { $: 'y := 2;' } } },
+        },
+      ],
+    })
+
+    const execute = body.rung.nodes.find((node) => node.type === 'execute')
+    const data = execute?.data as {
+      inputConnector?: { id?: string }
+      outputConnector?: { id?: string }
+      code: string
+    }
+
+    expect(data.inputConnector?.id).toBe('EN')
+    expect(data.outputConnector?.id).toBe('ENO')
+    expect(data.code).toBe('y := 2;')
+    expect(execute?.width).toBeGreaterThan(0)
+    expect(execute?.height).toBeGreaterThan(0)
+  })
+
   it('warns (non-fatally) about a dangling connection reference', () => {
     const { body, warnings } = parseFbdXml('p', {
       outVariable: [

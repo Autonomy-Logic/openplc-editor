@@ -38,6 +38,11 @@ export const buildGenericNode = <T>({
         variant: nodeType,
         label: connectionLabel,
       })
+    case 'execute':
+      return nodesBuilder.execute({
+        id,
+        position,
+      })
     case 'comment':
       return nodesBuilder.comment({
         id,

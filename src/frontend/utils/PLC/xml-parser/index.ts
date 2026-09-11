@@ -1,7 +1,7 @@
 import type { PLCDataType, PLCInstance, PLCPou, PLCTask, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { parseDataTypesXml } from './data-type-xml'
 import { parseConfigurationXml } from './instances-xml'
-import { parseXmlDocument } from './parse-xml-document'
+import { collectExecuteStCode, parseXmlDocument } from './parse-xml-document'
 import { parsePousXml } from './pou-xml'
 import { asRecord, asString } from './xml-node'
 
@@ -41,10 +41,13 @@ export interface PlcopenParseResult {
 // as non-fatal warnings rather than being parsed.
 export function parsePlcopenXml(xml: string): PlcopenParseResult {
   const project = parseXmlDocument(xml)
+  // Recovered from a second, untrimmed parse: the main parse trims text
+  // nodes, which would silently reindent any Execute ("ST Block") snippet.
+  const executeStCode = collectExecuteStCode(xml)
   const types = asRecord(project.types)
 
   const dataTypes = parseDataTypesXml(asRecord(types.dataTypes).dataType)
-  const { pous, warnings } = parsePousXml(asRecord(types.pous).pou)
+  const { pous, warnings } = parsePousXml(asRecord(types.pous).pou, executeStCode)
   const configurations = parseConfigurationXml(project.instances)
   const projectName = asString(asRecord(project.contentHeader)['@name'])
 

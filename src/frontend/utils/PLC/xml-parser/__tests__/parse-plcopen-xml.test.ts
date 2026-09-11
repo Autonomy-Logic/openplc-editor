@@ -427,7 +427,7 @@ describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () 
     // Node order follows the raw XML's element-type grouping (leftPowerRail,
     // rightPowerRail, contact, coil), not rung/visual position.
     expect(rung.nodes.map((n) => (n as { id: string }).id).sort()).toEqual(
-      ['LEFT-POWER-RAIL-1', 'RIGHT-POWER-RAIL-4', 'CONTACT-2', 'COIL-3'].sort(),
+      ['left-rail-1', 'right-rail-4', 'CONTACT-2', 'COIL-3'].sort(),
     )
     expect(rung.edges).toHaveLength(3)
     const nodesById = new Map(

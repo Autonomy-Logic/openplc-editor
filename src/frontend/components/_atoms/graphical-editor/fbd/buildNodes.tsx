@@ -11,6 +11,10 @@ import {
   DEFAULT_BLOCK_TYPE,
   DEFAULT_CONNECTION_CONNECTOR_X,
   DEFAULT_CONNECTION_CONNECTOR_Y,
+  DEFAULT_EXECUTE_CONNECTOR_X,
+  DEFAULT_EXECUTE_CONNECTOR_Y,
+  DEFAULT_EXECUTE_HEIGHT,
+  DEFAULT_EXECUTE_WIDTH,
   DEFAULT_VARIABLE_CONNECTOR_X,
   DEFAULT_VARIABLE_CONNECTOR_Y,
   MINIMUM_ELEMENT_HEIGHT,
@@ -24,6 +28,8 @@ import type {
   CommentNode,
   ConnectionBuilderProps,
   ConnectionNode,
+  ExecuteBuilderProps,
+  ExecuteNode,
   VariableBuilderProps,
   VariableNode,
 } from './utils/types'
@@ -107,6 +113,72 @@ export const buildCommentNode = ({ id, position }: CommentBuilderProps): Comment
       selectable: true,
       deletable: true,
       content: '',
+    },
+    deletable: true,
+    selectable: true,
+    draggable: true,
+    selected: true,
+  }
+}
+
+/**
+ * Build an FBD Execute ("ST Block") node.
+ *
+ * Same electrical shape as the ladder variant — `EN` target left, `ENO`
+ * source right — but free-positioned and resizable like the comment
+ * element, since FBD has no rung to lay it out.  Leaving `EN` unwired
+ * means the snippet runs unconditionally; the walker's "no incoming
+ * paths" case handles that.
+ */
+export const buildExecuteNode = ({ id, position, code = '' }: ExecuteBuilderProps): ExecuteNode => {
+  // `style.top` places the handle's DOM element — React Flow draws edges to
+  // the DOM position, so without it the wire meets the box off the pin row.
+  const inputHandle = buildHandle({
+    id: 'EN',
+    position: Position.Left,
+    type: 'target',
+    glbX: position.x,
+    glbY: position.y + DEFAULT_EXECUTE_CONNECTOR_Y,
+    relX: 0,
+    relY: DEFAULT_EXECUTE_CONNECTOR_Y,
+    style: { top: DEFAULT_EXECUTE_CONNECTOR_Y, left: 0 },
+  })
+  const outputHandle = buildHandle({
+    id: 'ENO',
+    position: Position.Right,
+    type: 'source',
+    glbX: position.x + DEFAULT_EXECUTE_CONNECTOR_X,
+    glbY: position.y + DEFAULT_EXECUTE_CONNECTOR_Y,
+    relX: DEFAULT_EXECUTE_CONNECTOR_X,
+    relY: DEFAULT_EXECUTE_CONNECTOR_Y,
+    style: { top: DEFAULT_EXECUTE_CONNECTOR_Y, right: 0 },
+  })
+
+  return {
+    id,
+    type: 'execute',
+    position,
+    width: DEFAULT_EXECUTE_WIDTH,
+    height: DEFAULT_EXECUTE_HEIGHT,
+    measured: {
+      width: DEFAULT_EXECUTE_WIDTH,
+      height: DEFAULT_EXECUTE_HEIGHT,
+    },
+    data: {
+      handles: [inputHandle, outputHandle],
+      inputHandles: [inputHandle],
+      outputHandles: [outputHandle],
+      inputConnector: inputHandle,
+      outputConnector: outputHandle,
+      numericId: generateNumericUUID(),
+      executionOrder: 0,
+      code,
+      // Shape-compatibility with `BasicNodeData`; an Execute box binds no
+      // single variable — it references whatever its code does.
+      variable: { id: '', name: '' },
+      draggable: true,
+      selectable: true,
+      deletable: true,
     },
     deletable: true,
     selectable: true,

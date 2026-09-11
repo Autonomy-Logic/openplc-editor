@@ -105,6 +105,18 @@ export type ContactType = {
   }
 }
 
+// execute ("ST Block")
+
+/**
+ * A box holding a raw Structured Text snippet, gated by the rung
+ * condition reaching its `EN` handle and passing power through on
+ * `ENO`.  `code` is stored exactly as the user typed it — indentation
+ * and blank lines included; the transpiler re-indents at emission.
+ */
+export type ExecuteNode = Node<BasicNodeData & { code: string }>
+export type ExecuteProps = NodeProps<ExecuteNode>
+export type ExecuteBuilderProps = BuilderBasicProps & { code?: string }
+
 // mock
 
 export type MockNode = Node<{ label: string; handles: CustomHandleProps[] }, 'text'>

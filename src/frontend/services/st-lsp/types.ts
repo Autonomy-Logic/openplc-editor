@@ -97,8 +97,16 @@ export interface StLspService {
    */
   openDocument(uri: string, content: string): void
 
-  /** Notify the worker of a content change in an already-open doc. */
-  changeDocument(uri: string, content: string, version: number): void
+  /**
+   * Notify the worker of a content change in an already-open doc.
+   *
+   * `version` is optional and usually better omitted: `openDocument` sets
+   * version 1, so a caller-side counter starting at 1 collides on the first
+   * edit and the worker drops it. Omitting it lets the service advance its own
+   * per-URI counter. Pass one only with a genuinely monotonic project-wide
+   * counter, as `project-sync` has.
+   */
+  changeDocument(uri: string, content: string, version?: number): void
 
   /** Notify the worker the document is no longer open. */
   closeDocument(uri: string): void

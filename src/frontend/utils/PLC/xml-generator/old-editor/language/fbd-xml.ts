@@ -19,6 +19,8 @@ import {
 } from '@root/middleware/shared/ports/xml-types/old-editor/pous/languages/fbd-diagram'
 import { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react'
 
+import { buildExecuteAddData, EXECUTE_TYPE_NAME, isBlockLikeNodeType } from '../../../execute-plcopen'
+
 const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
   const sourceNodeHandle = (nodes.find((node) => node.id === edge.source)?.data as BasicNodeData).outputHandles?.find(
     (handle) => handle.id === edge.sourceHandle,
@@ -88,7 +90,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
             connection: [
               {
                 '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-                '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
+                '@formalParameter': isBlockLikeNodeType(sourceNode.type) ? (edge.sourceHandle as string) : undefined,
                 position: path.reverse().map((point) => ({
                   '@x': point.x,
                   '@y': point.y,
@@ -138,6 +140,78 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
   return blockXML
 }
 
+/**
+ * Serialize an FBD Execute ("ST Block") element.
+ *
+ * Same `<block typeName="EXECUTE">` shape as the ladder variant. This is
+ * the neutral PLCOpen export, so it carries only the snippet — CODESYS's
+ * extra `fbdcalltype` / `inputparamtypes` / `outputparamtypes` descriptors
+ * belong to the CODESYS export alone.
+ *
+ * An unwired `EN` is materialised the way CODESYS does it: no connection at
+ * all here. (CODESYS feeds it from a literal `TRUE` inVariable; ours simply
+ * leaves the pin open, which the transpiler reads as "runs every scan" —
+ * semantically identical, and it avoids inventing a node the user never
+ * placed.)
+ */
+const executeToXml = (node: FlowNode<BasicNodeData & { code: string }>, rung: FBDRungState) => {
+  const inputVariables = node.data.inputHandles
+    .flatMap((handle) => {
+      const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
+      if (edges.length === 0) {
+        return [
+          {
+            '@formalParameter': handle.id || 'EN',
+            connectionPointIn: {
+              relPosition: { '@x': handle.relPosition.x || 0, '@y': handle.relPosition.y || 0 },
+              connection: [],
+            },
+          },
+        ]
+      }
+      return edges.map((edge) => {
+        const sourceNode = rung.nodes.find((candidate) => candidate.id === edge.source)
+        if (!sourceNode) return undefined
+        const path = getEdgePaths(edge, rung.nodes)
+        if (!path) return undefined
+        return {
+          '@formalParameter': handle.id || 'EN',
+          connectionPointIn: {
+            relPosition: { '@x': handle.relPosition.x || 0, '@y': handle.relPosition.y || 0 },
+            connection: [
+              {
+                '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
+                '@formalParameter': isBlockLikeNodeType(sourceNode.type) ? (edge.sourceHandle as string) : undefined,
+                position: path.reverse().map((point) => ({ '@x': point.x, '@y': point.y })),
+              },
+            ],
+          },
+        }
+      })
+    })
+    .filter((variable) => variable !== undefined)
+
+  return {
+    '@localId': node.data.numericId,
+    '@typeName': EXECUTE_TYPE_NAME,
+    ...(node.data.executionOrder ? { '@executionOrderId': node.data.executionOrder } : {}),
+    '@height': node.height as number,
+    '@width': node.width as number,
+    position: { '@x': node.position.x, '@y': node.position.y },
+    inputVariables: { variable: inputVariables },
+    inOutVariables: '',
+    outputVariables: {
+      variable: node.data.outputHandles.map((handle) => ({
+        '@formalParameter': handle.id || 'ENO',
+        connectionPointOut: {
+          relPosition: { '@x': handle.relPosition.x || 0, '@y': handle.relPosition.y || 0 },
+        },
+      })),
+    },
+    addData: buildExecuteAddData(node.data.code, 'openplc', 'fbd'),
+  }
+}
+
 const inputVariableToXml = (node: VariableNode): InVariableFbdXML => {
   const inputVariableXML: InVariableFbdXML = {
     '@localId': node.data.numericId,
@@ -179,7 +253,7 @@ const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariabl
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
+          '@formalParameter': isBlockLikeNodeType(sourceNode.type) ? (edge.sourceHandle as string) : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -224,7 +298,7 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
+          '@formalParameter': isBlockLikeNodeType(sourceNode.type) ? (edge.sourceHandle as string) : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -331,6 +405,13 @@ const fbdToXml = (rung: FBDRungState) => {
         break
       case 'comment':
         fbdXML.body.FBD.comment.push(commentToXml(node as CommentNode))
+        break
+      case 'execute':
+        // Serialises as a <block typeName="EXECUTE">, so it joins the block
+        // collection — see executeToXml.
+        fbdXML.body.FBD.block.push(
+          executeToXml(node as FlowNode<BasicNodeData & { code: string }>, rung) as BlockFbdXML,
+        )
         break
       default:
         break

@@ -68,3 +68,15 @@ export type VariableProps = NodeProps<VariableNode>
 export type VariableBuilderProps = BuilderBasicProps & {
   variant: 'input-variable' | 'output-variable' | 'inout-variable'
 }
+
+// execute ("ST Block")
+
+/**
+ * A box holding a raw Structured Text snippet.  `EN` gates execution;
+ * `ENO` passes the same signal through.  Unlike the ladder variant this
+ * one is free-positioned and user-resizable, matching the FBD comment
+ * element.
+ */
+export type ExecuteNode = Node<BasicNodeData & { code: string }>
+export type ExecuteProps = NodeProps<ExecuteNode>
+export type ExecuteBuilderProps = BuilderBasicProps & { code?: string }

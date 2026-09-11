@@ -42,3 +42,19 @@ and the oracle is a walker bug, never an oracle bug — see the
 fixture corpus under `xml2st/fixtures/` and the test harness under
 `xml2st/shared-backend/transpilers/generate-st-from-react-flow/tests/`
 for the validation loop.
+
+### Exception: the `execute` node
+
+The `execute` ("Execute" / "ST Block") element is a **deliberate
+superset** of the python generator's vocabulary — it has no oracle
+equivalent, so the byte-parity rule above does not apply to it. Its
+semantics are instead pinned against a real CODESYS PLCopen export
+(`<block typeName="EXECUTE">` carrying its source in a
+`.../plcopenxml/stcode` `addData`), which establishes that:
+
+- the snippet runs gated by whatever rung condition reaches `EN`, and
+- `ENO` is a plain power passthrough — a coil downstream of an
+  EXECUTE block references the block with no `formalParameter`
+  qualifier, so `contact → EXECUTE → coil` yields `coil := contact`.
+
+See `__tests__/execute-element.test.ts`.
