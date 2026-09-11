@@ -850,7 +850,7 @@ describe('createSharedSlice', () => {
         const second = await store.getState().datatypeActions.rename('Chassis', 'Frame')
 
         expect(second.ok).toBe(false)
-        expect(second.message).toBe('Another data type rename is awaiting confirmation')
+        expect(second.message).toBe('Another data type change is awaiting confirmation')
         // The first request's resolver is untouched and still completes.
         expect(store.getState().pendingDatatypeRename).toBe(pendingBefore)
         store.getState().datatypeActions.respondToPendingRename(true)
@@ -1023,6 +1023,54 @@ describe('createSharedSlice', () => {
       it('respondToPendingDelete without a pending request is a no-op', () => {
         store.getState().datatypeActions.respondToPendingDelete(true)
         expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('refuses a delete request while a rename is awaiting confirmation', async () => {
+        const rename = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        const pendingRename = store.getState().pendingDatatypeRename
+
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+        expect(store.getState().pendingDatatypeRename).toBe(pendingRename)
+
+        store.getState().datatypeActions.respondToPendingRename(false)
+        await rename
+      })
+
+      it('refuses a rename while a delete is awaiting confirmation', async () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        const result = await store.getState().datatypeActions.rename('OldDT', 'NewDT')
+
+        expect(result).toEqual({ ok: false, message: 'Another data type change is awaiting confirmation' })
+        expect(store.getState().pendingDatatypeDelete?.name).toBe('OldDT')
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('drops a pending delete when the project is closed', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        expect(store.getState().pendingDatatypeDelete).not.toBeNull()
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+      })
+
+      it('cancels a pending rename when the project is closed', async () => {
+        const rename = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(store.getState().pendingDatatypeRename).not.toBeNull()
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+        // Without the resolver being fired, this await would never settle.
+        await expect(rename).resolves.toEqual({
+          ok: false,
+          cancelled: true,
+          message: 'Rename cancelled',
+        })
       })
 
       it('skips the modal when nothing references the type', () => {

@@ -576,7 +576,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
     deleteRequest: (name) => {
       const state = getState()
-      if (state.pendingDatatypeDelete) return
+      if (state.pendingDatatypeDelete || state.pendingDatatypeRename) return
       const impact = findAllReferencesToDataType(
         name,
         state.project.data.pous,
@@ -623,8 +623,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         if (impact.totalReferences > 0) {
           // Overwriting a pending request would drop its resolver and strand
           // the first caller's await forever (e.g. Enter + blur double-fire).
-          if (getState().pendingDatatypeRename) {
-            return { ok: false, message: 'Another data type rename is awaiting confirmation' }
+          if (getState().pendingDatatypeRename || getState().pendingDatatypeDelete) {
+            return { ok: false, message: 'Another data type change is awaiting confirmation' }
           }
           const confirmed = await new Promise<boolean>((resolve) => {
             setState({ pendingDatatypeRename: { oldName, newName, impact, resolve } })
@@ -1019,6 +1019,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     clearStatesOnCloseProject: () => {
+      // A confirmation parked against the closing project must not answer for the next
+      // one, and a dropped rename resolver would strand its caller's await forever.
+      const pendingRename = getState().pendingDatatypeRename
+      setState({ pendingDatatypeRename: null, pendingDatatypeDelete: null })
+      pendingRename?.resolve(false)
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
