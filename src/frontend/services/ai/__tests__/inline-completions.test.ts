@@ -12,12 +12,12 @@
  * spell differently, and this file has to run under both.
  */
 
-import { describe, expect, it } from '@jest/globals'
+import { beforeEach, describe, expect, it } from '@jest/globals'
 import type * as monaco from 'monaco-editor'
 
 import type { AIPort } from '../../../../middleware/shared/ports/ai-port'
 import { isImeComposing, setImeComposing } from '../ime-state'
-import { registerAIInlineCompletions } from '../inline-completions'
+import { __resetInlineCompletionsForTests, registerAIInlineCompletions } from '../inline-completions'
 
 type FakeEditor = { onDidCompositionStart: (cb: () => void) => void; onDidCompositionEnd: (cb: () => void) => void }
 
@@ -39,6 +39,13 @@ function makePort(warmCache: () => void): AIPort {
     warmCache,
   }
 }
+
+// Both latches are module-level and once-per-session. Without this, every case after
+// the first runs against an already-warmed cache, and the case named for the warm branch
+// never reaches it — which is how it passed while asserting nothing.
+beforeEach(() => {
+  __resetInlineCompletionsForTests()
+})
 
 describe('registerAIInlineCompletions', () => {
   it('warms once, wires IME once, and disposes both halves', () => {

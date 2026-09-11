@@ -6,7 +6,7 @@ import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
-import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { useAI, useCapabilities, useEdgeAccountPort, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
 import { registerAIInlineCompletions } from '../../../../../services/ai/inline-completions'
 import { getCppMemberCompletions, projectTypeNamePredicate } from '../../../../../services/cpp-scope'
@@ -138,6 +138,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const capabilities = useCapabilities()
   const aiPort = useAI()
+  const edgeAccount = useEdgeAccountPort()
   const projectPort = useProject()
 
   const {
@@ -857,6 +858,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       monacoInstance: monaco,
       pouName: name,
       language,
+      session: edgeAccount?.session,
     })
 
     return () => registration.dispose()
@@ -868,6 +870,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     aiState.preferences.inlineCompletionsEnabled,
     capabilities.hasAIAssistant,
     aiPort,
+    edgeAccount,
   ])
 
   // -----------------------------------------------------------------------

@@ -163,6 +163,36 @@ describe('runAgenticLoop', () => {
     expect(sentRequests[1].conversationId).toBe('conv-A')
   })
 
+  it('reaches the real executor when no runner is injected', async () => {
+    // Every other case here injects `runTool`, which leaves `runTool ?? executeTool`
+    // — the branch production actually takes — unexercised. `read_project_state` is
+    // the one tool that only reads, so the default path can be walked against the
+    // store without leaving a POU behind.
+    streams = [
+      makeStream([
+        { type: 'tool_use', id: 'toolu_rs', name: 'read_project_state', input: {} },
+        { type: 'message_stop', stopReason: 'tool_use' },
+      ]),
+      makeStream([
+        { type: 'content_block_delta', delta: 'Empty project.' },
+        { type: 'message_stop', stopReason: 'end_turn' },
+      ]),
+    ]
+
+    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+
+    const complete = events.find((e) => e.type === 'tool_call_complete')
+    expect(complete).toMatchObject({ toolId: 'toolu_rs', toolName: 'read_project_state', result: { success: true } })
+    // The store's own project name, formatted by the executor — proof the call went
+    // through `executeTool`, not through a stand-in.
+    const results = events.find((e) => e.type === 'iteration_tool_results_complete')
+    const block = results?.type === 'iteration_tool_results_complete' ? results.blocks[0] : undefined
+    expect(block?.type === 'tool_result' ? block.content : '').toContain(
+      `Project: ${openPLCStoreBase.getState().project.meta.name}`,
+    )
+    expect(sentRequests).toHaveLength(2)
+  })
+
   it('runs a tool, emits tool lifecycle events, and chains a second iteration', async () => {
     streams = [
       makeStream([
@@ -283,7 +313,25 @@ describe('runAgenticLoop', () => {
 
     const events = await collect(runAgenticLoop(port, baseRequest, noTools))
     const errorEvent = events.find((e) => e.type === 'error')
-    expect(errorEvent).toEqual({ type: 'error', error: 'Out of ACU', billing })
+    expect(errorEvent).toEqual({ type: 'error', error: 'Out of ACU', billing, status: 402 })
+  })
+
+  it('carries the status of a refused request so the panel can tell a signed-out user apart', async () => {
+    streams = [
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async function* () {
+        yield { type: 'content_block_delta', delta: '' }
+        throw new AIRequestError('Sign in to Autonomy Edge to use the assistant.', 401)
+      },
+    ]
+
+    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+
+    expect(events.at(-1)).toEqual({
+      type: 'error',
+      error: 'Sign in to Autonomy Edge to use the assistant.',
+      status: 401,
+    })
   })
 
   it('falls back to a generic message when the stream throws a non-Error', async () => {

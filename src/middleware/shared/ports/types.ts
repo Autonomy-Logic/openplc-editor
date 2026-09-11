@@ -1710,7 +1710,12 @@ export interface AIUsage {
  * `AISlice` as `billingError` for the exhaustion-modal consumer (DOPE-285).
  */
 export type BillingErrorPayload = {
-  code: 'insufficient_acu' | 'subscription_inactive' | 'rate_limit_exceeded'
+  /**
+   * The four refusals autonomy-edge's `CreditGuard` can raise. `subscription_past_due`
+   * is a lapsed payment method: the plan is still there, the card is not, and the only
+   * useful thing to show is the way to fix it.
+   */
+  code: 'insufficient_acu' | 'subscription_inactive' | 'rate_limit_exceeded' | 'subscription_past_due'
   message: string
   /** Set when `code === 'insufficient_acu'`. ACU remaining in the period. */
   remaining?: number

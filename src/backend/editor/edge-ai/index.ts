@@ -191,12 +191,26 @@ export type ConversationDetail = z.infer<typeof ConversationDetailSchema>
  * Pull something readable out of a failure body.
  *
  * Nest's exception filter puts the reason in `message`, which may be a string or an
- * array of validation strings. Falling back to the status keeps the UI from showing an
- * empty toast when a proxy answers with HTML.
+ * array of validation strings — and Edge's `GlobalExceptionFilter` then wraps the
+ * whole thing as `{ timestamp, path, method, statusCode, error: <original body> }`,
+ * so on the wire the reason sits one level down, under `error`. Both levels are read,
+ * wrapped first: the wrapped shape is what the API sends, the bare one is what the
+ * guard throws and what its own tests assert against.
+ *
+ * Reading the root alone was how every non-billing 4xx and 5xx reached the desktop
+ * user as `Autonomy Edge answered 400.` — the 400 from `@ArrayMaxSize(100)` on
+ * `messages`, the 404 for an account with no subscription, the 403 for an org whose
+ * access was revoked — while the web build, which reads the body text, showed the
+ * real sentence. `parseBillingPayload` below already unwrapped; this did not.
+ *
+ * Falling back to the status keeps the UI from showing an empty toast when a proxy
+ * answers with HTML.
  */
 function messageFromBody(body: string, status: number): string {
-  const parsed = parseJsonBodyAs(body, FailureBodySchema)
-  const raw = parsed?.message
+  const root = parseJsonBody(body)
+  const wrapped = WrappedFailureSchema.safeParse(root)
+  const parsed = FailureBodySchema.safeParse(wrapped.success ? wrapped.data.error : root)
+  const raw = parsed.success ? parsed.data.message : undefined
 
   if (Array.isArray(raw) && raw.length > 0) {
     return raw.join('; ')
@@ -220,13 +234,16 @@ function messageFromBody(body: string, status: number): string {
  * value outside the known set would select none.
  */
 const BillingPayloadSchema = z.object({
-  error: z.enum(['insufficient_acu', 'subscription_inactive', 'rate_limit_exceeded']),
+  // The four the CreditGuard throws — `credit.guard.ts` in autonomy-edge. `past_due` is
+  // the one that was missing: a lapsed card produced a 402 this build could not read,
+  // so the exhaustion modal never opened and the user got no way to fix their payment.
+  error: z.enum(['insufficient_acu', 'subscription_inactive', 'rate_limit_exceeded', 'subscription_past_due']),
   message: z.string().catch('Credit limit reached.'),
   remaining: z.number().optional().catch(undefined),
   required: z.number().optional().catch(undefined),
   monthlyLimit: z.number().optional().catch(undefined),
   subscriptionStatus: SubscriptionStatusSchema.optional().catch(undefined),
-  reactivateUrl: z.string().optional().catch(undefined),
+  reactivateUrl: z.string().url().optional().catch(undefined),
   resetsAt: z.string().nullable().optional().catch(undefined),
 })
 
@@ -460,6 +477,12 @@ function parseSseLine(line: string): AiSseEvent | null {
 
   const parsed = SseEventSchema.safeParse(parseJsonBody(data))
 
+  // A frame of a type this build does not know is dropped here, on purpose. The web
+  // client forwards it, but on the web the consumer is in the same process and can
+  // ignore what it does not recognise; here the frame would have to cross IPC as a
+  // typed `AISSEEvent`, and there is no member of that union for it to travel as.
+  // Edge emits exactly the five types above today, so nothing is lost; the day it
+  // emits a sixth, this schema is the one place to teach it.
   return parsed.success ? parsed.data : null
 }
 

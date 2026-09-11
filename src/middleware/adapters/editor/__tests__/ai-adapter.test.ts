@@ -619,6 +619,41 @@ describe('stored conversations', () => {
   })
 })
 
+describe('a buffered read under an abort signal', () => {
+  it('is never made once the signal has already fired', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(adapter().fetchUsage(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(bridge.edgeAiFetchUsage).not.toHaveBeenCalled()
+  })
+
+  it('stops being waited on when the signal fires, and drops what arrives afterwards', async () => {
+    let answer: (value: unknown) => void = () => undefined
+    bridge.edgeAiFetchEntitlements.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve
+      }),
+    )
+    const controller = new AbortController()
+
+    const pending = adapter().fetchEntitlements(controller.signal)
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+
+    // The late answer has nowhere to go and must not throw.
+    answer({ ok: true, data: { acu: { monthlyAcu: 100 } } })
+    await settle()
+  })
+
+  it('answers normally when the signal never fires', async () => {
+    const controller = new AbortController()
+
+    await expect(adapter().fetchCredits(controller.signal)).resolves.toEqual({ credits_used: 1, credits_total: 500 })
+  })
+})
+
 describe('the buffered read routes', () => {
   it('hand back the payload the main process already validated', async () => {
     const ai = adapter()

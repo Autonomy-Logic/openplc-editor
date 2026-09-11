@@ -371,6 +371,87 @@ describe('streaming an answer', () => {
     })
   })
 
+  it('surfaces the reason Edge gave, from under the envelope its filter wraps it in', async () => {
+    const sink = recordingSink()
+
+    streamAiChat({}, sink)
+
+    const { sink: transport } = await nthStream(0)
+
+    // This is the shape on the wire: `GlobalExceptionFilter` re-wraps the thrown body
+    // under `error`. Reading `message` off the root — which is what the bare shape the
+    // guard throws would have — found nothing here, and every 400/403/404/500 reached the
+    // user as "Autonomy Edge answered 400." while the web build showed the sentence.
+    transport.onError(
+      new EdgeStreamHttpError(
+        400,
+        JSON.stringify({
+          timestamp: '2026-09-11T12:00:00.000Z',
+          path: '/ai/chat',
+          method: 'POST',
+          statusCode: 400,
+          error: { message: ['messages must contain no more than 100 elements'], error: 'Bad Request' },
+        }),
+      ),
+    )
+    await settle()
+
+    expect(sink.failures).toEqual([
+      { kind: 'http', status: 400, message: 'messages must contain no more than 100 elements' },
+    ])
+  })
+
+  it('still reads a bare failure body, which is what the guard itself throws', async () => {
+    const sink = recordingSink()
+
+    streamAiChat({}, sink)
+
+    const { sink: transport } = await nthStream(0)
+
+    transport.onError(new EdgeStreamHttpError(404, JSON.stringify({ message: 'No active subscription' })))
+    await settle()
+
+    expect(sink.failures).toEqual([{ kind: 'http', status: 404, message: 'No active subscription' }])
+  })
+
+  it('reads a lapsed payment method as a billing refusal, so the modal can offer the fix', async () => {
+    const sink = recordingSink()
+
+    streamAiChat({}, sink)
+
+    const { sink: transport } = await nthStream(0)
+
+    // The fourth code the CreditGuard throws, and the one this build did not know: the
+    // payload parsed as nothing, so the user saw "answered 402." and no payment CTA.
+    transport.onError(
+      new EdgeStreamHttpError(
+        402,
+        JSON.stringify({
+          statusCode: 402,
+          error: {
+            error: 'subscription_past_due',
+            message: 'Your subscription is past due. Update your payment method to restore AI access.',
+            subscriptionStatus: 'past_due',
+            reactivateUrl: 'https://edge.example/billing',
+          },
+        }),
+      ),
+    )
+    await settle()
+
+    expect(sink.failures).toEqual([
+      expect.objectContaining({
+        kind: 'billing',
+        status: 402,
+        billing: expect.objectContaining({
+          code: 'subscription_past_due',
+          subscriptionStatus: 'past_due',
+          reactivateUrl: 'https://edge.example/billing',
+        }),
+      }),
+    ])
+  })
+
   it('leaves an unrecognised 429 as an ordinary failure', async () => {
     const sink = recordingSink()
 

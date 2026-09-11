@@ -27,6 +27,7 @@ import { toChatMessageContent } from '../conversation-content'
 import { useConversation } from '../use-conversation'
 import { useConversations } from '../use-conversations'
 import { useDeleteConversation } from '../use-delete-conversation'
+import { useCreateConversation } from '../use-create-conversation'
 import { useRenameConversation } from '../use-rename-conversation'
 
 type ConversationsApi = NonNullable<AIPort['conversations']>
@@ -161,6 +162,48 @@ describe('useConversation', () => {
     const { result } = renderHook(() => useConversation(null), { wrapper })
 
     expect(result.current.fetchStatus).toBe('idle')
+  })
+})
+
+describe('useCreateConversation', () => {
+  it("invalidates the project's list so the switcher shows the new chat", async () => {
+    const created: AIConversationDetail = { ...summary, id: 'c2', title: 'New chat', messages: [] }
+    const { wrapper, queryClient } = makeWrapper(makeConversations({ create: () => Promise.resolve(created) }))
+    queryClient.setQueryData(['ai-conversations', 'p1'], [summary])
+
+    const { result } = renderHook(() => useCreateConversation(), { wrapper })
+    await act(async () => {
+      await result.current.mutateAsync({ projectId: 'p1', title: 'New chat' })
+    })
+
+    // The five per-hook suites this replaced never came back for this one, and the
+    // hook gained this invalidation in the same commit. Without it "+ New chat" leaves a
+    // switcher that does not list the conversation the user is now typing into.
+    expect(queryClient.getQueryState(['ai-conversations', 'p1'])?.isInvalidated).toBe(true)
+  })
+
+  it('hands back what the store created', async () => {
+    const created: AIConversationDetail = { ...summary, id: 'c2', title: 'New chat', messages: [] }
+    const { wrapper } = makeWrapper(makeConversations({ create: () => Promise.resolve(created) }))
+
+    const { result } = renderHook(() => useCreateConversation(), { wrapper })
+    let returned: AIConversationDetail | undefined
+    await act(async () => {
+      returned = await result.current.mutateAsync({ projectId: 'p1' })
+    })
+
+    expect(returned?.id).toBe('c2')
+  })
+
+  it('rejects rather than pretending, when the platform has no store', async () => {
+    const { wrapper } = makeWrapper(undefined)
+    const { result } = renderHook(() => useCreateConversation(), { wrapper })
+
+    await expect(
+      act(async () => {
+        await result.current.mutateAsync({ projectId: 'p1' })
+      }),
+    ).rejects.toThrow('no conversation store')
   })
 })
 

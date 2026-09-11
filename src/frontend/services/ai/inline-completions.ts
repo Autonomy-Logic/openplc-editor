@@ -12,10 +12,20 @@
 import type * as monaco from 'monaco-editor'
 
 import type { AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
+import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import { setImeComposing } from './ime-state'
 import { AIInlineCompletionProvider } from './inline-completion-provider'
 
 let didWarmCache = false
+
+/**
+ * Test seam: drop the once-per-session latches. Without it every test after the first
+ * runs against an already-warmed cache, and a case named for the warm-cache branch
+ * cannot reach it — which is exactly what happened to the test that claimed to.
+ */
+export function __resetInlineCompletionsForTests(): void {
+  didWarmCache = false
+}
 let didWireImeListeners = false
 
 /**
@@ -40,10 +50,18 @@ function wireImeCompositionListeners(m: typeof monaco): void {
  * Register AI inline completions for one POU's editor. Returns a disposable that
  * tears down both the Monaco registration and the provider's own state; the
  * caller is expected to call it when the POU or the language changes.
+ *
+ * `session` is the Edge account's session, where the platform has one: the provider
+ * stops asking while it is expired and resumes the moment it is restored.
  */
 export function registerAIInlineCompletions(
   ai: AIPort,
-  params: { monacoInstance: typeof monaco; pouName: string; language: AICompletionLanguage },
+  params: {
+    monacoInstance: typeof monaco
+    pouName: string
+    language: AICompletionLanguage
+    session?: EdgeSessionState
+  },
 ): { dispose: () => void } {
   // Warm the model's prompt cache once per session (fire-and-forget).
   if (!didWarmCache) {
@@ -54,7 +72,7 @@ export function registerAIInlineCompletions(
   // Track IME composition so type-through doesn't misfire on CJK input.
   wireImeCompositionListeners(params.monacoInstance)
 
-  const provider = new AIInlineCompletionProvider(params.pouName, params.language, ai)
+  const provider = new AIInlineCompletionProvider(params.pouName, params.language, ai, params.session)
   const disposable = params.monacoInstance.languages.registerInlineCompletionsProvider(params.language, provider)
 
   return {

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { AIRequestError } from '../../../../../middleware/shared/ports/ai-port'
 import type { ChatMessage } from '../../../../../middleware/shared/ports/types'
 import { isRemoteProjectPath } from '../../../../../middleware/shared/ports/types'
-import { useAI, useCapabilities, useProject } from '../../../../../middleware/shared/providers'
+import { useAI, useCapabilities, useEdgeAccountPort, useProject } from '../../../../../middleware/shared/providers'
 import { runAgenticLoop } from '../../../../services/ai/agentic-loop'
 import { collectFullProjectContext, isGraphicalLanguage } from '../../../../services/ai/context-collector'
 import { useConversation } from '../../../../services/ai/conversations'
@@ -31,13 +31,16 @@ import type { LadderFlowSlice } from '../../../../store/slices/ladder'
 import type { LibrarySlice } from '../../../../store/slices/library'
 import type { ProjectSlice } from '../../../../store/slices/project'
 import type { TabsSlice } from '../../../../store/slices/tabs'
+import { EdgeSignInModal } from '../../../_organisms/edge-sign-in-modal'
 import { AIChatInput } from './ai-chat-input'
 import { AIChatTurn } from './ai-chat-message'
+import { AIChatSignInNotice } from './ai-chat-sign-in'
 import { groupMessagesIntoTurns } from './ai-chat-turns'
 import { AIConversationList } from './ai-conversation-list'
 import { AISettingsPopover } from './ai-settings-popover'
 import { AITierBadge } from './ai-tier-badge'
 import { AIToolStatus, type ToolStatusEntry } from './ai-tool-status'
+import { useAssistantAccess } from './use-assistant-access'
 import { useStickToBottom } from './use-stick-to-bottom'
 
 function escapeForRegExp(s: string): string {
@@ -79,6 +82,15 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
   const projectPort = useProject()
   const capabilities = useCapabilities()
   const ai = useAI()
+  const edgeAccount = useEdgeAccountPort()
+  const {
+    needsSignIn,
+    ready: accountReady,
+    reason: signInReason,
+    noteRefusal,
+    signedIn: onSignedIn,
+  } = useAssistantAccess(capabilities, edgeAccount)
+  const [signInOpen, setSignInOpen] = useState(false)
   const queryClient = useQueryClient()
   /**
    * Which project on Autonomy Edge this conversation belongs to, or nothing.
@@ -151,12 +163,12 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     }
   }, [pouName, aiState.activeEditorPou, setActiveEditorPou])
 
-  // Hydrate ACU usage + subscription source once when the panel mounts, so the
+  // Hydrate ACU usage + subscription source once the account is known good, so the
   // tier badge (and any usage readout) reflects the live plan immediately on
   // open instead of waiting for the first chat send to refresh it.
   const didHydrateEntitlementsRef = useRef(false)
   useEffect(() => {
-    if (!ai) return
+    if (!ai || !accountReady) return
     if (didHydrateEntitlementsRef.current) return
     didHydrateEntitlementsRef.current = true
     void (async () => {
@@ -169,7 +181,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         // next successful send refreshes entitlements.
       }
     })()
-  }, [ai, setUsage, setSubscription])
+  }, [ai, accountReady, setUsage, setSubscription])
 
   // Project-scoped messages (single conversation)
   const messages = aiState.messages
@@ -331,6 +343,9 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         setAIError('AI is not available on this platform.')
         return
       }
+
+      // The composer is disabled in this state; a guard, not a path a user can reach.
+      if (needsSignIn) return
 
       // Sending re-engages auto-follow regardless of where the user had
       // scrolled to: they just asked a question, so they want to see the
@@ -579,7 +594,9 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
               // and would confuse the user. For all other errors, surface
               // the message as-is.
               let bubbleText: string
-              if (event.billing?.code === 'subscription_inactive') {
+              if (noteRefusal(event.status)) {
+                bubbleText = 'Sign in to Autonomy Edge to use the assistant.'
+              } else if (event.billing?.code === 'subscription_inactive') {
                 bubbleText = 'Your subscription is no longer active. Reactivate it to keep using AI features.'
               } else if (event.billing?.code === 'insufficient_acu') {
                 bubbleText = "You're out of ACU. Buy more ACU or upgrade your plan to keep going."
@@ -623,6 +640,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         }
       } catch (error) {
         if (error instanceof AIRequestError) {
+          noteRefusal(error.status)
           setAIError(error.message)
           // Any structured billing/limit payload (402 insufficient_acu /
           // subscription_inactive, or 429 rate_limit_exceeded) pops the
@@ -654,6 +672,8 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     },
     [
       ai,
+      needsSignIn,
+      noteRefusal,
       pouName,
       language,
       projectId,
@@ -855,13 +875,35 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         )}
       </div>
 
+      {/* No session, no assistant: the way in sits where the answer would have been.
+          Where the build opens the sign-in dialog by itself, no second one is offered. */}
+      {needsSignIn && (
+        <AIChatSignInNotice
+          reason={signInReason}
+          onSignIn={capabilities.requiresEdgeAccount ? undefined : () => setSignInOpen(true)}
+        />
+      )}
+
       {/* Input */}
       <AIChatInput
         onSend={(msg) => void handleSend(msg)}
         onCancel={handleCancel}
         isLoading={!!streamingMessageId}
-        disabled={!ai}
+        disabled={!ai || needsSignIn}
       />
+
+      {needsSignIn && edgeAccount && !capabilities.requiresEdgeAccount && (
+        <EdgeSignInModal
+          open={signInOpen}
+          onOpenChange={setSignInOpen}
+          account={edgeAccount}
+          reason={signInReason}
+          onSignedIn={() => {
+            setSignInOpen(false)
+            onSignedIn()
+          }}
+        />
+      )}
     </div>
   )
 }

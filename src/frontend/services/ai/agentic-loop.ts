@@ -37,7 +37,7 @@ export type AgenticEvent =
    * with a parsed 402 payload bubbled up from `streamAIRequest` — the chat
    * panel writes it onto `ai.billingError` so the exhaustion modal pops.
    */
-  | { type: 'error'; error: string; billing?: BillingErrorPayload }
+  | { type: 'error'; error: string; billing?: BillingErrorPayload; status?: number }
 
 /** Everything the loop needs beyond the transport and the request itself. */
 export type AgenticLoopOptions = {
@@ -143,6 +143,8 @@ export async function* runAgenticLoop(
         type: 'error',
         error: error instanceof Error ? error.message : 'Stream error',
         ...(billing ? { billing } : {}),
+        // The panel needs the status to tell a refused session (401) from a failed answer.
+        ...(error instanceof AIRequestError ? { status: error.status } : {}),
       }
       return
     }

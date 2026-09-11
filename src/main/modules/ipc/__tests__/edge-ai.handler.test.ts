@@ -106,14 +106,22 @@ type Sink = {
 const delta = (text: string): AISSEEvent => ({ type: 'content_block_delta', delta: text })
 
 /** The window a stream feeds, standing in for a real `webContents`. */
+type LifecycleHook = (details?: unknown) => void
+
 const makeSender = () => ({
   send: jest.fn(),
   isDestroyed: jest.fn(() => false),
-  once: jest.fn(),
-  removeListener: jest.fn(),
+  on: jest.fn<void, [string, LifecycleHook]>(),
 })
 
 type Sender = ReturnType<typeof makeSender>
+
+/** The handler the bridge hooked for one of a renderer's lifecycle events. */
+const hookFor = (sender: Sender, event: string): LifecycleHook => {
+  const call = sender.on.mock.calls.find(([name]) => name === event)
+  if (!call) throw new Error(`no hook for ${event}`)
+  return call[1]
+}
 
 const cancel = jest.fn()
 
@@ -229,10 +237,14 @@ describe('starting a stream', () => {
 
     const started = bridge.handleEdgeAiStreamStart({ sender } as never, { kind: 'chat', body: { messages: [] } })
 
-    // The map entry and the teardown hook are in place before the call — a throw
-    // that skipped the sink would otherwise leave a stream nothing can ever end.
+    // The map entry is in place before the call — a throw that skipped the sink would
+    // otherwise leave a stream nothing can ever end. Nothing to cancel, because the
+    // request was never made; and the renderer's hooks stay, because they belong to
+    // the renderer, not to the stream that failed to start.
     expect(started).toMatchObject({ ok: false, failure: { kind: 'unreachable' } })
-    expect(sender.removeListener).toHaveBeenCalledWith('destroyed', expect.any(Function))
+    expect(cancel).not.toHaveBeenCalled()
+    hookFor(sender, 'destroyed')()
+    expect(cancel).not.toHaveBeenCalled()
   })
 })
 
@@ -296,21 +308,66 @@ describe('a window that goes away mid-answer', () => {
 
     // A stream that has produced nothing yet would otherwise sit there holding an
     // open request until the model spoke — which, for a stalled request, is never.
-    const [event, onDestroyed] = sender.once.mock.calls[0] ?? []
-    expect(event).toBe('destroyed')
-    if (typeof onDestroyed === 'function') onDestroyed()
+    hookFor(sender, 'destroyed')()
 
     expect(cancel).toHaveBeenCalledTimes(1)
   })
 
-  it('unhooks the teardown listener when the stream ends normally', () => {
-    // The window outlives the stream, so a listener left behind is one more dead
-    // closure per answer on a long-lived webContents.
+  it('is cancelled when the renderer reloads, before Edge can bill the whole answer', () => {
     const { sender, sink } = startChat()
 
-    sink.onEnd()
+    // A reload does NOT destroy the WebContents, so the old destroy-only hook never
+    // fired: the generator reading the stream died with its JS context, frames kept
+    // going into the void, Edge ran to completion and COMMITTED the credit reservation.
+    // The user paid in full for an answer nobody could read.
+    hookFor(sender, 'did-start-navigation')({ isMainFrame: true, isSameDocument: false, url: 'http://x/' })
 
-    expect(sender.removeListener).toHaveBeenCalledWith('destroyed', expect.any(Function))
+    expect(cancel).toHaveBeenCalledTimes(1)
+
+    // And nothing more is sent to a renderer that is mid-reload.
+    sink.onEvent(delta('tok'))
+    expect(sender.send).not.toHaveBeenCalled()
+  })
+
+  it('does not mistake a hash change for a reload', () => {
+    const { sender } = startChat()
+
+    hookFor(sender, 'did-start-navigation')({ isMainFrame: true, isSameDocument: true, url: 'http://x/#a' })
+
+    expect(cancel).not.toHaveBeenCalled()
+  })
+
+  it('is cancelled when the renderer process crashes', () => {
+    const { sender } = startChat()
+
+    hookFor(sender, 'render-process-gone')()
+
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('hooks a renderer once, however many streams it opens', () => {
+    // Each stream used to add its own `once('destroyed')` to the same emitter; past ten
+    // concurrent streams Node warns about a leak. One set of hooks per renderer.
+    const sender = makeSender()
+    startChat(sender)
+    startChat(sender)
+    startChat(sender)
+
+    const hooked = sender.on.mock.calls.map(([name]) => name).sort()
+    expect(hooked).toEqual(['destroyed', 'did-start-navigation', 'render-process-gone'])
+  })
+
+  it("cancels every stream the renderer had open, and only that renderer's", () => {
+    const mine = makeSender()
+    const other = makeSender()
+    startChat(mine)
+    startChat(mine)
+    startChat(other)
+
+    hookFor(mine, 'destroyed')()
+
+    // Two streams on the renderer that went away; the third belongs to a live one.
+    expect(cancel).toHaveBeenCalledTimes(2)
   })
 })
 

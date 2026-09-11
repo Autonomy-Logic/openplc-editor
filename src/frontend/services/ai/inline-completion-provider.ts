@@ -7,6 +7,7 @@
 import type * as monaco from 'monaco-editor'
 
 import type { AICompleteParams, AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
+import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import type { BillingErrorPayload } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import { buildFIMContext } from './context-builder'
@@ -207,14 +208,33 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
   /** Minimum time (ms) a completion must be visible to count as a real user impression. */
   private static readonly MIN_SHOWN_MS = 300
 
+  /**
+   * No requests while the account is known signed-out (a 401/403 on the last one).
+   *
+   * Monaco asks on every keystroke, and each ask used to cost an IPC round trip plus a
+   * telemetry event that could only fail the same way. Held for a widening backoff, or
+   * until the session is restored where the caller wired one in.
+   */
+  private static readonly SIGNED_OUT_HOLD_MS = 30_000
+  private static readonly SIGNED_OUT_HOLD_MAX_MS = 15 * 60_000
+  private signedOutUntil = 0
+  private signedOutHoldMs = AIInlineCompletionProvider.SIGNED_OUT_HOLD_MS
+
   private unsubscribeFromStore: (() => void) | null = null
   private unsubscribeFromPreferences: (() => void) | null = null
+  private unsubscribeFromSession: (() => void) | null = null
 
   constructor(
     private readonly pouName: string,
     private readonly language: AICompletionLanguage,
     private readonly aiPort: AIPort,
+    private readonly session?: EdgeSessionState,
   ) {
+    // A sign-in ends the hold at once rather than at the end of the backoff.
+    this.unsubscribeFromSession =
+      session?.onRestored(() => {
+        this.releaseSignedOutHold()
+      }) ?? null
     // Subscribe to project state changes that affect completion context.
     // When variables, data types, or POUs change, cached completions are stale.
     this.unsubscribeFromStore = openPLCStoreBase.subscribe(
@@ -266,6 +286,8 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     // Don't interfere with IME composition (e.g. CJK): intermediate composition
     // characters must not be read as type-through divergence or trigger requests.
     if (isImeComposing()) return emptyResult
+
+    if (this.isHeldForSignIn()) return emptyResult
 
     const offset = model.getOffsetAt(position)
     const lineContent = model.getLineContent(position.lineNumber)
@@ -360,9 +382,10 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         localAbortController?.abort()
         // Unconditional, like every other diagnostic in this file. It used to be
         // behind `import.meta.env.DEV`, which is a Vite-only expression and does
-        // not compile in the desktop build now that this module is shared — and a
-        // five-second timeout with no first token is worth seeing in any build.
-        console.warn(
+        // not compile in the desktop build now that this module is shared. `debug` rather
+        // than `warn`: a developer with the console at verbose sees it in any build, while a
+        // production console is not handed a warning per timed-out completion.
+        console.debug(
           `[AI Completion] TIMEOUT after ${AIInlineCompletionProvider.TIMEOUT_MS}ms (no first token received) | model=haiku`,
         )
         this.aiPort.sendTelemetry('completion_timeout', {
@@ -389,6 +412,9 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         }
         completion += chunk
       }
+
+      // A request that went through means the account works again.
+      this.releaseSignedOutHold()
 
       // Strip markdown fences the model sometimes adds
       completion = AIInlineCompletionProvider.stripMarkdownFences(completion)
@@ -454,6 +480,10 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         openPLCStoreBase.getState().aiActions.setBillingError(billing)
       }
 
+      if (statusCode === 401 || statusCode === 403) {
+        this.holdForSignIn()
+      }
+
       this.aiPort.sendTelemetry('completion_error', {
         language: this.language,
         model: 'haiku',
@@ -482,10 +512,26 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     this.unsubscribeFromStore = null
     this.unsubscribeFromPreferences?.()
     this.unsubscribeFromPreferences = null
+    this.unsubscribeFromSession?.()
+    this.unsubscribeFromSession = null
     this.activeAbortController?.abort()
     this.activeAbortController = null
     this.cache.clear()
     this.clearActiveSuggestion()
+  }
+
+  private isHeldForSignIn(): boolean {
+    return this.session?.isExpired() === true || Date.now() < this.signedOutUntil
+  }
+
+  private holdForSignIn(): void {
+    this.signedOutUntil = Date.now() + this.signedOutHoldMs
+    this.signedOutHoldMs = Math.min(this.signedOutHoldMs * 2, AIInlineCompletionProvider.SIGNED_OUT_HOLD_MAX_MS)
+  }
+
+  private releaseSignedOutHold(): void {
+    this.signedOutUntil = 0
+    this.signedOutHoldMs = AIInlineCompletionProvider.SIGNED_OUT_HOLD_MS
   }
 
   /** Forget the active suggestion so type-through stops comparing against it. */

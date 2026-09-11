@@ -248,7 +248,6 @@ interface Md5VerifyReply {
 interface AiStream {
   cancel: () => void
   sender: WebContents
-  release: () => void
 }
 
 /**
@@ -2033,13 +2032,7 @@ class MainProcessBridge implements MainIpcModule {
     const streamId = randomUUID()
     const sender = event.sender
 
-    // A window can be closed with an answer half-written, and the request would
-    // go on being read for as long as the model kept talking. Hooking teardown
-    // here — rather than only noticing when the next chunk fails to send — ends
-    // it at once, including for a stream that has produced nothing yet.
-    const onSenderDestroyed = () => this.abortAiStream(streamId)
-
-    sender.once('destroyed', onSenderDestroyed)
+    this.watchAiSender(sender)
 
     // Registered BEFORE the request starts, because the sink can fire on this
     // same tick: a chunk delivered before the entry existed would be dropped on
@@ -2055,7 +2048,6 @@ class MainProcessBridge implements MainIpcModule {
         handle?.cancel()
       },
       sender,
-      release: () => sender.removeListener('destroyed', onSenderDestroyed),
     })
 
     // `onStatus` is left unimplemented on purpose: it is optional and diagnostic,
@@ -2144,16 +2136,64 @@ class MainProcessBridge implements MainIpcModule {
     stream.sender.send(channel, { streamId, ...payload })
   }
 
-  /** Forget a stream that has already finished: the map entry and the window hook go together. */
+  /** Forget a stream that has already finished. */
   private forgetAiStream(streamId: string) {
-    const stream = this.aiStreams.get(streamId)
+    this.aiStreams.delete(streamId)
+  }
 
-    if (!stream) {
+  /**
+   * The renderers whose streams this bridge is watching. A WeakSet so a window that
+   * goes away takes its entry with it, and so the check below is "have I hooked this
+   * one" rather than a counter that could drift from the truth.
+   */
+  private readonly watchedAiSenders = new WeakSet<WebContents>()
+
+  /**
+   * Hook the three ways a renderer stops being able to read its streams, ONCE per
+   * renderer rather than once per stream.
+   *
+   * `destroyed` is the window closing. It used to be the only hook, and it left the
+   * common case open: a RELOAD — Display → Refresh, Ctrl+R, or a dev-server hot reload —
+   * does not destroy the `WebContents`. The renderer's JS context dies with the
+   * generator that was reading the stream, nothing here noticed, the frames kept
+   * being sent into the void, and Edge ran the answer to completion. At that point the
+   * backend's controller sees `streamCompleted` and COMMITS the credit reservation
+   * instead of refunding it: the user paid in full for an answer that had nowhere to
+   * go. The web build never had the bug, because a reload closes the fetch and the
+   * server's `close` handler refunds.
+   *
+   * `did-start-navigation` covers the reload (and any other main-frame navigation), and
+   * `render-process-gone` covers a renderer crash, which has the same shape. Same-document
+   * navigations are skipped: a hash change is not a new JS context.
+   *
+   * Per renderer rather than per stream because each `once('destroyed')` was a new
+   * listener on the same emitter, and past ten concurrent streams Node warns about it.
+   */
+  private watchAiSender(sender: WebContents) {
+    if (this.watchedAiSenders.has(sender)) {
       return
     }
 
-    this.aiStreams.delete(streamId)
-    stream.release()
+    this.watchedAiSenders.add(sender)
+
+    const abortAll = () => this.abortAiStreamsFor(sender)
+
+    sender.on('destroyed', abortAll)
+    sender.on('render-process-gone', abortAll)
+    sender.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) {
+        abortAll()
+      }
+    })
+  }
+
+  /** Cancel every live stream a renderer was reading. */
+  private abortAiStreamsFor(sender: WebContents) {
+    for (const [streamId, stream] of this.aiStreams) {
+      if (stream.sender === sender) {
+        this.abortAiStream(streamId)
+      }
+    }
   }
 
   /** Forget a stream that has NOT finished, cancelling the request it holds open. */
@@ -2370,9 +2410,18 @@ class MainProcessBridge implements MainIpcModule {
   handleWindowReload = () => {
     // The reload wipes the renderer's store back to 'disconnected', so the
     // session has to go with the emulator — otherwise main keeps holding an open
-    // simulator session that the reloaded UI has no idea about.
+    // simulator session that the reloaded UI has no idea about. An AI answer
+    // mid-stream is the same shape of leftover, with money on it: see
+    // `watchAiSender` for why it must not be left running.
     this.stopSimulator()
-    this.mainWindow?.webContents.reload()
+
+    const contents = this.mainWindow?.webContents
+
+    if (contents) {
+      this.abortAiStreamsFor(contents)
+    }
+
+    contents?.reload()
   }
   handleWindowRebuildMenu = () => {
     void this.menuBuilder.buildMenu().catch((error) => {

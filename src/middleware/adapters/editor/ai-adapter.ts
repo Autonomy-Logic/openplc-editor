@@ -48,7 +48,7 @@ import { AIRequestError } from '../../shared/ports/ai-port'
  * the whole explanation of why their request was refused.
  */
 const BillingErrorPayloadSchema = z.object({
-  code: z.enum(['insufficient_acu', 'subscription_inactive', 'rate_limit_exceeded']),
+  code: z.enum(['insufficient_acu', 'subscription_inactive', 'rate_limit_exceeded', 'subscription_past_due']),
   message: z.string(),
   remaining: z.number().optional().catch(undefined),
   required: z.number().optional().catch(undefined),
@@ -57,7 +57,7 @@ const BillingErrorPayloadSchema = z.object({
     .enum(['trialing', 'active', 'past_due', 'paused', 'canceled', 'expired'])
     .optional()
     .catch(undefined),
-  reactivateUrl: z.string().optional().catch(undefined),
+  reactivateUrl: z.string().url().optional().catch(undefined),
   resetsAt: z.string().nullable().optional().catch(undefined),
 })
 
@@ -154,10 +154,9 @@ function unreadableAnswer(): AIRequestError {
  * `status` separates a 402 from a 500 and `billing` is what opens the exhaustion modal,
  * so both cross un-flattened, and `billing` is taken from the VALIDATED copy: a field the
  * schema had to fall back on reaches the modal as absent rather than as whatever
- * unreadable value it arrived as. `retryAfter` stays undefined — the main process's
- * failure union carries no `Retry-After`, and the one case where the wait is knowable,
- * the rolling-window 429, already carries `billing.resetsAt`, which is what the modal
- * actually reads. Inventing a number here would be a claim nobody made.
+ * unreadable value it arrived as.
+ *
+ * `retryAfter` stays undefined: the failure union carries no `Retry-After` (a 429 says when in `billing.resetsAt`).
  */
 function errorFromFailure(reported: unknown): AIRequestError {
   const parsed = AiFailureSchema.safeParse(reported)
@@ -222,6 +221,36 @@ function channel<A extends unknown[], T>(
 
     return unwrap(await fn(...args))
   }
+}
+
+/** What an aborted read rejects with — the same name the fetch-based web transport uses. */
+function abortError(): Error {
+  return new DOMException('The request was aborted.', 'AbortError')
+}
+
+/**
+ * Run a buffered read under a signal. An IPC result cannot be cancelled, only stopped
+ * being waited on: a signal that fires rejects the caller now, and whatever the main
+ * process later answers is dropped. Already aborted, the request is not even made.
+ */
+function abortable<T>(read: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) {
+    return read()
+  }
+
+  if (signal.aborted) {
+    return Promise.reject(abortError())
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(abortError())
+
+    signal.addEventListener('abort', onAbort, { once: true })
+
+    read()
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', onAbort))
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -417,6 +446,10 @@ async function* streamFrames(
 
       const event = AiSseEventSchema.safeParse(frame.event)
 
+      // The main process already dropped unknown frame types; this rejects a frame
+      // whose SHAPE is wrong for a type we do know, which can only mean the two
+      // bundles disagree about the wire format. Skipped rather than thrown, so a
+      // stale renderer degrades to a shorter answer instead of a broken stream.
       if (!event.success) {
         continue
       }
@@ -589,11 +622,11 @@ export function createEditorAIAdapter(config: EditorAIAdapterConfig): AIPort {
 
     // The three read routes hand back what the main process already validated against
     // the route's schema; `unwrap` has checked the envelope it came in.
-    fetchEntitlements: () => fetchEntitlements(),
+    fetchEntitlements: (signal?: AbortSignal) => abortable(() => fetchEntitlements(), signal),
 
-    fetchUsage: () => fetchUsage(),
+    fetchUsage: (signal?: AbortSignal) => abortable(() => fetchUsage(), signal),
 
-    fetchCredits: () => fetchCredits(),
+    fetchCredits: (signal?: AbortSignal) => abortable(() => fetchCredits(), signal),
 
     /**
      * Fire-and-forget, and deliberately silent. Telemetry that surfaced its own failures
