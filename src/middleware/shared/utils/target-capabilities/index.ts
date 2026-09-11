@@ -5,5 +5,5 @@ export {
   RUNTIME_V4_CAPABILITIES,
   SIMULATOR_CAPABILITIES,
 } from './presets'
-export { type BoardInfoLike, resolveTargetCapabilities } from './resolve'
+export { type BoardInfoLike, resolveAddressProducerCapabilities, resolveTargetCapabilities } from './resolve'
 export type { AddressProducerCapabilities, DebuggerTransport, TargetCapabilities } from './types'

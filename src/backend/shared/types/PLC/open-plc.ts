@@ -363,7 +363,13 @@ type S7CommPlcIdentity = z.infer<typeof S7CommPlcIdentitySchema>
 // S7Comm Buffer Mapping Schema
 const S7CommBufferMappingSchema = z.object({
   type: S7CommBufferTypeSchema,
-  startBuffer: z.number().min(0).max(1023),
+  // 65535, not 1023: 1023 was the runtime's old fixed BUFFER_SIZE, copied
+  // here as if it were a property of S7comm. The image is sized from the
+  // project now, so the only ceiling left is the ABI's own — a located
+  // variable's index is a uint16 (CON03, strucpp_abi.hpp), which makes 65535
+  // the highest addressable element. The bound stays: an unbounded start
+  // buffer would be a number with no meaning rather than a freedom.
+  startBuffer: z.number().min(0).max(65535),
   bitAddressing: z.boolean(),
 })
 type S7CommBufferMapping = z.infer<typeof S7CommBufferMappingSchema>

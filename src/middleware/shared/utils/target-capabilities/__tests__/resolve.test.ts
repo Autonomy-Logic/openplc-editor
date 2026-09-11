@@ -1,10 +1,11 @@
 import {
+  ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,
   RUNTIME_V3_CAPABILITIES,
   RUNTIME_V4_CAPABILITIES,
   SIMULATOR_CAPABILITIES,
 } from '../presets'
-import { resolveTargetCapabilities } from '../resolve'
+import { resolveAddressProducerCapabilities, resolveTargetCapabilities } from '../resolve'
 import type { TargetCapabilities } from '../types'
 
 describe('resolveTargetCapabilities', () => {
@@ -148,5 +149,39 @@ describe('preset shapes', () => {
     expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.pythonFunctionBlocks).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.debuggerTransports).toEqual(['modbus-serial', 'modbus-tcp'])
+  })
+})
+
+describe('resolveAddressProducerCapabilities', () => {
+  it('is permissive when there is no board info at all', () => {
+    // The DOPE-440 rule: an all-false block reads as "this target supports no
+    // producers", which froze every address in the store and would size every
+    // area to zero in the compile-time image sizer.
+    expect(resolveAddressProducerCapabilities(undefined)).toEqual(ALL_ADDRESS_PRODUCERS_ACTIVE)
+  })
+
+  it('is permissive for an entry with neither a capability block nor a known compiler', () => {
+    expect(resolveAddressProducerCapabilities({})).toEqual(ALL_ADDRESS_PRODUCERS_ACTIVE)
+    expect(resolveAddressProducerCapabilities({ compiler: 'something-else' })).toEqual(ALL_ADDRESS_PRODUCERS_ACTIVE)
+  })
+
+  it('honours a target that answered, including when it answers all-false', () => {
+    // The difference that matters: a resolved board declaring `pinMapping:
+    // false` must really deactivate pins, so their space frees up and the
+    // still-active producers compact into it.
+    const simulator = resolveAddressProducerCapabilities({ compiler: 'simulator' })
+    expect(simulator.pinMapping).toBe(false)
+    expect(simulator.modbusTcpRemote).toBe(true)
+
+    const arduino = resolveAddressProducerCapabilities({ compiler: 'arduino-cli' })
+    expect(arduino.pinMapping).toBe(true)
+    expect(arduino.modbusTcpRemote).toBe(false)
+  })
+
+  it('honours an explicit capability block even with no compiler', () => {
+    const caps = resolveAddressProducerCapabilities({ capabilities: { pinMapping: true } })
+    expect(caps.pinMapping).toBe(true)
+    // The rest fills in from EMPTY, which is the declared answer here, not silence.
+    expect(caps.ethercat).toBe(false)
   })
 })

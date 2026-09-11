@@ -28,7 +28,10 @@ import type {
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
-import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
+import {
+  resolveAddressProducerCapabilities,
+  resolveTargetCapabilities,
+} from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
 import { isRetainConfigCapableRuntime, MIN_RETAIN_CONFIG_RUNTIME_VERSION } from '../firmware/runtime-version-gate'
@@ -48,8 +51,16 @@ import type { DevicePin } from '../types/PLC/devices'
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
+import {
+  computeIoImage,
+  describeUnbackedLocation,
+  describeUnsupportedArea,
+  IMAGE_AREAS_BAREMETAL,
+  IMAGE_AREAS_RUNTIME_V4,
+} from './steps/compute-io-image'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
+import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
@@ -403,7 +414,56 @@ async function runCompilePipelineInner(
   // BoardInfoLike, but the runtime shape (capabilities + compiler +
   // optional vpp flag) is compatible — the resolver only reads
   // those fields and treats unknowns as missing.
-  const targetCapabilities = resolveTargetCapabilities(boardEntry as Parameters<typeof resolveTargetCapabilities>[0])
+  const targetCapabilities = resolveTargetCapabilities(boardEntry)
+
+  // ---------------------------------------------------------------------
+  // Step 0a: Size the I/O image from the project, and refuse a located
+  // declaration the target cannot honour (DOPE-615).
+  //
+  // Here rather than inside either branch: the figure feeds the runtime-v4
+  // bundle AND the arduino-cli defines, and computing it once is what keeps
+  // the two from disagreeing (FR05).
+  //
+  // TWO TARGETS ARE EXEMPT, and for the same reason: we do not size what we
+  // cannot measure, and a target we do not size must not be gated either.
+  //
+  //   - Runtime v3 receives plain ST and sizes its own image. We emit nothing
+  //     for it and know nothing about its buffers.
+  //   - The SIMULATOR has no address producers by construction. Its
+  //     capability block declares `pinMapping: false`, which hides the pin
+  //     table, and nothing seeds pins for a new project — so `PINMASK_DIN`
+  //     comes out empty, `NUM_DISCRETE_INPUT` comes out 0, and
+  //     `simulator.cpp`'s I/O loops run zero times. Located I/O on the
+  //     simulator is therefore already inert today. Gating it would refuse
+  //     projects for a producer the user has no way to create, and sizing it
+  //     would hand the firmware an all-zero image, which is worse than the
+  //     header's own defaults. It keeps those defaults.
+  // ---------------------------------------------------------------------
+  const sizesTheImage = !isRuntimeV3 && !isSimulator
+
+  const ioImage = computeIoImage({
+    projectData,
+    devicePinMapping,
+    vendorScreenData,
+    // NOT `targetCapabilities`: that answers `EMPTY_CAPABILITIES` for an entry
+    // that declares nothing, which reads as "no producers at all" and would
+    // size every area to zero and then refuse the build.
+    capabilities: resolveAddressProducerCapabilities(boardEntry),
+    areas: isRuntimeV4 ? IMAGE_AREAS_RUNTIME_V4 : IMAGE_AREAS_BAREMETAL,
+  })
+
+  if (sizesTheImage && (ioImage.unsupported.length > 0 || ioImage.unbacked.length > 0)) {
+    // Both lists, not the first non-empty one: a project can carry each kind of
+    // mistake, and reporting one round at a time turns a single fix into
+    // several compile attempts.
+    for (const issue of ioImage.unsupported) {
+      emit({ stage: 'validate', message: describeUnsupportedArea(issue, boardTarget), level: 'error' })
+    }
+    for (const issue of ioImage.unbacked) {
+      emit({ stage: 'validate', message: describeUnbackedLocation(issue), level: 'error' })
+    }
+    return bailError(emit, 'validate', 'Compilation aborted: every located variable needs an address that exists.')
+  }
 
   // ---------------------------------------------------------------------
   // Step 0: Use the already-preprocessed project data.
@@ -537,6 +597,7 @@ async function runCompilePipelineInner(
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
       confs = generateRuntimeConfs({
+        imageSizes: ioImage.sizes,
         servers: processedData.servers as never,
         remoteDevices: processedData.remoteDevices as never,
         instances: processedData.configuration.resource.instances.map(
@@ -627,6 +688,17 @@ async function runCompilePipelineInner(
         level: 'info',
       })
     }
+
+    // The I/O image sizes travel the same way, and unconditionally: unlike
+    // retain.conf there is no meaning in withholding the file, so there is no
+    // branch here. A runtime too old to read it keeps its compiled-in
+    // BUFFER_SIZE, which is today's behaviour.
+    bundle['image.conf'] = generateImageConf(ioImage.sizes)
+    emit({
+      stage: 'runtime-v4-bundle',
+      message: `Generated image.conf (${Object.keys(ioImage.sizes).length} address area(s) sized from the project)`,
+      level: 'info',
+    })
 
     // Write the bundle out BEFORE the compile-only branch, so `compile` and
     // `upload` leave the same artifacts on disk. Until this existed, the bundle
@@ -866,6 +938,9 @@ async function runCompilePipelineInner(
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    // Only for a target we actually size. Runtime v3 and the simulator keep
+    // openplc.h's own fallbacks, so their defines.h is unchanged.
+    ...(sizesTheImage ? { imageSizes: ioImage.sizes } : {}),
   })
 
   // VPP config header — emitted only for arduino-cli targets whose

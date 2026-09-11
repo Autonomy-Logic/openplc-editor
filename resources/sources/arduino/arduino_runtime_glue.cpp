@@ -412,15 +412,47 @@ static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
               "state, not only its inputs and outputs.");
 #endif
 
+// The bit areas must be a whole number of bytes, or the build FAILS.
+//
+// openplc.h declares them as `bool_input[MAX_DIGITAL_INPUT/8][8]`, so the
+// number is in bits and the division has to come out even. A value that is not
+// a multiple of eight truncates: the array comes up one byte short and the
+// slots of the partial byte become unaddressable, so the top few points of an
+// image simply do nothing. Nothing downstream can report that -- there is no
+// console on a microcontroller -- so the check happens at build time or not at
+// all, exactly as with OPLC_RETAIN_BLOB_SIZE above.
+//
+// The editor already rounds these up when it emits them (DOPE-615), which is
+// why this should never fire. That is the point: it is here so that the day it
+// stops rounding, the failure is a compiler error naming the cause rather than
+// I/O that quietly stops at the wrong index.
+static_assert(MAX_DIGITAL_INPUT % 8 == 0,
+              "MAX_DIGITAL_INPUT must be a multiple of 8: openplc.h declares "
+              "bool_input as [MAX_DIGITAL_INPUT/8][8], so a remainder is "
+              "silently dropped and the last few inputs become unaddressable.");
+static_assert(MAX_DIGITAL_OUTPUT % 8 == 0,
+              "MAX_DIGITAL_OUTPUT must be a multiple of 8: openplc.h declares "
+              "bool_output as [MAX_DIGITAL_OUTPUT/8][8], so a remainder is "
+              "silently dropped and the last few outputs become unaddressable.");
+
 static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
 static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
 static bool     retain_available  = false;
 
 // This program's identity, handed to the driver on every read so it can tell
 // whether what it is holding belongs to the program now running. Supplied by
-// the sketch from PROGRAM_MD5 rather than read from defines.h here: defines.h
-// has no include guard and must reach a translation unit through exactly one
-// path (modbus_config.h), which this file is deliberately not on.
+// the sketch from PROGRAM_MD5 rather than read from defines.h here, which
+// keeps the value flowing on one path and the sketch as its only source.
+//
+// This comment used to say defines.h "must reach a translation unit through
+// exactly one path (modbus_config.h), which this file is deliberately not on".
+// That stopped being true with DOPE-615: openplc.h now includes defines.h from
+// inside its own guard, so every TU that sees openplc.h sees defines.h,
+// including this one. Re-inclusion is safe — defines.h holds nothing but
+// object-like macros, and redefining a macro to an identical token sequence is
+// permitted (C11 6.10.3p2) — and nothing here or in modbus_debug.cpp,
+// Arduino_OpenPLC.h or mega_due_bkp.cpp changes behaviour as a result. The
+// single-path rule is simply gone; do not restore it from memory.
 static const char *retain_program_md5 = nullptr;
 
 static uint16_t retain_read_leaf(uint8_t arr, uint16_t elem, uint8_t* dest) {

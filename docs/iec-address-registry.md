@@ -109,7 +109,33 @@ to call on every mutation, on project load, and pre-compile.
 Determinism (stable order + stable channel order) guarantees reproducible
 results across sessions, so a re-open never gratuitously renumbers.
 
-### 5.1 Capability scoping vs. unresolved targets
+`allocateAddresses` returns `{ assignments, conflicts, slotCounts }`.
+
+### 5.1 Slot counts: how big the I/O image has to be
+
+Both passes above already build the reservation set for each prefix space,
+so the allocator knows exactly how far into each space the producers reach.
+`slotCounts` publishes that: prefix (`%IX`, `%QW`, …) → highest claimed
+linear index **plus one**, i.e. how many slots that space needs.
+
+It is the number the compile pipeline sizes the runtime's I/O image from
+(DOPE-615), instead of the fixed per-platform `MAX_*` / `BUFFER_SIZE`. Three
+properties of it are load-bearing:
+
+- **A prefix nobody claimed is absent, not zero-valued.** Absent and `0` mean
+  the same thing, and callers read `slotCounts[prefix] ?? 0`. A class with no
+  producers sizes to zero — the floor is always zero, never a minimum.
+- **Bit spaces count bits**, matching `linear` — `%IX1.2` is bit 10, so the
+  count is 11. Rounding up to a whole byte is the firmware buffer's concern
+  (bit areas are declared `[MAX_/8][8]`), not the registry's.
+- **It is a high-water mark, not a channel count.** A pinned channel at
+  `%QW9` needs 10 slots even if it is the only one, because the gap below it
+  is addressable storage.
+
+Unparseable `pinned` addresses take no part in the linear reservation, so
+they contribute nothing here — the same exception `assignments` makes.
+
+### 5.2 Capability scoping vs. unresolved targets
 
 Allocation is scoped to the consumer kinds the active target supports
 (`allocateAddresses`'s `activeKinds`). Deactivating a kind is deliberate and
@@ -230,7 +256,7 @@ in the emitters.
 middleware/shared/utils/iec-address/registry/
   types.ts          # Consumer, Channel, AddressClass, IecAddressRegistry, reports
   address-space.ts  # prefix<->class, bit linearization, parse/format, lowest-free
-  allocate.ts       # allocateAddresses(consumers) -> { assignments, conflicts }
+  allocate.ts       # allocateAddresses(consumers) -> { assignments, conflicts, slotCounts }
   registry.ts       # createRegistry / add / remove / update / setAlias / recalculate / queries
   resolve.ts        # buildAliasIndex, resolveLocation (compile-time)
   migrate.ts        # migrateProjectToRegistry (legacy -> registry) [Phase 2]
@@ -285,7 +311,7 @@ Shipped on `feat/central-iec-address-registry` (editor + web, byte-identical):
   already held by a VPP or Modbus channel — an unreported two-producer
   collision.
 - **Unresolved targets** allocate permissively rather than as if the target
-  supported nothing — see §5.1.
+  supported nothing — see §5.2.
 - **Aliases** resolve to concrete IEC addresses **in the editor** (each
   variable's `location` is kept resolved); the compiler/runtime are untouched.
 
