@@ -242,7 +242,12 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const handleCreateServer: SubmitHandler<CreateServerFormProps> = (data) => {
     const result = createServer({ name: data.name, protocol: data.protocol })
     if (!result.ok) {
-      serverSetError('name', { type: 'already-exists' })
+      serverSetError('name', { type: 'already-exists', message: result.message })
+      toast({
+        title: 'Server not created',
+        description: result.message ?? "You can't create a server with this name.",
+        variant: 'fail',
+      })
       return
     }
     toast({ title: 'Server created successfully', description: 'The server has been created', variant: 'default' })
@@ -253,7 +258,12 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const handleCreateRemoteDevice: SubmitHandler<CreateRemoteDeviceFormProps> = (data) => {
     const result = createRemoteDevice({ name: data.name, protocol: data.protocol })
     if (!result.ok) {
-      remoteDeviceSetError('name', { type: 'already-exists' })
+      remoteDeviceSetError('name', { type: 'already-exists', message: result.message })
+      toast({
+        title: 'Remote device not created',
+        description: result.message ?? "You can't create a remote device with this name.",
+        variant: 'fail',
+      })
       return
     }
     toast({
@@ -533,7 +543,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         />
                         {serverErrors.name?.type === 'already-exists' && (
                           <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                            * Server name already exists or protocol already in use
+                            * {serverErrors.name.message ?? 'Server name already exists or protocol already in use'}
                           </span>
                         )}
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
@@ -668,7 +678,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         />
                         {remoteDeviceErrors.name?.type === 'already-exists' && (
                           <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                            * Device name already exists
+                            * {remoteDeviceErrors.name.message ?? 'Device name already exists'}
                           </span>
                         )}
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>

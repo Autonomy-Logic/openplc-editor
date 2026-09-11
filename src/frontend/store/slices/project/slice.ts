@@ -56,6 +56,7 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
 import { createVariableValidation, updateVariableValidation } from './validation/variables'
@@ -1048,12 +1049,24 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // to the next free slot to avoid duplicate-address compile errors
       // (forum thread "openplc-420-teething-bugs", v4.2.0).
       const sourceVariables = scopedVariables(getState().project.data, scope, associatedPou, dto.associatedList) ?? []
-      const validated = createVariableValidation(sourceVariables, data)
+      // A global is a top-level symbol next to POUs and types, so its clone has
+      // to step over those names too, not only its own table.
+      const nameTaken =
+        scope === 'global'
+          ? (name: string) => elementNameCollision(getState(), name, 'resource-global') !== null
+          : undefined
+      const validated = createVariableValidation(sourceVariables, data, nameTaken)
       // Single-field location model: `location` is the binding itself — an
       // alias name OR a literal `%addr`. It is stored verbatim (no
       // address→alias auto-adoption); alias→address resolution happens at
       // compile time. The legacy `alias` field is unused.
       data = { ...data, ...validated }
+
+      if (scope === 'global') {
+        const collision = elementNameCollision(getState(), data.name, 'resource-global')
+        /* istanbul ignore next -- only when every auto-increment candidate is taken */
+        if (collision) return fail(collision, 'Variable already exists')
+      }
 
       let response: ProjectResponse = { ok: true }
       setState(
@@ -1103,6 +1116,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       if (scope === 'local') {
         const reconcile = reconcileVariablesText(associatedPou, getState, setState)
         if (!reconcile.ok) return reconcile
+      }
+
+      if (scope === 'global' && updates.name !== undefined) {
+        const globals = getState().project.data.configurations.resource.globalVariables
+        const current = getVariableBasedOnRowIdOrVariableId(globals, rowId, variableId)
+        if (current) {
+          const collision = elementNameCollision(getState(), updates.name, 'resource-global', current.variable.name)
+          if (collision) return fail(collision, 'Variable already exists')
+        }
       }
 
       let response: ProjectResponse = { ok: true }
