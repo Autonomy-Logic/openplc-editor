@@ -37,6 +37,15 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024
 const MAX_FILES = 1000
 const MAX_DEPTH = 10
+const SKIPPED_DIRECTORIES = new Set(['build', 'node_modules'])
+
+async function isProjectRoot(directory: string): Promise<boolean> {
+  try {
+    return (await fs.stat(path.join(directory, 'project.json'))).isFile()
+  } catch {
+    return false
+  }
+}
 
 /** A project without this is not a project the importer can read. */
 const PROJECT_MANIFEST = 'project.json'
@@ -246,6 +255,13 @@ async function collectFiles(
     const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
 
     if (entry.isDirectory()) {
+      // Build output, VCS metadata and a folder that is a project of its own are not
+      // part of THIS project; the importer would otherwise adopt the nested
+      // project.json as the manifest.
+      if (SKIPPED_DIRECTORIES.has(entry.name) || entry.name.startsWith('.') || (await isProjectRoot(absolute))) {
+        continue
+      }
+
       const failure = await collectFiles(projectPath, absolute, relativePath, depth + 1, collected, budget)
 
       if (failure) {

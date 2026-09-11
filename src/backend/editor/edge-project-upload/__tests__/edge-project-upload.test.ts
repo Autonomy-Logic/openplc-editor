@@ -80,6 +80,30 @@ describe('building the archive', () => {
     }
   })
 
+  it('leaves out nested projects, build output and dot-folders', async () => {
+    // A folder that holds other projects (a workshop directory, a git checkout with a
+    // build/) used to be packed whole; the importer then adopted the LAST nested
+    // project.json it met as the manifest and published someone else's files under
+    // someone else's name.
+    await writeProject({
+      'project.json': '{"meta":{"name":"Mine"}}',
+      'pous/programs/main.st': 'x := TRUE;',
+      'other-project/project.json': '{"meta":{"name":"Not mine"}}',
+      'other-project/pous/programs/main.st': 'y := TRUE;',
+      'build/OpenPLC Runtime v4/src/POUS.c': 'int x;',
+      '.git/config': '[core]',
+      'docs/notes.md': '# keep me',
+    })
+
+    const result = await buildProjectArchive(projectDir)
+
+    expect(result.ok).toBe(true)
+
+    if (result.ok) {
+      expect(await entriesOf(result.zip)).toEqual(['docs/notes.md', 'pous/programs/main.st', 'project.json'])
+    }
+  })
+
   it('leaves out files the importer would not accept', async () => {
     await writeProject({
       'project.json': '{}',
