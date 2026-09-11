@@ -3,11 +3,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
 import { FieldHelpIcon, TooltipProvider } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
-import { cn } from '@root/frontend/utils/cn'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
-import { useMemo } from 'react'
 
 import type { ScreenSection } from '../index'
 

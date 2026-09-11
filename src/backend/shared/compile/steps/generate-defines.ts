@@ -21,8 +21,8 @@ import type { DevicePin } from '../../types/PLC/devices'
 import {
   DEBUG_SLAVE,
   generateModbusDefines,
-  type ModbusServerCompileConfig,
   isDefaultPort,
+  type ModbusServerCompileConfig,
   resolveDefaultPortBaud,
   resolveRtuPort,
   type VppModbusScreenState,

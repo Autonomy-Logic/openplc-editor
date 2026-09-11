@@ -9,7 +9,7 @@
  */
 
 import { resolveTargetCapabilities } from '../target-capabilities'
-import type { ModbusSegment, ModbusSegmentCounts, ModbusServerProfile, ModbusServerTransport } from './types'
+import type { ModbusSegment, ModbusServerProfile, ModbusServerTransport } from './types'
 
 /** Minimal slice of BoardInfo the resolver reads. Loosely typed so a test
  *  fixture can hand over what it has instead of asserting a whole board. */
