@@ -152,28 +152,6 @@ Client* accept();
 /** Hand a client slot back.  Closes the connection if still open. */
 void release(Client* client);
 
-/** Is `client` still the SAME TCP connection it was when accept() returned it?
- *
- *  This is not a redundant `connected()`. Every Arduino network stack hands
- *  out a client object that is a NON-OWNING HANDLE onto a slot in the
- *  server's own fixed client table — Energia's EthernetClient wraps a pointer
- *  into `EthernetServer::clients[]`, and the WiFi/WizNet clients wrap a
- *  socket index. Hold one across the peer's disconnect and the stack is free
- *  to drop the NEXT inbound connection into that same slot, at which point
- *  the handle silently re-points: `connected()` is true again, `available()`
- *  reports the new peer's bytes, and the caller reads one connection's data
- *  as though it belonged to another.
- *
- *  Measured on hardware: sequential OPC-UA connections alternated ACK / ERR
- *  forever, because every second Hello was delivered on the previous
- *  connection's already-established SecureChannel. Four accepts served eight
- *  connections.
- *
- *  So identity, not just liveness, has to be tracked — and it has to be
- *  tracked HERE, because the remote port that establishes it is the one piece
- *  of per-stack knowledge this seam exists to contain. */
-bool alive(const Client* client);
-
 /** Service the stack.  A no-op on cores whose driver is interrupt-driven;
  *  the hook exists for stacks that need cooperative polling, so callers never
  *  have to know which kind they are on. */

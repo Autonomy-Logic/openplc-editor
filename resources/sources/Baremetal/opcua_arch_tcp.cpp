@@ -288,24 +288,6 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
     if (!m->listening)
         return;
 
-    // 0. Reap connections whose underlying slot is no longer theirs.
-    //
-    //    This MUST run before accept(). An Arduino client handle re-points at
-    //    whatever connection the stack next drops into its slot, so a peer
-    //    that reconnects immediately lands in the slot we are still holding.
-    //    Reaping first means the stale handle is gone by the time accept()
-    //    looks, and the new connection is accepted as the new connection it
-    //    is instead of having its Hello delivered on the dead one's
-    //    SecureChannel. See opcua_net::alive().
-    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
-    {
-        if (m->conns[i].client != nullptr && !opcua_net::alive(m->conns[i].client))
-        {
-            OPCUA_LOG("[cm] id=%u stale (slot reused or closed)", (unsigned)(i + 1));
-            drop(m, i);
-        }
-    }
-
     // 1. Accept. opcua_net owns the client storage and recycles slots whose
     //    peer has gone, so this cannot exhaust the table.
     Client* incoming = opcua_net::accept();
@@ -360,11 +342,14 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
             }
         }
 
-        // Retire on a clean close. Checking available() too means a peer that
-        // closed after sending a final request still gets that request
-        // processed before the channel goes away. The slot-reuse case is
-        // already handled by the reap above — `connected()` cannot detect it,
-        // because a recycled slot reports the NEW peer as connected.
+        // The only place a connection is retired. Checking available() too
+        // means a peer that closed after sending a final request still gets
+        // that request processed before the channel goes away.
+        //
+        // `connected()` is authoritative again: the core reports a handle
+        // whose slot was recycled for a different peer as NOT connected, so
+        // this catches the reconnect case as well as a plain close. It could
+        // not, before — which is what made every second session fail.
         if (!c.client->connected() && c.client->available() == 0)
         {
             drop(m, i);
