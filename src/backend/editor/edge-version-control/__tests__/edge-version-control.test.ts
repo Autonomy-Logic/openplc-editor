@@ -16,6 +16,7 @@
 
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
 import {
+  segment,
   applyStash,
   getBranchDiffWithBase,
   createBranch,
@@ -233,6 +234,72 @@ describe('the routes match the ones the web build calls', () => {
     // project gives up at the same point on both platforms. The 15s default is sized
     // for an auth round trip.
     expect(callArgs().init).toMatchObject({ timeoutMs: 30_000 })
+  })
+})
+
+/**
+ * Ids arrive from the renderer and are interpolated into routes on an authenticated
+ * session. Encoding keeps a `feat/x` in one segment; refusing keeps a `..` from
+ * addressing a different route altogether.
+ */
+describe('path segments', () => {
+  it('encodes an id that needs it', async () => {
+    request.mockResolvedValueOnce({ status: 204, body: '' })
+
+    await deleteBranch('p 1', 'b 2%')
+
+    expect(callArgs().path).toBe('/projects/p%201/branches/b%202%25')
+  })
+
+  it.each(['../../auth/logout', 'b/2', '..', '.', '', 'b?x=1', 'b#frag'])(
+    'refuses %j and never sends the request',
+    async (branchId) => {
+      const result = await deleteBranch('p1', branchId)
+
+      expect(request).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        ok: false,
+        failure: { kind: 'http', status: 400, message: `Refusing to build a request from "${branchId}".` },
+      })
+    },
+  )
+
+  it('guards the project id on every route the same way', async () => {
+    const attempts = [
+      listBranches('../x'),
+      createBranch('../x', 'b'),
+      switchBranch('../x', 'b', 'discard'),
+      previewSwitchCarry('../x', 'b'),
+      listCommits('../x'),
+      createCommit('../x', 'm'),
+      getCommitFiles('../x', 'h'),
+      restoreCommit('../x', 'h'),
+      getChanges('../x'),
+      discardChanges('../x'),
+      listStashes('../x'),
+      createStash('../x'),
+      applyStash('../x', 's'),
+      popStash('../x', 's'),
+      dropStash('../x', 's'),
+      getBranchDiffWithBase('../x', 'a', 'b'),
+      mergeBranches({ projectId: '../x', sourceBranch: 'a', targetBranch: 'b' }),
+    ]
+
+    for (const result of await Promise.all(attempts)) {
+      expect(result).toMatchObject({ ok: false, failure: { kind: 'http', status: 400 } })
+    }
+
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('refuses a commit hash that is not a segment', async () => {
+    await expect(getCommitFiles('p1', 'abc/../../x')).resolves.toMatchObject({ failure: { status: 400 } })
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('exposes the helper the routes are built from', () => {
+    expect(segment('feat x')).toBe('feat%20x')
+    expect(() => segment('a/b')).toThrow('Refusing to build a request from "a/b".')
   })
 })
 

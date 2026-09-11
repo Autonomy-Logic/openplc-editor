@@ -123,11 +123,18 @@ function messageFromBody(body: string, status: number): string {
  * being mistaken for a conflict the UI knows how to resolve.
  */
 async function call<Schema extends z.ZodTypeAny>(
-  path: string,
+  target: Route,
   schema: Schema,
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
   on409?: (body: string) => EdgeVcFailure | null,
 ): Promise<EdgeVcResult<z.infer<Schema>>> {
+  if (!target.ok) {
+    // Never sent. Reported as a 400 because that is what it is: a request this side
+    // refused to form, not one the server refused to serve.
+    return { ok: false, failure: { kind: 'http', status: 400, message: target.message } }
+  }
+
+  const { path } = target
   let response: { status: number; body: string } | null
 
   try {
@@ -195,11 +202,11 @@ async function call<Schema extends z.ZodTypeAny>(
 
 /** For the routes whose answer the caller ignores (delete, discard, drop). */
 async function callVoid(
-  path: string,
+  target: Route,
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
   on409?: (body: string) => EdgeVcFailure | null,
 ): Promise<EdgeVcResult<null>> {
-  const result = await call(path, z.unknown(), init, on409)
+  const result = await call(target, z.unknown(), init, on409)
 
   // These routes may answer 204, or 200 with no `data`. Both are success, so the
   // unreadable-body check in `call` has to be relaxed for them rather than turning an
@@ -245,27 +252,82 @@ function stashConflict(): EdgeVcFailure {
 }
 
 // ---------------------------------------------------------------------------
+// Paths — every id interpolated into a route goes through here
+// ---------------------------------------------------------------------------
+
+class InvalidRouteSegmentError extends Error {
+  constructor(readonly segment: string) {
+    super(`Refusing to build a request from "${segment}".`)
+    this.name = 'InvalidRouteSegmentError'
+  }
+}
+
+/**
+ * A path segment safe to interpolate into a route.
+ *
+ * Encoded so a branch named `feat/x` reaches the server as one segment, and refused
+ * outright for the values encoding alone cannot make safe: a `..` or a `/` here would
+ * let an id received from the renderer address a different route on the same
+ * authenticated session.
+ */
+export function segment(value: string): string {
+  if (value === '' || value === '.' || value === '..' || /[/?#]/.test(value)) {
+    throw new InvalidRouteSegmentError(value)
+  }
+
+  return encodeURIComponent(value)
+}
+
+type Route = { ok: true; path: string } | { ok: false; message: string }
+
+/** A route template whose every interpolated value is passed through {@link segment}. */
+function route(strings: TemplateStringsArray, ...values: string[]): Route {
+  try {
+    return {
+      ok: true,
+      path: strings.reduce(
+        (path, literal, index) => path + literal + (index < values.length ? segment(values[index]) : ''),
+        '',
+      ),
+    }
+  } catch (error) {
+    if (error instanceof InvalidRouteSegmentError) {
+      return { ok: false, message: error.message }
+    }
+
+    throw error
+  }
+}
+
+/** Append a query string, when there is one. `URLSearchParams` does its own encoding. */
+function withQuery(base: Route, params: URLSearchParams): Route {
+  const query = params.toString()
+
+  return base.ok && query ? { ok: true, path: `${base.path}?${query}` } : base
+}
+
+// ---------------------------------------------------------------------------
 // Branches
 // ---------------------------------------------------------------------------
 
 export function listBranches(projectId: string) {
-  return call(`/projects/${projectId}/branches`, z.object({ branches: z.array(z.unknown()) }))
+  return call(route`/projects/${projectId}/branches`, z.object({ branches: z.array(z.unknown()) }))
 }
 
 export function createBranch(projectId: string, name: string) {
-  return call(`/projects/${projectId}/branches`, z.object({ branch: z.unknown() }), {
+  return call(route`/projects/${projectId}/branches`, z.object({ branch: z.unknown() }), {
     method: 'POST',
     json: { name },
   })
 }
 
 export function deleteBranch(projectId: string, branchId: string) {
-  return callVoid(`/projects/${projectId}/branches/${branchId}`, { method: 'DELETE' })
+  return callVoid(route`/projects/${projectId}/branches/${branchId}`, { method: 'DELETE' })
 }
 
 export function switchBranch(projectId: string, branchName: string, strategy: 'discard' | 'carry') {
   return call(
-    `/projects/${projectId}/branches/switch`,
+    route`/projects/${projectId}/branches/switch`,
     z.object({ message: CaptionSchema, branch: z.string() }),
     { method: 'POST', json: { branchName, strategy } },
     carryConflict,
@@ -276,7 +338,7 @@ export function previewSwitchCarry(projectId: string, targetBranch: string) {
   const params = new URLSearchParams({ targetBranch })
 
   return call(
-    `/projects/${projectId}/branches/preview-switch-carry?${params}`,
+    withQuery(route`/projects/${projectId}/branches/preview-switch-carry`, params),
     z.object({ conflicts: z.array(z.string()) }),
   )
 }
@@ -292,10 +354,8 @@ export function listCommits(projectId: string, options: { limit?: number; offset
   if (options.offset !== undefined) params.set('offset', String(options.offset))
   if (options.branch) params.set('branch', options.branch)
 
-  const query = params.toString()
-
   return call(
-    `/projects/${projectId}/commits${query ? `?${query}` : ''}`,
+    withQuery(route`/projects/${projectId}/commits`, params),
     // `total` and `page` are the pagination counters, and the server does not always
     // send them. The port types them `number`, so they default rather than fail: a
     // history that arrived without its page counter is still a history, and refusing
@@ -310,14 +370,16 @@ export function createCommit(projectId: string, message: string, files?: string[
   if (files) json.files = files
   if (branch) json.branch = branch
 
-  return call(`/projects/${projectId}/commits`, z.unknown(), { method: 'POST', json })
+  return call(route`/projects/${projectId}/commits`, z.unknown(), { method: 'POST', json })
 }
 
 export function getCommitFiles(projectId: string, hash: string, branch?: string) {
-  const params = branch ? `?branch=${encodeURIComponent(branch)}` : ''
+  const params = new URLSearchParams()
+
+  if (branch) params.set('branch', branch)
 
   return call(
-    `/projects/${projectId}/commits/${hash}/files${params}`,
+    withQuery(route`/projects/${projectId}/commits/${hash}/files`, params),
     z.object({ files: z.array(z.unknown()), parentFiles: z.array(z.unknown()), commit: z.unknown() }),
   )
 }
@@ -328,7 +390,7 @@ export function restoreCommit(projectId: string, hash: string, branch?: string) 
   if (branch) json.branch = branch
 
   return call(
-    `/projects/${projectId}/commits/${hash}/restore`,
+    route`/projects/${projectId}/commits/${hash}/restore`,
     z.object({ message: CaptionSchema, restoredCommit: z.unknown() }),
     { method: 'POST', json },
   )
@@ -347,10 +409,8 @@ export function getChanges(projectId: string, includeContent?: boolean) {
 
   if (includeContent) search.set('includeContent', 'true')
 
-  const query = search.toString()
-
   return call(
-    `/projects/${projectId}/changes${query ? `?${query}` : ''}`,
+    withQuery(route`/projects/${projectId}/changes`, search),
     z.object({ changes: z.array(z.unknown()), hasChanges: z.boolean() }),
   )
 }
@@ -361,7 +421,7 @@ export function discardChanges(projectId: string, files?: string[]) {
 
   if (files) json.files = files
 
-  return callVoid(`/projects/${projectId}/discard-changes`, { method: 'POST', json })
+  return callVoid(route`/projects/${projectId}/discard-changes`, { method: 'POST', json })
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +429,7 @@ export function discardChanges(projectId: string, files?: string[]) {
 // ---------------------------------------------------------------------------
 
 export function listStashes(projectId: string) {
-  return call(`/projects/${projectId}/stashes`, z.object({ stashes: z.array(z.unknown()) }))
+  return call(route`/projects/${projectId}/stashes`, z.object({ stashes: z.array(z.unknown()) }))
 }
 
 export function createStash(projectId: string, message?: string, files?: string[]) {
@@ -378,12 +438,12 @@ export function createStash(projectId: string, message?: string, files?: string[
   if (message) json.message = message
   if (files && files.length > 0) json.files = files
 
-  return call(`/projects/${projectId}/stashes`, z.object({ stash: z.unknown() }), { method: 'POST', json })
+  return call(route`/projects/${projectId}/stashes`, z.object({ stash: z.unknown() }), { method: 'POST', json })
 }
 
 export function applyStash(projectId: string, ref: string) {
   return call(
-    `/projects/${projectId}/stashes/apply`,
+    route`/projects/${projectId}/stashes/apply`,
     z.object({ message: CaptionSchema }),
     { method: 'POST', json: { ref } },
     stashConflict,
@@ -392,7 +452,7 @@ export function applyStash(projectId: string, ref: string) {
 
 export function popStash(projectId: string, ref: string) {
   return call(
-    `/projects/${projectId}/stashes/pop`,
+    route`/projects/${projectId}/stashes/pop`,
     z.object({ message: CaptionSchema }),
     { method: 'POST', json: { ref } },
     stashConflict,
@@ -400,7 +460,7 @@ export function popStash(projectId: string, ref: string) {
 }
 
 export function dropStash(projectId: string, ref: string) {
-  return callVoid(`/projects/${projectId}/stashes/drop`, { method: 'POST', json: { ref } })
+  return callVoid(route`/projects/${projectId}/stashes/drop`, { method: 'POST', json: { ref } })
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +470,7 @@ export function dropStash(projectId: string, ref: string) {
 export function getBranchDiffWithBase(projectId: string, source: string, target: string) {
   const params = new URLSearchParams({ source, target })
 
-  return call(`/projects/${projectId}/branches-diff-with-base?${params}`, z.unknown())
+  return call(withQuery(route`/projects/${projectId}/branches-diff-with-base`, params), z.unknown())
 }
 
 /**
@@ -435,5 +495,5 @@ export function mergeBranches(params: {
   if (params.commitMessage) json.commitMessage = params.commitMessage
   if (params.resolutions) json.resolutions = params.resolutions
 
-  return call(`/projects/${params.projectId}/branches/merge`, z.unknown(), { method: 'POST', json }, mergeConflict)
+  return call(route`/projects/${params.projectId}/branches/merge`, z.unknown(), { method: 'POST', json }, mergeConflict)
 }
