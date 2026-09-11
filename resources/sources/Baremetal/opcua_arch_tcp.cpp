@@ -25,6 +25,7 @@ a zeroed field cannot masquerade as a live connection.
 #include <open62541.h>
 
 #include "opcua_arch.h"
+#include "opcua_log.h"
 #include "opcua_net.h"
 
 namespace {
@@ -47,12 +48,27 @@ struct Conn
     bool     announced;   // ESTABLISHED already delivered
 };
 
+/** The listener is itself a "connection" as far as open62541 is concerned.
+ *
+ *  serverNetworkCallback registers the listening socket as a
+ *  UA_ServerConnection the first time it is announced with a NULL context, and
+ *  reads `listen-port` / `listen-address` from the params to build the
+ *  DiscoveryUrls a client needs. Accepted clients then INHERIT that context,
+ *  which is how the server tells a fresh client apart from its own listener.
+ *  Skipping this is why the first device test came back with port 4840 closed:
+ *  the listener opened, and the server never knew it existed. */
+constexpr uintptr_t kListenerId = OPCUA_NET_MAX_CLIENTS + 1;
+
 struct ArduinoTcpCM
 {
     UA_ConnectionManager base;   // MUST be first: open62541 casts between them
     Conn                 conns[OPCUA_NET_MAX_CLIENTS];
     uint8_t              recv[kRecvBufSize];
     bool                 listening;
+    void*                listener_context;   // what accepted clients inherit
+    UA_ConnectionManager_connectionCallback cb;
+    void*                application;
+    UA_UInt16            port;
 };
 
 ArduinoTcpCM* self(UA_ConnectionManager* cm) { return reinterpret_cast<ArduinoTcpCM*>(cm); }
@@ -77,6 +93,7 @@ void drop(ArduinoTcpCM* m, uint8_t idx)
         c.cb(&m->base, (uintptr_t)(idx + 1), c.application, &c.context,
              UA_CONNECTIONSTATE_CLOSING, &UA_KEYVALUEMAP_NULL, UA_BYTESTRING_NULL);
     }
+    OPCUA_LOG("[cm] drop id=%u", (unsigned)(idx + 1));
     opcua_net::release(c.client);
     c.client    = nullptr;
     c.context   = nullptr;
@@ -100,13 +117,22 @@ UA_StatusCode cm_open(UA_ConnectionManager* cm, const UA_KeyValueMap* params,
 {
     ArduinoTcpCM* m = self(cm);
 
+    // `listen` is the real indicator, not the absence of an address: the
+    // server sets `address` as an ARRAY of String when the endpoint URL has a
+    // hostname, so treating its presence as "this is an outbound connect"
+    // rejected perfectly good listen requests.
+    const UA_Boolean* listen = (const UA_Boolean*)UA_KeyValueMap_getScalar(
+        params, UA_QUALIFIEDNAME(0, (char*)"listen"), &UA_TYPES[UA_TYPES_BOOLEAN]);
     const UA_UInt16* port = (const UA_UInt16*)UA_KeyValueMap_getScalar(
         params, UA_QUALIFIEDNAME(0, (char*)"port"), &UA_TYPES[UA_TYPES_UINT16]);
-    const UA_String* hostname = (const UA_String*)UA_KeyValueMap_getScalar(
-        params, UA_QUALIFIEDNAME(0, (char*)"address"), &UA_TYPES[UA_TYPES_STRING]);
 
-    if (port == nullptr || hostname != nullptr)
+    if (listen == nullptr || !*listen || port == nullptr)
+    {
+        // Outbound connects are the client role / reverse-connect / PubSub,
+        // none of which this build has. Refusing explicitly beats
+        // half-implementing it.
         return UA_STATUSCODE_BADNOTIMPLEMENTED;
+    }
 
     if (!m->listening)
     {
@@ -115,15 +141,28 @@ UA_StatusCode cm_open(UA_ConnectionManager* cm, const UA_KeyValueMap* params,
         m->listening = true;
     }
 
-    // The listener itself is not a connection, so there is no id to report.
-    // open62541 learns about clients through the callback when they arrive;
-    // remembering it here is what lets accept() reach the right server.
-    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
+    m->cb          = connectionCallback;
+    m->application = application;
+    m->port        = *port;
+    m->listener_context = context;   // NULL on the first call, by design
+
+    // Announce the listener. The server needs `listen-port` and
+    // `listen-address` to publish a DiscoveryUrl; without them a client that
+    // connects is told there is no matching endpoint.
+    UA_String addr = UA_STRING_STATIC(OPCUA_BIND_ADDRESS);
+    UA_KeyValuePair kv[2];
+    kv[0].key = UA_QUALIFIEDNAME(0, (char*)"listen-port");
+    UA_Variant_setScalar(&kv[0].value, &m->port, &UA_TYPES[UA_TYPES_UINT16]);
+    kv[1].key = UA_QUALIFIEDNAME(0, (char*)"listen-address");
+    UA_Variant_setScalar(&kv[1].value, &addr, &UA_TYPES[UA_TYPES_STRING]);
+    UA_KeyValueMap kvm = {2, kv};
+
+    if (m->cb != nullptr)
     {
-        m->conns[i].cb          = connectionCallback;
-        m->conns[i].application = application;
+        m->cb(cm, kListenerId, m->application, &m->listener_context,
+              UA_CONNECTIONSTATE_ESTABLISHED, &kvm, UA_BYTESTRING_NULL);
     }
-    (void)context;
+    OPCUA_LOG("[cm] listening port=%u announced", (unsigned)m->port);
     return UA_STATUSCODE_GOOD;
 }
 
@@ -151,14 +190,30 @@ UA_StatusCode cm_send(UA_ConnectionManager* cm, uintptr_t connectionId,
         sent += n;
     }
 
+    const size_t want = buf->length;
     // open62541 hands ownership of the buffer to send(), success or not.
     cm->freeNetworkBuffer(cm, connectionId, buf);
-    return (sent == buf->length) ? UA_STATUSCODE_GOOD : UA_STATUSCODE_BADCONNECTIONCLOSED;
+    if (sent != want)
+        OPCUA_LOG("[cm] send SHORT id=%lu %u/%u", (unsigned long)connectionId,
+                  (unsigned)sent, (unsigned)want);
+    return (sent == want) ? UA_STATUSCODE_GOOD : UA_STATUSCODE_BADCONNECTIONCLOSED;
 }
 
 UA_StatusCode cm_close(UA_ConnectionManager* cm, uintptr_t connectionId)
 {
     ArduinoTcpCM* m = self(cm);
+    if (connectionId == kListenerId)
+    {
+        // Closing the listener: report CLOSING so the server deregisters its
+        // UA_ServerConnection, then drop the socket.
+        if (m->cb != nullptr)
+        {
+            m->cb(cm, kListenerId, m->application, &m->listener_context,
+                  UA_CONNECTIONSTATE_CLOSING, &UA_KEYVALUEMAP_NULL, UA_BYTESTRING_NULL);
+        }
+        if (m->listening) { opcua_net::end(); m->listening = false; }
+        return UA_STATUSCODE_GOOD;
+    }
     if (connectionId == 0 || connectionId > OPCUA_NET_MAX_CLIENTS)
         return UA_STATUSCODE_BADNOTFOUND;
     drop(m, (uint8_t)(connectionId - 1));
@@ -226,13 +281,23 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
         {
             if (m->conns[i].client != nullptr)
                 continue;
-            m->conns[i].client    = incoming;
-            m->conns[i].context   = nullptr;
-            m->conns[i].announced = false;
+            m->conns[i].client      = incoming;
+            // Inherit the listener's context: that is how the server
+            // recognises a new client on its own server socket and attaches a
+            // SecureChannel on the first callback.
+            m->conns[i].context     = m->listener_context;
+            m->conns[i].cb          = m->cb;
+            m->conns[i].application = m->application;
+            m->conns[i].announced   = false;
             placed = true;
         }
         if (!placed)
+        {
+            OPCUA_LOG("[cm] accept REFUSED (table full)");
             opcua_net::release(incoming);
+        }
+        else
+            OPCUA_LOG("[cm] accepted");
     }
 
     // 2. Announce and drain.
@@ -253,6 +318,9 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
             }
         }
 
+        // The only place a connection is retired. Checking available() too
+        // means a peer that closed after sending a final request still gets
+        // that request processed before the channel goes away.
         if (!c.client->connected() && c.client->available() == 0)
         {
             drop(m, i);
@@ -272,6 +340,7 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
         const int got = c.client->read(m->recv, want);
         if (got <= 0)
             continue;
+        OPCUA_LOG("[cm] rx id=%lu %d bytes (avail=%d)", (unsigned long)id, got, avail);
 
         UA_ByteString msg;
         msg.data   = m->recv;

@@ -61,20 +61,42 @@ Client* accept()
     if (!g_started)
         return nullptr;
 
-    // Reap slots the peer has dropped before asking for a new connection, so
-    // a client that reconnects in a loop cannot exhaust the table.
-    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
-    {
-        if (g_slots[i].in_use && !g_slots[i].client.connected())
-        {
-            g_slots[i].client.stop();
-            g_slots[i].in_use = false;
-        }
-    }
+    // NO reaping here, deliberately.
+    //
+    // This used to free slots whose peer had gone, which looked like good
+    // hygiene and was in fact a lifetime bug: the ConnectionManager above
+    // still held a pointer to the slot, so it never noticed the close, never
+    // delivered UA_CONNECTIONSTATE_CLOSING, and open62541 kept the
+    // SecureChannel alive. With maxSecureChannels = 1 the next client was then
+    // refused — observed on hardware as one good session followed by
+    // BadInternalError on reconnect, recovering only when the stale channel
+    // eventually timed out.
+    //
+    // Connection lifetime belongs to exactly one layer. The CM detects the
+    // close, tells open62541, and calls release() — which is what actually
+    // frees the slot below.
 
     opcua_client_impl_t incoming = g_server.available();
     if (!incoming)
         return nullptr;
+
+    // Arduino's Server::available() returns ANY client with pending data, not
+    // only newly-arrived ones — so it hands back a connection we are already
+    // tracking every time that connection has unread bytes. Without this
+    // check the same peer lands in a second slot and gets announced to
+    // open62541 as a second connection: observed on hardware as
+    //   [cm] accepted / [cm] rx 72 bytes / [cm] accepted / [cm] drop
+    // i.e. the Hello arrived, the duplicate announcement confused the
+    // SecureChannel, and OpenSecureChannel died with "connection lost".
+    //
+    // The remote port is the identity: it is unique per live TCP connection,
+    // and it is the only handle the Arduino Client API exposes.
+    const int incoming_port = incoming.port();
+    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
+    {
+        if (g_slots[i].in_use && g_slots[i].client.port() == incoming_port)
+            return nullptr;   // already ours; the owning slot will read it
+    }
 
     for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
     {

@@ -384,6 +384,27 @@ UA_EventLoop* UA_EventLoop_new_Arduino(const UA_Logger* logger)
     return el;
 }
 
+/** Bare-metal abort().
+ *
+ *  newlib-nano under the core's -nostdlib does not provide one, and libgcc's
+ *  ARM unwinder references it. The archive is built -fno-unwind-tables so the
+ *  unwinder should not be reachable at all, but this stays as a safety net:
+ *  the alternative to defining it is a link failure that points at libgcc
+ *  rather than at anything a reader wrote.
+ *
+ *  Weak, so a core or application that supplies a real one wins.
+ *
+ *  Behaviour is deliberate rather than a stub: a library calling abort() on a
+ *  PLC is an unrecoverable internal fault, and the honest response is to stop
+ *  touching the outputs and let the watchdog reset the device — which is the
+ *  recovery path the runtime already relies on. Spinning with interrupts off
+ *  is what makes the WDT fire. */
+extern "C" __attribute__((weak, noreturn)) void abort(void)
+{
+    noInterrupts();
+    for (;;) { }
+}
+
 // ---------------------------------------------------------------------------
 // The _POSIX names server_config_default insists on. See the file header.
 // ---------------------------------------------------------------------------

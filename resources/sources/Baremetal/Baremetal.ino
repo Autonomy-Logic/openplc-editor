@@ -41,6 +41,7 @@
 // declare `opcuaServer` (OPCUA_ENABLED 0 in the generated opcua_config.h), so
 // no board-conditional is needed at the call sites below.
 #include "opcua_server.h"
+#include "opcua_log.h"
 
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets that declare SUPPORTS_UDP_SCAN (e.g. via a VPP's HAL flags) pull
@@ -271,6 +272,7 @@ void setup()
         // OPC-UA listens on top of the interface Modbus just configured, so it
         // has to come after mbconfig_*_iface() and must not re-init the link
         // itself (see opcua_net.h). No-op when OPC-UA is disabled.
+        opcua_log_begin();
         opcua_init();
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
