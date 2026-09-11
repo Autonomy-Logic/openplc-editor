@@ -179,12 +179,6 @@ export interface BoardBuildInfo {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From `target.coreVersion`. */
   coreVersion?: string
-  /** Firmware I/O buffer sizes this board's MCU family compiles with, from the
-   *  VPP manifest `device.io`. Feeds the generated `io_sizes.h`. */
-  io?: import('../../../middleware/shared/ports/types').PackageManifest['devices'][number]['io']
-  /** Per-field ceilings for `io`, from `device.ioMax`. A field with no ceiling
-   *  cannot be raised above its `io` value. */
-  ioMax?: import('../../../middleware/shared/ports/types').PackageManifest['devices'][number]['ioMax']
   /** Per-board capability overrides.  Merged by
    *  `resolveTargetCapabilities` on top of the compiler preset.
    *  Sourced from `hals.json` `capabilities` (static boards) or VPP
@@ -302,8 +296,6 @@ export class BoardInfoResolver {
       info.platformOptions = device.target.platformOptions
     }
     if (device.target.coreVersion) info.coreVersion = device.target.coreVersion
-    if (device.io) info.io = device.io
-    if (device.ioMax) info.ioMax = device.ioMax
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)

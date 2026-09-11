@@ -12,6 +12,7 @@
     "^monaco-editor$": "<rootDir>/configs/mocks/monaco-editor-mock.js"
   },
   "testEnvironment": "jsdom",
+  "workerIdleMemoryLimit": "1GB",
   "testEnvironmentOptions": {
     "url": "http://localhost/"
   },

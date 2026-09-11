@@ -11,7 +11,6 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
-import { completeIoSizes, type IoSizes } from '@root/backend/shared/compile/steps/generate-io-sizes'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
@@ -3079,28 +3078,6 @@ class CompilerModule {
       }
     }
 
-    // I/O buffer sizing. `boardEntry.io` is what openplc.h compiles for this
-    // board's MCU family; `boardEntry.ioMax` is how far the package says the
-    // board can be pushed. The project's request lives beside the rest of the
-    // board's screen state, under `io_sizes`. All three are optional: a board
-    // whose package declares no sizes gets the firmware defaults and no
-    // io_sizes.h, exactly as before.
-    let boardIoSizes: { defaults: IoSizes; ceilings?: Partial<IoSizes> } | undefined
-    let requestedIoSizes: Partial<IoSizes> | undefined
-    if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
-      // A partially declared block is not a smaller board, it is a package that
-      // said nothing about the rest: clamping against undefined defaults yields
-      // NaN, so the firmware's own `#ifndef` values have to stand instead.
-      const defaults = completeIoSizes(boardEntry.io)
-      if (defaults) {
-        boardIoSizes = {
-          defaults,
-          ...(boardEntry.ioMax ? { ceilings: boardEntry.ioMax } : {}),
-        }
-        requestedIoSizes = (vendorScreenData?.['io_sizes'] ?? undefined) as Partial<IoSizes> | undefined
-      }
-    }
-
     // Persistent storage (RETAIN) settings for a runtime-v4 upload. Read from
     // the same `devices/configuration.json` the VPP screen state comes from,
     // because they live in the same place for the same reason: the project owns
@@ -3208,8 +3185,6 @@ class CompilerModule {
         deviceContext,
         communicationPort: communicationPort ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
-        ...(boardIoSizes ? { boardIoSizes } : {}),
-        ...(requestedIoSizes ? { requestedIoSizes } : {}),
         ...(persistentStorage ? { persistentStorage } : {}),
         targetHidesPersistentStorage,
         vendorScreenData: effectiveVendorScreenData,

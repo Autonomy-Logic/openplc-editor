@@ -9,7 +9,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 // In a debug-only build this whole TU compiles to nothing, saving flash/SRAM.
 #ifdef MODBUS_ENABLED
 
-bool init_mbregs(uint16_t size_holding, uint16_t size_dint_memory, uint16_t size_lint_memory, uint16_t size_coils, uint16_t size_inputregs, uint16_t size_inputstatus)
+bool init_mbregs(uint8_t size_holding, uint8_t size_dint_memory, uint8_t size_lint_memory, uint8_t size_coils, uint8_t size_inputregs, uint8_t size_inputstatus)
 {
     //Save sizes
     modbus.holding_size = size_holding;
@@ -64,9 +64,7 @@ bool init_mbregs(uint16_t size_holding, uint16_t size_dint_memory, uint16_t size
 
 bool get_discrete(uint16_t addr, bool regtype)
 {
-    // byte_addr indexes the packed bit bank, so it is addr/8 of a 16-bit
-    // address -- it does not fit in a uint8_t past 2040 bits.
-    uint16_t byte_addr = addr / 8;
+    uint8_t byte_addr = addr / 8;
     uint8_t bit_addr = addr % 8;
     if (regtype == COILS)
         return bitRead(modbus.coils[byte_addr], bit_addr);
@@ -76,7 +74,7 @@ bool get_discrete(uint16_t addr, bool regtype)
 
 void write_discrete(uint16_t addr, bool regtype, bool value)
 {
-    uint16_t byte_addr = addr / 8;
+    uint8_t byte_addr = addr / 8;
     uint8_t bit_addr = addr % 8;
     if (regtype == COILS)
         bitWrite(modbus.coils[byte_addr], bit_addr, value);
@@ -118,7 +116,7 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
 
     uint16_t val;
     uint16_t i = 0;
-    uint16_t pos = 0;
+    uint8_t pos = 0;
 	while(numregs--)
     {
         if ((startreg + i) < modbus.holding_size)
@@ -179,7 +177,7 @@ void writeSingleRegister(uint16_t reg, uint16_t value)
         return;
     }
 
-    uint16_t pos = 0;
+    uint8_t pos = 0;
 
     if (reg < modbus.holding_size)
     {
@@ -256,7 +254,7 @@ void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t byte
 
     uint16_t value;
     uint16_t i = 0;
-    uint16_t pos = 0;
+    uint8_t pos = 0;
 	while(numoutputs--)
     {
         value = (uint16_t)mb_frame[7+i*2] << 8 | (uint16_t)mb_frame[8+i*2];

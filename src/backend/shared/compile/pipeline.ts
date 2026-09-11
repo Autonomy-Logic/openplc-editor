@@ -50,7 +50,6 @@ import type { PLCProjectData } from '../types/PLC/open-plc'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
-import { clampIoSizes, generateIoSizesHeader, type IoSizes } from './steps/generate-io-sizes'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { selectModbusServer } from './steps/modbus-defines'
@@ -122,14 +121,6 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
   coreVersion?: string
-  /** Firmware I/O buffer sizes this board's MCU family compiles with, from the
-   *  VPP manifest `device.io`.  Absent for hals.json boards and for any package
-   *  that has not declared them; the firmware's own `#ifndef`-guarded values
-   *  then stand and no `io_sizes.h` is emitted. */
-  io?: Partial<IoSizes>
-  /** Per-field ceilings for `io`, from the VPP manifest `device.ioMax`.  A
-   *  field with no ceiling cannot be raised above its `io` value. */
-  ioMax?: Partial<IoSizes>
   /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
    *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
    *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
@@ -255,17 +246,6 @@ export interface RunCompilePipelineArgs {
    *  Arduino targets.  Web passes `undefined` until the VPP
    *  Modbus screen lands on the web build. */
   vppModbusState?: import('./steps/modbus-defines').VppModbusScreenState
-  /** The board's firmware I/O buffer sizes, from the VPP manifest's
-   *  `device.io`, plus the optional ceilings from `device.ioMax`.
-   *  `defaults` is what `openplc.h` compiles for this MCU family; the
-   *  project may raise a count up to `ceilings` and no further, and may
-   *  never lower one (see `generate-io-sizes.ts`).  Absent for a board
-   *  whose package declares no sizes -- the firmware defaults then
-   *  stand and no `io_sizes.h` is emitted. */
-  boardIoSizes?: { defaults: IoSizes; ceilings?: Partial<IoSizes> }
-  /** Sizes the project asked for, from `vendorScreenData.io_sizes`.
-   *  Clamped against `boardIoSizes` before anything is emitted. */
-  requestedIoSizes?: Partial<IoSizes>
   /** The project's persistent-storage (RETAIN) settings, from
    *  `DeviceConfiguration.persistentStorage`.  Emitted into the
    *  runtime-v4 bundle as `retain.conf`, which the upload installs
@@ -412,8 +392,6 @@ async function runCompilePipelineInner(
     communicationPort,
     cacheDebugData,
     vppModbusState,
-    boardIoSizes,
-    requestedIoSizes,
     persistentStorage,
     targetHidesPersistentStorage,
     vendorScreenData,
@@ -919,17 +897,6 @@ async function runCompilePipelineInner(
   // place (drivers can still `#include "vpp_config.h"` unconditionally).
   const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
 
-  // io_sizes.h — overrides the per-MCU-family MAX_* buffer sizes in openplc.h,
-  // which are `#ifndef`-guarded so this wins. Emitted only when the project
-  // actually raised a count above the board default; otherwise `null`, no file
-  // is written, and the build is byte-for-byte what it was.
-  const ioSizesH = boardIoSizes
-    ? generateIoSizesHeader(
-        clampIoSizes(requestedIoSizes, boardIoSizes.defaults, boardIoSizes.ceilings),
-        boardIoSizes.defaults,
-      )
-    : null
-
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
@@ -941,7 +908,6 @@ async function runCompilePipelineInner(
     cBlocks,
     definesH,
     vppConfigH,
-    ...(ioSizesH !== null ? { ioSizesH } : {}),
     firmwareSkeleton,
   })
 
