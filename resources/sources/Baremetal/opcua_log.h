@@ -30,11 +30,20 @@ void opcua_log_poll(void);
  *  a debug channel that can stall the scan cycle is worse than no channel. */
 void opcua_logf(const char* fmt, ...);
 
+/** Dump lwIP's own pool/heap counters.
+ *
+ *  The question "why did the listener die under load" is not answerable from
+ *  our side of the stack: the sockets are gone but Modbus still serves, which
+ *  points below us. lwIP keeps the numbers already (LWIP_STATS defaults on,
+ *  MEMP_STATS/MEM_STATS derive to 1) — they just have to be read out. */
+void opcua_log_netstats(const char* tag);
+
 #define OPCUA_LOG(...) opcua_logf(__VA_ARGS__)
 
 #else
 
 #define OPCUA_LOG(...) do { } while (0)
+static inline void opcua_log_netstats(const char* tag) { (void)tag; }
 static inline void opcua_log_begin(void) { }
 static inline void opcua_log_poll(void)  { }
 

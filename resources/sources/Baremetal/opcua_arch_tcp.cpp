@@ -88,7 +88,24 @@ void drop(ArduinoTcpCM* m, uint8_t idx)
         return;
     // Tell open62541 first, while the id is still resolvable, so it can release
     // its SecureChannel before the slot is reused.
-    if (c.cb != nullptr)
+    //
+    // BUT only if the server actually took ownership of this connection. An
+    // accepted client starts out carrying the LISTENER's context (that is how
+    // open62541 recognises a new arrival on its own server socket), and the
+    // server replaces it with a SecureChannel on the first callback. If the
+    // peer went away before that happened, the context is still the
+    // listener's UA_ServerConnection — and reporting CLOSING with it makes
+    // the server believe its LISTENING SOCKET closed: it zeroes the
+    // connectionId and decrements serverConnectionsSize, after which the next
+    // client cannot be given a SecureChannel and gets ERR BadInternalError at
+    // Hello. Measured on hardware as a perfectly alternating ACK / ERR
+    // response to identical raw UA-TCP Hellos.
+    //
+    // Nothing is leaked by staying quiet: if no channel was created, there is
+    // nothing for the server to release.
+    const bool server_owns_it = (c.cb != nullptr && c.context != nullptr &&
+                                 c.context != m->listener_context);
+    if (server_owns_it)
     {
         c.cb(&m->base, (uintptr_t)(idx + 1), c.application, &c.context,
              UA_CONNECTIONSTATE_CLOSING, &UA_KEYVALUEMAP_NULL, UA_BYTESTRING_NULL);
@@ -271,6 +288,24 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
     if (!m->listening)
         return;
 
+    // 0. Reap connections whose underlying slot is no longer theirs.
+    //
+    //    This MUST run before accept(). An Arduino client handle re-points at
+    //    whatever connection the stack next drops into its slot, so a peer
+    //    that reconnects immediately lands in the slot we are still holding.
+    //    Reaping first means the stale handle is gone by the time accept()
+    //    looks, and the new connection is accepted as the new connection it
+    //    is instead of having its Hello delivered on the dead one's
+    //    SecureChannel. See opcua_net::alive().
+    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
+    {
+        if (m->conns[i].client != nullptr && !opcua_net::alive(m->conns[i].client))
+        {
+            OPCUA_LOG("[cm] id=%u stale (slot reused or closed)", (unsigned)(i + 1));
+            drop(m, i);
+        }
+    }
+
     // 1. Accept. opcua_net owns the client storage and recycles slots whose
     //    peer has gone, so this cannot exhaust the table.
     Client* incoming = opcua_net::accept();
@@ -301,6 +336,13 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
     }
 
     // 2. Announce and drain.
+    {
+        static uint8_t s_prev_held = 255;
+        uint8_t held = 0;
+        for (uint8_t k = 0; k < OPCUA_NET_MAX_CLIENTS; k++)
+            if (m->conns[k].client != nullptr) held++;
+        if (held != s_prev_held) { s_prev_held = held; OPCUA_LOG("[cm] held=%u", (unsigned)held); }
+    }
     for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
     {
         Conn& c = m->conns[i];
@@ -318,9 +360,11 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
             }
         }
 
-        // The only place a connection is retired. Checking available() too
-        // means a peer that closed after sending a final request still gets
-        // that request processed before the channel goes away.
+        // Retire on a clean close. Checking available() too means a peer that
+        // closed after sending a final request still gets that request
+        // processed before the channel goes away. The slot-reuse case is
+        // already handled by the reap above — `connected()` cannot detect it,
+        // because a recycled slot reports the NEW peer as connected.
         if (!c.client->connected() && c.client->available() == 0)
         {
             drop(m, i);

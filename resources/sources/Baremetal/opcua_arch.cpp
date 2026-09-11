@@ -34,6 +34,7 @@ containing to three lines rather than spreading through the file.
 #include <open62541.h>
 
 #include "opcua_arch.h"
+#include "opcua_log.h"
 #include "opcua_net.h"
 
 // ---------------------------------------------------------------------------
@@ -98,7 +99,15 @@ namespace {
 // keeps the allocation out of the arena and the worst case bounded.
 // ---------------------------------------------------------------------------
 
-constexpr uint8_t kMaxTimers = 8;
+// open62541 registers several repeated callbacks of its own (SecureChannel
+// housekeeping, session timeouts, discovery upkeep) and more arrive as
+// features are enabled. A table too small is not a soft limit: addTimer
+// returns BADOUTOFMEMORY, the server carries on believing the callback is
+// scheduled, and the work silently never happens. SecureChannel housekeeping
+// is exactly the one that must not be dropped — without it closed channels
+// are never reaped and, with maxSecureChannels small, the next client is
+// refused.
+constexpr uint8_t kMaxTimers = 24;
 
 struct Timer
 {
@@ -273,6 +282,7 @@ UA_StatusCode el_add_timer(UA_EventLoop* el, UA_Callback cb, void* application, 
     }
     // Bounded by design; refusing loudly beats silently not running a callback
     // the server believes is scheduled.
+    OPCUA_LOG("[el] addTimer REFUSED - timer table full (%u)", (unsigned)kMaxTimers);
     return UA_STATUSCODE_BADOUTOFMEMORY;
 }
 

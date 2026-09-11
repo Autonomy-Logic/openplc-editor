@@ -84,8 +84,20 @@ bool apply_and_verify_limits(UA_ServerConfig* config)
     config->tcpMaxMsgSize = 8192;
     config->tcpMaxChunks  = 1;
 
-    config->maxSessions       = OPCUA_MAX_SESSIONS;
-    config->maxSecureChannels = OPCUA_MAX_SESSIONS;
+    config->maxSessions = OPCUA_MAX_SESSIONS;
+
+    // SecureChannels are NOT sessions, and tying them together was a mistake.
+    //
+    // A session costs two 8 KB buffers, which is why maxSessions is the
+    // expensive, VPP-declared dimension. A SecureChannel is a small
+    // bookkeeping struct — but a CLOSED channel lingers until housekeeping
+    // reaps it, so allowing exactly as many channels as sessions means the
+    // next client is refused for as long as the previous one's channel is
+    // still being torn down. Measured on hardware as strictly alternating
+    // connect failures: one good session, one BadInternalError, repeating.
+    //
+    // Headroom here costs bytes, not buffers.
+    config->maxSecureChannels = OPCUA_MAX_SESSIONS + 3;
 
     // OperationLimits. Published under ServerCapabilities so conformant
     // clients split their own requests, and enforced so the rest get
@@ -99,6 +111,7 @@ bool apply_and_verify_limits(UA_ServerConfig* config)
         && config->tcpMaxMsgSize == 8192
         && config->tcpMaxChunks == 1
         && config->maxSessions == OPCUA_MAX_SESSIONS
+        && config->maxSecureChannels == OPCUA_MAX_SESSIONS + 3
         && config->maxNodesPerRead == OPCUA_MAX_NODES_PER_READ;
 }
 
@@ -172,9 +185,10 @@ void opcua_init()
         return;
     }
 
-    OPCUA_LOG("[ua] limits ok buf=%lu maxmsg=%lu chunks=%lu sessions=%u",
+    OPCUA_LOG("[ua] limits ok buf=%lu maxmsg=%lu chunks=%lu sessions=%u channels=%u",
               (unsigned long)config->tcpBufSize, (unsigned long)config->tcpMaxMsgSize,
-              (unsigned long)config->tcpMaxChunks, (unsigned)config->maxSessions);
+              (unsigned long)config->tcpMaxChunks, (unsigned)config->maxSessions,
+              (unsigned)config->maxSecureChannels);
 
     if (opcua_nodes_populate(g_server, nullptr) != UA_STATUSCODE_GOOD)
     {
@@ -213,6 +227,24 @@ void opcuatask()
     // exactly when init FAILED, and servicing it only on the happy path is
     // how the first bring-up attempt produced an open port 23 and no output.
     opcua_log_poll();
+
+    // Periodic net/arena census. Cheap (a few integer reads) and it is the
+    // only way to see a slow leak: a one-shot dump after a failure cannot
+    // distinguish "exhausted gradually" from "exhausted at the moment of
+    // failure", and those have different fixes.
+    {
+        static unsigned long s_next = 0;
+        const unsigned long now_ms = millis();
+        if ((long)(now_ms - s_next) >= 0)
+        {
+            s_next = now_ms + 15000;
+            opcua_log_netstats("tick");
+            opcua_arena_stats_t st; opcua_arena_get_stats(&st);
+            OPCUA_LOG("[arena] inuse=%lu hw=%lu fail=%lu largest=%lu",
+                      (unsigned long)st.in_use, (unsigned long)st.high_water,
+                      (unsigned long)st.failures, (unsigned long)st.largest_free);
+        }
+    }
 
     if (!g_started)
         return;
