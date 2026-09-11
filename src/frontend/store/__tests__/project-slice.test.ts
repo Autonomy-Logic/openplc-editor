@@ -1947,6 +1947,15 @@ describe('createProjectSlice', () => {
       expect(store.getState().project.data.servers![0].name).toBe('B')
     })
 
+    it('queues the file for deletion, so the save actually removes it from disk', () => {
+      // Dropping it from the array only changes memory. Without the queue entry
+      // the next save leaves `devices/servers/A.json` behind and the server
+      // returns on the following open.
+      seedServer(store, makeModbusTcpServer('A'))
+      store.getState().projectActions.deleteServer('A')
+      expect(store.getState().pendingDeletions).toContain('devices/servers/A.json')
+    })
+
     it('returns ok even when server not found', () => {
       const result = store.getState().projectActions.deleteServer('NonExistent')
       expect(result.ok).toBe(true)

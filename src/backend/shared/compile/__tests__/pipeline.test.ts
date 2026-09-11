@@ -1411,3 +1411,58 @@ describe('project-snapshot capability', () => {
     )
   })
 })
+
+/**
+ * A firmware build serves exactly one Modbus slave: `modbus.slaveid` is a single
+ * global and `init_mbregs` is called once. The selector that DETECTS the clash
+ * was covered; the refusal that acts on it was not, and the refusal is what the
+ * user meets.
+ */
+describe('runCompilePipeline — two enabled Modbus servers', () => {
+  const twoServers = [
+    {
+      name: 'mb_one',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: true, transports: ['rtu'], networkInterface: '0.0.0.0', port: 502 },
+    },
+    {
+      name: 'mb_two',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: true, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 },
+    },
+  ]
+
+  const withServers = () => ({
+    ...projectDataFixture,
+    servers: twoServers as unknown as typeof projectDataFixture.servers,
+  })
+
+  it('refuses the build and names both, so the user knows which to turn off', async () => {
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers(),
+        boardTarget: 'ESP32',
+        boardRuntime: 'arduino-cli',
+        isSimulator: false,
+      }),
+      makePort(),
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    const refusal = events.find((event) => event.message.includes('one Modbus server'))
+    expect(refusal?.message).toContain('mb_one')
+    expect(refusal?.message).toContain('mb_two')
+  })
+
+  it('lets a target that never reads the selection build anyway', async () => {
+    // The simulator takes its Modbus from a fixed block and Runtime v4 hosts the
+    // servers itself. Refusing them would block work on a project merely passing
+    // between targets, which is the reason the refusal lives here and not at
+    // creation.
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(makeArgs({ projectData: withServers() }), makePort(), emit)
+    expect(result.success).toBe(true)
+  })
+})

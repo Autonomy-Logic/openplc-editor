@@ -41,7 +41,11 @@ describe('resolveModbusServerProfile', () => {
     // v3 predates the slave plugin; its capability block says so.
     const profile = resolveModbusServerProfile({ capabilities: { modbusTcpServer: false } })
     expect(profile.transports).toEqual([])
-    expect(profile.transports).toEqual([])
+    // Empty transports is what hides the screen; there is no separate flag,
+    // because a server answering on nothing and a target that cannot serve are
+    // the same absence.
+    expect(profile.derivedCounts).toBeNull()
+    expect(profile.vppScreens).toEqual({})
   })
 
   describe('Runtime v4', () => {

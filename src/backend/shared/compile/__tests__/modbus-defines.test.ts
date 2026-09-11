@@ -556,3 +556,53 @@ describe('a pre-4.4.0 project whose wiring is still under the old keys', () => {
     expect(out).toContain('#define MBSERIAL_TXPIN 4')
   })
 })
+
+/**
+ * `NFR03`: promoting a project's Modbus to a `PLCServer` must not change the
+ * firmware it compiles to. The measurement behind it was that exactly one line
+ * moves, `DEBUG_SLAVE`, and that one is the editor's own link rather than the
+ * server's.
+ *
+ * Asserted as an A/B here because it is the only form that stays true: it emits
+ * ONE project's configuration through the legacy screen-section path and through
+ * the migrated-server path, and compares the two outputs directly.
+ */
+describe('NFR03 - the migration does not change the firmware', () => {
+  /** What a pre-4.4.0 project carries, all of it in the screen sections. */
+  const legacySections = {
+    modbus_rtu: {
+      enabled: true,
+      rtu_slave_id: 7,
+      rtu_interface: 'Serial2',
+      rtu_baud_rate: '19200',
+      enable_rs485_en_pin: true,
+      rtu_rs485_en_pin: '17',
+    },
+    modbus_tcp: { enabled: false },
+  }
+
+  /** The same configuration after `planVendorModbusMigration` promotes it. */
+  const migratedServer = {
+    enabled: true,
+    transports: ['rtu' as const],
+    slaveId: 7,
+    serialPort: 'Serial2',
+    baudRate: 19200,
+    networkInterface: '0.0.0.0',
+    port: 502,
+  }
+
+  it('emits the identical Modbus block through both paths', () => {
+    const before = generateModbusDefines(legacySections, 'Serial')
+    const after = generateModbusDefines(legacySections, 'Serial', migratedServer)
+    expect(after).toBe(before)
+  })
+
+  it('emits a block that is not empty, so the comparison above means something', () => {
+    const out = generateModbusDefines(legacySections, 'Serial', migratedServer)
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_TXPIN 17')
+  })
+})
