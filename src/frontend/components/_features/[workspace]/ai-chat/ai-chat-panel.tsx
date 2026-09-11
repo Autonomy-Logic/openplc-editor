@@ -890,6 +890,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         onCancel={handleCancel}
         isLoading={!!streamingMessageId}
         disabled={!ai || needsSignIn}
+        disabledReason={needsSignIn ? 'Sign in to Autonomy Edge to use the assistant.' : undefined}
       />
 
       {needsSignIn && edgeAccount && !capabilities.requiresEdgeAccount && (

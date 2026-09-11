@@ -6,9 +6,11 @@ type AIChatInputProps = {
   isLoading: boolean
   /** No AI transport on this platform — the composer is inert and says so. */
   disabled?: boolean
+  /** Why the composer is disabled, shown as its placeholder. */
+  disabledReason?: string
 }
 
-export const AIChatInput = ({ onSend, onCancel, isLoading, disabled = false }: AIChatInputProps) => {
+export const AIChatInput = ({ onSend, onCancel, isLoading, disabled = false, disabledReason }: AIChatInputProps) => {
   const [input, setInput] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -56,7 +58,9 @@ export const AIChatInput = ({ onSend, onCancel, isLoading, disabled = false }: A
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           disabled={disabled}
-          placeholder={disabled ? 'AI is not available on this platform.' : 'Ask about your PLC code…'}
+          placeholder={
+            disabled ? (disabledReason ?? 'AI is not available on this platform.') : 'Ask about your PLC code…'
+          }
           rows={1}
           className='w-full resize-none border-none bg-transparent text-[13px] text-neutral-900 placeholder-neutral-400 outline-none dark:text-neutral-100 dark:placeholder-neutral-500'
         />
