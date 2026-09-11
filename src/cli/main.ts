@@ -82,7 +82,11 @@ Usage
   openplc-cli devices [--timeout <ms>]
   openplc-cli library build <library-project> [--clean]
   openplc-cli library install <file.stlib>
+  openplc-cli library uninstall <name>[@<version>] [--all]
+  openplc-cli library info <name>[@<version>]
   openplc-cli library list
+  openplc-cli library pin <project> <name>@<version>
+  openplc-cli library unpin <project> <name>
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]

@@ -10,6 +10,7 @@ a parallel implementation.
 | Build                         | `openplc-cli compile <project>`    |
 | Build & Upload                | `openplc-cli upload <project>`     |
 | Search / serial-port dropdown | `openplc-cli devices`              |
+| Library Manager               | `openplc-cli library …`            |
 | Debug                         | `openplc-cli debug open …`         |
 | Start / Stop                  | `openplc-cli debug start` / `stop` |
 | Variable poll, force dialog   | `openplc-cli debug read` / `force` |
@@ -214,6 +215,88 @@ OPENPLC_CREDENTIALS=user:pass    # or OPENPLC_USER + OPENPLC_PASSWORD
 ```
 
 Prefer the environment form in CI: a flag lands in shell history and job logs.
+
+## Libraries
+
+A library is a `.stlib` archive: blocks, their pin signatures, data types, and
+any C/C++ sources they ship. Building one, installing it and choosing which
+version a project compiles against are all scriptable.
+
+```sh
+openplc-cli library build <library-project> [--clean]   # project -> .stlib
+openplc-cli library install <file.stlib>
+openplc-cli library uninstall <name>[@<version>] [--all]
+openplc-cli library info <name>[@<version>]
+openplc-cli library list
+openplc-cli library pin <project> <name>@<version>
+openplc-cli library unpin <project> <name>
+```
+
+A version is named with `@`, not a flag: `--version` is global and prints the
+CLI's own version.
+
+### Versions live side by side
+
+Installing `0.2.0` does not replace `0.1.0`. Both stay, and each project picks
+one. `list` names the newest and, once anything has more than one, adds a column
+listing them all; the JSON always carries the full array.
+
+```sh
+$ openplc-cli library list
+Name           Version  Installed            Origin
+libtest-basic  0.2.0    0.2.0, 0.1.0         stlib
+```
+
+`uninstall` refuses to choose for you when several are installed — name one, or
+pass `--all`. Bundled libraries cannot be uninstalled; disable them per project
+instead.
+
+### Pinning
+
+The pin lives in the project's `project.json` and decides what the compiler
+resolves against, so changing it changes the generated code:
+
+```sh
+openplc-cli library pin ./my-project libtest-basic@0.1.0
+openplc-cli compile ./my-project          # COUNTER_FB.PV is INT
+
+openplc-cli library pin ./my-project libtest-basic@0.2.0
+openplc-cli compile ./my-project          # COUNTER_FB.PV is REAL
+```
+
+`pin` refuses a version that is not installed rather than writing a reference the
+compiler would quietly substitute later. It rewrites one field of `project.json`
+and leaves the rest of the file alone.
+
+Diagrams already on the canvas are **reported, not rewritten**:
+
+```
+Repinned libtest-basic 0.1.0 → 0.2.0.
+  warning: COUNTER_FB: the library added pin RESET (BOOL). 1 placed block in main does not draw it yet.
+  COUNTER_FB.PV: type INT → REAL — 1 block in main.
+```
+
+Growing a block needs the editor's own layout engine, so the CLI says what
+changed and the GUI applies it the next time the project is opened. A pin type
+that changed is honoured by the compiler immediately either way.
+
+### `info`
+
+`list` carries identity only. `info` opens the archive and prints what is in it —
+which is how you answer "did this pin change between versions" without unpacking
+anything:
+
+```sh
+$ openplc-cli library info libtest-basic@0.2.0
+libtest-basic 0.2.0
+  namespace: libtest_basic
+  installed: 0.2.0, 0.1.0
+
+Function blocks (1)
+  COUNTER_FB
+    in:    CU: BOOL, MODE: TEST_MODE, RESET: BOOL
+    out:   Q: BOOL, CV: INT
+```
 
 ## Debug sessions
 

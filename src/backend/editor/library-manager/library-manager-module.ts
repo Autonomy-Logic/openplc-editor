@@ -410,28 +410,36 @@ export class LibraryManagerModule {
         return { success: false, error: `Library '${name}' is not installed` }
       }
 
+      const libraryDir = join(this.librariesDir, name)
+      assertPathContained(this.librariesDir, libraryDir, 'library install path')
+
       // One version, or the whole library when none is named.
       if (version !== undefined) {
         const entry = installed.versions[version]
         if (!entry) {
           return { success: false, error: `Library '${name}' version ${version} is not installed` }
         }
-        validatePathId(version, 'version')
-        const versionDir = join(this.librariesDir, name, version)
-        assertPathContained(this.librariesDir, versionDir, 'library install path')
-        // A version migrated from the old layout shares the library directory
-        // with its siblings, so remove just its archive.
-        const target = existsSync(versionDir) ? versionDir : entry.stlibPath
+        // The folder comes from the entry, never from the version string.
+        // `persistPrepared` sanitises a version into a folder name, so a
+        // version legally installed as `1.0.0+sha.abc` does not name its own
+        // directory and cannot be validated as a path id.
+        const entryDir = dirname(entry.stlibPath)
+        // A version migrated from the old layout keeps its archive directly in
+        // the library folder, shared with its siblings — remove just the archive.
+        const target = entryDir === libraryDir ? entry.stlibPath : entryDir
         assertPathContained(this.librariesDir, target, 'library install path')
         if (existsSync(target)) rmSync(target, { recursive: true })
         delete installed.versions[version]
-        if (Object.keys(installed.versions).length === 0) delete registry.libraries[name]
+        if (Object.keys(installed.versions).length === 0) {
+          delete registry.libraries[name]
+          // Last version gone: take the library folder with it rather than
+          // leaving an empty directory behind.
+          if (existsSync(libraryDir)) rmSync(libraryDir, { recursive: true })
+        }
         this.writeRegistry(registry)
         return { success: true }
       }
 
-      const libraryDir = join(this.librariesDir, name)
-      assertPathContained(this.librariesDir, libraryDir, 'library install path')
       if (existsSync(libraryDir)) {
         rmSync(libraryDir, { recursive: true })
       }
