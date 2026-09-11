@@ -66,6 +66,13 @@ interface ModbusSlaveConfig {
  * `imageSizes` is absent only where the caller has no image to offer — the
  * unit tests, and any future caller outside the compile pipeline — and the old
  * defaults still stand there.
+ *
+ * THE BIT COUNTS ARE EXACT, NOT PADDED. The sizer reports a raw high-water
+ * mark and only the bare-metal emitter rounds to a whole byte, so a project
+ * with six coils advertises six over Modbus rather than eight. Before that
+ * split the padding leaked into this file and the server published two coils
+ * the program had no variable for — harmless to read, and a lie about what
+ * exists.
  */
 const segmentDefault = (
   imageSizes: Readonly<Record<string, number>> | undefined,

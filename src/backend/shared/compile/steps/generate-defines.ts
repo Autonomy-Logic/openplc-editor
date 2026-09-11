@@ -55,6 +55,32 @@ const PROCESS_IMAGE_MACROS: ReadonlyArray<readonly [prefix: string, macro: strin
 ]
 
 /**
+ * Bit areas reach the firmware as a whole number of bytes (FR06, BR04, CON05).
+ *
+ * THIS IS THE ONLY EMITTER THAT NEEDS IT, which is why it rounds here rather
+ * than taking a padded figure from the sizer. `openplc.h` declares
+ * `bool_input[MAX_DIGITAL_INPUT/8][8]` and divides, so a count that is not a
+ * whole number of bytes rounds DOWN in the firmware and the slots of the
+ * partial byte become unaddressable — six bits of `%QX` would declare
+ * `bool_output[0][8]`.
+ *
+ * The other two consumers must NOT see this padding. Runtime v4 receives bits
+ * and converts where it knows the storage shape, and the Modbus config derives
+ * its coil counts from the raw figure, so a project with six coils advertises
+ * six rather than eight.
+ *
+ * `arduino_runtime_glue.cpp` static_asserts both macros are multiples of eight.
+ * That assert is the proof this rounding happened and stays untouched.
+ */
+const BITS_PER_BYTE = 8
+const BIT_MACRO_PREFIXES: ReadonlySet<string> = new Set(['%IX', '%QX'])
+
+function firmwareCount(prefix: string, slots: number): number {
+  if (!BIT_MACRO_PREFIXES.has(prefix)) return slots
+  return Math.ceil(slots / BITS_PER_BYTE) * BITS_PER_BYTE
+}
+
+/**
  * The `//Process image` block, or `''` when the caller passed no sizes.
  *
  * Absent means the target is one we do not size — Runtime v3, whose image we
@@ -72,7 +98,7 @@ function generateProcessImageDefines(sizes: IoImageSizes | undefined): string {
 
   let block = '//Process image\n'
   for (const [prefix, macro] of PROCESS_IMAGE_MACROS) {
-    block += `#define ${macro} ${sizes[prefix] ?? 0}\n`
+    block += `#define ${macro} ${firmwareCount(prefix, sizes[prefix] ?? 0)}\n`
   }
   return block
 }

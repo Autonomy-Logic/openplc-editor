@@ -48,9 +48,6 @@
 
 import type { IoImageSizes } from './compute-io-image'
 
-/** Bit tables are `IEC_BOOL *table[N][8]` — N counts bytes, not bits. */
-const BITS_PER_BYTE = 8
-
 /**
  * The fourteen tables, in the order `image_tables.h` declares them, paired
  * with the IEC prefix whose addresses they store.
@@ -60,36 +57,27 @@ const BITS_PER_BYTE = 8
  * able to go down both in step. Fixed order is also what makes the output
  * byte-stable for the same project (FR07).
  */
-const TABLES: ReadonlyArray<{ key: string; prefix: string; bits: boolean }> = [
-  { key: 'bool_input', prefix: '%IX', bits: true },
-  { key: 'bool_output', prefix: '%QX', bits: true },
-  { key: 'byte_input', prefix: '%IB', bits: false },
-  { key: 'byte_output', prefix: '%QB', bits: false },
-  { key: 'int_input', prefix: '%IW', bits: false },
-  { key: 'int_output', prefix: '%QW', bits: false },
-  { key: 'dint_input', prefix: '%ID', bits: false },
-  { key: 'dint_output', prefix: '%QD', bits: false },
-  { key: 'lint_input', prefix: '%IL', bits: false },
-  { key: 'lint_output', prefix: '%QL', bits: false },
-  { key: 'int_memory', prefix: '%MW', bits: false },
-  { key: 'dint_memory', prefix: '%MD', bits: false },
-  { key: 'lint_memory', prefix: '%ML', bits: false },
-  { key: 'bool_memory', prefix: '%MX', bits: true },
+const TABLES: ReadonlyArray<{ key: string; prefix: string; unit: string }> = [
+  { key: 'bool_input', prefix: '%IX', unit: 'bits' },
+  { key: 'bool_output', prefix: '%QX', unit: 'bits' },
+  { key: 'byte_input', prefix: '%IB', unit: 'bytes' },
+  { key: 'byte_output', prefix: '%QB', unit: 'bytes' },
+  { key: 'int_input', prefix: '%IW', unit: 'words' },
+  { key: 'int_output', prefix: '%QW', unit: 'words' },
+  { key: 'dint_input', prefix: '%ID', unit: 'dwords' },
+  { key: 'dint_output', prefix: '%QD', unit: 'dwords' },
+  { key: 'lint_input', prefix: '%IL', unit: 'lwords' },
+  { key: 'lint_output', prefix: '%QL', unit: 'lwords' },
+  { key: 'int_memory', prefix: '%MW', unit: 'words' },
+  { key: 'dint_memory', prefix: '%MD', unit: 'dwords' },
+  { key: 'lint_memory', prefix: '%ML', unit: 'lwords' },
+  { key: 'bool_memory', prefix: '%MX', unit: 'bits' },
 ]
 
-/**
- * How long the runtime has to make one table, in that table's own elements.
- *
- * `Math.ceil` on the bit tables rather than a plain division: the sizer
- * rounds bit areas to a whole byte, so the division is already exact and the
- * ceiling is unreachable — but rounding DOWN if that ever stopped being true
- * would leave the slots of the partial byte unaddressable, which is the
- * failure mode the rounding exists to prevent. Erring upward costs one byte.
- */
-function elementCount(sizes: IoImageSizes, table: (typeof TABLES)[number]): number {
-  const slots = sizes[table.prefix] ?? 0
-  return table.bits ? Math.ceil(slots / BITS_PER_BYTE) : slots
-}
+/** Bumped whenever a reader would misread an older file. Version 2 is the
+ *  first version any device has ever seen: version 1 was written but never
+ *  merged, so the parser needs no compatibility branch. */
+const FORMAT_VERSION = 2
 
 /**
  * The `image.conf` body for this project.
@@ -114,15 +102,16 @@ export function generateImageConf(sizes: IoImageSizes): string {
     '# and installed by the program upload; read by the PLC application when',
     '# the program loads. Edits here are overwritten on the next upload.',
     '#',
-    '# One key per table in core/src/plc_app/image_tables.h. Each value is a',
-    '# count of ELEMENTS in that table, so the three BOOL tables are in bytes',
-    '# (they are declared [N][8]) while every other table is in its own',
-    '# width. Zero means the program addresses nothing in that area and the',
-    '# runtime should allocate nothing for it.',
+    '# One key per table in core/src/plc_app/image_tables.h. Every value',
+    '# carries the unit of the ADDRESS it stores: the three BOOL tables are',
+    '# in bits, because %QX addresses bits, and the runtime converts to the',
+    '# [N][8] shape its storage actually has. Zero means the program',
+    '# addresses nothing in that area and the runtime allocates nothing.',
+    `format_version=${FORMAT_VERSION}`,
   ]
 
   for (const table of TABLES) {
-    lines.push(`${table.key}=${elementCount(sizes, table)}`)
+    lines.push(`${table.key}=${sizes[table.prefix] ?? 0} ${table.unit}`)
   }
 
   return `${lines.join('\n')}\n`

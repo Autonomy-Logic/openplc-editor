@@ -492,6 +492,36 @@ describe('generateDefinesContent — process image', () => {
     expect(out).not.toMatch(/MAX_MEMORY_BIT|MAX_BYTE/)
   })
 
+  it('rounds the two bit macros up to a whole byte', () => {
+    // FR06 lives HERE now, and only here: openplc.h declares
+    // bool_output[MAX_DIGITAL_OUTPUT/8][8] and divides, so six bits would
+    // declare bool_output[0][8] and none of the six would be addressable.
+    // The sizer reports the raw high-water mark so the other two consumers
+    // see an exact figure; this emitter is the one that needs a whole byte.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 6, '%IX': 11 } })
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 8')
+    expect(out).toContain('#define MAX_DIGITAL_INPUT 16')
+  })
+
+  it('leaves a bit count that is already a whole byte alone', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 16 } })
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 16')
+  })
+
+  it('does not round the word and dword macros', () => {
+    // Only the bit areas are declared [N/8][8]. Padding %MW would reserve
+    // memory the project never asked for, which is the opposite of BR10.
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      imageSizes: { '%MW': 3, '%MD': 5, '%ML': 7, '%IW': 9, '%QD': 11 },
+    })
+    expect(out).toContain('#define MAX_MEMORY_WORD 3')
+    expect(out).toContain('#define MAX_MEMORY_DWORD 5')
+    expect(out).toContain('#define MAX_MEMORY_LWORD 7')
+    expect(out).toContain('#define MAX_ANALOG_INPUT 9')
+    expect(out).toContain('#define MAX_REAL_OUTPUT 11')
+  })
+
   it('emits nothing at all for a target we do not size', () => {
     // Runtime v3 and the simulator. Their defines.h must stay byte-identical,
     // or every one of them rebuilds for no reason and openplc.h's own #ifdef

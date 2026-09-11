@@ -127,8 +127,10 @@ describe('computeIoImage — sizing from producers', () => {
 
   it('sizes an area from the pins that claim it', () => {
     const image = compute(makeProject({}), { devicePinMapping: pins('%IX0.0', '%IX0.1', '%QW0') })
-    // Four bits would still be a whole byte: FR06.
-    expect(image.sizes).toEqual({ '%IX': 8, '%QW': 1 })
+    // Two bits, reported as two. Padding to a whole byte is the bare-metal
+    // emitter's job (FR06), not the sizer's: %QX is bits here, so the Modbus
+    // config derives an exact coil count and Runtime v4 gets a real figure.
+    expect(image.sizes).toEqual({ '%IX': 2, '%QW': 1 })
     expect(image.unbacked).toEqual([])
   })
 
@@ -143,7 +145,7 @@ describe('computeIoImage — sizing from producers', () => {
     // program's declarations alone would leave the master writing outside the
     // image — the failure this contributor exists to prevent.
     const image = compute(makeProject({ remoteDevices: modbusMaster('%IX0.0', '%IX0.1', '%IX0.2') }))
-    expect(image.sizes).toEqual({ '%IX': 8 })
+    expect(image.sizes).toEqual({ '%IX': 3 })
   })
 
   it('sizes to the producer high-water mark, not the producer count', () => {
@@ -152,10 +154,13 @@ describe('computeIoImage — sizing from producers', () => {
     expect(image.sizes).toEqual({ '%QW': 10 })
   })
 
-  it('rounds a bit area up to a whole byte', () => {
-    // %IX1.2 is bit 10, so 11 bits are needed and 16 are emitted (FR06).
+  it('reports a bit area in bits, unpadded', () => {
+    // %IX1.2 is bit 10, so eleven bits are needed and eleven are reported.
+    // The whole-byte rounding FR06 asks for happens in generate-defines.ts,
+    // which is the only consumer declaring bool_input[MAX/8][8]. Rounding
+    // here would have made every other consumer un-pad.
     const image = compute(makeProject({}), { devicePinMapping: pins('%IX1.2') })
-    expect(image.sizes).toEqual({ '%IX': 16 })
+    expect(image.sizes).toEqual({ '%IX': 11 })
   })
 
   it('counts VPP backplane channels', () => {
@@ -211,7 +216,8 @@ describe('computeIoImage — sizing from producers', () => {
         ],
       }),
     )
-    expect(image.sizes).toEqual({ '%QX': 8 })
+    // %QX0.3 is bit 3, so four bits.
+    expect(image.sizes).toEqual({ '%QX': 4 })
   })
 
   it('skips a global with no location', () => {
@@ -280,10 +286,10 @@ describe('computeIoImage — server exposure', () => {
       '%MW': 2,
       '%MD': 3,
       '%ML': 4,
-      // Bit areas rounded up to whole bytes.
-      '%QX': 16,
-      '%MX': 24,
-      '%IX': 8,
+      // Exactly what was asked for. A server exposing nine coils sizes nine.
+      '%QX': 9,
+      '%MX': 17,
+      '%IX': 3,
       '%IW': 5,
     })
   })
@@ -383,9 +389,10 @@ describe('computeIoImage — memory is its own producer', () => {
     }
   })
 
-  it('counts a memory bit declaration in bits and rounds the area', () => {
-    // %MX5.3 is bit 43, so 44 bits are needed and 48 are emitted.
-    expect(compute(withLocal('%MX5.3')).sizes).toEqual({ '%MX': 48 })
+  it('counts a memory bit declaration in bits', () => {
+    // %MX5.3 is bit 43, so forty-four bits are needed and forty-four
+    // reported. Bare metal has no bool_memory to pad anyway (DOPE-605).
+    expect(compute(withLocal('%MX5.3')).sizes).toEqual({ '%MX': 44 })
   })
 
   it('sizes a located array to its LAST element', () => {
@@ -514,7 +521,7 @@ describe('computeIoImage — areas the target does not have', () => {
   it('accepts %MX on Runtime v4, which does have bool_memory', () => {
     const image = compute(withLocal('%MX0.1'), { areas: IMAGE_AREAS_RUNTIME_V4 })
     expect(image.unsupported).toEqual([])
-    expect(image.sizes).toEqual({ '%MX': 8 })
+    expect(image.sizes).toEqual({ '%MX': 2 })
   })
 
   it('reports a byte-addressed declaration on bare metal', () => {

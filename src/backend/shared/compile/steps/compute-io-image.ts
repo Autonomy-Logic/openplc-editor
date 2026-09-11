@@ -60,11 +60,6 @@ import {
 import type { AddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
-/** Bit areas are declared `[MAX_/8][8]` in the firmware, so a size that is not
- *  a whole number of bytes leaves the slots in the partial byte
- *  unaddressable (FR06, BR04, CON05). */
-const BITS_PER_BYTE = 8
-
 /**
  * Slots needed per IEC prefix (`%IX`, `%QW`, …).
  *
@@ -73,9 +68,17 @@ const BITS_PER_BYTE = 8
  * as `sizes[prefix] ?? 0` — never treat a missing key as "unknown", because
  * the floor is always zero and never a minimum.
  *
- * Bit prefixes are counted in BITS and always a multiple of 8. Every other
- * prefix is counted in its own unit (words for `%MW`, dwords for `%MD`, …),
- * which is the unit the firmware arrays and the runtime tables use.
+ * EVERY PREFIX IS COUNTED IN THE UNIT ITS OWN ADDRESS USES: bits for `%QX`,
+ * words for `%MW`, dwords for `%MD`. This is the raw high-water mark, with no
+ * padding of any kind.
+ *
+ * Rounding a bit area up to a whole byte belongs to the consumer that needs a
+ * whole byte, and only bare metal does: it declares `bool_input[MAX_/8][8]`
+ * and divides. `generate-defines.ts` rounds there (FR06, BR04, CON05). Runtime
+ * v4 receives the bit count as bits and converts on its own side, where the
+ * storage shape is known, and the Modbus config derives exact coil counts
+ * rather than padded ones. Padding here would have forced all three to
+ * un-pad, and a project exposing six coils would have advertised eight.
  */
 export type IoImageSizes = Readonly<Record<string, number>>
 
@@ -215,10 +218,6 @@ export interface ComputeIoImageInput {
 }
 
 /** `%IX`/`%QX`/`%MX`. */
-function isBitPrefix(prefix: string): boolean {
-  return prefix.endsWith('X')
-}
-
 /** `'%QW'` → `'Q'`. */
 function directionOf(prefix: string): string {
   return prefix.charAt(1)
@@ -452,14 +451,6 @@ function declaredSlotCount(variableType: PLCVariable['type'] | undefined): numbe
   return end >= start ? end - start + 1 : 1
 }
 
-/** Round a bit area up to a whole byte (FR06). */
-function roundBitAreas(sizes: Record<string, number>): void {
-  for (const prefix of Object.keys(sizes)) {
-    if (!isBitPrefix(prefix)) continue
-    sizes[prefix] = Math.ceil(sizes[prefix] / BITS_PER_BYTE) * BITS_PER_BYTE
-  }
-}
-
 /**
  * Size the project's I/O image, and report every declaration the target
  * cannot honour.
@@ -548,8 +539,6 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
       slotCount,
     })
   }
-
-  roundBitAreas(sizes)
 
   return { sizes, unbacked, unsupported }
 }
