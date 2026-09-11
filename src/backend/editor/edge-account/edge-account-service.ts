@@ -1,0 +1,457 @@
+/**
+ * The desktop editor's Edge session.
+ *
+ * WHY THE DESKTOP NEEDS ITS OWN. The openplc-web editor authenticates purely by the
+ * `httpOnly` cookie Edge leaves on a shared parent domain, and never handles a token
+ * itself. The desktop renderer is not on that domain, so there is no cookie to
+ * inherit: it has to hold the session. That single fact is why this flow is
+ * token-based while the web one is cookie-based, against the same API.
+ *
+ * WHAT IS HELD WHERE. The refresh token is the durable half, persisted encrypted (see
+ * `session-store`). The access token is in memory only.
+ *
+ * SIGNING IN IS OPTIONAL. Nothing here runs unless the user asks. A session that
+ * cannot be restored is not an error: it is the ordinary condition of an editor being
+ * used offline, on a local project, by someone who never wanted an account.
+ */
+
+import { z } from 'zod'
+
+import type { EdgeSignInOutcome, EdgeUser, EdgeUserRead } from '../../../middleware/shared/ports/edge-account-port'
+import { logger } from '../services'
+import { edgeRequest, parseJsonBodyAs } from './edge-http'
+import { clearRefreshToken, readRefreshToken, saveRefreshToken } from './session-store'
+
+/** In-memory access token and the moment it stops being usable. */
+let accessToken: string | null = null
+let accessTokenExpiresAtMs = 0
+
+/**
+ * The one renewal allowed to be in flight.
+ *
+ * Refresh tokens are single-use and rotate, so two concurrent renewals with the same
+ * token race: one rotates and the other presents a superseded value. Edge has a
+ * 60-second replay window that makes the loser recover rather than fail, but leaning
+ * on it would still mean two round trips and two rotations to serve one need.
+ */
+let renewal: Promise<boolean> | null = null
+
+/**
+ * Renew this far before the token actually dies. Anything tighter turns clock skew
+ * between this machine and the server into intermittent 401s.
+ */
+const RENEW_MARGIN_MS = 60_000
+
+/**
+ * What the server has to send for a value to be treated as a token.
+ *
+ * `.nullable()` rather than optional-and-loose: `accessToken: null` is a real answer
+ * from Edge (an unverified account signs in with a 200 and no tokens), while a token
+ * field that arrives as a number or an object is a server the editor does not
+ * understand — and used to become session state, because nothing checked.
+ */
+const TokenPairSchema = z.object({
+  accessToken: z.string().nullish(),
+  refreshToken: z.string().nullish(),
+})
+
+type TokenPair = z.infer<typeof TokenPairSchema>
+
+/**
+ * Only the fields this process reads are named. Edge is free to add more: `.passthrough()`
+ * is the default in zod 3, so an extra field is carried, not a validation failure.
+ */
+const EdgeUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  username: z.string(),
+  profileImage: z.string().nullish(),
+  customInitials: z.string().nullish(),
+  initialsColor: z.string().nullish(),
+  emailVerifiedAt: z.string().nullish(),
+}) satisfies z.ZodType<EdgeUser>
+
+/** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
+const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
+
+const RefreshResponseSchema = envelopeOf(TokenPairSchema)
+
+const MeResponseSchema = envelopeOf(z.object({ user: EdgeUserSchema.nullish() }))
+
+const SubscriptionResponseSchema = envelopeOf(
+  z.object({ plan: z.object({ displayName: z.string().nullish() }).nullish() }),
+)
+
+const SignInResponseSchema = envelopeOf(TokenPairSchema.extend({ user: EdgeUserSchema.nullish() }))
+
+/** The JWT payload, of which only `exp` is read. */
+const JwtPayloadSchema = z.object({ exp: z.number().optional() })
+
+/**
+ * Adopt a freshly issued pair.
+ *
+ * Persisting here rather than at each call site is what keeps rotation honest: the
+ * moment the server hands out a successor the old value is dead, and a stored token
+ * one rotation behind means the next launch starts with a request that cannot work.
+ */
+function adoptTokens(pair: TokenPair): boolean {
+  if (!pair.accessToken || !pair.refreshToken) {
+    return false
+  }
+
+  accessToken = pair.accessToken
+  accessTokenExpiresAtMs = readJwtExpiryMs(pair.accessToken)
+
+  // The answer used to be thrown away. `persisted: false` means the OS keychain refused
+  // and the token lives in memory only — this session ends with the process, and the
+  // user will be asked to sign in again next launch with no idea why. The UI already
+  // reads `isSessionPersistent()` to say so on screen; this is the trace for the
+  // developer reading the log after the fact, which the screen cannot leave.
+  const { persisted } = saveRefreshToken(pair.refreshToken)
+
+  if (!persisted) {
+    logger.warn(
+      'Edge refresh token kept in memory only: the OS keychain is unavailable, so this session will not survive a restart.',
+    )
+  }
+
+  return true
+}
+
+/**
+ * When a JWT says it expires, in epoch milliseconds.
+ *
+ * Read from the token rather than assumed from a constant: the lifetime is the
+ * server's decision and it has already changed once (24h to 7d, EDGE-602). Falling
+ * back to "now" on an unreadable token is the safe direction — it forces a renewal on
+ * first use instead of trusting an expiry we could not read.
+ */
+function readJwtExpiryMs(token: string): number {
+  try {
+    const payload = token.split('.')[1]
+
+    if (!payload) {
+      return Date.now()
+    }
+
+    const decoded = JwtPayloadSchema.safeParse(JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8')))
+
+    return decoded.success && decoded.data.exp !== undefined ? decoded.data.exp * 1000 : Date.now()
+  } catch {
+    return Date.now()
+  }
+}
+
+/** Drop every local trace of the session. */
+function forgetSession(): void {
+  accessToken = null
+  accessTokenExpiresAtMs = 0
+  clearRefreshToken()
+}
+
+/**
+ * Exchange the stored refresh token for a new pair.
+ *
+ * Resolves false when there is nothing to renew with or the server refused. In the
+ * refusal case the stored token is dropped, so the next launch does not repeat a
+ * request that can only fail.
+ *
+ * REJECTS when the renewal could not be completed — a transport failure, or a server
+ * that answered without deciding (a 5xx, a proxy's 502 during a deploy). Offline is
+ * not signed out, and a caller that cannot tell them apart will prompt someone whose
+ * session is fine. Rejecting for a 5xx as well as for no answer is what keeps
+ * `edgeAuthedRequest`'s contract in one sentence: null means no session, a rejection
+ * means nothing was established.
+ */
+async function renewNow(): Promise<boolean> {
+  const stored = readRefreshToken()
+
+  if (!stored) {
+    return false
+  }
+
+  const response = await edgeRequest('/auth/refresh', { method: 'POST', json: { refreshToken: stored } })
+
+  if (response.status === 401 || response.status === 403) {
+    // The server has an opinion and it is no: revoked, expired, or replayed past the
+    // grace window.
+    forgetSession()
+
+    return false
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    // Says nothing about whether the token is valid, so it is kept — and nothing was
+    // learned about the session either, so this is reported like a transport failure.
+    throw new Error(`Autonomy Edge could not renew the session (answered ${response.status}).`)
+  }
+
+  return adoptTokens(parseJsonBodyAs(response.body, RefreshResponseSchema)?.data ?? {})
+}
+
+/** Renew, sharing one in-flight attempt across every concurrent caller. */
+function renew(): Promise<boolean> {
+  renewal ??= renewNow().finally(() => {
+    renewal = null
+  })
+
+  return renewal
+}
+
+/** A usable access token, renewing when the held one is missing or close to expiry. */
+async function usableAccessToken(): Promise<string | null> {
+  if (accessToken && Date.now() < accessTokenExpiresAtMs - RENEW_MARGIN_MS) {
+    return accessToken
+  }
+
+  return (await renew()) ? accessToken : null
+}
+
+/**
+ * A request that carries the session, renewing once if the token turns out to be dead
+ * despite looking alive.
+ *
+ * The retry exists because `usableAccessToken` can only reason about expiry. It cannot
+ * know the session was revoked from another device, or that the account's tokens were
+ * invalidated by a password change — both of which arrive as a 401 on a token whose
+ * `exp` is comfortably in the future.
+ *
+ * Exported because the cloud-project layer needs exactly this treatment. Renewal, the
+ * single-flight guard and the one retry belong here rather than being reimplemented per
+ * caller. Resolves null when there is definitely no session — nothing to renew with, or
+ * a renewal the server refused — and REJECTS when that could not be established: a
+ * transport failure, or a renewal the server failed to complete. Callers have to keep
+ * "denied" apart from "unreachable".
+ */
+export async function edgeAuthedRequest(
+  path: string,
+  init: {
+    method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'
+    json?: unknown
+    raw?: { body: Buffer; contentType: string }
+    timeoutMs?: number
+  } = {},
+): Promise<{ status: number; body: string } | null> {
+  const token = await usableAccessToken()
+
+  if (!token) {
+    return null
+  }
+
+  const first = await edgeRequest(path, { ...init, accessToken: token })
+
+  if (first.status !== 401) {
+    return first
+  }
+
+  if (!(await renew()) || !accessToken) {
+    return null
+  }
+
+  return edgeRequest(path, { ...init, accessToken })
+}
+
+/**
+ * The bearer for a caller that cannot go through {@link edgeAuthedRequest}.
+ *
+ * A streamed response has no buffered body to hand back, so the streaming transport
+ * has to carry the token itself. That is the ONLY reason this is exported: renewal,
+ * the single-flight guard and the expiry margin stay here, and a caller that
+ * reimplemented any of them would race the rotation this module exists to serialise.
+ *
+ * `forceRenewal` is the streaming half of the one retry `edgeAuthedRequest` performs.
+ * A token can be refused despite a future `exp` — revoked from another device, or
+ * invalidated by a password change — and only the caller can see the 401 that says so,
+ * because by then the response is already being streamed to it.
+ *
+ * Resolves null when no session could be obtained, and REJECTS on a transport failure,
+ * for the same reason `edgeAuthedRequest` does: "denied" and "unreachable" are not the
+ * same answer.
+ */
+export async function edgeAccessToken({ forceRenewal = false } = {}): Promise<string | null> {
+  if (!forceRenewal) {
+    return usableAccessToken()
+  }
+
+  return (await renew()) ? accessToken : null
+}
+
+// ---------------------------------------------------------------------------
+// Public surface — one function per IPC handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Who is signed in.
+ *
+ * The three outcomes are not interchangeable, and that is the whole reason
+ * `EdgeUserRead` exists: `unknown` means the question could not be asked, and a
+ * caller that reads it as `no-session` prompts over a live session on every blip.
+ */
+export async function fetchUser(): Promise<EdgeUserRead> {
+  try {
+    const response = await edgeAuthedRequest('/auth/me')
+
+    // Null is "no token could be obtained": nothing to ask with, so no session.
+    if (!response) {
+      return { status: 'no-session' }
+    }
+
+    // 401 and 403 are the server saying no to the credentials it was shown — that IS
+    // the answer "nobody is signed in". Anything else that is not a 2xx is the server
+    // failing to answer the question: a 500, a 502 from a proxy, a 503 during a deploy.
+    // Reading those as `no-session` is exactly what the docstring above forbids, and it
+    // is what this branch used to do — every non-2xx collapsed into a sign-out, so a
+    // deploy of the Edge API signed the desktop out.
+    if (response.status === 401 || response.status === 403) {
+      return { status: 'no-session' }
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      return { status: 'unknown' }
+    }
+
+    const user = parseJsonBodyAs(response.body, MeResponseSchema)?.data?.user
+
+    return user ? { status: 'signed-in', user } : { status: 'no-session' }
+  } catch {
+    // Never reached the server, so nothing was established either way.
+    return { status: 'unknown' }
+  }
+}
+
+/**
+ * The caption under the account name, e.g. `Pro Plan`.
+ *
+ * Null covers every non-answer: no plan (Edge answers 404 for Community, expired or
+ * cancelled), no session, or a failed request. A caption is decoration beside a name
+ * and must never take the menu down with it.
+ */
+export async function fetchPlanCaption(): Promise<string | null> {
+  try {
+    const response = await edgeAuthedRequest('/me/subscription')
+
+    if (!response || response.status < 200 || response.status >= 300) {
+      return null
+    }
+
+    const displayName = parseJsonBodyAs(response.body, SubscriptionResponseSchema)?.data?.plan?.displayName
+
+    // Same wording as Edge's own `contextSwitcher.planLabel`.
+    return displayName ? `${displayName} Plan` : null
+  } catch {
+    return null
+  }
+}
+
+/** Sign in with an email and password. */
+export async function signIn(email: string, password: string): Promise<EdgeSignInOutcome> {
+  try {
+    const response = await edgeRequest('/auth/signin', { method: 'POST', json: { email, password } })
+
+    if (response.status === 401) {
+      return { status: 'invalid-credentials' }
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      return { status: 'failed' }
+    }
+
+    const payload = parseJsonBodyAs(response.body, SignInResponseSchema)?.data
+
+    // A verified account comes back with tokens; an unverified one comes back with
+    // `accessToken: null` and the SAME 200. Reporting that as a failed sign-in sends
+    // someone with the right password hunting for a wrong one.
+    if (!payload?.accessToken) {
+      return { status: 'email-unverified', email }
+    }
+
+    if (!adoptTokens(payload)) {
+      // A usable access token with nothing to renew it with is half a session: it
+      // would die in 7 days with no way back. Better to fail now.
+      return { status: 'failed' }
+    }
+
+    return await completeSignIn(payload.user ?? undefined)
+  } catch {
+    return { status: 'failed' }
+  }
+}
+
+/**
+ * Adopt a pair harvested from a provider flow.
+ *
+ * Separate from `signIn` because a provider flow produces no password and hands its
+ * tokens over out of band.
+ */
+export async function adoptProviderTokens(pair: TokenPair): Promise<EdgeSignInOutcome> {
+  if (!adoptTokens(pair)) {
+    return { status: 'failed' }
+  }
+
+  return completeSignIn(undefined)
+}
+
+/**
+ * Finish a sign-in by naming the user.
+ *
+ * Only a positive read will do: `no-session` and `unknown` both mean we cannot say
+ * who just signed in, which is a failed sign-in either way. Holding tokens we cannot
+ * attribute to anyone would show an account menu with no name in it.
+ */
+async function completeSignIn(known: EdgeUser | undefined): Promise<EdgeSignInOutcome> {
+  if (known) {
+    return { status: 'signed-in', user: known }
+  }
+
+  const read = await fetchUser()
+
+  if (read.status === 'signed-in') {
+    return { status: 'signed-in', user: read.user }
+  }
+
+  // Only a definitive "no session" throws the tokens away. `unknown` means the profile
+  // read never got an answer — and the tokens it would have confirmed were adopted a
+  // moment ago from a sign-in that WORKED. Forgetting them over a blip discarded a
+  // successful provider sign-in and sent the user back through the browser for nothing;
+  // kept, the next read of the account restores it without anyone doing anything.
+  if (read.status === 'no-session') {
+    forgetSession()
+  }
+
+  return { status: 'failed' }
+}
+
+/**
+ * End the session.
+ *
+ * Local state is cleared before the request is even attempted. Someone who asked to
+ * sign out must end up signed out even with the network down; leaving them looking at
+ * an account they just left is the worse outcome, and the server-side token expires
+ * on its own regardless.
+ */
+export async function signOut(): Promise<void> {
+  const stored = readRefreshToken()
+
+  forgetSession()
+
+  if (!stored) {
+    return
+  }
+
+  try {
+    await edgeRequest('/auth/logout', { method: 'POST', json: { refreshToken: stored } })
+  } catch {
+    // The token is the server's to revoke; it expires regardless.
+  }
+}
+
+/** Whether a session on this machine survives a restart. Surfaced to the UI. */
+export { isEncryptionAvailable } from './session-store'
+
+/** Test seam: drop in-memory state without touching what is on disk. */
+export function __resetInMemorySessionForTests(): void {
+  accessToken = null
+  accessTokenExpiresAtMs = 0
+  renewal = null
+}

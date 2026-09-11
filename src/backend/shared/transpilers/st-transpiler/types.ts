@@ -5,9 +5,8 @@
  * what the renderer store holds) and `backend/shared/types/PLC/open-plc.ts`
  * (schema shape, what `project.json` persists).  Callers project their
  * own shape into `TranspileProject` via the adapter helpers
- * (`from-schema.ts` here for the editor's IPC payload; openplc-web
- * ships a `transpile-from-port.ts` under middleware for its port-shape
- * renderer payload).
+ * (`from-schema.ts` here for the editor's IPC payload; the shared
+ * `../transpile-from-port.ts` for the renderer's port-shape payload).
  *
  * Carries ONLY the fields the transpiler actually reads — no
  * `servers`, no `remoteDevices`, no `libraries`, no `debugVariables`.

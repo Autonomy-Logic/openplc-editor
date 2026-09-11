@@ -44,7 +44,7 @@ const DECL_INDENT = '  '
  * This module is the ONE home of the suffix rule. Every path that emits a list —
  * the ST text here, the schema→IR projection in
  * `backend/shared/transpilers/st-transpiler/from-schema.ts`, and the port→IR
- * projection in `middleware/adapters/web/transpile-from-port.ts` — imports it
+ * projection in `backend/shared/transpilers/transpile-from-port.ts` — imports it
  * from here. A second copy would let the struct type stop matching its instance
  * and its `VAR_EXTERNAL` silently, which is the exact failure the module note
  * above warns about.

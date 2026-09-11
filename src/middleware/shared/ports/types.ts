@@ -543,6 +543,33 @@ export function isLibraryProject(meta: { type: 'plc-project' | 'plc-library' } |
 }
 
 /**
+ * True when a project identifier names a project held on Autonomy Edge rather
+ * than a file on this machine.
+ *
+ * `meta.path` carries both kinds. On the web it is always an Edge project id.
+ * On the desktop it is an Edge project id for a cloud project and an absolute
+ * path for one on disk, so an absolute path is the only thing that separates
+ * them — which is why this tests for one instead of guessing at id formats. A
+ * project id is opaque and its shape is the server's business; "starts with a
+ * slash or a drive letter" is a fact about filesystems that will not change.
+ *
+ * Version control is the caller this exists for: the git repository lives
+ * beside the project on the server, so a project sitting on disk has no
+ * history to show and no branches to switch.
+ */
+export function isRemoteProjectPath(identifier: string): boolean {
+  if (identifier.length === 0) {
+    return false
+  }
+
+  const isPosixAbsolute = identifier.startsWith('/')
+  // `C:\...` or `C:/...`, and `\\server\share` for a UNC path.
+  const isWindowsAbsolute = /^[A-Za-z]:[\\/]/.test(identifier) || identifier.startsWith('\\\\')
+
+  return !isPosixAbsolute && !isWindowsAbsolute
+}
+
+/**
  * Per-project-type capability matrix.  Drives every UI affordance
  * that depends on what kind of project is open: project tree
  * branches, sidebar actions, menu entries, the New Project modal's
@@ -1683,7 +1710,12 @@ export interface AIUsage {
  * `AISlice` as `billingError` for the exhaustion-modal consumer (DOPE-285).
  */
 export type BillingErrorPayload = {
-  code: 'insufficient_acu' | 'subscription_inactive' | 'rate_limit_exceeded'
+  /**
+   * The four refusals autonomy-edge's `CreditGuard` can raise. `subscription_past_due`
+   * is a lapsed payment method: the plan is still there, the card is not, and the only
+   * useful thing to show is the way to fix it.
+   */
+  code: 'insufficient_acu' | 'subscription_inactive' | 'rate_limit_exceeded' | 'subscription_past_due'
   message: string
   /** Set when `code === 'insufficient_acu'`. ACU remaining in the period. */
   remaining?: number

@@ -1,3 +1,54 @@
+import {
+  fetchPlanCaption as fetchEdgePlanCaption,
+  fetchUser as fetchEdgeUser,
+  isEncryptionAvailable,
+  signIn as signInToEdge,
+  signOut as signOutOfEdge,
+} from '@root/backend/editor/edge-account/edge-account-service'
+import {
+  type AiStreamHandle,
+  type AiStreamSink,
+  createConversation,
+  deleteConversation,
+  type EdgeAiResult,
+  fetchAiCredits,
+  fetchAiEntitlements,
+  fetchAiUsage,
+  getConversation,
+  listConversations,
+  renameConversation,
+  sendAiTelemetry,
+  streamAiChat,
+  streamAiCompletion,
+  warmAi,
+} from '@root/backend/editor/edge-ai'
+import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
+import {
+  listRecentCloudProjects,
+  readCloudProject,
+  saveCloudFile,
+  saveCloudProject,
+} from '@root/backend/editor/edge-projects'
+import {
+  applyStash,
+  createBranch,
+  createCommit,
+  createStash,
+  deleteBranch,
+  discardChanges,
+  dropStash,
+  getBranchDiffWithBase,
+  getChanges,
+  getCommitFiles,
+  listBranches,
+  listCommits,
+  listStashes,
+  mergeBranches,
+  popStash,
+  previewSwitchCarry,
+  restoreCommit,
+  switchBranch,
+} from '@root/backend/editor/edge-version-control'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
@@ -23,7 +74,9 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
+import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -36,16 +89,24 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  CloudFoldersResult,
+  CloudProjectsResult,
+  RawProjectFiles,
+  UploadProjectResult,
+} from '@root/middleware/shared/ports/project-port'
+import { WriteProjectFilesSchema } from '@root/middleware/shared/ports/project-port'
+import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
+import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
@@ -177,6 +238,48 @@ interface Md5VerifyReply {
   targetMd5?: string
   targetEndian?: 'le' | 'be'
   error?: string
+}
+
+/**
+ * A live AI stream, as the bridge sees it: what cancels the request, where its
+ * tokens are going, and how to unhook the listener watching for that window to
+ * go away.
+ */
+interface AiStream {
+  cancel: () => void
+  sender: WebContents
+}
+
+/**
+ * The telemetry events the renderer may send, as values rather than as a type.
+ *
+ * `satisfies` keeps the list honest in one direction only: a renamed or deleted
+ * event breaks the build here, but a NEW one has to be added here as well or it
+ * is silently dropped. That is the better half of the trade — an unchecked
+ * string from the renderer becomes an analytics event name, and a bug that
+ * produced `undefined` would write a bucket nobody can query out again.
+ */
+const AI_TELEMETRY_EVENTS = [
+  'completion_requested',
+  'completion_shown',
+  'completion_accepted',
+  'completion_dismissed',
+  'completion_error',
+  'completion_timeout',
+  'completion_empty',
+  'chat_message',
+  'chat_rating',
+  'conversation_created',
+  'conversation_loaded',
+  'conversation_renamed',
+  'conversation_deleted',
+  'acu_exhausted',
+  'upgrade_cta_clicked',
+] as const satisfies readonly AITelemetryEventName[]
+
+/** The telemetry event the renderer named, when this build knows it. */
+function toAiTelemetryEvent(value: unknown): AITelemetryEventName | undefined {
+  return AI_TELEMETRY_EVENTS.find((name) => name === value)
 }
 
 /**
@@ -837,6 +940,57 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('catalog:list', this.handleCatalogList)
+    // ----- Edge account (optional sign-in) -----
+    // All of it runs in the main process: the renderer is not on Edge's origin, so
+    // it can neither inherit a shared-domain cookie nor make the request itself.
+    this.registerHandle('edge-account:fetch-user', this.handleEdgeFetchUser)
+    this.registerHandle('edge-account:fetch-plan-caption', this.handleEdgeFetchPlanCaption)
+    this.registerHandle('edge-account:sign-in', this.handleEdgeSignIn)
+    this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
+    this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
+    // ----- Edge projects (the cloud half of the start screen) -----
+    this.registerHandle('edge-projects:list-recent', this.handleEdgeProjectsListRecent)
+    this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
+    this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
+    this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    // ----- Publishing a local project to Edge -----
+    this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
+    this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
+    // ----- Edge version control (branches, commits, changes, stashes) -----
+    this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
+    this.registerHandle('edge-vc:create-branch', this.handleEdgeVcCreateBranch)
+    this.registerHandle('edge-vc:delete-branch', this.handleEdgeVcDeleteBranch)
+    this.registerHandle('edge-vc:switch-branch', this.handleEdgeVcSwitchBranch)
+    this.registerHandle('edge-vc:preview-switch-carry', this.handleEdgeVcPreviewSwitchCarry)
+    this.registerHandle('edge-vc:list-commits', this.handleEdgeVcListCommits)
+    this.registerHandle('edge-vc:create-commit', this.handleEdgeVcCreateCommit)
+    this.registerHandle('edge-vc:get-commit-files', this.handleEdgeVcGetCommitFiles)
+    this.registerHandle('edge-vc:restore-commit', this.handleEdgeVcRestoreCommit)
+    this.registerHandle('edge-vc:get-changes', this.handleEdgeVcGetChanges)
+    this.registerHandle('edge-vc:discard-changes', this.handleEdgeVcDiscardChanges)
+    this.registerHandle('edge-vc:list-stashes', this.handleEdgeVcListStashes)
+    this.registerHandle('edge-vc:create-stash', this.handleEdgeVcCreateStash)
+    this.registerHandle('edge-vc:apply-stash', this.handleEdgeVcApplyStash)
+    this.registerHandle('edge-vc:pop-stash', this.handleEdgeVcPopStash)
+    this.registerHandle('edge-vc:drop-stash', this.handleEdgeVcDropStash)
+    this.registerHandle('edge-vc:branch-diff-with-base', this.handleEdgeVcBranchDiffWithBase)
+    this.registerHandle('edge-vc:merge-branches', this.handleEdgeVcMergeBranches)
+    // ----- Edge AI (chat, inline completion, billing surface, conversations) -----
+    // The last two are a pair: `stream-start` answers with an id, and everything
+    // the model produces arrives under it on `edge-ai:event` / `edge-ai:end` /
+    // `edge-ai:error`.
+    this.registerHandle('edge-ai:entitlements', this.handleEdgeAiEntitlements)
+    this.registerHandle('edge-ai:usage', this.handleEdgeAiUsage)
+    this.registerHandle('edge-ai:credits', this.handleEdgeAiCredits)
+    this.registerHandle('edge-ai:warm', this.handleEdgeAiWarm)
+    this.registerHandle('edge-ai:telemetry', this.handleEdgeAiTelemetry)
+    this.registerHandle('edge-ai:conversations-list', this.handleEdgeAiConversationsList)
+    this.registerHandle('edge-ai:conversations-get', this.handleEdgeAiConversationsGet)
+    this.registerHandle('edge-ai:conversations-create', this.handleEdgeAiConversationsCreate)
+    this.registerHandle('edge-ai:conversations-rename', this.handleEdgeAiConversationsRename)
+    this.registerHandle('edge-ai:conversations-delete', this.handleEdgeAiConversationsDelete)
+    this.registerHandle('edge-ai:stream-start', this.handleEdgeAiStreamStart)
+    this.registerHandle('edge-ai:stream-abort', this.handleEdgeAiStreamAbort)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -1288,6 +1442,772 @@ class MainProcessBridge implements MainIpcModule {
    * rather than thrown across the IPC boundary so the modal can
    * surface the failure without trying to read a rejected promise.
    */
+  // ===================== EDGE ACCOUNT =====================
+  // Signing in is OPTIONAL throughout. Every handler resolves to a value the renderer
+  // can render, none of them is an error the editor must recover from, and someone
+  // working offline on a local project never triggers any of it.
+
+  handleEdgeFetchUser = (_event: IpcMainInvokeEvent): Promise<EdgeUserRead> => fetchEdgeUser()
+
+  handleEdgeFetchPlanCaption = (_event: IpcMainInvokeEvent): Promise<string | null> => fetchEdgePlanCaption()
+
+  handleEdgeSignIn = (
+    _event: IpcMainInvokeEvent,
+    credentials: { email: string; password: string },
+  ): Promise<EdgeSignInOutcome> => {
+    // Validated rather than trusted: this crosses IPC, and a malformed payload must
+    // come back as a failed sign-in instead of throwing inside the handler and
+    // rejecting the invoke with a stack trace the UI cannot render.
+    if (typeof credentials?.email !== 'string' || typeof credentials?.password !== 'string') {
+      return Promise.resolve({ status: 'failed' })
+    }
+
+    return signInToEdge(credentials.email, credentials.password)
+  }
+
+  handleEdgeSignOut = (_event: IpcMainInvokeEvent): Promise<void> => signOutOfEdge()
+
+  /** Whether a session on this machine survives a restart — see `session-store`. */
+  handleEdgeIsSessionPersistent = (_event: IpcMainInvokeEvent): Promise<boolean> =>
+    Promise.resolve(isEncryptionAvailable())
+
+  // ===================== EDGE PROJECTS =====================
+  // The cloud round trip. Reads and writes go through the same session the account
+  // handlers use, so a revoked token is renewed once rather than per call site.
+
+  handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectsResult> => {
+    // Clamped rather than trusted: this crosses IPC, and an absurd limit would be
+    // forwarded straight into the API's own bounds check as a 400.
+    const requested = typeof limit === 'number' && Number.isInteger(limit) ? limit : 5
+
+    return listRecentCloudProjects(Math.min(Math.max(requested, 1), 50))
+  }
+
+  handleEdgeProjectsRead = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<RawProjectFiles> => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      return Promise.resolve({
+        success: false,
+        error: { title: 'Failed to open project', description: 'No project id was given.' },
+      })
+    }
+
+    return readCloudProject(projectId)
+  }
+
+  /**
+   * Takes `unknown` and validates, like the channels either side of it.
+   *
+   * It used to declare the parameter as `WriteProjectFiles` and check `projectPath`
+   * alone, which is a wish rather than a check: the renderer is where the payload comes
+   * from, and a TypeScript annotation on an IPC argument survives nothing. The whole
+   * payload becomes an envelope posted to Edge, and the backend deletes by omission —
+   * a missing `pouFiles` would ask it to delete every POU in the project.
+   */
+  handleEdgeProjectsSaveProject = (
+    _event: IpcMainInvokeEvent,
+    files: unknown,
+  ): Promise<{ success: boolean; error?: string }> => {
+    const parsed = WriteProjectFilesSchema.safeParse(files)
+
+    if (!parsed.success) {
+      return Promise.resolve({ success: false, error: 'The editor made an invalid save request.' })
+    }
+
+    return saveCloudProject(parsed.data)
+  }
+
+  handleEdgeProjectsSaveFile = (
+    _event: IpcMainInvokeEvent,
+    filePath: unknown,
+    content: unknown,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (typeof filePath !== 'string' || filePath.length === 0) {
+      return Promise.resolve({ success: false, error: 'No file path was given.' })
+    }
+
+    return saveCloudFile(filePath, content)
+  }
+
+  // -------------------------------------------------------------------------
+  // Edge version control
+  // -------------------------------------------------------------------------
+  //
+  // Every handler validates before it builds a URL. A non-string project id would
+  // otherwise be interpolated as `undefined` and ask the API about a project by that
+  // name, and a missing branch name would POST an empty one — both come back as a
+  // confusing 400 rather than as the local mistake they are.
+  //
+  // Optional arguments are normalised rather than forwarded: `undefined` arriving over
+  // IPC as `null` is the difference between "commit everything" and "commit no files".
+
+  /** Non-empty string, or nothing. */
+  private static vcString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.length > 0 ? value : undefined
+  }
+
+  /** Narrows an IPC argument to something indexable, without asserting. */
+  private static vcRecord(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value))
+      : {}
+  }
+
+  /** An array of non-empty strings, or nothing — never a partially valid list. */
+  private static vcStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+      return undefined
+    }
+
+    const strings = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+
+    return strings.length === value.length ? strings : undefined
+  }
+
+  private static readonly VC_BAD_REQUEST = {
+    ok: false,
+    failure: { kind: 'http', status: 400, message: 'The editor made an invalid version-control request.' },
+  } as const satisfies VersionControlResult<never>
+
+  handleEdgeUploadListFolders = (): Promise<CloudFoldersResult> => listCloudFolders()
+
+  /**
+   * Validates before it touches the filesystem. `projectPath` becomes a directory walk and
+   * `parentFolderId` becomes a form field the server trusts, so neither may arrive as
+   * anything but a non-empty string, and visibility is narrowed to the two the API accepts
+   * rather than forwarded — a typo would otherwise publish a project as public.
+   */
+  handleEdgeUploadProject = (_event: IpcMainInvokeEvent, params: unknown): Promise<UploadProjectResult> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const projectPath = MainProcessBridge.vcString(source.projectPath)
+    const parentFolderId = MainProcessBridge.vcString(source.parentFolderId)
+
+    if (!projectPath || !parentFolderId) {
+      return Promise.resolve({
+        status: 'failed',
+        failure: { reason: 'unreadable', message: 'The editor made an invalid upload request.' },
+      })
+    }
+
+    return uploadProjectToCloud({
+      projectPath,
+      parentFolderId,
+      projectName: MainProcessBridge.vcString(source.projectName),
+      // Anything but an explicit 'public' stays private. Guessing in the other direction
+      // would publish someone's work to the world on a malformed value.
+      visibility: source.visibility === 'public' ? 'public' : 'private',
+    })
+  }
+
+  handleEdgeVcBranchDiffWithBase = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    source: unknown,
+    target: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const from = MainProcessBridge.vcString(source)
+    const to = MainProcessBridge.vcString(target)
+
+    return id && from && to ? getBranchDiffWithBase(id, from, to) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcMergeBranches = (_event: IpcMainInvokeEvent, params: unknown): Promise<VersionControlResult<unknown>> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const projectId = MainProcessBridge.vcString(source.projectId)
+    const sourceBranch = MainProcessBridge.vcString(source.sourceBranch)
+    const targetBranch = MainProcessBridge.vcString(source.targetBranch)
+
+    if (!projectId || !sourceBranch || !targetBranch) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // Resolutions decide file CONTENT, so a malformed map is refused rather than partially
+    // forwarded: dropping an entry would merge with the wrong side of a conflict silently.
+    let resolutions: Record<string, string> | undefined
+
+    if (source.resolutions !== undefined) {
+      const record = MainProcessBridge.vcRecord(source.resolutions)
+      const entries = Object.entries(record)
+
+      if (!entries.every(([key, value]) => key.length > 0 && typeof value === 'string')) {
+        return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+      }
+
+      resolutions = Object.fromEntries(entries.map(([key, value]) => [key, String(value)]))
+    }
+
+    return mergeBranches({
+      projectId,
+      sourceBranch,
+      targetBranch,
+      commitMessage: MainProcessBridge.vcString(source.commitMessage),
+      resolutions,
+    })
+  }
+
+  handleEdgeVcListBranches = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? listBranches(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcCreateBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    name: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const branchName = MainProcessBridge.vcString(name)
+
+    return id && branchName ? createBranch(id, branchName) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDeleteBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    branchId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const branch = MainProcessBridge.vcString(branchId)
+
+    return id && branch ? deleteBranch(id, branch) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcSwitchBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    branchName: unknown,
+    strategy: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const name = MainProcessBridge.vcString(branchName)
+
+    if (!id || !name) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // Anything but an explicit 'carry' discards, which is the endpoint's own default and
+    // the safer reading of a malformed value: carrying edits on a guess could move work
+    // onto a branch the user did not mean to touch.
+    return switchBranch(id, name, strategy === 'carry' ? 'carry' : 'discard')
+  }
+
+  handleEdgeVcPreviewSwitchCarry = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    targetBranch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const target = MainProcessBridge.vcString(targetBranch)
+
+    return id && target ? previewSwitchCarry(id, target) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcListCommits = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    options: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    if (!id) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    const source = MainProcessBridge.vcRecord(options)
+    const limit = typeof source.limit === 'number' && Number.isInteger(source.limit) ? source.limit : undefined
+    const offset = typeof source.offset === 'number' && Number.isInteger(source.offset) ? source.offset : undefined
+
+    return listCommits(id, { limit, offset, branch: MainProcessBridge.vcString(source.branch) })
+  }
+
+  handleEdgeVcCreateCommit = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    message: unknown,
+    files: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitMessage = MainProcessBridge.vcString(message)
+
+    // Refused rather than dropped, for the reason `handleEdgeVcDiscardChanges` spells
+    // out: `vcStringArray` answers undefined for a partially valid list, and undefined
+    // means "all files" to `createCommit`. One non-string entry would turn "commit
+    // these three" into "commit the whole project".
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return id && commitMessage
+      ? createCommit(id, commitMessage, MainProcessBridge.vcStringArray(files), MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcGetCommitFiles = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    hash: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitHash = MainProcessBridge.vcString(hash)
+
+    return id && commitHash
+      ? getCommitFiles(id, commitHash, MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcRestoreCommit = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    hash: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitHash = MainProcessBridge.vcString(hash)
+
+    return id && commitHash
+      ? restoreCommit(id, commitHash, MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcGetChanges = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    includeContent: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? getChanges(id, includeContent === true) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDiscardChanges = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    files: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    if (!id) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // A malformed list is refused rather than dropped: silently discarding nothing when
+    // the user asked to discard three files would look like the button is broken, and
+    // silently discarding everything would destroy work.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return discardChanges(id, MainProcessBridge.vcStringArray(files))
+  }
+
+  handleEdgeVcListStashes = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? listStashes(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcCreateStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    message: unknown,
+    files: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    // Same refusal as commit and discard: undefined means "all files" downstream, so a
+    // malformed list would stash the whole project instead of the selection.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return id
+      ? createStash(id, MainProcessBridge.vcString(message), MainProcessBridge.vcStringArray(files))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcApplyStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? applyStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcPopStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? popStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDropStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? dropStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  // -------------------------------------------------------------------------
+  // Edge AI
+  // -------------------------------------------------------------------------
+  //
+  // Same discipline as the version-control channels above — every argument is
+  // narrowed before it becomes an HTTP request, because the renderer is not a
+  // trusted caller — plus the one thing those channels never had to do: chat
+  // and completion STREAM.
+  //
+  // `ipcMain.handle` is request/response, so a stream cannot be a single call.
+  // `edge-ai:stream-start` opens the upstream request and answers with an id;
+  // everything after that arrives as pushed events (`edge-ai:event`,
+  // `edge-ai:end`, `edge-ai:error`), each tagged with that id so a renderer
+  // running an inline completion and a chat answer at once can tell them apart.
+  //
+  // `edge-ai:event` carries the model's frames structured rather than as text,
+  // because a `tool_use` frame IS the feature: flattened to prose it disappears,
+  // and an assistant that cannot be seen asking to act reads as one that
+  // answered and then did nothing.
+  //
+  // `edge-ai:error` carries the module's `EdgeAiFailure` whole rather than a
+  // flattened message: signed-out, unreachable, billing and http are four
+  // different things to say to the user, and the non-streaming channels answer
+  // with that same union — so the renderer reads ONE failure shape everywhere.
+
+  /**
+   * The live streams, by id. This map is the only thing holding an open upstream
+   * request, so every way a stream can end has to remove its entry: the model
+   * finishing, the request failing, the renderer aborting, and the window going
+   * away mid-answer. An entry left behind is a socket nobody is reading and
+   * nobody will ever close.
+   */
+  private readonly aiStreams = new Map<string, AiStream>()
+
+  /**
+   * Narrows an IPC argument to a request body.
+   *
+   * Deliberately not `vcRecord`, which answers `{}` for anything unusable: an
+   * empty object is a well-formed body that would be POSTed as a request with
+   * no messages and come back from Edge as a confusing 400, instead of as the
+   * local mistake it is.
+   */
+  private static aiBody(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value))
+      : undefined
+  }
+
+  /** A count the API will accept, or nothing — never `NaN`, never negative. */
+  private static aiCount(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
+  }
+
+  private static readonly AI_BAD_REQUEST = {
+    ok: false,
+    failure: { kind: 'http', status: 400, message: 'The editor made an invalid AI request.' },
+  } as const satisfies EdgeAiResult<never>
+
+  handleEdgeAiEntitlements = () => fetchAiEntitlements()
+
+  handleEdgeAiUsage = () => fetchAiUsage()
+
+  handleEdgeAiCredits = () => fetchAiCredits()
+
+  /**
+   * Warm the prompt cache. `warmAi` resolves either way and answers nothing, so
+   * the result is manufactured here: every `edge-ai:*` channel answering the
+   * same union is what lets the renderer handle them all the same way.
+   */
+  handleEdgeAiWarm = async (): Promise<EdgeAiResult<null>> => {
+    await warmAi()
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Telemetry, refused unless the event is one this build knows.
+   *
+   * The name is written into an analytics record, so forwarding whatever string
+   * the renderer sent would let a bug — a template literal that produced
+   * `undefined`, say — create event names nobody can query out again.
+   */
+  handleEdgeAiTelemetry = async (
+    _event: IpcMainInvokeEvent,
+    name: unknown,
+    data: unknown,
+  ): Promise<EdgeAiResult<null>> => {
+    const telemetryEvent = toAiTelemetryEvent(name)
+
+    if (!telemetryEvent) {
+      // Loud, because the likeliest cause is not a malicious renderer but a new
+      // event added to the port's union and not to the list here — and a dropped
+      // analytics event is invisible by nature: nobody notices a graph that was
+      // never drawn. Logged and refused, never thrown: telemetry that fails must
+      // not take the request that carried it down.
+      logger.warn(`Refused an unknown AI telemetry event: ${typeof name === 'string' ? name : `(${typeof name})`}`)
+
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    await sendAiTelemetry(telemetryEvent, MainProcessBridge.vcRecord(data))
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * List conversations. Every option is narrowed rather than forwarded, because
+   * each one is stringified into the query: an object arriving as `limit` would
+   * ask Edge for `limit=[object Object]`, where a dropped option asks for the
+   * default the caller wanted anyway.
+   */
+  handleEdgeAiConversationsList = (_event: IpcMainInvokeEvent, options: unknown) => {
+    const source = MainProcessBridge.vcRecord(options)
+
+    return listConversations({
+      projectId: MainProcessBridge.vcString(source.projectId),
+      limit: MainProcessBridge.aiCount(source.limit),
+      offset: MainProcessBridge.aiCount(source.offset),
+    })
+  }
+
+  handleEdgeAiConversationsGet = (_event: IpcMainInvokeEvent, conversationId: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+
+    return id ? getConversation(id) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsCreate = (_event: IpcMainInvokeEvent, body: unknown) => {
+    const payload = MainProcessBridge.aiBody(body)
+
+    return payload ? createConversation(payload) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsRename = (_event: IpcMainInvokeEvent, conversationId: unknown, body: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+    const payload = MainProcessBridge.aiBody(body)
+
+    return id && payload ? renameConversation(id, payload) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsDelete = (_event: IpcMainInvokeEvent, conversationId: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+
+    return id ? deleteConversation(id) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  /**
+   * Open a stream and answer with the id its events will carry.
+   *
+   * The id is generated here rather than accepted from the renderer: it is the
+   * key of the cancellation map, and a renderer that reused one — two chat
+   * panels, or a remount — would abort somebody else's answer.
+   */
+  handleEdgeAiStreamStart = (event: IpcMainInvokeEvent, params: unknown): EdgeAiResult<{ streamId: string }> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const kind = source.kind
+    const body = MainProcessBridge.aiBody(source.body)
+
+    if ((kind !== 'chat' && kind !== 'completion') || !body) {
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    const streamId = randomUUID()
+    const sender = event.sender
+
+    this.watchAiSender(sender)
+
+    // Registered BEFORE the request starts, because the sink can fire on this
+    // same tick: a chunk delivered before the entry existed would be dropped on
+    // the floor, and a failure raised synchronously would leave an entry nothing
+    // ever removes. `cancel` is late-bound for the same reason — the handle that
+    // does the cancelling only exists once the call has returned.
+    let handle: AiStreamHandle | null = null
+    let cancelled = false
+
+    this.aiStreams.set(streamId, {
+      cancel: () => {
+        cancelled = true
+        handle?.cancel()
+      },
+      sender,
+    })
+
+    // `onStatus` is left unimplemented on purpose: it is optional and diagnostic,
+    // and a refusal never produces a chunk — whatever a consumer would do about
+    // the upstream status already reaches it as an `edge-ai:error` failure. A
+    // channel carrying it would be one more event with nothing on the far end.
+    const sink: AiStreamSink = {
+      // The frame crosses whole. Flattening to text here would strip `tool_use`,
+      // and a renderer that cannot see a tool call has no way to run it — the
+      // assistant would appear to answer and then do nothing.
+      onEvent: (event) => this.sendAiStreamEvent(streamId, 'edge-ai:event', { event }),
+      onEnd: () => {
+        this.sendAiStreamEvent(streamId, 'edge-ai:end', {})
+        this.forgetAiStream(streamId)
+      },
+      onFailure: (failure) => {
+        this.sendAiStreamEvent(streamId, 'edge-ai:error', { failure })
+        this.forgetAiStream(streamId)
+      },
+    }
+
+    try {
+      // The body crosses as the object the renderer sent, narrowed no further:
+      // what a chat or completion request must contain belongs to the edge-ai
+      // module and to the route behind it. A second copy of that shape here is
+      // the one nobody would remember to update.
+      handle = kind === 'chat' ? streamAiChat(body, sink) : streamAiCompletion(body, sink)
+    } catch (error) {
+      // Failures are supposed to arrive through the sink, so a throw here is the
+      // request never having been made at all. The entry and the window hook are
+      // already in place by this point, and leaving them would be a stream
+      // nothing can ever end — so they go before the failure is reported.
+      this.forgetAiStream(streamId)
+
+      return { ok: false, failure: { kind: 'unreachable', message: getErrorMessage(error) } }
+    }
+
+    // An abort that arrived while the request was being opened still has to
+    // land — at that point `cancel` above could only set the flag.
+    if (cancelled) {
+      handle.cancel()
+    }
+
+    return { ok: true, data: { streamId } }
+  }
+
+  /**
+   * Cancel a stream on the renderer's behalf.
+   *
+   * An id that is no longer live is answered as success rather than as an error:
+   * the user pressing stop races the model finishing, and both orders are
+   * ordinary. Cancelling emits no event — the module calls neither `onEnd` nor
+   * `onFailure` for a cancelled stream, and the renderer already knows.
+   */
+  handleEdgeAiStreamAbort = (_event: IpcMainInvokeEvent, streamId: unknown): EdgeAiResult<null> => {
+    const id = MainProcessBridge.vcString(streamId)
+
+    if (!id) {
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    this.abortAiStream(id)
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Push one event of a live stream to the window that asked for it.
+   *
+   * `send` on a destroyed `webContents` throws, and a stream whose reader is
+   * gone has no reason to keep running — so a destroyed target ends the stream
+   * rather than merely skipping the frame.
+   */
+  private sendAiStreamEvent(streamId: string, channel: string, payload: Record<string, unknown>) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    if (stream.sender.isDestroyed()) {
+      this.abortAiStream(streamId)
+      return
+    }
+
+    stream.sender.send(channel, { streamId, ...payload })
+  }
+
+  /** Forget a stream that has already finished. */
+  private forgetAiStream(streamId: string) {
+    this.aiStreams.delete(streamId)
+  }
+
+  /**
+   * The renderers whose streams this bridge is watching. A WeakSet so a window that
+   * goes away takes its entry with it, and so the check below is "have I hooked this
+   * one" rather than a counter that could drift from the truth.
+   */
+  private readonly watchedAiSenders = new WeakSet<WebContents>()
+
+  /**
+   * Hook the three ways a renderer stops being able to read its streams, ONCE per
+   * renderer rather than once per stream.
+   *
+   * `destroyed` is the window closing. It used to be the only hook, and it left the
+   * common case open: a RELOAD — Display → Refresh, Ctrl+R, or a dev-server hot reload —
+   * does not destroy the `WebContents`. The renderer's JS context dies with the
+   * generator that was reading the stream, nothing here noticed, the frames kept
+   * being sent into the void, and Edge ran the answer to completion. At that point the
+   * backend's controller sees `streamCompleted` and COMMITS the credit reservation
+   * instead of refunding it: the user paid in full for an answer that had nowhere to
+   * go. The web build never had the bug, because a reload closes the fetch and the
+   * server's `close` handler refunds.
+   *
+   * `did-start-navigation` covers the reload (and any other main-frame navigation), and
+   * `render-process-gone` covers a renderer crash, which has the same shape. Same-document
+   * navigations are skipped: a hash change is not a new JS context.
+   *
+   * Per renderer rather than per stream because each `once('destroyed')` was a new
+   * listener on the same emitter, and past ten concurrent streams Node warns about it.
+   */
+  private watchAiSender(sender: WebContents) {
+    if (this.watchedAiSenders.has(sender)) {
+      return
+    }
+
+    this.watchedAiSenders.add(sender)
+
+    const abortAll = () => this.abortAiStreamsFor(sender)
+
+    sender.on('destroyed', abortAll)
+    sender.on('render-process-gone', abortAll)
+    sender.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) {
+        abortAll()
+      }
+    })
+  }
+
+  /** Cancel every live stream a renderer was reading. */
+  private abortAiStreamsFor(sender: WebContents) {
+    for (const [streamId, stream] of this.aiStreams) {
+      if (stream.sender === sender) {
+        this.abortAiStream(streamId)
+      }
+    }
+  }
+
+  /** Forget a stream that has NOT finished, cancelling the request it holds open. */
+  private abortAiStream(streamId: string) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    this.forgetAiStream(streamId)
+    stream.cancel()
+  }
+
   handleCatalogList = async (
     _event: IpcMainInvokeEvent,
     args: ListPublicLibrariesArgs,
@@ -1490,9 +2410,18 @@ class MainProcessBridge implements MainIpcModule {
   handleWindowReload = () => {
     // The reload wipes the renderer's store back to 'disconnected', so the
     // session has to go with the emulator — otherwise main keeps holding an open
-    // simulator session that the reloaded UI has no idea about.
+    // simulator session that the reloaded UI has no idea about. An AI answer
+    // mid-stream is the same shape of leftover, with money on it: see
+    // `watchAiSender` for why it must not be left running.
     this.stopSimulator()
-    this.mainWindow?.webContents.reload()
+
+    const contents = this.mainWindow?.webContents
+
+    if (contents) {
+      this.abortAiStreamsFor(contents)
+    }
+
+    contents?.reload()
   }
   handleWindowRebuildMenu = () => {
     void this.menuBuilder.buildMenu().catch((error) => {

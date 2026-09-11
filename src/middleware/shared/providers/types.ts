@@ -44,9 +44,12 @@ export interface PlatformPorts {
   esi?: EsiPort
   ai?: AIPort
   /**
-   * Optional — the web build only. The desktop editor has no Edge account and
-   * sets `capabilities.hasEdgeAccount` false; gate on that capability rather than
-   * on this being present.
+   * Optional, because a platform may have no Edge account at all — the autonomy-node
+   * build talks to its own API, where Edge's account endpoints do not exist. Gate on
+   * `capabilities.hasEdgeAccount` rather than on this being present.
+   *
+   * Both the web editor and the desktop editor supply it. They differ in
+   * `requiresEdgeAccount`, not in whether an account exists.
    */
   edgeAccount?: EdgeAccountPort
   /**

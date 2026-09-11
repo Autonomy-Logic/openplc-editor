@@ -30,6 +30,7 @@
  */
 
 import type * as PdfJsLib from 'pdfjs-dist'
+import { z } from 'zod'
 
 import type { PrintRequest } from './print-types'
 import type { DeviceConfiguration, DevicePin, PLCProjectData, ProjectMeta, RecentProject, Unsubscribe } from './types'
@@ -154,6 +155,47 @@ export interface WriteProjectFiles {
   deletions: string[]
 }
 
+const RawProjectFileSchema = z.object({
+  relativePath: z.string(),
+  content: z.string(),
+}) satisfies z.ZodType<RawProjectFile>
+
+/**
+ * The same shape as a runtime check, for the boundaries that receive one from
+ * somewhere they do not control.
+ *
+ * The editor's `edge-projects:save-project` IPC channel is the reason it exists: it
+ * declared the parameter as `WriteProjectFiles` and validated only `projectPath`, so a
+ * renderer bug could send a payload with `pouFiles: undefined` and reach the save
+ * itself. A TypeScript annotation on an IPC argument is a wish, not a check — the
+ * neighbouring channels take `unknown` and narrow, and this is what they narrow with.
+ */
+export const WriteProjectFilesSchema = z.object({
+  projectPath: z.string().min(1),
+  projectJson: z.string(),
+  deviceConfig: z.string().optional(),
+  pinMapping: z.string().optional(),
+  libraryManifest: z.string().optional(),
+  pouFiles: z.array(RawProjectFileSchema),
+  serverFiles: z.array(RawProjectFileSchema),
+  remoteDeviceFiles: z.array(RawProjectFileSchema),
+  dataTypeFiles: z.array(RawProjectFileSchema),
+  deletions: z.array(z.string()),
+}) satisfies z.ZodType<WriteProjectFiles>
+
+/**
+ * Why a write did not land, when the platform can tell. `signed-out` is a session the
+ * server refused (401/403 or none at all); `unreachable` is a server that never answered
+ * or answered 5xx. Absent when the failure is neither — a bad request, a full disk.
+ */
+export type SaveFailureReason = 'signed-out' | 'unreachable'
+
+export interface SaveResult {
+  success: boolean
+  error?: string
+  reason?: SaveFailureReason
+}
+
 export interface CreatePouParams {
   name: string
   pouType: PouType
@@ -218,6 +260,19 @@ export interface RawProjectFiles {
      * "not pending" case (normal project, has `project.json`).
      */
     pendingPlcopenSource?: string
+    /**
+     * The file bytes exactly as the source handed them over, keyed by relative path.
+     *
+     * Present for a reader that has a notion of "as loaded" separate from the parsed
+     * result — a cloud project, whose bytes came off the wire. Absent for the filesystem
+     * reader, where the files on disk ARE the loaded state, and the sync point treats
+     * absent the same as nothing to echo.
+     *
+     * The save flow uses it to upload unedited files unchanged instead of re-serialising
+     * them, which is what keeps a save from rewriting every file in the editor's own
+     * formatting and reporting the whole project as modified.
+     */
+    rawLoadedFiles?: Record<string, string>
   }
   /**
    * `status` carries the HTTP status when the platform had one, for the same
@@ -228,7 +283,156 @@ export interface RawProjectFiles {
   error?: { title: string; description: string; status?: number }
 }
 
+/**
+ * The outcome of asking for the account's cloud projects.
+ *
+ * NOT just an array, and the distinction is the whole point: an empty list would
+ * collapse "you are not signed in", "you have no projects yet" and "we could not
+ * reach Edge" into one value, and the three call for completely different words on
+ * screen. Telling someone to sign in when they are already signed in and simply
+ * offline is the same class of bug `EdgeUserRead.unknown` exists to prevent.
+ */
+export type CloudProjectsResult =
+  | { status: 'ok'; projects: CloudProjectSummary[] }
+  /** The server answered, and there is no usable session. */
+  | { status: 'signed-out' }
+  /** The question could not be asked — offline, DNS, a dropped connection. */
+  | { status: 'unreachable' }
+  /** This build has no channel for cloud projects at all. */
+  | { status: 'unavailable' }
+
+/** A project on the user's Autonomy Edge account, as a list needs to show it. */
+export interface CloudProjectSummary {
+  id: string
+  name: string
+  /** IEC language slug, e.g. `st` / `ld`. Absent on projects that never set one. */
+  language?: string | null
+  /** ISO timestamp of the last change, which is what "recent" is ordered by. */
+  updatedAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Publishing a local project to Autonomy Edge
+// ---------------------------------------------------------------------------
+
+/** A destination the user can publish into. Flattened, with `depth` to read as a tree. */
+export interface CloudFolder {
+  id: string
+  /** Display-ready. The account's root folder is named after the user id on the wire. */
+  name: string
+  depth: number
+}
+
+export type CloudFoldersResult =
+  | { status: 'ok'; folders: CloudFolder[] }
+  | { status: 'signed-out' }
+  | { status: 'unreachable' }
+
+/**
+ * Why publishing did not happen, as data.
+ *
+ * Each case exists because the user's next move differs. "This folder is not an OpenPLC
+ * project" is a different problem from "your project is too big" and from "the connection
+ * dropped, so check Edge before trying again" — and the last one matters most: the upload
+ * is not idempotent, so an unanswered request may well have created the project.
+ */
+export type UploadProjectFailure =
+  | { reason: 'no-manifest' }
+  | { reason: 'empty' }
+  | { reason: 'too-many-files'; count: number }
+  | { reason: 'too-deep' }
+  | { reason: 'file-too-large'; relativePath: string; bytes: number }
+  | { reason: 'too-large'; bytes: number }
+  | { reason: 'unreadable'; message: string }
+  | { reason: 'signed-out' }
+  | { reason: 'unreachable'; message: string }
+  | { reason: 'rejected'; status: number; message: string }
+
+export type UploadProjectResult =
+  | { status: 'ok'; projectId: string | null; uploadedFiles: number }
+  | { status: 'failed'; failure: UploadProjectFailure }
+
+/**
+ * The three cloud answers, as runtime checks.
+ *
+ * The desktop adapter needs them because each arrives over IPC, where the declared
+ * type checks nothing — and every one of these unions exists precisely because the
+ * cases are worded differently to the user. An unrecognised shape falling through to
+ * the wrong branch is how a signed-out account gets told it has no projects, or an
+ * offline user gets sent to sign in. So an unreadable answer maps to the case that
+ * claims the least.
+ */
+export const CloudProjectsResultSchema = z.union([
+  z.object({
+    status: z.literal('ok'),
+    projects: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        language: z.string().nullish(),
+        updatedAt: z.string(),
+      }),
+    ),
+  }),
+  z.object({ status: z.literal('signed-out') }),
+  z.object({ status: z.literal('unreachable') }),
+  z.object({ status: z.literal('unavailable') }),
+]) satisfies z.ZodType<CloudProjectsResult>
+
+export const CloudFoldersResultSchema = z.union([
+  z.object({
+    status: z.literal('ok'),
+    folders: z.array(z.object({ id: z.string(), name: z.string(), depth: z.number() })),
+  }),
+  z.object({ status: z.literal('signed-out') }),
+  z.object({ status: z.literal('unreachable') }),
+]) satisfies z.ZodType<CloudFoldersResult>
+
+export const UploadProjectResultSchema = z.union([
+  z.object({ status: z.literal('ok'), projectId: z.string().nullable(), uploadedFiles: z.number() }),
+  z.object({
+    status: z.literal('failed'),
+    failure: z.discriminatedUnion('reason', [
+      z.object({ reason: z.literal('no-manifest') }),
+      z.object({ reason: z.literal('empty') }),
+      z.object({ reason: z.literal('too-many-files'), count: z.number() }),
+      z.object({ reason: z.literal('too-deep') }),
+      z.object({ reason: z.literal('file-too-large'), relativePath: z.string(), bytes: z.number() }),
+      z.object({ reason: z.literal('too-large'), bytes: z.number() }),
+      z.object({ reason: z.literal('unreadable'), message: z.string() }),
+      z.object({ reason: z.literal('signed-out') }),
+      z.object({ reason: z.literal('unreachable'), message: z.string() }),
+      z.object({ reason: z.literal('rejected'), status: z.number(), message: z.string() }),
+    ]),
+  }),
+]) satisfies z.ZodType<UploadProjectResult>
+
+export interface UploadProjectParams {
+  /** Absolute path of the project directory on this machine. */
+  projectPath: string
+  parentFolderId: string
+  /** Overrides the name inside `project.json`. */
+  projectName?: string
+  visibility: 'public' | 'private'
+}
+
 export interface ProjectPort {
+  /**
+   * Folders on Autonomy Edge the signed-in account can publish into.
+   *
+   * Optional: only a platform that can hold local projects AND reach Edge has anything to
+   * publish. Absent everywhere else, including the web build, where a project is already
+   * on Edge by definition.
+   */
+  listCloudFolders?(): Promise<CloudFoldersResult>
+
+  /**
+   * Archive a project on this machine and import it into Edge.
+   *
+   * Optional for the same reason as `listCloudFolders`.
+   */
+  uploadProjectToCloud?(params: UploadProjectParams): Promise<UploadProjectResult>
+
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
 
@@ -243,14 +447,14 @@ export interface ProjectPort {
   openProjectByPath(projectPath: string): Promise<ProjectResponse>
 
   /** Save the entire project. All files are pre-serialized by the frontend. */
-  saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }>
+  saveProject(files: WriteProjectFiles): Promise<SaveResult>
 
   /**
    * Save a single file within the project.
    * Editor: writes to disk.
    * Web: updates in-memory state and/or syncs to backend.
    */
-  saveFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }>
+  saveFile(filePath: string, content: unknown): Promise<SaveResult>
 
   /** Create a new POU file. */
   createPou(params: CreatePouParams): Promise<{ success: boolean; data?: unknown; error?: string }>
@@ -285,6 +489,23 @@ export interface ProjectPort {
 
   /** Get list of recently opened projects. */
   getRecentProjects(): Promise<RecentProject[]>
+
+  /**
+   * The most recently changed projects on the signed-in Autonomy Edge account.
+   *
+   * OPTIONAL, because not every platform lists cloud projects. The desktop editor does:
+   * it is the only place that shows local and cloud side by side, and reaching one from
+   * the other is the point. The web editor does not — it is always opened on a specific
+   * project, and Edge's own SPA is where a person browses them.
+   *
+   * Ordering is the server's (`updatedAt` descending). Sorting a truncated page here
+   * would be wrong: the five newest of ten fetched rows are not the five newest overall.
+   *
+   * Resolves a DISCRIMINATED result rather than a list, so the caller can tell being
+   * signed out from having no projects from being offline. Signing in is optional, so
+   * none of those is an error — but they are not the same thing to say.
+   */
+  listRecentCloudProjects?(limit: number): Promise<CloudProjectsResult>
 
   /**
    * Drop a project entry from the recent-projects list without

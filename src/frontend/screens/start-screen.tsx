@@ -5,6 +5,8 @@ import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
 import { VideoIcon } from '../assets/icons/interface/Video'
+import { StartAccountSection } from '../components/_features/[start]/account'
+import { StartCloudProjects } from '../components/_features/[start]/cloud-projects'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
@@ -14,6 +16,12 @@ import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
+  /**
+   * Bumped whenever something on this screen changes what is on the Edge account, so the
+   * cloud list re-reads. The two sections are siblings that know nothing about each
+   * other; this screen is the only place that knows both are here.
+   */
+  const [cloudRevision, setCloudRevision] = useState(0)
   const capabilities = useCapabilities()
   useSystem()
   const projectPort = useProject()
@@ -108,6 +116,9 @@ const StartScreen = () => {
             <MenuItem ghosted>
               <VideoIcon /> Tutorials
             </MenuItem>
+            {/* Above the divider, with the things you DO here. Below it is only
+                leaving, and the account is not on the way out. */}
+            <StartAccountSection />
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
@@ -119,7 +130,15 @@ const StartScreen = () => {
       </StartSideContent>
       <StartMainContent>
         <ProjectFilterBar setSearchFilterValue={searchFilter} />
-        <DisplayRecentProjects searchNameFilterValue={searchFilterValue} />
+        {/* Above the local list, and hidden entirely when there is nothing to show — so
+            an editor with no account, or nobody signed in, looks exactly as it did. The
+            filter box covers both sections, because a person searching for a project
+            does not care which side of the line it is on. */}
+        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} />
+        <DisplayRecentProjects
+          searchNameFilterValue={searchFilterValue}
+          onProjectUploaded={() => setCloudRevision((current) => current + 1)}
+        />
       </StartMainContent>
     </>
   )

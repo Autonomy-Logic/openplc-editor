@@ -51,6 +51,18 @@ function makeStContent(pouName: string, pouType: 'PROGRAM' | 'FUNCTION' | 'FUNCT
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — basic', () => {
+  it('says so when project.json is missing, instead of opening a default project in silence', () => {
+    // A cloud project whose `/details` answers `files: {}` — never saved, or lost
+    // server-side — used to open as a silent default, indistinguishable from a real
+    // empty project. The first save then wrote the defaults over whatever was meant
+    // to be there.
+    const result = parseProjectFiles('/my/project', '', makeDeviceConfig(), makePinMapping(), [], [], [])
+
+    expect(result.warnings?.some((w) => w.includes('project.json was missing or empty'))).toBe(true)
+    // Still opens — the warning is the point, not a refusal.
+    expect(result.meta.path).toBe('/my/project')
+  })
+
   it('parses a minimal valid project with no POU files', () => {
     const result = parseProjectFiles('/my/project', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], [], [])
     expect(result.meta.name).toBe('TestProject')

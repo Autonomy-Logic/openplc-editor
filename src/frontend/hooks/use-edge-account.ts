@@ -192,6 +192,33 @@ export function useEdgeAccount(enabled: boolean, account?: EdgeAccountPort): Use
   }, [active, account])
 
   /**
+   * Adopt a sign-in that happened somewhere else in the app.
+   *
+   * Every consumer of this hook holds its own state, and only the one whose dialog
+   * performed the sign-in calls `refresh`. So a second consumer — the project card
+   * menu deciding whether to offer "Upload to Cloud" — kept showing the signed-out
+   * answer until it happened to remount, which is why closing the app or opening a
+   * project and coming back appeared to fix it.
+   *
+   * The session already broadcasts this: a read that finds a user calls
+   * `markRestored()`, and that fires here for every listener. Cheaper and more
+   * honest than polling, and it is the same signal the cloud project list uses.
+   *
+   * `onExpired` below covers the other direction. Not scoped to a status: a
+   * consumer that is already `signed-in` still needs to re-read, because the
+   * account that signed in may not be the one it was showing.
+   */
+  useEffect(() => {
+    if (!active || !account) {
+      return
+    }
+
+    return account.session.onRestored(() => {
+      void refresh()
+    })
+  }, [active, account, refresh])
+
+  /**
    * Re-check when this tab regains focus while signed out.
    *
    * The provider flow finishes in a separate tab, so nothing in this one knows it

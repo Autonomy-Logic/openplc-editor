@@ -1,7 +1,9 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { LayoutDashboard, LogOut, Settings, User } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import type { EdgeUser } from '../../../../middleware/shared/ports/edge-account-port'
+import { cn } from '../../../utils/cn'
 import { EdgeAvatar } from '../../_atoms/edge-avatar'
 
 /**
@@ -35,6 +37,26 @@ interface EdgeAccountMenuProps {
    */
   edgeBaseUrl: string
   /**
+   * Size/shape for the trigger avatar.
+   *
+   * The activity bar wants the default — it is a column of its own and the avatar is
+   * the whole control. The start screen is a text menu whose icons are 20px, and an
+   * avatar that ignores that reads as misaligned rather than prominent.
+   */
+  avatarClassName?: string
+  /**
+   * Rendered inside the trigger, after the avatar.
+   *
+   * Exists so the whole row can be the trigger rather than just the avatar. In the
+   * activity bar a bare avatar is an obvious target, because it is the only thing in
+   * its column. In a text menu the name sits right beside it and is what a person
+   * actually aims at — leaving that outside the trigger means clicking the obvious
+   * place does nothing.
+   */
+  label?: ReactNode
+  /** Trigger geometry, for a caller that needs it to match a row of other controls. */
+  triggerClassName?: string
+  /**
    * Which way the menu opens. Defaults to `right` because this lives in the
    * activity bar, a ~48px strip — a menu dropping straight down would be clipped
    * by the window edge on short viewports.
@@ -47,7 +69,16 @@ const ITEM_CLASSES =
 const ICON_CLASSES = 'h-4 w-4 shrink-0 text-neutral-500 dark:text-neutral-400'
 const LABEL_CLASSES = 'text-sm text-neutral-900 dark:text-neutral-100'
 
-const EdgeAccountMenu = ({ user, planCaption, onSignOut, edgeBaseUrl, side = 'right' }: EdgeAccountMenuProps) => {
+const EdgeAccountMenu = ({
+  user,
+  planCaption,
+  onSignOut,
+  edgeBaseUrl,
+  side = 'right',
+  avatarClassName,
+  label,
+  triggerClassName,
+}: EdgeAccountMenuProps) => {
   const edgeBase = edgeBaseUrl
   // Same destinations Edge's own dropdown navigates to. `/profile` rather than
   // `/{username}`: the latter is the public profile page, not the account one the
@@ -62,14 +93,19 @@ const EdgeAccountMenu = ({ user, planCaption, onSignOut, edgeBaseUrl, side = 'ri
         <button
           type='button'
           aria-label={`Account: ${user.name}`}
-          className='cursor-pointer rounded-full outline-none ring-offset-1 focus-visible:ring-2 focus-visible:ring-brand'
+          className={cn(
+            'cursor-pointer rounded-full outline-none ring-offset-1 focus-visible:ring-2 focus-visible:ring-brand',
+            triggerClassName,
+          )}
         >
           <EdgeAvatar
             name={user.name}
             imageSrc={user.profileImage}
             customInitials={user.customInitials}
             initialsColor={user.initialsColor}
+            className={avatarClassName}
           />
+          {label}
         </button>
       </DropdownMenu.Trigger>
 

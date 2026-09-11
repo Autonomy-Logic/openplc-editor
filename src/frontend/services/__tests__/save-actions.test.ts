@@ -8,11 +8,13 @@
  * `pou.body.value`, so it must never be reported as saved.
  */
 
+import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import type { PlatformCapabilities } from '../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import { openPLCStoreBase } from '../../store'
 import type { LadderFlowType } from '../../store/slices/ladder'
 import { getMemoryState } from '../../utils/toast'
+import { hasSaveWaitingForSignIn, resetResumeSaveForTests } from '../resume-save-after-sign-in'
 import { buildAllProjectFileContentsPure, executeSaveFile, executeSaveProject } from '../save-actions'
 
 /**
@@ -29,7 +31,21 @@ function makeProjectPort(): ProjectPort {
   return {
     saveProject: vi.fn().mockResolvedValue({ success: true }),
     saveFile: vi.fn().mockResolvedValue({ success: true }),
+    // What Save As asks for when a cloud write falls back to disk.
+    pickPath: vi.fn().mockResolvedValue({ success: true, path: '/local/copy' }),
+    trackRecentProject: vi.fn().mockResolvedValue({ success: true }),
   } as unknown as ProjectPort
+}
+
+/** A session that is alive as far as the renewal layer knows — the write is what says otherwise. */
+function liveSession(): EdgeSessionState {
+  return {
+    isExpired: () => false,
+    isAbsent: () => false,
+    onExpired: () => () => undefined,
+    onRestored: () => () => undefined,
+    markRestored: () => undefined,
+  }
 }
 
 function createLadderPou(name: string) {
@@ -108,6 +124,79 @@ describe('save-actions', () => {
         const result = await executeSaveProject(projectPort, capabilities)
         expect(result.success).toBe(true)
         expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+    })
+
+    /**
+     * The write itself now says why it failed. The queue used to engage only when the
+     * renewal layer had already marked the session expired — which on the desktop it
+     * never does, since the save is not a request that layer made.
+     */
+    describe('a cloud write that did not land', () => {
+      let previousPath: string
+
+      beforeEach(() => {
+        resetResumeSaveForTests(liveSession())
+        previousPath = openPLCStoreBase.getState().project.meta.path
+      })
+
+      afterEach(() => {
+        resetResumeSaveForTests()
+        openPLCStoreBase.getState().projectActions.updateMetaPath(previousPath)
+      })
+
+      it('queues the save for sign-in when the write says the session is gone', async () => {
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveProject).mockResolvedValue({ success: false, reason: 'signed-out' })
+
+        const result = await executeSaveProject(projectPort, capabilities)
+
+        expect(result.success).toBe(false)
+        expect(hasSaveWaitingForSignIn()).toBe(true)
+        expect(projectPort.pickPath).not.toHaveBeenCalled()
+        expect(lastToast()).toMatchObject({ title: 'Not saved — your session ended', variant: 'fail' })
+      })
+
+      it('falls back to Save As on the desktop when Autonomy Edge cannot be reached', async () => {
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveProject)
+          .mockResolvedValueOnce({ success: false, reason: 'unreachable' })
+          .mockResolvedValue({ success: true })
+
+        const result = await executeSaveProject(projectPort, { ...capabilities, hasLocalFilesystem: true })
+
+        expect(result.success).toBe(true)
+        expect(projectPort.pickPath).toHaveBeenCalled()
+        // The second write is the local copy, and the project now lives there.
+        expect(vi.mocked(projectPort.saveProject).mock.calls[1][0].projectPath).toBe('/local/copy')
+        expect(openPLCStoreBase.getState().project.meta.path).toBe('/local/copy')
+        expect(hasSaveWaitingForSignIn()).toBe(false)
+      })
+
+      it('reports the failure on the web, which has no disk to fall back to', async () => {
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveProject).mockResolvedValue({
+          success: false,
+          reason: 'unreachable',
+          error: 'offline',
+        })
+
+        const result = await executeSaveProject(projectPort, { ...capabilities, hasLocalFilesystem: false })
+
+        expect(result.success).toBe(false)
+        expect(projectPort.pickPath).not.toHaveBeenCalled()
+        expect(lastToast()).toMatchObject({ title: 'Error in the save request!', description: 'offline' })
+      })
+
+      it('reports a cancelled Save As as an unsaved project', async () => {
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveProject).mockResolvedValue({ success: false, reason: 'unreachable' })
+        vi.mocked(projectPort.pickPath).mockResolvedValue({ success: false })
+
+        const result = await executeSaveProject(projectPort, { ...capabilities, hasLocalFilesystem: true })
+
+        expect(result.success).toBe(false)
+        expect(openPLCStoreBase.getState().workspace.editingState).toBe('unsaved')
       })
     })
 
@@ -358,6 +447,57 @@ describe('save-actions', () => {
       expect(result.success).toBe(false)
       expect(projectPort.saveFile).not.toHaveBeenCalled()
       expect(flowUpdated('BrokenFile')).toBe(true)
+    })
+
+    describe('a cloud write that did not land', () => {
+      let previousPath: string
+
+      beforeEach(() => {
+        resetResumeSaveForTests(liveSession())
+        previousPath = openPLCStoreBase.getState().project.meta.path
+      })
+
+      afterEach(() => {
+        resetResumeSaveForTests()
+        openPLCStoreBase.getState().projectActions.updateMetaPath(previousPath)
+      })
+
+      it('queues the file for sign-in when the write says the session is gone', async () => {
+        createLadderPou('CloudFile')
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, reason: 'signed-out' })
+
+        const result = await executeSaveFile('CloudFile', projectPort, capabilities)
+
+        expect(result.success).toBe(false)
+        expect(hasSaveWaitingForSignIn()).toBe(true)
+        expect(lastToast()?.description).toContain('"CloudFile" saves on its own')
+      })
+
+      it('falls back to Save As for the whole project on the desktop when Autonomy Edge cannot be reached', async () => {
+        createLadderPou('OfflineFile')
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, reason: 'unreachable' })
+
+        const result = await executeSaveFile('OfflineFile', projectPort, { ...capabilities, hasLocalFilesystem: true })
+
+        expect(result.success).toBe(true)
+        expect(projectPort.pickPath).toHaveBeenCalled()
+        expect(projectPort.saveProject).toHaveBeenCalled()
+        expect(hasSaveWaitingForSignIn()).toBe(false)
+      })
+
+      it('still names a plain write failure as one', async () => {
+        createLadderPou('BrokenDisk')
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, error: 'disk full' })
+
+        const result = await executeSaveFile('BrokenDisk', projectPort, { ...capabilities, hasLocalFilesystem: true })
+
+        expect(result.success).toBe(false)
+        expect(projectPort.pickPath).not.toHaveBeenCalled()
+        expect(lastToast()).toMatchObject({ title: 'Error saving file', description: 'disk full' })
+      })
     })
 
     it('writes a valid flow normally', async () => {

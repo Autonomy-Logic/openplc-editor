@@ -11,18 +11,33 @@
  */
 
 import type * as PdfJsLib from 'pdfjs-dist'
+import { z } from 'zod'
 
 import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import { buildProjectResponseFromPlcopenParse } from '../../../frontend/utils/PLC/build-plcopen-project-response'
+import { parsePlcopenXml } from '../../../frontend/utils/PLC/xml-parser'
+import type { EdgeAccountPort } from '../../shared/ports/edge-account-port'
 import type { PrintRequest } from '../../shared/ports/print-types'
 import type {
+  CloudFoldersResult,
+  CloudProjectsResult,
   CreatePouParams,
   CreateProjectParams,
   ProjectPort,
   ProjectResponse,
+  RawProjectFile,
   RawProjectFiles,
   RenamePouParams,
+  SaveResult,
+  UploadProjectParams,
+  UploadProjectResult,
   WriteProjectFiles,
+} from '../../shared/ports/project-port'
+import {
+  CloudFoldersResultSchema,
+  CloudProjectsResultSchema,
+  UploadProjectResultSchema,
 } from '../../shared/ports/project-port'
 import type {
   DeviceConfiguration,
@@ -36,6 +51,8 @@ import type {
   RecentProject,
   Unsubscribe,
 } from '../../shared/ports/types'
+import { isRemoteProjectPath } from '../../shared/ports/types'
+import { editorEdgeAccountPort } from './edge-account-adapter'
 import { applyPdfJsEnginePolyfills } from './services/pdf-export/pdfjs-engine-polyfills'
 
 /** Editor IPC POU shape (discriminated union). */
@@ -178,7 +195,149 @@ function mapIpcResponse(
   }
 }
 
-export function createEditorProjectAdapter(): ProjectPort {
+const RawProjectFileSchema = z.object({
+  relativePath: z.string(),
+  content: z.string(),
+}) satisfies z.ZodType<RawProjectFile>
+
+/**
+ * The raw files as the main process answers them, checked rather than asserted: the bridge
+ * type is a description of what it is meant to send, and a skewed main bundle used to be
+ * read straight through into the parser. `dataTypeFiles` falls back to none — a main
+ * process that predates `.dt` files sends nothing, and must not stop the project opening.
+ */
+const RawProjectFilesSchema = z.object({
+  success: z.boolean(),
+  data: z
+    .object({
+      projectPath: z.string(),
+      projectJson: z.string(),
+      deviceConfig: z.string(),
+      pinMapping: z.string(),
+      libraryManifest: z.string(),
+      pouFiles: z.array(RawProjectFileSchema),
+      serverFiles: z.array(RawProjectFileSchema),
+      remoteDeviceFiles: z.array(RawProjectFileSchema),
+      dataTypeFiles: z.array(RawProjectFileSchema).catch([]),
+      canEdit: z.boolean().optional(),
+      readme: z.string().nullish(),
+      pendingPlcopenSource: z.string().optional(),
+      rawLoadedFiles: z.record(z.string()).optional(),
+    })
+    .optional(),
+  error: z.object({ title: z.string(), description: z.string(), status: z.number().optional() }).optional(),
+})
+
+const UNREADABLE_PROJECT_FILES: RawProjectFiles = {
+  success: false,
+  error: {
+    title: 'Failed to open project',
+    description: 'The project files arrived in a shape this build of the editor cannot read.',
+  },
+}
+
+/** Validate a raw-files answer from either reader, or refuse it as unreadable. */
+function readRawProjectFiles(answer: unknown): RawProjectFiles {
+  const parsed = RawProjectFilesSchema.safeParse(answer)
+
+  return parsed.success ? parsed.data : UNREADABLE_PROJECT_FILES
+}
+
+/** The envelope a cloud write answers with. The main process reports a failure as text only. */
+const CloudWriteAnswerSchema = z.object({ success: z.boolean(), error: z.string().optional() })
+
+/**
+ * Turn a cloud write's answer into the result the save flow branches on.
+ *
+ * The main process says only THAT a write failed. Whether a session still exists is
+ * what the save flow needs to know — queue for sign-in, or keep the work locally — and
+ * asking the account is what answers it. A `no-session` read also marks the session gone
+ * for every consumer of the account, which is what puts the sign-in control back on screen.
+ */
+async function classifyCloudWrite(answer: unknown, account: EdgeAccountPort): Promise<SaveResult> {
+  const parsed = CloudWriteAnswerSchema.safeParse(answer)
+  const result: SaveResult = parsed.success
+    ? parsed.data
+    : { success: false, error: 'Autonomy Edge answered in a way this build cannot read.' }
+
+  if (result.success) {
+    return result
+  }
+
+  const read = await account.fetchUser()
+
+  return { ...result, reason: read.status === 'no-session' ? 'signed-out' : 'unreachable' }
+}
+
+/**
+ * Whether an identifier names a project on Autonomy Edge rather than one on disk.
+ *
+ * The editor opens both, and `project.meta.path` is the single identifier every save flows
+ * through — so this decides which world a project belongs to. It delegates rather than
+ * deciding: the shared UI needs the same answer to know whether to offer version control,
+ * and two copies of this test would eventually disagree about a Windows path and send a
+ * save to the wrong place. The name stays because the save flow reads better for it.
+ */
+export const isCloudProjectId = isRemoteProjectPath
+
+/**
+ * The cloud read, refusing rather than throwing when the channel is not there.
+ *
+ * The listing channels each check this and say why: the preload bundle and the
+ * renderer bundle are built separately and can skew, and a running app whose main
+ * process predates a channel has no such method. Without the check the call raises
+ * "is not a function", and that rejection escapes `openProjectByPath` to callers that
+ * do not catch it — the cloud-projects card among them, which takes the start screen
+ * down over one stale bundle.
+ */
+async function readCloudProjectFiles(projectId: string): Promise<RawProjectFiles> {
+  if (typeof window.bridge.edgeProjectsRead !== 'function') {
+    return {
+      success: false,
+      error: {
+        title: 'Failed to open project',
+        description: 'This build of the editor cannot open cloud projects.',
+      },
+    }
+  }
+
+  // The channel guard above only prevents "is not a function". `ipcRenderer.invoke`
+  // rejects on its own account too — the main handler threw, the channel exists in
+  // preload but not in main, or an argument would not structured-clone — and that
+  // rejection escapes `openProjectByPath` to callers that do not catch it. The folder
+  // and upload calls below already contain theirs for exactly this reason.
+  return window.bridge.edgeProjectsRead(projectId).then(
+    readRawProjectFiles,
+    (error: unknown): RawProjectFiles => ({
+      success: false,
+      error: {
+        title: 'Failed to open project',
+        description: error instanceof Error ? error.message : 'Autonomy Edge could not be reached.',
+      },
+    }),
+  )
+}
+
+/** What a cloud write answers when the channel it needs is not in this build. */
+const NO_CLOUD_WRITE_CHANNEL = {
+  success: false,
+  error: 'This build of the editor cannot save cloud projects.',
+} as const
+
+/**
+ * What a cloud write answers when the IPC call itself rejected.
+ *
+ * Distinct from the missing-channel case above: the channel was there and the call
+ * failed, which the user can act on. Either way the save flow gets the failure shape
+ * it already handles instead of an escaping rejection.
+ */
+const cloudWriteFailure = (error: unknown): SaveResult => ({
+  success: false,
+  error: error instanceof Error ? error.message : 'The save could not be sent to Autonomy Edge.',
+})
+
+/** `account` is what a failed cloud write asks whether a session still exists; the editor's own port by default. */
+export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdgeAccountPort): ProjectPort {
   return {
     async createProject(params: CreateProjectParams): Promise<ProjectResponse> {
       const response = (await window.bridge.createProject({
@@ -199,7 +358,7 @@ export function createEditorProjectAdapter(): ProjectPort {
         return { success: false, error: pickResult.error ?? { title: 'Cancelled', description: 'No project selected' } }
       }
       // Read raw files and parse on the frontend
-      const raw = (await window.bridge.readProjectFiles(pickResult.path)) as RawProjectFiles
+      const raw = readRawProjectFiles(await window.bridge.readProjectFiles(pickResult.path))
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
@@ -212,19 +371,47 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // Array guard: the IPC payload is a cast, not validated — a
-        // version-skewed main process must not crash project open.
-        Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+        raw.data.dataTypeFiles,
       )
       return { success: true, data: parsed }
     },
 
     async openProjectByPath(projectPath: string): Promise<ProjectResponse> {
-      // Read raw files and parse on the frontend
-      const raw = (await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles
+      // Read raw files and parse on the frontend. The parsing below is identical either
+      // way — only where the bytes come from differs, which is the whole point of the
+      // cloud reader returning the same `RawProjectFiles` the filesystem one does.
+      const raw = isCloudProjectId(projectPath)
+        ? await readCloudProjectFiles(projectPath)
+        : readRawProjectFiles(await window.bridge.readProjectFiles(projectPath))
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
+
+      /**
+       * A project uploaded as raw PLCopen XML has no `project.json` and no POUs — only
+       * Node's `plcopen-pending-import.xml` marker, stored verbatim because nothing
+       * parses it server-side. Handing that to `parseProjectFiles` loads schema
+       * defaults and ignores the XML entirely, so the project opens EMPTY: the imported
+       * program is on the server, and the editor shows a blank one over it.
+       *
+       * The web adapter has had this branch since the marker existed; the desktop
+       * inherited the reader without it. `wasPendingPlcopenImport` tells the caller to
+       * save immediately, which prunes the marker — Node's save deletes what the
+       * payload omits.
+       */
+      const pending = raw.data.pendingPlcopenSource
+
+      if (pending !== undefined && pending.length > 0) {
+        return {
+          success: true,
+          data: {
+            ...buildProjectResponseFromPlcopenParse(parsePlcopenXml(pending), raw.data.projectPath),
+            wasPendingPlcopenImport: true,
+            canEdit: raw.data.canEdit,
+          },
+        }
+      }
+
       const parsed = parseProjectFiles(
         raw.data.projectPath,
         raw.data.projectJson,
@@ -234,11 +421,32 @@ export function createEditorProjectAdapter(): ProjectPort {
         raw.data.serverFiles,
         raw.data.remoteDeviceFiles,
         raw.data.libraryManifest,
-        // Array guard: the IPC payload is a cast, not validated — a
-        // version-skewed main process must not crash project open.
-        Array.isArray(raw.data.dataTypeFiles) ? raw.data.dataTypeFiles : [],
+        raw.data.dataTypeFiles,
       )
-      return { success: true, data: parsed }
+      return {
+        success: true,
+        data: {
+          ...parsed,
+          /**
+           * Carried through so the save flow can echo unedited files back byte-for-byte
+           * instead of re-serialising them. `RawProjectFiles` only has it for a cloud
+           * project — the filesystem reader has the files on disk and no separate notion of
+           * "as loaded" — so it is absent for a local one, which the sync point treats the
+           * same as having nothing to echo.
+           */
+          rawLoadedFiles: raw.data.rawLoadedFiles,
+          /**
+           * Whether this account may persist changes, straight from the server's own
+           * capabilities. Dropping it made the store fall back to "editable", which left
+           * the read-only guards dead on the desktop: a viewer saw Commit, Discard and
+           * Restore enabled and found out only when Edge refused the write.
+           *
+           * Absent for a project on disk, where there is no remote permission to speak of,
+           * and the store reads absent as editable — which is correct there.
+           */
+          canEdit: raw.data.canEdit,
+        },
+      }
     },
 
     async trackRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }> {
@@ -246,10 +454,18 @@ export function createEditorProjectAdapter(): ProjectPort {
     },
 
     async readProjectFiles(projectPath: string): Promise<RawProjectFiles> {
-      return (await window.bridge.readProjectFiles(projectPath)) as RawProjectFiles
+      return readRawProjectFiles(await window.bridge.readProjectFiles(projectPath))
     },
 
-    async saveProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
+    async saveProject(files: WriteProjectFiles): Promise<SaveResult> {
+      if (isCloudProjectId(files.projectPath)) {
+        if (typeof window.bridge.edgeProjectsSaveProject !== 'function') {
+          return NO_CLOUD_WRITE_CHANNEL
+        }
+
+        return classifyCloudWrite(await window.bridge.edgeProjectsSaveProject(files).catch(cloudWriteFailure), account)
+      }
+
       const response = (await window.bridge.writeProjectFiles(files)) as { success: boolean; error?: string }
       if (!response.success) {
         return { success: false, error: response.error ?? 'Save failed' }
@@ -257,7 +473,20 @@ export function createEditorProjectAdapter(): ProjectPort {
       return { success: true }
     },
 
-    async saveFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> {
+    async saveFile(filePath: string, content: unknown): Promise<SaveResult> {
+      // `projectId/relative/path` for a cloud project, an absolute path for a local one.
+      // Both arrive here from the same shared save flow.
+      if (isCloudProjectId(filePath)) {
+        if (typeof window.bridge.edgeProjectsSaveFile !== 'function') {
+          return NO_CLOUD_WRITE_CHANNEL
+        }
+
+        return classifyCloudWrite(
+          await window.bridge.edgeProjectsSaveFile(filePath, content).catch(cloudWriteFailure),
+          account,
+        )
+      }
+
       return window.bridge.saveFile(filePath, content)
     },
 
@@ -317,6 +546,90 @@ export function createEditorProjectAdapter(): ProjectPort {
 
     async pickPath(): Promise<{ success: boolean; path?: string; error?: { title: string; description: string } }> {
       return window.bridge.pathPicker()
+    },
+
+    /**
+     * Where a local project can be published. Guarded like `listRecentCloudProjects`: a
+     * renderer paired with a main process that predates this channel would otherwise raise
+     * "is not a function" and take the start screen down over a menu item nobody clicked.
+     */
+    async listCloudFolders(): Promise<CloudFoldersResult> {
+      if (typeof window.bridge.edgeUploadListFolders !== 'function') {
+        return { status: 'unreachable' }
+      }
+
+      const result = await window.bridge.edgeUploadListFolders().catch(
+        (): CloudFoldersResult => ({
+          status: 'unreachable',
+        }),
+      )
+
+      // Shape-checked, not trusted: a stale main bundle answering with something else
+      // must not become an empty folder list, which would read as "you have no folders".
+      // Validated rather than probed for a `status` key — the `ok` case carries the
+      // folders the picker renders, and half of one is not better than none.
+      const parsed = CloudFoldersResultSchema.safeParse(result)
+
+      return parsed.success ? parsed.data : { status: 'unreachable' }
+    },
+
+    async uploadProjectToCloud(params: UploadProjectParams): Promise<UploadProjectResult> {
+      if (typeof window.bridge.edgeUploadProject !== 'function') {
+        return {
+          status: 'failed',
+          failure: { reason: 'unreadable', message: 'This build of the editor cannot publish to Autonomy Edge.' },
+        }
+      }
+
+      const answer = await window.bridge.edgeUploadProject(params).catch(
+        (error: unknown): UploadProjectResult => ({
+          status: 'failed',
+          // A rejection here is the IPC call itself failing, which says nothing about
+          // whether the import ran. Reported as unreachable for that reason.
+          failure: { reason: 'unreachable', message: error instanceof Error ? error.message : 'The upload failed.' },
+        }),
+      )
+
+      const parsed = UploadProjectResultSchema.safeParse(answer)
+
+      // Same reasoning as the rejection above, and the same wording: an answer we
+      // cannot read leaves it unknown whether the project was created, and the upload
+      // is not idempotent. Saying "failed" would invite a retry that duplicates it.
+      return parsed.success
+        ? parsed.data
+        : {
+            status: 'failed',
+            failure: { reason: 'unreachable', message: 'Autonomy Edge answered in a way this build cannot read.' },
+          }
+    },
+
+    listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
+      // Guarded, not assumed: the preload bundle and the renderer bundle are built
+      // separately and can skew — a running app whose main process predates this
+      // feature has no such channel. `unavailable` is the honest answer there, and it
+      // is what stops a missing channel taking the whole start screen down with it.
+      if (typeof window.bridge.edgeProjectsListRecent !== 'function') {
+        return Promise.resolve({ status: 'unavailable' })
+      }
+
+      // The SHAPE is checked too, not just the presence of the function. An older main
+      // process answers with a bare array, and an unrecognised shape falls through every
+      // branch of the section's state machine into "no cloud projects yet" — telling a
+      // signed-out user their account is empty. Observed, not imagined: it is what a
+      // stale bundle did on the first run of this code.
+      return (
+        window.bridge
+          .edgeProjectsListRecent(limit)
+          .then((result): CloudProjectsResult => {
+            const parsed = CloudProjectsResultSchema.safeParse(result)
+
+            return parsed.success ? parsed.data : { status: 'unavailable' }
+          })
+          // The most exposed of the four: the start screen calls this without a catch, so
+          // a rejected invoke took the whole screen down. `unreachable` is the union
+          // member for it — the question could not be asked, which is not "no projects".
+          .catch((): CloudProjectsResult => ({ status: 'unreachable' }))
+      )
     },
 
     async getRecentProjects(): Promise<RecentProject[]> {

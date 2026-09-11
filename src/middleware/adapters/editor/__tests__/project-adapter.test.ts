@@ -1,5 +1,11 @@
+import type { EdgeAccountPort, EdgeUserRead } from '../../../shared/ports/edge-account-port'
 import type { ProjectPort } from '../../../shared/ports/project-port'
-import { createEditorProjectAdapter, mapIpcPouToPortPou, mapPortPouToIpcPou } from '../project-adapter'
+import {
+  createEditorProjectAdapter,
+  isCloudProjectId,
+  mapIpcPouToPortPou,
+  mapPortPouToIpcPou,
+} from '../project-adapter'
 
 const mockRenderProjectToPdf = jest.fn()
 jest.mock('../../../../backend/shared/print', () => ({
@@ -108,6 +114,7 @@ const mockRawProjectFiles = {
       compileOnly: false,
     }),
     pinMapping: JSON.stringify([{ pin: '2', pinType: 'digitalInput', address: '%IX0.0' }]),
+    libraryManifest: '',
     pouFiles: [
       {
         relativePath: 'pous/programs/main.st',
@@ -148,9 +155,42 @@ beforeEach(() => {
     }),
     pickPlcopenImportFile: jest.fn().mockResolvedValue({ success: true, content: '<project/>' }),
     exportPlcopenFile: jest.fn().mockResolvedValue({ success: true }),
+    edgeProjectsListRecent: jest.fn().mockResolvedValue({ status: 'ok', projects: [] }),
+    edgeUploadListFolders: jest.fn().mockResolvedValue({ status: 'ok', folders: [] }),
+    edgeUploadProject: jest.fn().mockResolvedValue({ status: 'ok', projectId: 'p1', uploadedFiles: 3 }),
+    edgeProjectsRead: jest.fn().mockResolvedValue(mockRawProjectFiles),
+    edgeProjectsSaveProject: jest.fn().mockResolvedValue({ success: true }),
+    edgeProjectsSaveFile: jest.fn().mockResolvedValue({ success: true }),
+    // What a failed cloud write asks. `unknown` leaves the adapter's session state alone.
+    edgeAccountFetchUser: jest.fn().mockResolvedValue({ status: 'unknown' }),
     exportPdfFile: jest.fn().mockResolvedValue({ success: true }),
   } as unknown as typeof window.bridge
 })
+
+/** An account port that answers one fixed read; everything else is out of bounds here. */
+function accountAnswering(read: EdgeUserRead): EdgeAccountPort {
+  const unreachable = () => {
+    throw new Error('the project adapter must not call this')
+  }
+  return {
+    frontendBaseUrl: 'https://edge.test',
+    oauthProviders: [],
+    oauthUrl: unreachable,
+    fetchUser: () => Promise.resolve(read),
+    fetchPlanCaption: unreachable,
+    signIn: unreachable,
+    signOut: unreachable,
+    session: {
+      isExpired: () => false,
+      isAbsent: () => false,
+      onExpired: () => () => undefined,
+      onRestored: () => () => undefined,
+      markRestored: () => undefined,
+    },
+  }
+}
+
+const UNREADABLE_DESCRIPTION = 'The project files arrived in a shape this build of the editor cannot read.'
 
 describe('createEditorProjectAdapter', () => {
   let adapter: ProjectPort
@@ -410,6 +450,56 @@ describe('createEditorProjectAdapter', () => {
       expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/home/user/projects/my-project')
       expect(result.success).toBe(true)
       expect(result.data?.projectPath).toBe('/home/user/projects/my-project')
+    })
+  })
+
+  /**
+   * The bridge type is a description of what the main process is meant to send, and it
+   * checks nothing once a value has crossed IPC. An answer from a skewed main bundle used
+   * to be read straight through into the parser.
+   */
+  describe('raw project files this build cannot read', () => {
+    const unreadable = { success: true, data: { ...mockRawProjectFiles.data, pouFiles: 'not a list' } }
+
+    it('are refused by readProjectFiles', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue(null)
+
+      await expect(adapter.readProjectFiles('/p')).resolves.toEqual({
+        success: false,
+        error: { title: 'Failed to open project', description: UNREADABLE_DESCRIPTION },
+      })
+    })
+
+    it('are refused by openProject', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue(unreadable)
+
+      const result = await adapter.openProject()
+
+      expect(result.success).toBe(false)
+      expect(result.error?.description).toBe(UNREADABLE_DESCRIPTION)
+    })
+
+    it('are refused by openProjectByPath, from disk and from the cloud alike', async () => {
+      ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue(unreadable)
+      ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValue(unreadable)
+
+      const local = await adapter.openProjectByPath('/p')
+      const cloud = await adapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(local).toMatchObject({ success: false, error: { description: UNREADABLE_DESCRIPTION } })
+      expect(cloud).toMatchObject({ success: false, error: { description: UNREADABLE_DESCRIPTION } })
+    })
+
+    it('still carries the optional fields a cloud read answers with', async () => {
+      ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValue({
+        success: true,
+        data: { ...mockRawProjectFiles.data, canEdit: false, rawLoadedFiles: { 'project.json': '{}' } },
+      })
+
+      const result = await adapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(result.data?.canEdit).toBe(false)
+      expect(result.data?.rawLoadedFiles).toEqual({ 'project.json': '{}' })
     })
   })
 
@@ -848,5 +938,360 @@ describe('mapIpcPouToPortPou', () => {
     })
 
     expect(result.documentation).toBe('Test documentation')
+  })
+})
+
+/**
+ * The editor now opens projects from two worlds, and `project.meta.path` is the single
+ * identifier every save flows through. These cases pin down the one place that decides
+ * which world a project belongs to — get it wrong and a local save is sent to the API,
+ * or a cloud save is written to a directory that does not exist.
+ */
+describe('isCloudProjectId', () => {
+  it.each(['cmt7n5ke2077o07jofjr3dgr0', 'abc123', 'cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st'])(
+    'treats %s as a cloud identifier',
+    (identifier) => {
+      expect(isCloudProjectId(identifier)).toBe(true)
+    },
+  )
+
+  it.each([
+    '/Users/ada/projects/mine',
+    '/home/ada/p',
+    'C:\\Users\\ada\\projects',
+    'C:/Users/ada/projects',
+    '\\\\server\\share\\project',
+  ])('treats %s as a local path', (identifier) => {
+    expect(isCloudProjectId(identifier)).toBe(false)
+  })
+
+  it('treats an empty identifier as neither', () => {
+    // The start screen's "no project open" state. Routing it to the API would turn an
+    // empty workspace into a request for a project with no id.
+    expect(isCloudProjectId('')).toBe(false)
+  })
+})
+
+describe('cloud projects', () => {
+  let cloudAdapter: ProjectPort
+
+  beforeEach(() => {
+    cloudAdapter = createEditorProjectAdapter()
+  })
+
+  /**
+   * Found by running the app, not by reading it: the preload bundle and the renderer
+   * bundle are built separately, and a renderer newer than the main process called a
+   * channel that did not exist. The rejection escaped a `useEffect` and took the whole
+   * start screen down — local projects included. A cloud list nobody asked for must
+   * never cost someone their local work.
+   */
+  it('reports the channel unavailable when the bridge predates this feature', async () => {
+    const bridge = window.bridge as unknown as Record<string, unknown>
+    delete bridge.edgeProjectsListRecent
+
+    // Not `signed-out`: nobody asked about the session. The start screen hides the
+    // section entirely for this, rather than inviting a sign-in that cannot help.
+    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
+  })
+
+  it('lists the account projects through the bridge', async () => {
+    const summary = { id: 'cmt7', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' }
+    ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce({ status: 'ok', projects: [summary] })
+
+    await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'ok', projects: [summary] })
+    expect(window.bridge.edgeProjectsListRecent).toHaveBeenCalledWith(5)
+  })
+
+  it('reads a cloud project from the API and a local one from disk', async () => {
+    await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(window.bridge.edgeProjectsRead).toHaveBeenCalledWith('cmt7n5ke2077o07jofjr3dgr0')
+    expect(window.bridge.readProjectFiles).not.toHaveBeenCalled()
+
+    await cloudAdapter.openProjectByPath('/Users/ada/projects/mine')
+
+    expect(window.bridge.readProjectFiles).toHaveBeenCalledWith('/Users/ada/projects/mine')
+  })
+
+  it('forwards a cloud read failure as the adapter response', async () => {
+    ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValueOnce({
+      success: false,
+      error: { title: 'Failed to open project', description: 'Autonomy Edge answered 403.', status: 403 },
+    })
+
+    const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(result.success).toBe(false)
+    // The status rides along so a caller can tell a permission denial from a broken
+    // project.
+    expect(result.error?.status).toBe(403)
+  })
+
+  it('saves a cloud project to the API and a local one to disk', async () => {
+    const files = { projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never
+
+    await expect(cloudAdapter.saveProject(files)).resolves.toEqual({ success: true })
+    expect(window.bridge.edgeProjectsSaveProject).toHaveBeenCalledWith(files)
+    expect(window.bridge.writeProjectFiles).not.toHaveBeenCalled()
+
+    const local = { projectPath: '/Users/ada/projects/mine', deletions: [] } as never
+
+    await cloudAdapter.saveProject(local)
+
+    expect(window.bridge.writeProjectFiles).toHaveBeenCalledWith(local)
+  })
+
+  it('saves a cloud file to the API and a local one to disk', async () => {
+    await cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x := TRUE;')
+
+    expect(window.bridge.edgeProjectsSaveFile).toHaveBeenCalledWith(
+      'cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st',
+      'x := TRUE;',
+    )
+    expect(window.bridge.saveFile).not.toHaveBeenCalled()
+
+    await cloudAdapter.saveFile('/Users/ada/projects/mine/pous/programs/main.st', 'x := TRUE;')
+
+    expect(window.bridge.saveFile).toHaveBeenCalled()
+  })
+
+  it('converts a pending PLCopen import instead of opening an empty project over it', async () => {
+    // A project uploaded as raw PLCopen XML has NO `project.json` and no POUs — just
+    // Node's marker, stored verbatim because nothing parses it server-side. Handed to
+    // `parseProjectFiles` it loads schema defaults and ignores the XML, so the editor
+    // shows a blank project on top of the real one. The web adapter has always had
+    // this branch; the desktop inherited the reader without it.
+    const xml = [
+      '<?xml version="1.0" encoding="utf-8"?>',
+      '<project xmlns="http://www.plcopen.org/xml/tc6_0201">',
+      '<fileHeader companyName="" productName="" productVersion="" creationDateTime="2026-08-24T00:00:00" />',
+      '<contentHeader name="Imported From XML">',
+      '<coordinateInfo><fbd><scaling x="0" y="0"/></fbd><ld><scaling x="0" y="0"/></ld>',
+      '<sfc><scaling x="0" y="0"/></sfc></coordinateInfo></contentHeader>',
+      '<types><dataTypes/><pous/></types>',
+      '<instances><configurations/></instances>',
+      '</project>',
+    ].join('')
+    ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      data: { ...mockRawProjectFiles.data, projectJson: '', pouFiles: [], pendingPlcopenSource: xml },
+    })
+
+    const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.meta.name).toBe('Imported From XML')
+    // The caller has to save straight away: Node's save deletes what the payload omits,
+    // which is what prunes the marker.
+    expect(result.data?.wasPendingPlcopenImport).toBe(true)
+  })
+
+  it('takes the ordinary path when the marker is an empty string', async () => {
+    ;(window.bridge.edgeProjectsRead as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      data: { ...mockRawProjectFiles.data, pendingPlcopenSource: '' },
+    })
+
+    const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+    expect(result.data?.wasPendingPlcopenImport).toBeUndefined()
+  })
+
+  /**
+   * The preload bundle and the renderer bundle are built separately and can skew. The
+   * listing channels have always checked for this; the read and the two writes did not,
+   * and their rejection escapes to callers that do not catch it — taking the start
+   * screen down over one stale bundle.
+   */
+  describe('a main process that predates a cloud channel', () => {
+    it('refuses the read instead of raising "is not a function"', async () => {
+      Object.assign(window.bridge, { edgeProjectsRead: undefined })
+
+      const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(result.success).toBe(false)
+      expect(result.error?.description).toContain('cannot open cloud projects')
+    })
+
+    it('refuses the project save', async () => {
+      Object.assign(window.bridge, { edgeProjectsSaveProject: undefined })
+
+      await expect(
+        cloudAdapter.saveProject({ projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never),
+      ).resolves.toEqual({ success: false, error: 'This build of the editor cannot save cloud projects.' })
+    })
+
+    it('refuses the single-file save', async () => {
+      Object.assign(window.bridge, { edgeProjectsSaveFile: undefined })
+
+      await expect(cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x;')).resolves.toEqual({
+        success: false,
+        error: 'This build of the editor cannot save cloud projects.',
+      })
+    })
+  })
+
+  /**
+   * Each of these unions exists because the cases are worded differently on screen, so
+   * a shape that falls through to the wrong branch says something untrue: that a
+   * signed-out account is empty, or that an offline user has no folders.
+   */
+  describe('an answer the renderer cannot read', () => {
+    it('leaves the recents list unavailable rather than claiming the account is empty', async () => {
+      // A bare array is what an older main process answers with. It used to fall
+      // through the section's state machine into "no cloud projects yet".
+      ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce([])
+
+      await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
+    })
+
+    it('rejects an ok list whose rows are not projects', async () => {
+      ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce({
+        status: 'ok',
+        projects: [{ name: 'No id at all' }],
+      })
+
+      // A card with no id does nothing when clicked, and the whole answer is suspect
+      // once one row is wrong — the main process already drops unusable rows itself.
+      await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
+    })
+
+    it('reports folders as unreachable rather than as an empty account', async () => {
+      ;(window.bridge.edgeUploadListFolders as jest.Mock).mockResolvedValueOnce({ status: 'ok' })
+
+      await expect(cloudAdapter.listCloudFolders?.()).resolves.toEqual({ status: 'unreachable' })
+    })
+
+    it('reports an unreadable upload answer as unreachable, never as failed', async () => {
+      ;(window.bridge.edgeUploadProject as jest.Mock).mockResolvedValueOnce({ status: 'ok' })
+
+      // The import is not idempotent: "failed" invites a retry that would create the
+      // project twice, when it may already exist.
+      await expect(
+        cloudAdapter.uploadProjectToCloud?.({
+          projectPath: '/Users/ada/projects/mine',
+          parentFolderId: 'f1',
+          visibility: 'private',
+        }),
+      ).resolves.toMatchObject({ status: 'failed', failure: { reason: 'unreachable' } })
+    })
+  })
+
+  /**
+   * The channel guards stop "is not a function" and nothing else. `ipcRenderer.invoke`
+   * rejects on its own account — the main handler threw, the channel is in preload but
+   * not in main, an argument would not structured-clone — and that rejection escapes to
+   * callers that do not catch it. The folder and upload calls already contain theirs.
+   */
+  describe('an IPC call that rejects', () => {
+    it('does not take the start screen down with the recents list', async () => {
+      ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockRejectedValueOnce(new Error('no handler registered'))
+
+      // `unreachable`, not `unavailable`: the question could not be asked, which is a
+      // different thing from this build having no channel for it.
+      await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unreachable' })
+    })
+
+    it('resolves the cloud read as a failure so openProjectByPath always answers', async () => {
+      ;(window.bridge.edgeProjectsRead as jest.Mock).mockRejectedValueOnce(new Error('main process threw'))
+
+      const result = await cloudAdapter.openProjectByPath('cmt7n5ke2077o07jofjr3dgr0')
+
+      expect(result.success).toBe(false)
+      expect(result.error?.description).toBe('main process threw')
+    })
+
+    it('resolves the project save as a failure the save flow already handles', async () => {
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockRejectedValueOnce(new Error('channel is gone'))
+
+      await expect(
+        cloudAdapter.saveProject({ projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never),
+      ).resolves.toEqual({ success: false, error: 'channel is gone', reason: 'unreachable' })
+    })
+
+    it('resolves the single-file save as a failure too', async () => {
+      ;(window.bridge.edgeProjectsSaveFile as jest.Mock).mockRejectedValueOnce(new Error('channel is gone'))
+
+      await expect(cloudAdapter.saveFile('cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st', 'x;')).resolves.toEqual({
+        success: false,
+        error: 'channel is gone',
+        reason: 'unreachable',
+      })
+    })
+  })
+
+  it('cannot publish through a bridge that predates the upload channel', async () => {
+    Object.assign(window.bridge, { edgeUploadProject: undefined })
+
+    await expect(
+      cloudAdapter.uploadProjectToCloud?.({
+        projectPath: '/Users/ada/projects/mine',
+        parentFolderId: 'f1',
+        visibility: 'private',
+      }),
+    ).resolves.toEqual({
+      status: 'failed',
+      failure: { reason: 'unreadable', message: 'This build of the editor cannot publish to Autonomy Edge.' },
+    })
+  })
+
+  /**
+   * The main process reports a failed write as text only, and the save flow needs to know
+   * whether a session still exists: queue the save for sign-in, or keep the work locally.
+   * Asking the account is what answers it.
+   */
+  describe('why a cloud write failed', () => {
+    const files = { projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never
+    const failed = { success: false, error: 'Not signed in to Autonomy Edge.' }
+
+    it('is signed-out when the account has no session, for a project and a file alike', async () => {
+      const signedOut = createEditorProjectAdapter(accountAnswering({ status: 'no-session' }))
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValueOnce(failed)
+      ;(window.bridge.edgeProjectsSaveFile as jest.Mock).mockResolvedValueOnce(failed)
+
+      await expect(signedOut.saveProject(files)).resolves.toEqual({ ...failed, reason: 'signed-out' })
+      await expect(signedOut.saveFile('cmt7n5ke2077o07jofjr3dgr0/project.json', '{}')).resolves.toEqual({
+        ...failed,
+        reason: 'signed-out',
+      })
+    })
+
+    it('is unreachable when the session could not be checked or is fine', async () => {
+      const offline = createEditorProjectAdapter(accountAnswering({ status: 'unknown' }))
+      const signedIn = createEditorProjectAdapter(
+        accountAnswering({
+          status: 'signed-in',
+          user: { id: 'u1', name: 'Ada', email: 'ada@example.com', username: 'ada' },
+        }),
+      )
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValue({
+        success: false,
+        error: 'Autonomy Edge answered 503.',
+      })
+
+      await expect(offline.saveProject(files)).resolves.toMatchObject({ reason: 'unreachable' })
+      await expect(signedIn.saveProject(files)).resolves.toMatchObject({ reason: 'unreachable' })
+    })
+
+    it('is never asked for a write that succeeded', async () => {
+      const account = accountAnswering({ status: 'no-session' })
+      const fetchUser = jest.spyOn(account, 'fetchUser')
+
+      await expect(createEditorProjectAdapter(account).saveProject(files)).resolves.toEqual({ success: true })
+      expect(fetchUser).not.toHaveBeenCalled()
+    })
+
+    it('treats an answer the renderer cannot read as a failed write', async () => {
+      ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValueOnce(null)
+
+      await expect(
+        createEditorProjectAdapter(accountAnswering({ status: 'unknown' })).saveProject(files),
+      ).resolves.toEqual({
+        success: false,
+        error: 'Autonomy Edge answered in a way this build cannot read.',
+        reason: 'unreachable',
+      })
+    })
   })
 })

@@ -6,8 +6,9 @@ import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
-import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { useAI, useCapabilities, useEdgeAccountPort, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
+import { registerAIInlineCompletions } from '../../../../../services/ai/inline-completions'
 import { getCppMemberCompletions, projectTypeNamePredicate } from '../../../../../services/cpp-scope'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
 import { pouUri, splitExpression } from '../../../../../services/st-lsp'
@@ -137,6 +138,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const capabilities = useCapabilities()
   const aiPort = useAI()
+  const edgeAccount = useEdgeAccountPort()
   const projectPort = useProject()
 
   const {
@@ -847,12 +849,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!aiState.hasConsented) return
     if (!aiState.preferences.inlineCompletionsEnabled) return
 
-    if (!aiPort?.registerInlineCompletions) return
+    // The provider itself is shared (frontend/services/ai): it reaches the
+    // platform only through the port, so both builds get ghost text as soon as
+    // they have an AI port at all.
+    if (!aiPort) return
 
-    const registration = aiPort.registerInlineCompletions({
+    const registration = registerAIInlineCompletions(aiPort, {
       monacoInstance: monaco,
       pouName: name,
       language,
+      session: edgeAccount?.session,
     })
 
     return () => registration.dispose()
@@ -864,6 +870,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     aiState.preferences.inlineCompletionsEnabled,
     capabilities.hasAIAssistant,
     aiPort,
+    edgeAccount,
   ])
 
   // -----------------------------------------------------------------------

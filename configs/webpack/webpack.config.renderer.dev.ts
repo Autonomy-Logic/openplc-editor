@@ -227,6 +227,44 @@ const configuration: webpack.Configuration = {
     headers: { 'Access-Control-Allow-Origin': '*' },
     static: { publicPath: '/' },
     historyApiFallback: { verbose: true },
+    client: {
+      overlay: {
+        // Compile errors and warnings still get an overlay: those are the ones
+        // worth interrupting for, and they are what this overlay is good at.
+        errors: true,
+        warnings: true,
+        // Runtime errors do NOT, and it cannot be a filter instead.
+        //
+        // The reason to want one: Monaco cancels pending work by rejecting with
+        // an error it names `Canceled`, and every disposed editor leaves one
+        // behind for whichever debounced contribution was still armed. Nothing
+        // is wrong — cancellation is what disposal means — but it reaches
+        // `window` as an unhandled rejection, and a full-screen overlay sits
+        // above everything and swallows every click until dismissed. Reloading
+        // a project from the source-control panel left the app looking frozen.
+        //
+        // Why not a filter function, which is what webpack-dev-server offers
+        // and what this used to be: the option is serialized into the client's
+        // own URL as a STRING, and `decodeOverlayOptions` revives it with
+        // `new Function`. The renderer's CSP is `script-src 'self'
+        // 'unsafe-inline'` (see `src/index.ejs`), so that throws an EvalError
+        // while the dev-server client module is still initialising — which
+        // takes the whole bundle down and boots the app to a white screen.
+        // A boolean is not serialized as a string and never reaches `eval`.
+        //
+        // Why not suppress it from the app instead: the client registers its
+        // `unhandledrejection` listener at module init, before any of our code
+        // runs, so `preventDefault` cannot reach it and neither can
+        // `stopImmediatePropagation` — the listener that runs first wins, and
+        // ours is second by construction.
+        //
+        // What is lost: a genuine runtime error no longer raises an overlay in
+        // dev. It still reaches the console and the Electron DevTools, which is
+        // where this app is debugged anyway. `installMonacoCancellationGuard`
+        // in `main.tsx` keeps the cancellation itself out of the console.
+        runtimeErrors: false,
+      },
+    },
   },
 }
 

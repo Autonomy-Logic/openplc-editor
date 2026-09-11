@@ -1,12 +1,13 @@
 /**
  * NavigationPort — Abstracts in-app and external navigation.
  *
- * Editor adapter: Falls back to `window.open` (new BrowserWindow) for
- *                 secondary windows; `navigate` is a best-effort
- *                 `window.location.href` fallback. The editor has no
- *                 SPA router, but the routed features (merge, history)
- *                 are gated behind `capabilities.hasVersionControl=false`
- *                 and never reached in practice.
+ * Editor adapter: Intercepts the routed screens it can render in place —
+ *                 `/history` and `/merge` both become store state and are
+ *                 laid over the workspace. Any other in-app path is
+ *                 REFUSED rather than navigated to: the editor has no SPA
+ *                 router, and assigning `location.href` inside the Electron
+ *                 renderer reloads the shell, which used to close the open
+ *                 project. External URLs still open a window.
  * Web adapter:    Delegates to TanStack Router's `router.navigate(...)`
  *                 for in-app navigation (preserves SPA state, no full
  *                 reload) and `window.open(url, '_blank')` for the

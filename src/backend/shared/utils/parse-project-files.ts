@@ -535,6 +535,11 @@ export function parseProjectFiles(
         project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
       }
     } else {
+      // Absent is not the same as valid. A cloud project whose `/details` answers
+      // `files: {}` — because it was never saved, or because the server lost it — used
+      // to open as a silent default project, indistinguishable from a real empty one.
+      // The first save then wrote defaults over whatever was supposed to be there.
+      warnings.push('project.json was missing or empty. The project was opened with default settings.')
       project = getDefaultSchemaValues(PLCProjectSchema) as typeof project
     }
   } catch {
