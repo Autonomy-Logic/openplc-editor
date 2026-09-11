@@ -30,7 +30,10 @@ function ok(data: unknown): EdgeResponse {
   return { status: 200, body: JSON.stringify({ data }) }
 }
 
-const SentBodySchema = z.object({ files: ApiProjectFilesSchema, deletions: z.array(z.string()).optional() })
+const SentBodySchema = z.object({
+  files: ApiProjectFilesSchema.passthrough(),
+  deletions: z.array(z.string()).optional(),
+})
 
 /**
  * The body of the n-th request, validated once here rather than asserted at each
@@ -209,6 +212,27 @@ describe('readCloudProject', () => {
 
     await expect(readCloudProject('p1')).resolves.toMatchObject({ success: false })
   })
+
+  it('reports a malformed container instead of opening the project with defaults', async () => {
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, pous: { programs: 'PROGRAM main' } } }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.success).toBe(false)
+    expect(result.error?.description).toContain('cannot read')
+    expect(result.error?.description).toContain('pous.programs')
+  })
+
+  it('reads the servers from where Edge nests them', async () => {
+    request.mockResolvedValueOnce(
+      ok({ files: { ...FILES, devices: { ...FILES.devices, servers: { 'modbus.json': '{"port":502}' } } } }),
+    )
+
+    const result = await readCloudProject('p1')
+
+    expect(result.data?.serverFiles).toEqual([{ relativePath: 'devices/servers/modbus.json', content: '{"port":502}' }])
+    expect(result.data?.deviceConfig).toBe('{}')
+  })
 })
 
 describe('saveCloudFile', () => {
@@ -227,11 +251,69 @@ describe('saveCloudFile', () => {
     const sent = sentBody(1).files
 
     // The patched slot changed...
-    expect(sent.pous.programs['main.st']).toBe('x := FALSE;')
+    expect(sent.pous?.programs['main.st']).toBe('x := FALSE;')
     // ...and everything else is still there. The backend deletes by omission, so a
     // partial body would wipe the rest of the project.
     expect(sent['project.json']).toBe(FILES['project.json'])
-    expect(sent.devices['pin-mapping.json']).toBe('[]')
+    expect(sent.devices?.['pin-mapping.json']).toBe('[]')
+  })
+
+  it('sends back the keys it does not model, because omission is deletion', async () => {
+    request
+      .mockResolvedValueOnce(ok({ files: { ...structuredClone(FILES), 'README.md': '# Irrigation' } }))
+      .mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
+
+    // A README the schema does not name used to be stripped on read and deleted on the
+    // save that followed.
+    expect(sentBody(1).files).toMatchObject({ 'README.md': '# Irrigation' })
+  })
+
+  it('keeps the servers, which Edge nests under devices', async () => {
+    const files = {
+      ...structuredClone(FILES),
+      devices: { ...FILES.devices, servers: { 'modbus.json': '{"port":502}' } },
+    }
+    request.mockResolvedValueOnce(ok({ files })).mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/devices/servers/opcua.json', '{"port":4840}')
+
+    const sent = sentBody(1).files
+
+    // The whole container used to fail validation over the nested slot and come back
+    // empty, so a save deleted every device file the project had.
+    expect(sent.devices).toEqual({
+      'configuration.json': '{}',
+      'pin-mapping.json': '[]',
+      servers: { 'modbus.json': '{"port":502}', 'opcua.json': '{"port":4840}' },
+    })
+  })
+
+  it('does not invent a project.json the server did not send', async () => {
+    // A brand-new project answers `files: {}`. The web build posts back exactly what it
+    // got plus the patch; the desktop must not add an empty manifest beside it.
+    request.mockResolvedValueOnce(ok({ files: {} })).mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/pous/programs/main.st', 'x := TRUE;')
+
+    const init = request.mock.calls[1]?.[1]
+    const body = init && 'json' in init ? init.json : undefined
+
+    expect(body).toEqual({ files: { pous: { programs: { 'main.st': 'x := TRUE;' } } } })
+  })
+
+  it('refuses to write when the project came back malformed, and says which field', async () => {
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, devices: { 'configuration.json': { board: 'uno' } } } }))
+
+    const result = await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
+
+    // A malformed container used to be replaced by an empty one, and the write that
+    // followed deleted everything it had held. Now the read fails, so nothing is written.
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('cannot read')
+    expect(result.error).toContain('devices.configuration.json')
+    expect(request).toHaveBeenCalledTimes(1)
   })
 
   it('serialises a non-string payload', async () => {
@@ -244,7 +326,7 @@ describe('saveCloudFile', () => {
 
     const sent = sentBody(1).files
 
-    expect(JSON.parse(sent.devices['configuration.json'])).toEqual({ baudRate: 9600 })
+    expect(JSON.parse(sent.devices?.['configuration.json'] ?? '')).toEqual({ baudRate: 9600 })
   })
 
   it('refuses a path with no project id rather than guessing one', async () => {

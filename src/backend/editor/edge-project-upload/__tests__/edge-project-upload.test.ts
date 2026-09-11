@@ -96,6 +96,40 @@ describe('building the archive', () => {
     expect(result.ok && (await entriesOf(result.zip))).toEqual(['pous/programs/main.st', 'project.json'])
   })
 
+  it('packs every file type the importer accepts, data types and the README included', async () => {
+    await writeProject({
+      'project.json': '{}',
+      'datatypes/Motor.dt': 'TYPE Motor : STRUCT END_STRUCT; END_TYPE',
+      'pous/programs/seq.sfc': '<sfc/>',
+      'pous/programs/main.st': 'x;',
+      'pous/programs/logic.ld': '{}',
+      'pous/programs/blocks.fbd': '{}',
+      'pous/programs/list.il': 'LD x',
+      'pous/functions/native.c': 'int f(void);',
+      'pous/functions/native.cpp': 'int g();',
+      'pous/functions/script.py': 'pass',
+      'README.md': '# Irrigation',
+    })
+
+    const result = await buildProjectArchive(projectDir)
+
+    // `.dt` and `.md` used to be dropped here, so a project with data types arrived on
+    // Edge without them — and compiled differently there than it did locally.
+    expect(result.ok && (await entriesOf(result.zip))).toEqual([
+      'README.md',
+      'datatypes/Motor.dt',
+      'pous/functions/native.c',
+      'pous/functions/native.cpp',
+      'pous/functions/script.py',
+      'pous/programs/blocks.fbd',
+      'pous/programs/list.il',
+      'pous/programs/logic.ld',
+      'pous/programs/main.st',
+      'pous/programs/seq.sfc',
+      'project.json',
+    ])
+  })
+
   it('refuses a folder that is not an OpenPLC project', async () => {
     await writeProject({ 'pous/programs/main.st': 'x;' })
 

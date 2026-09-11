@@ -25,11 +25,12 @@ import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBodyAs } from '../edge-account/edge-http'
 
 /**
- * The extensions `POST /projects/import` accepts. Anything else in the project directory
- * is left out of the archive rather than making the upload fail — a stray `.DS_Store`, an
- * editor backup or a build artefact is not a reason to refuse to publish someone's work.
+ * The extensions `POST /projects/import` accepts — Edge's own list, from its
+ * `import-project.use-case.ts`. Anything else in the project directory is left out of
+ * the archive rather than making the upload fail — a stray `.DS_Store`, an editor backup
+ * or a build artefact is not a reason to refuse to publish someone's work.
  */
-const ALLOWED_EXTENSIONS = new Set(['.json', '.st', '.fbd', '.ld', '.il', '.py'])
+const ALLOWED_EXTENSIONS = new Set(['.ld', '.fbd', '.st', '.sfc', '.il', '.dt', '.json', '.py', '.c', '.cpp', '.md'])
 
 /** The server's own ceilings, mirrored so a doomed upload fails before it is attempted. */
 const MAX_FILE_BYTES = 50 * 1024 * 1024
@@ -344,8 +345,11 @@ export async function buildProjectArchive(
 
   return {
     ok: true,
-    // DEFLATE, not STORE: the payload is source text and JSON, which compresses hard, and
-    // the 100MB ceiling is measured on what is sent.
+    // DEFLATE, not STORE: the payload is source text and JSON, which compresses hard.
+    // The 100MB ceiling above is enforced on the UNCOMPRESSED bytes as they are read —
+    // before this archive exists — which is the conservative side: nothing that passes
+    // it can compress to more than itself, so an archive this produces is always within
+    // the server's own limit on what is sent.
     zip: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
     fileCount: collected.length,
   }

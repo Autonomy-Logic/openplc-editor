@@ -8,8 +8,11 @@
  * the same cases must round-trip cleanly in both directions.
  */
 
+import { describe, expect, it } from '@jest/globals'
+
 import type { WriteProjectFiles } from '../../../../middleware/shared/ports/project-port'
 import {
+  apiFilesToRaw,
   type ApiProjectFiles,
   ApiProjectFilesSchema,
   envelopeFromWriteProjectFiles,
@@ -28,14 +31,18 @@ function makeEnvelope(overrides?: Partial<ApiProjectFiles>): ApiProjectFiles {
 }
 
 /**
- * `devices` is a flat map of file contents that also carries one nested slot,
- * and no object literal satisfies both at once: the index signature demands a
- * string for every key while `remote` is a map. Filling the slot after the fact
+ * `devices` is a flat map of file contents that also carries nested slots, and no
+ * object literal satisfies both at once: the index signature demands a string for
+ * every key while `remote` and `servers` are maps. Filling the slots after the fact
  * builds the value the API actually sends without loosening the type.
  */
-const devicesWithRemote = (remote: Record<string, string>): ApiProjectFiles['devices'] => {
+const devicesWith = (nested: {
+  remote?: Record<string, string>
+  servers?: Record<string, string>
+}): ApiProjectFiles['devices'] => {
   const devices: ApiProjectFiles['devices'] = {}
-  devices.remote = remote
+  if (nested.remote) devices.remote = nested.remote
+  if (nested.servers) devices.servers = nested.servers
   return devices
 }
 
@@ -70,14 +77,29 @@ describe('getInEnvelope', () => {
 
   it('reads devices/remote/* from envelope.devices.remote', () => {
     const env = makeEnvelope({
-      devices: devicesWithRemote({ 'bus0.json': '{"id":0}' }),
+      devices: devicesWith({ remote: { 'bus0.json': '{"id":0}' } }),
     })
     expect(getInEnvelope(env, 'devices/remote/bus0.json')).toBe('{"id":0}')
   })
 
-  it('reads devices/servers/* from envelope.servers', () => {
+  it('reads devices/servers/* from envelope.devices.servers', () => {
+    // Edge nests by path, so `devices/servers/x.json` arrives under `devices`, not at
+    // the top level.
+    const env = makeEnvelope({ devices: devicesWith({ servers: { 'modbus.json': '{"port":502}' } }) })
+    expect(getInEnvelope(env, 'devices/servers/modbus.json')).toBe('{"port":502}')
+  })
+
+  it('falls back to the legacy top-level servers slot', () => {
     const env = makeEnvelope({ servers: { 'modbus.json': '{"port":502}' } })
     expect(getInEnvelope(env, 'devices/servers/modbus.json')).toBe('{"port":502}')
+  })
+
+  it('prefers the canonical slot when both name the file', () => {
+    const env = makeEnvelope({
+      devices: devicesWith({ servers: { 'modbus.json': 'NEW' } }),
+      servers: { 'modbus.json': 'OLD' },
+    })
+    expect(getInEnvelope(env, 'devices/servers/modbus.json')).toBe('NEW')
   })
 
   it('reads pous/{category}/{filename} from envelope.pous', () => {
@@ -138,22 +160,31 @@ describe('setInEnvelope', () => {
 
   it('appends to existing devices.remote', () => {
     const env = makeEnvelope({
-      devices: devicesWithRemote({ 'bus0.json': '{"id":0}' }),
+      devices: devicesWith({ remote: { 'bus0.json': '{"id":0}' } }),
     })
     setInEnvelope(env, 'devices/remote/bus1.json', '{"id":1}')
     expect(env.devices.remote).toEqual({ 'bus0.json': '{"id":0}', 'bus1.json': '{"id":1}' })
   })
 
-  it('lazily initialises envelope.servers container when writing first server', () => {
+  it('lazily initialises devices.servers container when writing first server', () => {
     const env = makeEnvelope()
     setInEnvelope(env, 'devices/servers/modbus.json', '{"port":502}')
-    expect(env.servers).toEqual({ 'modbus.json': '{"port":502}' })
+    expect(env.devices.servers).toEqual({ 'modbus.json': '{"port":502}' })
+    expect(env.servers).toBeUndefined()
   })
 
-  it('appends to existing envelope.servers', () => {
-    const env = makeEnvelope({ servers: { 'modbus.json': '{"port":502}' } })
+  it('appends to existing devices.servers', () => {
+    const env = makeEnvelope({ devices: devicesWith({ servers: { 'modbus.json': '{"port":502}' } }) })
     setInEnvelope(env, 'devices/servers/opcua.json', '{"port":4840}')
-    expect(env.servers).toEqual({ 'modbus.json': '{"port":502}', 'opcua.json': '{"port":4840}' })
+    expect(env.devices.servers).toEqual({ 'modbus.json': '{"port":502}', 'opcua.json': '{"port":4840}' })
+  })
+
+  it('retires the legacy top-level copy of a server it rewrites', () => {
+    const env = makeEnvelope({ servers: { 'modbus.json': 'OLD', 'opcua.json': 'KEEP' } })
+    setInEnvelope(env, 'devices/servers/modbus.json', 'NEW')
+    expect(env.devices.servers).toEqual({ 'modbus.json': 'NEW' })
+    // Only the file that was rewritten moves; the other legacy entry is untouched.
+    expect(env.servers).toEqual({ 'opcua.json': 'KEEP' })
   })
 
   it('lazily initialises envelope.pous[category] when writing first POU of that category', () => {
@@ -336,6 +367,15 @@ describe('setInEnvelope on the envelope a new project really returns', () => {
     expect(getInEnvelope(env, 'devices/remote/bus0.json')).toBe('{"id":0}')
   })
 
+  it('round-trips a server from a bare envelope', () => {
+    const env = emptyEnvelope()
+
+    setInEnvelope(env, 'devices/servers/opcua.json', '{"port":4840}')
+
+    expect(getInEnvelope(env, 'devices/servers/opcua.json')).toBe('{"port":4840}')
+    expect(Object.keys(env)).toEqual(['devices'])
+  })
+
   // A patch must not invent files the project does not have; the backend
   // deletes anything missing from the payload.
   it('adds only the container the path needs', () => {
@@ -370,7 +410,7 @@ describe('envelopeFromWriteProjectFiles', () => {
     })
   })
 
-  it('PLC project: emits project.json, devices.configuration, devices.pin-mapping, pous, servers', () => {
+  it('PLC project: emits project.json, devices.configuration, devices.pin-mapping, pous, devices.servers', () => {
     const env = envelopeFromWriteProjectFiles(
       makeWriteFiles({
         deviceConfig: '{"board":"uno"}',
@@ -386,9 +426,9 @@ describe('envelopeFromWriteProjectFiles', () => {
         'configuration.json': '{"board":"uno"}',
         'pin-mapping.json': '[]',
         remote: { 'bus0.json': '{"id":0}' },
+        servers: { 'modbus.json': '{"port":502}' },
       },
       pous: { programs: { 'main.st': 'PROGRAM main' } },
-      servers: { 'modbus.json': '{"port":502}' },
     })
   })
 
@@ -456,23 +496,48 @@ describe('ApiProjectFilesSchema', () => {
   it('keeps devices/remote AND the flat device files beside it', () => {
     // `devices` is the one container that is both a flat file map and a parent. A
     // schema that demands a string for every key rejects it whole the moment a project
-    // owns a remote device, and the tolerant branch then hands back an empty container
-    // — losing the board configuration and the pin mapping along with the bus.
+    // owns a remote device.
     const parsed = ApiProjectFilesSchema.parse({
       'project.json': '{}',
       devices: { 'configuration.json': '{"board":"uno"}', 'pin-mapping.json': '[]', remote: { 'bus0.json': '{}' } },
       pous: { programs: { 'main.st': 'x;' } },
     })
 
-    expect(parsed.devices['configuration.json']).toBe('{"board":"uno"}')
-    expect(parsed.devices['pin-mapping.json']).toBe('[]')
-    expect(parsed.devices.remote).toEqual({ 'bus0.json': '{}' })
+    expect(parsed.devices?.['configuration.json']).toBe('{"board":"uno"}')
+    expect(parsed.devices?.['pin-mapping.json']).toBe('[]')
+    expect(parsed.devices?.remote).toEqual({ 'bus0.json': '{}' })
   })
 
-  it('accepts the bare envelope a project that was never saved answers with', () => {
+  it('keeps devices/servers, which Edge nests under devices', () => {
+    // This is the shape that used to fail the `devices` container whole — and the
+    // tolerant branch then emptied it, taking the board configuration and the pin
+    // mapping down with the servers, which the next save persisted as a deletion.
+    const parsed = ApiProjectFilesSchema.parse({
+      'project.json': '{}',
+      devices: { 'configuration.json': '{"board":"uno"}', servers: { 'modbus.json': '{"port":502}' } },
+    })
+
+    expect(parsed.devices?.['configuration.json']).toBe('{"board":"uno"}')
+    expect(parsed.devices?.servers).toEqual({ 'modbus.json': '{"port":502}' })
+  })
+
+  it('accepts the bare envelope a project that was never saved answers with, adding nothing', () => {
     // `GET /details` answers `files: {}` for a brand-new project. Rejecting that would
-    // make the first save of every new project fail.
-    expect(ApiProjectFilesSchema.parse({})).toEqual({ 'project.json': '', devices: {}, pous: {} })
+    // make the first save of every new project fail; inventing a `project.json` would
+    // make the desktop post a key the web build does not.
+    expect(ApiProjectFilesSchema.parse({})).toEqual({})
+  })
+
+  it.each([
+    ['devices that is not an object', { devices: 'nope' }],
+    ['a device file that is not a string', { devices: { 'configuration.json': { board: 'uno' } } }],
+    ['a remote device that is not a string', { devices: { remote: { 'bus0.json': 5 } } }],
+    ['pous that is not nested', { pous: { programs: 'PROGRAM main' } }],
+    ['a project.json that is not a string', { 'project.json': { meta: {} } }],
+  ])('FAILS on %s rather than emptying the container', (_label, files) => {
+    // A malformed container used to be caught and replaced by `{}`. The project then
+    // opened with defaults and the next save deleted every file the container had held.
+    expect(ApiProjectFilesSchema.safeParse(files).success).toBe(false)
   })
 
   it('carries the optional containers through untouched', () => {
@@ -501,5 +566,87 @@ describe('ApiProjectFilesSchema', () => {
     })
 
     expect(parsed['plcopen-pending-import.xml']).toBe('<project/>')
+  })
+
+  it('survives a parse → patch → read round trip with servers in place', () => {
+    const parsed = ApiProjectFilesSchema.parse({
+      'project.json': '{}',
+      devices: { 'configuration.json': '{}', servers: { 'modbus.json': '{"port":502}' } },
+    })
+
+    setInEnvelope(parsed, 'devices/servers/opcua.json', '{"port":4840}')
+
+    expect(getInEnvelope(parsed, 'devices/servers/modbus.json')).toBe('{"port":502}')
+    expect(getInEnvelope(parsed, 'devices/servers/opcua.json')).toBe('{"port":4840}')
+    expect(getInEnvelope(parsed, 'devices/configuration.json')).toBe('{}')
+  })
+})
+
+describe('apiFilesToRaw', () => {
+  it('reads the servers from devices.servers', () => {
+    const raw = apiFilesToRaw('p1', {
+      'project.json': '{"meta":{}}',
+      devices: devicesWith({ servers: { 'modbus.json': '{"port":502}' } }),
+      pous: {},
+    })
+
+    expect(raw.serverFiles).toEqual([{ relativePath: 'devices/servers/modbus.json', content: '{"port":502}' }])
+  })
+
+  it('still reads the legacy top-level servers, letting the canonical slot win', () => {
+    const raw = apiFilesToRaw('p1', {
+      'project.json': '{}',
+      devices: devicesWith({ servers: { 'modbus.json': 'NEW' } }),
+      pous: {},
+      servers: { 'modbus.json': 'OLD', 'opcua.json': 'LEGACY' },
+    })
+
+    expect(raw.serverFiles).toEqual([
+      { relativePath: 'devices/servers/modbus.json', content: 'NEW' },
+      { relativePath: 'devices/servers/opcua.json', content: 'LEGACY' },
+    ])
+  })
+
+  it('reads a bare envelope into the documented sentinels', () => {
+    const raw = apiFilesToRaw('p1', {})
+
+    expect(raw).toEqual({
+      projectPath: 'p1',
+      projectJson: '',
+      deviceConfig: '{}',
+      pinMapping: '[]',
+      libraryManifest: '',
+      pouFiles: [],
+      serverFiles: [],
+      remoteDeviceFiles: [],
+      dataTypeFiles: [],
+      pendingPlcopenSource: undefined,
+    })
+  })
+
+  it('walks every category', () => {
+    const devices = devicesWith({ remote: { 'bus.json': 'RD' } })
+    devices['configuration.json'] = 'DC'
+    devices['pin-mapping.json'] = 'PM'
+
+    const raw = apiFilesToRaw('p1', {
+      'project.json': 'PJ',
+      'library.json': 'LIB',
+      'plcopen-pending-import.xml': '<x/>',
+      devices,
+      pous: { programs: { 'main.st': 'PG' } },
+      datatypes: { 'Motor.dt': 'DT' },
+    })
+
+    expect(raw).toMatchObject({
+      projectJson: 'PJ',
+      libraryManifest: 'LIB',
+      pendingPlcopenSource: '<x/>',
+      deviceConfig: 'DC',
+      pinMapping: 'PM',
+      remoteDeviceFiles: [{ relativePath: 'devices/remote/bus.json', content: 'RD' }],
+      pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'PG' }],
+      dataTypeFiles: [{ relativePath: 'datatypes/Motor.dt', content: 'DT' }],
+    })
   })
 })

@@ -27,14 +27,14 @@ import type {
 } from '../../../middleware/shared/ports/project-port'
 import {
   apiFilesToRaw,
-  type ApiProjectFiles,
   ApiProjectFilesSchema,
   envelopeFromWriteProjectFiles,
   getInEnvelope,
+  type IncomingApiProjectFiles,
   setInEnvelope,
 } from '../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
-import { parseJsonBodyAs } from '../edge-account/edge-http'
+import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
@@ -59,14 +59,28 @@ const ApiProjectRowSchema = z
 
 const RecentProjectsSchema = envelopeOf(z.object({ projects: z.array(ApiProjectRowSchema).nullish() }))
 
-const ProjectFilesSchema = envelopeOf(z.object({ files: ApiProjectFilesSchema.nullish() }))
+/**
+ * `.passthrough()`, because the envelope is posted back: the save endpoint deletes by
+ * omission, so a key the schema does not name (a `README.md`, a category Edge adds
+ * tomorrow) would be stripped on read and deleted on the next save.
+ */
+const IncomingFilesSchema = ApiProjectFilesSchema.passthrough()
+
+const ProjectFilesSchema = envelopeOf(z.object({ files: IncomingFilesSchema.nullish() }))
 
 const ProjectDetailsSchema = envelopeOf(
   z.object({
-    files: ApiProjectFilesSchema.nullish(),
+    files: IncomingFilesSchema.nullish(),
     capabilities: z.object({ canEdit: z.boolean().nullish() }).nullish(),
   }),
 )
+
+/** The field-level reasons a response could not be read, in one line. */
+function describeIssues(error: z.ZodError): string {
+  return error.issues.map((issue) => `${issue.path.join('.') || '(root)'} ${issue.message}`).join('; ')
+}
+
+const UNREADABLE_PROJECT = 'Autonomy Edge returned a project this editor cannot read'
 
 /**
  * The most recently changed projects on the account.
@@ -139,15 +153,31 @@ function detailsPath(projectId: string): string {
   return `/projects/${encodeURIComponent(projectId)}/details?uncached_version=${encodeURIComponent(APP_VERSION)}`
 }
 
-/** The current envelope, or null when it could not be read. */
-async function readEnvelope(projectId: string): Promise<ApiProjectFiles | null> {
+/** The current envelope, or why it could not be read. */
+async function readEnvelope(
+  projectId: string,
+): Promise<{ ok: true; files: IncomingApiProjectFiles } | { ok: false; error: string }> {
   const response = await edgeAuthedRequest(detailsPath(projectId))
 
-  if (!response || response.status < 200 || response.status >= 300) {
-    return null
+  if (!response) {
+    return { ok: false, error: 'Not signed in to Autonomy Edge.' }
   }
 
-  return parseJsonBodyAs(response.body, ProjectFilesSchema)?.data?.files ?? null
+  if (response.status < 200 || response.status >= 300) {
+    return { ok: false, error: `Autonomy Edge answered ${response.status}.` }
+  }
+
+  const parsed = ProjectFilesSchema.safeParse(parseJsonBody(response.body))
+
+  if (!parsed.success) {
+    // Said with the field, never swallowed: a malformed container used to become an
+    // empty one, and the save that followed deleted everything it had held.
+    return { ok: false, error: `${UNREADABLE_PROJECT}: ${describeIssues(parsed.error)}.` }
+  }
+
+  const files = parsed.data.data?.files
+
+  return files ? { ok: true, files } : { ok: false, error: 'Autonomy Edge returned no files.' }
 }
 
 /**
@@ -209,7 +239,19 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       }
     }
 
-    const payload = parseJsonBodyAs(response.body, ProjectDetailsSchema)?.data
+    const parsed = ProjectDetailsSchema.safeParse(parseJsonBody(response.body))
+
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: {
+          title: 'Failed to open project',
+          description: `${UNREADABLE_PROJECT}: ${describeIssues(parsed.error)}.`,
+        },
+      }
+    }
+
+    const payload = parsed.data.data
     const files = payload?.files
 
     if (!files) {
@@ -257,7 +299,7 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
 /** Persist a full envelope. `deletions` is omitted when empty, as the API expects. */
 async function writeEnvelope(
   projectId: string,
-  files: ApiProjectFiles,
+  files: IncomingApiProjectFiles,
   deletions: string[],
 ): Promise<{ success: boolean; error?: string }> {
   const response = await edgeAuthedRequest(`/projects/${encodeURIComponent(projectId)}/files/save`, {
@@ -308,12 +350,13 @@ export async function saveCloudFile(filePath: string, content: unknown): Promise
 
     // Read-modify-write, and the read is mandatory: the backend deletes by omission, so
     // sending only this file would wipe every other one.
-    const envelope = await readEnvelope(projectId)
+    const read = await readEnvelope(projectId)
 
-    if (!envelope) {
-      return { success: false, error: 'Could not read the project before saving it.' }
+    if (!read.ok) {
+      return { success: false, error: `Could not read the project before saving it: ${read.error}` }
     }
 
+    const envelope = read.files
     const text = typeof content === 'string' ? content : JSON.stringify(content)
 
     setInEnvelope(envelope, relativePath, text)

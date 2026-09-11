@@ -4,7 +4,7 @@
  *
  * The Edge API stores projects as a nested JSON object (top-level
  * `project.json`, `library.json`, `devices/{...}`, `pous/{cat}/{file}`,
- * `servers/{file}`).  The backend's `flattenFileHierarchy` walks
+ * `devices/servers/{file}`).  The backend's `flattenFileHierarchy` walks
  * this shape and lands each leaf at its `relativePath` on S3.
  *
  * It used to live in the web adapter, described here as web-specific
@@ -32,8 +32,8 @@ import { iterateWriteProjectFiles } from './iterate-write-project-files'
 
 /**
  * Shape the Edge API uses for project file payloads.  Optional
- * top-level keys (`library.json`, `servers`) are present only when
- * the project owns those files; the canonical `findInEnvelope` /
+ * keys (`library.json`, `devices.servers`) are present only when
+ * the project owns those files; the canonical `getInEnvelope` /
  * `setInEnvelope` pair handles the missing-container case.
  */
 export interface ApiProjectFiles {
@@ -51,13 +51,20 @@ export interface ApiProjectFiles {
   devices: Record<string, string> & {
     /** Nested map for `devices/remote/*` files; absent when empty. */
     remote?: Record<string, string>
+    /** Nested map for `devices/servers/*` files; absent when empty. */
+    servers?: Record<string, string>
   }
   /** Nested map: `pous[category][filename]`. */
   pous: Record<string, Record<string, string>>
   /** Flat map for `datatypes/*.dt` files; absent when the project
    *  has no data-type files (predates the format or has no types). */
   datatypes?: Record<string, string>
-  /** Flat map for `devices/servers/*` files; absent when empty. */
+  /**
+   * Legacy location of the server files.  Earlier builds wrote them to a top-level
+   * `servers` slot, which Edge stores at `servers/{file}` rather than
+   * `devices/servers/{file}`; a project saved by one of those builds still answers
+   * with this key.  Read as a fallback, never written.
+   */
   servers?: Record<string, string>
   /**
    * Build artifacts: the compiled `<name>.stlib` for library projects
@@ -85,48 +92,43 @@ export type IncomingApiProjectFiles = Partial<ApiProjectFiles>
 const FileMapSchema = z.record(z.string())
 
 /**
- * `devices` is a flat map of file contents that ALSO carries one nested slot, so a
- * plain record of strings is wrong for it: `remote` is a map, and a schema that
+ * `devices` is a flat map of file contents that ALSO carries nested slots, so a plain
+ * record of strings is wrong for it: `remote` and `servers` are maps, and a schema that
  * demands a string for every key rejects the whole container the moment a project has
- * a remote device — silently emptying it, taking `configuration.json` and
- * `pin-mapping.json` down with it. `catchall` keeps the flat files as strings while
- * `remote` keeps its own shape.
+ * a remote device or a server. `catchall` keeps the flat files as strings while the
+ * nested slots keep their own shape.
  */
-const DevicesSchema = z.object({ remote: FileMapSchema.optional() }).catchall(z.string())
+const DevicesSchema = z
+  .object({ remote: FileMapSchema.optional(), servers: FileMapSchema.optional() })
+  .catchall(z.string())
 
 /**
  * The envelope as it arrives from the API, for the callers that read one off
  * the wire.
  *
- * Every container is optional because the server omits the ones a project has
- * no files for — a brand-new project answers `files: {}` — and `getInEnvelope`
- * already guards each with `?.` for that reason.  Only `project.json` is
- * defaulted, to the empty string the readers already treat as "no manifest":
- * the alternative is a validation failure on the one response shape a new
- * project is guaranteed to produce.
+ * Every key is optional because the server omits the ones a project has no
+ * files for — a brand-new project answers `files: {}` — and `getInEnvelope`
+ * already guards each with `?.` for that reason.  Nothing is defaulted and
+ * nothing is caught: a container that arrives malformed fails the parse, so the
+ * caller can say so, rather than being replaced by an empty one that the next
+ * save would persist as "no files here".
  *
  * Loose on purpose about what it does NOT name: zod 3 strips unknown keys
  * rather than rejecting, so a category Edge adds tomorrow costs a slot in the
- * result, never an unreadable project.
+ * result, never an unreadable project.  A caller that writes the parsed value
+ * back must use `.passthrough()` so those keys survive the round trip.
  */
 export const ApiProjectFilesSchema = z.object({
-  'project.json': z.string().catch(''),
+  'project.json': z.string().optional(),
   'library.json': z.string().optional(),
   'plcopen-pending-import.xml': z.string().optional(),
-  devices: DevicesSchema.catch({}),
-  pous: z.record(FileMapSchema).catch({}),
+  devices: DevicesSchema.optional(),
+  pous: z.record(FileMapSchema).optional(),
   datatypes: FileMapSchema.optional(),
   servers: FileMapSchema.optional(),
   build: FileMapSchema.optional(),
-})
-
-/**
- * Compile-time proof that what the schema produces IS an `ApiProjectFiles`.
- * A field renamed on the interface without being renamed here fails at this
- * line rather than at some distant call site.
- */
-const _schemaProducesTheInterface: (parsed: z.infer<typeof ApiProjectFilesSchema>) => ApiProjectFiles = (parsed) =>
-  parsed
+  // A field renamed on the interface without being renamed here fails on this line.
+}) satisfies z.ZodType<IncomingApiProjectFiles, z.ZodTypeDef, unknown>
 
 /**
  * Look up a single file's content by its project-root-relative path.
@@ -147,7 +149,7 @@ export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string
     return env.devices?.remote?.[parts[2]]
   }
   if (parts.length === 3 && parts[0] === 'devices' && parts[1] === 'servers') {
-    return env.servers?.[parts[2]]
+    return env.devices?.servers?.[parts[2]] ?? env.servers?.[parts[2]]
   }
   if (parts.length === 3 && parts[0] === 'pous') {
     return env.pous?.[parts[1]]?.[parts[2]]
@@ -170,7 +172,7 @@ export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string
  * Patch the envelope so the slot for `relativePath` carries `content`.
  * Creates every container on the way in — the top-level `env.devices` /
  * `env.pous` maps as well as the nested `env.devices.remote`,
- * `env.servers`, `env.pous[category]`.  No-op for unknown paths so
+ * `env.devices.servers`, `env.pous[category]`.  No-op for unknown paths so
  * callers can blindly forward an iterator's output without a path
  * allowlist — unknown categories simply fall through.
  *
@@ -217,8 +219,12 @@ export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string
     return
   }
   if (parts.length === 3 && parts[0] === 'devices' && parts[1] === 'servers') {
-    if (!env.servers) env.servers = {}
-    env.servers[parts[2]] = content
+    if (!env.devices) env.devices = {}
+    if (!env.devices.servers) env.devices.servers = {}
+    env.devices.servers[parts[2]] = content
+    // A copy left at the legacy top-level slot would shadow nothing on read but
+    // would keep a stale `servers/{file}` alive on the server.
+    if (env.servers) delete env.servers[parts[2]]
     return
   }
   if (parts.length === 3 && parts[0] === 'pous') {
@@ -275,7 +281,7 @@ export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProj
  * which meant the desktop editor could not read a cloud project without a second
  * copy of the same knowledge.
  */
-export function apiFilesToRaw(projectPath: string, files: ApiProjectFiles) {
+export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFiles) {
   const pouFiles = []
   for (const [category, categoryFiles] of Object.entries(files.pous ?? {})) {
     for (const [filename, content] of Object.entries(categoryFiles)) {
@@ -283,7 +289,8 @@ export function apiFilesToRaw(projectPath: string, files: ApiProjectFiles) {
     }
   }
   const serverFiles = []
-  for (const [filename, content] of Object.entries(files.servers ?? {})) {
+  // The canonical slot wins over the legacy top-level one when both name a file.
+  for (const [filename, content] of Object.entries({ ...files.servers, ...files.devices?.servers })) {
     serverFiles.push({ relativePath: `devices/servers/${filename}`, content })
   }
   const remoteDeviceFiles = []
@@ -296,7 +303,7 @@ export function apiFilesToRaw(projectPath: string, files: ApiProjectFiles) {
   }
   return {
     projectPath,
-    projectJson: files['project.json'],
+    projectJson: files['project.json'] ?? '',
     deviceConfig: files.devices?.['configuration.json'] ?? '{}',
     pinMapping: files.devices?.['pin-mapping.json'] ?? '[]',
     // Empty string when the API doesn't carry a `library.json`
