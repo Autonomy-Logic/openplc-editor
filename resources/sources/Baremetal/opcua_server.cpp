@@ -46,6 +46,12 @@ Design notes that outlive the skeleton:
 /** Microseconds of each scan cycle the server may consume.  Declared here
  *  rather than in the generated header because it is a runtime scheduling
  *  policy, not project configuration. */
+/** The longest the server may go unserviced, from the project's OPC-UA screen
+ *  (`cycleTimeMs`). Fallback only matters for a hand-written config.h. */
+#ifndef OPCUA_SYNC_INTERVAL_MS
+#define OPCUA_SYNC_INTERVAL_MS 100u
+#endif
+
 /** What one UA_Server_run_iterate() may cost in the worst case.
  *
  *  Not a budget that gets enforced mid-call -- there is no way to interrupt
@@ -77,6 +83,12 @@ uint32_t   g_calls    = 0;
  * but it does mean OPC-UA is being starved and the scan interval is too tight
  * for the two to coexist comfortably. Worth surfacing to the user. */
 uint32_t   g_skipped  = 0;
+/* Iterations that ran because the sync interval came due rather than because
+ * there was slack. A high ratio of forced to total means the scan interval is
+ * too tight to absorb OPC-UA opportunistically -- useful to surface, not a
+ * fault in itself. */
+uint32_t   g_forced   = 0;
+unsigned long g_next_due_ms = 0;
 uint64_t   g_total_us = 0;
 UA_Server* g_server   = nullptr;
 
@@ -272,22 +284,40 @@ void opcuatask(uint32_t slack_us)
                       (unsigned long)g_max_us,
                       (unsigned long)(g_calls ? (g_total_us / g_calls) : 0),
                       (unsigned long)g_calls);
-            OPCUA_LOG("[scan] skipped=%lu (no slack)", (unsigned long)g_skipped);
+            OPCUA_LOG("[scan] skipped=%lu forced=%lu sync=%lums",
+                      (unsigned long)g_skipped, (unsigned long)g_forced,
+                      (unsigned long)OPCUA_SYNC_INTERVAL_MS);
         }
     }
 
     if (!g_started)
         return;
 
-    // Admission control. The PLC cycle comes first: if what is left of it
-    // cannot absorb a worst-case iteration, do not start one. Skipping costs a
-    // few milliseconds of OPC-UA latency; overrunning costs scan-cycle
-    // integrity, which is the thing the PLC exists to provide.
-    if (slack_us < OPCUA_WORST_CASE_US)
+    // Guaranteed service, plus opportunistic service. The same shape Modbus
+    // has: it runs once per scan cycle come what may, and again whenever there
+    // is room.
+    //
+    // A pure slack gate was WRONG and briefly shipped here. On a scan interval
+    // short enough that the PLC logic and Modbus consume most of it, the slack
+    // test never passes and the server is starved FOREVER -- it does not
+    // degrade, it stops. Worse, the tighter the cycle the more completely it
+    // fails, which is exactly backwards from a graceful limit.
+    //
+    // So slack only decides whether to run EARLY. Once OPCUA_SYNC_INTERVAL_MS
+    // has elapsed the server runs regardless, because a scan cycle that cannot
+    // afford ~5 ms of OPC-UA once per sync interval is a project whose scan
+    // interval is mis-set, and the honest answer to that is a visible overrun
+    // count, not a silently dead protocol.
+    const unsigned long now_ms = millis();
+    const bool due = (long)(now_ms - g_next_due_ms) >= 0;
+    if (!due && slack_us < OPCUA_WORST_CASE_US)
     {
         g_skipped++;
-        return;
+        return;   // not due yet, and no room to get ahead
     }
+    g_next_due_ms = now_ms + OPCUA_SYNC_INTERVAL_MS;
+    if (due)
+        g_forced++;
 
     const unsigned long deadline = micros() + OPCUA_SCAN_BUDGET_US;
 

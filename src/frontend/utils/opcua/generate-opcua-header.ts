@@ -310,6 +310,14 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
   lines.push(`#define OPCUA_PORT ${server.port}`)
   lines.push(`#define OPCUA_ENDPOINT_PATH ${cString(server.endpointPath)}`)
   lines.push(`#define OPCUA_NAMESPACE_URI ${cString(resolved.runtime.config.address_space.namespace_uri)}`)
+  // How often the server MUST be serviced, from the project's OPC-UA screen.
+  //
+  // This is the same `cycleTimeMs` Runtime v4 uses as its subscription push
+  // cycle. The baremetal server has no subscriptions, so it means the plainer
+  // thing here: the longest the server may go unserviced. It is a GUARANTEE,
+  // not a cap -- opcuatask() also runs opportunistically whenever the scan
+  // cycle has slack, exactly as Modbus does.
+  lines.push(`#define OPCUA_SYNC_INTERVAL_MS ${resolved.runtime.config.cycle_time_ms}u`)
   lines.push('')
   lines.push('// ---- Declared by the VPP: memory and protocol limits ----')
   lines.push(`#define OPCUA_ARENA_SIZE ${profile.arenaBytes}u`)
