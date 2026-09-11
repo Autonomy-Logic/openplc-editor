@@ -23,7 +23,11 @@ function lookupPath(path: string, context: unknown): unknown {
   let cursor: unknown = context
   for (const part of path.split('.')) {
     if (cursor === null || cursor === undefined || typeof cursor !== 'object') return undefined
-    cursor = Object.hasOwn(cursor, part) ? Reflect.get(cursor, part) : undefined
+    // `hasOwnProperty` via call, not `Object.hasOwn`: the web build's `lib` is
+    // below es2022. The guard itself matters -- without it an `optionsRef` of
+    // `board.constructor` would walk the prototype chain and resolve.
+    if (!Object.prototype.hasOwnProperty.call(cursor, part)) return undefined
+    cursor = Reflect.get(cursor, part)
   }
   return cursor
 }
