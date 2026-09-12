@@ -36,6 +36,7 @@ Design notes that outlive the skeleton:
 #include "opcua_log.h"
 #include "opcua_arch.h"
 #include "opcua_net.h"
+#include "opcua_auth.h"
 #include "opcua_nodes.h"
 #include "opcua_types.h"
 
@@ -225,6 +226,16 @@ void opcua_init()
               (unsigned long)config->tcpBufSize, (unsigned long)config->tcpMaxMsgSize,
               (unsigned long)config->tcpMaxChunks, (unsigned)config->maxSessions,
               (unsigned)config->maxSecureChannels);
+
+    // Before run_startup: the endpoints advertise which user-token policies
+    // the server accepts, and they are built during startup.
+    if (opcua_auth_install(config) != UA_STATUSCODE_GOOD)
+    {
+        OPCUA_LOG("[auth] access control install FAILED");
+        UA_Server_delete(g_server);
+        g_server = nullptr;
+        return;
+    }
 
     if (opcua_nodes_populate(g_server, nullptr) != UA_STATUSCODE_GOOD)
     {
