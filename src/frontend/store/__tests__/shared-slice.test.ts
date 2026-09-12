@@ -1457,7 +1457,22 @@ describe('createSharedSlice', () => {
         addServer('ExistingServer')
         const result = store.getState().serverActions.rename('OldServer', 'ExistingServer')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Server name already exists')
+        expect(result.message).toBe('Server already exists')
+      })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().serverActions.rename('OldServer', 'oldserver')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldServer']).toBeDefined()
+        expect(state.files['oldserver']).toBeUndefined()
+        expect(state.project.data.servers?.[0].name).toBe('OldServer')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().serverActions.rename('OldServer', 'OldServer')).toEqual({ ok: true })
       })
     })
   })
@@ -1602,7 +1617,29 @@ describe('createSharedSlice', () => {
         addRemoteDevice('ExistingDevice')
         const result = store.getState().remoteDeviceActions.rename('OldDevice', 'ExistingDevice')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Device name already exists')
+        expect(result.message).toBe('Remote device already exists')
+      })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'olddevice')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldDevice']).toBeDefined()
+        expect(state.files['olddevice']).toBeUndefined()
+        expect(state.project.data.remoteDevices?.[0].name).toBe('OldDevice')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().remoteDeviceActions.rename('OldDevice', 'OldDevice')).toEqual({ ok: true })
+      })
+
+      it('refuses a rename onto a POU name and says so', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+        expect(store.getState().files['OldDevice']).toBeDefined()
       })
     })
   })
@@ -1719,6 +1756,23 @@ describe('createSharedSlice', () => {
       it('allows renaming to the same name (no-op)', () => {
         const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100')
         expect(result).toEqual({ ok: true })
+      })
+
+      it('rejects renaming a slave onto a POU name, and says which', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+      })
+
+      it('keeps a slave name out of reach of the other workspace kinds', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'EK1100', language: 'st' })).toEqual({
+          ok: false,
+          message: '"EK1100" is already the name of an EtherCAT slave',
+        })
+        expect(store.getState().serverActions.create({ name: 'el1809', protocol: 'modbus-tcp' })).toEqual({
+          ok: false,
+          message: '"el1809" is already the name of an EtherCAT slave',
+        })
       })
 
       it('returns error when the bus does not exist', () => {
@@ -2488,6 +2542,74 @@ describe('createSharedSlice', () => {
         expect(store.getState().editors.find((e) => e.meta.name === 'A')).toBeUndefined()
         // And the next tab took over cleanly.
         expect(store.getState().editor.meta.name).toBe('B')
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // openRetrievedProject
+    // -----------------------------------------------------------------------
+    describe('openRetrievedProject', () => {
+      // The shared tail of both platforms' retrieve adapters: the desktop
+      // unpacks an archive to a scratch directory and reads it back, web parses
+      // the same archive in memory, and from here on they are the same two
+      // steps. Written per platform, the desktop's copy shipped without the
+      // load and web's marked the project ephemeral twice.
+      it('loads the project and marks it as having no location yet', () => {
+        store.getState().sharedWorkspaceActions.openRetrievedProject({
+          meta: { name: 'Irrigation Controller', type: 'plc-project', path: '/scratch/retrieved/irrigation' },
+          projectData: {
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+
+        expect(store.getState().project.meta.name).toBe('Irrigation Controller')
+        // What stops the next Save writing into a scratch directory the app
+        // prunes behind the user: it points them at Save As instead.
+        expect(store.getState().workspace.isEphemeralProject).toBe(true)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // hasUnsavedChanges
+    // -----------------------------------------------------------------------
+    describe('hasUnsavedChanges', () => {
+      // The rule `closeProject` applies, asked on its own by a caller that has
+      // to replace the project rather than close it -- retrieving from a
+      // device. The point of sharing it is that the two cannot drift: a caller
+      // that re-derived the condition would start discarding work silently the
+      // day the rule changed.
+      it('is true while the editing state is unsaved', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is true while any file is unsaved, whatever the editing state says', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: false })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is false once everything is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(false)
+      })
+
+      it('agrees with what closeProject does about it', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        const dirty = store.getState().sharedWorkspaceActions.hasUnsavedChanges()
+        const { pendingConfirmation } = store.getState().sharedWorkspaceActions.closeProject()
+
+        expect(pendingConfirmation).toBe(dirty)
       })
     })
 

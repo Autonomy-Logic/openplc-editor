@@ -18,6 +18,7 @@
  *   project:open-recent-accelerator
  *   project:save-accelerator
  *   project:save-file-accelerator
+ *   project:retrieve-accelerator
  *   workspace:close-project-accelerator
  *   compiler:export-project-request
  *   workspace:close-tab-accelerator
@@ -27,6 +28,8 @@
  *   edit:redo-request
  *   workspace:switch-perspective-accelerator
  *   about:open-accelerator
+ *   project:print-accelerator
+ *   project:page-setup-accelerator
  */
 
 import type { AcceleratorPort } from '../../shared/ports/accelerator-port'
@@ -58,12 +61,24 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
       return window.bridge.saveFileAccelerator(() => callback())
     },
 
+    onRetrieveProject(callback: () => void): Unsubscribe {
+      return window.bridge.retrieveProjectAccelerator(() => callback())
+    },
+
     onCloseProject(callback: () => void): Unsubscribe {
       return window.bridge.closeProjectAccelerator(() => callback())
     },
 
     onExportProject(callback: () => void): Unsubscribe {
       return window.bridge.exportProjectRequest(() => callback())
+    },
+
+    onPrint(callback: () => void): Unsubscribe {
+      return window.bridge.printAccelerator(() => callback())
+    },
+
+    onPageSetup(callback: () => void): Unsubscribe {
+      return window.bridge.pageSetupAccelerator(() => callback())
     },
 
     onCloseTab(callback: () => void): Unsubscribe {

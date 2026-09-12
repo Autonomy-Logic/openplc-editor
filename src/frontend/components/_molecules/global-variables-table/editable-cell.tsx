@@ -9,6 +9,7 @@ import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/type
 import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import type { ProjectResponse } from '../../../store/slices/project'
+import { elementNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
 import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../../../utils/remote-device-options'
@@ -43,6 +44,8 @@ type IEditableCellProps = CellContext<PLCGlobalVariable, unknown> & {
    * `propagateGlobalVariableListRename`'s job.
    */
   skipReferenceImpact?: boolean
+  /** A Resource global is a top-level symbol; a list member is not, so only the former is gated by name. */
+  isResourceGlobal?: boolean
 }
 const EditableNameCell = ({
   getValue,
@@ -51,6 +54,7 @@ const EditableNameCell = ({
   table,
   editable = true,
   skipReferenceImpact = false,
+  isResourceGlobal = true,
 }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()
@@ -93,6 +97,16 @@ const EditableNameCell = ({
       setCellValue(oldName)
       setIsEditing(false)
       return
+    }
+
+    if (isResourceGlobal) {
+      const collision = elementNameCollision(useOpenPLCStore.getState(), newName, 'resource-global', oldName)
+      if (collision) {
+        toast({ title: 'Variable already exists', description: collision, variant: 'fail' })
+        setCellValue(oldName)
+        setIsEditing(false)
+        return
+      }
     }
 
     const impact: ReferenceImpactAnalysis = skipReferenceImpact

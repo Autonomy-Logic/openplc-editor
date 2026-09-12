@@ -2,19 +2,25 @@
  * This need to be refactored!!!!
  */
 import { startCase } from 'lodash'
+import { GitBranch as SourceControlIcon } from 'lucide-react'
 import { ComponentProps, useCallback, useMemo } from 'react'
 
 import type { FbInstanceInfo } from '../../../../middleware/shared/ports'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { ConfigIcon } from '../../../assets/icons/interface/Config'
+import { DeviceTransferIcon } from '../../../assets/icons/interface/DeviceTransfer'
 import { ArrayIcon } from '../../../assets/icons/project/Array'
+import { DeviceIcon } from '../../../assets/icons/project/Device'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
+import { LibraryIcon } from '../../../assets/icons/project/Library'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
+import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
 import { PLCIcon } from '../../../assets/icons/project/PLC'
 import { RemoteDeviceIcon } from '../../../assets/icons/project/RemoteDevice'
 import { ServerIcon } from '../../../assets/icons/project/Server'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
+import { UsersIcon } from '../../../assets/icons/project/Users'
 import { LanguageIcon, LanguageIconType } from '../../../data/constants/language-icons'
 import { PouIcon, PouIconType } from '../../../data/constants/pou-icons'
 import { useOpenPLCStore } from '../../../store'
@@ -43,15 +49,17 @@ const Breadcrumbs = () => {
 
   const { meta } = editor
 
+  // Data-type derivations only. `configuration` used to live here for the
+  // `meta.name === 'Configuration'` branch that the device trail replaced, and
+  // nothing looked it up once that went.
   const derivationIcons = {
     enumerated: EnumIcon,
     structure: StructureIcon,
     array: ArrayIcon,
-    configuration: ConfigIcon,
   }
 
   const getPouTypeOrDataTypeOrResource = ():
-    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'global-variable-list' | 'device']
+    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'global-variable-list']
     | null => {
     if ('pouType' in meta) {
       return [meta.pouType] as ['program' | 'function' | 'function-block']
@@ -63,9 +71,6 @@ const Breadcrumbs = () => {
     // labelled "Resource", since that branch catches everything it does not recognise.
     if (globalVariableLists?.find((list) => list.name === meta.name)) {
       return ['global-variable-list']
-    }
-    if (meta.name === 'Configuration') {
-      return ['device']
     }
     return ['resource']
   }
@@ -79,10 +84,6 @@ const Breadcrumbs = () => {
     // through to the ST icon, which is silent rather than obviously wrong.
     if (globalVariableLists?.find((list) => list.name === meta.name)) {
       return [GlobalVariableListIcon, 'global-variable-list']
-    }
-    const deviceTypeDerivation = meta.name === 'Configuration' ? 'configuration' : null
-    if (deviceTypeDerivation) {
-      return [derivationIcons[deviceTypeDerivation], deviceTypeDerivation]
     }
     if ('language' in meta) {
       return [LanguageIcon[meta.language], meta.language]
@@ -174,6 +175,114 @@ const Breadcrumbs = () => {
         </li>
       </ol>
     )
+  }
+
+  // Device tree branch: <ProjectName> > Device > <Screen>.
+  //
+  // Keyed off `editor.type`, never off `meta.name`. The name match this
+  // replaced recognised the single string 'Configuration', so every other
+  // screen under the branch — Runtime Status, Orchestrators, Persistent
+  // Storage, User Management — fell through to the `resource` fallback at the
+  // foot of `getPouTypeOrDataTypeOrResource` and was labelled "Resource".
+  //
+  // Icons match the leaf each screen has in the project tree (`LeafSources` in
+  // _molecules/project-tree), so the trail and the tree read as one thing.
+  const deviceScreenIcon = (): React.ElementType | null => {
+    switch (editor.type) {
+      case 'plc-device':
+        switch (editor.meta.derivation) {
+          case 'orchestrators':
+            return OrchestratorIcon
+          case 'pin-mapping':
+            return DeviceTransferIcon
+          case 'configuration':
+          case 'runtime-status':
+            return ConfigIcon
+          default: {
+            // A derivation added without an icon would fall through to the
+            // `resource` fallback and be labelled "Resource" — the exact bug
+            // this trail exists to fix.
+            const exhaustive: never = editor.meta.derivation
+            return exhaustive
+          }
+        }
+      case 'plc-persistent-storage':
+        return ConfigIcon
+      case 'plc-user-management':
+        return UsersIcon
+    }
+    return null
+  }
+
+  const DeviceScreenIcon = deviceScreenIcon()
+  if (DeviceScreenIcon) {
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={DeviceIcon} text='Device' isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={DeviceScreenIcon} text={meta.name} isLast />
+        </li>
+      </ol>
+    )
+  }
+
+  // Screens that are not under any tree branch: a vendor screen sits at the
+  // project root beside the Device branch, and the two managers are opened from
+  // the workspace rather than the tree. Two segments, matching the manifest's
+  // trail above — inventing a parent they do not have would be worse than the
+  // "Resource" they used to show.
+  const standaloneScreenIcon = (): React.ElementType | null => {
+    switch (editor.type) {
+      case 'plc-vendor-screen':
+      case 'plc-package-manager':
+        return ConfigIcon
+      case 'plc-library-manager':
+        return LibraryIcon
+    }
+    return null
+  }
+
+  const StandaloneScreenIcon = standaloneScreenIcon()
+  if (StandaloneScreenIcon) {
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={StandaloneScreenIcon} text={meta.name} isLast />
+        </li>
+      </ol>
+    )
+  }
+
+  // Read-only diff tab. `meta.name` is the tab key ("Diff: <path>"), so the
+  // last crumb uses the path itself.
+  if (editor.type === 'diff-viewer') {
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={SourceControlIcon} text='Source Control' isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={SourceControlIcon} text={editor.meta.filePath} isLast />
+        </li>
+      </ol>
+    )
+  }
+
+  // No tab is really open yet — render nothing rather than a trail for a
+  // document that does not exist.
+  if (editor.type === 'available') {
+    return null
   }
 
   return (

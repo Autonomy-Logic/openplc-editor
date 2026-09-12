@@ -38,7 +38,12 @@
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
-import { normaliseLocation, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
+import {
+  type NavTarget,
+  normaliseLocation,
+  routeToPouBody,
+  routeToPouPreamble,
+} from '../lsp-shared/definition-redirect'
 
 export interface PythonRedirectContext {
   /** The Monaco model URI the user clicked Go to Definition from. */
@@ -63,8 +68,11 @@ export interface PythonRedirectContext {
  * caller can fall back to the URI-reachability filter.
  */
 export function redirectPythonDefinitionToStore(loc: Location | LocationLink, ctx: PythonRedirectContext): boolean {
-  const target = normaliseLocation(loc)
+  return redirectPythonNavTarget(normaliseLocation(loc), ctx)
+}
 
+/** Same routing for a target already in LSP coordinates. */
+export function redirectPythonNavTarget(target: NavTarget, ctx: PythonRedirectContext): boolean {
   // Cross-file navigation isn't supported yet — every reachable
   // Python definition target lives in the source URI.  Anything
   // else (a typeshed stub click, an external import) falls through
