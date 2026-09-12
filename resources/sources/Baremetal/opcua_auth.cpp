@@ -191,8 +191,40 @@ bool opcua_auth_verify(const char* password, size_t password_len, const char* st
     const unsigned long t0 = micros();
     bool ok = false;
 
+    if (stored == nullptr)
+        return false;
+
+    // plain:<password>
+    //
+    // What this target asks the build for. The editor holds the project's
+    // password and the BUILD derives whatever the target declares in
+    // `capabilities.opcua.passwordScheme`, so this runtime never has to run a
+    // KDF it cannot afford -- PBKDF2 costs ~124 us/iteration here and
+    // open62541 verifies synchronously inside one scan, which at the 600 000
+    // iterations a Linux runtime uses would be 74 seconds of stopped PLC.
+    //
+    // It is a weaker credential at rest and that is stated plainly in
+    // OPCUA.md. It is also not the weak link: this target runs OPC-UA without
+    // encryption, so the password already crosses the network in the clear,
+    // and its flash has no secure boot.
+    if (strncmp(stored, "plain:", 6) == 0)
+    {
+        const char* want_pw = stored + 6;
+        const size_t want_len = strlen(want_pw);
+        // Constant-time in the comparison, and length-checked first so the
+        // loop below cannot read past either buffer.
+        uint8_t diff = (uint8_t)((want_len == password_len) ? 0 : 1);
+        const size_t n = (want_len < password_len) ? want_len : password_len;
+        for (size_t i = 0; i < n; i++)
+            diff |= (uint8_t)(want_pw[i] ^ password[i]);
+        g_last_us = (uint32_t)(micros() - t0);
+        OPCUA_LOG("[auth] plain compare took=%luus -> %s",
+                  (unsigned long)g_last_us, (diff == 0) ? "OK" : "REJECT");
+        return diff == 0;
+    }
+
     // pbkdf2:sha256:<iters>$<salt-b64>$<hash-b64>
-    if (stored == nullptr || strncmp(stored, "pbkdf2:sha256:", 14) != 0)
+    if (strncmp(stored, "pbkdf2:sha256:", 14) != 0)
         return false;
 
     const char* p = stored + 14;

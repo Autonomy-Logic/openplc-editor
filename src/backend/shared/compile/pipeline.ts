@@ -48,6 +48,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
+import { materialiseOpcUaCredentials } from './opcua-credentials'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
@@ -541,8 +542,23 @@ async function runCompilePipelineInner(
     let confs
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
+      // Derive each OPC-UA user's stored credential for THIS target, once, before
+      // anything consumes `servers`. Both consumers — Runtime v4's
+      // `opcua_config.json` and the baremetal `OPCUA_USERS[]` table — then see a
+      // credential the selected device can actually verify.
+      //
+      // This is the point that knows both the project and the target, which is
+      // exactly why the derivation lives here rather than in the editor's user
+      // dialog: storage format is a device property, and the dialog has no idea
+      // what the device is. See ./opcua-credentials.ts.
+      const opcuaCredentialServers = materialiseOpcUaCredentials(
+        processedData.servers,
+        targetCapabilities.opcua,
+        (message) => emit({ stage: 'confs', message, level: 'warning' }),
+      )
+
       confs = generateRuntimeConfs({
-        servers: processedData.servers as never,
+        servers: opcuaCredentialServers as never,
         remoteDevices: processedData.remoteDevices as never,
         instances: processedData.configuration.resource.instances.map(
           (inst: { name: string; task: string; program: string }) => ({
@@ -895,8 +911,18 @@ async function runCompilePipelineInner(
   let opcuaConfigH: string | undefined
   if (targetCapabilities.opcuaServer && targetCapabilities.opcua) {
     try {
+      // Same derivation as the Runtime v4 branch, for the same reason: the
+      // credential this device stores is this device's property, and here is
+      // where the target is known. A LOGO! declaring `passwordScheme: plain`
+      // gets `plain:<password>`; anything declaring nothing gets the PBKDF2
+      // string Runtime v4 has always consumed.
+      const opcuaCredentialServers = materialiseOpcUaCredentials(
+        processedData.servers,
+        targetCapabilities.opcua,
+        (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      )
       const resolvedOpcUa = buildOpcUaRuntimeConfig(
-        processedData.servers as never,
+        opcuaCredentialServers as never,
         debugMapJson,
         processedData.configuration.resource.instances.map((inst: { name: string; task: string; program: string }) => ({
           name: inst.name,

@@ -458,6 +458,26 @@ const OpcUaUserSchema = z.object({
   id: z.string(),
   type: z.enum(['password', 'certificate']),
   username: z.string().nullable(),
+  /** The password, in the clear.
+   *
+   *  Deliberate, and it is the only thing that makes one project buildable for
+   *  every target: how a credential is stored is a DEVICE property, so the
+   *  build has to derive it, and to derive it the build needs the password.
+   *  The editor previously hashed at user-creation time with parameters fixed
+   *  before the target was even known, which made a project silently
+   *  incompatible with any device that could not afford those parameters.
+   *
+   *  The consequence is real and has to be stated plainly: a project file
+   *  containing OPC-UA users is a SECRET and must be handled as one. That is
+   *  how industrial engineering tools generally treat project archives, and it
+   *  is consistent with the rest of this system's posture -- the credential
+   *  ends up in a firmware image on a device without secure boot, and on a
+   *  `#None` endpoint it crosses the network in the clear anyway. */
+  password: z.string().nullable().optional(),
+  /** Legacy: a pre-hashed credential from a project authored before the build
+   *  took over derivation. Passed through untouched so existing Runtime v4
+   *  projects keep working; it cannot be re-derived for another target, so the
+   *  build warns when one is used on a target that wants a different scheme. */
   passwordHash: z.string().nullable(),
   certificateId: z.string().nullable(),
   role: OpcUaUserRoleSchema,

@@ -68,7 +68,11 @@ export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   security: 'none',
   certificates: false,
   subscriptions: false,
-  kdfIterations: 100_000,
+  // 600 000 and PBKDF2 by default: that is what the editor hard-coded and what
+  // Runtime v4 consumes, so a target declaring nothing keeps working exactly as
+  // it did. Constrained targets opt DOWN explicitly.
+  kdfIterations: 600_000,
+  passwordScheme: 'pbkdf2-sha256',
   hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
 }
 

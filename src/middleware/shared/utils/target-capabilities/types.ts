@@ -114,12 +114,33 @@ export interface OpcUaTargetProfile {
 
   /** PBKDF2-HMAC-SHA256 work factor for username/password auth.
    *
-   *  The editor hashes at 600 000 iterations, which is right for a Linux
-   *  runtime and ~15 s of software SHA-256 on a 120 MHz Cortex-M4 — long
-   *  enough to stall the scan through an entire ActivateSession. The runtime
-   *  chunks the KDF across scan cycles regardless, so this only sets how much
-   *  login LATENCY the target pays: parts with `hw.sha256` keep 600 000. */
+   *  Only meaningful when `passwordScheme` is `pbkdf2-sha256`. 600 000 is the
+   *  OWASP figure and what Runtime v4 has always used; a target that cannot
+   *  afford it says so through `passwordScheme`, not by quietly lowering this. */
   kdfIterations: number
+
+  /** How the BUILD turns a project's plaintext password into whatever this
+   *  target stores and compares against.
+   *
+   *  This is a device property, not an editor preference, which is why it
+   *  lives here. The editor used to hash at a hard-coded 600 000 iterations
+   *  the moment a user was created — before the target was necessarily even
+   *  chosen — so a project authored against Runtime v4 and later pointed at a
+   *  microcontroller carried a credential that microcontroller could not
+   *  verify, and nothing ever re-derived it. The project now stores the
+   *  password and the build derives the credential, so changing target and
+   *  rebuilding is all it takes.
+   *
+   *  - `pbkdf2-sha256` — `pbkdf2:sha256:<iters>$<salt>$<hash>`, exactly the
+   *    string Runtime v4 already consumes. The default, so a target that
+   *    declares nothing behaves as it always did.
+   *  - `plain` — `plain:<password>`. For parts with no crypto acceleration,
+   *    where PBKDF2 at any secure iteration count costs seconds of stalled
+   *    scan (measured ~124 us/iteration on a TM4C1294NCPDT). It is not a
+   *    downgrade in effective security so much as an honest one: such targets
+   *    run OPC-UA without encryption, so the password already crosses the
+   *    network in the clear, and their flash has no secure boot. */
+  passwordScheme: 'pbkdf2-sha256' | 'plain'
 
   /** Hardware facts about the part. These gate the fields above; they are
    *  not user preferences. */

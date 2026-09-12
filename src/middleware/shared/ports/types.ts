@@ -375,6 +375,10 @@ export interface OpcUaUser {
   id: string
   type: 'password' | 'certificate'
   username: string | null
+  /** Plaintext. See OpcUaUserSchema in backend/shared/types/PLC/open-plc.ts
+   *  for why the build, not the editor, derives the stored credential. */
+  password?: string | null
+  /** Legacy pre-hashed credential; passed through untouched. */
   passwordHash: string | null
   certificateId: string | null
   role: 'viewer' | 'operator' | 'engineer'
