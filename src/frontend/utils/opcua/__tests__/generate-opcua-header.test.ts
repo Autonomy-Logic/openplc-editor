@@ -18,6 +18,7 @@ const PROFILE: OpcUaTargetProfile = {
   certificates: false,
   subscriptions: false,
   kdfIterations: 100_000,
+  passwordScheme: 'pbkdf2-sha256',
   hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
 }
 
