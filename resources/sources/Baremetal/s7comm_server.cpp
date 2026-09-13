@@ -357,6 +357,63 @@ bool s7_write(void* ctx, uint8_t areaCode, uint16_t dbNumber,
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Identification and CPU control
+// ---------------------------------------------------------------------------
+
+#if S7COMM_SZL_ENABLED
+
+/** What this CPU says it is when a client asks.
+ *
+ *  Strings come from the project's S7 identity screen and live in flash; the
+ *  library only ever reads them. Many clients query the System Status List to
+ *  identify a CPU BEFORE doing anything useful -- python-snap7 never does, TIA
+ *  Portal and several HMIs do, and some refuse to talk to a device that will
+ *  not answer. That is why this is a capability rather than an assumption.
+ *
+ *  The order code is a real S7-315's. A client that recognises it treats this
+ *  as a CPU it knows how to talk to, which is the point of publishing one at
+ *  all -- there is no OpenPLC MlfB for a client to have heard of. */
+const S7SrvIdentity g_identity = {
+    S7COMM_ID_NAME,
+    S7COMM_ID_MODULE_TYPE,
+    "",                      // plant designation: not on the editor's screen
+    S7COMM_ID_COPYRIGHT,
+    S7COMM_ID_SERIAL,
+    S7COMM_ID_MODULE_NAME,
+    "6ES7 315-2EH14-0AB0",
+};
+
+/** A client asked to start or stop the PLC.
+ *
+ *  Routed through the same request the Modbus debugger's run/stop uses, so the
+ *  two cannot disagree about what running means -- and so a request to run
+ *  while the physical mode switch reads STOP is REFUSED here exactly as it is
+ *  there. Refusing is a real answer: the client is told, rather than being let
+ *  believe it started a machine that did not start. */
+bool on_control(void* ctx, bool run)
+{
+    (void)ctx;
+    const uint8_t result = runtime_request_plc_state(run ? PLC_STATE_RUNNING
+                                                         : PLC_STATE_STOPPED);
+    OPCUA_LOG("[s7] control %s -> %u", run ? "START" : "STOP", (unsigned)result);
+    return result == PLC_CTRL_OK;
+}
+
+/** Keep the status the server publishes in step with the runtime's own.
+ *
+ *  Polled rather than pushed because the PLC can stop for reasons no S7 client
+ *  asked for -- the mode switch, a fault -- and a client reading SZL 0x0424
+ *  should see what is true, not the last thing it was told. */
+void refresh_cpu_status(void)
+{
+    g_server.setCpuStatus(runtime_get_plc_state() == PLC_STATE_RUNNING
+                              ? S7SRV_CPU_RUN
+                              : S7SRV_CPU_STOP);
+}
+
+#endif // S7COMM_SZL_ENABLED
+
 /** S7 single-bit write. Exists so a bit write never re-asserts its seven
  *  neighbours -- on the output area those are seven other physical outputs. */
 bool s7_write_bit(void* ctx, uint8_t areaCode, uint16_t dbNumber,
@@ -547,6 +604,12 @@ void s7comm_init(void)
     g_server.setMaxPduSize(S7COMM_PDU_SIZE);
     g_server.setWriteEnabled(S7COMM_WRITE_ENABLED != 0);
 
+#if S7COMM_SZL_ENABLED
+    g_server.setIdentity(&g_identity);
+    g_server.setControlHandler(on_control);
+    refresh_cpu_status();
+#endif
+
     if (!g_listener.begin())
     {
         OPCUA_LOG("[s7] listen FAILED on port %u", (unsigned)S7COMM_PORT);
@@ -621,6 +684,14 @@ void s7commtask(uint32_t slack_us)
         g_forced++;
 
     const unsigned long t0 = micros();
+
+#if S7COMM_SZL_ENABLED
+    // Two integer reads. Cheap enough to do every pass, and doing it here
+    // rather than inside the SZL handler keeps the handler free of runtime
+    // dependencies -- which is what lets the protocol engine stay testable on
+    // a PC with no PLC behind it.
+    refresh_cpu_status();
+#endif
 
     accept_new();
 
