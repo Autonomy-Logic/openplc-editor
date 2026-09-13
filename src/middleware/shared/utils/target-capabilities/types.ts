@@ -155,6 +155,56 @@ export interface OpcUaTargetProfile {
   }
 }
 
+/**
+ * Baremetal S7Comm server dimensions.
+ *
+ * The same role `OpcUaTargetProfile` plays, and deliberately much smaller —
+ * which is the honest reflection of the protocol. S7 has no address space, no
+ * node ids, no sessions and no security handshake: a request names
+ * (area, db, offset, length) and the server answers with bytes. There is
+ * simply less to dimension.
+ */
+export interface S7TargetProfile {
+  /** Concurrent S7 connections.
+   *
+   *  The expensive dimension, exactly as `maxSessions` is for OPC-UA and for
+   *  the same reason: each costs a receive/transmit PDU pair, so the RAM is
+   *  `2 * pduSize` per client. Runtime v4 allows 32 because it is a Linux
+   *  process with a thread each; a microcontroller should default low and be
+   *  raised by a VPP that has measured the room. */
+  maxClients: number
+
+  /** Negotiated S7 PDU ceiling, 240..960.
+   *
+   *  240 is what an S7-300 offers and what every client copes with. Larger
+   *  PDUs mean fewer round trips for a big read and proportionally more RAM;
+   *  the server answers a client's proposal with the smaller of the two, so
+   *  raising this never breaks a client that wanted less. */
+  pduSize: number
+
+  /** Ceiling on data blocks, enforced by the editor before the build rather
+   *  than discovered on a device that stops answering. Flash, not RAM: the
+   *  area table is `const`. v4 allows 64. */
+  maxDataBlocks: number
+
+  /** Build the System Status List / identification service at all.
+   *
+   *  Many clients query SZL to identify the CPU before doing anything useful —
+   *  `python-snap7`'s basic read/write path does not, TIA Portal and several
+   *  HMIs do, and some refuse to connect without it. It is the single largest
+   *  optional piece of the protocol, so it is a capability rather than an
+   *  assumption. */
+  szl: boolean
+
+  /** Serve Write Var at all.
+   *
+   *  A read-only server is meaningfully cheaper and, for a protocol with no
+   *  authentication whatsoever, arguably the safer default for a device on a
+   *  plant network. The refusal is a proper S7 error, not a dropped
+   *  connection, so a client says "access denied" rather than "timeout". */
+  writeEnabled: boolean
+}
+
 export interface TargetCapabilities {
   /* ---------------------------------------------------------------
    * Address producers — sources that allocate IEC addresses and
@@ -197,6 +247,13 @@ export interface TargetCapabilities {
    *  overrides; `resolveTargetCapabilities` fills the rest from
    *  `DEFAULT_OPCUA_PROFILE`. */
   opcua?: OpcUaTargetProfile
+
+  /** Baremetal S7Comm server dimensions. Meaningful only where `s7Server` is
+   *  true AND the target compiles the baremetal runtime — Runtime v4 hosts S7
+   *  through a vendored Snap7 with a thread per client and ignores this.
+   *  Optional so a VPP declares only what it overrides; `resolveTargetCapabilities`
+   *  fills the rest from `DEFAULT_S7_PROFILE`. */
+  s7?: S7TargetProfile
 
   /* ---------------------------------------------------------------
    * Build / runtime behavior

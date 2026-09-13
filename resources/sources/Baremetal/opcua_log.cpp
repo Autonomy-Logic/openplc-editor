@@ -11,7 +11,7 @@ Copyright (C) 2026 Autonomy Logic
 #include <stdarg.h>
 #include <stdio.h>
 
-#include "opcua_net.h"   // for the same concrete server/client types
+#include "baremetal_net.h"   // for the same concrete server/client types
 
 // lwIP's counters. Only meaningful on the lwIP-backed targets (the LOGO!);
 // guarded so the file still builds on a shield/WiFi core that has no lwIP.
@@ -27,8 +27,8 @@ namespace {
 
 // Port 23. Telnet clients send option negotiation on connect, which we simply
 // ignore: this is a one-way log, so anything the client says is noise.
-opcua_server_impl_t g_log_server(23);
-opcua_client_impl_t g_log_client;
+bm_server_impl_t g_log_server(23);
+bm_client_impl_t g_log_client;
 bool g_log_started = false;
 
 // Ring buffer, so lines produced before anyone attaches are not lost — the
@@ -69,7 +69,7 @@ void opcua_log_poll(void)
         return;
     if (!g_log_client || !g_log_client.connected())
     {
-        opcua_client_impl_t incoming = g_log_server.available();
+        bm_client_impl_t incoming = g_log_server.available();
         if (incoming)
         {
             g_log_client = incoming;

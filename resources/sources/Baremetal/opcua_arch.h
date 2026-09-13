@@ -23,7 +23,7 @@ at the bottom of opcua_arch.cpp — see the note there.
  *  timeout by design: sleeping would stop the PLC logic. */
 UA_EventLoop* UA_EventLoop_new_Arduino(const UA_Logger* logger);
 
-/** TCP ConnectionManager over `opcua_net.h`'s abstract `Client*` seam — no
+/** TCP ConnectionManager over `baremetal_net.h`'s abstract `Client*` seam — no
  *  board macros, no sockets. */
 UA_ConnectionManager* UA_ConnectionManager_new_Arduino_TCP(const UA_String eventSourceName);
 

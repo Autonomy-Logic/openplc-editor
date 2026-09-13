@@ -2,10 +2,10 @@
 opcua_arch_tcp.cpp - open62541 TCP ConnectionManager over the Arduino Client seam
 Copyright (C) 2026 Autonomy Logic
 
-The transport open62541 talks to. It is built ONLY on opcua_net.h, which means
+The transport open62541 talks to. It is built ONLY on baremetal_net.h, which means
 this file contains no board macros and no socket calls: the network family is
-decided once, in opcua_net.h, and everything here sees an abstract `Client*`.
-That is the whole point of the seam — see opcua_net.h for what the alternative
+decided once, in baremetal_net.h, and everything here sees an abstract `Client*`.
+That is the whole point of the seam — see baremetal_net.h for what the alternative
 cost modbus_tcp.cpp.
 
 Connection identity is the slot index + 1, so connectionId 0 is never valid and
@@ -26,7 +26,7 @@ a zeroed field cannot masquerade as a live connection.
 
 #include "opcua_arch.h"
 #include "opcua_log.h"
-#include "opcua_net.h"
+#include "baremetal_net.h"
 
 namespace {
 
@@ -41,12 +41,18 @@ constexpr size_t kRecvBufSize = 8192;
 
 struct Conn
 {
-    Client*  client;      // owned by opcua_net; nullptr when the slot is free
+    Client*  client;      // owned by bm_net; nullptr when the slot is free
     void*    context;     // open62541's per-connection context
     UA_ConnectionManager_connectionCallback cb;
     void*    application;
     bool     announced;   // ESTABLISHED already delivered
 };
+
+/** This server's listening socket. One per protocol: S7Comm declares its own
+ *  on port 102, and the two share bm_net's client pool. Constructed with
+ *  OPCUA_PORT rather than a literal so a project that moves off 4840 needs no
+ *  code change. */
+bm_net::Listener g_listener(OPCUA_PORT);
 
 /** The listener is itself a "connection" as far as open62541 is concerned.
  *
@@ -57,12 +63,12 @@ struct Conn
  *  which is how the server tells a fresh client apart from its own listener.
  *  Skipping this is why the first device test came back with port 4840 closed:
  *  the listener opened, and the server never knew it existed. */
-constexpr uintptr_t kListenerId = OPCUA_NET_MAX_CLIENTS + 1;
+constexpr uintptr_t kListenerId = BM_NET_OPCUA_SLOTS + 1;
 
 struct ArduinoTcpCM
 {
     UA_ConnectionManager base;   // MUST be first: open62541 casts between them
-    Conn                 conns[OPCUA_NET_MAX_CLIENTS];
+    Conn                 conns[BM_NET_OPCUA_SLOTS];
     uint8_t              recv[kRecvBufSize];
     bool                 listening;
     void*                listener_context;   // what accepted clients inherit
@@ -75,7 +81,7 @@ ArduinoTcpCM* self(UA_ConnectionManager* cm) { return reinterpret_cast<ArduinoTc
 
 Conn* conn_for(ArduinoTcpCM* m, uintptr_t id)
 {
-    if (id == 0 || id > OPCUA_NET_MAX_CLIENTS)
+    if (id == 0 || id > BM_NET_OPCUA_SLOTS)
         return nullptr;
     Conn* c = &m->conns[id - 1];
     return (c->client != nullptr) ? c : nullptr;
@@ -111,7 +117,7 @@ void drop(ArduinoTcpCM* m, uint8_t idx)
              UA_CONNECTIONSTATE_CLOSING, &UA_KEYVALUEMAP_NULL, UA_BYTESTRING_NULL);
     }
     OPCUA_LOG("[cm] drop id=%u", (unsigned)(idx + 1));
-    opcua_net::release(c.client);
+    bm_net::release(c.client);
     c.client    = nullptr;
     c.context   = nullptr;
     c.cb        = nullptr;
@@ -153,7 +159,7 @@ UA_StatusCode cm_open(UA_ConnectionManager* cm, const UA_KeyValueMap* params,
 
     if (!m->listening)
     {
-        if (!opcua_net::begin(*port))
+        if (!g_listener.begin())
             return UA_STATUSCODE_BADCONNECTIONREJECTED;
         m->listening = true;
     }
@@ -214,7 +220,7 @@ UA_StatusCode cm_send(UA_ConnectionManager* cm, uintptr_t connectionId,
     // reading. Dropping such a connection is the correct answer anyway -- it
     // is a client that cannot keep up, and a real one reconnects.
     size_t sent = 0;
-    if (c->client->connected() && opcua_net::can_send(c->client, want))
+    if (c->client->connected() && bm_net::can_send(c->client, want))
     {
         while (sent < want)
         {
@@ -250,10 +256,10 @@ UA_StatusCode cm_close(UA_ConnectionManager* cm, uintptr_t connectionId)
             m->cb(cm, kListenerId, m->application, &m->listener_context,
                   UA_CONNECTIONSTATE_CLOSING, &UA_KEYVALUEMAP_NULL, UA_BYTESTRING_NULL);
         }
-        if (m->listening) { opcua_net::end(); m->listening = false; }
+        if (m->listening) { g_listener.end(); bm_net::close_all(); m->listening = false; }
         return UA_STATUSCODE_GOOD;
     }
-    if (connectionId == 0 || connectionId > OPCUA_NET_MAX_CLIENTS)
+    if (connectionId == 0 || connectionId > BM_NET_OPCUA_SLOTS)
         return UA_STATUSCODE_BADNOTFOUND;
     drop(m, (uint8_t)(connectionId - 1));
     return UA_STATUSCODE_GOOD;
@@ -283,11 +289,12 @@ UA_StatusCode es_start(UA_EventSource* es)
 void es_stop(UA_EventSource* es)
 {
     ArduinoTcpCM* m = reinterpret_cast<ArduinoTcpCM*>(es);
-    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
+    for (uint8_t i = 0; i < BM_NET_OPCUA_SLOTS; i++)
         drop(m, i);
     if (m->listening)
     {
-        opcua_net::end();
+        g_listener.end();
+        bm_net::close_all();
         m->listening = false;
     }
     es->state = UA_EVENTSOURCESTATE_STOPPED;
@@ -310,13 +317,13 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
     if (!m->listening)
         return;
 
-    // 1. Accept. opcua_net owns the client storage and recycles slots whose
+    // 1. Accept. bm_net owns the client storage and recycles slots whose
     //    peer has gone, so this cannot exhaust the table.
-    Client* incoming = opcua_net::accept();
+    Client* incoming = g_listener.accept();
     if (incoming != nullptr)
     {
         bool placed = false;
-        for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS && !placed; i++)
+        for (uint8_t i = 0; i < BM_NET_OPCUA_SLOTS && !placed; i++)
         {
             if (m->conns[i].client != nullptr)
                 continue;
@@ -333,7 +340,7 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
         if (!placed)
         {
             OPCUA_LOG("[cm] accept REFUSED (table full)");
-            opcua_net::release(incoming);
+            bm_net::release(incoming);
         }
         else
             OPCUA_LOG("[cm] accepted");
@@ -343,11 +350,11 @@ void opcua_cm_poll(UA_ConnectionManager* cm)
     {
         static uint8_t s_prev_held = 255;
         uint8_t held = 0;
-        for (uint8_t k = 0; k < OPCUA_NET_MAX_CLIENTS; k++)
+        for (uint8_t k = 0; k < BM_NET_OPCUA_SLOTS; k++)
             if (m->conns[k].client != nullptr) held++;
         if (held != s_prev_held) { s_prev_held = held; OPCUA_LOG("[cm] held=%u", (unsigned)held); }
     }
-    for (uint8_t i = 0; i < OPCUA_NET_MAX_CLIENTS; i++)
+    for (uint8_t i = 0; i < BM_NET_OPCUA_SLOTS; i++)
     {
         Conn& c = m->conns[i];
         if (c.client == nullptr)

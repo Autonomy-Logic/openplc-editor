@@ -10,7 +10,7 @@
  * updated yet.
  */
 
-import type { AddressProducerCapabilities, OpcUaTargetProfile, TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /**
  * Every address producer active. NOT a target preset — no board reports this,
@@ -74,6 +74,26 @@ export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   kdfIterations: 600_000,
   passwordScheme: 'pbkdf2-sha256',
   hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
+}
+
+/**
+ * What a target gets when it declares `s7Server` and nothing else.
+ *
+ * Deliberately below Runtime v4's numbers (32 clients, 64 DBs, 960-byte PDUs).
+ * v4 is a Linux process with a thread per client; this is a microcontroller
+ * where each client is a PDU pair in .bss and the whole area table is flash. A
+ * VPP that has measured the room raises them; nothing infers them.
+ *
+ * `szl` off because it is the largest optional piece of the protocol and the
+ * plan's Phase 0 question is which real clients actually need it — an
+ * assumption here would pre-answer it.
+ */
+export const DEFAULT_S7_PROFILE: S7TargetProfile = {
+  maxClients: 2,
+  pduSize: 240,
+  maxDataBlocks: 8,
+  szl: false,
+  writeEnabled: true,
 }
 
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {

@@ -1,5 +1,10 @@
 import type { TargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities/types'
-import { OPEN62541_LIBRARY, selectThirdPartyLibraries, THIRD_PARTY_LIBRARIES } from '../third-party-libraries'
+import {
+  OPEN62541_LIBRARY,
+  selectThirdPartyLibraries,
+  SETTIMINO_LIBRARY,
+  THIRD_PARTY_LIBRARIES,
+} from '../third-party-libraries'
 
 const caps = (over: Partial<TargetCapabilities> = {}): TargetCapabilities =>
   ({
@@ -59,5 +64,29 @@ describe('the catalogue', () => {
       expect(lib.reason.length).toBeGreaterThan(0)
       expect(lib.gitUrl).toMatch(/^https:\/\//)
     }
+  })
+})
+
+describe('S7 selection', () => {
+  it('gives an S7 target the Settimino fork', () => {
+    expect(selectThirdPartyLibraries(caps({ s7Server: true }))).toEqual([SETTIMINO_LIBRARY])
+  })
+
+  it('gives a target running both protocols both libraries', () => {
+    // They are independent: a board may host one, the other, or both, and the
+    // LOGO! measurably hosts both (+1,544 B flash, +2,504 B RAM for S7 on top
+    // of OPC-UA).
+    expect(selectThirdPartyLibraries(caps({ opcuaServer: true, s7Server: true }))).toEqual([
+      OPEN62541_LIBRARY,
+      SETTIMINO_LIBRARY,
+    ])
+  })
+
+  it('does not hand the S7 library to an OPC-UA-only target', () => {
+    expect(selectThirdPartyLibraries(caps({ opcuaServer: true }))).toEqual([OPEN62541_LIBRARY])
+  })
+
+  it('names Settimino as its library.properties does', () => {
+    expect(SETTIMINO_LIBRARY.name).toBe('Settimino')
   })
 })

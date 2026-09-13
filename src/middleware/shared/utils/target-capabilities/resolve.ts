@@ -20,16 +20,32 @@
 import {
   ARDUINO_CLI_CAPABILITIES,
   DEFAULT_OPCUA_PROFILE,
+  DEFAULT_S7_PROFILE,
   RUNTIME_V4_CAPABILITIES,
   SIMULATOR_CAPABILITIES,
 } from './presets'
-import type { OpcUaTargetProfile, TargetCapabilities } from './types'
+import type { OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /** Minimal subset of BoardInfo the resolver consumes. Loosely typed
  *  so callers don't have to pin the full interface from middleware. */
+/**
+ * A capability block as a VPP manifest actually writes it.
+ *
+ * `Partial<TargetCapabilities>` is not quite right: it makes the top-level
+ * keys optional but still demands a COMPLETE `opcua` / `s7` profile, while the
+ * documented contract for both is "declare only what you raise"
+ * (`{ maxSessions: 2 }` and nothing else). The nested blocks have to be
+ * partial too, which is exactly what the resolver functions below already
+ * accept — this type just says so.
+ */
+export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7'> & {
+  opcua?: Partial<OpcUaTargetProfile>
+  s7?: Partial<S7TargetProfile>
+}
+
 export type BoardInfoLike = {
   compiler?: string
-  capabilities?: Partial<TargetCapabilities>
+  capabilities?: DeclaredCapabilities
   /** Legacy hals.json BoardInfo flag: present and truthy when the board
    *  came from a VPP package. Used to flip `vppIo` on for v4-derived
    *  VPP boards that didn't ship an explicit capability block. */
@@ -124,13 +140,28 @@ function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined):
   }
 }
 
+/**
+ * Fill an S7 profile from `DEFAULT_S7_PROFILE`, so a VPP manifest can declare
+ * only what it raises (`{ maxClients: 4 }` and nothing else).
+ *
+ * A flat merge suffices here — unlike the OPC-UA profile there is no nested
+ * `hw` block, because classic S7 has no crypto to accelerate.
+ */
+function resolveS7Profile(declared: Partial<S7TargetProfile> | undefined): S7TargetProfile {
+  if (!declared) return DEFAULT_S7_PROFILE
+  return { ...DEFAULT_S7_PROFILE, ...declared }
+}
+
 export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined): TargetCapabilities {
   if (!boardInfo) return EMPTY_CAPABILITIES
 
   const base = inferFromCompiler(boardInfo)
   if (!boardInfo.capabilities) return base
 
-  const merged = { ...base, ...boardInfo.capabilities }
+  // The spread may put a PARTIAL nested profile on `merged`; both are replaced
+  // with fully-resolved ones immediately below, so the partial never escapes.
+  // The assertion is the narrow, local statement of that.
+  const merged = { ...base, ...boardInfo.capabilities } as TargetCapabilities
 
   // The OPC-UA profile is the one nested block in the matrix, so the shallow
   // spread above is not enough: a manifest declaring `opcua: { maxSessions: 2 }`
@@ -142,6 +173,11 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   // `undefined` keeps `EMPTY_CAPABILITIES` genuinely empty.
   if (merged.opcuaServer) {
     merged.opcua = resolveOpcUaProfile(boardInfo.capabilities.opcua)
+  }
+
+  // Same treatment for S7, same reasons.
+  if (merged.s7Server) {
+    merged.s7 = resolveS7Profile(boardInfo.capabilities.s7)
   }
 
   return merged

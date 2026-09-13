@@ -150,3 +150,47 @@ describe('preset shapes', () => {
     expect(ARDUINO_CLI_CAPABILITIES.debuggerTransports).toEqual(['modbus-serial', 'modbus-tcp'])
   })
 })
+
+describe('the S7 profile', () => {
+  it('is materialised only for a target that can host an S7 server', () => {
+    // A profile on a target that cannot host one is noise, and leaving it
+    // undefined keeps EMPTY_CAPABILITIES genuinely empty.
+    const without = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: false } })
+    expect(without.s7).toBeUndefined()
+
+    const with7 = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: true } })
+    expect(with7.s7).toBeDefined()
+  })
+
+  it('fills everything a manifest did not declare', () => {
+    // A VPP declares only what it raises. A shallow spread would leave the
+    // rest undefined and the generated header would be missing defines.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { s7Server: true, s7: { maxClients: 4 } },
+    })
+    expect(caps.s7?.maxClients).toBe(4)
+    expect(caps.s7?.pduSize).toBe(240)
+    expect(caps.s7?.maxDataBlocks).toBe(8)
+    expect(caps.s7?.writeEnabled).toBe(true)
+    expect(caps.s7?.szl).toBe(false)
+  })
+
+  it('defaults below Runtime v4, deliberately', () => {
+    // v4 allows 32 clients and 64 DBs because it is a Linux process with a
+    // thread each. Here every client is a PDU pair in .bss.
+    const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: true } })
+    expect(caps.s7?.maxClients).toBe(2)
+    expect(caps.s7?.maxDataBlocks).toBe(8)
+  })
+
+  it('leaves the OPC-UA profile alone', () => {
+    // The two are independent blocks; resolving one must not disturb the other.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { s7Server: true, opcuaServer: true, opcua: { maxSessions: 2 } },
+    })
+    expect(caps.opcua?.maxSessions).toBe(2)
+    expect(caps.s7?.maxClients).toBe(2)
+  })
+})

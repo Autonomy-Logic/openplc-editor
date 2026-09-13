@@ -21,6 +21,8 @@
  */
 
 import { buildOpcUaRuntimeConfig, generateOpcUaHeaderContent } from '../../../frontend/utils/opcua'
+import type { S7CommSlaveConfigLike } from '../../../frontend/utils/s7comm'
+import { generateS7CommHeaderContent } from '../../../frontend/utils/s7comm'
 import { isVersionAtLeast } from '../../../frontend/utils/semver'
 import type {
   CompilerPlatformPort,
@@ -953,6 +955,36 @@ async function runCompilePipelineInner(
     }
   }
 
+  // S7Comm config header — emitted only for baremetal targets whose VPP flips
+  // `s7Server: true`. Much less work than the OPC-UA branch above, and the
+  // reason is the protocol rather than the effort: an S7 area is a flat run of
+  // bytes over a located buffer that already exists, so there is no address
+  // space to resolve and no debug map to consult.
+  //
+  // A project with no enabled S7 server still gets a header (a disabled one)
+  // rather than none, because the runtime includes it unconditionally.
+  let s7commConfigH: string | undefined
+  if (targetCapabilities.s7Server && targetCapabilities.s7) {
+    try {
+      const s7Server = (processedData.servers ?? []).find(
+        (server: { protocol?: string; s7commSlaveConfig?: unknown }) =>
+          server.protocol === 's7comm' && server.s7commSlaveConfig,
+      ) as { s7commSlaveConfig?: S7CommSlaveConfigLike } | undefined
+
+      s7commConfigH = generateS7CommHeaderContent({
+        config: s7Server?.s7commSlaveConfig ?? null,
+        profile: targetCapabilities.s7,
+        warn: (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      })
+    } catch (error) {
+      return bailError(
+        emit,
+        'firmware-bundle',
+        `Error generating S7Comm config header: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
@@ -965,6 +997,7 @@ async function runCompilePipelineInner(
     definesH,
     vppConfigH,
     opcuaConfigH,
+    s7commConfigH,
     firmwareSkeleton,
   })
 

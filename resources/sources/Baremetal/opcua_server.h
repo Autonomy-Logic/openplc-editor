@@ -17,7 +17,7 @@ include unconditionally.
 #include "opcua_config.h"
 
 /** Bring the server up.  Safe to call when OPC-UA is disabled (no-op).
- *  Call AFTER the network layer is configured — see opcua_net.h. */
+ *  Call AFTER the network layer is configured — see baremetal_net.h. */
 void opcua_init();
 
 /** Service the server for at most `OPCUA_SCAN_BUDGET_US` microseconds.

@@ -43,8 +43,25 @@ export const OPEN62541_LIBRARY: ThirdPartyLibrary = {
   reason: 'OPC-UA server',
 }
 
+/**
+ * The S7 protocol stack.
+ *
+ * A fork of Dave Nardella's Settimino -- Snap7 for Arduino -- which was a
+ * client only. The fork adds the server role as a transport-free protocol
+ * engine: it owns no socket, so the runtime plugs its own network seam behind
+ * it and the whole thing is testable on a PC.
+ *
+ * Already a source Arduino library with `architectures=*`, so unlike
+ * open62541 there was nothing to re-engineer to make it installable.
+ */
+export const SETTIMINO_LIBRARY: ThirdPartyLibrary = {
+  name: 'Settimino',
+  gitUrl: 'https://github.com/Autonomy-Logic/Settimino.git',
+  reason: 'S7Comm server',
+}
+
 /** Everything installable this way. Small on purpose. */
-export const THIRD_PARTY_LIBRARIES: ThirdPartyLibrary[] = [OPEN62541_LIBRARY]
+export const THIRD_PARTY_LIBRARIES: ThirdPartyLibrary[] = [OPEN62541_LIBRARY, SETTIMINO_LIBRARY]
 
 /**
  * Which of them this target needs.
@@ -57,5 +74,6 @@ export function selectThirdPartyLibraries(capabilities: TargetCapabilities | und
   if (!capabilities) return []
   const selected: ThirdPartyLibrary[] = []
   if (capabilities.opcuaServer) selected.push(OPEN62541_LIBRARY)
+  if (capabilities.s7Server) selected.push(SETTIMINO_LIBRARY)
   return selected
 }

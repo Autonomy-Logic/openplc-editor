@@ -78,6 +78,11 @@ export interface ComposeFirmwareBundleInput {
    *  `#include "opcua_config.h"` unconditionally and compile to nothing on
    *  every target that has no server. */
   opcuaConfigH?: string
+  /** Generated `s7comm_config.h`, on the same contract: the firmware skeleton
+   *  ships a stub with `S7COMM_ENABLED 0`, so the S7 translation units
+   *  `#include "s7comm_config.h"` unconditionally and compile to nothing on
+   *  every target that has no server. */
+  s7commConfigH?: string
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -149,7 +154,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, firmwareSkeleton } = input
+  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -220,6 +225,11 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // `OPCUA_ENABLED 0` stub stays and the server compiles out.
   if (opcuaConfigH !== undefined) {
     files['src/opcua_config.h'] = opcuaConfigH
+  }
+
+  // s7comm_config.h — identical contract.
+  if (s7commConfigH !== undefined) {
+    files['src/s7comm_config.h'] = s7commConfigH
   }
 
   // OpenPLCUserLib.h stub — Baremetal.ino unconditionally

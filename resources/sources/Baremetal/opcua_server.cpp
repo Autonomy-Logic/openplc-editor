@@ -35,7 +35,7 @@ Design notes that outlive the skeleton:
 #include "opcua_arena.h"
 #include "opcua_log.h"
 #include "opcua_arch.h"
-#include "opcua_net.h"
+#include "baremetal_net.h"
 #include "opcua_auth.h"
 #include "opcua_nodes.h"
 #include "opcua_types.h"

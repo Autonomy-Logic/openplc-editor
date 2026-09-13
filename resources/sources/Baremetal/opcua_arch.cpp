@@ -35,7 +35,7 @@ containing to three lines rather than spreading through the file.
 
 #include "opcua_arch.h"
 #include "opcua_log.h"
-#include "opcua_net.h"
+#include "baremetal_net.h"
 
 // ---------------------------------------------------------------------------
 // Clock
@@ -225,7 +225,7 @@ UA_StatusCode el_run(UA_EventLoop* el, UA_UInt32 timeout)
     if (el->state != UA_EVENTLOOPSTATE_STARTED)
         return UA_STATUSCODE_BADINTERNALERROR;
     ArduinoEventLoop* l = self(el);
-    opcua_net::poll();
+    bm_net::poll();
     run_due_timers(l);
     for (UA_EventSource* es = el->eventSources; es != nullptr; es = es->next)
     {

@@ -36,12 +36,19 @@
 #include "ModbusSlave.h"
 #endif
 
-// OPC-UA server. Included unconditionally: the facade is defined either way
-// and the whole implementation compiles out when the target's VPP does not
-// declare `opcuaServer` (OPCUA_ENABLED 0 in the generated opcua_config.h), so
-// no board-conditional is needed at the call sites below.
+// Protocol servers. Included unconditionally: each facade is defined either
+// way and the whole implementation compiles out when the target's VPP does
+// not declare the capability -- OPCUA_ENABLED 0 in the generated
+// opcua_config.h, S7COMM_ENABLED 0 in s7comm_config.h.
+//
+// The CALL SITES below are still guarded, because an unconditional call to an
+// empty function is not free: the call survives, and so does evaluating its
+// argument, which here means a micros() the compiler cannot prove it may drop.
+// Measured at 64 bytes of flash. Small, but "costs nothing when disabled" is a
+// property that is either true or it is not.
 #include "opcua_server.h"
 #include "opcua_log.h"
+#include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
 
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets that declare SUPPORTS_UDP_SCAN (e.g. via a VPP's HAL flags) pull
@@ -271,9 +278,16 @@ void setup()
 
         // OPC-UA listens on top of the interface Modbus just configured, so it
         // has to come after mbconfig_*_iface() and must not re-init the link
-        // itself (see opcua_net.h). No-op when OPC-UA is disabled.
-        opcua_log_begin();
-        opcua_init();
+        // itself (see baremetal_net.h). No-op when OPC-UA is disabled.
+        #if OPCUA_ENABLED
+            opcua_log_begin();
+            opcua_init();
+        #endif
+        // S7Comm, same contract: the interface is already up, this only opens
+        // port 102.
+        #if S7COMM_ENABLED
+            s7comm_init();
+        #endif
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
@@ -511,11 +525,28 @@ void scheduler()
         mbtask();
     #endif
 
-    // OPC-UA gets the tail of the cycle, after the PLC logic and Modbus have
-    // had theirs. It is handed what remains of the cycle and declines to run
-    // unless that covers its worst case, so it can only ever spend slack and
-    // never extend the cycle. No-op when disabled.
-    opcuatask(cycle_slack_us());
+    // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
+    // Modbus have had theirs. Each is handed what remains and declines to run
+    // unless that covers its worst case, so neither can extend the cycle.
+    // No-ops when disabled.
+    //
+    // cycle_slack_us() is called TWICE, deliberately. The protocols share one
+    // budget rather than having one each: the second sees what the first
+    // actually spent. Passing one cached number to both would let two
+    // protocols each politely take "their" slack and together overrun.
+    //
+    // Guarded rather than relying on the no-op bodies. Both task functions
+    // compile to `return` when their protocol is disabled, but the CALL and
+    // its argument survive -- and cycle_slack_us() calls micros(), which the
+    // compiler cannot prove is side-effect free and so cannot drop. Measured
+    // at 64 bytes of flash for a project with no S7 server, which is 64 bytes
+    // more than "costs nothing when disabled" allows.
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
+    #endif
 
     if (!first_cycle)
     {
@@ -564,7 +595,14 @@ void loop()
     // the call sat. No 10 ms guard is needed here: opcuatask() is given the
     // real remaining slack and decides for itself, which is a tighter test
     // than a fixed threshold and the same one scheduler() uses.
-    opcuatask(cycle_slack_us());
+    //
+    // Guarded for the same reason as in scheduler() -- see the note there.
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
+    #endif
 
     #ifdef SIMULATOR_MODE
     __asm volatile("sleep");
