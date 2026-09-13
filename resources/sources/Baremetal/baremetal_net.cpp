@@ -28,10 +28,58 @@ struct Slot
 {
     bm_client_impl_t client;
     bool             in_use;
+    uint8_t          owner;   // which Listener took it
 };
 
 Slot g_slots[BM_NET_MAX_CLIENTS];
 bool g_pool_ready = false;
+
+/** Listener ids are handed out in construction order. Two is all there is
+ *  (OPC-UA and S7Comm); the registry exists so adding a third needs no thought.
+ *
+ *  Kept here rather than on the Listener because the admission test has to ask
+ *  about the OTHER listeners, and a static registry is the smallest way to let
+ *  it -- four bytes, versus threading a list through every call. */
+#define BM_NET_MAX_LISTENERS 4
+uint8_t g_next_listener_id = 0;
+uint8_t g_reserves[BM_NET_MAX_LISTENERS] = { 0, 0, 0, 0 };
+
+/** How many slots one listener currently holds. */
+uint8_t held_by(uint8_t owner)
+{
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < BM_NET_MAX_CLIENTS; i++)
+        if (g_slots[i].in_use && g_slots[i].owner == owner)
+            n++;
+    return n;
+}
+
+/** How many slots are free. */
+uint8_t free_slots()
+{
+    uint8_t n = 0;
+    for (uint8_t i = 0; i < BM_NET_MAX_CLIENTS; i++)
+        if (!g_slots[i].in_use)
+            n++;
+    return n;
+}
+
+/** Slots that must stay available so every OTHER listener can still reach its
+ *  floor. Taking one of these would be taking a slot someone else is
+ *  guaranteed. */
+uint8_t owed_to_others(uint8_t me)
+{
+    uint8_t owed = 0;
+    for (uint8_t l = 0; l < g_next_listener_id && l < BM_NET_MAX_LISTENERS; l++)
+    {
+        if (l == me)
+            continue;
+        const uint8_t held = held_by(l);
+        if (held < g_reserves[l])
+            owed = (uint8_t)(owed + (g_reserves[l] - held));
+    }
+    return owed;
+}
 
 void ensure_pool()
 {
@@ -44,9 +92,12 @@ void ensure_pool()
 
 } // namespace
 
-Listener::Listener(uint16_t port)
-    : impl_(port), started_(false)
+Listener::Listener(uint16_t port, uint8_t reserve)
+    : impl_(port), started_(false), reserve_(reserve), id_(g_next_listener_id)
 {
+    if (g_next_listener_id < BM_NET_MAX_LISTENERS)
+        g_reserves[g_next_listener_id] = reserve;
+    g_next_listener_id++;
 }
 
 bool Listener::begin()
@@ -90,28 +141,38 @@ Client* Listener::accept()
     if (!incoming)
         return nullptr;
 
+    // Below our own floor we are always served. Above it we may take a slot
+    // only if doing so still leaves every other listener able to reach ITS
+    // floor -- otherwise a protocol in a reconnect burst empties the pool under
+    // a quieter one, which is exactly what was measured: an OPC-UA session drop
+    // reconnects hard, and for the moment it took, S7 connections were refused.
+    const uint8_t mine = held_by(id_);
+    if (mine >= reserve_ && free_slots() <= owed_to_others(id_))
+    {
+        // Nothing left. Drop it now rather than leaving it half-accepted: a
+        // client refused at the TCP layer retries immediately, and a
+        // connection we neither serve nor close sits in the backlog.
+        OPCUA_LOG("[net] accept REFUSED (listener %u holds %u/%u, %u free, %u owed)",
+                  (unsigned)id_, (unsigned)mine, (unsigned)reserve_,
+                  (unsigned)free_slots(), (unsigned)owed_to_others(id_));
+        incoming.stop();
+        return nullptr;
+    }
+
     for (uint8_t i = 0; i < BM_NET_MAX_CLIENTS; i++)
     {
         if (!g_slots[i].in_use)
         {
             g_slots[i].client = incoming;
             g_slots[i].in_use = true;
-            OPCUA_LOG("[net] accepted port=%d -> slot %u",
-                      incoming.port(), (unsigned)i);
+            g_slots[i].owner  = id_;
+            OPCUA_LOG("[net] accepted port=%d -> slot %u (listener %u)",
+                      incoming.port(), (unsigned)i, (unsigned)id_);
             return &g_slots[i].client;
         }
     }
 
-    // Pool full. Drop it now rather than leaving it half-accepted: a client
-    // refused at the TCP layer retries immediately, and a connection we
-    // neither serve nor close would sit in the backlog.
-    //
-    // The pool is shared, so this is also the one place a busy protocol can
-    // starve a quiet one. It is sized so that cannot happen in normal use --
-    // every protocol's ceiling plus headroom -- and the alternative, a
-    // per-protocol reservation, buys nothing on a device where the real
-    // ceiling is lwIP's PCB count anyway.
-    OPCUA_LOG("[net] accept REFUSED (pool full)");
+    OPCUA_LOG("[net] accept REFUSED (no free slot)");
     incoming.stop();
     return nullptr;
 }

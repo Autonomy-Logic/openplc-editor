@@ -52,7 +52,7 @@ struct Conn
  *  on port 102, and the two share bm_net's client pool. Constructed with
  *  OPCUA_PORT rather than a literal so a project that moves off 4840 needs no
  *  code change. */
-bm_net::Listener g_listener(OPCUA_PORT);
+bm_net::Listener g_listener(OPCUA_PORT, BM_NET_OPCUA_SLOTS);
 
 /** The listener is itself a "connection" as far as open62541 is concerned.
  *

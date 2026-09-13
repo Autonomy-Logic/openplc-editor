@@ -189,7 +189,20 @@ namespace bm_net {
 class Listener
 {
 public:
-    explicit Listener(uint16_t port);
+    /** `reserve` is how many slots this listener may ALWAYS have, even when
+     *  another protocol is churning through connections.
+     *
+     *  The pool is shared because slots are cheap and one number is easier to
+     *  reason about than two. But shared without a floor means a protocol
+     *  reconnecting in a burst can take every free slot, and the other one is
+     *  refused until it lets go -- which is not theoretical: an OPC-UA session
+     *  drop, which reconnects hard, was measured refusing S7 connections for
+     *  the moment it took.
+     *
+     *  So each listener keeps a floor and competes for the rest. Below its
+     *  reserve a listener is always served; above it, it takes from what is
+     *  free. Set it to the protocol's own client ceiling. */
+    Listener(uint16_t port, uint8_t reserve);
 
     /** Open the socket. Does NOT configure the interface -- see the header
      *  comment. Idempotent; returns false only if the port could not be
@@ -211,6 +224,8 @@ public:
 private:
     bm_server_impl_t impl_;
     bool             started_;
+    uint8_t          reserve_;
+    uint8_t          id_;      // which slots in the shared pool are ours
 };
 
 /** Hand a client slot back. Closes the connection if still open. */
