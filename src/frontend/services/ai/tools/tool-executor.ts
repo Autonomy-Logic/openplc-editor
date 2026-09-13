@@ -3,7 +3,7 @@ import type { PLCDataType, PLCStructureVariable } from '../../../../middleware/s
 import { openPLCStoreBase } from '../../../store'
 import { computeHunks } from '../../../utils/ai-diff-review'
 import { isGraphicalLanguage } from '../context-collector'
-import { extractPouST, type ProjectStTranspiler, transpileProjectToST } from '../graphical-context'
+import { extractPouST, invalidateSTCache, type ProjectStTranspiler, transpileProjectToST } from '../graphical-context'
 import {
   adaptCreatePou,
   adaptCreateVariable,
@@ -57,6 +57,19 @@ export type ToolExecutionOptions = {
   transpileProject?: ProjectStTranspiler
 }
 
+/** Tools whose success changes the POUs or data types the cached project ST was produced from. */
+const PROJECT_MUTATING_TOOLS = new Set([
+  'create_pou',
+  'update_pou_body',
+  'delete_pou',
+  'create_variable',
+  'update_variable',
+  'delete_variable',
+  'create_datatype',
+  'update_datatype',
+  'delete_datatype',
+])
+
 /**
  * Execute an AI tool call against the Zustand store.
  * Never throws — all errors are returned as ToolResult with success: false.
@@ -68,39 +81,48 @@ export async function executeTool(
   options: ToolExecutionOptions = {},
 ): Promise<ToolResult> {
   try {
-    switch (toolName) {
-      case 'create_pou':
-        return executeCreatePou(toolInput as CreatePouInput)
-      case 'update_pou_body':
-        return executeUpdatePouBody(toolInput as UpdatePouBodyInput)
-      case 'create_variable':
-        return executeCreateVariable(toolInput as CreateVariableInput)
-      case 'delete_pou':
-        return executeDeletePou(toolInput as DeletePouInput)
-      case 'update_variable':
-        return executeUpdateVariable(toolInput as UpdateVariableInput)
-      case 'delete_variable':
-        return executeDeleteVariable(toolInput as DeleteVariableInput)
-      case 'create_datatype':
-        return executeCreateDatatype(toolInput as CreateDatatypeInput)
-      case 'update_datatype':
-        // `await` keeps a rejection inside this try/catch (never-throws contract).
-        return await executeUpdateDatatype(toolInput as UpdateDatatypeInput)
-      case 'delete_datatype':
-        return executeDeleteDatatype(toolInput as DeleteDatatypeInput)
-      case 'read_project_state':
-        return executeReadProjectState()
-      case 'read_pou_body':
-        // `await` keeps a rejection inside this try/catch (never-throws contract).
-        return await executeReadPouBody(toolInput as ReadPouBodyInput, options)
-      default:
-        return { success: false, message: `Unknown tool: ${toolName}` }
-    }
+    // `await` keeps a rejection inside this try/catch (never-throws contract).
+    const result = await dispatchTool(toolName, toolInput, options)
+    if (result.success && PROJECT_MUTATING_TOOLS.has(toolName)) invalidateSTCache()
+    return result
   } catch (error) {
     return {
       success: false,
       message: `Tool execution error: ${error instanceof Error ? error.message : String(error)}`,
     }
+  }
+}
+
+function dispatchTool(
+  toolName: string,
+  toolInput: unknown,
+  options: ToolExecutionOptions,
+): ToolResult | Promise<ToolResult> {
+  switch (toolName) {
+    case 'create_pou':
+      return executeCreatePou(toolInput as CreatePouInput)
+    case 'update_pou_body':
+      return executeUpdatePouBody(toolInput as UpdatePouBodyInput)
+    case 'create_variable':
+      return executeCreateVariable(toolInput as CreateVariableInput)
+    case 'delete_pou':
+      return executeDeletePou(toolInput as DeletePouInput)
+    case 'update_variable':
+      return executeUpdateVariable(toolInput as UpdateVariableInput)
+    case 'delete_variable':
+      return executeDeleteVariable(toolInput as DeleteVariableInput)
+    case 'create_datatype':
+      return executeCreateDatatype(toolInput as CreateDatatypeInput)
+    case 'update_datatype':
+      return executeUpdateDatatype(toolInput as UpdateDatatypeInput)
+    case 'delete_datatype':
+      return executeDeleteDatatype(toolInput as DeleteDatatypeInput)
+    case 'read_project_state':
+      return executeReadProjectState()
+    case 'read_pou_body':
+      return executeReadPouBody(toolInput as ReadPouBodyInput, options)
+    default:
+      return { success: false, message: `Unknown tool: ${toolName}` }
   }
 }
 

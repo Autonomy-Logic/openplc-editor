@@ -21,7 +21,14 @@ import type { LadderFlowType, RungLadderState } from '../../store/slices/ladder/
 
 let cachedProgramSt: string | null = null
 let cacheTimestamp = 0
+// Immer replaces both arrays on any edit, so their identity says which project the ST describes.
+let cachedPous: PLCProjectData['pous'] | null = null
+let cachedDataTypes: PLCProjectData['dataTypes'] | null = null
 const CACHE_TTL_MS = 30_000 // 30 seconds
+
+function isCachedFor(projectData: PLCProjectData): boolean {
+  return cachedPous === projectData.pous && cachedDataTypes === projectData.dataTypes
+}
 
 /**
  * Turn a whole project into ST, the way the compile and library paths do.
@@ -35,10 +42,12 @@ export type ProjectStTranspiler = (projectData: PLCProjectData) => Promise<strin
 
 /**
  * Transpile the full project to ST. Results cache for CACHE_TTL_MS to
- * avoid repeat work during a chat session.  Returns null if both the
- * call and any stale cache fail. Runs the same transpiler the
- * compile/library paths use, so AI context stays consistent with
- * what the pipeline emits.
+ * avoid repeat work during a chat session, but only for the very
+ * `pous` / `dataTypes` they were produced from: an edited project is
+ * never served the old ST. Returns null if both the call and any
+ * stale cache fail. Runs the same transpiler the compile/library
+ * paths use, so AI context stays consistent with what the pipeline
+ * emits.
  *
  * A missing `transpile` is not an error: it means this build has not wired one
  * up yet, and the answer is the stale cache (usually null), which every caller
@@ -48,6 +57,8 @@ export async function transpileProjectToST(
   projectData: PLCProjectData,
   transpile?: ProjectStTranspiler,
 ): Promise<string | null> {
+  if (!isCachedFor(projectData)) invalidateSTCache()
+
   const now = Date.now()
   if (cachedProgramSt && now - cacheTimestamp < CACHE_TTL_MS) {
     return cachedProgramSt
@@ -59,6 +70,8 @@ export async function transpileProjectToST(
     if (programSt) {
       cachedProgramSt = programSt
       cacheTimestamp = now
+      cachedPous = projectData.pous
+      cachedDataTypes = projectData.dataTypes
       return cachedProgramSt
     }
     return cachedProgramSt
@@ -79,6 +92,8 @@ export async function transpileProjectToST(
 export function invalidateSTCache(): void {
   cachedProgramSt = null
   cacheTimestamp = 0
+  cachedPous = null
+  cachedDataTypes = null
 }
 
 // ---------------------------------------------------------------------------

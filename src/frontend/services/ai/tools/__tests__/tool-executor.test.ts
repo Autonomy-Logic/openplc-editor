@@ -22,6 +22,7 @@ import type {
   PLCVariable,
 } from '../../../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../../../store'
+import { type ProjectStTranspiler, transpileProjectToST } from '../../graphical-context'
 import { executeTool } from '../tool-executor'
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,16 @@ const varsOf = (pouName: string) => pouNamed(pouName)?.interface?.variables ?? [
 const globals = () => project().configurations.resource.globalVariables
 const datatypeNamed = (name: string) => project().dataTypes.find((d) => d.name === name)
 const bodyOf = (pouName: string) => pouNamed(pouName)?.body.value
+
+/** A transpiler that records its calls so a test can prove the ST cache was dropped. */
+function countingTranspiler(programSt: string): { transpile: ProjectStTranspiler; callCount: () => number } {
+  let calls = 0
+  const transpile: ProjectStTranspiler = () => {
+    calls += 1
+    return Promise.resolve(programSt)
+  }
+  return { transpile, callCount: () => calls }
+}
 
 /** Narrow a stored type to its derivation so a test reads the section it means
  *  without an assertion — a struct that came back as an enum is itself a bug. */
@@ -1116,5 +1127,54 @@ describe('read_project_state', () => {
 
     expect(result.message).not.toContain('Global Variables')
     expect(result.message).not.toContain('Data Types')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Project ST cache
+// ---------------------------------------------------------------------------
+
+describe('project ST cache after a mutating tool', () => {
+  // `read_pou_body` on a diagram answers from a 30s whole-project ST cache; a
+  // mutating tool has to drop it or the model reads the project as it was.
+  const diagramSt = 'PROGRAM Diagram\nEND_PROGRAM'
+
+  it('transpiles the project again on the next diagram read after update_pou_body', async () => {
+    seedProject({ pous: [makePou('Conveyor', 'st', 'old;'), makePou('Diagram', 'ld', { rungs: [] })] })
+    const { transpile, callCount } = countingTranspiler(diagramSt)
+    const options = { transpileProject: transpile }
+    await executeTool('read_pou_body', { name: 'Diagram' }, options)
+
+    await executeTool('update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
+    const result = await executeTool('read_pou_body', { name: 'Diagram' }, options)
+
+    expect(result.success).toBe(true)
+    expect(callCount()).toBe(2)
+  })
+
+  it('drops the cached ST outright, not merely the project it was keyed to', async () => {
+    // Probing with the pre-edit snapshot isolates the explicit invalidation
+    // from the reference check: the same reference would otherwise still hit.
+    seedProject({ pous: [makePou('Conveyor', 'st', 'old;')] })
+    const snapshot = project()
+    const { transpile, callCount } = countingTranspiler(diagramSt)
+    await transpileProjectToST(snapshot, transpile)
+
+    await executeTool('create_pou', { name: 'Added', type: 'program', language: 'st' })
+    await transpileProjectToST(snapshot, transpile)
+
+    expect(callCount()).toBe(2)
+  })
+
+  it('keeps the cached ST when the mutating tool refused to write', async () => {
+    seedProject({ pous: [makePou('Conveyor', 'st', 'old;')] })
+    const snapshot = project()
+    const { transpile, callCount } = countingTranspiler(diagramSt)
+    await transpileProjectToST(snapshot, transpile)
+
+    await executeTool('update_pou_body', { pouName: 'Ghost', code: 'x := 1;' })
+    await transpileProjectToST(snapshot, transpile)
+
+    expect(callCount()).toBe(1)
   })
 })

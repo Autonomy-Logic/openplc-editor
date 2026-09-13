@@ -128,6 +128,47 @@ describe('transpileProjectToST', () => {
     expect(callCount()).toBe(2)
   })
 
+  it('reuses the cached ST for the same pous and dataTypes references inside the TTL', async () => {
+    // Callers hand over `state.project.data`; a fresh wrapper around unchanged
+    // arrays (nothing edited) must still hit the cache.
+    const { transpile, callCount } = countingTranspiler(['ONCE'])
+    await transpileProjectToST(emptyProject, transpile)
+
+    const sameArrays: PLCProjectData = { ...emptyProject }
+
+    expect(await transpileProjectToST(sameArrays, transpile)).toBe('ONCE')
+    expect(callCount()).toBe(1)
+  })
+
+  it('transpiles again for a different pous reference even inside the TTL', async () => {
+    // Immer hands out a new `pous` array on every POU edit, so an edited
+    // project can never be answered with the ST of the one before the edit.
+    const { transpile, callCount } = countingTranspiler(['BEFORE THE EDIT', 'AFTER THE EDIT'])
+    await transpileProjectToST(emptyProject, transpile)
+
+    const edited: PLCProjectData = { ...emptyProject, pous: [] }
+
+    expect(await transpileProjectToST(edited, transpile)).toBe('AFTER THE EDIT')
+    expect(callCount()).toBe(2)
+  })
+
+  it('transpiles again for a different dataTypes reference even inside the TTL', async () => {
+    const { transpile, callCount } = countingTranspiler(['BEFORE THE EDIT', 'AFTER THE EDIT'])
+    await transpileProjectToST(emptyProject, transpile)
+
+    const edited: PLCProjectData = { ...emptyProject, dataTypes: [] }
+
+    expect(await transpileProjectToST(edited, transpile)).toBe('AFTER THE EDIT')
+    expect(callCount()).toBe(2)
+  })
+
+  it("does not fall back to another project's ST when the transpile of an edited one fails", async () => {
+    const rejecting: ProjectStTranspiler = () => Promise.reject(new Error('worker died'))
+    await transpileProjectToST(emptyProject, countingTranspiler(['BEFORE THE EDIT']).transpile)
+
+    expect(await transpileProjectToST({ ...emptyProject, pous: [] }, rejecting)).toBeNull()
+  })
+
   it('answers null when no transpiler is wired up and nothing is cached', async () => {
     // The desktop and the web reach the transpiler differently; a build that
     // has not wired one yet must read as "no ST", not as an empty project.
