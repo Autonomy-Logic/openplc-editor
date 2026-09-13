@@ -55,6 +55,7 @@ import { generateDefinesContent } from './steps/generate-defines'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
+import { selectThirdPartyLibraries } from './third-party-libraries'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -866,7 +867,14 @@ async function runCompilePipelineInner(
   // returns false.
   emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
   const libInstall = await port.installArduinoLib(
-    { libId: '', extraLibraries: boardEntry.extra_libraries ?? [] },
+    {
+      libId: '',
+      extraLibraries: boardEntry.extra_libraries ?? [],
+      // Capability-driven, not board-name-driven: a target gets the OPC-UA
+      // stack because it declares `opcuaServer`, so adding a board is a
+      // manifest change rather than a code change.
+      thirdPartyLibraries: selectThirdPartyLibraries(targetCapabilities),
+    },
     makePlatformLog(emit, 'lib-install'),
   )
   if (!libInstall.ok) {

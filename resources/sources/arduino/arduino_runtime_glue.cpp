@@ -686,3 +686,19 @@ extern "C" uint8_t openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing
 {
     return strucpp::debug::handle_set(arr, elem, forcing != 0, bytes, len);
 }
+
+extern "C" uint8_t openplc_debug_write(uint8_t arr, uint16_t elem,
+                                       const uint8_t* bytes, uint16_t len)
+{
+    return strucpp::debug::handle_write(arr, elem, bytes, len);
+}
+
+// The status macros in arduino_runtime_glue.h exist so the other side of the
+// boundary never has to include debug_dispatch.hpp. This is the one place that
+// sees both, so this is where they are held to each other.
+static_assert(OPENPLC_DEBUG_STATUS_OK == strucpp::debug::STATUS_OK,
+              "OPENPLC_DEBUG_STATUS_OK drifted from strucpp::debug::STATUS_OK");
+static_assert(OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS == strucpp::debug::STATUS_OUT_OF_BOUNDS,
+              "OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS drifted from strucpp::debug::STATUS_OUT_OF_BOUNDS");
+static_assert(OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE == strucpp::debug::STATUS_DATA_TOO_LARGE,
+              "OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE drifted from strucpp::debug::STATUS_DATA_TOO_LARGE");
