@@ -4,6 +4,8 @@ import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { resolveModbusServerProfile } from '../../../../../../middleware/shared/utils/modbus-server-profile'
+import { resolveTargetCapabilities } from '../../../../../../middleware/shared/utils/target-capabilities'
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
 import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
 import { CreatePouSources, PouLanguageSources } from '../../../../../data/sources/POU'
@@ -148,6 +150,26 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const isArduinoTarget = checkIsArduinoTarget(currentBoardInfo)
   const isSimulator = isSimulatorTarget(currentBoardInfo)
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard, currentBoardInfo)
+
+  // Since 4.4.0 a baremetal board's Modbus is an ordinary `PLCServer`, so the
+  // "+" flow asks for a name and a protocol on every target alike. What the
+  // profile still decides is whether this target serves Modbus at all.
+  const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
+  const targetServesModbus = modbusProfile.transports.length > 0
+
+  // Offering a protocol the target cannot serve is the same defect as hiding
+  // one it can: an Arduino declares `opcuaServer: false, s7Server: false`, and
+  // a server created there would sit in the tree producing nothing. The list
+  // stays whole so the user can see the option and why it is out.
+  const targetCaps = resolveTargetCapabilities(currentBoardInfo)
+  const serverProtocolOptions = ServerProtocolSources.map((protocol) => {
+    if (protocol.disabled) return protocol
+    const unsupported =
+      (protocol.value === 'modbus-tcp' && !targetServesModbus) ||
+      (protocol.value === 's7comm' && !targetCaps.s7Server) ||
+      (protocol.value === 'opcua' && !targetCaps.opcuaServer)
+    return unsupported ? { ...protocol, disabled: true } : protocol
+  })
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     const pouWasCreated = create(data)
@@ -485,7 +507,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!(isRuntimeV4 || isSimulator) ? (
+                {!(isRuntimeV4 || isSimulator || targetServesModbus) ? (
                   <div className='flex flex-col gap-2 py-2'>
                     <p className='text-sm text-neutral-700 dark:text-neutral-300'>
                       Server configuration is only available for OpenPLC Runtime v4 targets.
@@ -558,7 +580,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   align='center'
                                   side='bottom'
                                 >
-                                  {ServerProtocolSources.map((protocol) => {
+                                  {serverProtocolOptions.map((protocol) => {
                                     return (
                                       <SelectItem
                                         key={protocol.value}

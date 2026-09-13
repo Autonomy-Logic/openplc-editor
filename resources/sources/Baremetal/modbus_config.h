@@ -45,6 +45,11 @@ it must reach a TU through exactly one path: this header.
     #ifndef DEBUG_SLAVE
         #define DEBUG_SLAVE 1
     #endif
+    // The editor's link answers on its own id IN ADDITION to whatever the Modbus
+    // server is set to, routed by function code, so the user's slave id is free
+    // on every port. Undefined without the debugger: there is no editor link to
+    // keep reachable and the server owns the port alone.
+    #define MB_EDITOR_SLAVE DEBUG_SLAVE
 #endif
 
 #endif

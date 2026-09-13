@@ -1,112 +1,8 @@
-import {
-  DEFAULT_DEBUG_BAUD,
-  DEFAULT_DEBUG_SLAVE,
-  generateModbusDefines,
-  resolveDebugBaud,
-  resolveDebugSlave,
-} from '../steps/modbus-defines'
+import { DEBUG_SLAVE, generateModbusDefines, selectModbusServer } from '../steps/modbus-defines'
 
-/**
- * The baud the always-on debugger answers on. It has to agree with the rate the
- * editor dials, and the two are derived in different places — so these pin the
- * derivation against the shapes real projects actually persist.
- */
-describe('resolveDebugBaud', () => {
-  it('prefers an explicit `serial` section when a package declares one', () => {
-    expect(
-      resolveDebugBaud({ serial: { baud_rate: '57600' }, modbus_rtu: { enabled: true, rtu_baud_rate: '9600' } }),
-    ).toBe('57600')
-  })
-
-  // The regression this function exists for: a PUBLISHED VPP has no `serial`
-  // section, so the RTU's baud is the only statement of the default port's speed.
-  // Reading 115200 instead compiled a firmware listening at one rate while the
-  // editor dialled another, and the board answered nothing at all.
-  it('takes the RTU baud when the RTU shares the default port (published VPP shape)', () => {
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600' } })).toBe(
-      '9600',
-    )
-  })
-
-  it('takes the RTU baud when the RTU names no port at all (defaults to the default one)', () => {
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: true, rtu_baud_rate: '19200' } })).toBe('19200')
-  })
-
-  it('honours a board whose default serial is not called `Serial`', () => {
-    expect(
-      resolveDebugBaud(
-        { modbus_rtu: { enabled: true, rtu_interface: 'SerialUSB', rtu_baud_rate: '38400' } },
-        'SerialUSB',
-      ),
-    ).toBe('38400')
-  })
-
-  it('ignores the RTU baud when the RTU is on a SECOND port', () => {
-    // There the debugger keeps the default port to itself and nothing in the
-    // project states its speed, so the firmware default is the only answer.
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600' } })).toBe(
-      DEFAULT_DEBUG_BAUD,
-    )
-  })
-
-  // The editor dials `rtu_baud_rate` whether or not the RTU is enabled — a debug
-  // spec's `params` are read independently of its `enabledWhen`. So the firmware
-  // must listen there too, or a project with Modbus turned off and a non-default
-  // baud saved on the screen is unreachable.
-  it('still takes the RTU baud when the RTU is DISABLED', () => {
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } })).toBe('9600')
-  })
-
-  it('takes the RTU baud when the RTU is disabled and names a second port', () => {
-    // The rate is unused by Modbus, and the debugger owns the default port. What
-    // decides this is what the editor dials, which is this value.
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: false, rtu_interface: 'Serial1', rtu_baud_rate: '9600' } })).toBe(
-      '9600',
-    )
-  })
-
-  it('falls back when the RTU section states no baud at all', () => {
-    expect(resolveDebugBaud({ modbus_rtu: { enabled: true } })).toBe(DEFAULT_DEBUG_BAUD)
-  })
-
-  it('falls back for an empty project', () => {
-    expect(resolveDebugBaud({})).toBe(DEFAULT_DEBUG_BAUD)
-  })
-})
-
-/**
- * The slave id the always-on debugger frames on. Unlike the baud, a mismatch here
- * is NOT recoverable by the connect flow's rate sweep — the firmware silently
- * drops every frame whose first byte isn't this id, and that check is the only
- * validation debug function codes get. So these pin exact agreement with the id
- * the editor addresses (`screens.modbus_rtu.rtu_slave_id`, read regardless of
- * whether the RTU is enabled).
- */
-describe('resolveDebugSlave', () => {
-  it('uses the RTU screen slave id when the RTU is enabled', () => {
-    expect(resolveDebugSlave({ modbus_rtu: { enabled: true, rtu_slave_id: 3 } })).toBe(3)
-  })
-
-  it('uses the RTU screen slave id even when the RTU is DISABLED', () => {
-    // The regression this exists for: a TCP-only (or Modbus-off) project still
-    // has the editor addressing the RTU screen's id over serial, because a debug
-    // spec's `params` are read independently of its `enabledWhen`. Defaulting to
-    // 1 here made a healthy board report "No Firmware Detected".
-    expect(resolveDebugSlave({ modbus_rtu: { enabled: false, rtu_slave_id: 7 } })).toBe(7)
-  })
-
-  it('uses the RTU screen slave id even when the RTU runs on a secondary UART', () => {
-    // Not a conflict: MBSERIAL_SLAVE frames that id on Serial1 while DEBUG_SLAVE
-    // frames it on Serial. Two distinct ports, and the editor still dials this id.
-    expect(resolveDebugSlave({ modbus_rtu: { enabled: true, serial_port: 'Serial1', rtu_slave_id: 4 } })).toBe(4)
-  })
-
-  it('falls back when the RTU section states no slave id', () => {
-    expect(resolveDebugSlave({ modbus_rtu: { enabled: true } })).toBe(DEFAULT_DEBUG_SLAVE)
-  })
-
-  it('falls back for an empty project', () => {
-    expect(resolveDebugSlave({})).toBe(DEFAULT_DEBUG_SLAVE)
+describe('DEBUG_SLAVE', () => {
+  it('is 1, the id every board already in the field answers on', () => {
+    expect(DEBUG_SLAVE).toBe(1)
   })
 })
 
@@ -117,14 +13,13 @@ describe('generateModbusDefines', () => {
     expect(generateModbusDefines({ modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } })).toBe('')
   })
 
-  it('emits the canonical RTU block with screen defaults explicitly provided', () => {
+  it('emits the canonical RTU block for a project that predates the server', () => {
+    // Never opened by an editor that promotes the screen state, so the section
+    // is still the only statement of what is served. It has to compile to the
+    // same firmware it compiled to yesterday.
     const out = generateModbusDefines({
-      modbus_rtu: {
-        enabled: true,
-        rtu_interface: 'Serial',
-        rtu_baud_rate: '115200',
-        rtu_slave_id: 1,
-      },
+      serial: { baud_rate: '115200' },
+      modbus_rtu: { enabled: true },
     })
     expect(out).toBe(
       [
@@ -140,44 +35,68 @@ describe('generateModbusDefines', () => {
     )
   })
 
-  it('Phase 2: RTU on the default port takes its baud from the Serial section and shares the debug serial', () => {
-    const out = generateModbusDefines({
-      serial: { baud_rate: '9600' },
-      modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
+  it('lets the project server decide what is served', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial1',
+      slaveId: 7,
     })
-    expect(out).toContain('#define MBSERIAL_IFACE Serial')
-    expect(out).toContain('#define MBSERIAL_BAUD 9600')
-    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
-    expect(out).not.toContain('MBSERIAL_ON_SECONDARY')
-  })
-
-  it('Phase 2: RTU on a secondary port uses its own baud and does NOT share the debug serial', () => {
-    const out = generateModbusDefines(
-      {
-        serial: { baud_rate: '9600' },
-        modbus_rtu: { enabled: true, serial_port: 'Serial1', baud_rate: '19200', rtu_slave_id: 1 },
-      },
-      'Serial',
-    )
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
-    expect(out).toContain('#define MBSERIAL_BAUD 19200')
-    expect(out).not.toContain('MBSERIAL_SHARES_DEBUG_SERIAL')
-    // Distinct UART from the debugger's default → firmware services two serials.
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
     expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
   })
 
-  it('Phase 2: honors a non-default `defaultSerial` when deciding the shares flag', () => {
-    const out = generateModbusDefines(
-      { serial: { baud_rate: '9600' }, modbus_rtu: { enabled: true, serial_port: 'Serial1' } },
-      'Serial1',
-    )
-    // serial_port === defaultSerial → shares, and baud from the Serial section.
+  it('serves nothing when the server exists but is switched off', () => {
+    expect(
+      generateModbusDefines({ modbus_rtu: { enabled: true } }, 'Serial', {
+        enabled: false,
+        transports: ['rtu'],
+      }),
+    ).toBe('')
+  })
+
+  it('takes the server over the stale section it replaced', () => {
+    // A migrated project still carries the old section, because the migration
+    // copies rather than moves. The server is what counts.
+    const out = generateModbusDefines({ modbus_rtu: { enabled: true } }, 'Serial', { transports: ['tcp'] })
+    expect(out).not.toContain('#define MBSERIAL')
+    expect(out).toContain('#define MBTCP')
+  })
+
+  it('honours the server slave id on the default port, where the editor also listens', () => {
+    // The firmware answers DEBUG_SLAVE there too, routed by function code, so
+    // the server keeps its own address on the UART the editor is using. This
+    // used to be overridden with the editor's id, which is what made the field
+    // read-only on that port.
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial',
+      slaveId: 7,
+    })
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('honours the server slave id on a UART of its own', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial1',
+      slaveId: 7,
+    })
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+  })
+
+  it('honors a non-default `defaultSerial` when deciding the shares flag', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial1', {
+      transports: ['rtu'],
+      serialPort: 'Serial1',
+    })
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
   })
 
-  it('Phase 2: reads TCP network config from the network section', () => {
+  it('reads TCP network config from the network section', () => {
     const out = generateModbusDefines({
       network: {
         interface: 'Wi-Fi',
@@ -185,11 +104,115 @@ describe('generateModbusDefines', () => {
         wifi_password: 'super-secret',
         enable_dhcp: true,
       },
-      modbus_tcp: { enabled: true, unit_id: 1 },
+      modbus_tcp: { enabled: true },
     })
     expect(out).toContain('#define MBTCP_SSID "MyNet"')
     expect(out).toContain('#define MBTCP_PWD "super-secret"')
     expect(out).toContain('#define MBTCP_WIFI')
+  })
+
+  it('takes the RTU port, its baud and the RS485 pin from the serial section', () => {
+    // The physical layer is the package's: which UART, how fast, which pin
+    // drives the RS-485 transceiver. The server says only that RTU is served.
+    const out = generateModbusDefines(
+      {
+        serial: {
+          baud_rate: '9600',
+          modbus_port: 'Serial2',
+          modbus_baud_rate: '19200',
+          enable_rs485_en_pin: true,
+          rs485_en_pin: '4',
+        },
+      },
+      'Serial',
+      { transports: ['rtu'], slaveId: 7 },
+    )
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_TXPIN 4')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  })
+
+  it('takes the secondary UART speed from the server, not from the screen', () => {
+    // The speed of a UART the editor is not on belongs to the server, like the
+    // slave id and the port itself. The screen value is only the fallback for a
+    // project that predates the move.
+    const out = generateModbusDefines({ serial: { baud_rate: '9600', modbus_baud_rate: '19200' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial2',
+      baudRate: 57600,
+    })
+    expect(out).toContain('#define MBSERIAL_BAUD 57600')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  })
+
+  it('ignores the server speed on the default port, where the editor already sets it', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
+      transports: ['rtu'],
+      serialPort: 'Serial',
+      baudRate: 57600,
+    })
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('shares the default port baud when the RTU stays on it', () => {
+    const out = generateModbusDefines({
+      serial: { baud_rate: '9600', modbus_port: 'Serial', modbus_baud_rate: '19200' },
+      modbus_rtu: { enabled: true },
+    })
+    // modbus_baud_rate belongs to the SECONDARY port; on the default one the
+    // debugger and the RTU are the same line and share one speed.
+    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+  })
+
+  it('emits the listen port the server states', () => {
+    const out = generateModbusDefines({ network: {} }, 'Serial', { transports: ['tcp'], port: 5020 })
+    expect(out).toContain('#define MBTCP_PORT 5020')
+  })
+
+  it('falls back to 502, which is what the firmware listened on before the port was configurable', () => {
+    const out = generateModbusDefines({ modbus_tcp: { enabled: true } })
+    expect(out).toContain('#define MBTCP_PORT 502')
+  })
+
+  it('emits no MBTCP when the network section is explicitly disabled', () => {
+    // Modbus TCP cannot come up without a network. Emitting MBTCP anyway
+    // produced firmware that called mbconfig_ethernet_iface and never linked —
+    // a healthy board that answers nothing, which reads as broken hardware.
+    const out = generateModbusDefines({
+      network: { enabled: false, interface: 'Wi-Fi', wifi_ssid: 'MyNet' },
+      modbus_tcp: { enabled: true },
+    })
+    expect(out).not.toContain('#define MBTCP')
+    expect(out).not.toContain('MBTCP_WIFI')
+    expect(out).toBe('')
+  })
+
+  it('still emits MBSERIAL when the network is off but RTU is on', () => {
+    // The network gate is TCP's alone; RTU has nothing to do with it.
+    const out = generateModbusDefines({
+      network: { enabled: false },
+      modbus_rtu: { enabled: true },
+      modbus_tcp: { enabled: true },
+    })
+    expect(out).toContain('#define MBSERIAL')
+    expect(out).toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('#define MBTCP')
+  })
+
+  it('builds TCP when the network section exists but its toggle was never touched', () => {
+    // The form layout persists only fields the user edited, so someone who
+    // typed an SSID without touching "Enable Network" has no `enabled` key.
+    // Only an explicit `false` blocks; absence must not.
+    const out = generateModbusDefines({
+      network: { wifi_ssid: 'MyNet', interface: 'Wi-Fi' },
+      modbus_tcp: { enabled: true },
+    })
+    expect(out).toContain('#define MBTCP')
+    expect(out).toContain('#define MBTCP_SSID "MyNet"')
   })
 
   it('applies RTU schema defaults when only `enabled: true` is persisted (form-layout writes only touched fields)', () => {
@@ -224,14 +247,10 @@ describe('generateModbusDefines', () => {
     expect(out).toContain('#define MBTCP_SUBNET 0')
   })
 
-  it('honors custom RTU values (non-default baud, slave_id, interface)', () => {
-    const out = generateModbusDefines({
-      modbus_rtu: {
-        enabled: true,
-        rtu_interface: 'Serial1',
-        rtu_baud_rate: '57600',
-        rtu_slave_id: 42,
-      },
+  it('honors custom RTU values (non-default baud, slave id, UART)', () => {
+    const out = generateModbusDefines({ serial: { modbus_port: 'Serial1', modbus_baud_rate: '57600' } }, 'Serial', {
+      transports: ['rtu'],
+      slaveId: 42,
     })
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 57600')
@@ -239,22 +258,30 @@ describe('generateModbusDefines', () => {
   })
 
   it('emits MBSERIAL_TXPIN only when the RS485 EN pin checkbox is on AND a pin value is set', () => {
+    const rtu = { transports: ['rtu' as const] }
+
     // Pin set but checkbox off → no MBSERIAL_TXPIN (matches screen visibility gate).
-    const checkboxOff = generateModbusDefines({
-      modbus_rtu: { enabled: true, enable_rs485_en_pin: false, rtu_rs485_en_pin: 'D2' },
-    })
+    const checkboxOff = generateModbusDefines(
+      { serial: { enable_rs485_en_pin: false, rs485_en_pin: 'D2' } },
+      'Serial',
+      rtu,
+    )
     expect(checkboxOff).not.toContain('MBSERIAL_TXPIN')
 
     // Checkbox on AND value set → emitted.
-    const checkboxOn = generateModbusDefines({
-      modbus_rtu: { enabled: true, enable_rs485_en_pin: true, rtu_rs485_en_pin: 'D2' },
-    })
+    const checkboxOn = generateModbusDefines(
+      { serial: { enable_rs485_en_pin: true, rs485_en_pin: 'D2' } },
+      'Serial',
+      rtu,
+    )
     expect(checkboxOn).toContain('#define MBSERIAL_TXPIN D2')
 
     // Checkbox on but pin empty → skipped (defensive — no garbage #define).
-    const checkboxOnEmptyPin = generateModbusDefines({
-      modbus_rtu: { enabled: true, enable_rs485_en_pin: true, rtu_rs485_en_pin: '' },
-    })
+    const checkboxOnEmptyPin = generateModbusDefines(
+      { serial: { enable_rs485_en_pin: true, rs485_en_pin: '' } },
+      'Serial',
+      rtu,
+    )
     expect(checkboxOnEmptyPin).not.toContain('MBSERIAL_TXPIN')
   })
 
@@ -333,7 +360,8 @@ describe('generateModbusDefines', () => {
 
   it('combines RTU + TCP and emits MODBUS_ENABLED exactly once', () => {
     const out = generateModbusDefines({
-      modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 5 },
+      serial: { baud_rate: '9600' },
+      modbus_rtu: { enabled: true },
       modbus_tcp: { enabled: true, tcp_interface: 'Ethernet', enable_dhcp: true },
     })
     expect(out).toContain('#define MBSERIAL')
@@ -379,7 +407,7 @@ describe('generateModbusDefines', () => {
     // the gating booleans are off. Output is still empty so defines.h stays
     // clean.
     const out = generateModbusDefines({
-      modbus_rtu: { enabled: false, rtu_interface: 'Serial', rtu_baud_rate: '115200' },
+      modbus_rtu: { enabled: false },
       modbus_tcp: { enabled: false, tcp_interface: 'Ethernet', enable_dhcp: true },
     })
     expect(out).toBe('')
@@ -387,8 +415,194 @@ describe('generateModbusDefines', () => {
 
   it('output always ends with a trailing newline (so callers can concatenate)', () => {
     const out = generateModbusDefines({
-      modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '115200', rtu_slave_id: 1 },
+      serial: { baud_rate: '115200' },
+      modbus_rtu: { enabled: true },
     })
     expect(out.endsWith('\n')).toBe(true)
+  })
+})
+
+/**
+ * Turning the server off has to actually turn Modbus off, on every board.
+ *
+ * The two halves are wired through `selectModbusServer`, so this asserts them
+ * together: the selector reports the disabled server rather than an absence,
+ * and the emitter reads its empty transport list instead of falling back to
+ * screen sections that a board's unsplit package still leaves switched on.
+ */
+describe('a server the user switched off', () => {
+  const LEGACY_SECTIONS = {
+    modbus_rtu: { enabled: true, rtu_slave_id: 7, rtu_interface: 'Serial1' },
+    modbus_tcp: { enabled: true },
+  }
+
+  it('emits no Modbus, even though the legacy sections still say enabled', () => {
+    const off = [
+      {
+        name: 'mb_baremetal_server',
+        protocol: 'modbus-tcp',
+        modbusSlaveConfig: { enabled: false, transports: ['rtu' as const], slaveId: 7 },
+      },
+    ]
+    const { server } = selectModbusServer(off)
+    expect(generateModbusDefines(LEGACY_SECTIONS, 'Serial', server)).toBe('')
+  })
+
+  it('still emits from the legacy sections when the project has no server at all', () => {
+    const { server } = selectModbusServer([])
+    expect(generateModbusDefines(LEGACY_SECTIONS, 'Serial', server)).toContain('MBSERIAL')
+  })
+})
+
+/**
+ * A firmware build serves exactly one Modbus slave. The editor lets a project
+ * carry several on purpose -- it moves between targets -- so the refusal has to
+ * land where a single answer is actually required, and it has to name the
+ * servers rather than state a number.
+ */
+describe('selectModbusServer', () => {
+  const server = (name: string, transports: ('rtu' | 'tcp')[], enabled = true) => ({
+    name,
+    protocol: 'modbus-tcp',
+    modbusSlaveConfig: { enabled, transports, networkInterface: '0.0.0.0', port: 502 },
+  })
+
+  it('finds nothing in a project with no servers', () => {
+    expect(selectModbusServer(undefined)).toEqual({})
+    expect(selectModbusServer([])).toEqual({})
+  })
+
+  it('returns a server that exists but serves nothing, rather than nothing at all', () => {
+    // The emitter falls back to the legacy screen sections when it gets no
+    // server. Those sections still say `enabled: true` on a board whose package
+    // was never split, so reporting an absence here compiled RTU on a server
+    // the user had switched off.
+    expect(selectModbusServer([server('mb1', [])]).server).toMatchObject({ transports: [] })
+    expect(selectModbusServer([server('mb1', ['rtu'], false)]).server).toMatchObject({ enabled: false })
+  })
+
+  it('reports nothing for a pre-4.4.0 server that never declared transports', () => {
+    // That server is a Runtime v4 one carried by a project whose baremetal
+    // Modbus still lives in the screen sections. Treating it as "serves
+    // nothing" would silence a project that has always compiled from them.
+    const legacy = { name: 'mb1', protocol: 'modbus-tcp', modbusSlaveConfig: { enabled: true, port: 502 } }
+    expect(selectModbusServer([legacy])).toEqual({})
+  })
+
+  it('ignores a server of another protocol', () => {
+    expect(selectModbusServer([{ name: 'opc', protocol: 'opcua' }])).toEqual({})
+  })
+
+  it('returns the one server that is serving', () => {
+    expect(selectModbusServer([server('mb1', ['rtu', 'tcp'])]).server).toMatchObject({ transports: ['rtu', 'tcp'] })
+  })
+
+  it('names every server in conflict, so the user knows which to turn off', () => {
+    const selection = selectModbusServer([server('mb1', ['rtu']), server('mb2', ['tcp'])])
+    expect(selection.conflict).toEqual(['mb1', 'mb2'])
+    expect(selection.server).toBeUndefined()
+  })
+
+  it('does not count a disabled server towards the conflict', () => {
+    const selection = selectModbusServer([server('mb1', ['rtu']), server('mb2', ['tcp'], false)])
+    expect(selection.conflict).toBeUndefined()
+    expect(selection.server).toMatchObject({ transports: ['rtu'] })
+  })
+
+  it('prefers the serving one when a disabled server comes first', () => {
+    const selection = selectModbusServer([server('mb1', ['tcp'], false), server('mb2', ['rtu'])])
+    expect(selection.server).toMatchObject({ transports: ['rtu'] })
+  })
+})
+
+/**
+ * The compiler reads the project from disk; `migrate-modbus-serial-fields` runs
+ * in the store. So the emitter meets the pre-split spellings routinely -- before
+ * the first save, always in a CLI process, and permanently on a board whose
+ * package was never split -- and has to honour them.
+ */
+describe('a pre-4.4.0 project whose wiring is still under the old keys', () => {
+  const legacy = {
+    modbus_rtu: {
+      enabled: true,
+      rtu_slave_id: 7,
+      rtu_interface: 'Serial2',
+      rtu_baud_rate: '19200',
+      enable_rs485_en_pin: true,
+      rtu_rs485_en_pin: '17',
+    },
+  }
+
+  it('drives the RS-485 enable pin instead of leaving the transceiver mute', () => {
+    // Losing this emits no MBSERIAL_TXPIN, the DE pin is never asserted, and the
+    // board receives every request and answers none.
+    expect(generateModbusDefines(legacy, 'Serial')).toContain('#define MBSERIAL_TXPIN 17')
+  })
+
+  it('puts the RTU on the UART the project named, not on the default one', () => {
+    const out = generateModbusDefines(legacy, 'Serial')
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+  })
+
+  it('still prefers the new keys when the fold has already run', () => {
+    const folded = {
+      modbus_rtu: { enabled: true, rtu_interface: 'Serial2', rtu_rs485_en_pin: '17' },
+      serial: { modbus_port: 'Serial1', enable_rs485_en_pin: true, rs485_en_pin: '4' },
+    }
+    const out = generateModbusDefines(folded, 'Serial')
+    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
+    expect(out).toContain('#define MBSERIAL_TXPIN 4')
+  })
+})
+
+/**
+ * `NFR03`: promoting a project's Modbus to a `PLCServer` must not change the
+ * firmware it compiles to. The measurement behind it was that exactly one line
+ * moves, `DEBUG_SLAVE`, and that one is the editor's own link rather than the
+ * server's.
+ *
+ * Asserted as an A/B here because it is the only form that stays true: it emits
+ * ONE project's configuration through the legacy screen-section path and through
+ * the migrated-server path, and compares the two outputs directly.
+ */
+describe('NFR03 - the migration does not change the firmware', () => {
+  /** What a pre-4.4.0 project carries, all of it in the screen sections. */
+  const legacySections = {
+    modbus_rtu: {
+      enabled: true,
+      rtu_slave_id: 7,
+      rtu_interface: 'Serial2',
+      rtu_baud_rate: '19200',
+      enable_rs485_en_pin: true,
+      rtu_rs485_en_pin: '17',
+    },
+    modbus_tcp: { enabled: false },
+  }
+
+  /** The same configuration after `planVendorModbusMigration` promotes it. */
+  const migratedServer = {
+    enabled: true,
+    transports: ['rtu' as const],
+    slaveId: 7,
+    serialPort: 'Serial2',
+    baudRate: 19200,
+    networkInterface: '0.0.0.0',
+    port: 502,
+  }
+
+  it('emits the identical Modbus block through both paths', () => {
+    const before = generateModbusDefines(legacySections, 'Serial')
+    const after = generateModbusDefines(legacySections, 'Serial', migratedServer)
+    expect(after).toBe(before)
+  })
+
+  it('emits a block that is not empty, so the comparison above means something', () => {
+    const out = generateModbusDefines(legacySections, 'Serial', migratedServer)
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+    expect(out).toContain('#define MBSERIAL_BAUD 19200')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_TXPIN 17')
   })
 })
