@@ -141,9 +141,11 @@ export interface LibraryPort {
 
   /**
    * Open the platform's file picker and install whatever the user
-   * selects.  Accepts `.stlib` archives (native strucpp format) and
+   * selects.  Accepts `.stlib` archives (native strucpp format),
    * `.lib`/`.library` files (CODESYS, run through strucpp's
-   * importer to produce a `.stlib`).  Returns `{ canceled: true }`
+   * importer to produce a `.stlib`), and a `.zip` holding any
+   * number of those files — which installs every one of them and
+   * reports each separately.  Returns `{ canceled: true }`
    * when the user dismisses the picker.
    */
   installFromFile(): Promise<LibraryInstallResult>

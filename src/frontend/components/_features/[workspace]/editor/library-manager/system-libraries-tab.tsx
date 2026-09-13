@@ -61,10 +61,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
     if (!library) return
     setIsPopoverOpen(false)
     const result = await library.installFromFile()
-    if (result.success && !result.canceled) {
-      setSelectedName(result.name)
-      onRefresh()
-    } else if (!result.success) {
+    if (!result.success) {
       openModal('debugger-message', {
         type: 'error',
         title: 'Library install failed',
@@ -72,6 +69,34 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
         buttons: ['OK'],
         onResponse: () => {},
       })
+      return
+    }
+
+    // A ZIP installs several at once. Select the first and refresh regardless,
+    // then name the ones that did not install -- reporting only the failure
+    // would hide the libraries that are now there.
+    if ('entries' in result) {
+      // The module turns "nothing installed" into a plain failure, so there is
+      // always one here -- read it safely anyway rather than trust an
+      // invariant the type cannot carry.
+      const first = result.installed[0]
+      if (first) setSelectedName(first.name)
+      onRefresh()
+      if (result.failed.length > 0) {
+        openModal('debugger-message', {
+          type: 'warning',
+          title: `Installed ${result.installed.length} of ${result.entries.length} libraries`,
+          message: result.failed.map((entry) => `${entry.path}: ${entry.error}`).join('\n'),
+          buttons: ['OK'],
+          onResponse: () => {},
+        })
+      }
+      return
+    }
+
+    if (!result.canceled) {
+      setSelectedName(result.name)
+      onRefresh()
     }
   }, [library, onRefresh, openModal])
 

@@ -1267,9 +1267,11 @@ class MainProcessBridge implements MainIpcModule {
     const result = await dialog.showOpenDialog(this.mainWindow, {
       title: 'Install Library',
       filters: [
-        { name: 'Library files', extensions: ['stlib', 'lib', 'library'] },
+        { name: 'Library files', extensions: ['stlib', 'lib', 'library', 'zip'] },
         { name: 'STruC++ archive', extensions: ['stlib'] },
         { name: 'CODESYS library', extensions: ['lib', 'library'] },
+        // A ZIP of library files: every one it holds is installed.
+        { name: 'Library bundle', extensions: ['zip'] },
       ],
       properties: ['openFile'],
     })

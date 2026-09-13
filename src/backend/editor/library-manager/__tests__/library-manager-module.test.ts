@@ -251,7 +251,8 @@ describe('LibraryManagerModule', () => {
       const result = await mod.installFromFile(tmp)
       expect(result).toMatchObject({ success: true, origin: 'codesys' })
       // Mock derives the name from the file basename, sanitised.
-      if (result.success && !('canceled' in result && result.canceled)) {
+      // Not a ZIP, so not the bundle arm -- narrow it away to read `name`.
+      if (result.success && !('entries' in result) && !result.canceled) {
         expect(result.name).toBe('OSCAT')
         expect(existsSync(installedPath(librariesDir, 'OSCAT'))).toBe(true)
       }

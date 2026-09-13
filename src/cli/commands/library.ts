@@ -241,7 +241,10 @@ function describeVerification(verification: CompileLibraryResult['verification']
 async function runLibraryInstall(reporter: Reporter, stlibPath: string | undefined): Promise<CliResult> {
   if (!stlibPath) {
     return reporter.failure(
-      { code: ErrorCode.InvalidArgument, message: 'library install needs the path of a .stlib file.' },
+      {
+        code: ErrorCode.InvalidArgument,
+        message: 'library install needs the path of a .stlib, .lib, .library or .zip file.',
+      },
       ExitCode.Usage,
     )
   }
@@ -252,6 +255,19 @@ async function runLibraryInstall(reporter: Reporter, stlibPath: string | undefin
   if (!result.success) {
     return reporter.failure({ code: ErrorCode.TargetError, message: result.error }, ExitCode.TargetError)
   }
+
+  // A ZIP installs several, and one failing does not stop the others. Report
+  // every outcome and let the exit code stay 0: libraries did land.
+  if ('entries' in result) {
+    return reporter.success({ ok: true, libraries: result.installed, failed: result.failed }, () =>
+      [
+        `Installed ${result.installed.length} librar${result.installed.length === 1 ? 'y' : 'ies'} from ${stlibPath}`,
+        ...result.installed.map((library) => `  ${library.name} ${library.version}`),
+        ...result.failed.map((entry) => `  skipped ${entry.path} — ${entry.error}`),
+      ].join('\n'),
+    )
+  }
+
   if (result.canceled) {
     return reporter.failure(
       { code: ErrorCode.TargetError, message: `Nothing installed from ${stlibPath}.` },

@@ -137,7 +137,10 @@ export interface InstalledLibrary {
  * .lib/.library paths funnel through this shape so the renderer
  * doesn't branch on origin.
  */
-export type LibraryInstallResult =
+export type LibraryInstallResult = LibrarySingleInstallResult | LibraryBundleInstallResult
+
+/** Installing one archive: what every path except a ZIP returns. */
+export type LibrarySingleInstallResult =
   | {
       success: true
       /** True when the user closed the file picker without choosing
@@ -152,6 +155,28 @@ export type LibraryInstallResult =
     }
   | { success: true; canceled: true }
   | { success: false; error: string }
+
+/** One `.stlib` inside a ZIP, and what installing it did. */
+export type LibraryBundleEntry =
+  | { path: string; success: true; name: string; version: string; origin: 'stlib' | 'codesys' }
+  | { path: string; success: false; error: string }
+
+/**
+ * A ZIP holds several archives, so one of them failing says nothing about the
+ * rest: each is installed on its own and reported on its own. `success` is
+ * true whenever at least one landed — the caller refreshes for those and
+ * surfaces `failed` for the others. Narrow with `'entries' in result`.
+ */
+export interface LibraryBundleInstallResult {
+  success: true
+  canceled?: false
+  /** Every `.stlib` the ZIP held, in the order they were installed. */
+  entries: LibraryBundleEntry[]
+  /** The ones that installed, so the caller can select one and refresh. */
+  installed: Array<{ name: string; version: string }>
+  /** The ones that did not, each naming its entry path. */
+  failed: Array<{ path: string; error: string }>
+}
 
 /** A project's reference to a library: a name, optionally pinned to a version. */
 export interface LibraryRef {

@@ -7,8 +7,10 @@ import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-p
 import type {
   EnabledArchives,
   InstalledLibrary,
+  LibraryBundleEntry,
   LibraryInstallResult,
   LibraryRef,
+  LibrarySingleInstallResult,
   VersionSubstitution,
 } from '../../../middleware/shared/ports/library-types'
 import type { PublicLibrary } from '../../../middleware/shared/ports/public-catalog-types'
@@ -19,6 +21,7 @@ import {
   prepareStlibUpload,
 } from '../../shared/library/prepare-library-upload'
 import { downloadPublicLibrary } from '../../shared/library/public-catalog-client'
+import { type BundledLibraryFile, readLibraryBundle } from '../../shared/library/read-library-bundle'
 import { validatePathId } from '../../shared/utils/path-safety'
 import { assertPathContained } from '../utils/path-containment'
 import { createDesktopCatalogTransport } from './desktop-catalog-transport'
@@ -157,9 +160,12 @@ export class LibraryManagerModule {
       if (ext === '.lib' || ext === '.library') {
         return this.installFromCodesys(filePath)
       }
+      if (ext === '.zip') {
+        return this.installFromZip(filePath)
+      }
       return {
         success: false,
-        error: `Unsupported library format: ${ext} (expected .stlib, .lib, or .library)`,
+        error: `Unsupported library format: ${ext} (expected .stlib, .lib, .library, or .zip)`,
       }
     } catch (err) {
       return { success: false, error: `Install failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -467,7 +473,7 @@ export class LibraryManagerModule {
    * The text is validated by the same strucpp preparer as any other install,
    * so an archive from a device gets no more trust than one a user picked.
    */
-  async installFromText(archiveText: string): Promise<LibraryInstallResult> {
+  async installFromText(archiveText: string): Promise<LibrarySingleInstallResult> {
     let prepared: PreparedLibrary
     try {
       prepared = prepareStlibUpload(archiveText)
@@ -477,7 +483,58 @@ export class LibraryManagerModule {
     return this.persistPrepared(prepared)
   }
 
-  private async installStlib(filePath: string): Promise<LibraryInstallResult> {
+  /**
+   * Install every library file a ZIP holds -- `.stlib` archives and CODESYS
+   * `.lib`/`.library` files alike, each through its own preparer.
+   *
+   * Each archive is installed on its own, and one failing leaves the rest
+   * alone: a bundle of eight where one is corrupt should install seven and say
+   * which one it skipped, not refuse the lot. A ZIP that will not open, or
+   * holds no archive at all, is a different thing -- the user picked the wrong
+   * file -- and fails outright.
+   */
+  private async installFromZip(filePath: string): Promise<LibraryInstallResult> {
+    let bundled: BundledLibraryFile[]
+    try {
+      bundled = await readLibraryBundle(new Uint8Array(readFileSync(filePath)))
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+
+    const entries: LibraryBundleEntry[] = []
+    for (const file of bundled) {
+      const result =
+        file.kind === 'stlib'
+          ? await this.installFromText(file.text)
+          : await this.installFromCodesysBytes(file.bytes, file.filename)
+      entries.push(
+        result.success && !result.canceled
+          ? {
+              path: file.path,
+              success: true,
+              name: result.name,
+              version: result.version,
+              origin: result.origin,
+            }
+          : { path: file.path, success: false, error: result.success ? 'Nothing installed' : result.error },
+      )
+    }
+
+    const installed = entries.filter((entry) => entry.success).map(({ name, version }) => ({ name, version }))
+    const failed = entries.filter((entry) => !entry.success).map(({ path, error }) => ({ path, error }))
+
+    // Nothing landed: the caller has no library to select and no reason to
+    // refresh, so this reads as a plain failure rather than a partial success.
+    if (installed.length === 0) {
+      return {
+        success: false,
+        error: `No libraries installed from the ZIP. ${failed.map((f) => `${f.path}: ${f.error}`).join('; ')}`,
+      }
+    }
+    return { success: true, entries, installed, failed }
+  }
+
+  private async installStlib(filePath: string): Promise<LibrarySingleInstallResult> {
     let prepared: PreparedLibrary
     try {
       prepared = prepareStlibUpload(readFileSync(filePath, 'utf-8'))
@@ -487,15 +544,26 @@ export class LibraryManagerModule {
     return this.persistPrepared(prepared)
   }
 
-  private async installFromCodesys(filePath: string): Promise<LibraryInstallResult> {
+  private async installFromCodesys(filePath: string): Promise<LibrarySingleInstallResult> {
     // Read the .lib/.library bytes here (Node-only territory) and
     // hand them to the platform-agnostic shared preparer.  The
     // bytes-in / filename-in shape is the same web's library-adapter
     // uses against an HTTP upload, so the shared module isn't coupled
     // to either backend's storage.
+    return this.installFromCodesysBytes(new Uint8Array(readFileSync(filePath)), basename(filePath))
+  }
+
+  /**
+   * Install a CODESYS library from bytes rather than a file on disk.
+   *
+   * A `.lib` inside a ZIP has no path of its own, and writing it out just to
+   * read it back would add a failure mode for nothing. `filename` still
+   * matters: the preparer derives the library identifier from it.
+   */
+  async installFromCodesysBytes(bytes: Uint8Array, filename: string): Promise<LibrarySingleInstallResult> {
     let prepared: PreparedLibrary
     try {
-      prepared = await prepareCodesysUpload(new Uint8Array(readFileSync(filePath)), basename(filePath))
+      prepared = await prepareCodesysUpload(bytes, filename)
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -508,7 +576,7 @@ export class LibraryManagerModule {
    * Manifest parsing + extraction already happened in the shared
    * preparer; this step is pure storage + filesystem-safety checks.
    */
-  private persistPrepared(prepared: PreparedLibrary): LibraryInstallResult {
+  private persistPrepared(prepared: PreparedLibrary): LibrarySingleInstallResult {
     try {
       validatePathId(prepared.name, 'manifest.name')
     } catch (err) {

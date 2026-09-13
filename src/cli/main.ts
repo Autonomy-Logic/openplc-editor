@@ -81,7 +81,7 @@ Usage
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
   openplc-cli library build <library-project> [--clean]
-  openplc-cli library install <file.stlib>
+  openplc-cli library install <file>                         (.stlib, .lib, .library, or a .zip of them)
   openplc-cli library uninstall <name>[@<version>] [--all]
   openplc-cli library info <name>[@<version>]
   openplc-cli library list
