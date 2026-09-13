@@ -82,7 +82,7 @@ namespace {
 // point of a PLC is that its memory use does not depend on what a peer does.
 // ---------------------------------------------------------------------------
 
-bm_net::Listener g_listener(S7COMM_PORT);
+bm_net::Listener g_listener(S7COMM_PORT, BM_NET_S7_SLOTS);
 
 S7Server g_server;
 bool     g_started = false;
