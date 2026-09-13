@@ -1,14 +1,6 @@
 /**
- * Publishing a local project to Edge, with HTTP stubbed and a real directory on disk.
- *
- * The archive is built from an actual temporary project rather than from a mocked
- * filesystem, because what matters here is what ends up INSIDE the zip: the importer
- * refuses an archive with no `project.json` at its root, and it reads paths with forward
- * slashes. A mock would happily agree with whatever the code did.
- *
- * The other half is the limits. They are the server's, mirrored locally so a doomed upload
- * fails before someone waits out a zip and a slow connection for a rejection that was
- * certain from the start.
+ * Publishing a local project to Edge, with HTTP stubbed and a real directory on disk,
+ * so what ends up inside the zip (paths, root manifest) is real rather than mocked.
  */
 
 import fs from 'fs/promises'
@@ -68,9 +60,7 @@ describe('building the archive', () => {
     expect(result.ok).toBe(true)
 
     if (result.ok) {
-      // Forward slashes, and `project.json` at the top — both are what the importer
-      // looks for. `path.join` would emit backslashes on Windows, which the server then
-      // reads as characters in a filename rather than as folders.
+      // Forward slashes always, even on Windows, or the server reads them as filename characters rather than folders.
       expect(await entriesOf(result.zip)).toEqual([
         'devices/configuration.json',
         'pous/programs/main.st',
@@ -81,10 +71,7 @@ describe('building the archive', () => {
   })
 
   it('leaves out nested projects, build output and dot-folders', async () => {
-    // A folder that holds other projects (a workshop directory, a git checkout with a
-    // build/) used to be packed whole; the importer then adopted the LAST nested
-    // project.json it met as the manifest and published someone else's files under
-    // someone else's name.
+    // A nested project.json must not be picked up as the manifest for this one.
     await writeProject({
       'project.json': '{"meta":{"name":"Mine"}}',
       'pous/programs/main.st': 'x := TRUE;',
@@ -137,8 +124,6 @@ describe('building the archive', () => {
 
     const result = await buildProjectArchive(projectDir)
 
-    // `.dt` and `.md` used to be dropped here, so a project with data types arrived on
-    // Edge without them — and compiled differently there than it did locally.
     expect(result.ok && (await entriesOf(result.zip))).toEqual([
       'README.md',
       'datatypes/Motor.dt',
@@ -168,9 +153,7 @@ describe('building the archive', () => {
 
   it('names the file that is too big, not just the fact', async () => {
     await writeProject({ 'project.json': '{}' })
-    // 50MB + 1 byte, in an allowed extension so it is not simply skipped. A Uint8Array
-    // rather than a Buffer: this project's TS/@types/node pairing rejects a Buffer here,
-    // the same mismatch the runtime uploader documents.
+    // 50MB + 1 byte, in an allowed extension so it is not simply skipped.
     await fs.writeFile(path.join(projectDir, 'huge.st'), new Uint8Array(50 * 1024 * 1024 + 1))
 
     const result = await buildProjectArchive(projectDir)
@@ -187,11 +170,8 @@ describe('building the archive', () => {
   it('refuses the total before it has allocated it', async () => {
     await writeProject({ 'project.json': '{}' })
 
-    // Three 40MB files: each is under the 50MB per-file ceiling, together they are over
-    // the 100MB total. The point of the assertion is not the refusal — it is that the
-    // third file is never read. Checking the ceiling after `readFile` enforces it on
-    // memory that has already been allocated, which is how a large project used to take
-    // the whole process down rather than fail politely.
+    // Three 40MB files: each under the 50MB per-file ceiling, together over the 100MB
+    // total. The point is that the third file is never read — the ceiling is checked before allocating, not after.
     const forty = new Uint8Array(40 * 1024 * 1024)
     await fs.writeFile(path.join(projectDir, 'a.st'), forty)
     await fs.writeFile(path.join(projectDir, 'b.st'), forty)
@@ -303,19 +283,13 @@ describe('uploading', () => {
   })
 
   it('cannot be made to forge a header through the filename', () => {
-    // The crafted name is handed to the real boundary directly instead of being created
-    // as a directory: Windows forbids `"`, CR and LF in a filename, so `mkdtemp` could
-    // never produce this on the windows-latest leg of CI. `zipNameFor` is the same
-    // function the upload path calls, so this still exercises the production route from
-    // a project path to a header.
+    // The crafted name is handed to the real boundary directly rather than created as a
+    // directory: Windows forbids `"`, CR and LF in a filename, so `mkdtemp` couldn't produce it in CI.
     const lines = fileDispositionHeader('B', zipNameFor(`${path.sep}tmp${path.sep}evil"\r\nX-Injected: 1`)).split(
       '\r\n',
     )
 
-    // The property that matters is that the break is gone, not that the text is: a
-    // forged header would have to start its own line. The characters survive inside the
-    // filename, harmlessly, which is why asserting on the substring would be asserting
-    // the wrong thing.
+    // What matters is that the line break is gone; the raw characters may still appear harmlessly inside the filename.
     expect(lines.some((line) => line.startsWith('X-Injected'))).toBe(false)
     expect(lines.filter((line) => line.includes('filename='))).toHaveLength(1)
   })

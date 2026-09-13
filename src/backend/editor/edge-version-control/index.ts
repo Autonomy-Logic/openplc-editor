@@ -1,28 +1,4 @@
-/**
- * Version control against Autonomy Edge, from the desktop main process.
- *
- * The git repository lives beside the project on the server: Edge's own worker runs the
- * commits, the branch switches and the stashes. So this module is a transport and nothing
- * more — the same role the web build's adapter plays, hitting the same seventeen routes
- * with the same payloads. That is deliberate and it is the whole design: `carry` conflict
- * detection, stash semantics and restore are real git behaviour implemented once, on the
- * server, and reimplementing any of it here would produce a desktop that *looks* like the
- * web editor and disagrees with it under load.
- *
- * WHY IT RETURNS RESULTS INSTEAD OF THROWING. The renderer's UI branches on
- * `error instanceof SwitchBranchCarryConflictError` and `error instanceof
- * StashConflictError`. A class instance does not survive the structured clone that IPC
- * puts it through — the prototype is lost and every `instanceof` silently answers false,
- * which would turn "these files conflict, pick discard or cancel" into a console error and
- * a switch that appears to do nothing. So failures cross the boundary as plain data with a
- * `kind`, and the adapter on the other side builds the real error object back. The typed
- * failures are the reason this file exists in this shape.
- *
- * WHY THE MAIN PROCESS AT ALL. The renderer is not on Edge's origin, and the session's
- * access token is held here (encrypted at rest) rather than being handed to the renderer.
- * Every authenticated call the editor makes already goes through `edgeAuthedRequest`,
- * which owns renewal and the single retry.
- */
+// Failures are returned as plain data with a `kind`: an Error instance loses its prototype crossing IPC.
 
 import { z } from 'zod'
 
@@ -31,56 +7,24 @@ import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
 import { logger } from '../services'
 
-/**
- * Git work against a whole project is not an auth round trip. Matches the web build's
- * axios timeout exactly, so the same commit on the same project gives up at the same
- * point on both platforms.
- */
+/** Matches the web build's axios timeout. */
 const VC_TIMEOUT_MS = 30_000
 
-// ---------------------------------------------------------------------------
-// Result shape — serialisable, because it crosses IPC
-// ---------------------------------------------------------------------------
+// Result shape
 
-/**
- * Why each of these is kept apart rather than collapsed into a message:
- *
- *  - `signed-out` — there is no session to spend. The user signs in; nothing is wrong
- *    with the project.
- *  - `unreachable` — the server never answered, so NOTHING was learned. Reporting this as
- *    a denial would tell someone their branch cannot be created when the truth is that
- *    their wifi dropped.
- *  - `carry-conflict` / `stash-conflict` — the two cases the UI has real recovery flows
- *    for. They carry exactly what those flows need.
- *  - `http` — everything else, with the status, so a 403 on a read-only project reads
- *    differently from a 500.
- */
+/** Failure taxonomy; `unreachable` means nothing was learned and must not read as a denial. */
 export type EdgeVcFailure = VersionControlFailure
 
 export type EdgeVcResult<T> = VersionControlResult<T>
 
 /** The `{ statusCode, data }` envelope every Edge route answers with. */
-/**
- * Every answer arrives wrapped as `{ statusCode, data }`. The wrapper is validated
- * here and the payload by the schema each route passes in, so a 2xx carrying a body
- * this build does not understand is reported as unreadable rather than handed to the
- * renderer as if it were the expected shape.
- */
 const edgeEnvelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) =>
   z.object({ statusCode: z.number().optional(), data: data.optional() })
 
 /** A `message` field as Nest's exception filter writes it. */
 const FailureBodySchema = z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() })
 
-/**
- * A human-readable caption the server sends alongside a completed operation.
- *
- * `.catch('')` rather than a required string: the port types these `string`, but the
- * operation they describe has already happened on the server by the time the body is
- * read. Failing a successful branch switch because its confirmation sentence was
- * missing would report the wrong thing entirely — the fields with semantics
- * (`branch`, `conflicts`, `total`) stay strict.
- */
+/** Server caption; `.catch('')` because the operation already happened by the time the body is read. */
 const CaptionSchema = z.string().catch('')
 
 /** A counter the server may omit. Absent reads as zero rather than as a failure. */
@@ -93,13 +37,7 @@ const ConflictBodySchema = z.object({
   message: z.string().nullish(),
 })
 
-/**
- * Pull something readable out of a failure body.
- *
- * Nest's exception filter puts the reason in `message`, which may be a string or an array
- * of validation strings. Falling back to the status keeps the UI from showing an empty
- * toast when a proxy answers with HTML.
- */
+/** Nest puts the reason in `message`, as a string or an array of strings. */
 function messageFromBody(body: string, status: number): string {
   const parsed = parseJsonBodyAs(body, FailureBodySchema)
   const raw = parsed?.message
@@ -115,13 +53,7 @@ function messageFromBody(body: string, status: number): string {
   return `Autonomy Edge answered ${status}.`
 }
 
-/**
- * One authenticated call, with the failure taxonomy applied.
- *
- * `on409` is how the two conflict flows get their own kind. Only the routes that can
- * conflict pass it, so a 409 anywhere else stays an ordinary HTTP failure rather than
- * being mistaken for a conflict the UI knows how to resolve.
- */
+/** One authenticated call; only routes that can conflict pass `on409`, so any other 409 stays an HTTP failure. */
 async function call<Schema extends z.ZodTypeAny>(
   target: Route,
   schema: Schema,
@@ -129,8 +61,7 @@ async function call<Schema extends z.ZodTypeAny>(
   on409?: (body: string) => EdgeVcFailure | null,
 ): Promise<EdgeVcResult<z.infer<Schema>>> {
   if (!target.ok) {
-    // Never sent. Reported as a 400 because that is what it is: a request this side
-    // refused to form, not one the server refused to serve.
+    // Never sent: a request this side refused to form.
     return { ok: false, failure: { kind: 'http', status: 400, message: target.message } }
   }
 
@@ -140,8 +71,7 @@ async function call<Schema extends z.ZodTypeAny>(
   try {
     response = await edgeAuthedRequest(path, { ...init, timeoutMs: VC_TIMEOUT_MS })
   } catch (error) {
-    // Rejection from `edgeAuthedRequest` means no answer at all — see edge-http's
-    // contract. This is the one branch that must not be reported as a denial.
+    // A rejection means no answer at all; must not be reported as a denial.
     return {
       ok: false,
       failure: { kind: 'unreachable', message: error instanceof Error ? error.message : 'No answer' },
@@ -177,12 +107,7 @@ async function call<Schema extends z.ZodTypeAny>(
   const envelope = edgeEnvelopeOf(schema).safeParse(parseJsonBody(body))
 
   if (!envelope.success || envelope.data.data === undefined) {
-    // A 2xx whose body we cannot read is not a success we can hand to the UI.
-    //
-    // Logged with the field that failed, because the message alone is a dead end: a
-    // developer facing "unreadable response" on a 200 has no way to tell a server that
-    // changed its shape from a schema here that is stricter than the server ever was.
-    // Both have happened; the second one cost an afternoon.
+    // Log the failing field: "unreadable response" alone cannot tell a changed server from a too-strict schema.
     logger.warn(
       `Unreadable ${path} response: ${
         envelope.success
@@ -208,9 +133,7 @@ async function callVoid(
 ): Promise<EdgeVcResult<null>> {
   const result = await call(target, z.unknown(), init, on409)
 
-  // These routes may answer 204, or 200 with no `data`. Both are success, so the
-  // unreadable-body check in `call` has to be relaxed for them rather than turning an
-  // empty success into an error.
+  // These routes may answer 204, or 200 with no `data`; both are success.
   if (!result.ok && result.failure.kind === 'http' && result.failure.status < 400) {
     return { ok: true, data: null }
   }
@@ -218,22 +141,14 @@ async function callVoid(
   return result.ok ? { ok: true, data: null } : result
 }
 
-/**
- * The carry rejection. The 409 body sits at the TOP level, not inside `data` — matching
- * how the web adapter reads `error.response.data`. `hasConflicts` is what distinguishes a
- * blocked carry from any other conflict on the same route.
- */
+/** The carry rejection: the 409 body is at the top level, not inside `data`; `hasConflicts` is the discriminator. */
 function carryConflict(body: string): EdgeVcFailure | null {
   const payload = parseJsonBodyAs(body, ConflictBodySchema)
 
   return payload?.hasConflicts ? { kind: 'carry-conflict', conflictedFiles: payload.conflictedFiles ?? [] } : null
 }
 
-/**
- * The merge refusal. Same top-level body shape as the carry rejection, and the same
- * discriminator: only `hasConflicts` means "decide per file", so any other 409 on the
- * route stays an ordinary failure.
- */
+/** The merge refusal; same top-level body and discriminator as the carry rejection. */
 function mergeConflict(body: string): EdgeVcFailure | null {
   const payload = parseJsonBodyAs(body, ConflictBodySchema)
 
@@ -251,9 +166,7 @@ function stashConflict(): EdgeVcFailure {
   return { kind: 'stash-conflict' }
 }
 
-// ---------------------------------------------------------------------------
-// Paths — every id interpolated into a route goes through here
-// ---------------------------------------------------------------------------
+// Paths
 
 class InvalidRouteSegmentError extends Error {
   constructor(readonly segment: string) {
@@ -262,14 +175,7 @@ class InvalidRouteSegmentError extends Error {
   }
 }
 
-/**
- * A path segment safe to interpolate into a route.
- *
- * Encoded so a branch named `feat/x` reaches the server as one segment, and refused
- * outright for the values encoding alone cannot make safe: a `..` or a `/` here would
- * let an id received from the renderer address a different route on the same
- * authenticated session.
- */
+/** Encodes a route segment; refuses `.`, `..` and `/?#`, which encoding alone cannot make safe. */
 export function segment(value: string): string {
   if (value === '' || value === '.' || value === '..' || /[/?#]/.test(value)) {
     throw new InvalidRouteSegmentError(value)
@@ -306,9 +212,7 @@ function withQuery(base: Route, params: URLSearchParams): Route {
   return base.ok && query ? { ok: true, path: `${base.path}?${query}` } : base
 }
 
-// ---------------------------------------------------------------------------
 // Branches
-// ---------------------------------------------------------------------------
 
 export function listBranches(projectId: string) {
   return call(route`/projects/${projectId}/branches`, z.object({ branches: z.array(z.unknown()) }))
@@ -343,9 +247,7 @@ export function previewSwitchCarry(projectId: string, targetBranch: string) {
   )
 }
 
-// ---------------------------------------------------------------------------
 // Commits
-// ---------------------------------------------------------------------------
 
 export function listCommits(projectId: string, options: { limit?: number; offset?: number; branch?: string } = {}) {
   const params = new URLSearchParams()
@@ -356,10 +258,7 @@ export function listCommits(projectId: string, options: { limit?: number; offset
 
   return call(
     withQuery(route`/projects/${projectId}/commits`, params),
-    // `total` and `page` are the pagination counters, and the server does not always
-    // send them. The port types them `number`, so they default rather than fail: a
-    // history that arrived without its page counter is still a history, and refusing
-    // it would blank the History tab over a field nothing on screen depends on.
+    // `total` and `page` are not always sent; default rather than blank the History tab.
     z.object({ commits: z.array(z.unknown()), total: CountSchema, page: CountSchema }),
   )
 }
@@ -396,15 +295,10 @@ export function restoreCommit(projectId: string, hash: string, branch?: string) 
   )
 }
 
-// ---------------------------------------------------------------------------
 // Working tree
-// ---------------------------------------------------------------------------
 
 export function getChanges(projectId: string, includeContent?: boolean) {
-  // No `branch` param, deliberately: the backend's validation whitelist rejects unknown
-  // query params, and pending changes are always computed against the worker's checked-out
-  // HEAD anyway. Sending it produces a 400 and nothing else. Same omission the web adapter
-  // documents.
+  // No `branch` param: the backend's whitelist rejects unknown query params with a 400.
   const search = new URLSearchParams()
 
   if (includeContent) search.set('includeContent', 'true')
@@ -424,9 +318,7 @@ export function discardChanges(projectId: string, files?: string[]) {
   return callVoid(route`/projects/${projectId}/discard-changes`, { method: 'POST', json })
 }
 
-// ---------------------------------------------------------------------------
 // Stashes
-// ---------------------------------------------------------------------------
 
 export function listStashes(projectId: string) {
   return call(route`/projects/${projectId}/stashes`, z.object({ stashes: z.array(z.unknown()) }))
@@ -463,9 +355,7 @@ export function dropStash(projectId: string, ref: string) {
   return callVoid(route`/projects/${projectId}/stashes/drop`, { method: 'POST', json: { ref } })
 }
 
-// ---------------------------------------------------------------------------
 // Merging
-// ---------------------------------------------------------------------------
 
 export function getBranchDiffWithBase(projectId: string, source: string, target: string) {
   const params = new URLSearchParams({ source, target })
@@ -473,13 +363,7 @@ export function getBranchDiffWithBase(projectId: string, source: string, target:
   return call(withQuery(route`/projects/${projectId}/branches-diff-with-base`, params), z.unknown())
 }
 
-/**
- * A merge is the one call here that can take real time: the server walks three trees and
- * writes a commit. It gets the same 30s budget as the rest, which matches the web build.
- *
- * `mergeConflict` is what turns the 409 into its own kind, so the renderer can rebuild
- * `MergeConflictError` and open the resolver instead of reporting a failure.
- */
+/** `mergeConflict` gives the 409 its own kind so the renderer can rebuild `MergeConflictError`. */
 export function mergeBranches(params: {
   projectId: string
   sourceBranch: string

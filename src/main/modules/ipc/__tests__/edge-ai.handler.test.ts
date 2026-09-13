@@ -1,16 +1,8 @@
 /**
- * What the `edge-ai:*` channels refuse, and what they clean up.
- *
- * Two different hazards live here. The first is the one every edge channel has:
- * the renderer is not a trusted caller, so an argument that is not what it
- * claims to be has to be REFUSED rather than forwarded — a conversation id read
- * as `undefined` becomes a request about a conversation by that name.
- *
- * The second is specific to streaming. A stream is the only thing in this bridge
- * that outlives its `invoke`: main holds the open upstream request in a map, and
- * anything that leaves an entry behind — an abort that does not delete, a window
- * closed mid-answer — is a socket nobody will ever close and tokens being pushed
- * at a `webContents` that would throw on receiving them.
+ * What the `edge-ai:*` channels refuse, and what they clean up. The renderer is not a
+ * trusted caller, so malformed args are refused rather than forwarded; and a stream
+ * outlives its `invoke`, so main must never leak the open upstream request it holds in
+ * its map (an abort that doesn't delete, a window closed mid-answer).
  */
 
 import type { EdgeAiFailure } from '@root/backend/editor/edge-ai'
@@ -154,9 +146,7 @@ describe('starting a stream', () => {
     ['a body that is a list', { kind: 'chat', body: [] }],
     ['no body at all', { kind: 'chat' }],
   ])('is refused for %s', (_label, params) => {
-    // Refused rather than defaulted: a completion started as a chat, or a chat
-    // POSTed with an empty body, comes back from Edge as a confusing 400 and
-    // still costs the round trip.
+    // Refused rather than defaulted, to avoid a wasted round trip on a confusing 400 from Edge.
     expect(bridge.handleEdgeAiStreamStart({ sender: makeSender() } as never, params)).toMatchObject({
       ok: false,
       failure: { kind: 'http', status: 400 },
@@ -202,11 +192,7 @@ describe('starting a stream', () => {
       input: { pouName: 'Main', body: 'a := 1;', variables: [{ name: 'a', type: 'INT' }] },
     })
 
-    // This is the frame the channel is structured FOR. Flattened to text it reads
-    // as nothing at all: the renderer cannot run a call it never saw, so the
-    // assistant answers and then silently does not act. The expectation is spelled
-    // out rather than compared against the object that was sent, because a
-    // transport that kept `name` and dropped `input` would still look right.
+    // Spelled out rather than compared against the sent object: a transport that kept `name` but dropped `input` would still look right otherwise.
     expect(sender.send).toHaveBeenCalledWith('edge-ai:event', {
       streamId,
       event: {
@@ -237,10 +223,7 @@ describe('starting a stream', () => {
 
     const started = bridge.handleEdgeAiStreamStart({ sender } as never, { kind: 'chat', body: { messages: [] } })
 
-    // The map entry is in place before the call — a throw that skipped the sink would
-    // otherwise leave a stream nothing can ever end. Nothing to cancel, because the
-    // request was never made; and the renderer's hooks stay, because they belong to
-    // the renderer, not to the stream that failed to start.
+    // The map entry is in place before the call, so a throw that skipped the sink can't leave a stream nothing can ever end.
     expect(started).toMatchObject({ ok: false, failure: { kind: 'unreachable' } })
     expect(cancel).not.toHaveBeenCalled()
     hookFor(sender, 'destroyed')()
@@ -316,10 +299,7 @@ describe('a window that goes away mid-answer', () => {
   it('is cancelled when the renderer reloads, before Edge can bill the whole answer', () => {
     const { sender, sink } = startChat()
 
-    // A reload does NOT destroy the WebContents, so the old destroy-only hook never
-    // fired: the generator reading the stream died with its JS context, frames kept
-    // going into the void, Edge ran to completion and COMMITTED the credit reservation.
-    // The user paid in full for an answer nobody could read.
+    // A reload does NOT destroy the WebContents, so a destroy-only hook would miss it and Edge would bill an answer nobody could read.
     hookFor(sender, 'did-start-navigation')({ isMainFrame: true, isSameDocument: false, url: 'http://x/' })
 
     expect(cancel).toHaveBeenCalledTimes(1)
@@ -346,8 +326,7 @@ describe('a window that goes away mid-answer', () => {
   })
 
   it('hooks a renderer once, however many streams it opens', () => {
-    // Each stream used to add its own `once('destroyed')` to the same emitter; past ten
-    // concurrent streams Node warns about a leak. One set of hooks per renderer.
+    // One set of hooks per renderer, not one per stream, or Node warns about a listener leak past ten concurrent streams.
     const sender = makeSender()
     startChat(sender)
     startChat(sender)
@@ -410,9 +389,7 @@ describe('telemetry', () => {
       failure: { status: 400 },
     })
 
-    // The allowlist is a copy of the port's union, so the likeliest refusal is an
-    // event added there and not here. Nobody notices a graph that was never drawn
-    // — the log line is the only trace a dropped event leaves.
+    // The log line is the only trace a dropped event leaves.
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('chat_messge'))
   })
 

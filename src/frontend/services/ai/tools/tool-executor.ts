@@ -45,13 +45,7 @@ export type ToolResult = {
   message: string
 }
 
-/**
- * Platform-supplied capabilities a tool may need.
- *
- * Passed in rather than imported because this module is shared: the desktop and
- * the web reach the ST transpiler by different routes. Everything else a tool
- * touches is the store, which both builds already share.
- */
+/** Platform-supplied capabilities a tool may need; passed in because the desktop and web reach the ST transpiler by different routes. */
 export type ToolExecutionOptions = {
   /** Project → whole-program ST, for tools that must read a diagram. */
   transpileProject?: ProjectStTranspiler
@@ -149,10 +143,7 @@ function executeCreatePou(input: CreatePouInput): ToolResult {
 
   const state = openPLCStoreBase.getState()
 
-  // A "main" POU is auto-created in every project. When the model tries to
-  // (re)create one with a body, redirect to update_pou_body on the existing
-  // POU so the logic the user asked for actually lands — the previous "just
-  // reject" behaviour relied on the model retrying, which it didn't always do.
+  // A "main" POU is auto-created in every project; redirect a (re)create with a body to update_pou_body instead.
   if (createProps.name.toLowerCase() === 'main') {
     const existingMain = state.project.data.pous.find((p) => p.name.toLowerCase() === 'main')
     if (existingMain) {
@@ -186,7 +177,6 @@ function executeCreatePou(input: CreatePouInput): ToolResult {
     return { success: false, message: result.message ?? `Failed to create POU "${createProps.name}".` }
   }
 
-  // If a body was provided, update it after creation
   if (body) {
     const freshState = openPLCStoreBase.getState()
     const pou = freshState.project.data.pous.find((p) => p.name === createProps.name)
@@ -250,9 +240,7 @@ function executeUpdatePouBody(input: UpdatePouBodyInput): ToolResult {
   state.projectActions.updatePou(adapted)
   state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(input.pouName)
 
-  // Record the pending diff in the store so per-hunk review is available for
-  // this POU even if no editor is currently mounted for it. The editor listener
-  // below handles model sync for the POU that IS currently open.
+  // Pending diff lets per-hunk review work with no editor mounted; the event below syncs the model if one is open.
   const hunks = computeHunks(oldBody, input.code)
   if (hunks.length > 0) {
     state.aiActions.setPendingDiff(input.pouName, {
@@ -329,7 +317,6 @@ function executeUpdateVariable(input: UpdateVariableInput): ToolResult {
   const state = openPLCStoreBase.getState()
   const isGlobal = !input.pouName
 
-  // Find the variable
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let variable: any
   if (isGlobal) {
@@ -347,7 +334,6 @@ function executeUpdateVariable(input: UpdateVariableInput): ToolResult {
     return { success: false, message: `Variable "${input.currentName}" not found in ${scope}.` }
   }
 
-  // Build partial update data
   const updateData: Record<string, unknown> = {}
   if (input.newName) updateData.name = input.newName
   if (input.class) updateData.class = input.class
@@ -502,7 +488,6 @@ async function executeUpdateDatatype(input: UpdateDatatypeInput): Promise<ToolRe
   // The tool only accepts fields for the existing derivation; everything else is ignored.
   const derivation = existing.derivation
 
-  // Validate struct field uniqueness if fields are being replaced
   if (derivation === 'structure' && input.fields) {
     const fieldNames = new Set<string>()
     for (const f of input.fields) {
@@ -645,15 +630,7 @@ function executeReadProjectState(): ToolResult {
 /** Input for the `read_pou_body` tool. */
 export type ReadPouBodyInput = { name?: string }
 
-/**
- * Return one POU's body verbatim.
- *
- * Textual POUs (ST / IL / Python / C++) return exactly what is stored — no
- * truncation, no reformatting. Graphical POUs return the transpiled ST
- * equivalent, because their stored body is an XYFlow graph of node
- * coordinates. A failed or unavailable transpile is reported as such rather
- * than returning an empty body the model would read as "this POU is empty".
- */
+/** Return one POU's body verbatim; graphical POUs return the transpiled ST equivalent since their body is node coordinates. */
 async function executeReadPouBody(input: ReadPouBodyInput, options: ToolExecutionOptions): Promise<ToolResult> {
   const requested = input?.name
   if (typeof requested !== 'string' || requested.trim() === '') {

@@ -2,8 +2,6 @@ import { describe, expect, it } from '@jest/globals'
 
 import { collectProjectContext } from '../context-collector'
 
-// -- helpers ------------------------------------------------------------------
-
 function makeState(overrides: {
   pous?: Array<{
     name: string
@@ -28,8 +26,6 @@ function makeState(overrides: {
     },
   } as unknown as ReturnType<typeof import('../../../store').openPLCStoreBase.getState>
 }
-
-// -- tests --------------------------------------------------------------------
 
 describe('collectProjectContext', () => {
   it('returns empty string when POU not found', () => {
@@ -168,7 +164,6 @@ describe('collectProjectContext', () => {
     })
 
     const result = collectProjectContext(state, 'P', 2)
-    // Budget is 8 chars - only the first section (or nothing) should fit
     expect(result.length).toBeLessThanOrEqual(8)
   })
 
@@ -189,7 +184,6 @@ describe('collectProjectContext', () => {
       expect(collectProjectContext(state, 'Main', 5000)).toContain('code here')
     }
 
-    // Non-text language (ld) should not include body
     const state = makeState({
       pous: [
         { name: 'Main', pouType: 'program', interface: { variables: [] }, body: { language: 'st', value: '' } },
@@ -265,7 +259,6 @@ describe('collectProjectContext', () => {
       interface: { variables: Array<{ name: string; class?: string; type: { value: string } }> }
       body: { language: string; value: string }
     }> = [{ name: 'Main', pouType: 'program', interface: { variables: [] }, body: { language: 'st', value: '' } }]
-    // Add many siblings to exceed budget
     for (let i = 0; i < 10; i++) {
       pous.push({
         name: `Sib${i}`,
@@ -275,9 +268,7 @@ describe('collectProjectContext', () => {
       })
     }
     const state = makeState({ pous })
-    // Very small budget - should stop partway through siblings
     const result = collectProjectContext(state, 'Main', 50)
-    // At least one sibling should be missing
     expect(result).not.toContain('Sib9')
   })
 
@@ -349,7 +340,6 @@ describe('collectProjectContext', () => {
     const state = makeState({ pous })
     // Small budget that fits Main variables + globals + maybe FB1 but not FB2's full section
     const result = collectProjectContext(state, 'Main', 60)
-    // The referenced FB2 section header should be excluded due to budget
     expect(result).not.toContain('FUNCTION_BLOCK FB2')
   })
 
@@ -400,14 +390,7 @@ describe('collectProjectContext', () => {
   })
 })
 
-// -- non-IEC dialects ---------------------------------------------------------
-
-/**
- * A Python or C++ POU gets the whole project described in its own comment
- * syntax. Emitting IEC syntax there would put `VAR_INPUT` blocks and
- * `TYPE … END_TYPE` declarations into a Python prompt, which the model reads as
- * code and continues in the wrong language.
- */
+/** Renders the project in the POU's own comment syntax; IEC syntax in a Python/C++ prompt reads as code to the model. */
 describe('collectProjectContext in Python and C++', () => {
   const variables = [
     { name: 'a', class: 'input', type: { value: 'INT' } },
@@ -495,8 +478,7 @@ describe('collectProjectContext in Python and C++', () => {
     ['python', '# ...'],
     ['cpp', '// ...'],
   ] as const)('truncates a long sibling body with a %s comment marker', (language, marker) => {
-    // The marker has to be a comment in the target language; an IEC `(* ... *)`
-    // in a Python prompt is a syntax error the model may copy.
+    // The marker must be a comment in the target language, not IEC's `(* ... *)`.
     const state = makeState({
       pous: [
         { name: 'Main', pouType: 'program', interface: { variables: [] }, body: { language, value: '' } },

@@ -11,8 +11,6 @@ import { openPLCStoreBase } from '../../../store'
 
 type TextualLanguage = 'st' | 'il' | 'python' | 'cpp'
 
-// --- Base type mapping ---
-
 const BASE_TYPES = new Set([
   'bool',
   'sint',
@@ -44,8 +42,6 @@ function resolveVariableType(typeStr: string): PLCVariableType {
   return { definition: 'user-data-type' as const, value: typeStr }
 }
 
-// --- create_pou adapter ---
-
 export type CreatePouInput = {
   name: string
   type: 'program' | 'function' | 'function-block'
@@ -63,8 +59,6 @@ export function adaptCreatePou(input: CreatePouInput): {
   }
 }
 
-// --- update_pou_body adapter ---
-
 export type UpdatePouBodyInput = {
   pouName: string
   code: string
@@ -79,8 +73,6 @@ export function adaptUpdatePouBody(input: UpdatePouBodyInput): { name: string; c
     content: { language: pou.body.language, value: input.code } as PLCBody,
   }
 }
-
-// --- create_variable adapter ---
 
 export type CreateVariableInput = {
   pouName?: string | null
@@ -113,13 +105,9 @@ export function adaptCreateVariable(input: CreateVariableInput): {
   }
 }
 
-// --- delete_pou adapter ---
-
 export type DeletePouInput = {
   pouName: string
 }
-
-// --- update_variable adapter ---
 
 export type UpdateVariableInput = {
   pouName?: string | null
@@ -130,14 +118,10 @@ export type UpdateVariableInput = {
   initialValue?: string
 }
 
-// --- delete_variable adapter ---
-
 export type DeleteVariableInput = {
   pouName?: string | null
   variableName: string
 }
-
-// --- create_datatype adapter ---
 
 export type CreateDatatypeInput = {
   name: string
@@ -149,10 +133,7 @@ export type CreateDatatypeInput = {
   initialValue?: string
 }
 
-/**
- * Build the full PLCDataType payload from a create_datatype tool input.
- * Returns null if derivation-specific required fields are missing.
- */
+/** Builds the PLCDataType payload from a create_datatype tool input; null if required fields are missing. */
 export function buildDatatypeFromCreateInput(input: CreateDatatypeInput): PLCDataType | null {
   if (input.derivation === 'structure') {
     if (!input.fields || input.fields.length === 0) return null
@@ -184,8 +165,6 @@ export function buildDatatypeFromCreateInput(input: CreateDatatypeInput): PLCDat
   return null
 }
 
-// --- update_datatype adapter ---
-
 export type UpdateDatatypeInput = {
   name: string
   newName?: string
@@ -195,8 +174,6 @@ export type UpdateDatatypeInput = {
   dimensions?: string[]
   initialValue?: string
 }
-
-// --- delete_datatype adapter ---
 
 export type DeleteDatatypeInput = {
   name: string

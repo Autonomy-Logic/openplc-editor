@@ -1,21 +1,3 @@
-/**
- * Publishing a project from this machine to Autonomy Edge.
- *
- * The desktop's counterpart to the web's "Import project" dialog, and it drives the same
- * endpoint — `POST /projects/import`, multipart, with a zip and a destination folder. The
- * web asks the user to produce that zip by hand ("right-click the project folder →
- * Compress"); here the project is already on disk with a path we hold, so the editor makes
- * the archive itself. That is the entire difference between the two flows.
- *
- * WHY THE LIMITS ARE ENFORCED HERE TOO. The server rejects an archive that is too big, has
- * too many files, nests too deep, or carries a file type it does not accept. Re-checking
- * before the upload is not distrust of the server: zipping a large project and pushing it
- * over a slow connection takes real time, and finding out afterwards that it was never
- * going to be accepted wastes all of it. The numbers are the server's own, and if they
- * drift, a rejection still lands — this only makes the common failures immediate and
- * specific instead of late and generic.
- */
-
 import fs from 'fs/promises'
 import JSZip from 'jszip'
 import path from 'path'
@@ -24,12 +6,7 @@ import { z } from 'zod'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBodyAs } from '../edge-account/edge-http'
 
-/**
- * The extensions `POST /projects/import` accepts — Edge's own list, from its
- * `import-project.use-case.ts`. Anything else in the project directory is left out of
- * the archive rather than making the upload fail — a stray `.DS_Store`, an editor backup
- * or a build artefact is not a reason to refuse to publish someone's work.
- */
+/** Edge's own list; anything else is left out of the archive rather than failing the upload. */
 const ALLOWED_EXTENSIONS = new Set(['.ld', '.fbd', '.st', '.sfc', '.il', '.dt', '.json', '.py', '.c', '.cpp', '.md'])
 
 /** The server's own ceilings, mirrored so a doomed upload fails before it is attempted. */
@@ -50,18 +27,10 @@ async function isProjectRoot(directory: string): Promise<boolean> {
 /** A project without this is not a project the importer can read. */
 const PROJECT_MANIFEST = 'project.json'
 
-/**
- * The folder tree as it arrives. Deliberately loose: only the fields the picker reads
- * are named, and `flattenFolders` already tolerates a malformed node — a folder that
- * cannot be understood is one destination missing from a menu, not a failure.
- */
+/** Loose on purpose: a folder that cannot be understood is one destination missing, not a failure. */
 const FoldersResponseSchema = z.object({ data: z.object({ folders: z.unknown() }).nullish() })
 
-/**
- * The two shapes Edge uses to explain a rejection. Validated rather than asserted
- * because the value lands in `failure.message`, which is typed `string`: a `message`
- * that arrived as an object used to flow straight through and reach the UI.
- */
+/** Validated because the value lands in `failure.message`, which is typed `string`. */
 const ImportErrorSchema = z.object({
   message: z.union([z.string(), z.array(z.string())]).nullish(),
   error: z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() }).nullish(),
@@ -78,9 +47,7 @@ const UPLOAD_TIMEOUT_MS = 300_000
 /** Listing folders is. */
 const LIST_TIMEOUT_MS = 30_000
 
-// ---------------------------------------------------------------------------
-// Folders — the destination picker's data
-// ---------------------------------------------------------------------------
+// Folders
 
 export interface CloudFolder {
   id: string
@@ -108,13 +75,7 @@ function isRawFolder(value: unknown): value is RawFolder {
   return typeof value === 'object' && value !== null
 }
 
-/**
- * What to call a folder in the picker.
- *
- * The root folder's `name` is the account's own user id — an internal detail that would be
- * meaningless and slightly alarming in a menu. The web's dialog shows `Root (/)` for it;
- * this says the same thing in the same place.
- */
+/** The root folder's `name` is the account's user id; show `Root (/)` like the web does. */
 function labelFor(folder: RawFolder): string {
   if (folder.type === 'root') {
     return 'Root (/)'
@@ -123,14 +84,7 @@ function labelFor(folder: RawFolder): string {
   return typeof folder.name === 'string' && folder.name.length > 0 ? folder.name : 'Untitled folder'
 }
 
-/**
- * Flatten the hierarchy into the list the picker shows.
- *
- * Only `root` and `directory` survive. A `project` folder IS a project, and offering it as
- * a destination would invite someone to nest a project inside another one — the web's
- * dialog filters the same two types for the same reason. Trashed folders are dropped as
- * well: importing into the bin would succeed and then be invisible.
- */
+/** Only `root` and `directory` are destinations: a `project` folder is a project, and trashed folders are dropped. */
 function flattenFolders(nodes: unknown, depth = 0): CloudFolder[] {
   if (!Array.isArray(nodes) || depth > MAX_DEPTH) {
     return []
@@ -187,9 +141,7 @@ export async function listCloudFolders(): Promise<CloudFoldersResult> {
   return { status: 'ok', folders: flattenFolders(payload?.data?.folders) }
 }
 
-// ---------------------------------------------------------------------------
 // Archiving
-// ---------------------------------------------------------------------------
 
 interface CollectedFile {
   /** Forward-slash separated, relative to the project directory. */
@@ -213,19 +165,7 @@ export type UploadProjectResult =
   | { status: 'ok'; projectId: string | null; uploadedFiles: number }
   | { status: 'failed'; failure: UploadFailure }
 
-/**
- * Read the project directory into memory, keeping only what the importer accepts.
- *
- * In memory because the archive has to be a single buffer for the multipart body anyway,
- * and the ceiling on that is 100MB — small enough that streaming to a temporary file
- * would add a cleanup path and a failure mode without buying anything.
- *
- * EVERY LIMIT IS CHECKED BEFORE THE READ, from the directory entry's own size. Checking
- * after `readFile` means the ceiling is enforced on memory already allocated: a thousand
- * accepted 50MB files is 50GB of allocation before the first rejection, which does not
- * fail politely — it takes the Electron process with it. The size in the entry's stat is
- * the same number the read would produce, minus the allocation.
- */
+/** Every limit is checked from the stat BEFORE the read, or the ceiling is enforced on memory already allocated. */
 async function collectFiles(
   projectPath: string,
   directory: string,
@@ -249,15 +189,11 @@ async function collectFiles(
 
   for (const entry of entries) {
     const absolute = path.join(directory, entry.name)
-    // Forward slashes, always: the ZIP spec's separator. `path.join` would emit
-    // backslashes on Windows, which the server then reads as literal characters in a
-    // filename rather than as directories — the same trap the runtime upload documents.
+    // Forward slashes always: `path.join` emits backslashes on Windows, which the server reads as filename characters.
     const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
 
     if (entry.isDirectory()) {
-      // Build output, VCS metadata and a folder that is a project of its own are not
-      // part of THIS project; the importer would otherwise adopt the nested
-      // project.json as the manifest.
+      // A nested project.json would otherwise be adopted as the manifest.
       if (SKIPPED_DIRECTORIES.has(entry.name) || entry.name.startsWith('.') || (await isProjectRoot(absolute))) {
         continue
       }
@@ -343,15 +279,9 @@ export async function buildProjectArchive(
     return { ok: false, failure: { reason: 'empty' } }
   }
 
-  // Checked here rather than trusting the server's message: "the archive must contain a
-  // project.json in the root" is true but unhelpful when the user picked a folder that was
-  // never an OpenPLC project at all.
   if (!collected.some((file) => file.relativePath === PROJECT_MANIFEST)) {
     return { ok: false, failure: { reason: 'no-manifest' } }
   }
-
-  // The running budget in `collectFiles` already refuses to read past the ceiling, so
-  // reaching here means the total is within it. Re-summing would only restate that.
 
   const zip = new JSZip()
 
@@ -361,41 +291,25 @@ export async function buildProjectArchive(
 
   return {
     ok: true,
-    // DEFLATE, not STORE: the payload is source text and JSON, which compresses hard.
-    // The 100MB ceiling above is enforced on the UNCOMPRESSED bytes as they are read —
-    // before this archive exists — which is the conservative side: nothing that passes
-    // it can compress to more than itself, so an archive this produces is always within
-    // the server's own limit on what is sent.
+    // The 100MB ceiling is enforced on the uncompressed bytes, so a DEFLATE archive is always within it.
     zip: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
     fileCount: collected.length,
   }
 }
 
-// ---------------------------------------------------------------------------
 // Upload
-// ---------------------------------------------------------------------------
 
 /** Strips CR/LF and quotes so a filename cannot forge a header or break the disposition. */
 function headerSafe(value: string): string {
   return value.replace(/[\r\n"]/g, '')
 }
 
-/**
- * What the archive is called in the multipart form. The project directory's own name,
- * which means it is user-controlled text on its way into a header.
- */
+/** The project directory's own name: user-controlled text on its way into a header. */
 export function zipNameFor(projectPath: string): string {
   return `${path.basename(projectPath) || 'project'}.zip`
 }
 
-/**
- * The header of the file part.
- *
- * Exported so the injection test can drive the real boundary with a crafted filename.
- * It cannot go through a directory on disk: Windows forbids `\r`, `\n` and `\"` in a
- * name outright, so the temp directory the test used to create could never exist there
- * — and the suite runs on windows-latest.
- */
+/** Exported so the injection test can drive the boundary: Windows forbids CR, LF and quotes in on-disk names. */
 export function fileDispositionHeader(boundary: string, filename: string): string {
   return (
     `--${boundary}\r\n` +
@@ -438,9 +352,7 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
 
   parts.push(Buffer.from(fileDispositionHeader(boundary, zipName)), archive.zip, Buffer.from(`\r\n--${boundary}--\r\n`))
 
-  // `Buffer.concat` is typed over `Uint8Array`, and this project's TS/@types/node pairing
-  // will not take a `Buffer` there. A view over the same memory satisfies it without
-  // copying the archive, and without the assertion the runtime uploader had to document.
+  // `Buffer.concat` is typed over `Uint8Array`; a view over the same memory avoids a copy and an assertion.
   const body = Buffer.concat(parts.map((part) => new Uint8Array(part.buffer, part.byteOffset, part.byteLength)))
 
   let response: { status: number; body: string } | null
@@ -452,9 +364,7 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
       timeoutMs: UPLOAD_TIMEOUT_MS,
     })
   } catch (error) {
-    // No answer at all, which for a non-idempotent POST means the project MAY have been
-    // created. Said as "unreachable" rather than "failed" so the message can tell the user
-    // to check Edge before retrying instead of implying nothing happened.
+    // No answer to a non-idempotent POST: the project MAY exist, so say "unreachable", not "failed".
     return {
       status: 'failed',
       failure: { reason: 'unreachable', message: error instanceof Error ? error.message : 'No answer' },

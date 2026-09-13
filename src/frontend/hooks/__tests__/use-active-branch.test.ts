@@ -1,15 +1,3 @@
-/**
- * The remembered active branch.
- *
- * It is client state in `localStorage`, one entry per project, and it is the name the
- * history section passes into `listCommits({ branch })`. So a name that no longer exists is
- * not merely cosmetic: it queries a branch the server does not have.
- *
- * These tests pin the storage contract the reconciliation in `BranchStatusBar` depends on —
- * that a stored name is returned as-is, and that the default is used when nothing is stored.
- * The reconciliation itself lives in the component, which needs the branch list to judge.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import { getActiveBranch } from '../use-active-branch'
@@ -26,8 +14,7 @@ describe('getActiveBranch', () => {
   })
 
   it('honours the caller default over the built-in one', () => {
-    // A repository whose default branch is not called `main` is the reason this parameter
-    // exists; hard-coding `main` here would name a branch that may not exist.
+    // A repository whose default branch is not `main` is why this parameter exists.
     expect(getActiveBranch('p1', 'trunk')).toBe('trunk')
   })
 
@@ -49,8 +36,7 @@ describe('getActiveBranch', () => {
   it('keeps returning a name that no longer exists — which is why the bar reconciles', () => {
     localStorage.setItem(KEY, JSON.stringify({ p1: 'deleted-elsewhere' }))
 
-    // Documented deliberately: this layer cannot know what exists, so it answers honestly
-    // from storage. Validating against the real branch list is the status bar's job.
+    // This layer cannot know what exists; validating against the branch list is the status bar's job.
     expect(getActiveBranch('p1')).toBe('deleted-elsewhere')
   })
 })

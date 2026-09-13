@@ -1,12 +1,4 @@
-/**
- * The Edge account slot at the foot of the activity bar.
- *
- * NOTHING IS MODULE-MOCKED. The bar reads the platform through `PlatformProvider`, so
- * the account arrives as a fake port and the real hook, menu and sign-in dialog run on
- * top of it; the rest of the bar renders against stub ports and the real store. That is
- * what lets one file run unchanged under both runners, whose module-mock hoisting
- * differs.
- */
+/** The Edge account slot at the foot of the activity bar, exercised through `PlatformProvider` with a fake account port rather than module mocks. */
 
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -52,13 +44,7 @@ function makePorts(overrides: Partial<PlatformPorts>): PlatformPorts {
   }
 }
 
-/**
- * An Edge account that answers `/auth/me` with whatever it is told to, and counts
- * how often it was asked. `null` means the read never comes back — the in-flight case.
- *
- * Present here so the account menu and the sign-in gate are reachable; a platform
- * without an Edge account supplies no port, and the bar renders neither.
- */
+/** Answers `/auth/me` with whatever it's told and counts reads; `null` means the read never resolves (in-flight). */
 function fakeAccount(read: EdgeUserRead | null) {
   let reads = 0
 
@@ -104,10 +90,7 @@ async function firstReadOf(account: ReturnType<typeof fakeAccount>) {
   await waitFor(() => expect(account.reads()).toBe(1))
 }
 
-/**
- * The footer the exit arrow sits in — the element whose bottom padding follows the
- * account slot. Two levels up: the arrow is wrapped by its tooltip trigger.
- */
+/** The footer the exit arrow sits in, two levels up since the arrow is wrapped by its tooltip trigger. */
 function footerOf(exitButton: HTMLElement): HTMLElement {
   const footer = exitButton.parentElement?.parentElement
 
@@ -139,8 +122,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
     expect(await screen.findByRole('button', ACCOUNT_MENU)).not.toBeNull()
   })
 
-  // It belongs at the foot of the bar, under the exit arrow — the account is a
-  // destination, not one of the tools above the divider.
   it('places the account below the exit arrow', async () => {
     renderBar(fakeAccount({ status: 'signed-in', user: USER }).port)
 
@@ -156,7 +137,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
     expect(screen.queryByRole('button', ACCOUNT_MENU)).toBeNull()
   })
 
-  // A slow /auth/me must not flash a sign-in prompt at someone already signed in.
   it('shows neither while the session is still being read', async () => {
     const account = fakeAccount(null)
 
@@ -167,8 +147,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
     expect(screen.queryByRole('button', ACCOUNT_MENU)).toBeNull()
   })
 
-  // The autonomy-node build shares this component but points at its own API,
-  // where Edge's account endpoints do not exist.
   describe('builds without an Edge account', () => {
     beforeEach(() => {
       capabilities = { ...capabilities, hasEdgeAccount: false }
@@ -186,16 +164,9 @@ describe('WorkspaceActivityBar — Edge account', () => {
 
       renderBar(account.port)
 
-      // An idle hook never asks who is signed in.
       expect(account.reads()).toBe(0)
     })
 
-    /**
-     * The exit arrow is an EXISTING control, and on a build with no account slot it
-     * is still the last thing in the bar. Making room below it for a menu that build
-     * never renders moved it ~28px down the activity bar — a visible change to
-     * something the account work was not supposed to touch.
-     */
     it('leaves the exit arrow where it already sat', () => {
       renderBar(fakeAccount({ status: 'no-session' }).port)
 
@@ -203,11 +174,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
     })
   })
 
-  /**
-   * The desktop editor: it has an Edge account, for cloud projects, but opens local
-   * projects from disk and works offline. Same component, same slot, same dialog —
-   * the only difference is that nothing is forced on someone who never asked.
-   */
   describe('builds that have an account but do not require one', () => {
     beforeEach(() => {
       capabilities = { ...capabilities, requiresEdgeAccount: false, isNativeApplication: true }
@@ -217,7 +183,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
       renderBar(fakeAccount({ status: 'no-session' }).port)
 
       expect(await screen.findByLabelText(SIGN_IN_LABEL)).not.toBeNull()
-      // The editor stays usable: no dialog until it is asked for.
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 
@@ -244,8 +209,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
       expect(screen.queryByLabelText(SIGN_IN_LABEL)).toBeNull()
     })
 
-    // The slot is occupied either way, so the foot keeps its tighter gap and the exit
-    // arrow does not move when someone signs in or out.
     it('does not move the exit arrow between signed in and out', async () => {
       const signedOut = renderBar(fakeAccount({ status: 'no-session' }).port)
       await screen.findByLabelText(SIGN_IN_LABEL)
@@ -258,8 +221,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
     })
   })
 
-  // The other side of it: where the account DOES render, it is the last thing in
-  // the bar and takes the smaller gap it was designed with.
   it('tightens the foot of the bar when the account sits there', async () => {
     renderBar(fakeAccount({ status: 'signed-in', user: USER }).port)
     await screen.findByRole('button', ACCOUNT_MENU)
@@ -267,8 +228,6 @@ describe('WorkspaceActivityBar — Edge account', () => {
     expect(footerOf(screen.getByLabelText('Exit')).classList.contains('pb-3')).toBe(true)
   })
 
-  // Not gated on being signed in: that would move the exit arrow on every sign-in
-  // and again on every sign-out.
   it('does not move the exit arrow when the user signs out', async () => {
     renderBar(fakeAccount({ status: 'no-session' }).port)
     await screen.findByRole('dialog')

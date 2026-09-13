@@ -1,12 +1,3 @@
-/**
- * The port-shape → transpiler IR projection, on the shared surface.
- *
- * Two things are proved: nothing the model or the compiler needs is dropped on the way
- * across — a graphical POU is a React Flow graph and nothing else, and a reference that
- * lives in a node's variable name has to survive — and the projection never throws on a
- * body it cannot read, because a chat turn or a compile is what would go down with it.
- */
-
 import { describe, expect, it } from '@jest/globals'
 
 import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'

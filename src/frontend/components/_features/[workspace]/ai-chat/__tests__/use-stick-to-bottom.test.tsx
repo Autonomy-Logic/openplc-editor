@@ -4,12 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
 import { type StickToBottomHandle, useStickToBottom } from '../use-stick-to-bottom'
 
-/**
- * jsdom has no layout: `scrollHeight` / `clientHeight` are always 0 and
- * `scrollTop` is a plain number that never clamps. Give the container a
- * scriptable geometry, including the clamp a real scroller applies to
- * `scrollTop`, so the tests can model a growing transcript.
- */
+/** jsdom has no layout, so give the container scriptable scrollHeight/clientHeight/scrollTop geometry. */
 function giveGeometry(el: HTMLElement, { scrollHeight, clientHeight }: { scrollHeight: number; clientHeight: number }) {
   Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true })
   Object.defineProperty(el, 'clientHeight', { value: clientHeight, configurable: true })
@@ -102,15 +97,13 @@ describe('useStickToBottom', () => {
     expect(h.handle.isFollowing()).toBe(true)
   })
 
-  // The regression this whole hook exists for.
   it('does not detach when its own pin is followed by a late scroll event', () => {
     const h = renderHarness()
     h.grow(1500)
     act(() => h.handle.pin())
 
-    // The browser delivers the scroll event a frame later — by which time the
-    // stream has appended more content, so the geometry read back is stale
-    // and shows a large gap. That must NOT be read as a user scroll-up.
+    // Scroll event arrives a frame late, after more content appended — the stale
+    // geometry must NOT be read as a user scroll-up.
     h.grow(900)
     h.emitScroll()
 
@@ -199,10 +192,8 @@ describe('useStickToBottom', () => {
 
   it.each(['PageUp', 'Home', 'ArrowUp'])('detaches on %s', (key) => {
     const h = renderHarness()
-    // Dispatched from the focused container, not at it: `keydown` reaches the
-    // scroller by bubbling up from whatever has focus, so a test that fires
-    // directly on the container would pass even if the panel gave it no way to
-    // take focus. The panel sets `tabIndex={0}` for exactly this reason.
+    // Dispatched via focus + bubbling, not directly at the container: a direct
+    // dispatch would pass even if the panel gave the scroller no way to take focus.
     h.container.focus()
     expect(document.activeElement).toBe(h.container)
     act(() => {
@@ -268,8 +259,7 @@ describe('useStickToBottom', () => {
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
 
     const h = renderHarness({ active: true })
-    // Content grows with no React render at all — only the frame loop can
-    // catch this, which is the case a render-driven pin slid behind on.
+    // Content grows with no React render at all — only the frame loop catches this.
     h.grow(1200)
     act(() => frames[frames.length - 1](0))
 
@@ -292,10 +282,8 @@ describe('useStickToBottom', () => {
       unobserve() {}
       disconnect() {}
     }
-    // Assigned rather than stubbed: `stubGlobal` is a Vitest-only API and this
-    // file also runs under Jest too, so the swap is done by hand and undone in
-    // `finally` — otherwise a failing assertion would leak this stub into every
-    // later test in the process.
+    // Assigned by hand, not stubGlobal (Vitest-only, this file also runs under
+    // Jest) — restored in `finally` so a failing assertion can't leak the stub.
     const scope = globalThis as { ResizeObserver?: unknown }
     const previousResizeObserver = scope.ResizeObserver
     scope.ResizeObserver = RO

@@ -1,10 +1,6 @@
 import type { ToolResult } from '../../../../services/ai/tools'
 
-/**
- * Per-tool status entry retained on the slice for downstream gating (e.g. the
- * Keep / Undo bar in the chat panel). No longer rendered as a per-tool
- * activity log — the UI shows a single quiet "AI is working..." row instead.
- */
+/** Per-tool status entry retained on the slice for downstream gating (e.g. the Keep / Undo bar). */
 type ToolStatusEntry = {
   toolId: string
   toolName: string

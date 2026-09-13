@@ -1,22 +1,6 @@
 /**
- * The commit's full-file view.
- *
- * This component is byte-identical in openplc-editor — it is on the compared shared
- * surface — so this file covers the desktop's screen too. That is the point of it having
- * been extracted: the desktop reached this feature through a route it does not have, and
- * the fix was one screen for both products rather than a second implementation.
- *
- * What is worth protecting here is the status column. A/M/D drive what the user believes
- * changed in a commit, and the interesting case is the fourth one: a graphical file whose
- * BYTES differ while its program does not. Older commits captured transient canvas state
- * (selection, drag positions), so a byte comparison alone marks half a project as modified
- * and buries the real change. The semantic diff is what keeps that honest.
- *
- * NOTHING IS MODULE-MOCKED. The version-control and theme ports arrive through
- * `PlatformProvider`; the panels, the restore modal and the diff pane are the real ones.
- * Monaco never comes up — its loader has nothing to fetch here — so the diff pane is
- * observed by the header it puts over the file. That is what lets one file run unchanged
- * under both runners, whose module-mock hoisting differs.
+ * Byte-identical with openplc-editor's copy, so this file covers the desktop's screen too.
+ * No module mocks: ports come through PlatformProvider, so the same file runs under both runners.
  */
 
 import { beforeEach, describe, expect, it } from '@jest/globals'
@@ -37,10 +21,7 @@ import { PlatformProvider } from '../../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
 import { CommitHistoryView } from '..'
 
-/**
- * A port whose every method answers `undefined`, except the ones handed in. For the
- * ports nothing here reads, and for the ones that only need a method or three.
- */
+/** A port whose every method answers `undefined`, except the ones handed in. */
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   return new Proxy({} as T, {
     get: (_, prop) => {
@@ -177,8 +158,7 @@ describe('the file list', () => {
 
     renderView()
 
-    // Present in the parent and absent now: the tree has to show it, because a deletion
-    // is a change the reviewer needs to see.
+    // A deletion is still a change the reviewer needs to see.
     expect(await screen.findByText('gone.st')).not.toBeNull()
     expect(screen.queryByTitle('Deleted')).not.toBeNull()
   })
@@ -228,7 +208,7 @@ describe('the file list', () => {
 
     renderView()
 
-    // The migration's leftover archive shows up as a deletion. Nobody would recognise it.
+    // Infrastructure files must not appear as deletions.
     await screen.findByText('a.st')
     expect(screen.queryByText('git-data.tar.gz')).toBeNull()
   })
@@ -246,9 +226,8 @@ describe('the file list', () => {
     renderView()
     await screen.findByText('alpha.st')
 
-    // Focused by hand rather than clicked: in this environment every element sits at
-    // (0,0), so a click there lands inside the resize handle's hit area and the panel
-    // library swallows it before the box gets focus. The typing itself is real.
+    // Focused by hand: every element sits at (0,0) here, so a real click lands in the
+    // resize handle's hit area and the panel library swallows it before focus lands.
     const box = screen.getByPlaceholderText('Search files...')
     box.focus()
     await userEvent.type(box, 'alpha', { skipClick: true })
@@ -278,8 +257,6 @@ describe('the diff pane', () => {
       parentFiles: [],
     })
 
-    // The whole reason `initialFile` exists: clicking a file in the source-control panel
-    // should land on that file's diff, not on an empty pane.
     renderView('pous/programs/main.st')
 
     // The pane names the file it is diffing — the tree only ever shows the leaf.
@@ -332,8 +309,7 @@ describe('the header', () => {
     await userEvent.click(confirmRestoreButton())
 
     expect(restoreCommit).toHaveBeenCalledWith('p1', 'abc1234567')
-    // A restore rewrote the working tree, so what the editor holds is stale. Leaving the
-    // user on it would have them editing a copy that no longer exists.
+    // A restore rewrote the working tree, so what the editor holds is now stale.
     await waitFor(() => expect(onRestored).toHaveBeenCalled())
   })
 

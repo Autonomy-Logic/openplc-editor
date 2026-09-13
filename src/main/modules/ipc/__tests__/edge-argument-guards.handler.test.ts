@@ -1,13 +1,4 @@
-/**
- * What the version-control and cloud-save channels refuse.
- *
- * The renderer is not a trusted caller. Every optional argument here means something
- * specific when it is absent — `files: undefined` means "all files" to `createCommit`
- * and `createStash`, and an omitted `pouFiles` means "delete every POU" to a backend
- * that deletes by omission. So a malformed argument has to be REFUSED, never dropped:
- * dropping it turns a renderer bug into a destructive operation the user did not ask
- * for, and nothing on screen would say so.
- */
+// A malformed optional argument must be refused, never dropped: absent means "all files" downstream.
 
 import { createCommit, createStash, discardChanges } from '@root/backend/editor/edge-version-control'
 import { saveCloudProject } from '@root/backend/editor/edge-projects'
@@ -96,9 +87,7 @@ describe('a malformed file selection', () => {
     ['stash', (files: unknown) => bridge.handleEdgeVcCreateStash(EVENT, 'p1', 'a message', files)],
     ['discard', (files: unknown) => bridge.handleEdgeVcDiscardChanges(EVENT, 'p1', files)],
   ])('is refused by %s rather than read as "every file"', async (_label, invoke) => {
-    // One non-string entry. `vcStringArray` answers undefined for a partially valid
-    // list, and undefined means "all files" downstream — so forwarding it would commit,
-    // stash or discard the WHOLE project when the user ticked three files.
+    // A partially valid list must not become undefined, which means "all files" downstream.
     await expect(invoke(['pous/programs/main.st', 42])).resolves.toMatchObject(BAD_REQUEST)
 
     expect(commit).not.toHaveBeenCalled()
@@ -119,9 +108,7 @@ describe('a malformed file selection', () => {
 
 describe('the cloud save channel', () => {
   it('refuses a payload that is not a complete set of project files', async () => {
-    // `projectPath` alone used to be the whole check, with the rest declared rather
-    // than validated. The payload becomes an envelope posted to Edge, and the backend
-    // deletes by omission: a missing `pouFiles` asks it to delete every POU.
+    // The backend deletes by omission: a missing `pouFiles` asks it to delete every POU.
     await expect(bridge.handleEdgeProjectsSaveProject(EVENT, { projectPath: 'p1' })).resolves.toMatchObject({
       success: false,
     })

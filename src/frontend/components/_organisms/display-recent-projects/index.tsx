@@ -12,13 +12,7 @@ import { UploadToCloudModal } from '../../_features/[start]/upload-to-cloud'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
   searchNameFilterValue: string
-  /**
-   * A local project was published to Autonomy Edge.
-   *
-   * Reported upward because the list it belongs in is a sibling section, and the start
-   * screen is the only thing that knows both exist. Without it the newly published
-   * project was missing from the cloud list until the screen was rebuilt.
-   */
+  /** A local project was published to Autonomy Edge; reported up since the start screen owns both lists. */
   onProjectUploaded?: () => void
 }
 
@@ -34,14 +28,7 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
   const caps = useCapabilities()
   const edgeAccount = useEdgeAccountPort()
 
-  /**
-   * Publishing is offered only to someone who is actually signed in, which is why this
-   * asks who that is rather than inferring it. A menu entry that opens a dialog only to
-   * say "sign in first" is a worse answer than not offering the entry.
-   *
-   * `canPublish` also requires the platform to implement the call: the web build has no
-   * local projects to publish, and this component is shared with it.
-   */
+  // canPublish also requires the platform to implement the call: the web build has no local projects to publish.
   const { status: accountStatus } = useEdgeAccount(caps.hasEdgeAccount, edgeAccount)
   const canPublish = accountStatus === 'signed-in' && project.uploadProjectToCloud !== undefined
 
@@ -136,11 +123,8 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
     })
   }
 
-  // "Remove from list" — disk untouched. Fires immediately, no
-  // confirmation: the project files stay where they are, re-opening
-  // the project re-adds it to recents. The sibling "Delete project"
-  // action routes through the confirm-delete-project modal because
-  // its blast radius is `rm -rf` on the project directory.
+  // Disk untouched, fires immediately: re-opening the project re-adds it to recents.
+  // "Delete project" routes through a confirm modal instead, since its blast radius is rm -rf.
   const handleRemoveFromList = async (projectPath: string) => {
     const result = await project.removeRecentProject(projectPath)
     if (!result.success) {
@@ -176,13 +160,8 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
               projectPath={proj.path}
               lastModified={projectTimes[proj.path]}
             />
-            {/* 3-dot overflow menu — always visible, positioned on
-             *  the SVG folder BODY's top-right (not the tab above
-             *  it). The folder shape's body starts at y≈33 inside a
-             *  160px-tall card, so `top-10` (40px) sits just inside
-             *  the blue body and leaves the tab clean. Stops click
-             *  propagation so opening the menu doesn't also fire
-             *  the card's onClick (open project). */}
+            {/* top-10 sits just inside the folder body's SVG shape, clear of the tab above it.
+                Stops click propagation so opening the menu doesn't also fire the card's onClick. */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
@@ -209,13 +188,7 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
                       onSelect={() => setProjectToUpload({ name: proj.name, path: proj.path })}
                       className={cn(
                         'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
-                        // Brand blue for the label as well as the glyph: the other two
-                        // entries manage the local copy, and this one is the only entry
-                        // that reaches Autonomy Edge. Reading as one blue unit is what
-                        // says so.
-                        // `blue-500` for the tint: `text-brand` is fine, but the brand token is a
-                        // `var()` holding a hex and Tailwind 3 cannot apply `/5` to it, so the
-                        // hover would simply not paint. Same colour either way.
+                        // blue-500 for the hover tint: text-brand's var() can't take Tailwind's /5 opacity modifier.
                         'text-brand hover:bg-blue-500/5 dark:hover:bg-blue-500/10',
                       )}
                     >

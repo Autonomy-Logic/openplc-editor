@@ -1,12 +1,4 @@
-/**
- * save-actions.ts test file
- *
- * The pure helpers these functions delegate to (sanitizePou,
- * collectDebugVariables, serializePouToText, …) are covered by their own
- * suites. The cases below drive the real store singleton to pin the DOPE-495
- * contract: a graphical flow that fails schema validation keeps a stale
- * `pou.body.value`, so it must never be reported as saved.
- */
+/** Drives the real store singleton; a flow that fails schema validation keeps a stale `pou.body.value`. */
 
 import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import type { PlatformCapabilities } from '../../../middleware/shared/ports/platform-capabilities'
@@ -17,12 +9,7 @@ import { getMemoryState } from '../../utils/toast'
 import { hasSaveWaitingForSignIn, resetResumeSaveForTests } from '../resume-save-after-sign-in'
 import { buildAllProjectFileContentsPure, executeSaveFile, executeSaveProject } from '../save-actions'
 
-/**
- * `hasEdgeAccount` is declared, not left off. The shared save path asks it to
- * decide whether a session that ended can be signed back into, and the desktop
- * always has an account surface. Nothing here exercises that branch today, but a
- * fixture that omits the field would send a future case down the wrong one.
- */
+// hasEdgeAccount is explicit: omitting it would silently route a future case down the wrong branch.
 const capabilities = { isNativeApplication: true, hasEdgeAccount: true } as PlatformCapabilities
 
 const lastToast = () => getMemoryState().toasts[0]
@@ -88,9 +75,7 @@ describe('save-actions', () => {
 
   describe('executeSaveProject', () => {
     describe('a project retrieved from a device', () => {
-      // It lives in a scratch directory until the user picks a location.
-      // Writing there and reporting success would tell someone their work is
-      // safe when it is somewhere temporary.
+      // A retrieved project's scratch location isn't real; reporting success there would be a lie.
       afterEach(() => {
         openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(false)
       })
@@ -107,9 +92,7 @@ describe('save-actions', () => {
       })
 
       it('still lets the build flush the project to disk', async () => {
-        // The compiler reads its source from disk, so refusing this would not
-        // protect the project -- it would stop it compiling. This is the whole
-        // reason the two saves are distinguishable.
+        // The compiler reads its source from disk, so refusing this would stop it compiling.
         openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
         const projectPort = makeProjectPort()
 
@@ -127,11 +110,7 @@ describe('save-actions', () => {
       })
     })
 
-    /**
-     * The write itself now says why it failed. The queue used to engage only when the
-     * renewal layer had already marked the session expired — which on the desktop it
-     * never does, since the save is not a request that layer made.
-     */
+    // The write's own response says why it failed; the queue doesn't depend on renewal-layer expiry state.
     describe('a cloud write that did not land', () => {
       let previousPath: string
 
@@ -243,8 +222,7 @@ describe('save-actions', () => {
 
       expect((await executeSaveProject(makeProjectPort(), capabilities)).success).toBe(false)
 
-      // Deleting the POU is the user's only escape hatch, and it leaves the
-      // flow behind — the save must stop reporting it.
+      // Deleting the POU leaves the flow behind — the save must stop reporting it.
       openPLCStoreBase.getState().pouActions.delete('Doomed')
 
       const result = await executeSaveProject(makeProjectPort(), capabilities)
@@ -297,8 +275,7 @@ describe('save-actions', () => {
         expect(JSON.parse(savedFiles(projectPort).projectJson).data.dataTypes).toEqual([])
       })
 
-      // The filter is deliberately generalised beyond data types, so pin the
-      // element type that has carried the same exposure the longest.
+      // The filter is generalised beyond data types; this pins the longest-exposed case, a recreated POU file.
       it('does not delete a POU file this same save is writing', async () => {
         const { pouActions } = openPLCStoreBase.getState()
         pouActions.create({ type: 'program', name: 'Recreated', language: 'st' })
@@ -314,8 +291,7 @@ describe('save-actions', () => {
         expect(deletions.filter((path) => path.endsWith('Recreated.st'))).toEqual([])
       })
 
-      // macOS and Windows treat these as one file, so an exact-string filter
-      // would write the new name and then unlink it under the old one.
+      // macOS/Windows treat these paths as one file; an exact-string filter would unlink the new write under the old name.
       it('does not delete a path that differs from a written one only by case', async () => {
         openPLCStoreBase.getState().datatypeActions.create({ name: 'Recased', derivation: 'structure' })
         openPLCStoreBase.getState().datatypeActions.delete('Recased')
@@ -331,9 +307,7 @@ describe('save-actions', () => {
       })
 
       it('does not delete a .dt file this same save is writing', async () => {
-        // `createDatatype` does not clear the entry `deleteDatatype` queued, and
-        // both platforms apply deletions after the writes — so without the
-        // payload filter this save would unlink the type it just wrote.
+        // Deletions apply after writes on both platforms, so without the payload filter this would unlink the type it just wrote.
         openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
         openPLCStoreBase.getState().datatypeActions.delete('Motor')
         openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
@@ -350,8 +324,7 @@ describe('save-actions', () => {
   })
 
   describe('executeSaveFile', () => {
-    // A single-file save that writes one `.dt` while project.json still carries
-    // the inline list leaves the two halves disagreeing. Migrate the whole set.
+    // A single-file save must migrate the whole set, or project.json and the new .dt disagree.
     describe('.dt migration of a pre-DOPE-385 project', () => {
       const savedPaths = (port: ProjectPort) => vi.mocked(port.saveFile).mock.calls.map((c) => c[0])
 
@@ -359,8 +332,7 @@ describe('save-actions', () => {
         const state = openPLCStoreBase.getState()
         state.datatypeActions.create({ name: 'MigEdited', derivation: 'structure' })
         state.datatypeActions.create({ name: 'MigUntouched', derivation: 'enumerated' })
-        // The single-file save resolves its target through the file registry,
-        // which the project tree populates in the running app.
+        // The single-file save resolves its target through the file registry the project tree populates.
         state.fileActions.addFile({ name: 'MigEdited', type: 'data-type', filePath: 'MigEdited' })
       })
 
@@ -373,8 +345,7 @@ describe('save-actions', () => {
         expect(result.success).toBe(true)
         const paths: string[] = savedPaths(projectPort)
         expect(paths.some((p) => p.endsWith('MigEdited.dt'))).toBe(true)
-        // The type the user did NOT save still has to reach disk, or reopening
-        // the project would drop it.
+        // The type the user did NOT save still has to reach disk, or reopening the project would drop it.
         expect(paths.some((p) => p.endsWith('MigUntouched.dt'))).toBe(true)
         // project.json goes last so a failed .dt write leaves the inline list intact.
         expect(paths[paths.length - 1].endsWith('project.json')).toBe(true)
@@ -384,8 +355,7 @@ describe('save-actions', () => {
         expect(openPLCStoreBase.getState().dataTypesNeedMigration).toBe(false)
       })
 
-      // `recordSavedFiles` tracks what is now on disk. Recording only the edited
-      // type would leave the other migrated files looking dirty forever.
+      // `recordSavedFiles` must track every migrated file, or the untouched ones stay marked dirty forever.
       it('records every migrated file with version control, not just the edited one', async () => {
         openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
 
@@ -420,8 +390,7 @@ describe('save-actions', () => {
       })
     })
 
-    // An unreadable .dt still gets a tab and a code view, so Ctrl+S on it is a
-    // realistic action now that every project carries .dt files.
+    // An unreadable .dt still gets a tab and a code view, so Ctrl+S on it is a realistic action.
     it('names the real problem when an unparseable .dt cannot be saved', async () => {
       openPLCStoreBase
         .getState()
@@ -521,22 +490,14 @@ describe('save-actions', () => {
 
       expect(result.success).toBe(true)
       expect(projectPort.saveFile).toHaveBeenCalled()
-      // The flush is scoped to the target, so the unrelated flow is never
-      // validated and never warns.
+      // The flush is scoped to the target, so the unrelated flow is never validated and never warns.
       expect(warn).not.toHaveBeenCalled()
       expect(flowUpdated('Unrelated')).toBe(true)
     })
   })
 })
 
-/**
- * `project.json` is a field-by-field object, so anything not named in it is dropped from
- * the saved project however well it lives in the store. A Global Variable List has no
- * file of its own — this IS its persistence — so the omission cost every list on every
- * save, silently, and reopening the project showed none of them.
- *
- * These cases exist to make the next field added to that object fail loudly instead.
- */
+// project.json is built field-by-field; an omitted field silently drops that list (it has no file of its own).
 describe('project.json carries global variable lists', () => {
   const createList = (name: string, members: string[]) => {
     const state = openPLCStoreBase.getState()
@@ -565,8 +526,7 @@ describe('project.json carries global variable lists', () => {
   })
 
   it('writes an empty array rather than omitting the field', () => {
-    // A reader cannot tell "no lists" from "written by a build that did not know about
-    // them" if the key is simply absent.
+    // A reader can't tell "no lists" from "an older build that didn't know about them" if the key is simply absent.
     const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
       data: { globalVariableLists?: unknown }
     }
@@ -575,9 +535,7 @@ describe('project.json carries global variable lists', () => {
   })
 
   it('folds a pending code-view buffer in before serializing', () => {
-    // Ctrl+S with the caret still in Monaco fires no blur, so the list would otherwise
-    // be serialized as it was before the user started typing.
-    // Through the shared action, so the list gets the editor model that holds the draft.
+    // Ctrl+S with the caret still in Monaco fires no blur, so the list would otherwise serialize stale.
     openPLCStoreBase.getState().globalVariableListActions.create('DraftProbe')
     openPLCStoreBase.getState().editorActions.updateModelStructureForName('DraftProbe', {
       display: 'code',
@@ -590,19 +548,11 @@ describe('project.json carries global variable lists', () => {
   })
 })
 
-/**
- * An unparseable declaration is written out as TEXT, never refused.
- *
- * Same contract a POU's unparseable variables block (`variablesText`) and an unreadable
- * `.dt` file already follow: the file is still saved, the text is preserved verbatim,
- * and it comes back in the code view to be corrected. Blocking the save is the one
- * outcome that loses the user's work.
- */
+// An unparseable declaration is saved as text, never refused, matching a POU's unparseable variables block.
 describe('an unparseable list declaration is saved as text', () => {
   const brokenDeclaration = 'VAR_GLOBAL\n  A : BOOL\nEND_VAR\n'
 
-  // The store is a singleton and the suites above deliberately corrupt ladder
-  // flows; a leftover stale flow would fail the save for reasons of its own.
+  // The store is a singleton; a stale corrupted flow left by an earlier suite would fail this save for unrelated reasons.
   beforeEach(() => {
     openPLCStoreBase.getState().ladderFlowActions.clearLadderFlows()
   })
@@ -650,15 +600,7 @@ describe('an unparseable list declaration is saved as text', () => {
   })
 })
 
-/**
- * A retrieved project has no location the user chose: it sits in a scratch
- * directory the app prunes behind them. Both save entry points must refuse and
- * say so, rather than writing there and reporting success.
- *
- * Untested until now, which is how a refactor that stopped marking retrieved
- * projects at all reached a user: the save silently wrote to scratch and showed
- * nothing, because on the desktop a successful save is silent.
- */
+// A retrieved project sits in a scratch directory the app prunes; both save entry points must refuse and say so.
 describe('a project with no location the user chose', () => {
   beforeEach(() => {
     openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)

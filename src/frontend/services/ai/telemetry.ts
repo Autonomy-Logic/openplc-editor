@@ -1,21 +1,10 @@
 import type { AIPort, AITelemetryEventName } from '../../../middleware/shared/ports/ai-port'
 
-/**
- * All this module needs from the platform: somewhere to post an event. Narrowed
- * to that one method so a caller can hand it a real port, a fake or a spy
- * without standing up the rest of the AI surface — and so nothing here has to
- * know how the event leaves the machine.
- */
+/** Narrowed to the one method a caller needs, so a fake or spy doesn't have to stand up the rest of the AI surface. */
 export type AITelemetrySink = Pick<AIPort, 'sendTelemetry'>
 
-/**
- * Tracks an AI telemetry event with automatic timestamp enrichment.
- * All events are fire-and-forget — failures are silently ignored.
- */
+/** Fire-and-forget: failures are silently ignored. No timestamp added here — the port stamps every event. */
 function track(ai: AITelemetrySink, event: AITelemetryEventName, data: Record<string, unknown>): void {
-  // No timestamp here on purpose: the port stamps every event, including the
-  // ones the completion provider sends straight through without passing here.
-  // Stamping in both places would just overwrite one clock with another.
   ai.sendTelemetry(event, data)
 }
 
@@ -159,13 +148,7 @@ export function trackConversationDeleted(ai: AITelemetrySink, data: { conversati
   track(ai, 'conversation_deleted', data)
 }
 
-/**
- * Track that the `AcuExhaustionModal` opened in response to a 402.
- * `source` distinguishes the two backend variants: `usage_limit` (ACU
- * depleted on an otherwise active plan) vs `subscription` (plan is in a
- * non-active Paddle state). `remaining` is the ACU left when the block
- * happened; `0` for the typical exhaustion case.
- */
+/** Track that the `AcuExhaustionModal` opened in response to a 402; `remaining` is the ACU left, `0` typically. */
 export function trackAcuExhausted(
   ai: AITelemetrySink,
   data: {
@@ -177,12 +160,7 @@ export function trackAcuExhausted(
   track(ai, 'acu_exhausted', data)
 }
 
-/**
- * Track that the user clicked the upgrade / reactivate CTA. `source`
- * identifies which surface fired it — only `modal` exists today after the
- * meter (DOPE-284) and banner (DOPE-286) descopes, but the field stays so
- * future surfaces stay distinguishable in analytics.
- */
+/** Track that the user clicked the upgrade / reactivate CTA; `source` identifies which surface fired it. */
 export function trackUpgradeCtaClicked(ai: AITelemetrySink, data: { source: 'modal' }): void {
   track(ai, 'upgrade_cta_clicked', data)
 }

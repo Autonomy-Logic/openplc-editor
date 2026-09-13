@@ -279,33 +279,14 @@ const createMainWindow = async () => {
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    /**
-     * Provider sign-in is the one link that must NOT go to the system browser.
-     *
-     * The shared sign-in dialog renders each provider as a `target='_blank'` link, which
-     * is exactly right on the web: the new tab shares Edge's cookie jar, so the session
-     * it establishes is the session the editor is already using. A desktop app shares
-     * nothing with the system browser — the tokens would land in a jar this process
-     * cannot read, and the user would come back to an editor that still says they are
-     * signed out. Which is precisely what happened before this existed: the click just
-     * opened Edge in a browser and nothing came back.
-     *
-     * So the intent the link expresses is honoured by a different mechanism: a window
-     * this process owns, whose cookies it can read. The shared component says WHERE to
-     * go; the platform decides HOW.
-     *
-     * The window closing and focus returning here is what tells the renderer to
-     * re-check — the account hook already re-reads on focus while signed out, which is
-     * how the web build closes its own provider round-trip too.
-     */
+    // Provider sign-in must NOT go to the system browser: its cookie jar is unreadable from here.
     const provider = edgeOAuthProviderFromUrl(edata.url)
 
     if (provider) {
       void runOAuthFlow(provider)
         .then((outcome) => {
           if (outcome.status !== 'tokens') {
-            // Cancelled, declined or timed out. Nothing to adopt and nothing to report:
-            // the renderer re-checks on focus and finds nobody signed in, which is true.
+            // Cancelled, declined or timed out: the renderer re-checks on focus.
             return undefined
           }
 
@@ -321,8 +302,7 @@ const createMainWindow = async () => {
       return { action: 'deny' }
     }
 
-    // Only web links leave the app. A renderer-supplied `file:` or custom-scheme URL
-    // handed to the OS would run whatever is registered for it.
+    // Only web links leave the app: a `file:` or custom-scheme URL would run whatever the OS registers for it.
     if (isWebUrl(edata.url)) {
       void shell.openExternal(edata.url)
     } else {

@@ -1,22 +1,3 @@
-/**
- * The local project list, and the one thing it reports upward.
- *
- * Publishing a project to Autonomy Edge creates something that belongs in a DIFFERENT
- * section of the same screen — the cloud list, a sibling that cannot observe this. So the
- * publish is announced to the screen above, and these tests hold that announcement in
- * place: without it the newly published project was missing from the cloud list until the
- * whole screen was rebuilt, which reads as the upload having silently failed.
- *
- * The menu's gate is the other half. "Upload to Cloud" is offered only to someone signed
- * in, because an entry that opens a dialog just to say "sign in first" is worse than no
- * entry at all.
- *
- * NOTHING IS MODULE-MOCKED. The ports arrive through `PlatformProvider`, the store is the
- * real one seeded with a recent project, the publish dialog is the real one driven to its
- * Upload button, and the toast is read back from its own memory state. That is what lets
- * one file run unchanged under both runners, whose module-mock hoisting differs.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -42,10 +23,7 @@ const RECENT = [
 
 const USER = { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', username: 'ada' }
 
-/**
- * A port whose every method answers `undefined`, except the ones handed in. For the
- * ports nothing here reads, and for the one that only needs a handful of its methods.
- */
+/** A port whose every method answers `undefined`, except the ones handed in. */
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   return new Proxy({} as T, {
     get: (_, prop) => {
@@ -76,10 +54,7 @@ function makePorts(overrides: Partial<PlatformPorts>): PlatformPorts {
   }
 }
 
-/**
- * An Edge account that answers `/auth/me` with whatever it is told to, and counts how
- * often it was asked. `null` means the read never comes back — the account still being read.
- */
+/** An Edge account whose `fetchUser` answers `read`, or never resolves when `read` is null. */
 function fakeAccount(read: EdgeUserRead | null) {
   let reads = 0
 
@@ -198,8 +173,7 @@ describe('after a project is published', () => {
     await userEvent.click(await screen.findByText('Upload to Cloud'))
     await finishUpload()
 
-    // The cloud list is a sibling section: it cannot see this happen, and the new project
-    // belongs at the top of it.
+    // The cloud list is a sibling section that cannot see this happen on its own.
     await waitFor(() => expect(announced).toBe(1))
   })
 

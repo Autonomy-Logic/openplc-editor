@@ -1,23 +1,6 @@
-/**
- * The editor's AI adapter.
- *
- * Two things here would be invisible in a diff and catastrophic in use, so they get the
- * most attention:
- *
- *   - A frame that arrives while nobody is pulling must still be there when the consumer
- *     comes back. A generator only runs between `next()` calls and the model does not
- *     wait; a transport that dropped what landed in between would lose words out of the
- *     middle of an answer, with nothing anywhere reporting a problem.
- *   - A refusal must arrive as `AIRequestError`, with its `billing` payload whole. IPC
- *     structure-clones its payloads and the prototype does not survive, so the assertions
- *     below are about `instanceof` and about the payload's fields — a test that only
- *     checked the message would still pass while someone out of credits was being shown
- *     a generic error instead of the exhaustion modal.
- *
- * The rest guards the things that are easy to get subtly wrong: abort has to reach the
- * server, every exit path has to unsubscribe, and an answer this build cannot read has to
- * be refused rather than trusted.
- */
+// Covers two easy-to-lose behaviors: a frame that arrives while nobody is pulling must still be
+// queued for the consumer, and a refusal must survive IPC as `AIRequestError` with `billing` intact
+// (assertions check `instanceof` and payload fields, not message text).
 
 import { AIRequestError } from '../../../shared/ports/ai-port'
 import type { AISSEEvent } from '../../../shared/ports/ai-port'
@@ -333,9 +316,7 @@ describe('a refusal becomes the error the shared UI branches on', () => {
     await settle()
     emitFailure({ kind: 'billing', status: 402, message: 'Out of ACU.', billing })
 
-    // `instanceof`, not the message: the prototype is exactly what the structured clone
-    // destroys, and it is what the chat panel tests to decide whether to open the
-    // exhaustion modal at all.
+    // `instanceof`, not the message: the prototype is exactly what the structured clone destroys.
     await expect(first).rejects.toBeInstanceOf(AIRequestError)
     // Re-run to inspect the payload, since a rejection cannot be read twice.
     await first.catch((error: unknown) => {

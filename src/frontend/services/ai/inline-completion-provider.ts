@@ -1,9 +1,4 @@
-/**
- * Monaco InlineCompletionsProvider powered by the AI backend.
- *
- * Web-exclusive — all AI business logic (caching, abort handling, streaming,
- * telemetry, store subscriptions) lives here, not in the shared frontend.
- */
+/** Monaco InlineCompletionsProvider powered by the AI backend. */
 import type * as monaco from 'monaco-editor'
 
 import type { AICompleteParams, AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
@@ -12,10 +7,6 @@ import type { BillingErrorPayload } from '../../../middleware/shared/ports/types
 import { openPLCStoreBase } from '../../store'
 import { buildFIMContext } from './context-builder'
 import { isImeComposing } from './ime-state'
-
-// ---------------------------------------------------------------------------
-// Inline utilities
-// ---------------------------------------------------------------------------
 
 class CompletionCache<V> {
   private readonly maxSize: number
@@ -72,12 +63,7 @@ function startTimer(): TelemetryTimer {
   return { elapsed: () => Math.round(performance.now() - start) }
 }
 
-/**
- * Resolve after `ms`, or early with `false` if the Monaco cancellation token
- * fires first. Monaco cancels the prior provideInlineCompletions token on every
- * new document change, so a keystroke (including a backtrack that re-matches the
- * suggestion) supersedes a pending divergence re-request automatically.
- */
+/** Resolve after `ms`, or early with `false` if the Monaco cancellation token fires first. */
 function abortableDelay(ms: number, token: monaco.CancellationToken): Promise<boolean> {
   return new Promise((resolve) => {
     if (token.isCancellationRequested) {
@@ -98,12 +84,7 @@ function isWhitespace(ch: string): boolean {
   return ch === ' ' || ch === '\t'
 }
 
-/**
- * How many characters of `suggestion` are consumed by `typed`, tolerating
- * whitespace differences (tab vs space, collapsed runs). Returns the consumed
- * length in suggestion coordinates, or `null` if `typed` diverges from the
- * suggestion (a non-whitespace mismatch, or typing past the suggestion's end).
- */
+/** Characters of `suggestion` consumed by `typed` (whitespace-tolerant), or `null` on divergence. */
 function tolerantPrefixMatch(suggestion: string, typed: string): number | null {
   let i = 0
   let j = 0
@@ -126,12 +107,7 @@ function tolerantPrefixMatch(suggestion: string, typed: string): number | null {
   return i
 }
 
-/**
- * Trim from the end of `remainder` any trailing run of closing characters that
- * the editor has already auto-inserted into the line after the cursor (e.g. the
- * `)` Monaco adds when the user types `(`). Without this, the ghost text would
- * duplicate the closer (VS Code #170527 / Monaco #4189).
- */
+// Closers Monaco already auto-inserted after the cursor must not be duplicated by the ghost text.
 function reconcileAutoClosed(remainder: string, lineSuffix: string): string {
   let trim = 0
   while (
@@ -148,10 +124,6 @@ function reconcileAutoClosed(remainder: string, lineSuffix: string): string {
 function isClosingChar(ch: string): boolean {
   return CLOSING_CHARS.has(ch)
 }
-
-// ---------------------------------------------------------------------------
-// Provider implementation
-// ---------------------------------------------------------------------------
 
 type CachedCompletion = {
   item: monaco.languages.InlineCompletion
@@ -187,34 +159,16 @@ type TypeThroughResult =
 export class AIInlineCompletionProvider implements monaco.languages.InlineCompletionsProvider {
   private activeAbortController: AbortController | null = null
   private readonly cache = new CompletionCache<CachedCompletion>(16)
-  /** The current active suggestion (full text + anchor), or null. */
   private lastResult: ActiveSuggestion | null = null
-  /** Whether the one-shot `type_through` impression has been reported for `lastResult`. */
   private typeThroughTracked = false
   private lastShown: ShownCompletion | null = null
   private static readonly TIMEOUT_MS = 5000
-  /**
-   * How long to wait for typing to settle before firing a network request.
-   *
-   * Monaco calls `provideInlineCompletions` on every keystroke and only renders
-   * the result of its latest call. Debouncing EVERY network path (not just
-   * divergence) means that while the user types fast, each superseded call is
-   * cancelled during this wait and returns empty; only the settled (latest) call
-   * survives to fetch — so the completion we log as shown is the one Monaco
-   * actually paints. Cache hits and type-through matches bypass this and stay
-   * instant. Kept modest so a pause feels responsive against the model round-trip.
-   */
+  // Every network path is debounced so only the latest provide() call fetches and is logged as shown.
   private static readonly REQUEST_DEBOUNCE_MS = 300
-  /** Minimum time (ms) a completion must be visible to count as a real user impression. */
+  /** Minimum visible time (ms) for a completion to count as an impression. */
   private static readonly MIN_SHOWN_MS = 300
 
-  /**
-   * No requests while the account is known signed-out (a 401/403 on the last one).
-   *
-   * Monaco asks on every keystroke, and each ask used to cost an IPC round trip plus a
-   * telemetry event that could only fail the same way. Held for a widening backoff, or
-   * until the session is restored where the caller wired one in.
-   */
+  // No requests while the account is known signed-out; widening backoff, released on session restore.
   private static readonly SIGNED_OUT_HOLD_MS = 30_000
   private static readonly SIGNED_OUT_HOLD_MAX_MS = 15 * 60_000
   private signedOutUntil = 0
@@ -235,8 +189,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       session?.onRestored(() => {
         this.releaseSignedOutHold()
       }) ?? null
-    // Subscribe to project state changes that affect completion context.
-    // When variables, data types, or POUs change, cached completions are stale.
+    // Variable, data type or POU changes make cached completions stale.
     this.unsubscribeFromStore = openPLCStoreBase.subscribe(
       (state) => {
         const pou = state.project.data.pous.find((p) => p.name === pouName)
@@ -256,8 +209,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       },
     )
 
-    // Clear cached completions when the user disables inline suggestions, so nothing stale
-    // surfaces if they re-enable later.
     this.unsubscribeFromPreferences = openPLCStoreBase.subscribe(
       (state) => state.ai.preferences.inlineCompletionsEnabled,
       (enabled) => {
@@ -278,13 +229,11 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
   ): Promise<monaco.languages.InlineCompletions> {
     const emptyResult = { items: [] }
 
-    // Check if AI is enabled and inline completions are turned on
     const aiState = openPLCStoreBase.getState().ai
     if (!aiState.isEnabled) return emptyResult
     if (!aiState.preferences.inlineCompletionsEnabled) return emptyResult
 
-    // Don't interfere with IME composition (e.g. CJK): intermediate composition
-    // characters must not be read as type-through divergence or trigger requests.
+    // IME composition characters must not read as type-through divergence.
     if (isImeComposing()) return emptyResult
 
     if (this.isHeldForSignIn()) return emptyResult
@@ -293,14 +242,12 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     const lineContent = model.getLineContent(position.lineNumber)
     const textBeforeCursor = lineContent.substring(0, position.column - 1)
 
-    // Skip only if the editor is completely empty (no context to complete from)
     if (offset === 0 && textBeforeCursor.trim().length === 0) return emptyResult
 
     const prefixForHash = model.getValue().substring(Math.max(0, offset - 200), offset)
     const cacheKey = buildCacheKey(model.uri.toString(), offset, hashString(prefixForHash))
 
-    // 1. Type-through: if the user is typing the characters we already suggested,
-    //    keep the suggestion alive and shrink the ghost text instead of re-requesting.
+    // 1. Type-through: shrink the ghost text instead of re-requesting.
     const typeThrough = this.tryTypeThrough(model, position)
     if (typeThrough.kind === 'match') {
       if (!this.typeThroughTracked) {
@@ -320,32 +267,25 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       return emptyResult
     }
 
-    // 2. Cache lookup (instant) — serves undo/redo and revisited cursor positions.
+    // 2. Cache lookup.
     const cached = this.cache.get(cacheKey)
     if (cached) {
       this.trackShown(model, position, cached.item.insertText as string, 0, 'cache')
       return { items: [cached.item] }
     }
 
-    // 3. Debounce EVERY network request (cold and divergent alike). Waiting for
-    //    typing to settle is what makes the latest provide() call the one that
-    //    fetches — superseded calls are cancelled during this wait and return
-    //    empty, so Monaco renders the same result we log as shown. Any new
-    //    keystroke (including a backtrack that re-matches the suggestion) cancels
-    //    the token and supersedes this request.
+    // 3. Debounce every network request, cold and divergent alike.
     const elapsed = await abortableDelay(AIInlineCompletionProvider.REQUEST_DEBOUNCE_MS, token)
     if (!elapsed || token.isCancellationRequested) return emptyResult
 
-    // 4. Cancel any still-in-flight request from a superseded call.
+    // 4. Cancel any in-flight request from a superseded call.
     if (this.activeAbortController) {
       this.activeAbortController.abort()
     }
 
     if (token.isCancellationRequested) return emptyResult
 
-    // Held in a local as well as on the instance: the field is nullable and a
-    // later call reassigns it, so reading `signal` off the field would depend on
-    // narrowing that not every type-checker in this repo's toolchain keeps.
+    // Kept in a local: a later call reassigns the nullable field.
     const controller = new AbortController()
     this.activeAbortController = controller
     const { signal } = controller
@@ -354,14 +294,11 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       this.activeAbortController?.abort()
     })
 
-    // 5. Build FIM context
     const fimContext = buildFIMContext(model, position, this.pouName, this.language)
 
-    // 6. Stream completion
     const timer = startTimer()
     let _timedOut = false
 
-    // Timeout must be declared outside try so it can be cleared in catch/finally
     let timeoutId: ReturnType<typeof setTimeout> | undefined
 
     try {
@@ -374,17 +311,12 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         maxTokens: AIInlineCompletionProvider.estimateMaxTokens(textBeforeCursor, position, model),
       }
 
-      // 6a. Start client-side timeout — abort if no first token within TIMEOUT_MS
-      // Capture the current abort controller so stale timeouts can't kill newer requests
+      // Capture the controller so a stale timeout can't abort a newer request.
       const localAbortController = this.activeAbortController
       timeoutId = setTimeout(() => {
         _timedOut = true
         localAbortController?.abort()
-        // Unconditional, like every other diagnostic in this file. It used to be
-        // behind `import.meta.env.DEV`, which is a Vite-only expression and does
-        // not compile in the desktop build now that this module is shared. `debug` rather
-        // than `warn`: a developer with the console at verbose sees it in any build, while a
-        // production console is not handed a warning per timed-out completion.
+        // Not gated on `import.meta.env.DEV`: that is Vite-only and this module is shared.
         console.debug(
           `[AI Completion] TIMEOUT after ${AIInlineCompletionProvider.TIMEOUT_MS}ms (no first token received) | model=haiku`,
         )
@@ -401,7 +333,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         if (ttftMs < 0) {
           ttftMs = timer.elapsed()
           clearTimeout(timeoutId)
-          // Track only after first token — aborted requests don't count
+          // Tracked only after the first token; aborted requests don't count.
           this.aiPort.sendTelemetry('completion_requested', {
             language: this.language,
             model: 'haiku',
@@ -413,17 +345,11 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         completion += chunk
       }
 
-      // A request that went through means the account works again.
       this.releaseSignedOutHold()
 
-      // Strip markdown fences the model sometimes adds
       completion = AIInlineCompletionProvider.stripMarkdownFences(completion)
 
-      // Empty completion — the stream finished but produced nothing usable.
-      // Distinguish the two shapes so the AI dashboard can separate "model
-      // returned no tokens at all" (ttftMs < 0, nothing ever streamed) from
-      // "model streamed only whitespace/fences that stripped to nothing".
-      // This is the client-side half of the backend `outcome:'empty'` signal.
+      // `reason` separates "no tokens at all" from "stripped to nothing" for the dashboard.
       if (!completion.trim()) {
         this.aiPort.sendTelemetry('completion_empty', {
           language: this.language,
@@ -434,14 +360,9 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         return emptyResult
       }
 
-      // Bail if this call was superseded while streaming. Monaco only renders the
-      // result of its latest provideInlineCompletions call; returning (and logging
-      // as shown) a stale result here is exactly the "completion_shown but nothing
-      // painted" bug. Skipping the cache/lastResult write also keeps type-through
-      // from comparing against a suggestion the user never saw.
+      // Superseded while streaming: Monaco won't paint it, so don't log it as shown or cache it.
       if (token.isCancellationRequested) return emptyResult
 
-      // 7. Cache and return
       const item: monaco.languages.InlineCompletion = {
         insertText: completion,
         range: {
@@ -454,8 +375,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
 
       const entry: CachedCompletion = { item }
       this.cache.set(cacheKey, entry)
-      // This becomes the active suggestion type-through compares against. The anchor
-      // is the cursor at request time; the text is the full suggested completion.
       this.lastResult = {
         text: completion,
         anchorLineNumber: position.lineNumber,
@@ -472,10 +391,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       const statusCode = (error as { status?: number }).status
       const billing = (error as { billing?: BillingErrorPayload }).billing
 
-      // Inline completion fails silently by design (no surfacing UI), but a
-      // 402 here is the same billing block that would gate the chat. Persist
-      // it on the slice so the exhaustion-modal consumer (DOPE-285) has a
-      // single source of truth — next chat interaction will pop the modal.
+      // Completions fail silently, but a 402 must still reach the slice for the exhaustion modal.
       if (statusCode === 402 && billing) {
         openPLCStoreBase.getState().aiActions.setBillingError(billing)
       }
@@ -506,7 +422,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     this.trackAcceptOrDismiss()
   }
 
-  /** Cancel any active request (called on dispose) */
   dispose(): void {
     this.unsubscribeFromStore?.()
     this.unsubscribeFromStore = null
@@ -564,11 +479,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     })
   }
 
-  /**
-   * Detect whether the user accepted or dismissed the last shown completion.
-   * Completions visible for less than MIN_SHOWN_MS are ignored — they were replaced
-   * by the next keystroke before the user could read them.
-   */
+  /** Report accept/dismiss of the last shown completion; ignores ones visible under MIN_SHOWN_MS. */
   private trackAcceptOrDismiss(): void {
     if (!this.lastShown) return
 
@@ -602,16 +513,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     }
   }
 
-  /**
-   * Compare what the user has typed since the active suggestion appeared against
-   * that suggestion. Single-line (v1): only engages while the cursor stays on the
-   * anchor line at/after the anchor column.
-   *
-   * On a match we return an item whose `range` spans the anchor→cursor text and
-   * whose `insertText` is exactly `typed + remainder`. Monaco strips the common
-   * prefix (the typed text) and renders only `remainder` as ghost text — so the
-   * suggestion visibly shrinks as the user types it, with no re-request.
-   */
+  // On a match the item spans anchor->cursor with `typed + remainder`; Monaco strips the typed prefix.
   private tryTypeThrough(model: monaco.editor.ITextModel, position: monaco.Position): TypeThroughResult {
     const active = this.lastResult
     if (!active) return { kind: 'none' }
@@ -620,16 +522,13 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     const anchorLine = active.anchorLineNumber
     const anchorColumn = active.anchorColumn
 
-    // Single-line only, and never before the anchor (a backtrack past it).
     if (position.lineNumber !== anchorLine) return { kind: 'none' }
     if (position.column < anchorColumn) return { kind: 'none' }
 
     const line = model.getLineContent(position.lineNumber)
     const typed = line.substring(anchorColumn - 1, position.column - 1)
 
-    // Cursor sits exactly at the anchor — nothing typed through yet. Defer to the
-    // cache lookup, which validates the surrounding context via its prefix hash
-    // (so a stale suggestion at a coincidentally-equal column isn't resurfaced).
+    // Nothing typed yet: defer to the cache lookup, whose prefix hash validates the context.
     if (typed.length === 0) return { kind: 'none' }
 
     const consumed = tolerantPrefixMatch(original, typed)
@@ -652,12 +551,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     return { kind: 'match', item, matchedChars: typed.length, completionLength: original.length }
   }
 
-  /**
-   * Estimate a reasonable maxTokens cap based on cursor context.
-   * Mid-line completions are almost always short expressions; new-line/block
-   * starts may need multi-line output. Capping output tokens reduces total
-   * stream time without affecting TTFT.
-   */
+  /** Estimate a maxTokens cap from cursor context. */
   private static estimateMaxTokens(
     textBeforeCursor: string,
     position: monaco.Position,
@@ -668,31 +562,17 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       .substring(position.column - 1)
       .trim()
 
-    // Mid-line: completing an expression before existing code — keep it short
+    // Mid-line: short expression.
     if (textAfterCursor.length > 0) return 64
 
-    // After assignment, comma, or open paren: likely a single expression
+    // After assignment, comma or open paren: single expression.
     if (/(:=|,|\()\s*$/.test(textBeforeCursor)) return 96
 
-    // Default: new line or block start — allow multi-line completions
+    // New line or block start: allow multi-line.
     return 256
   }
 
-  /**
-   * Normalizes a raw model completion before it becomes ghost text.
-   *
-   * The backend uses a "hole filler" prompt: the model is prefilled with
-   * `<COMPLETION>` and stops on `</COMPLETION>`, so the streamed text is
-   * normally clean code. This strips three artifacts defensively:
-   *  1. a stray `<COMPLETION>` / `</COMPLETION>` wrapper (if the model echoes
-   *     the tag instead of relying on the prefill/stop);
-   *  2. markdown code fences (some models still wrap code in ``` );
-   *  3. all leading blank lines — the `<COMPLETION>` prefill / hole-filler
-   *     reliably emits one or more (especially on an empty line after a
-   *     comment), which would insert a blank line and render an invisible ghost
-   *     at the cursor, or break a mid-expression completion like
-   *     `YellowTime := \nT#1000ms`.
-   */
+  /** Strip `<COMPLETION>` tags, markdown fences and leading blank lines from a raw completion. */
   private static stripMarkdownFences(text: string): string {
     let result = text.replace(/^\s*<COMPLETION>/, '').replace(/<\/COMPLETION>\s*$/, '')
 
@@ -704,13 +584,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       result = result.replace(/\n?```\s*$/, '')
     }
 
-    // Drop ALL leading blank lines the assistant prefill / hole-filler induces
-    // (it commonly emits `\n` or `\n\n` before the code, especially when the
-    // cursor is on an empty line after a comment). A completion that begins with
-    // a blank line renders as an invisible ghost at the cursor — the visible
-    // text is pushed a line down — which reads as "no suggestion". `[ \t]*\n`
-    // peels whole blank / whitespace-only leading lines while preserving the
-    // indentation of the first real line of code.
+    // A completion starting with a blank line renders as an invisible ghost; keep the first line's indent.
     result = result.replace(/^(?:[ \t]*\n)+/, '')
 
     return result

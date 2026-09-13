@@ -1,11 +1,3 @@
-/**
- * The confirmation for an operation that rewrites the working tree and cannot be
- * undone. What is worth protecting is what it says when the restore does NOT happen:
- * this modal stays open on a failure, so with nothing written in it the reader is
- * looking at the same confirmation they already pressed and cannot tell whether their
- * project was rewritten.
- */
-
 import { render, screen } from '@testing-library/react'
 
 import { RestoreConfirmationModal } from '../restore-confirmation-modal'
@@ -26,7 +18,6 @@ describe('RestoreConfirmationModal', () => {
   it('says why the restore failed, in the dialog that is still open', () => {
     render(<RestoreConfirmationModal {...PROPS} error='Autonomy Edge answered 409.' />)
 
-    // `getByText` throws when it is not there, which is the assertion.
     screen.getByText('Autonomy Edge answered 409.')
     // Still a confirmation, not an error screen: the reader can retry or back out.
     expect(button('Restore').disabled).toBe(false)
@@ -60,9 +51,6 @@ describe('RestoreConfirmationModal', () => {
   })
 
   it('offers the way out again once the restore is no longer running', () => {
-    // The caller clears `isLoading` on BOTH paths now. It used to clear it only on
-    // failure, so a host that keeps this instance mounted after a successful restore
-    // reopened the modal on a permanently disabled "Restoring..." button.
     const { rerender } = render(<RestoreConfirmationModal {...PROPS} isLoading />)
     expect(button('Restoring...').disabled).toBe(true)
 

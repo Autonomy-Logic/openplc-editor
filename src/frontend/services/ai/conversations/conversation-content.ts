@@ -1,16 +1,4 @@
-/**
- * Narrowing for a stored transcript.
- *
- * `AIConversationDetail` keeps a message's `content` as `unknown` on purpose:
- * the block shape belongs to the wire, and restating it on the port would be a
- * second copy of something the server owns. That opacity stops at this boundary
- * — the store holds `string | AIChatContentBlock[]`, so anything arriving from
- * the transport is checked here rather than asserted into place.
- *
- * A block we do not recognise is DROPPED, not coerced. A transcript written by a
- * newer backend then renders as the parts this build understands instead of
- * putting an object where the renderer expects text.
- */
+// Message content arrives as `unknown` from the wire; unrecognised blocks are dropped, not coerced.
 
 import type { AIChatContentBlock } from '../../../../middleware/shared/ports/types'
 
@@ -41,12 +29,7 @@ function toContentBlock(value: unknown): AIChatContentBlock | null {
   return null
 }
 
-/**
- * Turn a transcript message's opaque `content` into what the store accepts.
- * Plain prose stays a string; a block array keeps only the blocks this build
- * knows. Anything else becomes an empty string, which renders as a blank turn
- * rather than throwing inside the message renderer.
- */
+/** Narrows a message's opaque content to what the store accepts; unrecognised content becomes an empty string. */
 export function toChatMessageContent(value: unknown): string | AIChatContentBlock[] {
   if (typeof value === 'string') return value
   if (!Array.isArray(value)) return ''

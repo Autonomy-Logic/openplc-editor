@@ -1,15 +1,5 @@
 /**
  * The session logic, with HTTP and disk stubbed out.
- *
- * What is worth protecting is not the request shapes — one line each — but four
- * decisions that are easy to regress and expensive when they break:
- *
- *  - an unverified email arrives as a 200 with a null access token. Read as a failure,
- *    it sends someone with the right password hunting for a wrong one.
- *  - a transport failure must surface as `unknown`, never as `no-session`.
- *  - rotation is single-use, so concurrent renewals must collapse onto ONE request.
- *  - a refused renewal must drop the stored token, or every launch afterwards begins
- *    with a request that can only fail.
  */
 
 import {
@@ -23,11 +13,8 @@ import {
 import { edgeRequest } from '../edge-http'
 import { clearRefreshToken, readRefreshToken, saveRefreshToken } from '../session-store'
 
-// Only the transport is stubbed. The parsing and validation helpers are the real
-// ones, so a response shape the service should reject is rejected here too rather
-// than being waved through by a permissive double.
-// The logger service reads `app.getPath('userData')` at load and `electron` has no
-// `app` under jest — same stub the IPC handler tests use, for the same reason.
+// Only the transport is stubbed; parsing/validation stay real. Logger is stubbed since
+// `electron.app` doesn't exist under jest.
 jest.mock('../../services', () => ({
   logger: { debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }))
@@ -114,9 +101,7 @@ describe('signIn', () => {
   })
 
   it('fails on an access token with no refresh token', async () => {
-    // Not `email-unverified` — that case is a NULL access token. Here there is a usable
-    // access token and nothing to renew it with, which is a session that dies in 7 days
-    // with no way back.
+    // Not `email-unverified` (that's a null access token) — here there's a usable token but nothing to renew it with.
     request.mockResolvedValueOnce(ok({ accessToken: LIVE_TOKEN, refreshToken: null, user: USER }))
 
     await expect(signIn('ada@example.com', 'right')).resolves.toEqual({ status: 'failed' })
@@ -215,8 +200,6 @@ describe('fetchUser', () => {
     readStored.mockReturnValue('stored-r')
     request.mockResolvedValueOnce({ status: 503, body: '' })
 
-    // A 503 during a deploy of the Edge API used to sign the desktop out: renewal
-    // answered false, the request answered null, and null read as "no session".
     await expect(fetchUser()).resolves.toEqual({ status: 'unknown' })
     // A 5xx says nothing about whether the token is valid.
     expect(clearStored).not.toHaveBeenCalled()

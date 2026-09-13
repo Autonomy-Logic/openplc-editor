@@ -1,10 +1,6 @@
 import { useOpenPLCStore } from '../../../../store'
 
-/**
- * Human label for the badge. Prefers the Paddle plan slug (e.g. `'standard'`
- * → `'Standard'`) once `/me/entitlements` has resolved, and falls back to the
- * legacy `'free' | 'pro'` tier flag before the first fetch completes.
- */
+/** Human label for the badge, preferring the resolved plan slug over the legacy tier flag. */
 function tierLabel(planSlug: string | null, tier: 'free' | 'pro'): string {
   if (planSlug && planSlug.length > 0) {
     return planSlug.charAt(0).toUpperCase() + planSlug.slice(1)
@@ -15,12 +11,7 @@ function tierLabel(planSlug: string | null, tier: 'free' | 'pro'): string {
 /** Plans that map to the free tier (no paid entitlement). */
 const FREE_PLAN_SLUGS = new Set<string>(['community', 'education'])
 
-/**
- * Small pill next to the "AI Chat" title showing the user's current
- * subscription tier. Reads the AI slice's subscription fields, which the chat
- * panel hydrates from `/me/entitlements` on mount and after each send. Paid
- * tiers get the brand accent; the free tier stays neutral.
- */
+/** Small pill next to the "AI Chat" title showing the user's current subscription tier. */
 export const AITierBadge = () => {
   const { planSlug, tier } = useOpenPLCStore.useAi()
   const label = tierLabel(planSlug, tier)

@@ -1,10 +1,4 @@
-/**
- * Whether the assistant may talk to Autonomy Edge, and how a refused request changes that.
- *
- * The AI routes need an Edge session, and on a build where signing in is optional the
- * panel can be opened without one. The account is read first, so the gate shows BEFORE a
- * request is made; a 401 on a request becomes the same gate and re-reads the account.
- */
+/** Whether the assistant may talk to Autonomy Edge, and how a refused request changes that. */
 
 import { useCallback, useEffect, useState } from 'react'
 

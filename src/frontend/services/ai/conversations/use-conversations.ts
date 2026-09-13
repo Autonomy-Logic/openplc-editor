@@ -5,13 +5,7 @@ import { useAI } from '../../../../middleware/shared/providers'
 
 export type { AIConversationSummary as ConversationSummary }
 
-/**
- * Lists the caller's recent conversations for a project.
- *
- * Goes through `AIPort.conversations`, which is optional as a group: a platform
- * without a conversation store leaves the query disabled and the switcher hides
- * itself rather than rendering an empty list.
- */
+/** Lists the caller's recent conversations for a project; disabled when the platform has no conversation store. */
 export function useConversations(projectId: string | null | undefined) {
   const conversations = useAI()?.conversations
 

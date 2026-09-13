@@ -1,20 +1,6 @@
 /**
- * The cloud section on the start screen.
- *
- * What these tests are really protecting is the copy, and specifically that each kind of
- * nothing gets its OWN sentence. The list request reports four outcomes precisely so this
- * component can tell them apart: telling a signed-in user who is merely offline to "sign
- * in" sends them to fix a problem they do not have, and telling someone with an empty
- * account the same thing is simply wrong.
- *
- * The component is byte-identical in openplc-editor — the shared surface is compared file
- * by file — so this covers the desktop's copy too. It is the desktop that renders this
- * section at all: this build's start screen is only reached with no `project_id` and
- * returns early before the menu.
- *
- * NOTHING IS MODULE-MOCKED. The ports arrive through `PlatformProvider`, the store is the
- * real one, and the toast is read back from its own memory state. That is what lets one
- * file run unchanged under both runners, whose module-mock hoisting differs.
+ * The ports arrive through `PlatformProvider`, not module mocks, so this file runs
+ * unchanged under both runners.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
@@ -38,10 +24,7 @@ import { openPLCStoreBase } from '../../../../../store'
 import { dispatch, getMemoryState } from '../../../../../utils/toast'
 import { StartCloudProjects } from '..'
 
-/**
- * A port whose every method answers `undefined`, except the ones handed in. For the
- * ports nothing here reads, and for the one that only needs two of its methods.
- */
+/** A port whose every method answers `undefined`, except the ones handed in. */
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   return new Proxy({} as T, {
     get: (_, prop) => {
@@ -79,13 +62,8 @@ const openProjectByPath = jest.fn<Promise<ProjectResponse>, [string]>()
 let restoredSubscriptions = 0
 let expiredSubscriptions = 0
 
-/**
- * STABLE objects, deliberately. The component's load effect depends on the port's
- * identity, and the real provider hands out one instance created at boot. A fake that
- * built a fresh object per render would re-run the effect on every render — which is a
- * defect in the fake, not the component, but it silently eats `mockResolvedValueOnce`
- * queues and makes every state assertion below meaningless.
- */
+// Stable objects: the load effect depends on port identity, so a fresh object per render
+// would re-run it and silently eat `mockResolvedValueOnce` queues.
 const projectPort = stubPort<ProjectPort>({ listRecentCloudProjects, openProjectByPath })
 const accountPort: EdgeAccountPort = {
   frontendBaseUrl: 'https://edge.example.com',
@@ -201,10 +179,6 @@ describe('StartCloudProjects', () => {
       expect(screen.queryByText(HEADING)).not.toBeNull()
     })
 
-    /**
-     * The invitation is a control, not a caption. A sentence a user can ignore converts
-     * nobody, and connecting people to Edge is the point of this section existing.
-     */
     it('offers a sign-in the user can actually press', async () => {
       listRecentCloudProjects.mockResolvedValueOnce({ status: 'signed-out' })
 
@@ -225,8 +199,6 @@ describe('StartCloudProjects', () => {
 
       const link = await screen.findByRole('link', { name: /create an account/i })
 
-      // Signing up is an email round-trip, so it opens Edge rather than pretending to
-      // happen inside the editor.
       expect(link.getAttribute('href')).toBe('https://edge.example.com/signup')
       expect(link.getAttribute('target')).toBe('_blank')
     })
@@ -245,8 +217,6 @@ describe('StartCloudProjects', () => {
 
       expect(await screen.findByText(/Could not reach Autonomy Edge/i)).not.toBeNull()
       expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
-      // And it says the local work is untouched, because that is what the user is
-      // actually looking at this screen for.
       expect(screen.queryByText(/local projects below are unaffected/i)).not.toBeNull()
     })
 
@@ -270,12 +240,8 @@ describe('StartCloudProjects', () => {
 
       renderSection({ searchNameFilterValue: '' })
 
-      // A returning user's stored session is usually about to resolve; flashing "Sign in"
-      // at them first would be worse than saying nothing.
       expect(screen.queryByText(HEADING)).not.toBeNull()
       expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
-      // But saying nothing looked like an empty section, and the local projects below
-      // jumped when the real cards arrived. Placeholders hold the row.
       expect(screen.queryByRole('status', LOADING)).not.toBeNull()
     })
 
@@ -313,17 +279,11 @@ describe('StartCloudProjects', () => {
 
       const { container } = renderSection({ searchNameFilterValue: '' })
 
-      // A main process that predates the feature. Inviting a sign-in that cannot help
-      // would be worse than staying quiet.
+      // A main process predating the feature; no sign-in offered since it can't help.
       await waitFor(() => expect(container.innerHTML).toBe(''))
     })
   })
 
-  /**
-   * Publishing a local project puts a new project on the account, and it belongs at the
-   * top of this list. Nothing here can observe that on its own — the upload happens in a
-   * sibling section — so the screen above both bumps a number and this re-reads.
-   */
   describe('when something else changes what is on the account', () => {
     it('re-reads on a new revision', async () => {
       const { rerender } = renderSection({ searchNameFilterValue: '', revision: 0 })
@@ -345,8 +305,7 @@ describe('StartCloudProjects', () => {
 
       rerender(<StartCloudProjects searchNameFilterValue='zzz' revision={3} />)
 
-      // Typing in the search box filters what is already here; it is not a reason to ask
-      // Edge again on every keystroke.
+      // Search filters what is already here; it doesn't re-ask Edge.
       expect(listRecentCloudProjects).toHaveBeenCalledTimes(1)
     })
 

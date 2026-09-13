@@ -1,55 +1,19 @@
-/**
- * PlatformCapabilities — Feature toggles for platform-specific UI behavior.
- *
- * The shared UI uses these flags to conditionally render or enable features
- * that differ between the Electron editor and the web application.
- * This replaces branching on platform detection and keeps the UI code clean.
- *
- * Each adapter provides its own PlatformCapabilities instance:
- *   - Editor: native window controls, local filesystem, no auth, etc.
- *   - Web: browser-based, cloud auth, WebRTC, orchestrator management, etc.
- */
+/** Feature toggles the shared UI uses to branch on platform (editor vs web) instead of platform detection. */
 
 export interface PlatformCapabilities {
-  // --- Window & Chrome ---
-
   /** True if the app is a native desktop application (Electron editor). */
   isNativeApplication: boolean
 
   /** True if the app supports native file dialogs (open, save, pick directory). */
   hasNativeFileDialogs: boolean
 
-  // --- Authentication ---
-
   /** True if the app requires user authentication to access the workspace. */
   hasAuthentication: boolean
 
-  /**
-   * True if the Edge account UI belongs in this build — the profile menu in the
-   * title bar and the sign-in gate, both talking to the Edge API.
-   *
-   * Distinct from {@link hasAuthentication} on purpose. The autonomy-node build
-   * shares WEB_CAPABILITIES and is also authenticated, but its API is node's own,
-   * not Edge's: showing Edge's account UI there would offer a sign-in that cannot
-   * work. Gate the account UI on THIS flag, never on `hasAuthentication`.
-   */
+  /** True if the Edge account UI (profile menu, sign-in gate) belongs in this build. Distinct from `hasAuthentication`: autonomy-node is authenticated via its own API, not Edge's, so gate on this flag alone. */
   hasEdgeAccount: boolean
-  /**
-   * Whether the build is UNUSABLE without an Edge account.
-   *
-   * Distinct from `hasEdgeAccount`, and the distinction is load-bearing. The web
-   * editor reaches a project only through Edge's API, so a visitor who is not signed
-   * in has nothing to look at and the sign-in dialog opens on its own. The desktop
-   * editor opens local projects from disk and works offline: an account is how you
-   * reach CLOUD projects, and forcing a dialog on someone editing a local file would
-   * block an editor that needs nothing from Edge at all.
-   *
-   * Both builds show the same account control in the same place. This only decides
-   * whether the sign-in dialog opens by itself or when the user asks for it.
-   */
+  /** Whether the build is UNUSABLE without an Edge account — forces the sign-in dialog open. Distinct from `hasEdgeAccount`: the editor works offline on local projects and only needs one for cloud projects. */
   requiresEdgeAccount: boolean
-
-  // --- Device & Hardware ---
 
   /** True if the app can detect local serial/communication ports. */
   hasLocalSerialPorts: boolean
@@ -60,12 +24,8 @@ export interface PlatformCapabilities {
   /** True if the app supports WebRTC connections to runtime devices. */
   hasWebRTC: boolean
 
-  // --- Simulator ---
-
   /** True if the simulator runs in the same process (web: in-browser, editor: main process). */
   hasInProcessSimulator: boolean
-
-  // --- Project Management ---
 
   /** True if the app supports a local filesystem project structure (directories, files). */
   hasLocalFilesystem: boolean
@@ -78,33 +38,16 @@ export interface PlatformCapabilities {
 
   /** True if the app supports version control (branches, commits, change tracking). */
   hasVersionControl: boolean
-  /**
-   * Whether this build can show the branch merge screen.
-   *
-   * Both have it today: the screen is shared, and the desktop reaches it through its
-   * navigation adapter rather than a route. The flag stays because the fact it describes
-   * is its own — a build can have version control and no merge screen, which the desktop
-   * briefly did, and the entry then has to be withheld rather than left pointing at
-   * nothing. Collapsing it into `hasVersionControl` would remove the way to say that.
-   */
+  /** Whether this build can show the branch merge screen. Kept separate from `hasVersionControl`: a build can have one without the other. */
   hasBranchMerge: boolean
 
   /** True if the app supports the "About" dialog. */
   hasAboutDialog: boolean
 
-  // --- Editor Features ---
-
   /** True if the app has a Python LSP (language server protocol) for code completion. */
   hasPythonLSP: boolean
 
-  /**
-   * True if the app hosts the STruC++ language server for Structured
-   * Text (`.st`) editors.  Both the Electron and web builds will
-   * eventually flip this on as their host-side wiring lands; while
-   * the flag is false, ST Monaco editors fall back to plain text
-   * (no autocomplete, no diagnostics) — there is no hand-written
-   * legacy provider any more.
-   */
+  /** True if the app hosts the STruC++ language server for `.st` editors. While false, ST Monaco editors fall back to plain text with no autocomplete or diagnostics. */
   hasStLSP: boolean
 
   /** True if the app supports undo/redo history tracking. */
@@ -113,60 +56,33 @@ export interface PlatformCapabilities {
   /** True if the app can watch files for external changes. */
   hasFileWatcher: boolean
 
-  // --- AI Features ---
-
   /** True if the app has AI-assisted coding (inline completions, chat panel, telemetry). */
   hasAIAssistant: boolean
-
-  // --- Runtime Connection ---
 
   /** True if the runtime connection goes through an orchestrator/agent proxy. */
   hasProxiedRuntimeConnection: boolean
 
-  /**
-   * True if the app can upload compiled programs directly to the runtime.
-   * Web: uploads zip via API. Editor: runtime compiles from uploaded source.
-   */
+  /** True if the app can upload compiled programs directly to the runtime. */
   hasDirectProgramUpload: boolean
-
-  // --- Packages ---
 
   /** True if the app supports installing/managing VPP board packages. */
   hasPackageManager: boolean
 
-  // --- EtherCAT ---
-
   /** True if the app supports EtherCAT device configuration and ESI repository. */
   hasEthercat: boolean
 
-  // --- Debugging ---
-
-  /**
-   * Polling interval (ms) for the debugger's HTTP fallback transport (used
-   * when WebRTC is unavailable). Each poll is a full proxied round-trip, so
-   * this is deployment-tunable rather than a fixed constant — e.g.
-   * autonomy-node runs no WebRTC signaling relay and wants this to match
-   * its general-purpose poll rate.
-   */
+  /** Polling interval (ms) for the debugger's HTTP fallback transport. Deployment-tunable: e.g. autonomy-node has no WebRTC relay and wants a different rate. */
   debugRelayPollIntervalMs: number
-
-  // --- Environment ---
 
   /** True when running in a development build (Vite DEV / webpack development mode). */
   isDevMode: boolean
 }
 
-// ---------------------------------------------------------------------------
-// Default capability profiles
-// ---------------------------------------------------------------------------
-
 export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   isNativeApplication: true,
   hasNativeFileDialogs: true,
   hasAuthentication: false,
-  // The desktop editor has an Edge account, for cloud projects...
   hasEdgeAccount: true,
-  // ...but never demands one: local projects and offline work need no sign-in.
   requiresEdgeAccount: false,
   hasLocalSerialPorts: true,
   hasOrchestratorDevices: false,
@@ -175,16 +91,11 @@ export const EDITOR_CAPABILITIES: PlatformCapabilities = {
   hasLocalFilesystem: true,
   hasProjectExport: true,
   hasProjectImport: true,
-  // On for cloud projects only, which the shared gate enforces by asking whether the
-  // open project lives on Edge. The repository sits beside the project on the server,
-  // so a project opened from disk has no history to show — see `isRemoteProjectPath`.
+  // On for cloud projects only; see `isRemoteProjectPath`.
   hasVersionControl: true,
   hasBranchMerge: true,
   hasAboutDialog: true,
   hasPythonLSP: true,
-  // Worker wired via src/frontend/services/st-lsp/boot.ts, started
-  // from App.tsx at module load.  Web build keeps this off until
-  // their HTTP-backed stlibSource adapter ships.
   hasStLSP: true,
   hasUndoRedoHistory: true,
   hasFileWatcher: true,
@@ -201,40 +112,22 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   isNativeApplication: false,
   hasNativeFileDialogs: false,
   hasAuthentication: true,
-  // Default for the web build; the autonomy-node build turns this off via env.
+  // Default for the web build; autonomy-node turns this off via env.
   hasEdgeAccount: true,
-  // The web editor reaches a project only through Edge's API, so without a session
-  // there is nothing to show and the dialog opens on its own.
   requiresEdgeAccount: true,
   hasLocalSerialPorts: false,
   hasOrchestratorDevices: true,
   hasWebRTC: true,
   hasInProcessSimulator: true,
   hasLocalFilesystem: false,
-  // Browser-download implementation makes export just as viable on web
-  // as on desktop — no reason to keep this gated off.
   hasProjectExport: true,
   hasProjectImport: true,
   hasVersionControl: true,
   hasBranchMerge: true,
   hasAboutDialog: true,
-  // `monaco-pyright-lsp` ships its own ESM worker via
-  // `new Worker(new URL('./worker.js', import.meta.url))` which Vite
-  // resolves to an emitted chunk at build time — no `MonacoEnvironment`
-  // worker-URL handoff required (unlike STruC++, which we pre-warm
-  // through `bootStLsp` with a `?url` import).  Pyright bundle is
-  // ~MB-scale; web users editing Python POUs pay the load once on the
-  // first Python file open since the import is at module-evaluation
-  // time in the body Monaco editor.  Lazy-loading is a follow-up
-  // optimisation if first-paint cost becomes a real concern.
+  // Pyright's worker loads eagerly at module-evaluation time; lazy-loading is a possible follow-up.
   hasPythonLSP: true,
-  // The STruC++ worker bundle runs in any modern browser; web's
-  // stlib-source adapter (HTTP-backed, mirror of editor's IPC-backed
-  // one) lands alongside the library port and lets `bootStLsp`
-  // populate the worker with the user's enabled archives.  Web only
-  // compiles to Runtime v4 targets — the matiec / iec2c flow is
-  // Electron-only — so there's no scenario where the LSP isn't the
-  // right tool for ST tooling on web.
+  // Web only compiles to Runtime v4 (matiec/iec2c is Electron-only), so the LSP is always right here.
   hasStLSP: true,
   hasUndoRedoHistory: false,
   hasFileWatcher: false,

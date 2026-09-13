@@ -1,24 +1,7 @@
 /**
- * Editor VersionControlPort adapter — Autonomy Edge, over IPC.
- *
- * Version control on the desktop is the same feature the web editor has, because it is
- * the same server doing the work: the git repository lives beside the project on Edge and
- * every operation here is one of the seventeen routes the web build calls. Nothing about
- * branching, carrying edits between branches or stashing is reimplemented locally, so the
- * two products cannot drift apart in behaviour — there is only one implementation of it.
- *
- * That also fixes the boundary of the feature. A project opened from disk has no
- * repository anywhere, so it has no history to show; the shared UI gates the whole
- * affordance on `isRemoteProjectPath(projectPath)` and never calls into here for one.
- *
- * REBUILDING THE TYPED ERRORS IS THE POINT OF THIS FILE. The main process cannot throw
- * `SwitchBranchCarryConflictError` at the renderer: IPC structure-clones the value and the
- * prototype does not survive, so every `instanceof` in the UI would quietly answer false
- * and a blocked branch switch would look like a button that does nothing. The main process
- * therefore reports failures as plain data, and `unwrap` below turns them back into the
- * exact error objects the components already branch on. The web adapter gets this for free
- * from axios; the desktop has to do it by hand, and doing it here keeps the components
- * identical between the two.
+ * Editor VersionControlPort adapter — Autonomy Edge, over IPC. IPC structure-clones thrown
+ * errors, so their prototypes (and `instanceof` checks in the UI) don't survive the crossing;
+ * `unwrap` below rebuilds the typed errors from plain data the main process reports instead.
  */
 
 import { computeGraphicalDiff as computeGraphicalDiffImpl } from '../../../backend/shared/utils/graphical-diff'
@@ -39,20 +22,11 @@ import {
   VersionControlResultSchema,
 } from '../../shared/ports/version-control-port'
 
-/**
- * Turn a reported failure back into the error the UI expects, or hand back the data.
- *
- * The two conflict kinds are the ones with real recovery flows behind them — the carry
- * modal reopens with the conflicted file list, and the stash panel offers to keep the
- * stash — so they have to arrive as their own classes. Everything else becomes a plain
- * `Error`, which is what the components' `catch` blocks log and toast.
- */
+// Turns a reported failure back into the error the UI expects (or hands back the data). The two
+// conflict kinds have real recovery flows keyed off their class; everything else becomes a plain `Error`.
 function unwrap<T>(result: VersionControlResult<T>): T {
-  // Validated first, because `result` crossed IPC and its declared type checked
-  // nothing on the way. A main process that answered `null` made `result.ok` raise a
-  // TypeError from inside the adapter — which reaches the user as a toast with no
-  // message on it — and a `kind` from a build that has drifted fell through to the
-  // exhaustive branch and stringified itself into the UI.
+  // Validated first: `result` crossed IPC and its declared type checks nothing at runtime, so an
+  // unreadable answer would otherwise raise or fall through the exhaustive branch below.
   const envelope = VersionControlResultSchema.safeParse(result)
 
   if (!envelope.success) {
@@ -75,9 +49,7 @@ function unwrap<T>(result: VersionControlResult<T>): T {
     case 'signed-out':
       throw new Error('Not signed in to Autonomy Edge.')
     case 'unreachable':
-      // Named as unreachable rather than as a failure of the operation: the branch was
-      // not "not created", it is unknown whether it was, and the user needs to know the
-      // difference before they try again.
+      // Named "unreachable", not a failed operation: whether it actually happened is unknown.
       throw new Error(`Could not reach Autonomy Edge. ${failure.message}`)
     case 'http':
       throw new Error(failure.message)
@@ -89,16 +61,9 @@ function unwrap<T>(result: VersionControlResult<T>): T {
   }
 }
 
-/**
- * Bind one IPC channel, guarding against a main process that predates it.
- *
- * A renderer bundle is not always paired with the main bundle it was built beside — a
- * partial rebuild during development, or an app that updated one side, leaves the channel
- * missing. Reading straight through would raise `... is not a function`, and an unhandled
- * rejection inside a load effect takes down the whole workspace rather than the panel that
- * asked. This has already happened once, on the cloud project list, so every channel goes
- * through here and fails as an ordinary error the UI can report.
- */
+// Binds one IPC channel, guarding against a main process that predates it (a partial rebuild or
+// mismatched update can leave the channel missing) — fails as an ordinary reportable error instead
+// of an unhandled rejection that takes down the whole workspace.
 function channel<A extends unknown[], T>(
   fn: ((...args: A) => Promise<VersionControlResult<T>>) | undefined,
   name: string,
@@ -145,9 +110,7 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
       await deleteBranch(projectId, branchId)
     },
 
-    // Defaults to 'discard' here rather than relying on the main process, so the strategy
-    // the server is asked for is decided in one place and matches the web adapter's
-    // signature exactly.
+    // Defaults to 'discard' here (not in the main process) to match the web adapter's signature exactly.
     switchBranch: (projectId: string, branchName: string, strategy: SwitchBranchStrategy = 'discard') =>
       switchBranch(projectId, branchName, strategy),
 
@@ -162,9 +125,8 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
 
     restoreCommit: (projectId: string, hash: string, branch?: string) => restoreCommit(projectId, hash, branch),
 
-    // `branch` is accepted and dropped, exactly as the web adapter does: the backend's
-    // validation whitelist rejects the query param and computes pending changes against
-    // the worker's checked-out HEAD regardless, so forwarding it only earns a 400.
+    // `branch` is accepted and dropped, as the web adapter does too: the backend rejects it and
+    // computes changes against the worker's checked-out HEAD regardless.
     getChanges: (projectId: string, _branch?: string, includeContent?: boolean) =>
       getChanges(projectId, includeContent),
 
@@ -195,11 +157,8 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
       resolutions?: Record<string, string>
     }): Promise<MergeResult> => merge(params),
 
-    // Stays in the renderer: it is synchronous by contract, and it is pure computation
-    // over two file contents the caller already holds. Sending a whole LD program across
-    // IPC to compute a diff and sending the result back would be slower and would not
-    // make it any more correct. Shared module, so the desktop and the web produce the
-    // same diff from the same bytes.
+    // Stays in the renderer: pure, synchronous computation over content the caller already holds;
+    // a shared module keeps desktop and web producing the same diff from the same bytes.
     computeGraphicalDiff: (originalContent: string, currentContent: string, filePath: string): GraphicalDiffResult =>
       computeGraphicalDiffImpl(originalContent, currentContent, filePath),
   }

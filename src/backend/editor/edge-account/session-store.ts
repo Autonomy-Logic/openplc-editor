@@ -1,20 +1,7 @@
 /**
- * Where the desktop editor keeps its Edge session between runs.
- *
- * Only the refresh token is persisted. The access token deliberately is not: it lives
- * 7 days, so a copy on disk is a week-long credential for anyone who reads the file,
- * and it can always be re-minted from the refresh token in one round trip.
- *
- * WHY IT MAY REFUSE TO PERSIST. `safeStorage` is backed by the Keychain on macOS,
- * DPAPI on Windows, and a Secret Service keyring on Linux. On a Linux box with no
- * keyring there is no key, and `encryptString` either throws or — worse, on some
- * Electron versions — degrades to plaintext. Writing a bearer credential to a
- * world-readable JSON file is not an acceptable degradation, so when encryption is
- * unavailable the session is kept in memory for the run and the user signs in again
- * next launch. Losing that convenience is the right trade.
- *
- * The desktop cannot use the shared parent-domain cookie the web editor relies on —
- * its renderer is not on Edge's origin — which is why this file exists at all.
+ * Where the desktop editor keeps its Edge session between runs. Only the refresh token
+ * is persisted (the access token is short-lived and always re-mintable); when
+ * `safeStorage` can't encrypt, the session is kept in memory only rather than writing plaintext.
  */
 
 import { safeStorage } from 'electron'
@@ -25,13 +12,9 @@ import { store } from '../../../main/modules/store'
 let inMemoryRefreshToken: string | null = null
 
 /**
- * Whether the OS can encrypt. Probed through a function rather than a module-level
- * constant because `safeStorage` is only meaningful once the app is ready, and this
- * module can be imported before that.
- *
- * On Linux without a keyring Electron still answers `isEncryptionAvailable() === true`
- * while its backend is `basic_text` — a hardcoded key, which is obfuscation rather than
- * encryption. That is treated as no encryption at all.
+ * Whether the OS can encrypt; probed lazily since `safeStorage` is only meaningful once
+ * the app is ready. On Linux without a keyring, `isEncryptionAvailable()` can answer
+ * true while the backend is `basic_text` (a hardcoded key) — treated as no encryption.
  */
 function canEncrypt(): boolean {
   try {
@@ -47,12 +30,8 @@ function canEncrypt(): boolean {
 }
 
 /**
- * Persist the refresh token, encrypted when the OS allows it.
- *
- * Rotation makes this a hot path: every renewal issues a new token and kills the old
- * one, so a write that silently failed would leave the stored value one rotation
- * behind the server and sign the user out on the next launch. Hence the return value
- * — callers can tell "kept in memory only" from "written".
+ * Persists the refresh token, encrypted when the OS allows it. Returns whether it was
+ * actually written, since a silent failure would leave a stale token that signs the user out on the next launch.
  */
 export function saveRefreshToken(token: string): { persisted: boolean } {
   inMemoryRefreshToken = token
@@ -77,11 +56,8 @@ export function saveRefreshToken(token: string): { persisted: boolean } {
 }
 
 /**
- * Drop what is on disk, keeping the in-memory copy.
- *
- * Called when a rotation could not be persisted: the entry on disk would then hold the
- * token the server just retired, and the next launch would begin with a request that
- * can only fail.
+ * Drops what is on disk, keeping the in-memory copy — used when a rotation couldn't be
+ * persisted, so disk doesn't keep a token the server already retired.
  */
 function forgetStoredSession(): void {
   try {
@@ -120,11 +96,8 @@ export function readRefreshToken(): string | null {
 }
 
 /**
- * Forget the session, in memory and on disk.
- *
- * Called on sign-out and whenever a renewal is refused. A refresh token the server
- * has revoked is worse than none, because keeping it makes every launch begin with a
- * failing request that looks like an outage.
+ * Forgets the session, in memory and on disk — called on sign-out and when a renewal is
+ * refused, since a revoked token left in place makes every launch look like an outage.
  */
 export function clearRefreshToken(): void {
   inMemoryRefreshToken = null

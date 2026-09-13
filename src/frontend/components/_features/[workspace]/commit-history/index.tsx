@@ -1,18 +1,7 @@
 /**
  * One commit, file by file, with the diff for whichever file is selected.
- *
- * Reached from the source-control panel's "View all files". It is a whole screen rather
- * than a panel because that is what the content needs: a graphical diff of a ladder or
- * FBD program next to its previous version does not fit in a sidebar.
- *
- * PLATFORM-FREE ON PURPOSE. This owns the tree, the statuses, the search and the restore
- * flow, and it takes `onBack`/`onRestored` instead of navigating. The web wraps it in a
- * router page at `/history`; the desktop, which has no router, renders it as a full-screen
- * layer over the workspace. Both get the same screen from the same code — which is the
- * only way the two stay identical as this grows.
- *
- * `h-full w-full` rather than `h-screen w-screen` for that reason: the viewport is the
- * host's business, and a screen-sized child inside a layered container overflows it.
+ * Platform-free: takes `onBack`/`onRestored` instead of navigating, so editor and web
+ * share this screen. Uses `h-full w-full` (not `h-screen`) since the viewport is the host's.
  */
 
 import { ArrowLeft, File, Folder, FolderOpen, RotateCcw, Search } from 'lucide-react'
@@ -25,10 +14,6 @@ import { isSystemFile } from '../../../../utils/system-files'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../../../_organisms/panel'
 import { FileDiffView, isGraphicalFile } from '../editor/diff-viewer'
 import { RestoreConfirmationModal } from '../source-control/modals/restore-confirmation-modal'
-
-// ---------------------------------------------------------------------------
-// File tree types & helpers
-// ---------------------------------------------------------------------------
 
 type FileStatus = 'A' | 'M' | 'D' | 'U'
 
@@ -92,10 +77,6 @@ function buildTree(files: { path: string; content: string; status?: FileStatus }
   sortNodes(root)
   return root
 }
-
-// ---------------------------------------------------------------------------
-// File tree item
-// ---------------------------------------------------------------------------
 
 function FileStatusBadge({ status }: { status: FileStatus }) {
   const config = FILE_STATUS_CONFIG[status]
@@ -173,10 +154,6 @@ function FileTreeItem({
   )
 }
 
-// ---------------------------------------------------------------------------
-// History page
-// ---------------------------------------------------------------------------
-
 export type CommitHistoryViewProps = {
   projectId: string
   commitHash: string
@@ -184,11 +161,7 @@ export type CommitHistoryViewProps = {
   initialFile?: string
   /** Leave the screen. The host decides what that means. */
   onBack: () => void
-  /**
-   * A restore landed, so the project on disk no longer matches what is on screen. The
-   * host has to reload it — this component cannot, and pretending otherwise would leave
-   * the user editing a stale copy.
-   */
+  /** A restore landed; the caller must reload the project since this view can't. */
   onRestored: () => void
 }
 
@@ -204,11 +177,8 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  /**
-   * Kept apart from `error`, which blanks the whole screen with "Failed to load commit
-   * files". A restore that failed is not a commit that could not be read, and it has to
-   * be said inside the modal the reader is still looking at.
-   */
+  // Kept apart from `error`, which blanks the whole screen; a failed restore is reported
+  // inside the still-open modal instead.
   const [restoreError, setRestoreError] = useState<string | null>(null)
   const [files, setFiles] = useState<CommitFile[]>([])
   const [parentFiles, setParentFiles] = useState<CommitFile[]>([])
@@ -216,25 +186,15 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
 
   const isDark = themePort.getCurrentTheme() === 'dark'
 
-  // Fetch commit files via port.
-  //
-  // Cancelled on cleanup rather than left to land: this view is updated IN PLACE when
-  // the reader clicks another commit — no `key`, so React keeps the instance and its
-  // state. A slow request for the previous commit would otherwise resolve afterwards
-  // and paint ITS files under the new commit's header, and its `finally` would clear
-  // the loading state of a request still in flight.
+  // Cancelled on cleanup: this view has no `key`, so React keeps the instance across
+  // commit changes, and a slow request for the previous commit could otherwise land after.
   useEffect(() => {
     if (!versionControl) return
 
     let current = true
 
-    // Re-derived per commit, for the same reason the cancellation flag above exists:
-    // there is no `key`, so React keeps this instance and its state when the reader
-    // clicks another commit. `selectedFile` would keep the previous commit's path —
-    // and if that path is absent from the new commit, both sides of the diff fall back
-    // to '' and the panel shows an empty diff under a header naming the old file. The
-    // auto-expand effect only runs while nothing is expanded, so the new commit's
-    // folders would stay collapsed too.
+    // Reset per commit for the same reason: without a `key`, stale selection/expansion
+    // state from the previous commit would otherwise persist.
     setSelectedFile(initialFile ?? null)
     setExpandedFolders(new Set())
     setIsLoading(true)
@@ -275,9 +235,8 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
       if (!parentPaths.has(file.path)) {
         status = 'A'
       } else if (parentContent !== file.content) {
-        // Bytes differ. For graphical files, the difference may be only transient
-        // UI state (selectedNodes, dragging, etc.) that leaked into older commits.
-        // Run the semantic diff: if nodes/edges/variables match, treat as unchanged.
+        // Graphical files: bytes may differ only in transient UI state, so fall back to
+        // the semantic diff before calling the file modified.
         if (isGraphicalFile(file.path) && versionControl && parentContent !== undefined) {
           const semantic = versionControl.computeGraphicalDiff(parentContent, file.content, file.path)
           status = semantic.changedIndexes.length === 0 && semantic.variableDiff.length === 0 ? 'U' : 'M'
@@ -345,19 +304,13 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
     versionControl
       .restoreCommit(projectId, commitHash)
       .then(() => {
-        // Cleared here too, not only on failure. This component takes `onRestored`
-        // rather than navigating, precisely so the host decides what happens next — so
-        // it cannot assume it is about to be unmounted. A host that reloads the project
-        // in place keeps this instance, and the next open of the modal would show a
-        // disabled "Restoring..." button for good.
+        // Cleared here too: a host that reloads in place keeps this instance mounted,
+        // so a stuck "Restoring..." button would persist otherwise.
         setIsRestoring(false)
         setShowRestoreModal(false)
         onRestored()
       })
       .catch((err) => {
-        // Said, not discarded. On a failure the modal stays open with the spinner gone
-        // and nothing written anywhere, so the reader cannot tell whether the restore
-        // ran — over an operation that rewrites the working tree.
         setIsRestoring(false)
         setRestoreError(err instanceof Error ? err.message : 'Failed to restore commit')
       })
@@ -393,7 +346,6 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
 
   return (
     <div className='flex h-full w-full flex-col overflow-hidden bg-neutral-100 dark:bg-neutral-900'>
-      {/* Header */}
       <div className='flex shrink-0 items-center justify-between border-b-2 border-neutral-200 bg-white px-4 py-2.5 dark:border-neutral-800 dark:bg-neutral-950'>
         <div className='flex min-w-0 items-center gap-3'>
           <button
@@ -430,10 +382,8 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
         </button>
       </div>
 
-      {/* Main content */}
       <div className='min-h-0 flex-1 p-2'>
         <ResizablePanelGroup id='historyPanelGroup' direction='horizontal' className='h-full gap-2'>
-          {/* File tree */}
           <ResizablePanel
             id='historyFileTree'
             order={1}
@@ -482,7 +432,6 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
             className='w-[4px] transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700'
           />
 
-          {/* Diff viewer */}
           <ResizablePanel
             id='historyContentViewer'
             order={2}

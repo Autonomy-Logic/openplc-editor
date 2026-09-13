@@ -1,18 +1,3 @@
-/**
- * The inline completion provider is the piece of the AI feature the user meets
- * on every keystroke, and almost everything it protects against is invisible
- * when it breaks: a suggestion logged as shown that Monaco never painted, a
- * cached completion served after the variables it referenced were deleted, a
- * duplicated closing paren, ghost text that renders as an empty line.
- *
- * The AI port is a hand-built fake and the real store is seeded, so nothing
- * here mocks a module and the file runs under jest (editor) and vitest (web)
- * alike. Timers are faked so the 300 ms request debounce and the 5 s stream
- * timeout cost nothing; the two cases that depend on how long a suggestion was
- * *visible* run on real timers instead, because that measurement is taken from
- * `performance.now()` and the two runners fake it differently.
- */
-
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 import type * as monaco from 'monaco-editor'
 
@@ -23,25 +8,16 @@ import { openPLCStoreBase } from '../../../store'
 import { setImeComposing } from '../ime-state'
 import { AIInlineCompletionProvider } from '../inline-completion-provider'
 
-// ---------------------------------------------------------------------------
-// Fake AI port
-// ---------------------------------------------------------------------------
-
 type TelemetryCall = { event: string; data: Record<string, unknown> }
 type CompletionStream = (params: AICompleteParams, signal?: AbortSignal) => AsyncGenerator<string, void, unknown>
 
 type FakePort = {
   port: AIPort
-  /** Requests the provider actually sent, in order. */
   requests: AICompleteParams[]
   telemetry: TelemetryCall[]
 }
 
-/**
- * A port that answers completions and nothing else. Every other method throws
- * rather than returning a benign default — a provider quietly reaching for
- * chat or credits on a keystroke is itself the defect.
- */
+/** Every method but `streamCompletion` throws — reaching for chat or credits on a keystroke is itself the defect. */
 function makePort(stream: CompletionStream): FakePort {
   const requests: AICompleteParams[] = []
   const telemetry: TelemetryCall[] = []
@@ -95,13 +71,7 @@ function eventsNamed(telemetry: TelemetryCall[], event: string): TelemetryCall[]
   return telemetry.filter((call) => call.event === event)
 }
 
-// ---------------------------------------------------------------------------
-// Monaco fakes
-//
-// `ITextModel`, `Position`, `CancellationToken` and `InlineCompletionContext`
-// have far more surface than the provider touches; faking them whole would be
-// noise, so each assertion is confined to one helper below.
-// ---------------------------------------------------------------------------
+// Minimal fakes for the small slice of monaco's surface the provider touches.
 
 function makeEditableModel(initial: string, uri = 'file:///test.st') {
   let text = initial
@@ -155,10 +125,6 @@ function makeToken(): { token: monaco.CancellationToken; cancel: () => void } {
 
 const inlineContext = {} as monaco.languages.InlineCompletionContext
 
-// ---------------------------------------------------------------------------
-// Store seeding
-// ---------------------------------------------------------------------------
-
 function makeVariable(name: string): PLCVariable {
   return { name, class: 'local', type: { definition: 'base-type', value: 'INT' }, location: '', documentation: '' }
 }
@@ -211,10 +177,6 @@ afterEach(() => {
   setImeComposing(false)
 })
 
-// ---------------------------------------------------------------------------
-// Gates
-// ---------------------------------------------------------------------------
-
 describe('gates before any request', () => {
   it('asks for nothing while the AI feature is off', async () => {
     openPLCStoreBase.getState().aiActions.setAIEnabled(false)
@@ -241,8 +203,7 @@ describe('gates before any request', () => {
   })
 
   it('stays out of the way during IME composition', async () => {
-    // Intermediate composition characters (CJK) are not typing; reading them
-    // as type-through divergence would cancel the suggestion mid-word.
+    // CJK composition characters are not typing; treating them as divergence would cancel mid-word.
     setImeComposing(true)
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
@@ -255,8 +216,6 @@ describe('gates before any request', () => {
   })
 
   it('asks for nothing in a completely empty editor', async () => {
-    // With no code at all there is nothing to complete from, and the request
-    // would spend a model call on an empty prompt.
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
 
@@ -267,10 +226,6 @@ describe('gates before any request', () => {
     provider.dispose()
   })
 })
-
-// ---------------------------------------------------------------------------
-// The network path
-// ---------------------------------------------------------------------------
 
 describe('network completions', () => {
   it('joins the streamed chunks into one suggestion anchored at the cursor', async () => {
@@ -293,8 +248,6 @@ describe('network completions', () => {
   })
 
   it('sends the FIM context the builder produced, not the raw document', async () => {
-    // The model is completing a body, but it needs the POU wrapper to know
-    // what it is inside — that is what the request must carry.
     seedPous([makePou('Main', [makeVariable('speed')])])
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
@@ -313,8 +266,7 @@ describe('network completions', () => {
     ['an echoed COMPLETION wrapper', ['<COMPLETION>x := 1;</COMPLETION>'], 'x := 1;'],
     ['leading blank lines', ['\n\n  y := 2;'], '  y := 2;'],
   ])('strips %s the model added around the code', async (_label, chunks, expected) => {
-    // A completion that begins with a blank line renders as an invisible ghost
-    // at the cursor — the user reads it as "no suggestion".
+    // A leading blank line would render as an invisible ghost suggestion.
     const { port } = makePort(yielding(...chunks))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
 
@@ -328,8 +280,7 @@ describe('network completions', () => {
     ['no_tokens', []],
     ['whitespace_only', ['   ']],
   ])('reports an empty completion as %s rather than showing nothing silently', async (reason, chunks) => {
-    // The two shapes are different backend problems; collapsing them would
-    // hide "the model returned nothing at all" behind "it returned whitespace".
+    // Different backend problems; collapsing them would hide "nothing at all" behind "whitespace".
     const { port, telemetry } = makePort(yielding(...chunks))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
 
@@ -357,14 +308,8 @@ describe('network completions', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Cancellation
-// ---------------------------------------------------------------------------
-
 describe('cancellation', () => {
   it('never reaches the network when a keystroke supersedes the request during the debounce', async () => {
-    // This is what makes the completion we log as shown the one Monaco paints:
-    // superseded calls die in the debounce window instead of racing.
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     const { token, cancel } = makeToken()
@@ -379,8 +324,6 @@ describe('cancellation', () => {
   })
 
   it('returns nothing and caches nothing when the request is superseded mid-stream', async () => {
-    // Returning a stale suggestion here is the "completion_shown but nothing
-    // painted" bug; caching it would also poison type-through afterwards.
     const { token, cancel } = makeToken()
     const { port, requests } = makePort(
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -431,16 +374,11 @@ describe('cancellation', () => {
 
     expect((await pending).items).toHaveLength(0)
     expect(eventsNamed(telemetry, 'completion_timeout')[0].data).toMatchObject({ timeoutMs: 5000 })
-    // An aborted request never counted as requested, so it must not be logged
-    // as an error on top of the timeout.
+    // An aborted request never counted as requested, so it must not also be logged as an error.
     expect(eventsNamed(telemetry, 'completion_error')).toHaveLength(0)
     provider.dispose()
   })
 })
-
-// ---------------------------------------------------------------------------
-// Cache
-// ---------------------------------------------------------------------------
 
 describe('cache', () => {
   it('serves a revisited cursor position without asking the model again', async () => {
@@ -458,8 +396,7 @@ describe('cache', () => {
   })
 
   it('drops cached completions when the project changes under them', async () => {
-    // A suggestion referencing a variable the user just deleted is worse than
-    // no suggestion — it compiles to nothing and reads as the assistant lying.
+    // A suggestion referencing a variable the user just deleted reads as the assistant lying.
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     const model = makeModel('x := ')
@@ -473,7 +410,6 @@ describe('cache', () => {
   })
 
   it('drops cached completions when the user turns inline suggestions off', async () => {
-    // Nothing stale may resurface the moment they turn the feature back on.
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     const model = makeModel('x := ')
@@ -502,10 +438,6 @@ describe('cache', () => {
     provider.dispose()
   })
 })
-
-// ---------------------------------------------------------------------------
-// Type-through
-// ---------------------------------------------------------------------------
 
 describe('type-through', () => {
   it('shrinks the ghost text as the user types it, with no new request', async () => {
@@ -541,8 +473,7 @@ describe('type-through', () => {
   })
 
   it('tolerates a tab typed where the suggestion had spaces', async () => {
-    // Editors re-indent as you type; a whitespace difference is not the user
-    // rejecting the suggestion.
+    // Editors re-indent as you type; a whitespace difference is not a rejection.
     const { port, requests } = makePort(yielding('a\tbc'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
@@ -566,8 +497,7 @@ describe('type-through', () => {
   })
 
   it('does not duplicate a closing paren the editor already inserted', async () => {
-    // Monaco auto-closes `(`; without reconciliation the ghost text would show
-    // a second `)` the user then has to delete (VS Code #170527).
+    // Monaco auto-closes `(`; without reconciling, ghost text would double the `)` (VS Code #170527).
     const { port } = makePort(yielding('foo(a)'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
@@ -612,14 +542,9 @@ describe('type-through', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Failures
-// ---------------------------------------------------------------------------
-
 describe('failures', () => {
   it('fails silently in the editor but records why', async () => {
-    // Inline completion has no error UI by design; the telemetry is the only
-    // way a broken backend becomes visible.
+    // Inline completion has no error UI by design; telemetry is the only visibility into it.
     const { port, telemetry } = makePort(failingWith(Object.assign(new Error('boom'), { status: 500 })))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
 
@@ -654,8 +579,7 @@ describe('failures', () => {
   })
 
   it('persists a 402 on the slice so the exhaustion modal has one source of truth', async () => {
-    // Completion itself stays silent, but the same billing block would gate
-    // chat — the next chat interaction must pop the modal.
+    // Completion stays silent, but the same billing block must gate the next chat interaction.
     const billing: BillingErrorPayload = {
       code: 'insufficient_acu',
       message: 'Out of ACU',
@@ -682,10 +606,6 @@ describe('failures', () => {
     provider.dispose()
   })
 })
-
-// ---------------------------------------------------------------------------
-// A signed-out account
-// ---------------------------------------------------------------------------
 
 /** A session whose expiry can be flipped, and whose restore listeners can be fired. */
 function makeSession(): {
@@ -796,14 +716,7 @@ describe('a signed-out account', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Accept / dismiss accounting
-//
-// These read how long the suggestion was visible, which comes from
-// `performance.now()`; jest and vitest fake that differently, so the clock here
-// is the real one.
-// ---------------------------------------------------------------------------
-
+// Elapsed-visible-time assertions use performance.now(), which jest and vitest fake differently — real timers here.
 describe('accept and dismiss accounting', () => {
   beforeEach(() => {
     vi.useRealTimers()
@@ -844,8 +757,7 @@ describe('accept and dismiss accounting', () => {
   })
 
   it('ignores a completion replaced before the user could read it', async () => {
-    // A suggestion superseded by the next keystroke is not a rejection; counting
-    // it would drown the dismissal signal in noise.
+    // A suggestion superseded by the next keystroke is not a rejection; counting it would drown the signal.
     const { port, telemetry } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     const editable = makeEditableModel('x := ')
@@ -871,8 +783,7 @@ describe('accept and dismiss accounting', () => {
   })
 
   it('still counts a dismissal when the model it was shown in is gone', async () => {
-    // The editor can be torn down before Monaco releases the completion;
-    // losing the impression to a throw would silently skew the accept rate.
+    // Losing the impression to a throw on teardown would silently skew the accept rate.
     const { port, telemetry } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)
     const broken = {

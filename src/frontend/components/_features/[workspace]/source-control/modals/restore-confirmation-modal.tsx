@@ -7,13 +7,7 @@ type RestoreConfirmationModalProps = {
   commitMessage: string
   onConfirm: () => void
   onCancel: () => void
-  /**
-   * Why the last attempt failed, when one did.
-   *
-   * Shown here rather than left to the caller because this modal stays open on a
-   * failure: without it the spinner simply stops and the reader is looking at the same
-   * confirmation they already pressed, with no way to tell whether the restore ran.
-   */
+  /** Why the last attempt failed, when one did. Shown here since the modal stays open on failure. */
   error?: string | null
 }
 

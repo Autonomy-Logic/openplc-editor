@@ -1,14 +1,5 @@
 /**
  * The cloud round trip, with HTTP stubbed.
- *
- * Three things here are worth protecting, and each has bitten a real codebase:
- *
- *  - a remote list is narrowed field by field, not cast. A row missing an id would
- *    otherwise become a card the user can click and nothing happens.
- *  - a partial save is read-modify-write, and the read is MANDATORY: the backend deletes
- *    by omission, so sending only the changed file wipes the rest of the project.
- *  - "not signed in", "denied" and "unreachable" are three different answers, and the
- *    user needs a different thing from each.
  */
 
 import { z } from 'zod'
@@ -112,11 +103,6 @@ describe('listRecentCloudProjects', () => {
     })
   })
 
-  /**
-   * The three kinds of nothing, kept apart. Collapsing them into an empty list is what
-   * makes a start screen tell an offline user to sign in — sending them to fix a problem
-   * they do not have.
-   */
   it('reports no session when there is no token to use', async () => {
     request.mockResolvedValueOnce(null)
 
@@ -265,8 +251,6 @@ describe('saveCloudFile', () => {
 
     await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
 
-    // A README the schema does not name used to be stripped on read and deleted on the
-    // save that followed.
     expect(sentBody(1).files).toMatchObject({ 'README.md': '# Irrigation' })
   })
 
@@ -281,8 +265,6 @@ describe('saveCloudFile', () => {
 
     const sent = sentBody(1).files
 
-    // The whole container used to fail validation over the nested slot and come back
-    // empty, so a save deleted every device file the project had.
     expect(sent.devices).toEqual({
       'configuration.json': '{}',
       'pin-mapping.json': '[]',
@@ -308,8 +290,6 @@ describe('saveCloudFile', () => {
 
     const result = await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
 
-    // A malformed container used to be replaced by an empty one, and the write that
-    // followed deleted everything it had held. Now the read fails, so nothing is written.
     expect(result.success).toBe(false)
     expect(result.error).toContain('cannot read')
     expect(result.error).toContain('devices.configuration.json')
@@ -402,15 +382,7 @@ describe('saveCloudProject', () => {
   })
 })
 
-/**
- * The bytes as loaded.
- *
- * The save flow echoes these back for files the user did not touch. Without them every save
- * re-serialises the whole project in the editor's own formatting — same meaning, different
- * bytes — which grew a real project from 62KB to 147KB and reported every file as modified
- * against HEAD. The web build has had this since it shipped; these tests are the desktop
- * catching up, so they check the same keys the web adapter produces.
- */
+/** The bytes as loaded, echoed back for files the user didn't touch instead of re-serialized. */
 describe('readCloudProject carries the raw bytes', () => {
   it('keys the project and device files exactly as the save flow asks for them', async () => {
     request.mockResolvedValueOnce(ok({ files: FILES }))

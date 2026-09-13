@@ -1,11 +1,5 @@
 /**
  * Where the refresh token goes, with `safeStorage` and the store stubbed.
- *
- * Two decisions are worth protecting. A token must never reach the disk in a form the
- * OS did not actually encrypt — and on Linux without a keyring Electron says it can
- * encrypt while using a hardcoded key. And a rotation that could not be persisted must
- * not leave the previous ciphertext behind, because that ciphertext is a token the
- * server has already retired.
  */
 
 import { safeStorage } from 'electron'
@@ -134,9 +128,6 @@ describe('saveRefreshToken', () => {
         }),
     ],
   ])('deletes the previously stored entry when %s', (_label, arrange) => {
-    // Every renewal rotates the token and retires the old one. A stored ciphertext one
-    // rotation behind is a token the server no longer accepts, so the next launch would
-    // begin with a request that can only fail.
     saveRefreshToken('r1')
     expect(disk.set).toHaveBeenCalledTimes(1)
 

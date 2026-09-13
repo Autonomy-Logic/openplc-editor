@@ -39,12 +39,7 @@ function toConversationDetail(detail: AIConversationDetail): ConversationDetail 
   }
 }
 
-/**
- * Loads the full transcript of a conversation. Turns come back in the order the
- * backend stored them (text, `tool_use` and `tool_result` blocks all preserved),
- * with each message's opaque content narrowed at this boundary — see
- * `conversation-content.ts` for why that check lives here and not in the store.
- */
+/** Loads a conversation's full transcript, with each message's opaque content narrowed at this boundary. */
 export function useConversation(id: string | null | undefined) {
   const conversations = useAI()?.conversations
 

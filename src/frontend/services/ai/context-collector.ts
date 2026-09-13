@@ -3,9 +3,7 @@ import type { openPLCStoreBase } from '../../store'
 
 type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 
-/** Options for `collectFullProjectContext`. An object rather than positional
- *  params so a future addition can't be silently mistaken for the previous
- *  numeric token-budget argument this function used to take. */
+/** Options for `collectFullProjectContext`. */
 export type CollectFullProjectContextOptions = {
   /** Formatting dialect for comments and variable blocks. */
   language?: AICompletionLanguage
@@ -18,23 +16,14 @@ export function isGraphicalLanguage(language: string): boolean {
   return language === 'ld' || language === 'fbd' || language === 'sfc'
 }
 
-/**
- * Collect project-level context for AI completion requests.
- * Gathers variables, globals, referenced FBs, data types, and sibling POUs
- * in priority order, truncating to fit within the token budget.
- *
- * When language is Python or C++, context is formatted in the target language's
- * native style (comments + type hints) rather than IEC 61131-3 syntax.
- *
- * ~4 chars ≈ 1 token, so maxChars = maxTokenBudget * 4
- */
+/** Collects project-level context for AI completion requests, truncated to the token budget. */
 export function collectProjectContext(
   state: StoreState,
   currentPouName: string,
   maxTokenBudget: number,
   language: AICompletionLanguage = 'st',
 ): string {
-  const maxChars = maxTokenBudget * 4
+  const maxChars = maxTokenBudget * 4 // ~4 chars per token
   const pous = state.project.data.pous
   const pou = pous.find((p) => p.name === currentPouName)
   if (!pou) return ''
@@ -50,20 +39,18 @@ export function collectProjectContext(
     return true
   }
 
-  // 1. Current POU variables (always included — most important context)
+  // Sections are added in priority order and stop once the budget is exhausted.
   const pouVariables = pou.interface?.variables ?? []
   if (pouVariables.length > 0) {
     const varBlock = fmt.vars(pouVariables)
     addSection(`${fmt.comment(`Current POU: ${pou.name} [${pou.pouType}]`)}\n${varBlock}`)
   }
 
-  // 2. Global variables
   const globals = state.project.data.configurations.resource.globalVariables
   if (globals && globals.length > 0) {
     addSection(`${fmt.comment('Global Variables')}\n${fmt.globals(globals)}`)
   }
 
-  // 3. Referenced function blocks — full variable declarations
   const derivedTypeNames = pouVariables.filter((v) => v.type.definition === 'user-data-type').map((v) => v.type.value)
 
   if (derivedTypeNames.length > 0) {
@@ -76,7 +63,6 @@ export function collectProjectContext(
     }
   }
 
-  // 4. User-defined data types
   const dataTypes = state.project.data.dataTypes
   if (dataTypes.length > 0) {
     const dtLines = dataTypes
@@ -89,7 +75,6 @@ export function collectProjectContext(
     }
   }
 
-  // 5. Sibling POUs — signatures with variable declarations and body snippet
   const siblings = pous.filter((p) => p.name !== currentPouName)
   const truncComment = language === 'python' ? '\n# ...' : language === 'cpp' ? '\n// ...' : '\n(* ... *)'
   for (const sib of siblings.slice(0, 5)) {
@@ -103,19 +88,7 @@ export function collectProjectContext(
   return sections.join('\n\n')
 }
 
-/**
- * Collect full project context for AI chat requests (project-scoped).
- *
- * **Project code is never truncated.** Source the model is asked to reason
- * about is not a thing to ration: it either sees the code or it cannot
- * answer.
- *
- * Graphical POUs (LD / FBD / SFC) store an XYFlow graph, not source, so they
- * are represented by their transpiled ST equivalent, supplied by the caller
- * via `options.graphicalSt` (one whole-project transpile per send, keyed by
- * POU name). With no ST available the entry says so and points at
- * `read_pou_body` rather than silently omitting the body.
- */
+/** Collects full project context for AI chat; graphical POUs use transpiled ST, or a `read_pou_body` pointer when unavailable. */
 export function collectFullProjectContext(
   state: StoreState,
   activeEditorPouName: string | null,
@@ -138,8 +111,6 @@ export function collectFullProjectContext(
     return body ? `\n\n${body}` : ''
   }
 
-  // 1. Active editor POU — full body + all variables (highest priority, and
-  //    first so the model reads the POU the user is looking at before the rest)
   if (activeEditorPouName) {
     const activePou = pous.find((p) => p.name === activeEditorPouName)
     if (activePou) {
@@ -151,13 +122,11 @@ export function collectFullProjectContext(
     }
   }
 
-  // 2. Global variables
   const globals = state.project.data.configurations.resource.globalVariables
   if (globals && globals.length > 0) {
     sections.push(`${fmt.comment('Global Variables')}\n${fmt.globals(globals)}`)
   }
 
-  // 3. Every other POU — variable declarations + full body
   for (const pou of pous) {
     if (pou.name === activeEditorPouName) continue
     const vars = pou.interface?.variables ?? []
@@ -166,7 +135,6 @@ export function collectFullProjectContext(
     sections.push(`${fmt.comment(header)}${varBlock}${bodyFor(pou)}`)
   }
 
-  // 4. User-defined data types
   const dataTypes = state.project.data.dataTypes
   if (dataTypes.length > 0) {
     const dtLines = dataTypes.map((dt) => fmt.dataType(dt)).filter(Boolean)
@@ -175,7 +143,6 @@ export function collectFullProjectContext(
     }
   }
 
-  // 5. Configuration summary
   const config = state.project.data.configurations
   if (config.resource.tasks.length > 0) {
     const taskSummary = config.resource.tasks.map((t) => `${t.name} (${t.triggering})`).join(', ')
@@ -185,11 +152,7 @@ export function collectFullProjectContext(
   return sections.join('\n\n')
 }
 
-/**
- * Group variables into proper IEC 61131-3 variable sections.
- * Returns a string like:
- *   VAR_INPUT\n  x : INT;\n  END_VAR\nVAR_OUTPUT\n  y : BOOL;\n  END_VAR\nVAR\n  local : REAL;\nEND_VAR
- */
+/** Groups variables into IEC 61131-3 VAR_INPUT/VAR_OUTPUT/VAR_IN_OUT/... sections. */
 export function formatIecVariables(variables: VarLike[]): string {
   const sectionMap: Record<string, string> = {
     input: 'VAR_INPUT',
@@ -225,10 +188,6 @@ function getTextualBody(pou: { body: { language: string; value: unknown } }): st
   return null
 }
 
-// ---------------------------------------------------------------------------
-// Multi-language formatters
-// ---------------------------------------------------------------------------
-
 type VarLike = { name: string; class?: string; type: { value: string } }
 type GlobalLike = { name: string; type: { value: string } }
 type DataTypeLike = {
@@ -240,9 +199,7 @@ type DataTypeLike = {
   baseType?: { value: string }
 }
 
-/**
- * Format variables as Python-style type-hinted comments.
- */
+/** Format variables as Python-style type-hinted comments. */
 export function formatPythonVariables(variables: VarLike[]): string {
   const sectionMap: Record<string, string> = {
     input: 'Inputs',

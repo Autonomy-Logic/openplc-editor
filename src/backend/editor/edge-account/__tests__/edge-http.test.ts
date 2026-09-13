@@ -1,12 +1,6 @@
 /**
- * The Edge transport, against a real loopback server.
- *
- * Deliberately not a socket double. What is worth protecting here is the behaviour of
- * the wire itself — a frame split across two TCP writes, a body that has to be buffered
- * whole because it is a refusal, a request torn down mid-answer — and a hand-rolled
- * fake `http` module would be asserting that the test's own idea of a socket matches
- * the code's. Loopback is also the one host the confidentiality guard lets us reach
- * over plain http, which is exactly why that escape hatch exists.
+ * The Edge transport, against a real loopback server rather than a socket double, so
+ * the wire behaviour (split frames, buffered refusals, torn-down requests) is real.
  */
 
 import http from 'http'

@@ -18,15 +18,7 @@ const StoreSchema = z.object({
       y: z.number(),
     }),
   }),
-  /**
-   * The Edge session, when the user has chosen to sign in. Optional because signing
-   * in is optional: the editor is fully usable with no account, and an absent key is
-   * the normal state rather than a missing value to repair.
-   *
-   * `refreshToken` holds a base64 `safeStorage` ciphertext, never the raw token. See
-   * `backend/editor/edge-account/session-store.ts` for why the access token is
-   * deliberately not kept.
-   */
+  // Absent key is the signed-out state. `refreshToken` is a base64 `safeStorage` ciphertext, never the raw token.
   edge_session: z
     .object({
       refreshToken: z.string(),

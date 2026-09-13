@@ -1,26 +1,10 @@
-/**
- * The behaviour worth protecting is the session state machine, not the IPC
- * forwarding. Three distinctions in it are load-bearing:
- *
- *  - `unknown` (the question could not be asked) must NOT read as signed out, or a
- *    two-second network drop prompts over a live session holding unsaved work.
- *  - "never signed in" must not be worded as "your session expired", which is a claim
- *    about a session the user never had.
- *  - expiry must announce on the TRANSITION only. Firing on every failed read replays
- *    the handler on each poll.
- */
+// Covers the session state machine: `unknown` must not read as signed out, "never signed in" must
+// not be worded as "expired", and expiry must announce once, on the transition.
 
 import { __resetEdgeSessionForTests, editorEdgeAccountPort, isSessionPersistent } from '../edge-account-adapter'
 
-/**
- * The five bridge methods `editorEdgeAccountPort` touches, and only those.
- *
- * Picked from the real bridge rather than described again here, so each double carries
- * the real signature: a channel whose arguments or answer change breaks this file
- * instead of being papered over. It used to be installed through
- * `as unknown as typeof window.bridge`, which accepted any shape at all — including
- * one missing a method the port had started calling.
- */
+// Picked from the real bridge, so a changed channel signature breaks this file instead of being
+// papered over by a permissive cast.
 type EdgeAccountBridge = Pick<
   typeof window.bridge,
   | 'edgeAccountFetchUser'
@@ -241,9 +225,7 @@ describe('listener bookkeeping', () => {
   })
 
   it('survives a listener that re-subscribes while being notified', async () => {
-    // The interrupted-save queue does exactly this when its replay fails a second
-    // time. Iterating a live Set turns re-registration into an unbounded loop, which
-    // is why the fan-out snapshots first.
+    // Iterating a live Set would turn this re-registration into an unbounded loop.
     let calls = 0
 
     const resubscribe = () => {
@@ -274,17 +256,9 @@ describe('listener bookkeeping', () => {
   })
 })
 
-/**
- * The bridge's return types are a description of what the main process is MEANT to
- * send. They check nothing at runtime, and the answers here drive the session state
- * machine — so an answer this build cannot read has to have a safe reading, and each
- * of the two has a different one.
- */
 describe('an answer the renderer cannot read', () => {
   it('is `unknown` for a user read, never a sign-out', async () => {
-    // The whole point of `unknown`: a reading we cannot trust must not end a session
-    // that may be perfectly alive. `null` is what a main process that failed to answer
-    // sends, and `.status` on it used to throw.
+    // `null` is what a main process that failed to answer sends; `.status` on it used to throw.
     bridge.edgeAccountFetchUser.mockResolvedValue(null as never)
 
     await expect(editorEdgeAccountPort.fetchUser()).resolves.toEqual({ status: 'unknown' })
@@ -316,8 +290,7 @@ describe('an answer the renderer cannot read', () => {
     bridge.edgeAccountFetchUser.mockResolvedValue(undefined as never)
     await editorEdgeAccountPort.fetchUser()
 
-    // This is the failure the `unknown` case was built to prevent, reached by a new
-    // route: a reply the renderer cannot parse must not sign anyone out.
+    // A reply the renderer cannot parse must not sign anyone out.
     expect(announcedDead).toBe(0)
     expect(editorEdgeAccountPort.session.isExpired()).toBe(false)
   })

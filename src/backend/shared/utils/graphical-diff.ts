@@ -1,10 +1,6 @@
 /**
- * Graphical diff utilities — pure data transformation for LD/FBD flow comparison.
- *
- * Parses IEC 61131-3 source files containing embedded JSON flow data,
- * extracts variable declarations, and computes semantic diffs between two versions.
- *
- * This module is backend-only. Frontend accesses it through VersionControlPort.
+ * Graphical diff utilities: parses IEC 61131-3 source files with embedded JSON flow data and
+ * computes semantic diffs between two versions. Backend-only — frontend uses VersionControlPort.
  */
 
 import type { Edge, Node } from '@xyflow/react'
@@ -77,13 +73,8 @@ const STRUCTURAL_NODE_TYPES = new Set([
 type GraphicalLanguage = 'ld' | 'fbd'
 
 /**
- * A node and an edge as this module needs them.
- *
- * `Node` and `Edge` come from @xyflow/react and carry far more than a body on disk is
- * obliged to fill in, so restating them as a schema would reject valid flows. What is
- * checked is what the diff below actually depends on: `id` keys every map here, and
- * `source`/`target` are what an edge is FOR. Anything else is read defensively at the
- * point of use.
+ * `Node`/`Edge` from @xyflow/react carry more than a body on disk must fill in, so only
+ * `id` (and `source`/`target` for edges) is validated; everything else is read defensively.
  */
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -97,12 +88,7 @@ const EdgeSchema = z.custom<Edge>(
     typeof value.target === 'string',
 )
 
-/**
- * An array that drops what it cannot validate instead of failing whole.
- *
- * A diff of the rest of a rung is worth more to the reader than no diff at all, and a
- * single malformed node used to be carried through as if it were a real one.
- */
+/** An array that drops elements it can't validate rather than failing whole — a partial diff beats none. */
 const arrayOfValid = <T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>) =>
   z.array(z.unknown()).transform((items) =>
     items.flatMap((item) => {
@@ -125,12 +111,8 @@ const LadderBodySchema = z.object({ rungs: z.array(RawFlowSchema) })
 const FbdBodySchema = z.object({ rung: RawFlowSchema })
 
 /**
- * Which graphical language a path is, or null for anything else.
- *
- * Narrowed rather than asserted: `pous/programs/main.st` yields `st`, which the old
- * assertion typed as `'ld' | 'fbd'` and handed on. Nothing broke — `extractFlowData`
- * happens to answer null for it — but the type was a lie, and the first `switch` on
- * `ext` written against it would have been unsound with no warning.
+ * Which graphical language a path is, or null for anything else. Narrowed rather than
+ * asserted, so a non-`ld`/`fbd` extension types correctly instead of lying as `'ld' | 'fbd'`.
  */
 function graphicalLanguageOf(filePath: string): GraphicalLanguage | null {
   const ext = filePath.split('.').pop()?.toLowerCase()
@@ -374,11 +356,9 @@ function matchNodePools(
 }
 
 /**
- * Matching is scoped to paired rungs: a global pass lets an element consume the
- * counterpart of an element in another rung whenever they share a semantic key
- * (two unbound contacts, say), painting untouched rungs as modified/removed —
- * DOPE-496. The one cross-rung pass left is a safety net for when rung alignment
- * itself failed, not move detection: elements can't change rungs.
+ * Matching is scoped to paired rungs: a global pass could let an element consume a same-keyed
+ * element in another rung, painting untouched rungs as changed. The one cross-rung pass left is
+ * a safety net for failed rung alignment, not move detection — elements can't change rungs.
  */
 function computeNodeDiffMap(rungPairs: RungPair[]): {
   original: Map<string, DiffStatus>
@@ -510,13 +490,8 @@ function computeEdgeDiffMaps(
 // ---------------------------------------------------------------------------
 
 /**
- * A geometry field off the wire, or the fallback.
- *
- * `??` alone is not enough here: it rejects only `null` and `undefined`, so a
- * dimension that arrived as a string used to pass straight through, `ny + nh`
- * concatenated instead of adding, and `calcRungHeight` returned `NaN` into the rung
- * layout. `NodeSchema` checks `id` and no more, deliberately — and these bodies come
- * from historical commits, so the writer is not always this version of the editor.
+ * A geometry field off the wire, or the fallback. `??` alone isn't enough: a dimension that
+ * arrived as a string would pass through and concatenate instead of adding in `calcRungHeight`.
  */
 const finiteOr = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -584,11 +559,8 @@ export function computeGraphicalDiff(
     const rungEdgeDiff = computeEdgeDiffMaps(orig, curr, nodeDiffMaps.original, nodeDiffMaps.current)
     edgeDiffMaps.push(rungEdgeDiff)
 
-    // Detect change from the semantic diff maps rather than raw JSON
-    // byte-comparison. A byte-level compare would flag rungs as changed on
-    // any non-semantic drift (stripped/reordered transient fields from
-    // the sync-back cycle, ReactFlow-injected runtime state, etc.) even
-    // when the ladder is visually identical.
+    // Uses the semantic diff maps rather than raw JSON byte-comparison: a byte compare would
+    // flag rungs as changed on non-semantic drift (reordered fields, ReactFlow runtime state) alone.
     const nodeChanged =
       (curr?.nodes ?? []).some((n) => (nodeDiffMaps.current.get(n.id) ?? 'unchanged') !== 'unchanged') ||
       (orig?.nodes ?? []).some((n) => (nodeDiffMaps.original.get(n.id) ?? 'unchanged') !== 'unchanged')

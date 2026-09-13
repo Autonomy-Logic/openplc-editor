@@ -1,16 +1,5 @@
 /**
- * Editor platform adapter — wires all port interfaces to Electron IPC bridge.
- *
- * This file creates the concrete PlatformPorts object for the Electron editor.
- * Each port delegates to `window.bridge.*` methods exposed by the preload script.
- *
- * Usage:
- *   import { editorPorts } from './adapters/editor-platform'
- *
- *   // In App.tsx root:
- *   <PlatformProvider ports={editorPorts}>
- *     <App />
- *   </PlatformProvider>
+ * Editor platform adapter — wires all port interfaces to Electron IPC bridge (`window.bridge.*`).
  */
 
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
@@ -58,9 +47,7 @@ const editorProject = createEditorProjectAdapter()
 const editorRuntime = createEditorRuntimeAdapter(() => _runtimeIpAddress)
 
 /**
- * Opening a fetched project is the one retrieve step that needs two ports, so
- * it is composed here where both are in scope. The work itself lives in its own
- * module, where a test can reach it — see `open-fetched-project.ts`.
+ * Composed here because it needs both the project and runtime ports in scope; see `open-fetched-project.ts`.
  */
 editorRuntime.openFetchedProject = (project) => openFetchedProject(project, editorProject)
 
@@ -82,22 +69,11 @@ export const editorPorts: PlatformPorts = {
   navigation: createEditorNavigationAdapter(),
   library: createEditorLibraryAdapter(),
   stlibSource: createEditorStlibSourceAdapter(),
-  /**
-   * The Edge account. `EDITOR_CAPABILITIES` pairs it with `requiresEdgeAccount: false`,
-   * so the account control appears in the same slot as it does on the web while
-   * signing in stays optional here.
-   */
+  // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
   edgeAccount: editorEdgeAccountPort,
-  /**
-   * The assistant. Wired unconditionally, exactly like the account port above: whether
-   * anything appears is decided by `capabilities.hasAIAssistant`, by the consent the
-   * user gave and by whether they are signed in to Edge — not by the port's absence.
-   */
+  // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
   ai: createEditorAIAdapter({
-    // No build-time kill switch on the desktop. The main process holds the only route to
-    // the AI endpoints, so a build whose proxy is absent already fails closed; adding a
-    // second, silent way to be off would just make "why is the button missing" harder to
-    // answer.
+    // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.
     isFeatureEnabled: true,
     hasUserConsented: hasAiConsent(),
     inlineCompletionsEnabled: readInlineCompletionsPreference(),
@@ -105,14 +81,7 @@ export const editorPorts: PlatformPorts = {
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }
 
-/**
- * Whether the user has accepted the AI notice.
- *
- * Read from the same `localStorage` key the shared consent modal writes
- * (`monaco/ai-consent-modal.tsx`), because the modal is shared surface and the desktop
- * renderer has a perfectly ordinary `localStorage`. Anything unreadable reads as "not
- * accepted": consent that cannot be demonstrated is consent that was not given.
- */
+// Reads the same localStorage key the shared consent modal writes; unreadable reads as "not accepted".
 function hasAiConsent(): boolean {
   try {
     return localStorage.getItem('ai-consent-v1') === 'accepted'
@@ -121,13 +90,7 @@ function hasAiConsent(): boolean {
   }
 }
 
-/**
- * The user's ghost-text preference, written by the shared AI settings popover.
- *
- * Defaults to on — matching the store's own default — so a first run, a cleared profile
- * or an unreadable value all land on the same behaviour rather than silently disabling a
- * feature the user never turned off.
- */
+// Defaults to on (matches the store default) so a first run or unreadable value never silently disables the feature.
 function readInlineCompletionsPreference(): boolean {
   try {
     const raw = localStorage.getItem('ai-preferences-v1')

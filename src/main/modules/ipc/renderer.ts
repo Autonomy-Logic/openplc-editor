@@ -83,15 +83,8 @@ import type {
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
-/**
- * Register an IPC listener and hand back a per-listener unsubscribe.
- *
- * `removeAllListeners(channel)` would drop sibling subscribers on the same
- * channel, so every `on`-style bridge method routes through here and returns
- * the disposer instead. Callers that mount the same subscription repeatedly
- * (React effects re-running on dependency changes) must call it on cleanup —
- * otherwise dead listeners pile up until Node warns past ten.
- */
+// Registers an IPC listener and hands back a per-listener unsubscribe: `removeAllListeners(channel)`
+// would drop sibling subscribers on the same channel, so every `on`-style method routes through here.
 const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void) => {
   const listener: IpcRendererCallbacks = (event, ...args) => callback(event, ...args)
   ipcRenderer.on(channel, listener)
@@ -100,22 +93,12 @@ const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void
   }
 }
 
-/**
- * What an `edge-ai:*` channel answers, read off the main-process function behind
- * it.
- *
- * These bridge methods are pass-throughs, so restating the payload shapes here
- * would be a second declaration of the same contract — and the copy that goes
- * quietly stale when the module on the other side changes.
- */
+// What an `edge-ai:*` channel answers, read off the main-process function behind it — these bridge
+// methods are pass-throughs, so restating the payload shape would be a second, driftable copy.
 type EdgeAiReply<Fn extends (...args: never[]) => unknown> = Promise<Awaited<ReturnType<Fn>>>
 
-/** Data posted through the MessagePort by the compiler module.
- *  `compileError` carries strucpp's structured `CompileError` (pouName,
- *  section, bodyLine, …) when the message is one of the per-error log
- *  entries emitted by the strucpp compile failure path — the renderer
- *  uses it to attach a click-to-open handler to the rendered line.
- *  Absent for plain progress messages. */
+// Data posted through the MessagePort by the compiler module. `compileError` carries strucpp's
+// structured error for a per-error log entry; absent for plain progress messages.
 type CompilerPortMessage = {
   message?: string
   logLevel?: string
@@ -123,23 +106,11 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
-  /** The build's verdict, carried on the `closePort` message. Sourced from
-   *  `runCompilePipeline`, which reduces every step's process exit code to one
-   *  boolean, so it — not the presence of error-level log lines — is what
-   *  decides whether a build failed.
-   *
-   *  Declared here because the seam is typed: `onmessage` currently forwards
-   *  `event.data` wholesale, so a consumer reading a `Record<string, unknown>`
-   *  sees the field regardless. A bridge refactor that reconstructs the
-   *  message field-by-field (the shape the `libraryBuildResult` path already
-   *  uses) would otherwise drop it silently, and `compileProgramFlow` would
-   *  fall back to its `hasError` heuristic — reintroducing a resolved bug with
-   *  no compile error and no failing test. */
+  // The build's verdict (from `runCompilePipeline`'s reduced exit code, not error-log presence). A
+  // bridge refactor that reconstructs this message field-by-field must keep forwarding it, or
+  // `compileProgramFlow` silently falls back to its `hasError` heuristic.
   success?: boolean
-  /** Final structured outcome of a library build.  Set only on the
-   *  close-port message emitted by `compileLibrary`; absent from
-   *  intermediate log entries and from program-build / debug-build
-   *  callbacks. */
+  /** Final structured outcome of a library build; set only on `compileLibrary`'s close-port message. */
   libraryBuildResult?: import('@root/middleware/shared/ports/types').CompileLibraryResult
 }
 
@@ -221,12 +192,8 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
-  /**
-   * Load all bundled .stlib archives. Returns parsed `StlibArchive`
-   * objects in alphabetical-filename order. Typed as `unknown[]` here
-   * so the IPC layer stays free of strucpp type imports — the
-   * LibraryPort consumer narrows to `StlibArchiveDTO[]`.
-   */
+  // Typed as `unknown[]` so the IPC layer stays free of strucpp type imports; the LibraryPort
+  // consumer narrows the parsed archives to `StlibArchiveDTO[]`.
   // ===================== LIBRARY MANAGER METHODS =====================
   loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
   listInstalledLibraries: (): Promise<
@@ -367,11 +334,8 @@ const rendererProcessBridge = {
     resolutions?: Record<string, string>
   }): Promise<VersionControlResult<MergeResult>> => ipcRenderer.invoke('edge-vc:merge-branches', params),
   // ----- Edge AI -----
-  // The desktop holds its own Edge session in the main process, exactly as the
-  // account and version-control channels do, so every AI request crosses the
-  // boundary rather than being made from the renderer. Warm and telemetry answer
-  // the same `EdgeAiResult` union as the rest even though the module behind them
-  // answers nothing, so a caller handles one shape for the whole surface.
+  // Every AI request crosses to the main process, which holds the session (same as account/VC).
+  // Warm and telemetry answer the same `EdgeAiResult` union as the rest so callers handle one shape.
   edgeAiFetchEntitlements: (): EdgeAiReply<typeof fetchAiEntitlements> => ipcRenderer.invoke('edge-ai:entitlements'),
   edgeAiFetchUsage: (): EdgeAiReply<typeof fetchAiUsage> => ipcRenderer.invoke('edge-ai:usage'),
   edgeAiFetchCredits: (): EdgeAiReply<typeof fetchAiCredits> => ipcRenderer.invoke('edge-ai:credits'),
@@ -396,10 +360,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-ai:conversations-delete', conversationId),
 
   // ----- Edge AI streaming -----
-  // `invoke` is request/response, so a streamed answer is a handshake: this call
-  // opens the request and comes back with the id every event below carries. Hold
-  // onto that id — it is the only way to abort the request, and the only way to
-  // tell two answers running at once apart.
+  // `invoke` is request/response, so a streamed answer is a handshake: this call opens the request
+  // and returns the id every event below carries — the only way to abort it or tell concurrent answers apart.
   edgeAiStreamStart: (request: {
     kind: 'chat' | 'completion'
     body: Record<string, unknown>
@@ -407,13 +369,8 @@ const rendererProcessBridge = {
   /** Cancels the upstream request. No further event follows, and aborting a finished stream is a no-op. */
   edgeAiStreamAbort: (streamId: string): Promise<EdgeAiResult<null>> =>
     ipcRenderer.invoke('edge-ai:stream-abort', streamId),
-  /**
-   * One frame of the answer, structured.
-   *
-   * Not just text: a `tool_use` frame is how the model asks to act on the project,
-   * and the agentic loop reads it here. Flattening this to prose at the boundary
-   * would leave the loop unable to see a tool call at all.
-   */
+  // One frame of the answer, structured (not just text): a `tool_use` frame is how the model asks
+  // to act on the project, and flattening it to prose here would hide tool calls from the agentic loop.
   onEdgeAiStreamEvent: (callback: (payload: { streamId: string; event: AISSEEvent }) => void): (() => void) => {
     const listener = (_event: unknown, payload: { streamId: string; event: AISSEEvent }) => callback(payload)
     ipcRenderer.on('edge-ai:event', listener)
@@ -425,11 +382,8 @@ const rendererProcessBridge = {
     ipcRenderer.on('edge-ai:end', listener)
     return () => ipcRenderer.removeListener('edge-ai:end', listener)
   },
-  /**
-   * The stream failed. `failure` is the same union the non-streaming channels
-   * answer with, so the sign-in prompt, the offline notice and the ACU
-   * exhaustion modal are chosen from one discriminant.
-   */
+  // The stream failed. `failure` is the same union the non-streaming channels answer with, so the
+  // sign-in prompt, offline notice and ACU exhaustion modal are chosen from one discriminant.
   onEdgeAiStreamError: (callback: (payload: { streamId: string; failure: EdgeAiFailure }) => void): (() => void) => {
     const listener = (_event: unknown, payload: { streamId: string; failure: EdgeAiFailure }) => callback(payload)
     ipcRenderer.on('edge-ai:error', listener)
@@ -493,10 +447,7 @@ const rendererProcessBridge = {
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
   runCompileProgram: (compileProgramArgs: CompileProgramIpcArgs, callback: (args: CompilerPortMessage) => void) => {
-    // Create a MessageChannel to communicate between the renderer and main process
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    // Send to the main process a message to run the compile program
-    // The main process will handle the compilation and send the result back through the port
     ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
     rendererProcessPort.addEventListener('close', () =>
@@ -504,7 +455,6 @@ const rendererProcessBridge = {
         closePort: true,
       }),
     )
-    // rendererProcessPort.start()
     // Set up the renderer process port to listen for messages from the main process
   },
 
@@ -519,11 +469,8 @@ const rendererProcessBridge = {
     )
   },
 
-  /** Build the open Library Project into a `.stlib` archive.  Same
-   *  MessageChannel pattern as `runCompileProgram`; the tuple shape
-   *  is `CompileLibraryIpcArgs`, declared next to the adapter that
-   *  fills it.  Callback receives a stream of log messages and a
-   *  final `libraryBuildResult`. */
+  // Builds the open Library Project into a `.stlib` archive. Same MessageChannel pattern as
+  // `runCompileProgram`; callback receives a stream of log messages and a final `libraryBuildResult`.
   runCompileLibrary: (compileArgs: CompileLibraryIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
@@ -865,13 +812,8 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
-  /**
-   * Retrieve the stored project and unpack it to a scratch directory.
-   *
-   * Returns a path, never the archive: those are untrusted bytes from a device,
-   * and every check deciding whether they are safe to write lives beside the
-   * write in the main process.
-   */
+  // Returns a path, never the archive: those are untrusted device bytes, and the safety checks on
+  // writing them live beside the write in the main process.
   runtimeRetrieveProject: (
     ipAddress: string,
   ): Promise<{

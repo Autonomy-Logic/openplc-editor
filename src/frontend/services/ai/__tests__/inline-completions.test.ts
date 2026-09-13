@@ -1,17 +1,3 @@
-/**
- * Registration wiring for inline completions.
- *
- * The three things worth pinning are the ones that only misbehave once: the
- * prompt cache is warmed exactly once per session, IME listeners are attached
- * exactly once (a second attach would toggle the composing flag twice per
- * keystroke), and disposing tears down BOTH the Monaco registration and the
- * provider — leaking either keeps a dead POU's store subscription alive.
- *
- * Those are module-level latches, so they are asserted inside one test rather
- * than reset between tests: resetting modules is the one thing jest and vitest
- * spell differently, and this file has to run under both.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import type * as monaco from 'monaco-editor'
 
@@ -40,9 +26,7 @@ function makePort(warmCache: () => void): AIPort {
   }
 }
 
-// Both latches are module-level and once-per-session. Without this, every case after
-// the first runs against an already-warmed cache, and the case named for the warm branch
-// never reaches it — which is how it passed while asserting nothing.
+// Latches are module-level and once-per-session; reset so each case starts unwarmed.
 beforeEach(() => {
   __resetInlineCompletionsForTests()
 })

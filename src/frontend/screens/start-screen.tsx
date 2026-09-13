@@ -16,11 +16,7 @@ import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
-  /**
-   * Bumped whenever something on this screen changes what is on the Edge account, so the
-   * cloud list re-reads. The two sections are siblings that know nothing about each
-   * other; this screen is the only place that knows both are here.
-   */
+  // Bumped when the Edge account changes, so the sibling cloud list re-reads.
   const [cloudRevision, setCloudRevision] = useState(0)
   const capabilities = useCapabilities()
   useSystem()
@@ -54,7 +50,6 @@ const StartScreen = () => {
     windowPort.close()
   }
 
-  // Load recent projects
   useEffect(() => {
     const loadRecent = async () => {
       const recentProjects = await projectPort.getRecentProjects()
@@ -80,7 +75,6 @@ const StartScreen = () => {
     }
   }, [device, setAvailableOptions])
 
-  // Web: show welcome message when no local filesystem
   if (!capabilities.hasLocalFilesystem) {
     return (
       <div className='flex h-full w-full items-center justify-center bg-neutral-950'>
@@ -101,7 +95,6 @@ const StartScreen = () => {
     )
   }
 
-  // Editor: show menu + recent projects
   return (
     <>
       <StartSideContent>
@@ -116,8 +109,7 @@ const StartScreen = () => {
             <MenuItem ghosted>
               <VideoIcon /> Tutorials
             </MenuItem>
-            {/* Above the divider, with the things you DO here. Below it is only
-                leaving, and the account is not on the way out. */}
+            {/* Above the divider with the actions; the account is not on the way out. */}
             <StartAccountSection />
           </MenuSection>
           <MenuDivider />
@@ -130,10 +122,7 @@ const StartScreen = () => {
       </StartSideContent>
       <StartMainContent>
         <ProjectFilterBar setSearchFilterValue={searchFilter} />
-        {/* Above the local list, and hidden entirely when there is nothing to show — so
-            an editor with no account, or nobody signed in, looks exactly as it did. The
-            filter box covers both sections, because a person searching for a project
-            does not care which side of the line it is on. */}
+        {/* Hidden entirely when there is nothing to show; the filter box covers both sections. */}
         <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} />
         <DisplayRecentProjects
           searchNameFilterValue={searchFilterValue}

@@ -1,16 +1,7 @@
 /**
- * Merging one branch into another, file by file.
- *
- * Reached from the branch switcher. It is a whole screen because the decision needs one:
- * a three-way view of source, target and their common ancestor, a diff per file, and a
- * conflict resolver for the files the server says will collide.
- *
- * PLATFORM-FREE ON PURPOSE. It talks to the version-control port and takes
- * `onBack`/`onMerged` instead of navigating. The web wraps it in a router page at
- * `/merge`; the desktop, which has no router, lays it over the workspace. Both get the
- * same screen from the same code, which is the only way the two stay identical, and the
- * reason the desktop could not have this feature before: the page was wired straight to
- * the web own API layer, which the editor does not have.
+ * Merges one branch into another, file by file, with a per-file conflict resolver.
+ * Platform-free: talks only to the version-control port and takes `onBack`/`onMerged`
+ * instead of navigating, so editor and web can render the same screen.
  */
 
 import { DiffEditor } from '@monaco-editor/react'
@@ -37,10 +28,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { GraphicalDiffViewer, isGraphicalFile } from '../editor/diff-viewer'
 import { useDiffEditorTeardown, useDiffModelPaths } from '../editor/diff-viewer/use-diff-editor-teardown'
 import { TextConflictResolver } from './merge-text-conflict-resolver'
-
-// ---------------------------------------------------------------------------
-// File tree types & helpers (same shape as history-page so the look matches)
-// ---------------------------------------------------------------------------
 
 type FileStatus = 'A' | 'M' | 'D' | 'U' | 'C' | 'R'
 
@@ -145,10 +132,6 @@ function formatContentForDisplay(path: string, content: string): string {
   return `${declaration}\n\n(* ${ext.toUpperCase()} graphical data omitted *)\n\n${endKeyword}`
 }
 
-// ---------------------------------------------------------------------------
-// File tree item
-// ---------------------------------------------------------------------------
-
 function FileStatusBadge({ status }: { status: FileStatus }) {
   const config = FILE_STATUS_CONFIG[status]
   return (
@@ -225,10 +208,6 @@ function FileTreeItem({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Merge page
-// ---------------------------------------------------------------------------
-
 export type BranchMergeViewProps = {
   projectId: string
   /** The branch being merged in. */
@@ -237,18 +216,14 @@ export type BranchMergeViewProps = {
   targetParam?: string
   /** Leave without merging. */
   onBack: () => void
-  /**
-   * The merge landed. The project on the server has moved, so the host has to reload it —
-   * this view cannot, and leaving the user on a stale copy would be worse than closing.
-   */
+  /** The merge landed; the caller must reload the project since this view can't. */
   onMerged: () => void
 }
 
 export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, onMerged }: BranchMergeViewProps) {
   const versionControl = useVersionControl()
-  // Monaco is mounted directly here, so the library's reversed teardown applies: without
-  // this, closing the screen raises "TextModel got disposed before DiffEditorWidget model
-  // got reset" as an uncaught error. Measured in the running app before the fix.
+  // Reversed teardown for the directly-mounted Monaco diff editor, or disposing the
+  // screen throws "TextModel got disposed before DiffEditorWidget model got reset".
   const diffEditorRef = useDiffEditorTeardown()
   const diffModelPaths = useDiffModelPaths()
 
@@ -264,16 +239,14 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
   const [resolutions, setResolutions] = useState<Record<string, string>>({})
   const [resolvedFiles, setResolvedFiles] = useState<Set<string>>(new Set())
 
-  // Editable commit message — pre-filled with the default template when the
-  // diff loads. User can override it before clicking "Merge".
+  // Pre-filled with the default template once branches are known; user can override it.
   const [commitMessage, setCommitMessage] = useState<string>('')
   const [showCommitMessageEdit, setShowCommitMessageEdit] = useState(false)
 
   const [branches, setBranches] = useState<Branch[]>([])
 
-  // The list is needed for two things only: resolving the default target when none was
-  // given, and finding the source branch's id so it can be offered for deletion after a
-  // merge. A failure leaves it empty, which degrades both gracefully.
+  // Used to resolve the default target when none was given, and to find the source
+  // branch's id for post-merge deletion; a failed fetch just leaves it empty.
   useEffect(() => {
     if (!versionControl) return
     let alive = true
@@ -288,9 +261,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     }
   }, [projectId, versionControl])
 
-  // `target` may be omitted when the user opens merge from the same branch
-  // they're on. Fall back to the repo's default branch (skipping source so
-  // the page never tries to merge a branch into itself).
+  // Falls back to the repo's default branch (never the source) when target is omitted.
   const targetBranch = useMemo(() => {
     if (targetParam && targetParam !== sourceBranch) return targetParam
     const defaultBranch = branches.find((b) => b.isDefault && b.name !== sourceBranch)
@@ -301,13 +272,11 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [isMerging, setIsMerging] = useState(false)
-  // Its own flag, so the button can say which of the two steps is running. The web build
-  // read this from a second mutation; here the distinction is kept by hand.
+  // Separate flag so the button label can distinguish merging from deleting the source.
   const [isDeletingSource, setIsDeletingSource] = useState(false)
 
-  // Re-runs when either branch changes, and drops a late answer for a pair the user has
-  // already moved off — otherwise switching target twice quickly can leave the first
-  // response on screen under the second one's heading.
+  // Drops a late response for a branch pair the user has already moved off, or switching
+  // target twice quickly can leave the first response on screen under the second heading.
   useEffect(() => {
     if (!versionControl?.getBranchDiffWithBase || !sourceBranch || !targetBranch || sourceBranch === targetBranch) {
       setIsLoading(false)
@@ -345,9 +314,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     }
   }, [sourceBranch, targetBranch, commitMessage])
 
-  // Default branch can't be deleted; the prompt is hidden for it.
-  // Double-guard: rely on isDefault flag AND on well-known default names
-  // (in case the branch metadata hasn't been loaded yet or isDefault is stale).
+  // Checks isDefault AND well-known default names, in case branch metadata is stale.
   const sourceBranchEntry = branches.find((b) => b.name === sourceBranch)
   const sourceBranchIsDefault = sourceBranchEntry?.isDefault ?? false
   const sourceLooksLikeDefault = sourceBranch === 'main' || sourceBranch === 'master'
@@ -361,9 +328,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     else document.documentElement.classList.remove('dark')
   }, [isDark])
 
-  // Build per-file status: target is the "original" (we're merging INTO target),
-  // source is the "modified" (changes coming from source branch).
-  // Also marks files as 'C' (conflict) when listed in data.conflicts.
+  // target is the "original" (merging INTO it), source is the "modified".
   const filesWithStatus = useMemo<MergeFileEntry[]>(() => {
     if (!data) return []
 
@@ -460,8 +425,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     setPostMergeError(null)
     setShowMergeOptionsModal(false)
 
-    // Only files the user actually marked resolved. Sending a half-edited one would merge
-    // content nobody approved.
+    // Only send files the user actually marked resolved.
     const resolutionsToSend: Record<string, string> = {}
     for (const path of resolvedFiles) {
       if (path in resolutions) resolutionsToSend[path] = resolutions[path]
@@ -481,11 +445,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
       setIsMerging(false)
 
       if (err instanceof MergeConflictError) {
-        // The server still sees unresolved conflicts. Usually drift: the branches moved
-        // since this screen loaded, so reloading is the honest advice rather than letting
-        // the user re-press a button that will refuse again.
-        // Edge's 409 body names no files, so the list is empty there and the message is
-        // what the server actually said.
+        // Server-side conflicts usually mean the branches moved since this screen loaded.
         const summary =
           err.conflictedFiles.length > 0
             ? `Conflicts remain in: ${err.conflictedFiles.join(', ')}.`
@@ -498,8 +458,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
       return
     }
 
-    // Merged. Deleting the source is a courtesy, so its failure must not read as the merge
-    // having failed — it warns and still lets the user close.
+    // Deleting the source is a courtesy; its failure must not read as the merge failing.
     if (shouldDelete && sourceBranchEntry && canDeleteSource) {
       setIsDeletingSource(true)
 
@@ -548,7 +507,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
 
   return (
     <div className='flex h-full w-full flex-col overflow-hidden bg-neutral-100 dark:bg-neutral-900'>
-      {/* Header */}
       <div className='flex shrink-0 items-center justify-between border-b-2 border-neutral-200 bg-white px-4 py-2.5 dark:border-neutral-800 dark:bg-neutral-950'>
         <div className='flex min-w-0 items-center gap-3'>
           <button
@@ -603,7 +561,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
         </div>
       </div>
 
-      {/* Commit message editor (collapsible) */}
       {showCommitMessageEdit && (
         <div className='shrink-0 border-b border-neutral-200 bg-neutral-50 px-4 py-2 dark:border-neutral-800 dark:bg-neutral-900'>
           <label className='mb-1 block text-[11px] font-medium text-neutral-600 dark:text-neutral-400'>
@@ -636,10 +593,8 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
         </div>
       )}
 
-      {/* Main content */}
       <div className='min-h-0 flex-1 p-2'>
         <ResizablePanelGroup id='mergePanelGroup' direction='horizontal' className='h-full gap-2'>
-          {/* File tree */}
           <ResizablePanel
             id='mergeFileTree'
             order={1}
@@ -694,7 +649,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
             className='w-[4px] transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700'
           />
 
-          {/* Diff viewer */}
           <ResizablePanel
             id='mergeContentViewer'
             order={2}
@@ -704,8 +658,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
               {selected ? (
                 selected.status === 'C' || selected.status === 'R' ? (
                   isGraphicalFile(selected.path) ? (
-                    /* Graphical file conflict — pick one branch's version wholesale.
-                       Per-rung/per-node semantic merge is Phase 2/3. */
+                    // Graphical conflicts resolve whole-file only; no per-node merge yet.
                     (() => {
                       const isResolved = resolvedFiles.has(selected.path)
                       const chosen = resolutions[selected.path]
@@ -732,9 +685,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
                           return next
                         })
                       }
-                      // Per-file conflict navigation — placeholder for when Phase 2
-                      // introduces per-rung conflict detection. For now each file
-                      // shows as a single conflict (1/1).
+                      // Placeholder nav; always 1/1 until per-rung conflicts exist.
                       const conflictIndex = 1
                       const conflictTotal = 1
                       const SideHeader = ({ side, branch }: { side: 'source' | 'target'; branch: string }) => (
@@ -854,7 +805,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
                     />
                   )
                 ) : (
-                  /* Non-conflict view: just show the diff (read-only) */
                   <>
                     <div className='flex shrink-0 items-center gap-2 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800'>
                       <p className='flex-1 truncate font-mono text-xs text-neutral-600 dark:text-neutral-400'>
@@ -923,7 +873,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
         </ResizablePanelGroup>
       </div>
 
-      {/* Pre-merge: confirm and pick whether to delete the source branch */}
       {showMergeOptionsModal && (
         <div className='fixed inset-0 z-50 flex items-center justify-center'>
           <div

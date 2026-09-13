@@ -1,18 +1,4 @@
-/**
- * Publishing a project from this machine to Autonomy Edge.
- *
- * The desktop's answer to Edge's own "Import project" dialog, and it asks for the same
- * three things: where it goes, what it is called, and whether anyone else can see it. The
- * difference is what the user has to do — on the web they are told to zip the folder
- * themselves ("right-click → Compress"), while here the project is already on disk with a
- * path the editor holds, so it makes the archive. Nothing about that belongs on screen.
- *
- * WHY EACH FAILURE GETS ITS OWN SENTENCE. Publishing can fail for reasons with completely
- * different remedies: a folder that was never an OpenPLC project, a project too large for
- * the importer, a name already taken, a dropped connection. The last is the one worth
- * being careful about — the import is not idempotent, so an unanswered request may have
- * created the project anyway, and telling someone it failed would invite a duplicate.
- */
+/** Publishing a project from this machine to Autonomy Edge, archiving it here instead of asking the user to zip it. */
 
 import { CloudUpload, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -65,15 +51,7 @@ function describeFailure(failure: UploadProjectFailure): string {
   }
 }
 
-/**
- * The branch drawn to the left of a folder's name.
- *
- * Box-drawing characters rather than plain indentation: at one or two levels an indent
- * alone reads as a list that happens to be ragged, while a connector says the thing that
- * matters — this folder is INSIDE that one, and picking it puts the project there. The
- * same shape Edge's own import dialog uses, so the two products describe one hierarchy
- * the same way.
- */
+/** The branch drawn to the left of a folder's name, matching Edge's own import dialog. */
 function folderConnector(depth: number): string {
   return depth === 0 ? '' : `${'    '.repeat(depth - 1)}└── `
 }
@@ -105,8 +83,7 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
     }
   }, [project])
 
-  // Loaded on open rather than on mount: the modal lives beside every project card, and
-  // asking Edge for folders because a menu exists would be a request per card.
+  // Loaded on open, not on mount — the modal lives beside every project card.
   useEffect(() => {
     if (!open) {
       return
@@ -124,9 +101,6 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
       return
     }
 
-    // Said, not swallowed. The Upload button is enabled whenever the form is ready, so
-    // returning silently here is a press that does nothing and explains nothing —
-    // `loadFolders` already surfaces the paired missing method rather than going quiet.
     if (!project.uploadProjectToCloud) {
       setError('This build of the editor cannot publish to Autonomy Edge.')
 
@@ -140,8 +114,7 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
     const result = await project.uploadProjectToCloud({
       projectPath,
       parentFolderId,
-      // Omitted when unchanged, so the importer keeps using the name in project.json
-      // rather than being handed the same value twice.
+      // Omitted when unchanged, so the importer keeps using the name already in project.json.
       projectName: trimmed && trimmed !== projectName ? trimmed : undefined,
       visibility,
     })
@@ -201,14 +174,7 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
               <legend className='mb-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300'>
                 Destination folder
               </legend>
-              {/* A tree, not a dropdown. The whole hierarchy is worth seeing at once —
-                  choosing where a project lands is the decision this dialog exists for,
-                  and a collapsed control hides the very structure being chosen from.
-                  Scrolls past a handful so a deep account cannot push the buttons off.
-
-                  Native radios underneath, visually hidden: they carry the arrow-key
-                  navigation, the focus ring and the screen-reader semantics that a
-                  hand-rolled listbox would have to reimplement, usually worse. */}
+              {/* Native radios underneath, visually hidden, for arrow-key nav and screen-reader semantics for free. */}
               <div className='max-h-[220px] overflow-y-auto rounded-lg border border-neutral-200 bg-white p-1.5 dark:border-neutral-700 dark:bg-neutral-900'>
                 {folders.folders.map((folder) => {
                   const selected = folder.id === parentFolderId
@@ -218,10 +184,7 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
                       key={folder.id}
                       className={cn(
                         'flex cursor-pointer items-center rounded-md px-2 py-1.5 text-sm transition-colors',
-                        // `blue-500` and not `brand` wherever an opacity modifier is
-                        // involved: the brand token is a `var()` holding a hex, and
-                        // Tailwind 3 cannot reliably apply `/10` to that. Same colour,
-                        // same substitution the cloud-projects card documents.
+                        // `blue-500`, not `brand`: the brand token is a hex `var()`, and Tailwind 3 can't apply `/10` to it.
                         'focus-within:ring-2 focus-within:ring-blue-500/40',
                         selected
                           ? 'bg-blue-500/10 font-medium text-neutral-900 dark:bg-blue-500/20 dark:text-neutral-100'
@@ -236,9 +199,7 @@ const UploadToCloudModal = ({ open, onOpenChange, projectPath, projectName, onUp
                         onChange={() => setParentFolderId(folder.id)}
                         className='sr-only'
                       />
-                      {/* Monospaced so the connectors of sibling rows line up. Only the
-                          branch is monospaced — the folder's own name stays in the UI
-                          font, because a name is text, not a diagram. */}
+                      {/* Only the branch is monospaced, so sibling connectors line up. */}
                       {folder.depth > 0 && (
                         <span aria-hidden className='whitespace-pre font-mono text-neutral-400 dark:text-neutral-600'>
                           {folderConnector(folder.depth)}

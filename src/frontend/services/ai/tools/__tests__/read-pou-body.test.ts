@@ -1,13 +1,3 @@
-/**
- * `read_pou_body` is how the model sees a POU it did not write. The cases that
- * matter are the ones where a wrong answer is indistinguishable from a right
- * one: a graphical POU must never come back as its flow-graph JSON, and a POU
- * whose ST could not be produced must say so rather than look empty.
- *
- * The transpiler is injected through `executeTool`'s options, so nothing here
- * mocks a module and the file runs under both runners.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import { openPLCStoreBase } from '../../../../store'
@@ -30,8 +20,6 @@ function transpilerYielding(programSt: string | null): ToolExecutionOptions {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  // The shared module caches the last successful transpile for 30s; without
-  // this, one case's ST answers the next case's question.
   invalidateSTCache()
 })
 
@@ -153,9 +141,6 @@ describe('executeTool("read_pou_body")', () => {
     })
 
     it('surfaces a transpiler rejection as a failed tool result, not a throw', async () => {
-      // The shared cache swallows the rejection and falls back to whatever it
-      // last knew — nothing, here — so the user gets the "no ST" message rather
-      // than a stack trace or, worse, the previous project's code.
       seedStore([{ name: 'Rungs', pouType: 'program', body: { language: 'ld', value: {} } }])
 
       const result = await executeTool(

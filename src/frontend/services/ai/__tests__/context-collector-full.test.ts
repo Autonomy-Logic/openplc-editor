@@ -2,8 +2,6 @@ import { describe, expect, it } from '@jest/globals'
 
 import { collectFullProjectContext, isGraphicalLanguage } from '../context-collector'
 
-// -- helpers ------------------------------------------------------------------
-
 type TestPou = {
   name: string
   pouType: string
@@ -33,13 +31,11 @@ function makeState(overrides: {
   } as unknown as ReturnType<typeof import('../../../store').openPLCStoreBase.getState>
 }
 
-/** A body long enough that the old 35 %-of-budget cap would have cut it. */
+/** A body long enough to expose any truncation. */
 function longBody(marker: string, chars = 4000): string {
   const line = `  (* ${marker} *) counter := counter + 1;\n`
   return line.repeat(Math.ceil(chars / line.length))
 }
-
-// -- tests --------------------------------------------------------------------
 
 describe('isGraphicalLanguage', () => {
   it.each(['ld', 'fbd', 'sfc'])('treats %s as graphical', (lang) => {
@@ -56,8 +52,6 @@ describe('collectFullProjectContext', () => {
     expect(collectFullProjectContext(makeState({}), null)).toBe('')
   })
 
-  // The regression this whole change exists for: a 12-POU library whose
-  // bodies were each cut to ~700 chars mid-statement.
   it('never truncates POU bodies, however many POUs there are', () => {
     const pous: TestPou[] = Array.from({ length: 12 }, (_, i) => ({
       name: `FB${i}`,
@@ -68,9 +62,7 @@ describe('collectFullProjectContext', () => {
 
     const result = collectFullProjectContext(makeState({ pous }), null)
 
-    // Every body present in full, and no truncation marker anywhere.
     for (const pou of pous) {
-      // `getTextualBody` trims; the point is that nothing in the middle is lost.
       expect(result).toContain((pou.body.value as string).trim())
     }
     expect(result).not.toContain('(* ... *)')
@@ -100,7 +92,6 @@ describe('collectFullProjectContext', () => {
 
     const result = collectFullProjectContext(state, 'Main')
     expect(result.indexOf('Active POU: Main')).toBeLessThan(result.indexOf('FUNCTION Other'))
-    // The active POU is not repeated in the "every other POU" pass.
     expect(result.match(/Main/g)?.length).toBe(1)
   })
 
@@ -154,7 +145,6 @@ describe('collectFullProjectContext', () => {
       expect(result).toContain('out := in1 + in2;')
       expect(result).toContain('LD diagram — transpiled ST equivalent')
       expect(result).toContain('FBD diagram — transpiled ST equivalent')
-      // The raw flow graph must never reach the model.
       expect(result).not.toContain('rungs')
     })
 

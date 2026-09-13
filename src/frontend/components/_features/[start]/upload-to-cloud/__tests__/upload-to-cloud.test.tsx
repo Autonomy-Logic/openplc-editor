@@ -1,18 +1,6 @@
 /**
- * The publish dialog.
- *
- * The destination picker is a tree rather than a dropdown, and that is a decision worth
- * holding: choosing where a project lands is what this dialog exists for, and a collapsed
- * control hides the very structure being chosen from. Radios underneath, so arrow keys and
- * screen readers work without any of it being reimplemented.
- *
- * The rest is about not lying. Private has to be the default, an unchanged name must not
- * be sent, and a dropped connection must not be reported as a failure — the import is not
- * idempotent, so an unanswered request may well have created the project.
- *
- * NOTHING IS MODULE-MOCKED. The project port arrives through `PlatformProvider` and the
- * real modal renders into the document, which is where every query below looks. That is
- * what lets one file run unchanged under both runners, whose module-mock hoisting differs.
+ * The project port arrives through `PlatformProvider`, not module mocks, so this file
+ * runs unchanged under both runners.
  */
 
 import { beforeEach, describe, expect, it } from '@jest/globals'
@@ -31,10 +19,7 @@ import { PlatformProvider } from '../../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
 import { UploadToCloudModal } from '..'
 
-/**
- * A port whose every method answers `undefined`, except the ones handed in. For the
- * ports nothing here reads, and for the one that only needs two of its methods.
- */
+/** A port whose every method answers `undefined`, except the ones handed in. */
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   return new Proxy({} as T, {
     get: (_, prop) => {
@@ -68,13 +53,7 @@ function makePorts(overrides: Partial<PlatformPorts>): PlatformPorts {
 const listCloudFolders = jest.fn<Promise<CloudFoldersResult>, []>()
 const uploadProjectToCloud = jest.fn<Promise<UploadProjectResult>, [UploadProjectParams]>()
 
-/**
- * A STABLE object, deliberately. The dialog's load effect depends on the port's identity,
- * and the real provider hands out one instance created at boot. A fake building a fresh
- * object per render re-runs that effect on every render — which resets the chosen folder
- * and eats `mockResolvedValueOnce` queues, making every assertion below meaningless. That
- * is a defect in the fake, not in the component.
- */
+// Stable object: a fresh one per render would re-run the load effect and reset the chosen folder.
 const projectPort = stubPort<ProjectPort>({ listCloudFolders, uploadProjectToCloud })
 const ports = makePorts({ project: projectPort })
 
@@ -121,7 +100,6 @@ describe('choosing a destination', () => {
   it('shows the whole hierarchy at once', async () => {
     renderModal()
 
-    // Every folder visible, not one behind a collapsed control.
     for (const folder of FOLDERS) {
       expect(
         await screen.findByRole('radio', { name: new RegExp(folder.name.replace(/[()/]/g, '\\$&')) }),
@@ -132,7 +110,6 @@ describe('choosing a destination', () => {
   it('selects the account root to begin with', async () => {
     renderModal()
 
-    // First in the list, and the destination that always exists.
     await waitFor(() => expect(radio(/Root/).checked).toBe(true))
   })
 
@@ -160,8 +137,7 @@ describe('choosing a destination', () => {
     renderModal()
     await screen.findByRole('radio', { name: /forum/ })
 
-    // The connector is what says "inside", which plain indentation does not. The dialog
-    // is portalled, so the document is where it reads.
+    // The dialog is portalled, so the document body is where the connector reads.
     expect(document.body.textContent).toContain('└──')
   })
 })
@@ -171,8 +147,6 @@ describe('what gets sent', () => {
     renderModal()
     await screen.findByRole('radio', { name: /Root/ })
 
-    // Publishing someone's control program to the world is not a default anyone should
-    // get by pressing Enter.
     expect(radio(/Private/).checked).toBe(true)
 
     await userEvent.click(uploadButton())
@@ -188,8 +162,6 @@ describe('what gets sent', () => {
 
     await userEvent.click(uploadButton())
 
-    // Absent means "use the name in project.json", rather than handing the importer the
-    // same value twice.
     await waitFor(() => expect(uploadProjectToCloud).toHaveBeenCalled())
     expect(uploadProjectToCloud.mock.calls[0][0].projectName).toBeUndefined()
   })

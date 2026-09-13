@@ -1,10 +1,6 @@
 /**
- * Project the renderer's port-shape `PLCProjectData` (`middleware/shared/ports/types.ts`)
- * into the JSON transpiler's minimal IR.
- *
- * Shared by both builds: the store shape is the same on each, so the projection is too.
- * The companion schema adapter — the one the main process uses on the compile path,
- * against the shape its IPC payload arrives in — is `st-transpiler/from-schema.ts`.
+ * Projects the renderer's port-shape `PLCProjectData` into the JSON transpiler's minimal IR.
+ * The companion adapter for the main process's IPC-payload shape is `st-transpiler/from-schema.ts`.
  */
 
 import {
@@ -43,10 +39,9 @@ import type { RFBody, RFEdge, RFNode, RFRung } from './st-transpiler/walker/type
 
 export function fromPortShape(data: PLCProjectData): TranspileProject {
   const resource = data.configurations?.resource
-  // A Global Variable List has no IEC equivalent, so it is compiled as the shape STruC++
-  // resolves qualified member access through: a STRUCT type, one global instance named
-  // after the list, and a `VAR_EXTERNAL` in each POU that mentions it. An empty list is
-  // skipped — an empty STRUCT is not a legal type, so there would be nothing to instantiate.
+  // A Global Variable List has no IEC equivalent: compiled as a STRUCT type, one global
+  // instance named after the list, and a `VAR_EXTERNAL` in each POU that mentions it.
+  // Empty lists are skipped — an empty STRUCT is not a legal type.
   const lists = (data.globalVariableLists ?? []).filter((list) => list.variables.length > 0)
 
   return {
@@ -61,9 +56,6 @@ export function fromPortShape(data: PLCProjectData): TranspileProject {
 }
 
 /* ──────────────────── global variable lists (GVLs) ──────────────────────── */
-
-// The `_TYPE` suffix and what counts as a reference are imported from the serialiser, not
-// restated: a private copy would let the struct type stop matching its instance silently.
 
 /** The struct backing a list. Member addresses are dropped: a struct member cannot be bound to I/O. */
 function globalListStruct(list: PLCGlobalVariableList): TranspileDataType {
@@ -88,8 +80,8 @@ function globalListInstance(list: PLCGlobalVariableList): TranspileVariable {
 
 /** Declare, in this POU, the lists its body actually references — STruC++ needs a `VAR_EXTERNAL`. */
 function withGlobalListExternals(pou: TranspilePou, lists: PLCGlobalVariableList[]): TranspilePou {
-  // The whole projected POU is scanned, not just its body: a ladder or FBD reference lives
-  // in a node's variable name rather than in any text the body exposes.
+  // Scans the whole projected POU, not just its body: a ladder or FBD reference lives in a
+  // node's variable name rather than in any text the body exposes.
   const searchText = referenceSearchText(pou)
   const referenced = lists.filter((list) => globalVariableListIsReferencedIn(list.name, searchText))
   if (referenced.length === 0) return pou
@@ -141,7 +133,7 @@ function projectBody(body: PLCBody): TranspileBody {
 
 /* ─── React Flow body projection ─────────────────────────────────── */
 
-// A graphical body is `unknown` on the port, so every field is read through a guard.
+// A graphical body is `unknown` on the port; every field is read through a guard.
 
 function projectLdBody(value: unknown): RFBody {
   const rungs = isRecord(value) ? asArray(value.rungs) : []
@@ -225,8 +217,7 @@ function projectVariable(v: PLCVariable): TranspileVariable {
 }
 
 function projectStructureVariable(v: PLCStructureVariable): TranspileVariable {
-  // The port hides a structure member's initial value inside `{ simpleValue: { value } }`;
-  // the IR flattens that to a bare string, as the PLCVariable projection above does.
+  // The port hides a structure member's initial value inside `{ simpleValue: { value } }`.
   const initial = v.initialValue?.simpleValue?.value
   return {
     name: v.name,
@@ -258,8 +249,6 @@ function projectDataType(dt: PLCDataType): TranspileDataType {
       name: dt.name,
       derivation: 'array',
       dimensions: dt.dimensions.map((d) => ({ dimension: d.dimension })),
-      // The port's array baseType is a PLCVariableType; the IR carries the same scalar
-      // shape the schema side does — a bare name for a nested array, a wrapper otherwise.
       baseType: dt.baseType.definition === 'array' ? dt.baseType.value : { value: dt.baseType.value },
       ...(dt.initialValue ? { initialValue: dt.initialValue } : {}),
     }

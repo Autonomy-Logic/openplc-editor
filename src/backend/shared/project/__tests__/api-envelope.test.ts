@@ -1,11 +1,6 @@
 /**
- * Tests for the Edge API envelope helpers.
- *
- * These functions own the web-only path↔slot mapping.  Both the
- * full-project saveProject path (`envelopeFromWriteProjectFiles` ->
- * POST) and the single-file saveFile path (`getInEnvelope` /
- * `setInEnvelope` for load-patch-save) dispatch through them, so
- * the same cases must round-trip cleanly in both directions.
+ * Tests for the Edge API envelope helpers — the web-only path↔slot mapping. Cases must
+ * round-trip identically between the full-project and single-file save paths.
  */
 
 import { describe, expect, it } from '@jest/globals'
@@ -31,10 +26,8 @@ function makeEnvelope(overrides?: Partial<ApiProjectFiles>): ApiProjectFiles {
 }
 
 /**
- * `devices` is a flat map of file contents that also carries nested slots, and no
- * object literal satisfies both at once: the index signature demands a string for
- * every key while `remote` and `servers` are maps. Filling the slots after the fact
- * builds the value the API actually sends without loosening the type.
+ * `devices` mixes a flat file-content map with nested `remote`/`servers` slots, which no
+ * single object literal satisfies; slots are filled in after construction instead.
  */
 const devicesWith = (nested: {
   remote?: Record<string, string>
@@ -268,26 +261,9 @@ describe('setInEnvelope', () => {
   })
 })
 
-/**
- * The envelope a brand-new project actually comes back with.
- *
- * `GET /projects/:id/details` answers `files: {}` for a project that has never
- * been saved — no `pous`, no `devices`, not even `project.json`. `makeEnvelope`
- * above always supplies those containers, which is exactly why this went
- * unnoticed: `setInEnvelope` assumed they existed and threw a TypeError, so
- * `saveFile`'s load-patch-save round trip failed between the GET and the POST.
- * Ctrl+S issued the read, died on the patch, never wrote anything, and left the
- * file dirty behind a toast that faded. Full project saves were fine because
- * they build a complete envelope from scratch.
- */
+/** A brand-new, never-saved project's envelope: `files: {}` — no `pous`, no `devices`, not even `project.json`. */
 describe('setInEnvelope on the envelope a new project really returns', () => {
-  /**
-   * `files: {}` — no containers at all, as the API sends it.
-   *
-   * Typed `IncomingApiProjectFiles` rather than asserted into `ApiProjectFiles`:
-   * that IS the shape on the wire, and it is the shape `setInEnvelope` declares it
-   * accepts. Asserting here used to hide the mismatch these tests exist to prove.
-   */
+  /** `files: {}` as the API sends it — typed as `IncomingApiProjectFiles`, the shape `setInEnvelope` accepts. */
   function emptyEnvelope(): IncomingApiProjectFiles {
     return {}
   }
@@ -332,7 +308,6 @@ describe('setInEnvelope on the envelope a new project really returns', () => {
     expect(env['project.json']).toBe('{"meta":{"name":"P"}}')
   })
 
-  // What the crash cost: the write never reached the transport at all.
   it('never throws, whatever container is missing', () => {
     const paths = [
       'project.json',
@@ -487,16 +462,11 @@ describe('envelopeFromWriteProjectFiles', () => {
   })
 })
 
-/**
- * The schema is what stands between a response off the wire and the reader, so its
- * failure mode is not a type error — it is a project that opens with pieces missing
- * and no complaint. Each case here is a container that must survive the crossing.
- */
+/** Each case is a container that must survive the wire→reader crossing without silently emptying. */
 describe('ApiProjectFilesSchema', () => {
   it('keeps devices/remote AND the flat device files beside it', () => {
-    // `devices` is the one container that is both a flat file map and a parent. A
-    // schema that demands a string for every key rejects it whole the moment a project
-    // owns a remote device.
+    // `devices` is both a flat file map and a parent (holds `remote`/`servers`); a schema
+    // demanding a string for every key would reject it once a project owns a remote device.
     const parsed = ApiProjectFilesSchema.parse({
       'project.json': '{}',
       devices: { 'configuration.json': '{"board":"uno"}', 'pin-mapping.json': '[]', remote: { 'bus0.json': '{}' } },
@@ -509,9 +479,6 @@ describe('ApiProjectFilesSchema', () => {
   })
 
   it('keeps devices/servers, which Edge nests under devices', () => {
-    // This is the shape that used to fail the `devices` container whole — and the
-    // tolerant branch then emptied it, taking the board configuration and the pin
-    // mapping down with the servers, which the next save persisted as a deletion.
     const parsed = ApiProjectFilesSchema.parse({
       'project.json': '{}',
       devices: { 'configuration.json': '{"board":"uno"}', servers: { 'modbus.json': '{"port":502}' } },
@@ -522,9 +489,8 @@ describe('ApiProjectFilesSchema', () => {
   })
 
   it('accepts the bare envelope a project that was never saved answers with, adding nothing', () => {
-    // `GET /details` answers `files: {}` for a brand-new project. Rejecting that would
-    // make the first save of every new project fail; inventing a `project.json` would
-    // make the desktop post a key the web build does not.
+    // Rejecting `{}` would fail every new project's first save; inventing `project.json`
+    // would post a key the web build never sends.
     expect(ApiProjectFilesSchema.parse({})).toEqual({})
   })
 
@@ -535,8 +501,6 @@ describe('ApiProjectFilesSchema', () => {
     ['pous that is not nested', { pous: { programs: 'PROGRAM main' } }],
     ['a project.json that is not a string', { 'project.json': { meta: {} } }],
   ])('FAILS on %s rather than emptying the container', (_label, files) => {
-    // A malformed container used to be caught and replaced by `{}`. The project then
-    // opened with defaults and the next save deleted every file the container had held.
     expect(ApiProjectFilesSchema.safeParse(files).success).toBe(false)
   })
 

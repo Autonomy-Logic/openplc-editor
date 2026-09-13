@@ -1,17 +1,7 @@
 /**
- * Version control against Edge, with HTTP stubbed.
- *
- * What these tests protect is SAMENESS. The desktop and the web editor call the same
- * seventeen routes, and the promise made to the user is that a commit made from one
- * behaves like a commit made from the other. So the assertions here are deliberately
- * literal about method, path, query and body — a drifted query param is not a cosmetic
- * difference, it is a 400 the whitelist raises, and a dropped payload field is a commit
- * that quietly includes the wrong files.
- *
- * The other half is the failure taxonomy. "No session", "you may not", "it never
- * answered" and "these files conflict" are four different things, and the UI has a
- * different flow for each. Collapsing any pair of them produces the class of bug where a
- * dropped connection tells someone their branch cannot be created.
+ * Version control against Edge, with HTTP stubbed. Asserts literally on method, path,
+ * query and body, since the desktop and web editor must call the same routes the same
+ * way; and keeps the four-way failure taxonomy (signed-out / http / unreachable / conflict) apart.
  */
 
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
@@ -37,10 +27,7 @@ import {
   switchBranch,
 } from '..'
 
-// The module logs an unreadable response through winston, and the logger service
-// reads `app.getPath('userData')` when it loads — `electron` has no `app` under jest,
-// so importing it for real takes the whole suite down before a single test runs. Same
-// stub the IPC handler tests use, for the same reason.
+// Logger is stubbed since `electron.app` doesn't exist under jest.
 jest.mock('../../services', () => ({
   logger: { debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }))
@@ -237,11 +224,7 @@ describe('the routes match the ones the web build calls', () => {
   })
 })
 
-/**
- * Ids arrive from the renderer and are interpolated into routes on an authenticated
- * session. Encoding keeps a `feat/x` in one segment; refusing keeps a `..` from
- * addressing a different route altogether.
- */
+/** Ids are interpolated into routes; encoding keeps `feat/x` in one segment, and `..` is refused rather than sent. */
 describe('path segments', () => {
   it('encodes an id that needs it', async () => {
     request.mockResolvedValueOnce({ status: 204, body: '' })

@@ -44,11 +44,7 @@ const GROUP_ORDER: GroupKey[] = [
   'read_project_state',
 ]
 
-/**
- * Pull the user-meaningful target name (e.g. `TrafficLight_FB`) and an
- * optional detail (e.g. `BOOL`) out of a tool's input payload. Falls back to
- * the tool name itself when the schema doesn't expose anything friendlier.
- */
+/** Pulls the user-meaningful target name and detail out of a tool's input payload. */
 function describeToolCall(name: string, input: unknown): { target: string; detail: string | null } {
   const i = (input ?? {}) as Record<string, unknown>
   const s = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined)

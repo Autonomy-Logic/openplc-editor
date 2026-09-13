@@ -1,7 +1,5 @@
 /**
- * Webpack dev config for the src/ renderer.
- *
- * Usage: npm run start:dev
+ * Webpack dev config for the src/ renderer. Usage: npm run start:dev
  */
 
 import 'webpack-dev-server'
@@ -166,17 +164,11 @@ const configuration: webpack.Configuration = {
 
     new webpack.EnvironmentPlugin({
       NODE_ENV: 'development',
-      // Override for the editor's VPP catalog backend host.  Falsy
-      // (empty string) when the dev shell doesn't set it — the
-      // adapter (`package-adapter.ts`) then falls back to the
-      // production default hardcoded there.  Set the env BEFORE
-      // `npm run dev` to point at staging or localhost:
-      //   `VPP_CATALOG_URL=http://localhost:3333 npm run dev`
+      // Empty falls back to the production host in package-adapter.ts; set before
+      // `npm run dev` to override, e.g. VPP_CATALOG_URL=http://localhost:3333.
       VPP_CATALOG_URL: '',
-      // Same mechanism for the Edge WEB app (the `/buy` license page), which is
-      // a DIFFERENT origin from the API above.  Falls back to the production
-      // host hardcoded in `system-adapter.ts` when unset:
-      //   `OPENPLC_EDGE_WEB_URL=http://localhost:5173 npm run dev`
+      // Same mechanism for the Edge WEB app (`/buy` license page), a different origin;
+      // falls back to the host in system-adapter.ts, e.g. OPENPLC_EDGE_WEB_URL=http://localhost:5173.
       OPENPLC_EDGE_WEB_URL: '',
     }),
 
@@ -206,11 +198,8 @@ const configuration: webpack.Configuration = {
     }),
 
     new MonacoEditorWebpackPlugin({
-      // `python` covers the Python POU editor; `json` covers the
-      // Library Project's manifest tab (`library.json`).  Without
-      // `json` here, opening the manifest tab spawns a worker with
-      // no asset registered, which surfaces as an unhandled Worker
-      // `error` event in the renderer console.
+      // `json` covers the Library Project's manifest tab; without it, opening that
+      // tab spawns a worker with no asset registered, erroring in the console.
       languages: ['python', 'json'],
     }),
   ],
@@ -229,39 +218,9 @@ const configuration: webpack.Configuration = {
     historyApiFallback: { verbose: true },
     client: {
       overlay: {
-        // Compile errors and warnings still get an overlay: those are the ones
-        // worth interrupting for, and they are what this overlay is good at.
         errors: true,
         warnings: true,
-        // Runtime errors do NOT, and it cannot be a filter instead.
-        //
-        // The reason to want one: Monaco cancels pending work by rejecting with
-        // an error it names `Canceled`, and every disposed editor leaves one
-        // behind for whichever debounced contribution was still armed. Nothing
-        // is wrong — cancellation is what disposal means — but it reaches
-        // `window` as an unhandled rejection, and a full-screen overlay sits
-        // above everything and swallows every click until dismissed. Reloading
-        // a project from the source-control panel left the app looking frozen.
-        //
-        // Why not a filter function, which is what webpack-dev-server offers
-        // and what this used to be: the option is serialized into the client's
-        // own URL as a STRING, and `decodeOverlayOptions` revives it with
-        // `new Function`. The renderer's CSP is `script-src 'self'
-        // 'unsafe-inline'` (see `src/index.ejs`), so that throws an EvalError
-        // while the dev-server client module is still initialising — which
-        // takes the whole bundle down and boots the app to a white screen.
-        // A boolean is not serialized as a string and never reaches `eval`.
-        //
-        // Why not suppress it from the app instead: the client registers its
-        // `unhandledrejection` listener at module init, before any of our code
-        // runs, so `preventDefault` cannot reach it and neither can
-        // `stopImmediatePropagation` — the listener that runs first wins, and
-        // ours is second by construction.
-        //
-        // What is lost: a genuine runtime error no longer raises an overlay in
-        // dev. It still reaches the console and the Electron DevTools, which is
-        // where this app is debugged anyway. `installMonacoCancellationGuard`
-        // in `main.tsx` keeps the cancellation itself out of the console.
+        // Must be a boolean, not a filter fn: a filter is serialized into the dev-server client URL and revived with `new Function`, which the renderer CSP blocks.
         runtimeErrors: false,
       },
     },

@@ -1,22 +1,4 @@
-/**
- * Monaco's diff editor, and the order it is torn down in.
- *
- * `@monaco-editor/react` 4.7 disposes the two text models before the widget that still
- * holds them, and Monaco answers with an UNCAUGHT error — "TextModel got disposed before
- * DiffEditorWidget model got reset" — which covers the screen the instant a diff unmounts.
- * The desktop reaches it because the commit view is a layer over a live workspace; the web
- * only escaped it because closing a browser tab tears the page down first.
- *
- * So these tests are about sequence, not about rendering. A diff that renders correctly
- * and disposes in the wrong order is exactly the bug being fixed here, and only an
- * assertion on ordering can tell the two apart.
- *
- * NOTHING IS MODULE-MOCKED. The library is the real one; what stands in is Monaco itself,
- * through the door the library's loader leaves open on purpose — an instance already on
- * `window` is used instead of fetched. So the widget, the models and their URIs below are
- * exactly what the library asked Monaco for. The teardown hook is also driven on its own,
- * where the order can be pinned without React's cleanup order in the way.
- */
+/** `@monaco-editor/react` 4.7 disposes the two text models before the widget that still holds them, which throws uncaught; these tests assert teardown order, not rendering. */
 
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import { render, renderHook, screen, waitFor } from '@testing-library/react'
@@ -31,10 +13,6 @@ import { PlatformProvider } from '../../../../../../../middleware/shared/provide
 import type { PlatformPorts } from '../../../../../../../middleware/shared/providers/types'
 import { FileDiffView, getLanguageFromPath } from '../file-diff-view'
 import { useDiffEditorTeardown, useDiffModelPaths } from '../use-diff-editor-teardown'
-
-// ---------------------------------------------------------------------------
-// A Monaco small enough to read, large enough for the library to mount against
-// ---------------------------------------------------------------------------
 
 const events: string[] = []
 
@@ -155,10 +133,6 @@ const monaco = fakeMonaco()
 // The loader's own escape hatch: a Monaco already on the window is used as-is.
 Object.assign(window, { monaco })
 
-// ---------------------------------------------------------------------------
-// The platform the graphical route reads
-// ---------------------------------------------------------------------------
-
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   return new Proxy({} as T, {
     get: (_, prop) => {
@@ -224,8 +198,7 @@ describe('tearing the diff down', () => {
 
     unmount()
 
-    // The whole defect in one assertion: reversing these lines is what throws. Monaco's
-    // own models are what got disposed, in this order, before anything else happened.
+    // Reversing these lines is what throws: models must be released before disposed.
     expect(events.slice(0, 3)).toEqual(['setModel:null', 'dispose:original', 'dispose:modified'])
   })
 
@@ -235,9 +208,7 @@ describe('tearing the diff down', () => {
 
     unmount()
 
-    // Left to its own devices the library disposes the models in the wrong order.
-    // `keepCurrentOriginalModel` / `keepCurrentModifiedModel` are what stop it — and if
-    // they were missing, each model would be disposed a second time here.
+    // `keepCurrentOriginalModel`/`keepCurrentModifiedModel` stop the library disposing these itself.
     expect(count('dispose:original')).toBe(1)
     expect(count('dispose:modified')).toBe(1)
     expect(count('dispose:widget')).toBe(1)
@@ -246,9 +217,7 @@ describe('tearing the diff down', () => {
   it('still disposes the models when the widget went first', async () => {
     const { unmount } = renderDiff()
     await mounted(1)
-    // The library's cleanup ran before this one. Whether React reaches a parent or a child
-    // first while unwinding a deleted subtree is its own business, and a leak must not
-    // hinge on it.
+    // React's parent-vs-child unmount order is not guaranteed; teardown must not depend on it.
     lastEditor().disposed = true
 
     expect(() => unmount()).not.toThrow()
@@ -267,10 +236,6 @@ describe('tearing the diff down', () => {
   })
 })
 
-/**
- * The hook on its own, where the order is pinned exactly — without React deciding
- * whether the library's cleanup or this one runs first.
- */
 describe('useDiffEditorTeardown', () => {
   function editorWith(models: ModelPair, options: { disposed?: boolean } = {}) {
     const editor = new FakeDiffEditor({})
@@ -319,9 +284,7 @@ describe('keeping instances apart', () => {
 
     const [first, second] = monaco.diffEditors.map((editor) => editor.getModel())
 
-    // The library derives the URI from these and defaults them to '', so without this
-    // every diff in the app shares one model pair — and the commit view now sits over a
-    // workspace whose own diff tab may still be mounted.
+    // Without distinct URIs every diff in the app would share one model pair.
     expect(first?.original.uri.toString()).not.toBe(second?.original.uri.toString())
     expect(first?.original.uri.toString()).not.toBe(first?.modified.uri.toString())
     expect(monaco.models.size).toBe(4)
@@ -345,9 +308,7 @@ describe('keeping instances apart', () => {
 
     rerender(<FileDiffView filePath='b.st' original='x' current='y' isDark={false} />)
 
-    // A new path would make the library hand back a cached model with the OLD text. Fixed
-    // path plus changed content props lets its own value sync do the work: same two
-    // models, new contents.
+    // A new path would hand back a cached model with stale text; same path, new content, syncs instead.
     await waitFor(() => expect(lastEditor().getModel()?.modified.getValue()).toBe('y'))
     expect(lastEditor().getModel()?.original).toBe(before?.original)
     expect(lastEditor().getModel()?.original.getValue()).toBe('x')

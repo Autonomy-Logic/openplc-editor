@@ -1,15 +1,4 @@
-/**
- * Graphical context is what stands in for a diagram the model cannot read: the
- * transpiled ST plus a description of the layout. Two failure modes matter and
- * both are silent. The module-level ST cache can answer a question about a
- * project that no longer exists (an edit landed, the cache did not clear), and
- * a failed transpile can be presented as an empty POU — the model then
- * confidently tells the user their diagram does nothing.
- *
- * The transpiler is a parameter, so nothing here mocks a module and the file
- * runs under jest (editor) and vitest (web) alike. `Date.now` is spied rather
- * than waiting out the real 30s TTL.
- */
+/** The module-level ST cache must never answer with text from a project that has since been edited. */
 
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 import type { Edge, Node } from '@xyflow/react'
@@ -26,10 +15,6 @@ import {
   type ProjectStTranspiler,
   transpileProjectToST,
 } from '../graphical-context'
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const emptyProject: PLCProjectData = {
   dataTypes: [],
@@ -90,8 +75,7 @@ function advanceClockBy(ms: number): void {
 }
 
 beforeEach(() => {
-  // The cache lives at module scope, so one case's ST would otherwise answer
-  // the next case's question.
+  // Cache is module-scoped; clear it so one case's ST doesn't leak into the next.
   invalidateSTCache()
 })
 
@@ -99,14 +83,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// ---------------------------------------------------------------------------
-// transpileProjectToST
-// ---------------------------------------------------------------------------
-
 describe('transpileProjectToST', () => {
   it('transpiles once and serves the cached ST for the rest of a chat turn', async () => {
-    // A chat send asks for the whole project's ST several times over; without
-    // the cache that is one full transpile per POU read.
     const { transpile, callCount } = countingTranspiler(['PROGRAM Main\nEND_PROGRAM'])
 
     const first = await transpileProjectToST(emptyProject, transpile)
@@ -129,8 +107,7 @@ describe('transpileProjectToST', () => {
   })
 
   it('reuses the cached ST for the same pous and dataTypes references inside the TTL', async () => {
-    // Callers hand over `state.project.data`; a fresh wrapper around unchanged
-    // arrays (nothing edited) must still hit the cache.
+    // Cache keys on array reference; a fresh wrapper around the same unchanged arrays must still hit it.
     const { transpile, callCount } = countingTranspiler(['ONCE'])
     await transpileProjectToST(emptyProject, transpile)
 
@@ -141,8 +118,7 @@ describe('transpileProjectToST', () => {
   })
 
   it('transpiles again for a different pous reference even inside the TTL', async () => {
-    // Immer hands out a new `pous` array on every POU edit, so an edited
-    // project can never be answered with the ST of the one before the edit.
+    // Immer hands out a new `pous` array on every edit, so cache-by-reference catches it.
     const { transpile, callCount } = countingTranspiler(['BEFORE THE EDIT', 'AFTER THE EDIT'])
     await transpileProjectToST(emptyProject, transpile)
 
@@ -170,14 +146,12 @@ describe('transpileProjectToST', () => {
   })
 
   it('answers null when no transpiler is wired up and nothing is cached', async () => {
-    // The desktop and the web reach the transpiler differently; a build that
-    // has not wired one yet must read as "no ST", not as an empty project.
+    // A build with no transpiler wired must read as "no ST", not as an empty project.
     expect(await transpileProjectToST(emptyProject)).toBeNull()
   })
 
   it('keeps answering the last good ST when a later refresh cannot produce any', async () => {
-    // Stale code is still the user's code. Dropping to null here would make
-    // every graphical POU look empty the moment one transpile hiccupped.
+    // Dropping to null here would make every graphical POU look empty on one bad transpile.
     const { transpile } = countingTranspiler(['GOOD', null])
     await transpileProjectToST(emptyProject, transpile)
 
@@ -191,8 +165,7 @@ describe('transpileProjectToST', () => {
   })
 
   it('swallows a transpiler rejection rather than propagating it to the tool layer', async () => {
-    // `read_pou_body` relies on this never throwing: a dead worker has to
-    // surface as a failed tool result, not as a crashed chat turn.
+    // `read_pou_body` relies on this never throwing: a dead worker must surface as a failed tool result.
     const rejecting: ProjectStTranspiler = () => Promise.reject(new Error('worker died'))
 
     expect(await transpileProjectToST(emptyProject, rejecting)).toBeNull()
@@ -210,8 +183,7 @@ describe('transpileProjectToST', () => {
 
 describe('invalidateSTCache', () => {
   it('drops the text, not just its timestamp, so an edited diagram cannot answer as the old one', async () => {
-    // If only the timestamp were cleared, a failed transpile after an edit
-    // would fall back to ST describing a project that no longer exists.
+    // Clearing only the timestamp would let a failed transpile fall back to stale ST.
     const rejecting: ProjectStTranspiler = () => Promise.reject(new Error('worker died'))
     await transpileProjectToST(emptyProject, countingTranspiler(['BEFORE THE EDIT']).transpile)
 
@@ -220,10 +192,6 @@ describe('invalidateSTCache', () => {
     expect(await transpileProjectToST(emptyProject, rejecting)).toBeNull()
   })
 })
-
-// ---------------------------------------------------------------------------
-// extractPouST
-// ---------------------------------------------------------------------------
 
 describe('extractPouST', () => {
   const program = 'PROGRAM Main\n  a := 1;\nEND_PROGRAM'
@@ -236,8 +204,7 @@ describe('extractPouST', () => {
   })
 
   it('extracts a function block by its own keyword pair', () => {
-    // PROGRAM is a prefix of nothing, but FUNCTION is a prefix of
-    // FUNCTION_BLOCK — picking the wrong keyword returns the wrong POU's code.
+    // FUNCTION is a prefix of FUNCTION_BLOCK — the wrong keyword returns the wrong POU's code.
     expect(extractPouST(whole, 'Debounce', 'function-block')).toBe(functionBlock)
   })
 
@@ -246,8 +213,7 @@ describe('extractPouST', () => {
   })
 
   it('answers an empty string for a POU the transpiler did not emit', () => {
-    // The caller reads this as "no ST for this POU" and says so, instead of
-    // handing the model an empty body.
+    // Caller reads '' as "no ST for this POU", not as an empty body.
     expect(extractPouST(whole, 'Missing', 'program')).toBe('')
   })
 
@@ -256,17 +222,12 @@ describe('extractPouST', () => {
   })
 
   it('treats regex metacharacters in a POU name as literal text', () => {
-    // A name the ST transpiler mangles into something regex-flavoured must not
-    // turn the extraction into a wildcard that grabs a neighbouring POU.
+    // A regex-flavoured POU name must not turn the extraction into a wildcard.
     const st = 'PROGRAM A.B\n  x := 1;\nEND_PROGRAM\n\nPROGRAM AXB\n  y := 2;\nEND_PROGRAM'
 
     expect(extractPouST(st, 'A.B', 'program')).toBe('PROGRAM A.B\n  x := 1;\nEND_PROGRAM')
   })
 })
-
-// ---------------------------------------------------------------------------
-// Ladder layout metadata
-// ---------------------------------------------------------------------------
 
 describe('generateLadderLayoutMetadata', () => {
   it('says the diagram is empty rather than emitting a header with nothing under it', () => {
@@ -274,8 +235,7 @@ describe('generateLadderLayoutMetadata', () => {
   })
 
   it('lists contacts, blocks and coils left to right, which is execution order in ladder', () => {
-    // The nodes arrive in whatever order the editor stored them; presenting
-    // them unsorted describes a rung that reads backwards.
+    // Nodes arrive in storage order; presenting them unsorted describes a rung that reads backwards.
     const metadata = generateLadderLayoutMetadata(
       ladderFlow([
         rung({
@@ -325,7 +285,7 @@ describe('generateLadderLayoutMetadata', () => {
       ]),
     )
 
-    // The parallel node itself is not an element, so the count stays at 1.
+    // A parallel node is not itself an element, so the count stays at 1.
     expect(metadata).toContain('Rung 1 [id=rung-1]: 1 elements — Motor seal-in [has parallel branches]')
   })
 
@@ -337,18 +297,13 @@ describe('generateLadderLayoutMetadata', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// FBD layout metadata
-// ---------------------------------------------------------------------------
-
 describe('generateFBDLayoutMetadata', () => {
   it('says the diagram is empty rather than emitting a header with nothing under it', () => {
     expect(generateFBDLayoutMetadata(fbdFlow([]))).toBe('(* Empty FBD diagram *)')
   })
 
   it('lists blocks in execution order with the sources feeding each one', () => {
-    // In FBD, position carries no meaning — executionOrder does. Listing the
-    // blocks by array order would describe a program that runs differently.
+    // In FBD, position carries no meaning — executionOrder does.
     const metadata = generateFBDLayoutMetadata(
       fbdFlow(
         [
@@ -398,8 +353,7 @@ describe('generateFBDLayoutMetadata', () => {
   })
 
   it('marks an output variable nothing drives', () => {
-    // An unconnected output is a real defect in the diagram; it has to reach
-    // the model rather than being rendered as if it were wired.
+    // An unconnected output is a real defect; it must reach the model, not render as if wired.
     const metadata = generateFBDLayoutMetadata(fbdFlow([node('out1', 'output-variable', {})]))
 
     expect(metadata).toContain('Output variable: "???" <- ?')
@@ -417,10 +371,6 @@ describe('generateFBDLayoutMetadata', () => {
     expect(metadata).toContain('Block "SUB" instance "" (exec #0)')
   })
 })
-
-// ---------------------------------------------------------------------------
-// generateGraphicalContext
-// ---------------------------------------------------------------------------
 
 describe('generateGraphicalContext', () => {
   it('leads with the POU identity, then the ST, then the layout, then the project', () => {
@@ -448,8 +398,7 @@ describe('generateGraphicalContext', () => {
   })
 
   it.each([null, ''])('says the ST is unavailable (%p) instead of presenting the POU as empty', (stCode) => {
-    // Omitting the section would read as "this POU has no code" — the single
-    // most damaging thing the model could be told about a working diagram.
+    // Omitting the section would read as "this POU has no code".
     const context = generateGraphicalContext('Rungs', 'program', 'ld', stCode, '(* layout *)', '')
 
     expect(context).toContain('(* ST transpilation unavailable — using layout metadata only *)')

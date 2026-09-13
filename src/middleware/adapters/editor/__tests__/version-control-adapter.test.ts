@@ -1,19 +1,5 @@
-/**
- * The editor's version-control adapter.
- *
- * This file exists for one reason above all others: the UI decides what to show by asking
- * `error instanceof SwitchBranchCarryConflictError`, and IPC destroys that. A class sent
- * through a structured clone arrives as a plain object, `instanceof` answers false, and a
- * blocked branch switch stops offering the conflict dialog and starts looking like a
- * button that does nothing at all. So the assertions below are about identity, not
- * message text — a test that only checked the wording would still pass while the feature
- * was broken.
- *
- * The rest guards the two things that are easy to get subtly wrong: a stale main process
- * must produce an error rather than take the workspace down with it, and the `branch`
- * argument on the working-tree calls must be swallowed here exactly as the web adapter
- * swallows it.
- */
+// IPC's structured clone strips the class off a thrown error, so the assertions below check
+// `instanceof`, not message text — a wording-only test would still pass while the feature was broken.
 
 import {
   MergeConflictError,
@@ -150,9 +136,8 @@ describe('a stale main process fails as an error, not as a crash', () => {
   it('reports the missing channel by name', async () => {
     delete bridge.edgeVcListBranches
 
-    // A renderer bundle is not always paired with the main bundle beside it. Reading
-    // straight through would raise "... is not a function" inside a load effect and take
-    // the whole workspace down — which has already happened once, on the cloud list.
+    // A renderer bundle isn't always paired with the main bundle beside it; reading straight
+    // through would raise "... is not a function" and take the whole workspace down.
     await expect(createEditorVersionControlAdapter().listBranches('p1')).rejects.toThrow(
       /edge-vc:list-branches is missing/,
     )
@@ -226,9 +211,7 @@ describe('the graphical diff', () => {
 
     const result = vc.computeGraphicalDiff('<before/>', '<after/>', 'pous/programs/main.xml')
 
-    // Synchronous by contract, and pure computation over content the caller already
-    // holds — sending a whole LD program across IPC to diff it would be slower and no
-    // more correct. Shared module, so the desktop and the web produce the same diff.
+    // Synchronous, pure computation over content the caller already holds — no need to cross IPC.
     expect(computeGraphicalDiffImpl).toHaveBeenCalledWith('<before/>', '<after/>', 'pous/programs/main.xml')
     expect(result).toEqual({ isLadder: true })
   })
@@ -278,11 +261,7 @@ describe('the merge conflict crosses IPC as itself', () => {
   })
 })
 
-/**
- * The envelope arrives over IPC, where its declared type checked nothing. `unwrap`
- * reads `result.ok` and then switches on `failure.kind`, and both used to be read off
- * whatever the main process happened to send.
- */
+// The envelope arrives over IPC, where its declared type checks nothing at runtime.
 describe('an envelope this build cannot read', () => {
   it.each([
     ['nothing at all', null],
@@ -293,9 +272,7 @@ describe('an envelope this build cannot read', () => {
   ])('fails with something sayable rather than a TypeError: %s', async (_label, answer) => {
     bridge.edgeVcListBranches.mockResolvedValueOnce(answer)
 
-    // The wording matters here: `result.ok` on `null` raises a TypeError whose message
-    // is about reading a property, which reaches the user as a toast that explains
-    // nothing about Autonomy Edge.
+    // `result.ok` on `null` would otherwise raise a TypeError that says nothing about Autonomy Edge.
     await expect(createEditorVersionControlAdapter().listBranches('p1')).rejects.toThrow(
       'Autonomy Edge returned an answer this build of the editor cannot read.',
     )

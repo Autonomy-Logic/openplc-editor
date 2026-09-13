@@ -48,13 +48,7 @@ function escapeForRegExp(s: string): string {
 }
 
 export type AIChatPanelProps = {
-  /**
-   * Turns the project into whole-program ST, so the model can read a ladder or
-   * FBD diagram as code. Platform-supplied: the transpiler runs on a Web Worker
-   * in the browser and in the main process on the desktop. Omitted, graphical
-   * POUs simply report that their ST is unavailable — which is what this panel
-   * already showed whenever a transpile failed.
-   */
+  /** Whole-program ST transpiler; when omitted, graphical POUs report their ST as unavailable. */
   transpileProject?: ProjectStTranspiler
 }
 
@@ -92,53 +86,24 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
   } = useAssistantAccess(capabilities, edgeAccount)
   const [signInOpen, setSignInOpen] = useState(false)
   const queryClient = useQueryClient()
-  /**
-   * Which project on Autonomy Edge this conversation belongs to, or nothing.
-   *
-   * The web used to read the router's `?project_id=`; the desktop has no router
-   * and does not depend on `@tanstack/react-router`. `project.meta.path` carries
-   * the same identifier on both — but ONLY for a project that lives on Edge. On
-   * the desktop it is an absolute path on disk for a local project, and sending
-   * that as a project id asks the backend to attach a conversation to a project
-   * it has never heard of: it answers 500 and the whole message fails. Found by
-   * driving the desktop build against staging, where every request from a local
-   * project came back "Internal server error".
-   *
-   * Absent is the correct answer for a local project rather than a degradation:
-   * the conversation store is keyed by Edge project, a project on disk has no
-   * entry in it, and the backend simply keeps the conversation unattached.
-   */
+  // A local project's path is not an Edge project id; sending it makes the backend 500.
   const projectPath = useOpenPLCStore((s) => s.project.meta.path)
   const projectId = isRemoteProjectPath(projectPath) ? projectPath : undefined
   const abortRef = useRef<AbortController | null>(null)
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
   const [toolStatuses, setToolStatuses] = useState<ToolStatusEntry[]>([])
-  /**
-   * Whether the current AI turn produced any reviewable diff hunks. Latched
-   * true while `pendingDiffs` is non-empty and reset at the start of each turn
-   * (and on Keep/Undo). Lets us tell "this turn never made diffs" (keep the
-   * bar) apart from "every diff has now been individually accepted/rejected"
-   * (hide the bar) — see `showKeepUndoBar` and the finalize effect below.
-   */
+  // Latched once this turn produces diff hunks; reset per turn and on Keep/Undo.
   const [hadDiffsThisTurn, setHadDiffsThisTurn] = useState(false)
 
-  // Number of POUs with unresolved diff hunks. Drives both the Keep/Undo bar
-  // visibility and the auto-finalize when the user resolves the last hunk.
   const pendingDiffCount = Object.keys(aiState.pendingDiffs).length
 
-  // Latch `hadDiffsThisTurn` once hunks appear. (Resolving them later sets the
-  // count back to 0 but leaves the latch set until the next turn / Keep / Undo.)
   useEffect(() => {
     if (pendingDiffCount > 0 && !hadDiffsThisTurn) {
       setHadDiffsThisTurn(true)
     }
   }, [pendingDiffCount, hadDiffsThisTurn])
 
-  /**
-   * Snapshot of every POU-dependent slice, captured before the agentic loop runs.
-   * On "Undo changes" we restore all of these atomically so orphaned tabs/editors/flows
-   * don't survive the rollback (the old code only captured `project.data`).
-   */
+  // Every POU-dependent slice must be captured, or Undo leaves orphaned tabs/editors/flows.
   type AICheckpoint = {
     projectData: ProjectSlice['project']['data']
     tabs: TabsSlice['tabs']
@@ -152,20 +117,16 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
   }
   const projectCheckpointRef = useRef<AICheckpoint | null>(null)
 
-  // Derive the active POU name from the editor
   const pouName = editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.meta.name : null
   const language = editor.type === 'plc-textual' ? editor.meta.language : undefined
 
-  // Track which editor is active (for context building, not conversation routing)
   useEffect(() => {
     if (pouName && pouName !== aiState.activeEditorPou) {
       setActiveEditorPou(pouName)
     }
   }, [pouName, aiState.activeEditorPou, setActiveEditorPou])
 
-  // Hydrate ACU usage + subscription source once the account is known good, so the
-  // tier badge (and any usage readout) reflects the live plan immediately on
-  // open instead of waiting for the first chat send to refresh it.
+  // Hydrate entitlements on open so the tier badge doesn't wait for the first send.
   const didHydrateEntitlementsRef = useRef(false)
   useEffect(() => {
     if (!ai || !accountReady) return
@@ -177,23 +138,13 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         setUsage(usage.acu.used, usage.acu.monthlyLimit)
         setSubscription(entitlements.source.subscriptionStatus, null, entitlements.source.planSlug)
       } catch {
-        // Non-critical — the badge falls back to the default tier until the
-        // next successful send refreshes entitlements.
+        // Non-critical; the next successful send refreshes entitlements.
       }
     })()
   }, [ai, accountReady, setUsage, setSubscription])
 
-  // Project-scoped messages (single conversation)
   const messages = aiState.messages
 
-  /**
-   * Sticky-bottom transcript, same contract as the Console
-   * (`frontend/components/_organisms/console/index.tsx`): follow the tail
-   * while attached, append silently once the user scrolls up, re-attach when
-   * they scroll back down. `active` is the turn-in-flight signal that drives
-   * the per-frame re-assert; see the hook for why attachment is decided from
-   * gestures rather than from scroll-event geometry.
-   */
   const {
     containerRef: messagesContainerRef,
     contentRef: messagesContentRef,
@@ -201,19 +152,12 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     followTail,
   } = useStickToBottom(!!streamingMessageId || aiState.isAgenticLoopRunning)
 
-  /**
-   * Pin on new content. `useLayoutEffect` so the write lands before paint.
-   * Depends on the streaming id and tool-status list as well as the messages
-   * so tool blocks and the "AI is working" row follow the tail too.
-   */
+  // useLayoutEffect so the pin lands before paint; tool rows must follow the tail too.
   useLayoutEffect(() => {
     pin()
   }, [messages, streamingMessageId, toolStatuses, aiState.isAgenticLoopRunning, pin])
 
-  // Conversation loading: when the active conversationId changes to a value
-  // that hasn't been loaded yet, fetch the transcript and replace the slice's
-  // messages in one shot. The lastLoadedRef guards against re-loading on every
-  // refetch — only transitions trigger a replace.
+  // Only conversationId transitions replace messages; refetches must not.
   const lastLoadedConversationRef = useRef<string | null>(null)
   const { data: loadedConversation, isLoading: isLoadingConversationData } = useConversation(aiState.conversationId)
   useEffect(() => {
@@ -246,8 +190,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
 
   const handleSelectConversation = useCallback(
     (id: string) => {
-      // Setting the id triggers the useConversation query above. Clearing
-      // messages here gives instant feedback while the fetch resolves.
       setConversationId(id)
       replaceMessages([])
       if (ai) trackConversationLoaded(ai, { conversationId: id })
@@ -266,9 +208,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     if (pouName) {
       window.dispatchEvent(new CustomEvent('ai-accept-all-hunks', { detail: { pouName } }))
     }
-    // Also clear any pending diffs on non-active POUs (the event above only
-    // reaches the active editor; other POUs may have pending entries from the
-    // same agentic turn that need clearing too).
+    // The event only reaches the active editor; other POUs may hold pending diffs too.
     clearAllPendingDiffs()
     void executeSaveProject(projectPort, capabilities)
   }, [pouName, projectPort, capabilities, clearAllPendingDiffs])
@@ -280,8 +220,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       window.dispatchEvent(new CustomEvent('ai-reject-all-hunks', { detail: { pouName } }))
     }
 
-    // Restore every POU-dependent slice atomically so tabs, editor models, flows,
-    // library entries, and file save-state can't reference POUs that no longer exist.
+    // Restore every POU-dependent slice atomically so nothing references a deleted POU.
     openPLCStoreBase.setState((state) => ({
       ...state,
       project: { ...state.project, data: structuredClone(cp.projectData) },
@@ -295,10 +234,8 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       files: structuredClone(cp.files),
     }))
 
-    // Dispose Monaco text models whose POU no longer exists post-restore. Removing them
-    // from the `editors[]` slice isn't enough — Monaco's own path-keyed registry keeps them
-    // alive and they'd leak memory (or worse, re-surface if a new POU is created with the
-    // same name). Use a word-boundary match so "Main" doesn't accidentally protect "MainCalc".
+    // Monaco keeps its own model registry; dispose models for POUs that no longer exist.
+    // Word-boundary match so "Main" doesn't protect "MainCalc".
     const validModelNames = new Set(cp.editors.map((e) => e.meta.name))
     for (const model of monaco.editor.getModels()) {
       const uri = model.uri.toString()
@@ -312,15 +249,10 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     }
 
     projectCheckpointRef.current = null
-    // Checkpoint restore reverts every POU-dependent slice, so every pending
-    // diff entry is now referring to text that no longer exists. Clear them all.
     clearAllPendingDiffs()
     setHadDiffsThisTurn(false)
     setAgenticLoopRunning(false)
-    // Append revert note to the last assistant message. Handle both string
-    // content (plain text) and block array content (post-DOPE-3) by extracting
-    // the prose, appending the marker, and rewriting as a single text block —
-    // mirrors what a reload would produce.
+    // Append the revert note as a single text block, as a reload would produce.
     const lastMsg = aiState.messages[aiState.messages.length - 1]
     if (lastMsg?.role === 'assistant') {
       const existingText =
@@ -337,23 +269,18 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
 
   const handleSend = useCallback(
     async (userMessage: string) => {
-      // No transport, no turn. The composer is disabled in this state, so this
-      // is a guard rather than a path a user can reach.
+      // Guard only: the composer is disabled in this state.
       if (!ai) {
         setAIError('AI is not available on this platform.')
         return
       }
 
-      // The composer is disabled in this state; a guard, not a path a user can reach.
       if (needsSignIn) return
 
-      // Sending re-engages auto-follow regardless of where the user had
-      // scrolled to: they just asked a question, so they want to see the
-      // answer. Mirrors the Console's one-shot `followRequestId` kick.
+      // Sending re-engages auto-follow wherever the user had scrolled to.
       followTail()
 
-      // Snapshot every POU-dependent slice before tool execution. On Undo we restore
-      // all of these atomically so no slice can orphan-reference a deleted POU.
+      // Snapshot every POU-dependent slice so Undo can restore them atomically.
       const snapshotState = openPLCStoreBase.getState()
       projectCheckpointRef.current = {
         projectData: structuredClone(snapshotState.project.data),
@@ -366,12 +293,9 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         libraries: structuredClone(snapshotState.libraries),
         files: structuredClone(snapshotState.files),
       }
-      // New turn: reset the diff latch so a prior turn's resolved diffs don't
-      // make this turn's Keep/Undo bar disappear prematurely.
       setHadDiffsThisTurn(false)
       setAgenticLoopRunning(true)
 
-      // Add user message to store
       const userMsg = {
         id: uuidv4(),
         role: 'user' as const,
@@ -380,7 +304,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       }
       addMessage(userMsg)
 
-      // Create placeholder for assistant response
       const assistantMsgId = uuidv4()
       const assistantMsg = {
         id: assistantMsgId,
@@ -392,34 +315,21 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       setStreamingMessageId(assistantMsgId)
       setToolStatuses([])
 
-      // Build messages array for API. Skip empty assistant placeholders
-      // (`content: ''` or `content: []`) which exist mid-stream — sending
-      // them back to Anthropic would confuse the model.
+      // Skip empty mid-stream assistant placeholders; the model must not see them.
       const storeState = openPLCStoreBase.getState()
       const hasContent = (content: ChatMessage['content']) =>
         typeof content === 'string' ? content.length > 0 : content.length > 0
-      // Heal broken tool_use/tool_result pairings before sending. A
-      // conversation interrupted mid-agentic-loop can be persisted ending in a
-      // tool_use with no matching tool_result; re-sending that verbatim makes
-      // Anthropic 400 on every resume. The backend repairs this too — this is
-      // a client-side guard so a stale build can't send a broken sequence.
+      // A transcript ending in an unmatched tool_use makes the API 400 on every resume.
       const apiMessages: AIChatMessage[] = repairToolUseSequence(
         storeState.ai.messages
           .filter((m) => m.role === 'user' || (m.role === 'assistant' && hasContent(m.content)))
           .map((m) => ({ role: m.role, content: m.content })),
       )
 
-      // Resolve language from POU data
       const pou = pouName ? storeState.project.data.pous.find((p) => p.name === pouName) : undefined
       const pouLang = pou?.body.language ?? language ?? 'st'
 
-      // Collect full project context with the active editor POU highlighted.
-      //
-      // Graphical POUs (LD/FBD/SFC) store an XYFlow graph, not source, so they
-      // are represented by their transpiled ST. One whole-project transpile
-      // serves every graphical POU — the previous code transpiled the same
-      // program and then threw away everything except the active POU, leaving
-      // every other diagram in the project represented by variable names alone.
+      // One whole-project transpile serves every graphical POU, not only the active one.
       const graphicalPous = storeState.project.data.pous.filter((p) => isGraphicalLanguage(p.body.language))
       let graphicalSt: Map<string, string> | undefined
       if (graphicalPous.length > 0) {
@@ -455,7 +365,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         pouContext = projectCtx
       }
 
-      // Track telemetry
       trackChatMessage(ai, {
         language: pouLang,
         model: 'sonnet',
@@ -463,7 +372,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         activeEditor: pouName,
       })
 
-      // Run the agentic loop with tool-use support
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
@@ -471,30 +379,19 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       setAILoading(true)
       setAIError(null)
 
-      // Track the message currently being streamed into. Starts as the
-      // placeholder created above for iteration 1; resets at each
-      // iteration_assistant_complete; the next text_delta after a reset
-      // creates a fresh assistant placeholder so each iteration becomes its
-      // own bubble (matches the on-reload view).
+      // Reset at each iteration_assistant_complete so every iteration gets its own bubble.
       let currentAssistantId: string | null = assistantMsgId
       let accumulated = ''
-      // Tracks whether the agentic loop yielded a billing error event. When
-      // true, the post-loop refresh path skips its "clear billingError on
-      // success" step — otherwise the modal pops for ~200ms before the
-      // refresh promise resolves and silently dismisses it.
+      // The post-loop refresh must not clear a billing error this very turn raised.
       let loopHadBillingError = false
       try {
-        // Read the latest conversationId from the slice on each send (might have
-        // been set by a prior turn's `conversation_started` event).
         const activeConversationId = openPLCStoreBase.getState().ai.conversationId
         const fullRequest: AIChatRequest = {
           messages: apiMessages,
           pouContext,
           language: (pouLang as AIChatRequest['language']) ?? undefined,
           model: 'sonnet',
-          // Backend persistence: at least one of the two must be present.
-          // Both are optional from the backend's perspective — if neither is
-          // sent, /ai/chat falls through to its stateless behavior.
+          // Without either id, /ai/chat falls through to its stateless behaviour.
           ...(activeConversationId ? { conversationId: activeConversationId } : {}),
           ...(projectId ? { projectId } : {}),
         }
@@ -504,14 +401,9 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
           transpileProject,
         })) {
           if (event.type === 'conversation_started') {
-            // Mark the just-created conversation as "already loaded" BEFORE
-            // setConversationId fires the useConversation query — otherwise
-            // the load effect would refetch the half-persisted transcript
-            // (only the user turn at this point) and replaceMessages would
-            // wipe the streaming placeholder + any text already received.
+            // Mark loaded BEFORE setConversationId, or the load effect wipes the streaming placeholder.
             lastLoadedConversationRef.current = event.conversationId
             setConversationId(event.conversationId)
-            // The new conversation isn't in the project's list yet; refresh.
             if (projectId) {
               void queryClient.invalidateQueries({ queryKey: ['ai-conversations', projectId] })
             }
@@ -541,12 +433,9 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
 
           if (event.type === 'iteration_assistant_complete') {
             if (currentAssistantId) {
-              // Freeze the streaming string into a block array so reload
-              // can restore the full assistant turn (text + tool_use).
               updateMessageContent(currentAssistantId, event.blocks)
             } else {
-              // No streaming placeholder for this iteration (rare — the
-              // model went straight to tool calls). Add a message wholesale.
+              // The model went straight to tool calls; no placeholder exists.
               addMessage({
                 id: uuidv4(),
                 role: 'assistant',
@@ -573,11 +462,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
           }
 
           if (event.type === 'iteration_tool_results_complete') {
-            // Persist tool_result blocks as a user-role message so the
-            // agentic-loop transcript survives reload. The visible UX
-            // doesn't render these in the bubble flow — toolStatuses
-            // already shows the live spinner row, and the renderer hides
-            // tool_result blocks.
+            // Persisted as a user-role message so the transcript survives reload; the renderer hides it.
             addMessage({
               id: uuidv4(),
               role: 'user',
@@ -588,11 +473,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
 
           if (event.type === 'error') {
             if (currentAssistantId && !accumulated) {
-              // For 402 billing blocks, compose user-facing copy from the
-              // structured payload — the backend `CreditGuard` message still
-              // references the descoped Haiku model quick-switch (DOPE-288)
-              // and would confuse the user. For all other errors, surface
-              // the message as-is.
+              // Billing copy is composed here; the backend message is not user-facing.
               let bubbleText: string
               if (noteRefusal(event.status)) {
                 bubbleText = 'Sign in to Autonomy Edge to use the assistant.'
@@ -608,10 +489,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
               }
               updateMessageContent(currentAssistantId, bubbleText)
             }
-            // The agentic-loop forwards `AIRequestError.billing` through the
-            // error event when a 402 surfaces mid-loop. Lift it onto the slice
-            // so AcuExhaustionModal pops — without this, the user only sees
-            // the bubble error and never gets the upgrade CTA.
             if (event.billing) {
               setBillingError(event.billing)
               loopHadBillingError = true
@@ -619,19 +496,11 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
           }
         }
 
-        // Refresh ACU usage + subscription source after the loop completes.
-        // Done once per chat send (not per agentic iteration) — the loop can
-        // run many tool round-trips per user prompt; refreshing each iteration
-        // would hammer the chassis pointlessly. `/me/entitlements` doesn't
-        // expose `currentPeriodEnd` today; DOPE-285 can add a separate
-        // /me/subscription fetch if its modal copy needs the reset date.
+        // Once per send, not per agentic iteration.
         try {
           const [usage, entitlements] = await Promise.all([ai.fetchUsage(), ai.fetchEntitlements()])
           setUsage(usage.acu.used, usage.acu.monthlyLimit)
           setSubscription(entitlements.source.subscriptionStatus, null, entitlements.source.planSlug)
-          // Clear any prior 402 billing block on a clean send — but NOT when
-          // this very turn produced one (otherwise the exhaustion modal pops
-          // and immediately dismisses when this refresh resolves).
           if (!loopHadBillingError) {
             setBillingError(null)
           }
@@ -642,9 +511,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         if (error instanceof AIRequestError) {
           noteRefusal(error.status)
           setAIError(error.message)
-          // Any structured billing/limit payload (402 insufficient_acu /
-          // subscription_inactive, or 429 rate_limit_exceeded) pops the
-          // exhaustion modal with the right copy + CTA.
           if (error.billing) {
             setBillingError(error.billing)
           }
@@ -653,8 +519,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         }
       }
 
-      // If we never streamed any text and never got an iteration completion
-      // (i.e. the original placeholder is still empty), surface a fallback.
       const finalState = openPLCStoreBase.getState().ai
       const stillEmptyPlaceholder = finalState.messages.find(
         (m) => m.id === assistantMsgId && (m.content === '' || (Array.isArray(m.content) && m.content.length === 0)),
@@ -705,27 +569,17 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
   }, [clearConversation])
 
   const hasMutatingSuccess = toolStatuses.some((s) => s.status === 'success' && isMutatingTool(s.toolName))
-  // A non-diff mutation (variable/datatype CRUD, POU deletion) leaves changes
-  // that have no per-hunk controls, so they can only be kept/reverted from the
-  // bar — keep it visible even after all hunks are resolved.
+  // Non-diff mutations have no per-hunk controls; only the bar can keep/revert them.
   const hasNonDiffMutation = toolStatuses.some((s) => s.status === 'success' && isNonDiffMutatingTool(s.toolName))
 
-  // Show the Keep/Undo bar while there are unresolved AI changes. Once a
-  // diff-only turn has every hunk individually accepted/rejected
-  // (`pendingDiffCount === 0` after `hadDiffsThisTurn` latched), there's
-  // nothing left for the bulk bar to act on, so it hides. Turns that produced
-  // no diffs (`!hadDiffsThisTurn`) or any non-diff mutation keep the bar.
+  // Hides once a diff-only turn has every hunk resolved individually.
   const showKeepUndoBar =
     !aiState.isAgenticLoopRunning &&
     hasMutatingSuccess &&
     (pendingDiffCount > 0 || hasNonDiffMutation || !hadDiffsThisTurn)
 
-  // Finalize a diff-only turn once the user resolves the last hunk: persist the
-  // per-hunk decisions (same as "Keep changes") and clear the turn state so the
-  // bar — already hidden by `showKeepUndoBar` — stays gone. Gated on
-  // `!hasNonDiffMutation` so turns with structural changes still require an
-  // explicit Keep/Undo, and on `toolStatuses.length` so Keep/Undo's own
-  // clearing doesn't re-trigger a save.
+  // Auto-finalize a diff-only turn on the last resolved hunk. The
+  // `toolStatuses.length` gate stops Keep/Undo's own clearing from re-triggering a save.
   useEffect(() => {
     if (
       !aiState.isAgenticLoopRunning &&
@@ -751,7 +605,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
 
   return (
     <div className='flex h-full w-full flex-col overflow-hidden rounded-[10px] border border-neutral-200 bg-white dark:border-neutral-850 dark:bg-neutral-950'>
-      {/* Header */}
       <header className='flex h-10 items-center gap-2 border-b border-neutral-100 pl-3 pr-2 dark:border-white/5'>
         <span className='text-[13px] font-semibold tracking-[0.01em] text-neutral-900 dark:text-white'>AI Chat</span>
         <AITierBadge />
@@ -766,8 +619,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
             Clear
           </button>
         )}
-        {/* Hidden outright on a platform with no conversation store — an empty
-            switcher would just be a dead control. */}
         {ai?.conversations && (
           <AIConversationList
             projectId={projectId}
@@ -798,19 +649,11 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         </button>
       </header>
 
-      {/* Messages */}
       <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-        {/* `overflow-anchor:none`: we pin the tail ourselves, and the browser's
-            scroll anchoring moves `scrollTop` on its own as the streamed
-            markdown reflows, which fights that pin. */}
+        {/* `overflow-anchor:none`: browser scroll anchoring fights our own tail pin. */}
         <div
           ref={messagesContainerRef}
-          // A scrollable region has to be reachable by keyboard, and the
-          // transcript is the one part of this panel a keyboard user needs to
-          // move through independently of the composer. It also makes the
-          // hook's PageUp/Home/ArrowUp detach real: `keydown` bubbles up from
-          // the focused element, so without a focus target of its own the
-          // container never saw those keys.
+          // Focusable so the hook's PageUp/Home/ArrowUp detach actually receives keydown.
           tabIndex={0}
           role='log'
           aria-label='Conversation'
@@ -875,8 +718,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         )}
       </div>
 
-      {/* No session, no assistant: the way in sits where the answer would have been.
-          Where the build opens the sign-in dialog by itself, no second one is offered. */}
+      {/* Where the build opens the sign-in dialog by itself, no second one is offered. */}
       {needsSignIn && (
         <AIChatSignInNotice
           reason={signInReason}
@@ -884,7 +726,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         />
       )}
 
-      {/* Input */}
       <AIChatInput
         onSend={(msg) => void handleSend(msg)}
         onCancel={handleCancel}

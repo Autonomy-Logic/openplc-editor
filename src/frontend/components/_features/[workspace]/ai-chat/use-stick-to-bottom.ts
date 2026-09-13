@@ -1,23 +1,12 @@
 import { type RefObject, useCallback, useEffect, useRef } from 'react'
 
-/**
- * Pixel slack for the "scrolled to bottom" check. Sub-pixel layout
- * (fractional `scrollTop` on hi-DPI displays, `clientHeight` rounding) can
- * leave `scrollHeight - scrollTop - clientHeight` at 0.5–1.5 px even when the
- * user is visually at the bottom. Anything tighter than this and we detach
- * from auto-scroll on a phantom delta; wider and a real one-line scroll-up
- * wouldn't detach.
- */
+/** Pixel slack for the "scrolled to bottom" check — sub-pixel layout can leave a 0.5-1.5px gap even at the bottom. */
 export const STICK_THRESHOLD_PX = 4
 
 export interface StickToBottomHandle {
   /** Attach to the scrolling element. */
   containerRef: RefObject<HTMLDivElement>
-  /**
-   * Attach to the element that grows inside the scroller. A callback ref:
-   * that element only mounts once the transcript is non-empty, so an effect
-   * keyed on a plain ref would set its observer up before the node exists.
-   */
+  /** Attach to the element that grows inside the scroller. A callback ref, since it mounts late. */
   contentRef: (node: HTMLDivElement | null) => void
   /** Pin to the tail if auto-follow is currently engaged. */
   pin: () => void
@@ -28,35 +17,9 @@ export interface StickToBottomHandle {
 }
 
 /**
- * VSCode-console-style sticky bottom for a streaming transcript.
- *
- * The naive version of this — "on every `scroll` event, follow if the gap is
- * under a threshold" — is wrong for streamed content, and wrong in a way that
- * only shows up under load. `scroll` events are dispatched **asynchronously**,
- * on a frame after the write that caused them. While a response streams the
- * list keeps growing and the composer keeps resizing in between, so by the
- * time the handler runs the geometry no longer matches what was written: the
- * component's own scroll-to-bottom reads back as a large gap, is mistaken for
- * "the user scrolled up", and auto-follow switches off for the rest of the
- * turn. That is what made the panel stop following mid-answer and ignore the
- * scroll-to-bottom that should accompany sending a message.
- *
- * So attachment state is decided by *intent*, not by geometry sampled at an
- * arbitrary later moment:
- *
- * - **Detaching happens synchronously, in the gesture handlers.** A wheel-up,
- *   a downward touch drag, PageUp/Home/ArrowUp — each settles the flag before
- *   any pin can race it.
- * - **Re-attaching happens in the `scroll` handler.** Once detached nothing
- *   pins the view, so the geometry that event reports really is the user's
- *   own position and can be trusted.
- * - **Pinning re-asserts every frame while `active`.** The list's height also
- *   changes for reasons React never re-renders for — a markdown fence closing
- *   and reflowing, a code block gaining a scrollbar, web fonts landing — and a
- *   render-driven pin slides further behind on each of those.
- *
- * @param active - whether a response is currently streaming (drives the
- *   per-frame re-assert; outside a turn the layout-effect `pin` is enough).
+ * VSCode-console-style sticky bottom for a streaming transcript. Follow state is decided by user
+ * gesture (detach happens synchronously in the gesture handlers), not by geometry sampled from
+ * async `scroll` events, which lag behind streamed content and would cause false detaches.
  */
 export function useStickToBottom(active: boolean): StickToBottomHandle {
   const containerRef = useRef<HTMLDivElement>(null)

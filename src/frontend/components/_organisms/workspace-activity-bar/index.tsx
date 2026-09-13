@@ -51,12 +51,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
   const { closeProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
   const navigation = useNavigation()
 
-  /**
-   * Whether this build has an account slot at the foot of the bar at all.
-   *
-   * Deliberately not "is someone signed in": that would move the exit arrow on
-   * every sign-in and again on every sign-out. This is a property of the build.
-   */
+  // Deliberately a build property, not "is someone signed in": that would move the exit arrow on every sign-in/out.
   const hasAccountSlot = caps.hasEdgeAccount && edgeAccount !== undefined
 
   const isFBDEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'fbd'
@@ -132,30 +127,15 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
           </>
         )}
       </div>
-      {/* Foot of the bar: leaving the project, then who is signed in. The account
-          sits below the exit arrow because it is a destination, not a tool — the
-          same reasoning that keeps it out of the toolbox above the divider.
-
-          The bottom padding follows the account slot instead of being fixed. Where
-          there is no slot — a build with no Edge account, such as autonomy-node — the
-          exit arrow is still the last thing in the bar and keeps the `pb-10` it has
-          always had. Making room for a menu that build never renders had moved it
-          ~28px down the activity bar, a visible change to an existing control for no
-          reason. Where the account does render it is the last thing, and it wants the
-          smaller gap.
-
-          The slot is occupied on both sign-in states, so the arrow does not move when
-          someone signs in or out. */}
+      {/* Bottom padding follows the account slot: a build with no Edge account keeps the
+          exit arrow's original pb-10, so adding the slot never shifts it for that build. */}
       <div className={cn('flex w-full shrink-0 flex-col items-center gap-4', hasAccountSlot ? 'pb-3' : 'pb-10')}>
         <TooltipSidebarWrapperButton tooltipContent='Exit'>
           <ExitButton onClick={handleExitApplication} />
         </TooltipSidebarWrapperButton>
 
-        {/* `hasEdgeAccount`, NOT `hasAuthentication`: the autonomy-node build is
-            also authenticated but talks to its own API, where Edge's account
-            endpoints do not exist — this would offer a sign-in that cannot work. */}
-        {/* No tooltip on this one: the menu it opens already leads with the name
-            and email, so a hover label just repeats itself over the open menu. */}
+        {/* hasEdgeAccount, not hasAuthentication: autonomy-node is authenticated but talks to its own
+            API, where Edge's account endpoints don't exist. No tooltip: the menu already shows name/email. */}
         {caps.hasEdgeAccount && edgeAccount && accountStatus === 'signed-in' && accountUser && (
           <EdgeAccountMenu
             user={accountUser}
@@ -167,18 +147,11 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
           />
         )}
 
-        {/* The same slot, for a build that does not demand an account: the way in is
-            offered rather than imposed. Never rendered where the dialog is already
-            opening itself, so the web build is untouched. */}
+        {/* Same slot, for a build that doesn't demand an account: never rendered where the dialog
+            already opens itself, so the web build is untouched. */}
         {caps.hasEdgeAccount && edgeAccount && !caps.requiresEdgeAccount && accountStatus === 'signed-out' && (
           <TooltipSidebarWrapperButton tooltipContent='Sign in to Autonomy Edge'>
-            {/* `ActivityBarButton` and the exit arrow's own colour, not a bespoke
-                button: signed out, this is one control among the bar's others and has
-                no reason to look different from them. `size-5` is the interface icons'
-                default, and `#B4D0FE` is what `ExitButton` right above it uses.
-
-                An icon rather than an avatar with nobody in it — that falls back to
-                `?`, which reads as something being wrong rather than as a way in. */}
+            {/* size-5 and #B4D0FE match ExitButton above it; an icon rather than an empty-avatar '?'. */}
             <ActivityBarButton aria-label='Sign in to Autonomy Edge' onClick={() => setSignInDialogOpen(true)}>
               <LogIn className='size-5 text-[#B4D0FE]' />
             </ActivityBarButton>
@@ -186,16 +159,9 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
         )}
       </div>
 
-      {/* Gated on `signed-out` rather than `!user`, so a slow /auth/me never
-          flashes a sign-in prompt at someone who is already signed in.
-
-          `open` follows `requiresEdgeAccount`, not the signed-out state alone. Where
-          an account is required — the web editor, which can only reach a project
-          through Edge's API — a visitor who is not signed in has nothing to look at,
-          so the dialog opens by itself exactly as it always has. Where it is not —
-          the desktop editor, which opens local projects from disk and works offline —
-          the same dialog is reached from the same slot by asking for it. Forcing it
-          there would block an editor that needs nothing from Edge. */}
+      {/* Gated on signed-out rather than !user, so a slow /auth/me never flashes a sign-in prompt
+          at someone already signed in. `open` follows requiresEdgeAccount: forced open where an
+          account is required (web), opened on request otherwise (desktop, which works offline). */}
       {caps.hasEdgeAccount && edgeAccount && accountStatus === 'signed-out' && (
         <EdgeSignInModal
           open={caps.requiresEdgeAccount || signInDialogOpen}
@@ -203,11 +169,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
           account={edgeAccount}
           reason={accountSignedOutReason}
           onSignedIn={() => {
-            // Cleared, not left standing. The dialog disappears here only because the
-            // `signed-out` guard above unmounts it — the flag stays true, so the next
-            // time this build sees `signed-out` (a session that expires later in the
-            // same run) the dialog reopens on its own. On the desktop that is precisely
-            // what the comment above says must not happen.
+            // Cleared, not left standing: the flag must not force the dialog back open on a later expiry.
             setSignInDialogOpen(false)
             void refreshAccount()
           }}

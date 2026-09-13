@@ -17,10 +17,6 @@ function getMessageText(content: ChatMessage['content']): string {
     .join('\n')
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 type AIChatTurnProps = {
   turn: ChatTurn
   language?: string

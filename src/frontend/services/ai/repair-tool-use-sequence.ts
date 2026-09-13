@@ -1,10 +1,6 @@
 import type { AIChatContentBlock, AIChatMessage } from './types'
 
-/**
- * Content for a synthesized `tool_result` that closes a `tool_use` whose real
- * result was never recorded (the agentic loop was interrupted between the
- * assistant turn and the follow-up request that would have carried it).
- */
+/** Content for a synthesized `tool_result` closing a `tool_use` whose real result was never recorded. */
 export const INTERRUPTED_TOOL_RESULT_CONTENT =
   'The previous tool call did not complete — the session was interrupted before a result was recorded. ' +
   'Treat it as not executed and retry if needed.'
@@ -34,22 +30,8 @@ function stripEmptyText(blocks: AIChatContentBlock[]): AIChatContentBlock[] {
 }
 
 /**
- * Client-side mirror of the backend repair. Make a message list valid for the
- * Anthropic Messages API before sending it, so an interrupted agentic loop can
- * never leave the conversation unresumable.
- *
- * The API requires every assistant `tool_use` to be answered by a matching
- * `tool_result` in the immediately following user message, and rejects orphan
- * `tool_result`s and empty `text` blocks. A loop persists the `tool_use` turn
- * and its `tool_result` turn in two separate requests, so an interruption
- * between them strands a `tool_use` with no result and every later request
- * 400s. This:
- *  - synthesizes an `is_error` `tool_result` for each unanswered `tool_use`
- *    (merged into the following user message, or inserted as a new one),
- *  - drops orphan `tool_result`s and empty text blocks.
- *
- * The backend applies the same repair; this guard means a stale client build
- * still can't send a broken sequence.
+ * Client-side mirror of the backend repair: makes a message list valid for the Anthropic Messages API
+ * by synthesizing `tool_result`s for unanswered `tool_use`s and dropping orphan results/empty text.
  */
 export function repairToolUseSequence(messages: AIChatMessage[]): AIChatMessage[] {
   const out: AIChatMessage[] = []

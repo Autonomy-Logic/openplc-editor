@@ -1,20 +1,8 @@
 /**
- * The user's Autonomy Edge projects, from the desktop editor.
- *
- * Three operations, and they are the whole cloud round trip: list what the account has,
- * read one into the shape the editor's project reader already returns, and write one
- * back. Everything authenticated goes through `edgeAuthedRequest`, so renewal, the
- * single-flight guard and the one retry on a revoked token are not reimplemented here.
- *
- * THE WIRE FORMAT IS NOT DUPLICATED. `backend/shared/project/api-envelope` owns both
- * directions of the envelope and is shared with openplc-web, which reaches the same API.
- * That module used to live in the web adapter, which is exactly why the desktop could
- * not read a cloud project without a second copy of the same knowledge.
- *
- * SAVING IS READ-MODIFY-WRITE, and it has to be. The backend deletes by omission, so
- * sending only the file that changed would wipe the rest of the project. Every partial
- * save therefore loads the current envelope first, patches one slot and sends the whole
- * thing — the same contract the web adapter follows.
+ * The user's Autonomy Edge projects: list, read, and write, all through
+ * `edgeAuthedRequest` for renewal/retry. The wire format lives in
+ * `backend/shared/project/api-envelope`, shared with openplc-web. Saving is
+ * read-modify-write since the backend deletes by omission.
  */
 
 import { z } from 'zod'
@@ -40,11 +28,8 @@ import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
 
 /**
- * A row in the recents list, left deliberately loose.
- *
- * The fields are `unknown` rather than typed because the narrowing below is what
- * decides whether a row is usable: a row with no id is a list entry that cannot be
- * opened, and dropping it is better than showing it.
+ * A row in the recents list, left deliberately loose: fields are `unknown` since the
+ * narrowing below decides whether a row (e.g. one missing an id) is usable at all.
  */
 const ApiProjectRowSchema = z
   .object({
@@ -53,17 +38,12 @@ const ApiProjectRowSchema = z
     language: z.unknown(),
     updatedAt: z.unknown(),
   })
-  // A row that is not even an object becomes an empty one, which the narrowing below
-  // drops. Rejecting instead would take the whole list down over a single bad row.
+  // A row that isn't even an object becomes an empty one rather than failing the whole list.
   .catch({ id: undefined, name: undefined, language: undefined, updatedAt: undefined })
 
 const RecentProjectsSchema = envelopeOf(z.object({ projects: z.array(ApiProjectRowSchema).nullish() }))
 
-/**
- * `.passthrough()`, because the envelope is posted back: the save endpoint deletes by
- * omission, so a key the schema does not name (a `README.md`, a category Edge adds
- * tomorrow) would be stripped on read and deleted on the next save.
- */
+/** `.passthrough()`: the save endpoint deletes by omission, so an unnamed key would be stripped on read and deleted on the next save. */
 const IncomingFilesSchema = ApiProjectFilesSchema.passthrough()
 
 const ProjectFilesSchema = envelopeOf(z.object({ files: IncomingFilesSchema.nullish() }))
@@ -83,14 +63,10 @@ function describeIssues(error: z.ZodError): string {
 const UNREADABLE_PROJECT = 'Autonomy Edge returned a project this editor cannot read'
 
 /**
- * The most recently changed projects on the account.
- *
- * Ordered by the server, not here: `updatedAt desc` is what "recent" means, and asking
- * the API for it costs nothing while sorting a truncated page locally would be wrong —
- * the five newest of ten fetched rows are not the five newest overall.
- *
- * Reports WHICH kind of nothing it found — no session, nothing to show, or a server it
- * could not reach — because the start screen says something different for each.
+ * The most recently changed projects on the account. Ordered by the server
+ * (`updatedAt desc`), since sorting a truncated page locally would be wrong. Reports
+ * which kind of nothing it found — no session, empty, or unreachable — since the start
+ * screen has a different message for each.
  */
 export async function listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
   const query = new URLSearchParams({ limit: String(limit), sortBy: 'updatedAt', sortOrder: 'desc' })
@@ -142,12 +118,9 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
 }
 
 /**
- * `/details` for a project, with the build id the endpoint expects.
- *
- * An editor-origin request that omits `uncached_version` is treated as an outdated
- * cached bundle and answered with a synthetic "hard refresh" project instead of the real
- * one. The desktop is not that origin, but sending the real version keeps us out of that
- * branch by construction rather than by assumption.
+ * `/details` for a project, with the build id the endpoint expects. Omitting
+ * `uncached_version` is read as a stale cached bundle and answered with a synthetic
+ * "hard refresh" project instead of the real one.
  */
 function detailsPath(projectId: string): string {
   return `/projects/${encodeURIComponent(projectId)}/details?uncached_version=${encodeURIComponent(APP_VERSION)}`
@@ -170,8 +143,7 @@ async function readEnvelope(
   const parsed = ProjectFilesSchema.safeParse(parseJsonBody(response.body))
 
   if (!parsed.success) {
-    // Said with the field, never swallowed: a malformed container used to become an
-    // empty one, and the save that followed deleted everything it had held.
+    // Reported with the field, never swallowed into an empty container — a save that followed would delete everything.
     return { ok: false, error: `${UNREADABLE_PROJECT}: ${describeIssues(parsed.error)}.` }
   }
 
@@ -181,18 +153,10 @@ async function readEnvelope(
 }
 
 /**
- * Read a cloud project into the same shape the filesystem reader returns.
- *
- * `canEdit` rides along from the server's own capabilities rather than being assumed:
- * a project shared read-only must not offer a save that will be refused.
+ * Read a cloud project into the same shape the filesystem reader returns. `canEdit`
+ * rides along from the server's capabilities so a read-only share doesn't offer a save that will be refused.
  */
-/**
- * The raw-content map the save flow consults, in the shape the web build produces.
- *
- * Deliberately the same keys the web adapter uses — `project.json`, the two device files,
- * and every POU/server/remote-device path. Anything the save flow does not ask about is
- * left out on purpose: a key nobody reads is a key that can only drift.
- */
+/** The raw-content map the save flow consults, keyed the same way the web adapter does. */
 function rawLoadedFilesFrom(raw: {
   projectJson: string
   deviceConfig: string
@@ -268,18 +232,8 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       data: {
         ...raw,
         canEdit: payload?.capabilities?.canEdit ?? undefined,
-        /**
-         * The bytes exactly as the API sent them, keyed by path.
-         *
-         * The save flow echoes these back for files the user did not edit, instead of
-         * re-serialising them. Without it every save rewrites every file in the editor's
-         * own formatting: same meaning, different bytes, so the project grows (62KB to
-         * 147KB on a real one) and git reports every file as modified.
-         *
-         * Built from the parsed result rather than the envelope so the keys match the
-         * paths the save flow asks about — and match what the web adapter produces, since
-         * the point is for the two to behave the same.
-         */
+        // The bytes exactly as the API sent them, keyed by path — echoed back for files
+        // the user didn't edit instead of re-serialized, so an untouched file's bytes don't drift.
         rawLoadedFiles: rawLoadedFilesFrom(raw),
       },
     }
@@ -332,10 +286,8 @@ export async function saveCloudProject(files: WriteProjectFiles): Promise<{ succ
 }
 
 /**
- * Save one file inside a cloud project.
- *
- * `filePath` is `projectId/relative/path`, the same contract the web adapter uses, which
- * is what lets the shared save flow drive both platforms without knowing which it is on.
+ * Save one file inside a cloud project. `filePath` is `projectId/relative/path`, the
+ * same contract the web adapter uses, so the shared save flow doesn't need to know which platform it's on.
  */
 export async function saveCloudFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> {
   try {
@@ -361,10 +313,7 @@ export async function saveCloudFile(filePath: string, content: unknown): Promise
 
     setInEnvelope(envelope, relativePath, text)
 
-    // `setInEnvelope` is a no-op for any path outside its allowlist — a nested `build/…`
-    // path, or a category added to the iterator without a matching branch here. Posting
-    // the unmodified envelope and answering `success: true` would mark the file saved
-    // while the edit was never persisted, and the user would find out on the next open.
+    // `setInEnvelope` is a no-op for a path outside its allowlist; verify it landed rather than reporting success for an edit that was never persisted.
     if (getInEnvelope(envelope, relativePath) !== text) {
       return { success: false, error: `Autonomy Edge has no slot for ${relativePath}.` }
     }

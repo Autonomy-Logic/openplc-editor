@@ -1,12 +1,3 @@
-/**
- * The assistant's sign-in gate.
- *
- * What is pinned: a signed-out account shows the gate BEFORE any request is made and
- * keeps the entitlement reads from running; a 401 on a request turns into the same gate
- * and re-reads the account; a build with no Edge account is never gated; and the notice
- * offers a button only where a dialog does not already open by itself.
- */
-
 import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from '@jest/globals'
 

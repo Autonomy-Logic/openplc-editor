@@ -33,25 +33,9 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
   const [carryCheckState, setCarryCheckState] = useState<CarryCheckState>('loading')
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
 
-  /**
-   * Reconcile the remembered branch against the ones that actually exist.
-   *
-   * The active branch is client state, kept in `localStorage` per project, and nothing used
-   * to check it was still real. A branch deleted anywhere else — the web editor, another
-   * machine, or a merge that removed its source — left this bar naming it indefinitely, and
-   * worse: the history section passes the name straight into `listCommits({ branch })`, so a
-   * stale name meant querying a branch the server no longer has.
-   *
-   * Falling back to the default branch is the honest answer, because that is where the
-   * server puts a working tree whose branch went away.
-   *
-   * WHAT THIS DOES NOT FIX. If the remembered branch still exists but the server's checkout
-   * moved to a different one, the two remain out of step and this cannot tell: the API
-   * reports `defaultBranch` and each branch's head, but never which branch is checked out.
-   * Closing that gap needs the backend to say so — forcing a `switchBranch` on open instead
-   * would be a write on every project open, and with `discard` it could throw away
-   * server-side edits nobody asked to lose.
-   */
+  // Falls back to the default branch if the remembered active branch (client state in
+  // localStorage) no longer exists, since a stale name would otherwise be sent straight
+  // into listCommits({ branch }).
   useEffect(() => {
     if (!versionControl || !projectId) {
       return
@@ -62,8 +46,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
     versionControl
       .listBranches(projectId)
       .then(({ branches }) => {
-        // An empty list means the request told us nothing useful, not that every branch is
-        // gone — leaving the remembered name alone is safer than resetting on a blank answer.
+        // An empty list means the request failed, not that every branch is gone.
         if (!alive || branches.length === 0 || branches.some((branch) => branch.name === activeBranchName)) {
           return
         }
@@ -105,13 +88,8 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       if (branch.name === activeBranchName) return
       if (!versionControl) return
 
-      // Block the switch when the editor has unsaved (not-yet-persisted) edits.
-      // The switch reloads the project from the server (handleBranchSwitch ->
-      // openProjectByPath), which would silently wipe in-memory editor state.
-      // `getChanges` below only sees server-side working-tree changes and can't
-      // detect these, so we guard here and let the user decide what to do with
-      // them (save via Ctrl+S, or discard) rather than persisting on their
-      // behalf — they may not want to keep these edits.
+      // Block on unsaved in-editor edits: switching reloads the project from the server
+      // and would silently wipe them, and getChanges below can't see them either.
       if (!checkIfAllFilesAreSaved()) {
         toast({
           title: 'Unsaved changes',
@@ -122,11 +100,8 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         return
       }
 
-      // Warn before switching if there are uncommitted changes. The store's
-      // pendingChangesCount (the same signal the source-control panel shows) is
-      // the primary trigger: the live getChanges round-trip is best-effort and
-      // the backend returns an empty list on any error, so relying on it alone
-      // would let us switch silently over pending work the user can see.
+      // pendingChangesCount is the primary signal; getChanges is best-effort and returns
+      // an empty list on error, so relying on it alone could miss pending work.
       let hasUncommittedChanges = pendingChangesCount > 0
       try {
         const { changes } = await versionControl.getChanges(projectId, activeBranchName)
@@ -142,8 +117,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         setConflictedFiles([])
         setShowUnsavedWarning(true)
 
-        // Fire the pre-check in parallel so the modal opens immediately
-        // and updates as soon as the dry-run lands.
+        // Runs in parallel so the modal opens immediately and updates once the dry-run lands.
         void versionControl
           .previewSwitchCarry(projectId, branch.name)
           .then((result) => {
@@ -185,8 +159,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
       setPendingBranchSwitch(null)
       return
     }
-    // Race: the preview said "ok" but the apply hit a conflict (or another
-    // error happened). Surface conflicts in the still-open modal.
+    // Race: preview said "ok" but the apply hit a conflict; surface it in the open modal.
     if (result.conflictedFiles.length > 0) {
       setCarryCheckState('conflict')
       setConflictedFiles(result.conflictedFiles)
@@ -208,9 +181,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
 
   const handleMerge = useCallback(
     (branch: Branch) => {
-      // Source is the clicked branch; default target to the active branch
-      // (if different). When source == active, omit `target` entirely so the
-      // merge page can apply its own default rather than receiving `target=`.
+      // Omit `target` entirely when source == active so the merge page applies its own default.
       navigation.navigate('/merge', {
         project_id: projectId,
         source: branch.name,
@@ -261,9 +232,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         onClose={() => setShowSwitcher(false)}
         onSelect={handleSelect}
         onDelete={handleDelete}
-        // Withheld where there is no screen to reach. Both builds have one today, so this
-        // passes through; the guard remains because handing the entry a callback with no
-        // destination is what once closed the open project instead of merging anything.
+        // Only passed when there is a merge screen to reach.
         onMerge={caps.hasBranchMerge ? handleMerge : undefined}
       />
 

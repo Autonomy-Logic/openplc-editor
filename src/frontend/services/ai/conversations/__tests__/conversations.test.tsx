@@ -1,16 +1,3 @@
-/**
- * The conversation hooks, over a fake `AIPort.conversations`.
- *
- * These used to be five files of axios mocks in the web adapter. Now the HTTP is
- * the platform's business and the hooks are shared, so the fake is the port —
- * which is also what makes this file runnable under both jest and vitest.
- *
- * What is worth pinning: the transcript's opaque content is narrowed (a block a
- * newer backend invented must not reach the renderer), the optimistic list edits
- * roll back when the call fails, and a platform with no conversation store
- * leaves the queries disabled instead of erroring.
- */
-
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from '@jest/globals'
@@ -45,10 +32,7 @@ function makeConversations(overrides: Partial<ConversationsApi> = {}): Conversat
   }
 }
 
-/**
- * Only `ai` is read by anything under test; the rest of the platform is absent
- * on purpose so a hook that starts reaching for another port fails loudly.
- */
+// Only `ai` is present, so a hook that reaches for another port fails loudly.
 function makeWrapper(conversations: ConversationsApi | undefined) {
   // Telemetry rides along on every successful mutation, so the fake port needs a
   // sink even when the test is only interested in the cache.
@@ -176,9 +160,6 @@ describe('useCreateConversation', () => {
       await result.current.mutateAsync({ projectId: 'p1', title: 'New chat' })
     })
 
-    // The five per-hook suites this replaced never came back for this one, and the
-    // hook gained this invalidation in the same commit. Without it "+ New chat" leaves a
-    // switcher that does not list the conversation the user is now typing into.
     expect(queryClient.getQueryState(['ai-conversations', 'p1'])?.isInvalidated).toBe(true)
   })
 

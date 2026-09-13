@@ -1,11 +1,4 @@
-/**
- * The agentic loop, driven by a scripted transport.
- *
- * Everything the loop reaches for is injected — the chat stream comes off a fake
- * `AIPort`, the tool runner is an option — so nothing here mocks a module. That
- * is deliberate: this file runs under jest in the editor and vitest on the web,
- * and module-mock hoisting is the one thing those two do not agree on.
- */
+/** The chat stream and tool runner are injected rather than mocked, since jest and vitest disagree on module-mock hoisting. */
 
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
@@ -22,11 +15,7 @@ let sentRequests: AIChatRequest[] = []
 /** One stream implementation per iteration; the last one repeats. */
 let streams: ChatStream[] = []
 
-/**
- * A port that answers chat and nothing else. Every other method throws rather
- * than returning a benign default — the loop must not be quietly reaching for
- * credits or telemetry while it streams.
- */
+/** Every method but chat throws, so the loop can't be quietly reaching for credits or telemetry while it streams. */
 function makePort(): AIPort {
   const unreachable = () => {
     throw new Error('the agentic loop must not call this')
@@ -129,11 +118,8 @@ describe('runAgenticLoop', () => {
   })
 
   it('attaches the slice conversationId to every iteration after conversation_started', async () => {
-    // Regression for the chat-split bug: when iter 1 spawns a new
-    // conversation (panel writes the id into the slice as it handles the
-    // `conversation_started` event), iter 2 must attach the id so the
-    // tool-result turn lands on the SAME conversation instead of creating
-    // a sibling.
+    // When iter 1 spawns a new conversation, iter 2 must attach its id so the tool-result
+    // turn lands on the same conversation instead of creating a sibling.
     streams = [
       makeStream([
         { type: 'conversation_started', conversationId: 'conv-A', conversationTitle: 'Treadmill' },
@@ -147,8 +133,8 @@ describe('runAgenticLoop', () => {
       ]),
     ]
 
-    // Stand in for the panel: drive the generator manually so we can write
-    // the slice on `conversation_started` BEFORE iter 2 builds its request.
+    // Drive the generator manually so the slice is written on `conversation_started`
+    // before iter 2 builds its request, standing in for the panel.
     const gen = runAgenticLoop(port, { ...baseRequest }, noTools, {
       runTool: toolAlways({ success: true, message: 'created' }),
     })
@@ -164,10 +150,8 @@ describe('runAgenticLoop', () => {
   })
 
   it('reaches the real executor when no runner is injected', async () => {
-    // Every other case here injects `runTool`, which leaves `runTool ?? executeTool`
-    // — the branch production actually takes — unexercised. `read_project_state` is
-    // the one tool that only reads, so the default path can be walked against the
-    // store without leaving a POU behind.
+    // Exercises the `runTool ?? executeTool` branch production actually takes;
+    // `read_project_state` is the one tool that only reads, so it leaves no POU behind.
     streams = [
       makeStream([
         { type: 'tool_use', id: 'toolu_rs', name: 'read_project_state', input: {} },
@@ -183,8 +167,7 @@ describe('runAgenticLoop', () => {
 
     const complete = events.find((e) => e.type === 'tool_call_complete')
     expect(complete).toMatchObject({ toolId: 'toolu_rs', toolName: 'read_project_state', result: { success: true } })
-    // The store's own project name, formatted by the executor — proof the call went
-    // through `executeTool`, not through a stand-in.
+    // Proof the call went through `executeTool`, not a stand-in.
     const results = events.find((e) => e.type === 'iteration_tool_results_complete')
     const block = results?.type === 'iteration_tool_results_complete' ? results.blocks[0] : undefined
     expect(block?.type === 'tool_result' ? block.content : '').toContain(
@@ -229,14 +212,12 @@ describe('runAgenticLoop', () => {
       blocks: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'Foo created', is_error: false }],
     })
 
-    // Second iteration's text answer + done.
     expect(events.at(-2)).toEqual({
       type: 'iteration_assistant_complete',
       blocks: [{ type: 'text', text: 'Done.' }],
     })
     expect(events.at(-1)).toEqual({ type: 'done' })
 
-    // Second call's request must include the prior assistant + tool_result.
     expect(sentRequests).toHaveLength(2)
     expect(sentRequests[1].messages).toHaveLength(3)
     expect(sentRequests[1].messages.at(-1)).toEqual({
@@ -304,8 +285,6 @@ describe('runAgenticLoop', () => {
     const err = new AIRequestError('Out of ACU', 402, undefined, billing)
     streams = [
       async function* () {
-        // Cover the "throw before yielding any usable content" path so the
-        // catch wraps the AIRequestError into an error event.
         yield { type: 'content_block_delta', delta: '' }
         throw err
       },
@@ -338,7 +317,6 @@ describe('runAgenticLoop', () => {
     streams = [
       // eslint-disable-next-line @typescript-eslint/require-await
       async function* () {
-        // Yield nothing, then throw a string (covers the non-Error branch).
         yield { type: 'content_block_delta', delta: '' }
         throw 'oops'
       },
@@ -378,8 +356,7 @@ describe('runAgenticLoop', () => {
   })
 
   it('emits iteration_assistant_complete + done when the stream ends without a message_stop (text accumulated)', async () => {
-    // Stream finishes naturally without ever yielding `message_stop` —
-    // exercises the post-for-await `if (toolCalls.length === 0)` branch.
+    // Exercises the post-for-await `if (toolCalls.length === 0)` branch.
     streams = [makeStream([{ type: 'content_block_delta', delta: 'orphaned' }])]
 
     const events = await collect(runAgenticLoop(port, baseRequest, noTools))

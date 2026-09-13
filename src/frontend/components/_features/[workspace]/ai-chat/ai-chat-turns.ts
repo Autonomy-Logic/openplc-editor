@@ -1,10 +1,6 @@
 import type { AIChatContentBlock, ChatMessage } from '../../../../../middleware/shared/ports/types'
 
-/**
- * A single tool invocation as seen by the UI: the assistant's `tool_use`
- * block paired with the matching `tool_result` (which lives on a later
- * user-role message). Status is `pending` until the result arrives.
- */
+/** A `tool_use` block paired with its later `tool_result`; `pending` until the result arrives. */
 export type ToolCall = {
   id: string
   name: string
@@ -13,11 +9,7 @@ export type ToolCall = {
   resultContent?: string
 }
 
-/**
- * A single conversational turn as seen by the user. Multiple store messages
- * (produced one-per-iteration by the agentic loop) collapse into one
- * assistant turn so we don't render a separate bubble per tool call.
- */
+/** One conversational turn; consecutive assistant messages collapse into a single turn. */
 export type ChatTurn =
   | { kind: 'user'; message: ChatMessage }
   | {
@@ -40,15 +32,7 @@ function extractToolUses(content: ChatMessage['content']): Array<Extract<AIChatC
   return content.filter((b): b is Extract<AIChatContentBlock, { type: 'tool_use' }> => b.type === 'tool_use')
 }
 
-/**
- * Collapse the raw store list into conversational turns. Consecutive
- * assistant messages — one per agentic-loop iteration — are merged into a
- * single turn so the UI shows one bubble per back-and-forth, regardless of
- * how many HTTP requests the model made under the hood.
- *
- * Tool_result-only user messages are folded into the preceding assistant
- * turn so the renderer can show status (success/error) per tool call.
- */
+/** Collapses store messages into turns; tool_result-only user messages fold into the preceding assistant turn. */
 export function groupMessagesIntoTurns(messages: ChatMessage[], streamingId: string | null): ChatTurn[] {
   const turns: ChatTurn[] = []
   for (const msg of messages) {

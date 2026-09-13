@@ -1,16 +1,4 @@
-/**
- * The tool executor is the only code in the product that lets a language model
- * write to the user's project. Every case here therefore asserts the STORE
- * after the call, not just the `ToolResult` — a tool that answers
- * `success: true` and writes nothing is the failure this file exists to catch,
- * and it is invisible to a result-only assertion.
- *
- * The real store is seeded per test rather than mocked: these tools are thin,
- * and almost every interesting refusal (name collisions, illegal identifiers,
- * auto-increment) is enforced by the slices, not by the executor. Mocking the
- * store would assert the executor against a fiction. Nothing here mocks a
- * module, so the file runs under jest (editor) and vitest (web) alike.
- */
+/** Every case asserts the STORE after the call, not just the `ToolResult`; the store is seeded, never mocked. */
 
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
@@ -24,10 +12,6 @@ import type {
 import { openPLCStoreBase } from '../../../../store'
 import { type ProjectStTranspiler, transpileProjectToST } from '../../graphical-context'
 import { executeTool } from '../tool-executor'
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 function makeVariable(name: string, type = 'INT', cls: PLCVariable['class'] = 'local'): PLCVariable {
   return {
@@ -78,10 +62,6 @@ function makeArray(name: string, baseType: string, dimensions: string[]): PLCDat
   }
 }
 
-// ---------------------------------------------------------------------------
-// Store seeding + readers
-// ---------------------------------------------------------------------------
-
 type Seed = {
   pous?: PLCPou[]
   dataTypes?: PLCDataType[]
@@ -122,8 +102,7 @@ function countingTranspiler(programSt: string): { transpile: ProjectStTranspiler
   return { transpile, callCount: () => calls }
 }
 
-/** Narrow a stored type to its derivation so a test reads the section it means
- *  without an assertion — a struct that came back as an enum is itself a bug. */
+/** Narrow a stored type to its derivation so a test reads the section it means without an assertion. */
 function structFields(name: string): PLCStructureVariable[] | undefined {
   const dt = datatypeNamed(name)
   return dt?.derivation === 'structure' ? dt.variable : undefined
@@ -136,17 +115,11 @@ function enumValues(name: string): Array<{ description: string }> | undefined {
 
 beforeEach(() => {
   const state = openPLCStoreBase.getState()
-  // The store is a module singleton, so anything a previous case created would
-  // otherwise collide with the next one's names (POUs and user library blocks
-  // share the IEC identifier namespace) or be mistaken for this case's writes.
+  // Store is a module singleton: clear it so a previous case's names can't collide with this one's.
   state.libraryActions.clearUserLibraries()
   state.aiActions.clearAllPendingDiffs()
   seedProject()
 })
-
-// ---------------------------------------------------------------------------
-// Dispatcher
-// ---------------------------------------------------------------------------
 
 describe('executeTool dispatch', () => {
   it('names the tool it does not know instead of failing silently', async () => {
@@ -156,19 +129,13 @@ describe('executeTool dispatch', () => {
   })
 
   it('turns a throwing tool into a failed result, upholding the never-throws contract', async () => {
-    // The agentic loop feeds tool results straight back to the model; a thrown
-    // error there would abort the whole turn instead of letting the model
-    // correct itself. `null` input dereferences inside the create path.
+    // `null` input dereferences inside the create path.
     const result = await executeTool('create_pou', null)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Tool execution error')
   })
 })
-
-// ---------------------------------------------------------------------------
-// create_pou
-// ---------------------------------------------------------------------------
 
 describe('create_pou', () => {
   it('adds the POU to the project with the requested type, language and body', async () => {
@@ -187,8 +154,7 @@ describe('create_pou', () => {
   })
 
   it('registers a new function block as a library element so it can be placed in a diagram', async () => {
-    // Creating the POU but not the library entry is how a block ends up
-    // invisible in the LD/FBD pickers the model just told the user to use.
+    // A POU without a library entry is invisible in the LD/FBD pickers.
     await executeTool('create_pou', { name: 'Debounce', type: 'function-block', language: 'st' })
 
     expect(openPLCStoreBase.getState().libraries.user.some((l) => l.name === 'Debounce')).toBe(true)
@@ -212,8 +178,7 @@ describe('create_pou', () => {
   })
 
   it('strips the POU wrapper and VAR block the model adds despite instructions not to', async () => {
-    // The model routinely returns a whole compilable POU. Storing that verbatim
-    // produces a body the ST transpiler rejects — declarations nested in a body.
+    // The model routinely returns a whole compilable POU, which the ST transpiler rejects verbatim.
     await executeTool('create_pou', {
       name: 'Wrapped',
       type: 'program',
@@ -237,8 +202,7 @@ describe('create_pou', () => {
   })
 
   it('refuses a graphical language and explains which ones are supported', async () => {
-    // LD/FBD bodies are flow graphs the model cannot author, so the tool must
-    // refuse rather than create a POU with an unusable empty diagram.
+    // LD/FBD bodies are flow graphs the model cannot author; the tool must refuse rather than create an empty diagram.
     const result = await executeTool('create_pou', { name: 'Rungs', type: 'program', language: 'ld' })
 
     expect(result.success).toBe(false)
@@ -275,9 +239,7 @@ describe('create_pou', () => {
   })
 
   it('redirects a "main" re-creation carrying a body onto the existing POU', async () => {
-    // Every project is born with a main POU. Rejecting outright relied on the
-    // model retrying with update_pou_body, which it often did not — so the
-    // logic the user asked for was simply lost.
+    // Every project is born with a main POU; creating one with a body redirects to update_pou_body.
     seedProject({ pous: [makePou('Main', 'st', 'old;')] })
 
     const result = await executeTool('create_pou', { name: 'main', type: 'program', language: 'st', body: 'fresh;' })
@@ -299,8 +261,7 @@ describe('create_pou', () => {
   })
 
   it('surfaces the redirected update failing instead of reporting a phantom success', async () => {
-    // A graphical main cannot take a text body. The redirect must propagate
-    // that refusal, not swallow it behind "updated its body instead".
+    // A graphical main cannot take a text body; the redirect must propagate that refusal.
     seedProject({ pous: [{ ...makePou('Main', 'ld', { rungs: [] }) }] })
 
     const result = await executeTool('create_pou', { name: 'main', type: 'program', language: 'st', body: 'x := 1;' })
@@ -316,10 +277,6 @@ describe('create_pou', () => {
     expect(pouNamed('main')).toBeDefined()
   })
 })
-
-// ---------------------------------------------------------------------------
-// update_pou_body
-// ---------------------------------------------------------------------------
 
 describe('update_pou_body', () => {
   it('replaces the stored body', async () => {
@@ -342,8 +299,7 @@ describe('update_pou_body', () => {
   })
 
   it('tells the open editor to resync through the ai-pou-updated event', async () => {
-    // The Monaco model is not driven by the store, so without this event the
-    // user keeps looking at the pre-edit text while the project already changed.
+    // The Monaco model is not driven by the store, so it needs this event to catch up.
     seedProject({ pous: [makePou('Conveyor', 'st', 'old := 1;')] })
     const seen: Array<{ pouName: string; body: string; oldBody: string }> = []
     const listener = (event: Event) => {
@@ -401,8 +357,7 @@ describe('update_pou_body', () => {
   const graphicalLanguages: Array<PLCBody['language']> = ['ld', 'fbd', 'sfc']
 
   it.each(graphicalLanguages)('refuses to overwrite a %s diagram with text', async (language) => {
-    // The stored body is an XYFlow graph; writing a string over it would
-    // destroy the diagram and leave a POU the editor cannot render.
+    // The stored body is an XYFlow graph; writing a string over it would destroy the diagram.
     const graph = { rungs: [] }
     seedProject({ pous: [makePou('Diagram', language, graph)] })
 
@@ -413,10 +368,6 @@ describe('update_pou_body', () => {
     expect(bodyOf('Diagram')).toBe(graph)
   })
 })
-
-// ---------------------------------------------------------------------------
-// create_variable
-// ---------------------------------------------------------------------------
 
 describe('create_variable', () => {
   it('adds a local variable to the POU with the base type resolved', async () => {
@@ -450,8 +401,7 @@ describe('create_variable', () => {
   })
 
   it('marks a type it does not recognise as a user data type, not a base type', async () => {
-    // Getting this wrong emits `motor : Motor;` as a base type and the
-    // generated ST no longer references the struct the model just created.
+    // Getting this wrong emits `motor : Motor;` as a base type instead of a user-data-type reference.
     seedProject({ pous: [makePou('Conveyor')], dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
 
     await executeTool('create_variable', { pouName: 'Conveyor', name: 'm', type: 'MotorState' })
@@ -467,9 +417,7 @@ describe('create_variable', () => {
   })
 
   it('auto-suffixes a duplicate name rather than overwriting the existing variable', async () => {
-    // The slice never silently replaces a declaration. Worth pinning because
-    // the tool still reports the requested name: the model believes it created
-    // `motor`, the project holds `motor1`.
+    // The slice never silently replaces a declaration; the tool still reports the requested name, not the actual one.
     seedProject({ pous: [makePou('Conveyor', 'st', '', [makeVariable('motor', 'BOOL')])] })
 
     const result = await executeTool('create_variable', { pouName: 'Conveyor', name: 'motor', type: 'BOOL' })
@@ -499,8 +447,7 @@ describe('create_variable', () => {
   })
 
   it('refuses a name that is not a legal IEC identifier', async () => {
-    // An illegal name reaches the on-disk declaration text and breaks the
-    // reopen parse, so it has to be stopped at the tool boundary.
+    // An illegal name reaches the on-disk declaration text and breaks the reopen parse.
     seedProject({ pous: [makePou('Conveyor')] })
 
     const result = await executeTool('create_variable', { pouName: 'Conveyor', name: 'motor speed', type: 'INT' })
@@ -509,10 +456,6 @@ describe('create_variable', () => {
     expect(varsOf('Conveyor')).toHaveLength(0)
   })
 })
-
-// ---------------------------------------------------------------------------
-// delete_pou
-// ---------------------------------------------------------------------------
 
 describe('delete_pou', () => {
   it('removes the POU from the project', async () => {
@@ -557,10 +500,6 @@ describe('delete_pou', () => {
     expect(project().pous).toHaveLength(1)
   })
 })
-
-// ---------------------------------------------------------------------------
-// update_variable
-// ---------------------------------------------------------------------------
 
 describe('update_variable', () => {
   it('renames, retypes and reclasses a POU variable in one call', async () => {
@@ -648,10 +587,6 @@ describe('update_variable', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// delete_variable
-// ---------------------------------------------------------------------------
-
 describe('delete_variable', () => {
   it('removes the named variable and leaves its siblings alone', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', '', [makeVariable('a'), makeVariable('b')])] })
@@ -703,8 +638,7 @@ describe('delete_variable', () => {
   })
 
   it('refuses to delete a global another POU declares as VAR_EXTERNAL', async () => {
-    // Cascading that deletion silently would leave the referencing POU
-    // declaring a symbol the resource no longer defines.
+    // Cascading silently would leave the referencing POU declaring an undefined symbol.
     seedProject({
       globalVariables: [makeVariable('shared', 'BOOL', 'global')],
       pous: [makePou('Conveyor', 'st', '', [makeVariable('shared', 'BOOL', 'external')])],
@@ -717,14 +651,9 @@ describe('delete_variable', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// create_datatype
-// ---------------------------------------------------------------------------
-
 describe('create_datatype', () => {
   it('creates a structure carrying every field, not just the skeleton', async () => {
-    // The skeleton and the content are two store calls. If only the first ran,
-    // the project would hold an empty struct while the tool reports success.
+    // Skeleton and content are two store calls; if only the first ran, the struct would be empty.
     const result = await executeTool('create_datatype', {
       name: 'MotorState',
       derivation: 'structure',
@@ -847,10 +776,6 @@ describe('create_datatype', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// update_datatype
-// ---------------------------------------------------------------------------
-
 describe('update_datatype', () => {
   it('replaces a structure’s field list', async () => {
     seedProject({ dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
@@ -865,8 +790,7 @@ describe('update_datatype', () => {
   })
 
   it('preserves the sections the caller omitted instead of wiping them', async () => {
-    // A rename that also blanked the fields was the failure this branch guards:
-    // partial updates must never be read as "replace with nothing".
+    // Partial updates must never be read as "replace with nothing".
     seedProject({ dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
 
     const result = await executeTool('update_datatype', { name: 'MotorState', newName: 'DriveState' })
@@ -970,9 +894,7 @@ describe('update_datatype', () => {
   })
 
   it('reports the user cancelling the reference-impact modal as a failed tool call', async () => {
-    // Renaming a referenced type opens a confirmation. The user declining is
-    // not an error, but the model must be told the rename did not happen —
-    // otherwise it keeps writing code against the new name.
+    // Renaming a referenced type opens a confirmation; declining is not an error, but the model must be told.
     seedProject({
       dataTypes: [makeStruct('MotorState', [['speed', 'INT']])],
       pous: [
@@ -982,8 +904,7 @@ describe('update_datatype', () => {
       ],
     })
 
-    // The rename parks on the modal promise synchronously, so the pending
-    // request is already registered by the time this call returns its promise.
+    // The rename parks on the modal promise synchronously, before this call returns its own promise.
     const pending = executeTool('update_datatype', { name: 'MotorState', newName: 'DriveState' })
     openPLCStoreBase.getState().datatypeActions.respondToPendingRename(false)
     const result = await pending
@@ -1024,10 +945,6 @@ describe('update_datatype', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// delete_datatype
-// ---------------------------------------------------------------------------
-
 describe('delete_datatype', () => {
   it('removes the data type from the project', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE']), makeEnum('Keeper', ['X'])] })
@@ -1063,10 +980,6 @@ describe('delete_datatype', () => {
     expect(project().dataTypes).toHaveLength(1)
   })
 })
-
-// ---------------------------------------------------------------------------
-// read_project_state
-// ---------------------------------------------------------------------------
 
 describe('read_project_state', () => {
   it('reports every POU with its type, language, variable count and body size', async () => {
@@ -1130,13 +1043,8 @@ describe('read_project_state', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Project ST cache
-// ---------------------------------------------------------------------------
-
 describe('project ST cache after a mutating tool', () => {
-  // `read_pou_body` on a diagram answers from a 30s whole-project ST cache; a
-  // mutating tool has to drop it or the model reads the project as it was.
+  // `read_pou_body` on a diagram answers from a 30s whole-project ST cache; a mutating tool must drop it.
   const diagramSt = 'PROGRAM Diagram\nEND_PROGRAM'
 
   it('transpiles the project again on the next diagram read after update_pou_body', async () => {
@@ -1153,8 +1061,7 @@ describe('project ST cache after a mutating tool', () => {
   })
 
   it('drops the cached ST outright, not merely the project it was keyed to', async () => {
-    // Probing with the pre-edit snapshot isolates the explicit invalidation
-    // from the reference check: the same reference would otherwise still hit.
+    // Probing with the pre-edit snapshot isolates the explicit invalidation from the reference check.
     seedProject({ pous: [makePou('Conveyor', 'st', 'old;')] })
     const snapshot = project()
     const { transpile, callCount } = countingTranspiler(diagramSt)

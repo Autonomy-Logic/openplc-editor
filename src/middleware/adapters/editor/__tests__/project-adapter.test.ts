@@ -413,9 +413,7 @@ describe('createEditorProjectAdapter', () => {
       expect(result.error).toEqual({ title: 'Not Found', description: 'Path does not exist' })
     })
 
-    // The read is deliberately not flag-gated: a flag-off build has to open a
-    // project a flag-on build migrated, or rolling the flag back would present
-    // it as having no data types.
+    // Deliberately not flag-gated: rolling the write flag back must not hide migrated data types.
     it('hydrates .dt files even though the write flag ships off', async () => {
       ;(window.bridge.readProjectFiles as jest.Mock).mockResolvedValue({
         ...mockRawProjectFiles,
@@ -453,11 +451,7 @@ describe('createEditorProjectAdapter', () => {
     })
   })
 
-  /**
-   * The bridge type is a description of what the main process is meant to send, and it
-   * checks nothing once a value has crossed IPC. An answer from a skewed main bundle used
-   * to be read straight through into the parser.
-   */
+  // The bridge type checks nothing once a value has crossed IPC.
   describe('raw project files this build cannot read', () => {
     const unreadable = { success: true, data: { ...mockRawProjectFiles.data, pouFiles: 'not a list' } }
 
@@ -598,10 +592,7 @@ describe('createEditorProjectAdapter', () => {
   })
 
   describe('trackRecentProject', () => {
-    // Save As is the one flow that gives a project a location without reading
-    // it, so it is the one that has to say "now track this" out loud. A
-    // retrieved project relies on it: untracked while it sits in scratch, on
-    // the list once the user keeps it somewhere.
+    // Save As gives a project a location without reading it, so it must say "track this" explicitly.
     it('delegates to window.bridge.trackRecentProject with the project path', async () => {
       await adapter.trackRecentProject?.('/p/kept-here')
 
@@ -617,9 +608,7 @@ describe('createEditorProjectAdapter', () => {
     })
 
     it('passes the failure shape through unchanged (e.g. safety gate tripped)', async () => {
-      // The bridge surfaces the project-service's `project.json`-missing
-      // branch as { success: false, error: '...' } — the adapter is a
-      // thin pass-through so the renderer sees the same shape.
+      // The adapter is a thin pass-through, so the renderer sees the service's error shape unchanged.
       ;(window.bridge.deleteProject as jest.Mock).mockResolvedValue({
         success: false,
         error: 'Path "..." does not contain a project.json. Removed the entry from the recent list.',
@@ -941,12 +930,7 @@ describe('mapIpcPouToPortPou', () => {
   })
 })
 
-/**
- * The editor now opens projects from two worlds, and `project.meta.path` is the single
- * identifier every save flows through. These cases pin down the one place that decides
- * which world a project belongs to — get it wrong and a local save is sent to the API,
- * or a cloud save is written to a directory that does not exist.
- */
+// Pins down the one place that decides which world (local disk or cloud) a project belongs to.
 describe('isCloudProjectId', () => {
   it.each(['cmt7n5ke2077o07jofjr3dgr0', 'abc123', 'cmt7n5ke2077o07jofjr3dgr0/pous/programs/main.st'])(
     'treats %s as a cloud identifier',
@@ -979,13 +963,7 @@ describe('cloud projects', () => {
     cloudAdapter = createEditorProjectAdapter()
   })
 
-  /**
-   * Found by running the app, not by reading it: the preload bundle and the renderer
-   * bundle are built separately, and a renderer newer than the main process called a
-   * channel that did not exist. The rejection escaped a `useEffect` and took the whole
-   * start screen down — local projects included. A cloud list nobody asked for must
-   * never cost someone their local work.
-   */
+  // A cloud list nobody asked for must never cost someone their local work.
   it('reports the channel unavailable when the bridge predates this feature', async () => {
     const bridge = window.bridge as unknown as Record<string, unknown>
     delete bridge.edgeProjectsListRecent
@@ -1057,11 +1035,8 @@ describe('cloud projects', () => {
   })
 
   it('converts a pending PLCopen import instead of opening an empty project over it', async () => {
-    // A project uploaded as raw PLCopen XML has NO `project.json` and no POUs — just
-    // Node's marker, stored verbatim because nothing parses it server-side. Handed to
-    // `parseProjectFiles` it loads schema defaults and ignores the XML, so the editor
-    // shows a blank project on top of the real one. The web adapter has always had
-    // this branch; the desktop inherited the reader without it.
+    // A project uploaded as raw PLCopen XML has no `project.json` and no POUs, just Node's marker;
+    // without this branch, `parseProjectFiles` would load schema defaults and show a blank project.
     const xml = [
       '<?xml version="1.0" encoding="utf-8"?>',
       '<project xmlns="http://www.plcopen.org/xml/tc6_0201">',
@@ -1098,12 +1073,7 @@ describe('cloud projects', () => {
     expect(result.data?.wasPendingPlcopenImport).toBeUndefined()
   })
 
-  /**
-   * The preload bundle and the renderer bundle are built separately and can skew. The
-   * listing channels have always checked for this; the read and the two writes did not,
-   * and their rejection escapes to callers that do not catch it — taking the start
-   * screen down over one stale bundle.
-   */
+  // The preload and renderer bundles are built separately and can skew.
   describe('a main process that predates a cloud channel', () => {
     it('refuses the read instead of raising "is not a function"', async () => {
       Object.assign(window.bridge, { edgeProjectsRead: undefined })
@@ -1132,15 +1102,9 @@ describe('cloud projects', () => {
     })
   })
 
-  /**
-   * Each of these unions exists because the cases are worded differently on screen, so
-   * a shape that falls through to the wrong branch says something untrue: that a
-   * signed-out account is empty, or that an offline user has no folders.
-   */
   describe('an answer the renderer cannot read', () => {
     it('leaves the recents list unavailable rather than claiming the account is empty', async () => {
-      // A bare array is what an older main process answers with. It used to fall
-      // through the section's state machine into "no cloud projects yet".
+      // A bare array is what an older main process answers with.
       ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockResolvedValueOnce([])
 
       await expect(cloudAdapter.listRecentCloudProjects?.(5)).resolves.toEqual({ status: 'unavailable' })
@@ -1178,12 +1142,7 @@ describe('cloud projects', () => {
     })
   })
 
-  /**
-   * The channel guards stop "is not a function" and nothing else. `ipcRenderer.invoke`
-   * rejects on its own account — the main handler threw, the channel is in preload but
-   * not in main, an argument would not structured-clone — and that rejection escapes to
-   * callers that do not catch it. The folder and upload calls already contain theirs.
-   */
+  // The channel guards stop "is not a function"; a rejected `ipcRenderer.invoke` still escapes.
   describe('an IPC call that rejects', () => {
     it('does not take the start screen down with the recents list', async () => {
       ;(window.bridge.edgeProjectsListRecent as jest.Mock).mockRejectedValueOnce(new Error('no handler registered'))
@@ -1236,11 +1195,8 @@ describe('cloud projects', () => {
     })
   })
 
-  /**
-   * The main process reports a failed write as text only, and the save flow needs to know
-   * whether a session still exists: queue the save for sign-in, or keep the work locally.
-   * Asking the account is what answers it.
-   */
+  // A failed write is reported as text only; asking the account tells the save flow whether to
+  // queue for sign-in or keep the work locally.
   describe('why a cloud write failed', () => {
     const files = { projectPath: 'cmt7n5ke2077o07jofjr3dgr0', deletions: [] } as never
     const failed = { success: false, error: 'Not signed in to Autonomy Edge.' }

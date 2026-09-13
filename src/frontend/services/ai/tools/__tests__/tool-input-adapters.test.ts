@@ -1,14 +1,3 @@
-/**
- * The adapters translate a model's loosely-typed tool input into the exact
- * shapes the store slices accept. They are where a wrong answer is silent: an
- * unknown type name that comes back as a base type still compiles into a
- * declaration, it just declares the wrong thing.
- *
- * `adaptUpdatePouBody` reads the project, so the real store is seeded rather
- * than mocked — the same reason the executor suite does, and what lets this
- * file run under jest and vitest unchanged.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { PLCPou } from '../../../../../middleware/shared/ports/types'
@@ -41,8 +30,6 @@ describe('resolveVariableType', () => {
   })
 
   it('keeps a user data type name spelled exactly as declared', () => {
-    // A struct is looked up by name at compile time, so lower-casing it the way
-    // base types are folded would point the declaration at nothing.
     expect(resolveVariableType('MotorState')).toEqual({ definition: 'user-data-type', value: 'MotorState' })
   })
 
@@ -58,8 +45,6 @@ describe('resolveVariableType', () => {
 
 describe('adaptCreatePou', () => {
   it('splits the create properties from the body, which is applied after creation', () => {
-    // The slice's create takes no body; passing one through would be dropped
-    // silently and the POU would arrive empty.
     expect(adaptCreatePou({ name: 'Conveyor', type: 'program', language: 'st', body: 'x := 1;' })).toEqual({
       createProps: { name: 'Conveyor', type: 'program', language: 'st' },
       body: 'x := 1;',
@@ -73,8 +58,6 @@ describe('adaptCreatePou', () => {
 
 describe('adaptUpdatePouBody', () => {
   it('carries the POU’s own language forward so an update cannot retype it', () => {
-    // The tool input has no language field. Defaulting to ST here would turn a
-    // Python POU into an ST one on the first AI edit.
     seedPous([makePou('Script', 'python', 'print(1)')])
 
     expect(adaptUpdatePouBody({ pouName: 'Script', code: 'print(2)' })).toEqual({
@@ -116,8 +99,6 @@ describe('adaptCreateVariable', () => {
 
     expect(adapted.scope).toBe('global')
     expect(adapted.associatedPou).toBeUndefined()
-    // A global is always class `global` regardless of what the model asked for —
-    // any other class would be rejected by the resource variable table.
     expect(adapted.data.class).toBe('global')
   })
 
@@ -168,8 +149,6 @@ describe('buildDatatypeFromCreateInput', () => {
   })
 
   it('omits initialValue entirely when none was given, rather than writing undefined', () => {
-    // The key's presence is what the serializer checks; an explicit
-    // `initialValue: undefined` would be written out as an empty assignment.
     expect(
       buildDatatypeFromCreateInput({ name: 'Mode', derivation: 'enumerated', values: ['IDLE'] }),
     ).not.toHaveProperty('initialValue')

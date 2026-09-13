@@ -1,27 +1,8 @@
 /**
- * Provider sign-in (Google / Microsoft / Apple) for the desktop editor.
- *
- * WHY A WINDOW WE OWN, AND NOT THE SYSTEM BROWSER. Edge's OAuth callback hands the
- * session over as `httpOnly` cookies scoped to `COOKIE_DOMAIN`, then redirects to a
- * URL whose origin must match the server's `EDITOR_URL`. Nothing about the tokens
- * travels in the redirect. So the standard native-app pattern — system browser plus a
- * loopback listener — has nothing to catch: the tokens land in a cookie jar this
- * process cannot read, inside a browser it does not control. Driving the flow in a
- * `BrowserWindow` we own makes the jar ours, and Electron's cookie API reads
- * `httpOnly` values.
- *
- * KNOWN LIMIT, READ THIS BEFORE DEBUGGING A FAILURE. Google's policy refuses OAuth in
- * embedded browsers and can answer `disallowed_useragent` instead of a consent
- * screen. The desktop-Chrome user agent below is what makes it work in practice, but
- * it is a heuristic against a policy, not a contract. The durable fix is server-side:
- * an Edge endpoint that exchanges a one-time code for tokens, which would let this run
- * in the real system browser the way RFC 8252 intends. That change belongs to
- * autonomy-edge; until it exists, this is the only route that works from here.
- *
- * A FRESH PARTITION PER ATTEMPT is not a detail. Reusing one keeps the previous Google
- * account signed in inside the window, so a user who picked the wrong account could
- * never pick another — the next attempt would skip the chooser and hand back the same
- * identity, which reads as the app ignoring them.
+ * Provider sign-in (Google / Microsoft / Apple) for the desktop editor. Runs in an
+ * owned `BrowserWindow`, not the system browser, so Electron's cookie API can read
+ * Edge's `httpOnly` session cookies; each attempt gets a fresh partition so picking
+ * the wrong account doesn't stick for the next attempt.
  */
 
 import { BrowserWindow, session } from 'electron'
@@ -52,21 +33,14 @@ export type OAuthFlowResult =
 /** The providers, as they appear in Edge's own `/auth/{provider}` routes. */
 const PROVIDER_IDS: readonly EdgeOAuthProviderId[] = ['google', 'microsoft', 'apple']
 
-/**
- * Where each provider's sign-in may legitimately take the window. Kept short on
- * purpose: a host missing from here costs a blocked navigation that is easy to see and
- * add, while a host too many lets a provider page walk the window anywhere.
- */
+/** Where each provider's sign-in may legitimately take the window; kept narrow since a host too many lets a provider page navigate the window anywhere. */
 const PROVIDER_HOSTS: Record<EdgeOAuthProviderId, readonly string[]> = {
   google: ['accounts.google.com', 'accounts.youtube.com'],
   microsoft: ['login.microsoftonline.com', 'login.live.com', 'login.microsoft.com', 'account.live.com'],
   apple: ['appleid.apple.com', 'idmsa.apple.com'],
 }
 
-/**
- * Same default and override as the renderer's `getEdgeWebUrl`, restated here because
- * that helper lives in the adapters layer, which the main process may not import.
- */
+/** Mirrors the renderer's `getEdgeWebUrl` default; restated here since the main process can't import the adapters layer. */
 const DEFAULT_EDGE_WEB_URL = 'https://edge.autonomylogic.com'
 
 function hostnameOf(url: string): string | null {
@@ -93,11 +67,8 @@ function isHostOrSubdomain(hostname: string, allowed: string): boolean {
 }
 
 /**
- * Whether the sign-in window may follow a navigation to `url`.
- *
- * The window renders a third party's pages with a desktop-Chrome user agent, and a link
- * on one of them could take it anywhere. Anywhere is too far for a window titled "Sign
- * in to Autonomy Edge": only Edge's own hosts and the provider's are allowed.
+ * Whether the sign-in window may follow a navigation to `url`. Only Edge's own hosts
+ * and the provider's are allowed, since the window renders third-party pages under a spoofed UA.
  */
 export function isAllowedOAuthNavigation(url: string, provider: EdgeOAuthProviderId): boolean {
   let parsed: URL
@@ -120,11 +91,7 @@ export function isAllowedOAuthNavigation(url: string, provider: EdgeOAuthProvide
   )
 }
 
-/**
- * Whether a cookie was set for Edge's host — the host itself or a parent domain of it,
- * which is how a domain cookie is scoped. A provider's own cookie, or one a page on the
- * way through managed to set for another site, does not match.
- */
+/** Whether a cookie was set for Edge's host (itself or a parent domain), as opposed to a provider's or another site's. */
 export function cookieBelongsToEdge(cookieDomain: string | undefined, edgeHost: string): boolean {
   if (!cookieDomain) {
     return false
@@ -134,18 +101,9 @@ export function cookieBelongsToEdge(cookieDomain: string | undefined, edgeHost: 
 }
 
 /**
- * Recognise a provider sign-in link the renderer asked to open.
- *
- * Matched on PATH ONLY, deliberately, not on origin. The shared sign-in dialog builds
- * its provider links from the Edge WEB origin, because that is the only Edge URL a
- * renderer bundle knows; the real endpoint is on the API origin, which is a
- * main-process env var. Rather than plumb that into the bundle, the renderer's URL is
- * treated as a statement of intent — "start a Google sign-in" — and this process builds
- * the actual request from its own configuration. Matching on origin would force the two
- * to agree about something only one of them can know.
- *
- * Returns null for everything else, which keeps ordinary links going to the system
- * browser.
+ * Recognises a provider sign-in link by path only, not origin: the renderer only knows
+ * the Edge WEB origin, while the real endpoint lives on the API origin (a main-process
+ * env var). Returns null for anything else, which falls through to the system browser.
  */
 export function edgeOAuthProviderFromUrl(url: string): EdgeOAuthProviderId | null {
   try {
@@ -158,13 +116,9 @@ export function edgeOAuthProviderFromUrl(url: string): EdgeOAuthProviderId | nul
 }
 
 /**
- * Where a provider flow starts.
- *
- * `state=editor` is the marker Edge's callback reads to know which app began the
- * flow. It sends the browser to the server's own `EDITOR_URL` afterwards, which on a
- * desktop install is a page we neither need nor can reach — irrelevant, because the
- * cookies are set by the response that issues that redirect, and we read them from
- * our own jar rather than from wherever it points.
+ * Where a provider flow starts. `state=editor` marks the app for Edge's callback; the
+ * post-auth redirect target is irrelevant since cookies are read from our own jar, not
+ * from wherever it points.
  */
 function providerUrl(provider: EdgeOAuthProviderId): string {
   const url = new URL(`${getEdgeApiBaseUrl()}/auth/${provider}?state=editor`)
@@ -177,11 +131,8 @@ function providerUrl(provider: EdgeOAuthProviderId): string {
 }
 
 /**
- * Run a provider flow to completion.
- *
- * Resolves once the session cookies appear in our partition, when the user closes the
- * window, or on timeout. Never rejects: every outcome is one the caller has to render,
- * not an exception to propagate.
+ * Runs a provider flow to completion. Never rejects — resolves once session cookies
+ * appear in our partition, the user closes the window, or on timeout.
  */
 export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowResult> {
   let startUrl: string
@@ -208,9 +159,7 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
       autoHideMenuBar: true,
       webPreferences: {
         partition,
-        // This window renders a third party's login page. It gets no bridge, no Node
-        // and no access to anything of ours: it exists only to let the provider talk
-        // to Edge.
+        // No bridge, no Node, no access to anything of ours — it exists only to let the provider talk to Edge.
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -249,12 +198,9 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
     }, FLOW_TIMEOUT_MS)
 
     /**
-     * Look for the session in our jar.
-     *
-     * Polled on every navigation rather than matched against an expected URL: the
-     * redirect target is the server's `EDITOR_URL`, which this process has no way to
-     * know. The cookies appearing IS the completion signal, and a more honest one
-     * than a URL guess.
+     * Looks for the session in our jar. Polled on every navigation rather than matched
+     * against an expected URL, since the redirect target (the server's `EDITOR_URL`)
+     * isn't knowable here — the cookies appearing is the completion signal.
      */
     const checkForSession = async () => {
       if (settled) {
@@ -262,9 +208,7 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
       }
 
       try {
-        // Scoped to Edge's own origin. The partition is private to this flow, but the
-        // provider's pages set cookies of their own on the way through, and an unscoped
-        // read would sweep those up with ours. Only Edge sets the two this looks for.
+        // Scoped to Edge's own origin — an unscoped read would also sweep up cookies the provider's pages set along the way.
         const edgeHost = new URL(startUrl).hostname
         const cookies = (await oauthSession.cookies.get({ url: startUrl })).filter((cookie) =>
           cookieBelongsToEdge(cookie.domain, edgeHost),
@@ -281,19 +225,14 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
       }
     }
 
-    // Any of these can be the moment the cookies land — `did-fail-load` included, and
-    // that one matters: the callback redirects to EDITOR_URL, which on a desktop
-    // install is often unreachable. The redirect failing to load is irrelevant, since
-    // the cookies were set by the response that issued it.
+    // `did-fail-load` matters too: the callback's redirect to EDITOR_URL is often unreachable on desktop, but the cookies were already set by the response that issued it.
     win.webContents.on('did-navigate', () => void checkForSession())
     win.webContents.on('did-redirect-navigation', () => void checkForSession())
     win.webContents.on('did-finish-load', () => void checkForSession())
     win.webContents.on('did-fail-load', () => void checkForSession())
 
-    // Edge sends a failed flow to the editor's `/unauthorized?reason=oauth_failed`.
-    // Recognising it lets the user see a real message instead of a window that sits
-    // there until the timeout. Everything else is held to the allowlist; server-side
-    // redirects do not pass through here, so the callback's own redirect is unaffected.
+    // Recognises Edge's `/unauthorized?reason=oauth_failed` so the user sees a real
+    // message instead of waiting out the timeout; everything else is held to the allowlist.
     win.webContents.on('will-navigate', (event, url) => {
       if (url.includes('reason=oauth_failed')) {
         finish({ status: 'failed', reason: 'provider-declined' })

@@ -1,15 +1,3 @@
-/**
- * The desktop's ST context for the assistant.
- *
- * Two things are being proved. First, that the port-shape project the store holds is
- * projected into the transpiler's IR without losing anything the model needs — a graphical
- * POU that arrives as a React Flow graph and nothing else is a program the assistant
- * cannot read, and there is no error anywhere when that happens: the answers just quietly
- * stop being about the user's program. Second, that the whole thing NEVER throws. It is
- * called from a chat turn, and a transpiler that raised would take the answer down with
- * it; `null` means "no ST for this diagram", which every caller already handles.
- */
-
 import { fromPortShape } from '../../../../backend/shared/transpilers/transpile-from-port'
 import type { PLCProjectData, PLCPou, PLCVariable } from '../../../shared/ports/types'
 import { transpileProjectStInProcess } from '../transpile-project-st'
@@ -374,9 +362,7 @@ describe('the transpiler the chat panel is handed', () => {
   it('answers null — never throws — when a POU cannot be compiled', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // A Python POU with no declared variables: the transpiler collects this as a per-POU
-    // error rather than throwing, and a partial program is not context the model should
-    // be answering from.
+    // A Python POU with no declared variables is a collected per-POU error, not a throw.
     const broken = await transpileProjectStInProcess({
       dataTypes: [],
       pous: [pou({ name: 'Broken', body: { language: 'python', value: 'pass' } })],
@@ -392,8 +378,7 @@ describe('the transpiler the chat panel is handed', () => {
   it('answers null when the projection itself blows up', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // The projection guards every graphical field, so the throwing path is reached with a
-    // POU whose body cannot even be read — the error-collecting path is the case above.
+    // Every graphical field is guarded, so only an unreadable body reaches the throwing path.
     const hostile: PLCPou = {
       name: 'Broken',
       pouType: 'program',

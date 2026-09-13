@@ -1,13 +1,3 @@
-/**
- * Telemetry is a thin layer: name the event, hand it to the port. These tests
- * pin the two things that can silently break — the event name each helper emits,
- * and that the payload reaches the port unmangled.
- *
- * The sink is injected rather than module-mocked. That is what lets one test file
- * run under both runners (jest in the editor, vitest on the web): module mock
- * hoisting is the one thing the two do not agree on.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { AITelemetryEventName } from '../../../../middleware/shared/ports/ai-port'
@@ -46,7 +36,6 @@ beforeEach(() => {
 describe('startTimer', () => {
   it('returns elapsed milliseconds', () => {
     const timer = startTimer()
-    // elapsed returns a rounded number
     expect(typeof timer.elapsed()).toBe('number')
   })
 })

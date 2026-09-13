@@ -12,11 +12,7 @@ const markRestored = jest.fn<void, []>()
 let expiryListener: (() => void) | null = null
 let restoredListener: (() => void) | null = null
 
-/**
- * The port the hook now takes as an argument. Nothing here mocks the web adapter:
- * the hook is in `frontend/`, a surface mirrored into a build with no such adapter,
- * so the dependency arrives as a parameter.
- */
+// Passed in rather than imported: this surface is mirrored into a build with no web adapter.
 const account: EdgeAccountPort = {
   frontendBaseUrl: 'https://edge.example.com',
   oauthProviders: [],
@@ -48,21 +44,9 @@ import { useEdgeAccount } from '../use-edge-account'
 
 const USER = { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', username: 'ada' }
 
-/**
- * `fetchUser` answers with a read, not a bare user-or-null.
- *
- * That is the whole point of the type: `noSession()` is the server saying nobody is
- * signed in, and `unreachable()` is the question never having been asked. Collapsing
- * the two into `null` is what put a blocking sign-in dialog over a live session.
- */
-/**
- * Fire an expiry the way the renewal layer really does.
- *
- * `notifyExpired()` sets `sessionExpired` — and `lastFailureKind` before it — and
- * only THEN calls the listeners, so a listener that reads the session sees an
- * accurate verdict. Driving the listener without the flags is a fake the hook can
- * no longer be tested against, now that it asks which kind of failure this was.
- */
+// `fetchUser` resolves to a read (no-session/unknown/signed-in), never a bare user,
+// so a network failure can't be conflated with "nobody is signed in".
+// Mirrors the renewal layer's real order: sets sessionExpired/lastFailureKind before notifying listeners.
 function fireExpiry({ absent = false }: { absent?: boolean } = {}) {
   isEdgeSessionExpired.mockReturnValue(true)
   isEdgeSessionAbsent.mockReturnValue(absent)
@@ -190,9 +174,7 @@ describe('useEdgeAccount', () => {
     expect(result.current.planCaption).toBeNull()
   })
 
-  // The provider flow finishes in another tab, so nothing here knows it happened.
-  // Coming back to this tab is the only signal, and without this the sign-in gate
-  // would stay up over a session that already exists.
+  // The provider flow finishes in another tab; only regaining focus tells this hook a session now exists.
   describe('returning from a provider tab', () => {
     it('re-checks the session when the tab regains focus', async () => {
       fetchEdgeUser.mockResolvedValue(noSession())
@@ -225,14 +207,7 @@ describe('useEdgeAccount', () => {
       expect(fetchEdgeUser.mock.calls.length).toBe(callsBefore)
     })
 
-    /**
-     * The gap the review caught. A provider flow finishes in another tab, so this
-     * focus re-check is the only thing that learns the session works again — and
-     * because the request SUCCEEDS, the renewal layer never runs and never
-     * announces the recovery. Work queued while the session was dead (an
-     * interrupted save) stayed queued forever, while the toast said it would
-     * finish on its own.
-     */
+    // A successful focus re-check never runs the renewal layer, so it must announce the recovery itself.
     it('announces the recovery when it finds a session, with no 401 involved', async () => {
       fetchEdgeUser.mockResolvedValue(noSession())
 
@@ -277,10 +252,7 @@ describe('useEdgeAccount', () => {
     })
   })
 
-  /**
-   * The sign-in prompt reads very differently depending on how the user got here,
-   * so the hook has to carry the reason rather than leaving the UI to guess.
-   */
+  // The sign-in prompt reads differently depending on why, so the hook carries the reason.
   describe('why the account is signed out', () => {
     it('reports a plain signed-out state when nobody was signed in', async () => {
       fetchEdgeUser.mockResolvedValue(noSession())
@@ -315,13 +287,7 @@ describe('useEdgeAccount', () => {
       await waitFor(() => expect(result.current.signedOutReason).toBe('expired'))
     })
 
-    /**
-     * `isExpired()` alone is not the question. The renewal layer marks the session
-     * expired for BOTH kinds of 401 — one that ran out, and one where there was
-     * never a session to renew — so asking only that told someone who had just
-     * signed out, or who had never signed in at all, that *their* session expired.
-     * `isAbsent()` exists for exactly this and the web router already uses it.
-     */
+    // isExpired() alone can't distinguish "ran out" from "never existed"; isAbsent() carries that.
     it('does not claim an expiry when there was no session to expire', async () => {
       fetchEdgeUser.mockResolvedValue(noSession())
       isEdgeSessionExpired.mockReturnValue(true)
@@ -333,9 +299,6 @@ describe('useEdgeAccount', () => {
       expect(result.current.signedOutReason).toBe('signed-out')
     })
 
-    // The reviewer's route to it: sign out, alt-tab away and back. The focus
-    // re-check 401s, the refresh reports no token, and the dialog used to rewrite
-    // itself to "Your session has expired" over a session the user ended on purpose.
     it('does not claim an expiry after the user signed out and came back', async () => {
       fetchEdgeUser.mockResolvedValue(signedIn(USER))
 
@@ -358,7 +321,6 @@ describe('useEdgeAccount', () => {
       expect(result.current.signedOutReason).toBe('signed-out')
     })
 
-    // Same for the expiry event itself, which used to hard-code the reason.
     it('does not claim an expiry when the event says there was no session', async () => {
       fetchEdgeUser.mockResolvedValue(signedIn(USER))
 
@@ -422,12 +384,7 @@ describe('useEdgeAccount', () => {
     expect(result.current.user).toEqual(USER)
   })
 
-  /**
-   * A read of /auth/me is not instant, and the session can die while one is out.
-   * The reply then describes a session that no longer exists — so applying it puts
-   * the user back to `signed-in` and, worse, announces a recovery, which replays a
-   * queued save against a session that is already gone.
-   */
+  // A stale read must not resurrect a session that has since died.
   describe('a read that outlives what it was reading', () => {
     it('does not let a read from before the expiry undo it', async () => {
       fetchEdgeUser.mockResolvedValue(signedIn(USER))
@@ -501,14 +458,7 @@ describe('useEdgeAccount', () => {
     })
   })
 
-  /**
-   * The reported bug, and the reason `fetchUser` answers with a read instead of a
-   * user-or-null. A request that never reached the server establishes nothing; when
-   * that was collapsed into "nobody is signed in", a two-second wifi drop mounted a
-   * blocking sign-in dialog over a live editor holding unsaved work — and the only
-   * way out was the focus listener, so a window that never lost focus never cleared
-   * it.
-   */
+  // A request that never reached the server must not be read as "nobody is signed in".
   describe('a read that never reached the server', () => {
     it('keeps a signed-in user signed in', async () => {
       fetchEdgeUser.mockResolvedValue(signedIn(USER))
@@ -560,11 +510,7 @@ describe('useEdgeAccount', () => {
       expect(result.current.status).toBe('signed-out')
     })
 
-    /**
-     * A FIRST read is the one case with no answer to hold: `loading` renders neither
-     * the account menu nor the sign-in gate, and the focus re-check only runs while
-     * `signed-out`, so without a retry there is no path back short of a reload.
-     */
+    // A first read has no prior answer to hold onto, so it must retry rather than give up.
     it('retries a first read until it gets through', async () => {
       jest.useFakeTimers()
 
@@ -655,15 +601,9 @@ describe('useEdgeAccount', () => {
     })
   })
 
-  /**
-   * The port contracts a failure into `null`, so the web adapter never rejects.
-   * Covered anyway because nothing in the types enforces that, and the failure it
-   * would cause is silent: `status` stays on `loading`, which renders neither the
-   * account menu nor the button to sign in.
-   */
+  // Nothing in the types stops a port from rejecting instead of resolving.
   describe('a port that rejects instead of resolving', () => {
-    // A rejection says nothing about the session, so it is folded into the same
-    // "learned nothing" answer as a network failure: hold, and retry.
+    // Folded into the same "learned nothing" answer as a network failure: hold, and retry.
     it('does not report a signed-out user when the read throws', async () => {
       fetchEdgeUser.mockRejectedValue(new Error('offline'))
 
@@ -688,17 +628,8 @@ describe('useEdgeAccount', () => {
   })
 })
 
-/**
- * A sign-in that happened somewhere else in the app.
- *
- * This is what was broken: every consumer of the hook keeps its own state, and only
- * the one whose dialog performed the sign-in ever called `refresh`. A second
- * consumer — the project card menu deciding whether to offer "Upload to Cloud" —
- * went on showing the signed-out answer until it happened to remount, so quitting
- * the app or opening a project and coming back looked like the fix.
- *
- * The session already announces it, and these tests hold the hook to listening.
- */
+// Every consumer of the hook keeps its own state, so a sign-in from another consumer's
+// dialog must reach this one too, not just the one that performed it.
 describe('a sign-in performed elsewhere', () => {
   function fireRestored() {
     act(() => {

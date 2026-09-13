@@ -256,10 +256,6 @@ describe('computeGraphicalDiff — FBD', () => {
 
 describe('computeGraphicalDiff — what it is given', () => {
   it('produces an empty diff for a file that is not graphical at all', () => {
-    // `main.st` used to be typed `'ld' | 'fbd'` by an assertion on the extension. The
-    // result happened to be right, because the extractor answers null for anything it
-    // cannot read — but nothing about the type said so, and the next branch written on
-    // `ext` would have been unsound with no warning.
     const body = 'PROGRAM main\nVAR\n  A : BOOL;\nEND_VAR\nA := TRUE;\nEND_PROGRAM'
 
     const result = computeGraphicalDiff(body, body, 'pous/programs/main.st')
@@ -269,10 +265,7 @@ describe('computeGraphicalDiff — what it is given', () => {
   })
 
   it('does not let a non-numeric dimension turn the rung height into NaN', () => {
-    // `??` rejects only null and undefined, so a dimension that arrived as a string
-    // used to pass through and `y + height` concatenated instead of adding. The result
-    // reached `flows[].originalHeight` as NaN and laid the rung out on it. These bodies
-    // come from historical commits, so this editor is not always the writer.
+    // A dimension arriving as a string must not concatenate with `y`/`height` instead of adding.
     const poisoned = withBody({
       rungs: [
         {
@@ -290,8 +283,6 @@ describe('computeGraphicalDiff — what it is given', () => {
   })
 
   it('drops a malformed node instead of losing the rung it sits in', () => {
-    // A node with no id cannot be keyed, and used to be carried through as if it were
-    // a real one. The rest of the rung still diffs.
     const broken = withBody({
       rungs: [{ id: 'r1', edges: [], nodes: [rail('RAIL_1'), { type: 'contact' }, coil('NODE_c', 'A', 300)] }],
     })

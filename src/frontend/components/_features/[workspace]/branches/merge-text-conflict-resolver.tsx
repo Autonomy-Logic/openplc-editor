@@ -28,10 +28,7 @@ function getLanguageFromPath(path: string): string {
   }
 }
 
-/**
- * Build the initial resolution content with git-style conflict markers,
- * pre-populated for the user to edit.
- */
+/** Builds the initial resolution content with git-style conflict markers. */
 function buildInitialResolution(
   _filePath: string,
   sourceContent: string,
@@ -40,8 +37,7 @@ function buildInitialResolution(
   sourceBranch: string,
   targetBranch: string,
 ): string {
-  // Simple line-based conflict markers (real git would do hunks; this is a
-  // pragmatic version that gives the user both versions to edit freely).
+  // Line-based markers, not real git hunks — gives the user both versions to edit freely.
   return [
     `<<<<<<< ${sourceBranch} (source)`,
     sourceContent.trimEnd(),
@@ -50,8 +46,6 @@ function buildInitialResolution(
     `>>>>>>> ${targetBranch} (target)`,
     '',
   ].join('\n')
-  // Note: baseContent could be used in a 3-way diff display; not needed for
-  // the editable resolution panel itself.
 }
 
 type TextConflictResolverProps = {
@@ -108,7 +102,6 @@ export function TextConflictResolver({
 
   return (
     <div className='flex h-full flex-col'>
-      {/* Header bar */}
       <div className='flex shrink-0 items-center justify-between gap-2 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800'>
         <div className='flex min-w-0 items-center gap-2'>
           <p className='truncate font-mono text-xs text-neutral-700 dark:text-neutral-300'>{filePath}</p>
@@ -165,7 +158,6 @@ export function TextConflictResolver({
         </div>
       </div>
 
-      {/* Top: side-by-side source vs target (read-only diff) */}
       <ResizablePanelGroup id={`text-resolver-${filePath}`} direction='vertical' className='min-h-0 flex-1'>
         <ResizablePanel id='compare-pane' order={1} defaultSize={45} minSize={25}>
           <div className='flex h-full flex-col'>
@@ -210,7 +202,6 @@ export function TextConflictResolver({
           className='h-[4px] transition-colors data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light'
         />
 
-        {/* Bottom: editable resolution */}
         <ResizablePanel id='resolution-pane' order={2} defaultSize={55} minSize={20}>
           <div className='flex h-full flex-col'>
             <div className='flex shrink-0 items-center justify-between gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-1 text-[10px] font-medium text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400'>

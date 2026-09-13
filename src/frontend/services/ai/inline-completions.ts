@@ -1,13 +1,4 @@
-/**
- * Wiring that turns the AI port into ghost text in a Monaco editor.
- *
- * This used to live inside the web AI adapter, which meant the desktop could
- * never have inline completions no matter how good its transport got. Nothing in
- * here is web-specific: the provider talks to the platform only through the
- * port, and Monaco is Monaco on both builds. What IS platform-specific — warming
- * the model's prompt cache — is an optional port call, so a build without a warm
- * endpoint simply skips it.
- */
+/** Wiring that turns the AI port into ghost text in a Monaco editor; talks to the platform only through the port. */
 
 import type * as monaco from 'monaco-editor'
 
@@ -18,21 +9,13 @@ import { AIInlineCompletionProvider } from './inline-completion-provider'
 
 let didWarmCache = false
 
-/**
- * Test seam: drop the once-per-session latches. Without it every test after the first
- * runs against an already-warmed cache, and a case named for the warm-cache branch
- * cannot reach it — which is exactly what happened to the test that claimed to.
- */
+/** Test seam: resets the once-per-session latches. */
 export function __resetInlineCompletionsForTests(): void {
   didWarmCache = false
 }
 let didWireImeListeners = false
 
-/**
- * Attach IME composition listeners to every Monaco editor (existing and future)
- * exactly once per session, so the inline-completion provider can suppress
- * type-through/requests while a CJK composition is in progress.
- */
+/** Attach IME composition listeners to every Monaco editor (existing and future), once per session. */
 function wireImeCompositionListeners(m: typeof monaco): void {
   if (didWireImeListeners) return
   didWireImeListeners = true
@@ -46,14 +29,7 @@ function wireImeCompositionListeners(m: typeof monaco): void {
   m.editor.onDidCreateEditor(attach)
 }
 
-/**
- * Register AI inline completions for one POU's editor. Returns a disposable that
- * tears down both the Monaco registration and the provider's own state; the
- * caller is expected to call it when the POU or the language changes.
- *
- * `session` is the Edge account's session, where the platform has one: the provider
- * stops asking while it is expired and resumes the moment it is restored.
- */
+/** Register AI inline completions for one POU's editor; returns a disposable to call when the POU or language changes. */
 export function registerAIInlineCompletions(
   ai: AIPort,
   params: {
@@ -63,13 +39,12 @@ export function registerAIInlineCompletions(
     session?: EdgeSessionState
   },
 ): { dispose: () => void } {
-  // Warm the model's prompt cache once per session (fire-and-forget).
+  // Fire-and-forget: warms the cache once per session, no await.
   if (!didWarmCache) {
     didWarmCache = true
     ai.warmCache?.()
   }
 
-  // Track IME composition so type-through doesn't misfire on CJK input.
   wireImeCompositionListeners(params.monacoInstance)
 
   const provider = new AIInlineCompletionProvider(params.pouName, params.language, ai, params.session)

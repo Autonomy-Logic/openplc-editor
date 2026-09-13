@@ -1,7 +1,4 @@
-/**
- * LRU completion cache for AI inline completions.
- * Serves instant results on undo/redo or cursor repositioning.
- */
+/** LRU cache for AI inline completions. */
 export class CompletionCache<V> {
   private readonly maxSize: number
   private readonly cache = new Map<string, V>()
@@ -51,18 +48,12 @@ export class CompletionCache<V> {
   }
 }
 
-/**
- * Build a cache key from file URI and cursor offset.
- * Uses a hash of the prefix text for deduplication.
- */
+/** Cache key from file URI, cursor offset and prefix hash. */
 export function buildCacheKey(fileUri: string, offset: number, prefixHash: string): string {
   return `${fileUri}:${offset}:${prefixHash}`
 }
 
-/**
- * Simple string hash for cache key generation.
- * Uses djb2 algorithm — fast and good enough for cache keys.
- */
+/** djb2 string hash; fast and good enough for cache keys. */
 export function hashString(str: string): string {
   let hash = 5381
   for (let i = 0; i < str.length; i++) {

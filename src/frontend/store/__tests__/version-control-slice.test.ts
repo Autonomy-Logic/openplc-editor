@@ -36,9 +36,6 @@ describe('createVersionControlSlice', () => {
     expect(vc().selectedCommitHash).toBeNull()
   })
 
-  // ---------------------------------------------------------------------------
-  // headContent (source-control diff HEAD snapshot)
-  // ---------------------------------------------------------------------------
   describe('setHeadContent', () => {
     it('stores a copy of the provided snapshot', () => {
       const snapshot = { 'pous/programs/Main.st': 'PROGRAM Main\nEND_PROGRAM' }
@@ -221,14 +218,8 @@ describe('createVersionControlSlice', () => {
     expect(vc().pendingChangesCount).toBe(0)
   })
 
-  /**
-   * The two overlay screens the desktop reaches instead of routing. There is no
-   * router in the editor, so the navigation adapter turns `/history` and
-   * `/merge` into this state and the workspace lays the screen over itself.
-   * Opening has to copy the descriptor rather than hold the caller\'s object:
-   * the caller is a click handler whose argument it is free to mutate
-   * afterwards, and a held reference would let it rewrite what is on screen.
-   */
+  // Desktop-only overlay screens (no router); opening copies the descriptor since the
+  // caller (a click handler) is free to mutate its argument afterwards.
   describe('the overlay screens', () => {
     it('opens the history view on a commit, with or without a file', () => {
       actions().openHistoryView({ commitHash: 'abc1234' })

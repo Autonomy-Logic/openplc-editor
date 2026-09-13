@@ -1,10 +1,4 @@
-/**
- * FIM (Fill-in-the-Middle) context builder for AI inline completions.
- *
- * Web-exclusive — extracts prefix/suffix from the Monaco model, synthesizes
- * structural suffixes for ST/IL, and collects project-level context with
- * single-entry caching.
- */
+// FIM (Fill-in-the-Middle) context builder for AI inline completions.
 import type * as monaco from 'monaco-editor'
 
 import type { AICompletionLanguage } from '../../../middleware/shared/ports/ai-port'
@@ -52,14 +46,7 @@ let contextCache: {
   result: string
 } | null = null
 
-/**
- * Build a synthetic POU header prepended to the FIM prefix so the model sees the full
- * structural context surrounding the code body — the editor only shows the body.
- *
- * ST/IL: IEC 61131-3 syntax (PROGRAM ... VAR_INPUT ... END_VAR)
- * Python: comment-based header (# POU: Name (type)\n# Variables:\n#   x: INT ...)
- * C++:    comment-based header (// POU: Name (type)\n// Variables:\n//   x: INT ...)
- */
+// Builds a synthetic POU header prepended to the FIM prefix, since the editor only shows the body.
 function buildSyntheticHeader(pouName: string, language: string): string {
   const state = openPLCStoreBase.getState()
   const pou = state.project.data.pous.find((p) => p.name === pouName)
@@ -88,15 +75,7 @@ function buildSyntheticHeader(pouName: string, language: string): string {
   return ''
 }
 
-/**
- * Builds Fill-in-the-Middle context from a Monaco editor model and cursor position.
- * Extracts prefix/suffix code around the cursor and collects project-level context.
- *
- * For ST/IL, a synthetic POU header (PROGRAM/FUNCTION/FUNCTION_BLOCK + variable
- * declarations) is prepended to the prefix, and a synthetic closing keyword is
- * appended to the suffix when the cursor is at/near the end — the editor only shows
- * the body, not the enclosing wrapper.
- */
+/** Builds Fill-in-the-Middle context from a Monaco editor model and cursor position. */
 export function buildFIMContext(
   model: monaco.editor.ITextModel,
   position: monaco.Position,
@@ -112,16 +91,9 @@ export function buildFIMContext(
   const prefix = header + fullText.substring(Math.max(0, offset - maxCodePrefix), offset)
   let suffix = fullText.substring(offset, Math.min(fullText.length, offset + MAX_SUFFIX_CHARS))
 
-  // Synthesize structural suffix when at or near the end of the editor.
-  // The editor only shows the POU body — the model needs a boundary signal to
-  // understand it shouldn't generate past the end.
-  //
-  // The boundary keyword is placed a BLANK LINE below the cursor (`\n\n…`),
-  // never jammed directly against it (`\n…`). With the keyword flush against
-  // the cursor the FIM span reads as already-closed — the model frequently
-  // concluded nothing belonged between the two and returned an empty
-  // completion (most visibly right after a trailing comment line). The blank
-  // line gives it obvious room to write the body.
+  // Boundary keyword goes a blank line below the cursor (`\n\n…`), never jammed against it
+  // (`\n…`) — flush against the cursor, the model reads the span as already-closed and
+  // returns an empty completion.
   if (suffix.trim().length === 0) {
     if (language === 'st' || language === 'il') {
       const state = openPLCStoreBase.getState()
@@ -142,11 +114,7 @@ export function buildFIMContext(
   return { prefix, suffix, projectContext, language }
 }
 
-/**
- * Get project context with single-entry caching.
- * Invalidates when the POU name or language changes, or when the Zustand state
- * references change (pous, dataTypes, globalVariables arrays).
- */
+// Gets project context with single-entry caching, invalidated on POU/language change or a Zustand state reference change.
 function getCachedProjectContext(pouName: string, language: AICompletionLanguage): string {
   const state = openPLCStoreBase.getState()
   const pousRef = state.project.data.pous

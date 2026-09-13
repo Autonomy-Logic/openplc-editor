@@ -260,15 +260,7 @@ export const readProjectStateTool: AIToolDefinition = {
   },
 }
 
-/**
- * Read one POU's body verbatim.
- *
- * The escape hatch that makes context completeness a non-issue: whatever the
- * chat payload could not carry (or the model wants to re-read exactly), it can
- * pull on demand. Graphical POUs return their transpiled ST equivalent — the
- * stored XYFlow graph is node coordinates, which is not something a model can
- * reason about.
- */
+/** Read one POU's body verbatim; graphical POUs return their transpiled ST equivalent instead of raw node coordinates. */
 const readPouBodyTool: AIToolDefinition = {
   name: 'read_pou_body',
   description:
@@ -317,22 +309,10 @@ export function isMutatingTool(toolName: string): boolean {
   return MUTATING_TOOL_NAMES.has(toolName)
 }
 
-/**
- * Mutating tools whose result produces a reviewable diff in the editor
- * (a `pendingDiffs` entry of per-hunk accept/reject controls). Everything
- * else in `MUTATING_TOOL_NAMES` (variable/datatype CRUD, POU deletion)
- * changes project state without any hunks to review.
- */
+/** Mutating tools whose result produces a reviewable diff in the editor (a `pendingDiffs` entry). */
 export const DIFF_PRODUCING_TOOL_NAMES = new Set<string>(['create_pou', 'update_pou_body'])
 
-/**
- * A mutating tool that does NOT surface per-hunk diff controls. The chat
- * panel uses this to decide whether resolving every pending hunk fully
- * resolves the turn: if a turn only ran diff-producing tools, clearing all
- * hunks means there's nothing left to keep/undo, so the Keep/Undo bar can
- * hide. If a non-diff mutation also ran, the bar stays so the user can still
- * keep or revert those changes.
- */
+/** A mutating tool that does NOT surface per-hunk diff controls; used to decide whether the Keep/Undo bar can hide. */
 export function isNonDiffMutatingTool(toolName: string): boolean {
   return MUTATING_TOOL_NAMES.has(toolName) && !DIFF_PRODUCING_TOOL_NAMES.has(toolName)
 }

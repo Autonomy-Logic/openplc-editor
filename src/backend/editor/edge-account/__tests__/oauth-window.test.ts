@@ -1,23 +1,10 @@
 /**
  * The provider sign-in window, with Electron stubbed.
- *
- * The URL matcher decides between two very different fates for a link: intercepted
- * into a window this process owns, or handed to the system browser. Wrong in one
- * direction and provider tokens land in a jar we cannot read; wrong in the other and
- * ordinary links get swallowed into a login window.
- *
- * The window itself renders a third party's pages on a session we then read cookies
- * from, so what it may load, what it may open and whose cookies count are the other
- * half of what is worth protecting here.
  */
 
-/**
- * `oauth-window` imports `electron` at module scope, and CI installs with
- * `--ignore-scripts` — so Electron's postinstall never runs and `require('electron')`
- * throws before a single test can start. The stub records every window it is asked to
- * create so the tests can drive its events. Only identifiers prefixed `mock` may be
- * referenced from a hoisted factory.
- */
+// `oauth-window` imports `electron` at module scope, and CI installs with
+// `--ignore-scripts`, so `require('electron')` would throw before a test can start.
+// Only identifiers prefixed `mock` may be referenced from a hoisted factory.
 jest.mock('electron', () => {
   const mockWindows: unknown[] = []
   const mockCookies: { get: jest.Mock } = { get: jest.fn(async () => []) }
@@ -134,10 +121,7 @@ describe('edgeOAuthProviderFromUrl', () => {
   })
 
   it('matches on path regardless of origin', () => {
-    // Load-bearing: the shared dialog builds its links from the Edge WEB origin, because
-    // that is the only Edge URL a renderer bundle knows, while the real endpoint is on
-    // the API origin that only the main process is configured with. Matching on origin
-    // would force the two to agree about something only one of them can know.
+    // The renderer only knows the Edge WEB origin; the real endpoint is on the API origin.
     expect(edgeOAuthProviderFromUrl('https://edge.autonomylogic.com/auth/google?state=x')).toBe('google')
     expect(edgeOAuthProviderFromUrl('http://localhost:5173/auth/apple')).toBe('apple')
   })

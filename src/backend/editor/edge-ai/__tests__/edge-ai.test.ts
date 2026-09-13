@@ -1,23 +1,7 @@
 /**
- * The AI proxy, with the transport stubbed and the parsing real.
- *
- * Two things are worth protecting here, and neither is the request shapes.
- *
- * The first is SSE reassembly. A `data:` frame is not a unit of anything on the wire —
- * it arrives in whatever pieces TCP produced — and a parser that reads chunks instead
- * of lines drops the split frame, which reaches the user as a missing word in the
- * middle of an answer nobody can reproduce.
- *
- * The second is that a frame carrying no prose still reaches the consumer. A
- * `tool_use` is the model saying it wants to act on the project, and a transport that
- * flattens the stream to text drops it — which turns "the assistant built your POU"
- * into "the assistant said nothing and stopped", with no error anywhere to explain it.
- *
- * The third is the failure taxonomy. "You are signed out", "your plan refused this",
- * "the server never answered" and "the model broke" are four different things, and the
- * assistant has a different screen for each. The 402 in particular carries the only
- * payload the exhaustion modal has to work with, so it has to survive the whole trip
- * from the socket to the caller with every field intact.
+ * The AI proxy, with the transport stubbed and the parsing real: SSE reassembly across
+ * chunk boundaries, non-prose frames (`tool_use`) reaching the consumer, and the
+ * failure taxonomy (signed-out / billing / http / unreachable) staying intact.
  */
 
 import type { AISSEEvent } from '../../../../middleware/shared/ports/ai-port'
@@ -45,9 +29,7 @@ jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAccessToken: jest.fn(),
 }))
 
-// Only the transport is stubbed. `EdgeStreamHttpError` and the JSON helpers are the
-// real ones, so a body this module should reject is rejected here too rather than
-// being waved through by a permissive double.
+// Only the transport is stubbed; `EdgeStreamHttpError` and the JSON helpers stay real.
 jest.mock('../../edge-account/edge-http', () => ({
   ...jest.requireActual<typeof import('../../edge-account/edge-http')>('../../edge-account/edge-http'),
   edgeStreamRequest: jest.fn(),
@@ -378,10 +360,7 @@ describe('streaming an answer', () => {
 
     const { sink: transport } = await nthStream(0)
 
-    // This is the shape on the wire: `GlobalExceptionFilter` re-wraps the thrown body
-    // under `error`. Reading `message` off the root — which is what the bare shape the
-    // guard throws would have — found nothing here, and every 400/403/404/500 reached the
-    // user as "Autonomy Edge answered 400." while the web build showed the sentence.
+    // `GlobalExceptionFilter` re-wraps the thrown body under `error`; must read from there, not root `message`.
     transport.onError(
       new EdgeStreamHttpError(
         400,
@@ -421,8 +400,7 @@ describe('streaming an answer', () => {
 
     const { sink: transport } = await nthStream(0)
 
-    // The fourth code the CreditGuard throws, and the one this build did not know: the
-    // payload parsed as nothing, so the user saw "answered 402." and no payment CTA.
+    // One of several codes CreditGuard throws; must parse into a billing failure with a payment CTA.
     transport.onError(
       new EdgeStreamHttpError(
         402,

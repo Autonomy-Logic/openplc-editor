@@ -1,19 +1,6 @@
 /**
- * The start-screen account.
- *
- * The guarantee worth pinning down is the one that differs from the activity bar: this
- * dialog NEVER opens on its own, on either build. The activity bar opens it unprompted
- * where `requiresEdgeAccount` is set, and that is right there — a project was asked for
- * and could not be reached. Here nothing has been asked for, and forcing a login onto
- * the screen a user lands on would block an editor that is usable without an account.
- *
- * The component is byte-identical in openplc-editor (the shared surface is compared
- * file by file), so this covers the desktop's copy too.
- *
- * NOTHING IS MODULE-MOCKED. The section reads the platform through `PlatformProvider`,
- * so the account arrives as a fake port and the real hook, menu and dialog run on top
- * of it — the same way they do in the app. That is what lets one file run unchanged
- * under both runners, whose module-mock hoisting differs.
+ * The section is exercised through `PlatformProvider` with a fake port, not module
+ * mocks, so this file runs unchanged under both runners.
  */
 
 import { describe, expect, it } from '@jest/globals'
@@ -60,10 +47,7 @@ function makePorts(overrides: Partial<PlatformPorts>): PlatformPorts {
   }
 }
 
-/**
- * An Edge account that answers `/auth/me` with whatever it is told to, and counts
- * how often it was asked. `null` means the read never comes back — the in-flight case.
- */
+/** A fake Edge account port; `read: null` never resolves, simulating the in-flight case. */
 function fakeAccount(read: EdgeUserRead | null, session: { expired: boolean } = { expired: false }) {
   let reads = 0
 
@@ -80,7 +64,6 @@ function fakeAccount(read: EdgeUserRead | null, session: { expired: boolean } = 
     signOut: () => Promise.resolve(),
     session: {
       isExpired: () => session.expired,
-      // An expiry that was a real session dying, not a 401 on a session that never was.
       isAbsent: () => !session.expired,
       onExpired: () => () => undefined,
       onRestored: () => () => undefined,
@@ -127,12 +110,6 @@ describe('StartAccountSection', () => {
     expect(await screen.findByRole('dialog')).not.toBeNull()
   })
 
-  /**
-   * The whole point of this component existing separately from the activity bar's
-   * slot. On the web, `requiresEdgeAccount` is true and the activity bar opens the
-   * dialog unprompted — but the start screen is reached with no project asked for, so
-   * forcing a login there would block a screen that works without one.
-   */
   it('still does not open by itself where an account is required', async () => {
     renderSection({
       account: fakeAccount({ status: 'no-session' }).port,
@@ -163,8 +140,6 @@ describe('StartAccountSection', () => {
 
     const { container } = renderSection({ account: account.port })
 
-    // The read went out and has not come back: nothing on screen. A row that appears
-    // and then vanishes is worse than a beat of nothing.
     await waitFor(() => expect(account.reads()).toBe(1))
     expect(container.innerHTML).toBe('')
   })
@@ -175,8 +150,6 @@ describe('StartAccountSection', () => {
     const { container } = renderSection({ account: account.port, capabilities: { hasEdgeAccount: false } })
 
     expect(container.innerHTML).toBe('')
-    // And it tells the hook to stay idle rather than polling an API that has no
-    // account endpoints — the autonomy-node build. An idle hook never asks.
     await waitFor(() => expect(container.innerHTML).toBe(''))
     expect(account.reads()).toBe(0)
   })

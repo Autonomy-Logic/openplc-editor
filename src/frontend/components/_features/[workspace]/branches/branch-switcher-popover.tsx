@@ -14,10 +14,7 @@ type BranchSwitcherPopoverProps = {
   onClose: () => void
   onSelect: (branch: Branch) => void
   onDelete: (branch: Branch) => void
-  /**
-   * Absent on a build with no merge screen, and the entry is then not rendered at all.
-   * Rendering it disabled would still be a promise this platform cannot keep.
-   */
+  /** Absent, rather than disabled, when this build has no merge screen to reach. */
   onMerge?: (branch: Branch) => void
 }
 
@@ -84,8 +81,7 @@ export function BranchSwitcherPopover({
     }
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      // Don't close if the click is inside Radix-portalled content (popover form
-      // for create branch, or the branch actions dropdown menu)
+      // Don't close for clicks inside Radix-portalled content (create-branch form, actions menu).
       if (target.closest?.('[data-radix-popper-content-wrapper]')) return
       if (target.closest?.('[data-radix-menu-content]')) return
       if (popoverRef.current && !popoverRef.current.contains(target)) {
@@ -118,7 +114,6 @@ export function BranchSwitcherPopover({
         )}
         style={position ? { left: position.left, bottom: position.bottom } : { left: 8, bottom: 32 }}
       >
-        {/* Search */}
         <div className='p-2 pb-0'>
           <input
             type='text'
@@ -131,7 +126,6 @@ export function BranchSwitcherPopover({
           <div className='mt-2 h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
         </div>
 
-        {/* Branch list */}
         <div className='max-h-56 overflow-y-auto px-2 py-1'>
           {isLoading && (
             <p className='px-2 py-3 text-center font-caption text-xs font-normal text-neutral-500 dark:text-neutral-400'>
@@ -156,9 +150,8 @@ export function BranchSwitcherPopover({
                   isActive && 'bg-neutral-100 dark:bg-neutral-900',
                 )}
               >
-                {/* Clickable area — only branch icon + name triggers selection.
-                    Side elements (checkmark, default badge, dots menu) are OUTSIDE
-                    this button so they don't accidentally trigger a branch switch. */}
+                {/* Side elements (checkmark, badge, menu) stay outside this button so they
+                    don't trigger a branch switch. */}
                 <button
                   type='button'
                   onClick={() => {
@@ -167,7 +160,6 @@ export function BranchSwitcherPopover({
                   }}
                   className='flex min-w-0 flex-1 cursor-pointer items-center gap-[6px] bg-transparent text-left'
                 >
-                  {/* Git branch icon */}
                   <svg
                     className='h-3.5 w-3.5 shrink-0 text-neutral-500 dark:text-neutral-400'
                     viewBox='0 0 16 16'
@@ -189,7 +181,6 @@ export function BranchSwitcherPopover({
                     default
                   </span>
                 )}
-                {/* Actions menu (3 dots) — reveals merge + delete on hover. */}
                 <div className='shrink-0' data-branch-actions>
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
@@ -276,7 +267,6 @@ export function BranchSwitcherPopover({
           })}
         </div>
 
-        {/* Create new branch */}
         <div className='px-2 pb-2'>
           <div className='mb-1 h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
           <CreateBranchPopover projectId={projectId} onCloseParent={handleClose} />

@@ -65,13 +65,7 @@ export const AIChatInput = ({ onSend, onCancel, isLoading, disabled = false, dis
           className='w-full resize-none border-none bg-transparent text-[13px] text-neutral-900 placeholder-neutral-400 outline-none dark:text-neutral-100 dark:placeholder-neutral-500'
         />
         <div className='mt-1.5 flex items-center gap-1.5'>
-          {/*
-            Attach-context and mention buttons are hidden until those features
-            ship. They stay in the tree (not removed) per product request, but
-            must be invisible and non-interactable: `hidden` removes them from
-            layout, `disabled` + `tabIndex={-1}` + `aria-hidden` keep them out
-            of mouse, keyboard, and assistive-tech reach.
-          */}
+          {/* Hidden until shipped; kept in the tree but inert via disabled + tabIndex={-1} + aria-hidden. */}
           <button
             type='button'
             title='Attach context'

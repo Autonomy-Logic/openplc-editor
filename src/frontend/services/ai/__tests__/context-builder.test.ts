@@ -1,15 +1,3 @@
-/**
- * The FIM context is everything the completion model is told about the code it
- * is completing. The editor shows only a POU's body, so this module synthesizes
- * the wrapper around it — the declaration header before the cursor and the
- * closing keyword after it. Get either wrong and the model writes a second
- * PROGRAM header into the body, or keeps generating past the end of the POU.
- *
- * The real store is seeded rather than mocked (the module reads it directly)
- * and the real context collector runs, so nothing here mocks a module and the
- * file runs under jest (editor) and vitest (web) alike.
- */
-
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import type * as monaco from 'monaco-editor'
 
@@ -17,15 +5,7 @@ import type { PLCPou, PLCVariable } from '../../../../middleware/shared/ports/ty
 import { openPLCStoreBase } from '../../../store'
 import { buildFIMContext } from '../context-builder'
 
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
-/**
- * Monaco's `ITextModel` has well over a hundred members; a fake that satisfies
- * the whole interface would be pure noise. Only `getValue` and `getOffsetAt`
- * are read here, so the assertion is confined to this one helper.
- */
+// Only `getValue` and `getOffsetAt` are read; a fake covering all of `ITextModel` would be noise.
 function makeModel(text: string): monaco.editor.ITextModel {
   const model = {
     getValue: () => text,
@@ -39,7 +19,7 @@ function makeModel(text: string): monaco.editor.ITextModel {
   return model as unknown as monaco.editor.ITextModel
 }
 
-/** Same reasoning as `makeModel`: `Position` is a class, only two fields read. */
+// Same reasoning as above: `Position` is a class, only two fields read.
 function makePosition(lineNumber: number, column: number): monaco.Position {
   return { lineNumber, column } as unknown as monaco.Position
 }
@@ -75,10 +55,6 @@ beforeEach(() => {
   seedPous([makePou('Main')])
 })
 
-// ---------------------------------------------------------------------------
-// Prefix / suffix extraction
-// ---------------------------------------------------------------------------
-
 describe('buildFIMContext', () => {
   it('splits the document at the cursor into prefix and suffix', () => {
     const ctx = buildFIMContext(makeModel('line one\nline two\nline three'), makePosition(2, 5), 'Main', 'st')
@@ -89,8 +65,7 @@ describe('buildFIMContext', () => {
   })
 
   it('caps the code prefix so a long POU cannot crowd out the synthetic header', () => {
-    // The header is the only thing telling the model what POU it is inside; it
-    // is charged against the same budget and must survive a 10k-character body.
+    // The header is charged against the same budget and must survive a 10k-character body.
     const text = 'x'.repeat(10_000)
 
     const ctx = buildFIMContext(makeModel(text), makePosition(1, 10_001), 'Main', 'st')
@@ -107,10 +82,6 @@ describe('buildFIMContext', () => {
     expect(ctx.suffix.length).toBe(1000)
   })
 })
-
-// ---------------------------------------------------------------------------
-// Synthetic POU header
-// ---------------------------------------------------------------------------
 
 describe('synthetic header', () => {
   it('declares the POU and its variables ahead of the ST body', () => {
@@ -137,8 +108,7 @@ describe('synthetic header', () => {
   })
 
   it('writes a Python comment header instead of IEC syntax', () => {
-    // An IEC header in a Python POU would be read as code and the model would
-    // continue in the wrong language.
+    // An IEC header in a Python POU would be read as code, continuing in the wrong language.
     seedPous([makePou('Script', 'program', [makeVariable('speed')])])
 
     const ctx = buildFIMContext(makeModel('x'), makePosition(1, 2), 'Script', 'python')
@@ -165,17 +135,12 @@ describe('synthetic header', () => {
   })
 
   it('prepends nothing when the POU is not in the project', () => {
-    // A stale editor can outlive its POU; the completion must still work off
-    // the raw text rather than claiming a POU that no longer exists.
+    // A stale editor can outlive its POU; completion must work off the raw text.
     const ctx = buildFIMContext(makeModel('x := 1;'), makePosition(1, 8), 'Deleted', 'st')
 
     expect(ctx.prefix).toBe('x := 1;')
   })
 })
-
-// ---------------------------------------------------------------------------
-// Synthetic closing boundary
-// ---------------------------------------------------------------------------
 
 describe('synthetic suffix', () => {
   it.each([
@@ -192,9 +157,7 @@ describe('synthetic suffix', () => {
   })
 
   it('leaves a blank line between the cursor and the boundary keyword', () => {
-    // With the keyword flush against the cursor the span reads as already
-    // closed and the model returns an empty completion — most visibly right
-    // after a trailing comment line.
+    // Flush against the cursor, the keyword would read as an already-closed span.
     const ctx = buildFIMContext(makeModel('(* do the thing *)\n'), makePosition(2, 1), 'Main', 'st')
 
     expect(ctx.suffix.startsWith('\n\n')).toBe(true)
@@ -218,10 +181,6 @@ describe('synthetic suffix', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// Project-context cache
-// ---------------------------------------------------------------------------
-
 describe('project context', () => {
   it('describes the surrounding project, not just the current POU', () => {
     seedPous([makePou('Main', 'program', [makeVariable('speed')]), makePou('Helper')])
@@ -233,8 +192,7 @@ describe('project context', () => {
   })
 
   it('reuses the collected context across keystrokes while the project is unchanged', () => {
-    // Every keystroke calls this; re-walking the project each time is the cost
-    // the single-entry cache exists to avoid.
+    // Every keystroke calls this; the single-entry cache avoids re-walking the project each time.
     const first = buildFIMContext(makeModel('x'), makePosition(1, 2), 'Main', 'st')
     const second = buildFIMContext(makeModel('xy'), makePosition(1, 3), 'Main', 'st')
 

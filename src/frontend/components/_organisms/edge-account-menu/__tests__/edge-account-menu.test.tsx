@@ -40,8 +40,7 @@ describe('EdgeAccountMenu', () => {
     expect(await screen.findByText('Ada Lovelace')).not.toBeNull()
   })
 
-  // Every destination lives in Edge; the editor links out rather than rebuilding
-  // them, and points at the same routes Edge's own dropdown navigates to.
+  // Every destination lives in Edge; the editor links out rather than rebuilding them.
   it('links to the dashboard, profile and settings on Edge', async () => {
     render(<EdgeAccountMenu edgeBaseUrl={EDGE_BASE} user={USER} onSignOut={signOutCounter().onSignOut} />)
     await openMenu()
@@ -58,8 +57,7 @@ describe('EdgeAccountMenu', () => {
     )
   })
 
-  // Edge's pattern leads with a card naming the account rather than an action, and
-  // captions it with the plan.
+  // Edge's pattern leads with a card naming the account, captioned with the plan.
   it('heads the menu with the account, username and plan', async () => {
     render(
       <EdgeAccountMenu
@@ -76,8 +74,7 @@ describe('EdgeAccountMenu', () => {
     expect(screen.queryByText('Pro Plan')).not.toBeNull()
   })
 
-  // No active subscription is a valid state; Edge omits the caption rather than
-  // inventing one, and an empty line would read as a rendering fault.
+  // No active subscription is a valid state; Edge omits the caption rather than inventing one.
   it('omits the caption when the plan is unknown', async () => {
     render(
       <EdgeAccountMenu edgeBaseUrl={EDGE_BASE} user={USER} planCaption={null} onSignOut={signOutCounter().onSignOut} />,
@@ -88,8 +85,7 @@ describe('EdgeAccountMenu', () => {
     expect(screen.queryByText(/plan/i)).toBeNull()
   })
 
-  // Signing out here ends the one session both apps share — that is why the menu
-  // is in the editor at all.
+  // Signing out here ends the one session both apps share.
   it('calls back on sign out', async () => {
     const signOut = signOutCounter()
     render(<EdgeAccountMenu edgeBaseUrl={EDGE_BASE} user={USER} onSignOut={signOut.onSignOut} />)
@@ -100,12 +96,7 @@ describe('EdgeAccountMenu', () => {
     expect(signOut.count()).toBe(1)
   })
 
-  /**
-   * The start-screen menu passes the name into the trigger so the WHOLE row opens the
-   * dropdown. Leaving the name outside it meant a user clicking the obvious target —
-   * their own name, right beside the avatar — got nothing, and had to find the 20px
-   * photo to reach Sign out.
-   */
+  // The name is passed into the trigger so the whole row opens the dropdown, not just the avatar.
   describe('with a label in the trigger', () => {
     it('opens from a click on the label, not just the avatar', async () => {
       const signOut = signOutCounter()
@@ -141,8 +132,7 @@ describe('EdgeAccountMenu', () => {
       const trigger = screen.getByRole('button', { name: /account: ada lovelace/i })
 
       expect(trigger.classList.contains('w-48')).toBe(true)
-      // `cn` merges, so the caller's radius replaces the default `rounded-full`
-      // instead of fighting it.
+      // `cn` merges, so the caller's radius replaces the default `rounded-full`.
       expect(trigger.classList.contains('rounded-md')).toBe(true)
       expect(trigger.classList.contains('rounded-full')).toBe(false)
     })

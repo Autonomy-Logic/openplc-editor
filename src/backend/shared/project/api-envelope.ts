@@ -1,122 +1,42 @@
-/**
- * The Edge API project envelope and the canonical path↔slot mapping
- * that goes with it.
- *
- * The Edge API stores projects as a nested JSON object (top-level
- * `project.json`, `library.json`, `devices/{...}`, `pous/{cat}/{file}`,
- * `devices/servers/{file}`).  The backend's `flattenFileHierarchy` walks
- * this shape and lands each leaf at its `relativePath` on S3.
- *
- * It used to live in the web adapter, described here as web-specific
- * on the reasoning that the editor writes the same files straight to
- * disk and needs no envelope at all.  That stopped being true when the
- * desktop learned to open a cloud project: `backend/editor/edge-projects`
- * drives the same endpoints over the same envelope, so the shape is
- * shared and lives in `backend/shared` accordingly.  Both builds must
- * compute the same answer from the same bytes.
- *
- * `getInEnvelope` / `setInEnvelope` are the symmetric pair that
- * own the path→slot mapping; both `saveProject` (full-snapshot
- * write) and `saveFile` (single-slot patch) dispatch through them
- * so a future file category added to `iterateWriteProjectFiles`
- * cannot drift on one side without TypeScript flagging the other.
- * `envelopeFromWriteProjectFiles` walks the shared iterator and
- * calls `setInEnvelope` for each entry — the iterator decides
- * "which files exist", this helper decides "where they go".
- */
+/** The Edge API project envelope and its path <-> slot mapping. Shared by both builds. */
 
 import { z } from 'zod'
 
 import type { WriteProjectFiles } from '../../../middleware/shared/ports/project-port'
 import { iterateWriteProjectFiles } from './iterate-write-project-files'
 
-/**
- * Shape the Edge API uses for project file payloads.  Optional
- * keys (`library.json`, `devices.servers`) are present only when
- * the project owns those files; the canonical `getInEnvelope` /
- * `setInEnvelope` pair handles the missing-container case.
- */
+/** Shape the Edge API uses for project file payloads. */
 export interface ApiProjectFiles {
   'project.json': string
-  /** Library projects only.  Absent on PLC projects. */
+  /** Library projects only. */
   'library.json'?: string
-  /**
-   * Raw PLCopen XML marker written by Node's raw-import path
-   * (`plcopen-pending-import.xml` at the project root). Present ONLY on a
-   * project that's pending conversion — Node stores the uploaded XML
-   * verbatim and does no server-side parsing, so a project in this state
-   * has no `project.json` and no `pous`. Absent on every normal project.
-   */
+  /** Present only on a project pending PLCopen conversion; such a project has no `project.json`. */
   'plcopen-pending-import.xml'?: string
   devices: Record<string, string> & {
-    /** Nested map for `devices/remote/*` files; absent when empty. */
     remote?: Record<string, string>
-    /** Nested map for `devices/servers/*` files; absent when empty. */
     servers?: Record<string, string>
   }
-  /** Nested map: `pous[category][filename]`. */
   pous: Record<string, Record<string, string>>
-  /** Flat map for `datatypes/*.dt` files; absent when the project
-   *  has no data-type files (predates the format or has no types). */
   datatypes?: Record<string, string>
-  /**
-   * Legacy location of the server files.  Earlier builds wrote them to a top-level
-   * `servers` slot, which Edge stores at `servers/{file}` rather than
-   * `devices/servers/{file}`; a project saved by one of those builds still answers
-   * with this key.  Read as a fallback, never written.
-   */
+  /** Legacy top-level server slot. Read as a fallback, never written. */
   servers?: Record<string, string>
-  /**
-   * Build artifacts: the compiled `<name>.stlib` for library projects
-   *  and the verification cache (`.verify-cache-library.json`).  The
-   *  shared library-build orchestrator writes both through
-   *  `setInEnvelope('build/<name>')`, so the slot must exist here for
-   *  the writes to round-trip the save endpoint instead of being
-   *  silently dropped by `setInEnvelope`'s unknown-path branch.
-   */
+  /** Build artifacts (`<name>.stlib`, verification cache). Without this slot they are silently dropped. */
   build?: Record<string, string>
 }
 
-/**
- * An envelope as it may actually arrive.
- *
- * The API omits every container the project has no files for — a project that has
- * never been saved answers `files: {}`, with no `pous`, no `devices` and not even a
- * `project.json`.  {@link getInEnvelope} guards each container with `?.` and
- * {@link setInEnvelope} creates them on the way in precisely because of that, so this
- * is the type those two actually accept.  Saying so removes the only reason a caller
- * ever had to assert its way past {@link ApiProjectFiles}.
- */
+/** An envelope as it may arrive: the API omits every container the project has no files for. */
 export type IncomingApiProjectFiles = Partial<ApiProjectFiles>
 
 const FileMapSchema = z.record(z.string())
 
-/**
- * `devices` is a flat map of file contents that ALSO carries nested slots, so a plain
- * record of strings is wrong for it: `remote` and `servers` are maps, and a schema that
- * demands a string for every key rejects the whole container the moment a project has
- * a remote device or a server. `catchall` keeps the flat files as strings while the
- * nested slots keep their own shape.
- */
+// `devices` mixes flat file strings with nested `remote`/`servers` maps; a plain string record rejects it.
 const DevicesSchema = z
   .object({ remote: FileMapSchema.optional(), servers: FileMapSchema.optional() })
   .catchall(z.string())
 
 /**
- * The envelope as it arrives from the API, for the callers that read one off
- * the wire.
- *
- * Every key is optional because the server omits the ones a project has no
- * files for — a brand-new project answers `files: {}` — and `getInEnvelope`
- * already guards each with `?.` for that reason.  Nothing is defaulted and
- * nothing is caught: a container that arrives malformed fails the parse, so the
- * caller can say so, rather than being replaced by an empty one that the next
- * save would persist as "no files here".
- *
- * Loose on purpose about what it does NOT name: zod 3 strips unknown keys
- * rather than rejecting, so a category Edge adds tomorrow costs a slot in the
- * result, never an unreadable project.  A caller that writes the parsed value
- * back must use `.passthrough()` so those keys survive the round trip.
+ * Wire schema for an incoming envelope. Nothing is defaulted: a malformed container must
+ * fail the parse, not become an empty one the next save would persist.
  */
 export const ApiProjectFilesSchema = z.object({
   'project.json': z.string().optional(),
@@ -130,14 +50,7 @@ export const ApiProjectFilesSchema = z.object({
   // A field renamed on the interface without being renamed here fails on this line.
 }) satisfies z.ZodType<IncomingApiProjectFiles, z.ZodTypeDef, unknown>
 
-/**
- * Look up a single file's content by its project-root-relative path.
- * Returns `undefined` when the envelope doesn't carry the file
- * (e.g. PLC project's `library.json`) OR when the path is unknown.
- * Callers distinguishing "missing" from "unknown path" should
- * validate the path shape themselves; the contract here is the
- * superset of both.
- */
+/** Look up a file by project-relative path; `undefined` for both a missing file and an unknown path. */
 export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string): string | undefined {
   if (relativePath === 'project.json') return env['project.json']
   if (relativePath === 'library.json') return env['library.json']
@@ -157,11 +70,7 @@ export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string
   if (parts.length === 2 && parts[0] === 'datatypes') {
     return env.datatypes?.[parts[1]]
   }
-  // Flat `build/<filename>`: `build/<name>.stlib` and
-  // `build/.verify-cache-library.json`.  Nested build paths (e.g.
-  // `build/library/src/plc.xml`) are intentionally not persisted by
-  // the orchestrator and are dropped here for symmetry — see the
-  // path-constants comment in library-build-orchestrator.ts.
+  // Flat `build/<filename>` only; nested build paths are intentionally not persisted.
   if (parts.length === 2 && parts[0] === 'build') {
     return env.build?.[parts[1]]
   }
@@ -169,27 +78,8 @@ export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string
 }
 
 /**
- * Patch the envelope so the slot for `relativePath` carries `content`.
- * Creates every container on the way in — the top-level `env.devices` /
- * `env.pous` maps as well as the nested `env.devices.remote`,
- * `env.devices.servers`, `env.pous[category]`.  No-op for unknown paths so
- * callers can blindly forward an iterator's output without a path
- * allowlist — unknown categories simply fall through.
- *
- * Creating the TOP-LEVEL containers is load-bearing, not defensive
- * tidiness.  `getInEnvelope` guards every container with `?.` because the
- * API omits a container the project has no files for; this function used
- * to assume `env.devices` and `env.pous` were always objects and threw a
- * TypeError when they were not.  A brand-new project's `/details` answers
- * `files: {}` — no `pous`, no `devices`, not even `project.json` — so
- * `saveFile`'s load-patch-save round trip died on the patch, returned a
- * failure, and Ctrl+S did nothing but flash a toast: the GET went out, the
- * POST never did, and the file stayed dirty with no explanation. Full
- * project saves were unaffected because `envelopeFromWriteProjectFiles`
- * starts from a complete literal, which is why this only bit the
- * single-file path and only until the first full save.
- *
- * Mutates `env` in place.  Idempotent for the same `(path, content)`.
+ * Write `content` into the slot for `relativePath`, mutating `env`. Creates every container,
+ * including the top-level ones: a never-saved project arrives as `files: {}`. Unknown paths are a no-op.
  */
 export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string, content: string): void {
   if (relativePath === 'project.json') {
@@ -238,28 +128,15 @@ export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string
     env.datatypes[parts[1]] = content
     return
   }
-  // Flat `build/<filename>`.  See the matching branch in
-  // `getInEnvelope` for the rationale; this lets the library-build
-  // orchestrator's `.stlib` write + verification-cache write round-
-  // trip the save endpoint instead of being silently dropped here.
   if (parts.length === 2 && parts[0] === 'build') {
     if (!env.build) env.build = {}
     env.build[parts[1]] = content
     return
   }
-  // Unknown path — silently ignored.  Iterator output stays in sync
-  // with this mapping; an iterator change that adds a new category
-  // without updating this function would surface as "envelope is
-  // missing the file" in integration tests rather than crashing here.
+  // Unknown path: silently ignored.
 }
 
-/**
- * Build a fresh envelope from a flat `WriteProjectFiles`.  Iterates
- * the shared generator and slots each entry; both sides — what
- * files exist, where they go — are now expressed in one place
- * (iterator + envelope mapping), nowhere does the project-adapter
- * hand-roll the envelope shape.
- */
+/** Build a fresh envelope from a flat `WriteProjectFiles`. */
 export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProjectFiles {
   const env: ApiProjectFiles = {
     'project.json': '',
@@ -272,15 +149,7 @@ export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProj
   return env
 }
 
-/**
- * Envelope -> the shape a project reader hands back.
- *
- * The inverse of `envelopeFromWriteProjectFiles`, and it lives beside it for that
- * reason: the two describe one wire format, and a change to either that is not
- * mirrored in the other corrupts a round trip. It used to live in the web adapter,
- * which meant the desktop editor could not read a cloud project without a second
- * copy of the same knowledge.
- */
+/** Envelope -> the shape a project reader hands back. Inverse of `envelopeFromWriteProjectFiles`. */
 export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFiles) {
   const pouFiles = []
   for (const [category, categoryFiles] of Object.entries(files.pous ?? {})) {
@@ -306,22 +175,12 @@ export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFile
     projectJson: files['project.json'] ?? '',
     deviceConfig: files.devices?.['configuration.json'] ?? '{}',
     pinMapping: files.devices?.['pin-mapping.json'] ?? '[]',
-    // Empty string when the API doesn't carry a `library.json`
-    // (PLC projects don't have one; library projects do).  The
-    // shared `RawProjectFiles` contract makes this field
-    // non-optional so PLC-vs-library callers don't have to
-    // special-case its presence — empty string is the documented
-    // sentinel.  When the web backend adds library-project support
-    // it can surface `files['library.json']` and the same shape
-    // continues to work.
+    // Empty string is the documented sentinel for "no library.json".
     libraryManifest: files['library.json'] ?? '',
     pouFiles,
     serverFiles,
     remoteDeviceFiles,
     dataTypeFiles,
-    // `undefined` when absent — that's the "not a pending PLCopen import"
-    // case. Present only when Node's project directory is a bare
-    // `plcopen-pending-import.xml` marker (see openProjectByPath).
     pendingPlcopenSource: files['plcopen-pending-import.xml'],
   }
 }
