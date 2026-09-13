@@ -322,6 +322,17 @@ export function resolveDebugConnection(
     if (cached) connectionParams[prompt.field] = cached
   }
 
+  // The editor's slave id is a constant that every package now declares as a
+  // literal. A board flashed before that answers only the id its project stated
+  // on the Modbus screen, which no package declares any more — so this cannot be
+  // a `$ref` (the packages' own ref check rejects one pointing at a screen they
+  // do not ship) and is read from the project's leftover state instead. Serial
+  // only: over TCP the unit id is a routing field, not an address to retry.
+  if (channel.channel === 'rtu') {
+    const legacy = lookupRef('screens.modbus_rtu.rtu_slave_id', context.state)
+    if (typeof legacy === 'number') connectionParams.legacySlaveId = legacy
+  }
+
   return {
     kind: 'config',
     channelLabel: channel.label,

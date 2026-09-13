@@ -15,7 +15,7 @@
 
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 
-import { toDebugCandidate } from '../debug-channel-factory'
+import { toDebugCandidate, toDeviceLinkCandidates } from '../debug-channel-factory'
 
 const wsConstructorArgs: Array<{ host: string; port: number; token: string; rejectUnauthorized: boolean }> = []
 
@@ -104,5 +104,59 @@ describe('toDebugCandidate — serial', () => {
 
     expect(candidate?.transport).toBe('rtu')
     expect(candidate?.descriptor).toBe('/dev/cu.usbmodem11301')
+  })
+})
+
+/**
+ * The legacy slave id exists for one board: flashed before the editor's id
+ * became a constant, still answering only what its project recorded. It has to
+ * come LAST and stay cheap, because every project that carries the old field
+ * pays for it on every failed Connect.
+ */
+describe('toDeviceLinkCandidates - legacy slave id', () => {
+  const serial = (params: DebugConnectionConfig['connectionParams']): DebugConnectionConfig => ({
+    connectionType: 'rtu',
+    connectionParams: { port: '/dev/ttyUSB0', baudRate: 115200, slaveId: 1, ...params },
+  })
+
+  it("adds one speculative attempt on the project's old id", () => {
+    const candidates = toDeviceLinkCandidates([serial({ legacySlaveId: 7 })], { probeBaudRates: false })
+
+    expect(candidates).toHaveLength(2)
+    expect(candidates[0].speculative).toBe(false)
+    expect(candidates[1].speculative).toBe(true)
+  })
+
+  it('adds nothing when the declared id is already the one every firmware answers', () => {
+    expect(toDeviceLinkCandidates([serial({})], { probeBaudRates: false })).toHaveLength(1)
+  })
+
+  it("adds the editor's id when an old package declares its own", () => {
+    // A pre-4.4.0 package resolves the channel from the screen it still ships,
+    // so the declared id and the legacy id are the same value and there was
+    // nothing left to differ from. A board reflashed by this editor answers only
+    // 1, and used to be unreachable here.
+    const candidates = toDeviceLinkCandidates([serial({ slaveId: 7, legacySlaveId: 7 })], { probeBaudRates: false })
+
+    expect(candidates).toHaveLength(2)
+    expect(candidates[1].speculative).toBe(true)
+  })
+
+  it('does not pair the old id with the swept baud rates', () => {
+    // Each of those would be a port open, and an open resets an AVR or ESP8266 —
+    // restarting the user's program to chase two stale values at once.
+    const swept = toDeviceLinkCandidates([serial({ legacySlaveId: 7 })], { probeBaudRates: true })
+    const declaredOnly = toDeviceLinkCandidates([serial({})], { probeBaudRates: true })
+
+    expect(swept).toHaveLength(declaredOnly.length + 1)
+  })
+
+  it('leaves TCP alone: its unit id is a routing field, not an address to retry', () => {
+    const tcp: DebugConnectionConfig = {
+      connectionType: 'tcp',
+      connectionParams: { ipAddress: '192.168.2.4', legacySlaveId: 7 },
+    }
+
+    expect(toDeviceLinkCandidates([tcp], { probeBaudRates: false })).toHaveLength(1)
   })
 })

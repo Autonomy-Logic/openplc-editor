@@ -1969,6 +1969,20 @@ describe('createProjectSlice', () => {
       expect(servers[0].modbusSlaveConfig?.port).toBe(502)
     })
 
+    it('seeds transports, so the new server is visible to the build', () => {
+      // `selectModbusServer` only considers a server that declares `transports`
+      // -- one without it is the pre-4.4.0 shape whose Modbus still lives in the
+      // board's screen sections. Seeding none made a freshly created server
+      // invisible to the compile, which then fell back to those sections; on a
+      // 4.4.0 package there are none, so the firmware came out with Modbus
+      // entirely off while the screen said "Serving Modbus TCP".
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
     it('creates an s7comm server with default config', () => {
       const result = store.getState().projectActions.createServer({
         data: { name: 'S7Server', protocol: 's7comm' },
@@ -2026,6 +2040,15 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.servers).toHaveLength(1)
       expect(store.getState().project.data.servers![0].name).toBe('B')
+    })
+
+    it('queues the file for deletion, so the save actually removes it from disk', () => {
+      // Dropping it from the array only changes memory. Without the queue entry
+      // the next save leaves `devices/servers/A.json` behind and the server
+      // returns on the following open.
+      seedServer(store, makeModbusTcpServer('A'))
+      store.getState().projectActions.deleteServer('A')
+      expect(store.getState().pendingDeletions).toContain('devices/servers/A.json')
     })
 
     it('returns ok even when server not found', () => {

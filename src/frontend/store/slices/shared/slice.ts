@@ -14,6 +14,7 @@ import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
 import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
+import { planVendorModbusMigration } from '../../../utils/vpp/migrate-vendor-modbus-to-server'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
@@ -1321,6 +1322,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         })
       }
 
+      // A project saved before 4.4.0 kept its baremetal Modbus in the board's
+      // VPP screen, because baremetal had no server element. Protocol
+      // configuration belongs to the editor now, so promote it to a real
+      // `PLCServer`. It runs HERE because it is the first point where both
+      // halves are readable: the project's servers landed with `setProject`
+      // above, the screen state with `setDeviceDefinitions` just now.
+      const migratedModbusServer = planVendorModbusMigration(
+        getState().deviceDefinitions.configuration.vendorScreenData,
+        getState().project.data.servers,
+      )
+      if (migratedModbusServer) {
+        getState().projectActions.createServer({ data: migratedModbusServer })
+      }
+
       // Restore debug flags from debugVariables
       // Since POU variables are saved as text files, debug flags are stored separately in project.json
       const debugVariables = data.projectData.debugVariables
@@ -1386,6 +1401,18 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           files[s.name] = { type: 'server', filePath: s.name, saved: true }
         })
       }
+      // The migration above created a server that is NOT in `data.projectData`,
+      // which is what this map is built from -- so without this it gets no
+      // registry entry at all, and dirty tracking, the close-project check and
+      // the single-file save all skip it. It is unsaved by construction: it
+      // exists in memory and has never been written.
+      if (migratedModbusServer) {
+        files[migratedModbusServer.name] = {
+          type: 'server',
+          filePath: migratedModbusServer.name,
+          saved: false,
+        }
+      }
       const remoteDevices = data.projectData.remoteDevices
       if (remoteDevices) {
         remoteDevices.forEach((d) => {
@@ -1405,6 +1432,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
+
+      // `handleOpenProjectResponse` opens with `setEditingState('saved')`, so
+      // the migration has to say otherwise here, after the registry is in
+      // place. Otherwise the project looks clean, the user closes it without a
+      // prompt, and the promoted server is never written -- the migration then
+      // runs again on the next open, and the board keeps compiling from screen
+      // sections the editor no longer shows.
+      if (migratedModbusServer) {
+        getState().workspaceActions.setEditingState('unsaved')
+      }
 
       // Open the default tab for the project type:
       //   - Library projects: the manifest (`library.json`) — it's
