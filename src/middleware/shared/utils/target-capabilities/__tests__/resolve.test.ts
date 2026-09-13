@@ -16,12 +16,49 @@ describe('resolveTargetCapabilities', () => {
     expect(caps.debuggerTransports).toEqual([])
   })
 
+  // The presets carry no nested `opcua` / `s7` block; the resolver fills them
+  // whenever the matching server flag is on, so a target that declares nothing
+  // still gets a usable profile. Compared field-by-field rather than with
+  // toEqual for that reason.
   it('returns Simulator preset for compiler="simulator"', () => {
-    expect(resolveTargetCapabilities({ compiler: 'simulator' })).toEqual(SIMULATOR_CAPABILITIES)
+    expect(resolveTargetCapabilities({ compiler: 'simulator' })).toMatchObject(SIMULATOR_CAPABILITIES)
   })
 
   it('returns Runtime v4 preset for compiler="openplc-compiler" (non-VPP)', () => {
-    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' })).toEqual(RUNTIME_V4_CAPABILITIES)
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' })).toMatchObject(RUNTIME_V4_CAPABILITIES)
+  })
+
+  it('fills the nested profiles even with no capability block at all', () => {
+    // THE REGRESSION THIS GUARDS. The resolver used to return the preset
+    // unchanged when a board carried no `capabilities`, which left `opcua`
+    // undefined on a target whose PRESET enables the server. The pipeline
+    // tests `capability && profile` before emitting a config header, so such a
+    // target silently got no server: the capability said yes, the profile said
+    // nothing.
+    //
+    // It is also what lets a VPP published before these profiles existed keep
+    // working untouched — nothing has to be rebuilt to pick up a new field.
+    const caps = resolveTargetCapabilities({ compiler: 'simulator' })
+    expect(caps.opcuaServer).toBe(true)
+    expect(caps.opcua).toBeDefined()
+    expect(caps.s7).toBeDefined()
+  })
+
+  it('defaults to the MOST COMPATIBLE profile, not the most capable', () => {
+    // A target that says nothing about itself gets the configuration that
+    // works everywhere: no security policy, no certificates, and no assumed
+    // crypto hardware. Anything else would be the editor guessing that
+    // silicon it has never heard of can do RSA.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { opcuaServer: true, s7Server: true },
+    })
+    expect(caps.opcua?.security).toBe('none')
+    expect(caps.opcua?.certificates).toBe(false)
+    expect(caps.opcua?.subscriptions).toBe(false)
+    expect(caps.opcua?.hw).toEqual({ sha256: false, aes: false, pk: false, trng: false, rtc: false })
+    expect(caps.s7?.pduSize).toBe(240)
+    expect(caps.s7?.szl).toBe(true)
   })
 
   it('flips vppIo on when the board is marked as VPP-derived', () => {
@@ -173,7 +210,7 @@ describe('the S7 profile', () => {
     expect(caps.s7?.pduSize).toBe(240)
     expect(caps.s7?.maxDataBlocks).toBe(8)
     expect(caps.s7?.writeEnabled).toBe(true)
-    expect(caps.s7?.szl).toBe(false)
+    expect(caps.s7?.szl).toBe(true)
   })
 
   it('defaults below Runtime v4, deliberately', () => {
