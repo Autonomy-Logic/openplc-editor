@@ -84,15 +84,24 @@ export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
  * where each client is a PDU pair in .bss and the whole area table is flash. A
  * VPP that has measured the room raises them; nothing infers them.
  *
- * `szl` off because it is the largest optional piece of the protocol and the
- * plan's Phase 0 question is which real clients actually need it — an
- * assumption here would pre-answer it.
+ * `szl` ON, which reverses the initial guess. It was off while the plan's
+ * Phase 0 question — which real clients actually need identification — was
+ * open, and off because Snap7 spends 352 bytes of flash on a template for SZL
+ * 0x001C alone. Measured, building the record from the project's identity
+ * instead costs *228 bytes total*, and the clients that need it (TIA Portal,
+ * several HMIs) refuse to talk to a device without it. At that price the
+ * compatible default is to answer.
+ *
+ * `pduSize` 240 for the same reason: it is what an S7-300 offers and what
+ * every client copes with. The server always negotiates down to the smaller of
+ * its ceiling and the client's proposal, so a target that raises this never
+ * breaks a client that wanted less.
  */
 export const DEFAULT_S7_PROFILE: S7TargetProfile = {
   maxClients: 2,
   pduSize: 240,
   maxDataBlocks: 8,
-  szl: false,
+  szl: true,
   writeEnabled: true,
 }
 
