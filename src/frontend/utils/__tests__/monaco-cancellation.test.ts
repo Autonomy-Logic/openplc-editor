@@ -60,4 +60,21 @@ describe('installMonacoCancellationGuard', () => {
     window.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
   })
+
+  // Disposal cancels a token inside an emitter, which rethrows synchronously.
+  it('swallows a cancellation that arrives as an uncaught error', () => {
+    const uninstall = installMonacoCancellationGuard()
+    const event = new ErrorEvent('error', { error: canceled(), cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    uninstall()
+  })
+
+  it('leaves a real uncaught error to be reported', () => {
+    const uninstall = installMonacoCancellationGuard()
+    const event = new ErrorEvent('error', { error: new Error('worker died'), cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    uninstall()
+  })
 })

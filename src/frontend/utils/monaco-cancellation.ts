@@ -20,6 +20,15 @@ export function installMonacoCancellationGuard(): () => void {
   const onUnhandledRejection = (event: PromiseRejectionEvent) => {
     if (isMonacoCancellation(event.reason)) event.preventDefault()
   }
+  // Disposal cancels a token inside an emitter, which rethrows synchronously: that
+  // arrives as an uncaught error, not a rejection, so both listeners are needed.
+  const onError = (event: ErrorEvent) => {
+    if (isMonacoCancellation(event.error)) event.preventDefault()
+  }
   window.addEventListener('unhandledrejection', onUnhandledRejection)
-  return () => window.removeEventListener('unhandledrejection', onUnhandledRejection)
+  window.addEventListener('error', onError)
+  return () => {
+    window.removeEventListener('unhandledrejection', onUnhandledRejection)
+    window.removeEventListener('error', onError)
+  }
 }
