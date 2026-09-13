@@ -202,11 +202,7 @@ describe('createEditorCompilerPlatformPort', () => {
     // callback follows, then the git-installed third-party list.
     // Asserting the exact list catches accidental drops in plumbing
     // between port → handler.
-    expect(handleLibraryInstallation).toHaveBeenCalledWith(
-      ['Arduino_Opta_Blueprint', 'P1AM'],
-      expect.any(Function),
-      [],
-    )
+    expect(handleLibraryInstallation).toHaveBeenCalledWith(['Arduino_Opta_Blueprint', 'P1AM'], expect.any(Function), [])
     expect(result).toEqual({ ok: true })
   })
 
