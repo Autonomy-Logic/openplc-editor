@@ -6,7 +6,7 @@ Turns the generated OPCUA_NODES[] table into open62541 variable nodes whose
 values come straight from the PLC, with no copy in between.
 
 Every node is a DATA SOURCE, not a value-holding variable. That is the whole
-data plane: a read calls strucpp::debug::handle_read(arr, elem, ...) against
+data plane: a read calls openplc_debug_read(arr, elem, ...) against
 the table the compiler already emitted for the debugger, so the client always
 sees the live value, there is no shadow copy to keep in sync, and there is no
 mirroring loop running at scan rate. The (arr, elem) pair in each row is the
@@ -27,19 +27,16 @@ resolve differently here than it does for Runtime v4.
 #include "opcua_log.h"
 #include "opcua_types.h"
 
-// Arduino/Energia define min / max / abs / round as preprocessor macros, and
-// they wreck the std headers the strucpp runtime pulls in behind
-// debug_dispatch.hpp — iec_traits.hpp uses std::numeric_limits<T>::min(),
-// which becomes "macro min requires 2 arguments". Same ordering rule
-// generateCBlocksCode enforces for user C blocks: <Arduino.h>, then the
-// undefs, then the strucpp headers.
-#undef min
-#undef max
-#undef abs
-#undef round
-
-// The strucpp debug table. Same accessors the Modbus debugger uses.
-#include "debug_dispatch.hpp"
+// The debug table, reached through the extern "C" shims rather than by
+// including debug_dispatch.hpp here. Exactly the route modbus_debug.cpp takes,
+// and for the same reason: this TU is compiled by arduino-cli with the core's
+// default C++ standard, while the strucpp runtime needs gnu++17 and lives in
+// the precompiled OpenPLCUserLib archive. Including its template headers on
+// this side of the boundary is the std-mismatch ABI break the precompile
+// pipeline exists to prevent -- and it dragged in std::numeric_limits<T>::min()
+// under Arduino's min/max macros, which is why this file used to have to #undef
+// four of them before it could compile at all.
+#include "arduino_runtime_glue.h"
 
 namespace {
 
@@ -103,7 +100,7 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
 
     // 8 bytes covers every scalar in the table above.
     uint8_t buf[8] = {0};
-    const uint16_t n = strucpp::debug::handle_read(row->arr, row->elem, buf);
+    const uint16_t n = openplc_debug_read(row->arr, row->elem, buf);
     if (n == 0)
         return UA_STATUSCODE_BADNODATA;   // out of bounds, or a string stub
 
@@ -147,11 +144,11 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
         return UA_STATUSCODE_BADTYPEMISMATCH;
     }
 
-    const uint16_t width = strucpp::debug::handle_size(row->arr, row->elem);
+    const uint16_t width = openplc_debug_size(row->arr, row->elem);
     if (width == 0 || width > 8)
         return UA_STATUSCODE_BADNOTWRITABLE;
 
-    const uint8_t status = strucpp::debug::handle_write(
+    const uint8_t status = openplc_debug_write(
         row->arr, row->elem, static_cast<const uint8_t*>(value->value.data), width);
     OPCUA_LOG("[ua] write %s arr=%u elem=%u w=%u status=0x%02x",
               row->browse_name, (unsigned)row->arr, (unsigned)row->elem,
@@ -161,7 +158,7 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
     // the editor's wire parsers can tell them apart, and zero is not one of
     // them. Comparing against 0 reported every SUCCESSFUL write to the client
     // as BadNotWritable while the value had in fact landed in the PLC.
-    return (status == strucpp::debug::STATUS_OK)
+    return (status == OPENPLC_DEBUG_STATUS_OK)
                ? UA_STATUSCODE_GOOD
                : UA_STATUSCODE_BADNOTWRITABLE;
 }
