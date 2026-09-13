@@ -268,7 +268,7 @@ export function createEditorCompilerPlatformPort(
         await handlers.handleLibraryInstallation(args.extraLibraries ?? [], (chunk, level) => {
           const message = typeof chunk === 'string' ? chunk : chunk.toString()
           log(message, level ?? 'info')
-        })
+        }, args.thirdPartyLibraries ?? [])
         return { ok: true }
       } catch (error) {
         // Reached only when the install machinery itself can't run
