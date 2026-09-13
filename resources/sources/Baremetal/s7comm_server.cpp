@@ -41,6 +41,8 @@ device on a plant network it is often the right answer.
 #include "opcua_log.h"       // shared debug transport; see below
 #include "s7comm_types.h"
 #include "arduino_runtime_glue.h"
+// The located-variable buffers themselves: bool_input[][], int_memory[], ...
+#include "openplc.h"
 
 // ---------------------------------------------------------------------------
 // Tunables the generated config may override.
@@ -84,6 +86,18 @@ bm_net::Listener g_listener(S7COMM_PORT);
 
 S7Server g_server;
 bool     g_started = false;
+
+/** The library's view of the address space.
+ *
+ *  Built once at init from the generated S7COMM_AREAS[]. Two tables rather
+ *  than one because they answer to different owners: s7comm_area_t is the ABI
+ *  with the code generator and carries the located-buffer mapping, while
+ *  S7SrvArea is the library's and carries only what the protocol needs. This
+ *  is the only place they meet.
+ *
+ *  RAM, unavoidably -- the library takes a pointer it can dereference -- but
+ *  eight bytes an area, against the mapping itself which stays in flash. */
+S7SrvArea g_lib_areas[S7COMM_AREA_COUNT];
 
 /** One connection.
  *
@@ -145,6 +159,243 @@ const s7comm_area_t* find_area(uint8_t area, uint16_t dbNumber)
         return a;
     }
     return nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// The bridge from S7 areas to the PLC's located variables.
+//
+// An S7 area is a flat run of bytes; OpenPLC's located variables are arrays of
+// POINTERS into the program's own storage (openplc.h). So every access is a
+// translation: S7 byte offset -> buffer slot + byte within that slot, with the
+// byte order flipped, because S7 is BIG-endian on the wire and every part this
+// runs on is little-endian.
+//
+// Getting the byte order wrong is the failure mode this deserves care over: a
+// swapped INT is a plausible number, not an error, and a client has no way to
+// tell it from the truth. That is why the editor-side tests assert exact bytes
+// and the interop test reads back a known ramp.
+//
+// An UNBOUND located variable is a NULL pointer -- the project declared %MW7
+// and nothing uses it, say. Reads give 0 and writes are dropped, which is the
+// convention every HAL in this tree already follows for the same arrays. The
+// alternative, failing the whole request, would make one unused address break
+// a read that spans it.
+// ---------------------------------------------------------------------------
+
+/** Pointer to the located slot `index` of `buffer`, or NULL if unbound or out
+ *  of range. The ceilings come from openplc.h and differ per target. */
+static void* slot_ptr(uint8_t buffer, uint16_t index, uint8_t* width)
+{
+    switch (buffer)
+    {
+        case S7COMM_BUF_INT_INPUT:
+            *width = 2;
+            return (index < MAX_ANALOG_INPUT) ? (void*)int_input[index] : NULL;
+        case S7COMM_BUF_INT_OUTPUT:
+            *width = 2;
+            return (index < MAX_ANALOG_OUTPUT) ? (void*)int_output[index] : NULL;
+#if defined(MAX_MEMORY_WORD) && MAX_MEMORY_WORD > 0
+        case S7COMM_BUF_INT_MEMORY:
+            *width = 2;
+            return (index < MAX_MEMORY_WORD) ? (void*)int_memory[index] : NULL;
+#endif
+#if defined(MAX_MEMORY_DWORD) && MAX_MEMORY_DWORD > 0
+        case S7COMM_BUF_DINT_MEMORY:
+            *width = 4;
+            return (index < MAX_MEMORY_DWORD) ? (void*)dint_memory[index] : NULL;
+#endif
+#if defined(MAX_MEMORY_LWORD) && MAX_MEMORY_LWORD > 0
+        case S7COMM_BUF_LINT_MEMORY:
+            *width = 8;
+            return (index < MAX_MEMORY_LWORD) ? (void*)lint_memory[index] : NULL;
+#endif
+        default:
+            *width = 0;
+            return NULL;
+    }
+}
+
+/** One bit of a bit buffer, or NULL. */
+static IEC_BOOL* bit_ptr(uint8_t buffer, uint16_t byteIndex, uint8_t bitIndex)
+{
+    if (bitIndex > 7)
+        return NULL;
+    if (buffer == S7COMM_BUF_BOOL_INPUT)
+        return (byteIndex < (MAX_DIGITAL_INPUT / 8)) ? bool_input[byteIndex][bitIndex] : NULL;
+    if (buffer == S7COMM_BUF_BOOL_OUTPUT)
+        return (byteIndex < (MAX_DIGITAL_OUTPUT / 8)) ? bool_output[byteIndex][bitIndex] : NULL;
+    return NULL;
+}
+
+/** Read a slot as a native 64-bit value, widening from its real width. */
+static uint64_t slot_read(void* p, uint8_t width)
+{
+    if (p == NULL)
+        return 0;
+    switch (width)
+    {
+        case 2:  return *(const uint16_t*)p;
+        case 4:  return *(const uint32_t*)p;
+        case 8:  return *(const uint64_t*)p;
+        default: return 0;
+    }
+}
+
+static void slot_write(void* p, uint8_t width, uint64_t value)
+{
+    if (p == NULL)
+        return;   // unbound: dropped, see the note above
+    switch (width)
+    {
+        case 2: *(uint16_t*)p = (uint16_t)value; break;
+        case 4: *(uint32_t*)p = (uint32_t)value; break;
+        case 8: *(uint64_t*)p = value;           break;
+        default: break;
+    }
+}
+
+/** S7 read: `len` bytes from byte offset `start` within the area. */
+bool s7_read(void* ctx, uint8_t areaCode, uint16_t dbNumber,
+             uint32_t start, uint16_t len, uint8_t* dest)
+{
+    (void)ctx;
+    const s7comm_area_t* a = find_area(areaCode, dbNumber);
+    if (a == NULL || start + len > a->size_bytes)
+        return false;
+
+    if (s7comm_is_bit_buffer(a->buffer))
+    {
+        // One S7 byte is eight consecutive located bits, LSB first -- which is
+        // what `%IX<byte>.<bit>` already means, so the mapping is the identity
+        // rather than a convention this code invents.
+        for (uint16_t i = 0; i < len; i++)
+        {
+            uint8_t packed = 0;
+            const uint16_t byteIndex = (uint16_t)(a->start_index + start + i);
+            for (uint8_t b = 0; b < 8; b++)
+            {
+                const IEC_BOOL* p = bit_ptr(a->buffer, byteIndex, b);
+                if (p != NULL && *p)
+                    packed |= (uint8_t)(1u << b);
+            }
+            dest[i] = packed;
+        }
+        return true;
+    }
+
+    uint8_t width = 0;
+    if (slot_ptr(a->buffer, 0, &width) == NULL && width == 0)
+        return false;   // not a buffer this target has
+
+    for (uint16_t i = 0; i < len; i++)
+    {
+        const uint32_t off       = start + i;
+        const uint16_t slotIndex = (uint16_t)(a->start_index + off / width);
+        const uint8_t  byteInSlot = (uint8_t)(off % width);
+
+        uint8_t w = 0;
+        const uint64_t value = slot_read(slot_ptr(a->buffer, slotIndex, &w), width);
+
+        // Big-endian extraction: byte 0 of a slot is its MOST significant.
+        dest[i] = (uint8_t)((value >> (8u * (width - 1u - byteInSlot))) & 0xFFu);
+    }
+    return true;
+}
+
+/** S7 write: `len` bytes at byte offset `start` within the area. */
+bool s7_write(void* ctx, uint8_t areaCode, uint16_t dbNumber,
+              uint32_t start, uint16_t len, const uint8_t* src)
+{
+    (void)ctx;
+    const s7comm_area_t* a = find_area(areaCode, dbNumber);
+    if (a == NULL || start + len > a->size_bytes)
+        return false;
+    if (!a->writable)
+        return false;
+
+    if (s7comm_is_bit_buffer(a->buffer))
+    {
+        // A byte-wide write to a bit area sets all eight, which is what the
+        // client asked for when it addressed a byte.
+        for (uint16_t i = 0; i < len; i++)
+        {
+            const uint16_t byteIndex = (uint16_t)(a->start_index + start + i);
+            for (uint8_t b = 0; b < 8; b++)
+            {
+                IEC_BOOL* p = bit_ptr(a->buffer, byteIndex, b);
+                if (p != NULL)
+                    *p = (IEC_BOOL)((src[i] >> b) & 1u);
+            }
+        }
+        return true;
+    }
+
+    uint8_t width = 0;
+    if (slot_ptr(a->buffer, 0, &width) == NULL && width == 0)
+        return false;
+
+    for (uint16_t i = 0; i < len; i++)
+    {
+        const uint32_t off        = start + i;
+        const uint16_t slotIndex  = (uint16_t)(a->start_index + off / width);
+        const uint8_t  byteInSlot = (uint8_t)(off % width);
+
+        uint8_t w = 0;
+        void* p = slot_ptr(a->buffer, slotIndex, &w);
+        if (p == NULL)
+            continue;   // unbound: dropped
+
+        // Read-modify-write, because a client may write one byte of a word.
+        // Safe here in a way it is not for bits: the other byte of a WORD is
+        // the same variable, not a different output.
+        const uint8_t shift = (uint8_t)(8u * (width - 1u - byteInSlot));
+        uint64_t value = slot_read(p, width);
+        value &= ~((uint64_t)0xFFu << shift);
+        value |= (uint64_t)src[i] << shift;
+        slot_write(p, width, value);
+    }
+    return true;
+}
+
+/** S7 single-bit write. Exists so a bit write never re-asserts its seven
+ *  neighbours -- on the output area those are seven other physical outputs. */
+bool s7_write_bit(void* ctx, uint8_t areaCode, uint16_t dbNumber,
+                  uint32_t byteIndex, uint8_t bitIndex, bool value)
+{
+    (void)ctx;
+    const s7comm_area_t* a = find_area(areaCode, dbNumber);
+    if (a == NULL || byteIndex >= a->size_bytes)
+        return false;
+    if (!a->writable)
+        return false;
+
+    if (s7comm_is_bit_buffer(a->buffer))
+    {
+        IEC_BOOL* p = bit_ptr(a->buffer, (uint16_t)(a->start_index + byteIndex), bitIndex);
+        if (p != NULL)
+            *p = (IEC_BOOL)(value ? 1 : 0);
+        return true;
+    }
+
+    // A bit inside a word area. Read-modify-write of that word is correct:
+    // every bit of it belongs to the same variable.
+    uint8_t width = 0;
+    if (slot_ptr(a->buffer, 0, &width) == NULL && width == 0)
+        return false;
+
+    const uint16_t slotIndex  = (uint16_t)(a->start_index + byteIndex / width);
+    const uint8_t  byteInSlot = (uint8_t)(byteIndex % width);
+    uint8_t w = 0;
+    void* p = slot_ptr(a->buffer, slotIndex, &w);
+    if (p == NULL)
+        return true;   // unbound: dropped
+
+    const uint8_t shift = (uint8_t)(8u * (width - 1u - byteInSlot) + bitIndex);
+    uint64_t v = slot_read(p, width);
+    if (value) v |=  ((uint64_t)1u << shift);
+    else       v &= ~((uint64_t)1u << shift);
+    slot_write(p, width, v);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +529,21 @@ void s7comm_init(void)
         g_conns[i].have   = 0;
     }
 
-    g_server.setAreas(nullptr, 0);      // Phase 1 wires S7COMM_AREAS in
+    // Every area is served by the accessors above rather than by a flat
+    // buffer: the values live in the PLC program's own storage, reached
+    // through the located-variable pointer arrays, so there is no block of
+    // bytes to hand over and no shadow copy to keep in sync.
+    for (uint8_t i = 0; i < S7COMM_AREA_COUNT; i++)
+    {
+        g_lib_areas[i].code     = S7COMM_AREAS[i].area;
+        g_lib_areas[i].dbNumber = S7COMM_AREAS[i].db_number;
+        g_lib_areas[i].data     = nullptr;
+        g_lib_areas[i].size     = S7COMM_AREAS[i].size_bytes;
+        g_lib_areas[i].readOnly = (S7COMM_AREAS[i].writable == 0);
+    }
+    g_server.setAreas(g_lib_areas, S7COMM_AREA_COUNT);
+    g_server.setAccessors(s7_read, s7_write, nullptr);
+    g_server.setBitWriter(s7_write_bit);
     g_server.setMaxPduSize(S7COMM_PDU_SIZE);
     g_server.setWriteEnabled(S7COMM_WRITE_ENABLED != 0);
 
