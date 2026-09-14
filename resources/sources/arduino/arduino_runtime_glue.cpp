@@ -435,6 +435,41 @@ static_assert(MAX_DIGITAL_OUTPUT % 8 == 0,
               "bool_output as [MAX_DIGITAL_OUTPUT/8][8], so a remainder is "
               "silently dropped and the last few outputs become unaddressable.");
 
+// The image has to be at least as large as the pin table that indexes it.
+//
+// Both halves of defines.h now come from one emitter but two SOURCES:
+// NUM_DISCRETE_INPUT and its siblings are counts of mapped pins, while
+// MAX_DIGITAL_INPUT and its siblings come from the address registry and are
+// capability-scoped. The HALs index with the first and size with the second --
+// `for (int i = 0; i < NUM_DISCRETE_INPUT; i++) ... bool_input[i/8][i%8]`
+// against `bool_input[MAX_DIGITAL_INPUT/8][8]`.
+//
+// While the MAX_* were fixed constants comfortably above any board's pin count
+// the two could not disagree. They can now: MAX_DIGITAL_INPUT may legitimately
+// be 0, and any path where the registry sizes an area below the pin count --
+// a pin whose address does not parse still counts toward NUM_, a capability
+// block that switches pinMapping off while a mapping still reaches the
+// emitter -- is an out-of-bounds write on a microcontroller, with nothing
+// anywhere to report it.
+static_assert(MAX_DIGITAL_INPUT >= NUM_DISCRETE_INPUT,
+              "MAX_DIGITAL_INPUT is smaller than NUM_DISCRETE_INPUT: the HAL "
+              "loops over every mapped input pin and indexes bool_input, which "
+              "is declared from MAX_DIGITAL_INPUT. The image is sized from the "
+              "address registry and the pin count is not, so they have "
+              "disagreed -- writing past the end of bool_input.");
+static_assert(MAX_DIGITAL_OUTPUT >= NUM_DISCRETE_OUTPUT,
+              "MAX_DIGITAL_OUTPUT is smaller than NUM_DISCRETE_OUTPUT: the HAL "
+              "loops over every mapped output pin and indexes bool_output, "
+              "which is declared from MAX_DIGITAL_OUTPUT.");
+static_assert(MAX_ANALOG_INPUT >= NUM_ANALOG_INPUT,
+              "MAX_ANALOG_INPUT is smaller than NUM_ANALOG_INPUT: the HAL "
+              "loops over every mapped analog input and indexes int_input, "
+              "which is declared from MAX_ANALOG_INPUT.");
+static_assert(MAX_ANALOG_OUTPUT >= NUM_ANALOG_OUTPUT,
+              "MAX_ANALOG_OUTPUT is smaller than NUM_ANALOG_OUTPUT: the HAL "
+              "loops over every mapped analog output and indexes int_output, "
+              "which is declared from MAX_ANALOG_OUTPUT.");
+
 static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
 static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
 static bool     retain_available  = false;

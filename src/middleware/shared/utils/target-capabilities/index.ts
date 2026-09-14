@@ -6,4 +6,9 @@ export {
   SIMULATOR_CAPABILITIES,
 } from './presets'
 export { type BoardInfoLike, resolveAddressProducerCapabilities, resolveTargetCapabilities } from './resolve'
-export type { AddressProducerCapabilities, DebuggerTransport, TargetCapabilities } from './types'
+export type {
+  AddressProducerCapabilities,
+  DebuggerTransport,
+  ServerCapabilities,
+  TargetCapabilities,
+} from './types'

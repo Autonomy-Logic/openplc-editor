@@ -468,8 +468,9 @@ describe('generateDefinesContent — process image', () => {
   })
 
   it('emits the bit areas in BITS, which is what openplc.h divides by 8', () => {
-    // The opposite of image.conf for Runtime v4, whose BOOL tables count
-    // bytes. Bare metal writes bool_input[MAX_DIGITAL_INPUT/8][8].
+    // SAME unit as image.conf — both are in bits. What differs is padding:
+    // only this emitter pads, because openplc.h writes
+    // bool_input[MAX_DIGITAL_INPUT/8][8] and divides.
     const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 64 } })
     expect(out).toContain('#define MAX_DIGITAL_OUTPUT 64')
     expect(out).not.toContain('#define MAX_DIGITAL_OUTPUT 8')

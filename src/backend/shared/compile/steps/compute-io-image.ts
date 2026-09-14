@@ -57,7 +57,11 @@ import {
   parseAddress,
   prefixOf,
 } from '../../../../middleware/shared/utils/iec-address/registry'
-import type { AddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import type {
+  AddressProducerCapabilities,
+  ServerCapabilities,
+} from '../../../../middleware/shared/utils/target-capabilities'
+import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
 /**
@@ -202,6 +206,16 @@ export interface ComputeIoImageInput {
    */
   capabilities: AddressProducerCapabilities
   /**
+   * Which servers this target actually runs.
+   *
+   * Required rather than optional-and-defaulted, for the same reason `areas`
+   * is: a forgotten input that silently widens what counts as a producer is
+   * the kind of hole that stays open for months. A caller with no target in
+   * mind passes every flag false, which sizes nothing from servers -- the
+   * conservative answer, since a server that does not run publishes nothing.
+   */
+  serverCapabilities: ServerCapabilities
+  /**
    * The areas the target runtime has buffers for — `IMAGE_AREAS_BAREMETAL` or
    * `IMAGE_AREAS_RUNTIME_V4`.
    *
@@ -322,9 +336,25 @@ function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<numb
  *
  * Absent therefore means "expose whatever the image turns out to be", which is
  * also what FR16 asks of the server: publish the range actually sized, not a
- * limit of its own. The Modbus server screen cooperates — it writes a count
- * only when the user changes it away from the default — so a persisted count
- * is a deliberate request, and a deliberate request is what sizes an area.
+ * limit of its own.
+ *
+ * THE SCREEN DOES NOT COOPERATE YET, and this comment used to claim it did.
+ * `updateServerConfig` (`store/slices/project/slice.ts`) spreads all four
+ * groups over `DEFAULT_BUFFER_MAPPING` whenever any one field is edited, so
+ * touching a single count persists the whole of 1024/8192 — and every one of
+ * those reads here as a deliberate request. A freshly created server is safe
+ * (`initializeServerProtocolConfig` seeds no `bufferMapping` at all), but any
+ * project whose Modbus screen was ever opened and edited is sized back to the
+ * constant this change exists to remove.
+ *
+ * Fixing that is a store change, and it collides with the Modbus screen
+ * rewrite in DOPE-442; it is tracked there rather than papered over here.
+ * Projects already on disk carry the materialised defaults either way, so the
+ * reducer fix alone does not rescue them — telling a deliberate 1024 from a
+ * materialised one needs a per-segment marker or a migration.
+ *
+ * What this module can honestly say is the rule it applies: a persisted count
+ * sizes an area, an absent one does not.
  *
  * Exposure BACKS the addresses it covers as well as sizing them: a `%QW` the
  * server publishes has something reading it, which is exactly what BR14 asks
@@ -337,8 +367,31 @@ function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<numb
  * exposure it does) is the drift worth avoiding. If that selection changes,
  * this has to change with it.
  */
-function serverExposure(servers: PLCServer[] | undefined, backed: Map<string, Set<number>>): Record<string, number> {
+function serverExposure(
+  servers: PLCServer[] | undefined,
+  serverCapabilities: ServerCapabilities,
+  backed: Map<string, Set<number>>,
+): Record<string, number> {
   const sizes: Record<string, number> = {}
+
+  /* SCOPED TO THE TARGET, exactly as the producer claims above are.
+   *
+   * A server config outlives a target change: retarget a project from Runtime
+   * v4 to a bare-metal board and `servers` stays in project.json, hidden in
+   * the UI rather than removed, while `generateRuntimeConfs` -- the only route
+   * by which a `bufferMapping` reaches a device -- runs under `isRuntimeV4`
+   * alone. Sizing from it anyway hands the firmware `MAX_*` macros derived
+   * from a slave config that board will never run; with the materialised
+   * defaults that is 8192 bits and four areas at 1024, which most MCU targets
+   * will not even link.
+   *
+   * The backing half is worse than the sizing half. `markBacked` below makes
+   * the exposure VOUCH for those addresses, so `AT %QX0.0 : BOOL` would pass
+   * the BR14 gate on a target where nothing whatsoever produces it -- "inside
+   * the image" and "has a producer" both answered by a file the target never
+   * receives. */
+  if (!serverCapabilities.modbusTcpServer) return sizes
+
   const server = (servers ?? []).find((entry) => entry.protocol === 'modbus-tcp' && entry.modbusSlaveConfig)
   const mapping: ModbusBufferMapping | undefined = server?.modbusSlaveConfig?.bufferMapping
 
@@ -443,12 +496,17 @@ function declaredSlotCount(variableType: PLCVariable['type'] | undefined): numbe
   const dimensions = variableType.data?.dimensions
   if (!dimensions || dimensions.length !== 1) return 1
 
-  const bounds = /^\s*(\d+)\s*\.\.\s*(\d+)\s*$/.exec(dimensions[0]?.dimension ?? '')
-  if (!bounds) return 1
-
-  const start = Number(bounds[1])
-  const end = Number(bounds[2])
-  return end >= start ? end - start + 1 : 1
+  // `parseDimensionRange`, not a regex of this module's own, because the
+  // editor already reserves slots for a located array through it
+  // (`getArrayTotalElements` -> `slotsClaimedBy`). A second parser here means
+  // the two can disagree about the same declaration, and they did: this one
+  // rejected a NEGATIVE lower bound and fell back to one slot, so
+  // `AT %MW0 : ARRAY [-5..5] OF WORD` reserved eleven words in the editor and
+  // sized one in the image — eleven words written into a one-word buffer, and
+  // on %I/%Q a tail that runs past every producer without the gate noticing.
+  const range = parseDimensionRange(dimensions[0]?.dimension ?? '')
+  if (!range) return 1
+  return range.upper - range.lower + 1
 }
 
 /**
@@ -465,7 +523,9 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
   const backed = new Map<string, Set<number>>()
   const sizes: Record<string, number> = producerClaims(input, backed)
 
-  for (const [prefix, count] of Object.entries(serverExposure(input.projectData.servers, backed))) {
+  for (const [prefix, count] of Object.entries(
+    serverExposure(input.projectData.servers, input.serverCapabilities, backed),
+  )) {
     claim(sizes, prefix, count)
   }
 
