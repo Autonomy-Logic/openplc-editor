@@ -158,6 +158,30 @@ export async function isExpressionValidForType(
 }
 
 /**
+ * Is `name` an instance of function-block type `blockType` in this POU's scope?
+ *
+ * A block element resolves its instance name against the POU's own
+ * `interface.variables`, which structurally cannot see a **global variable
+ * list** member: `NET.node` is not in that list under any spelling, so the
+ * block painted itself as an error while compiling perfectly. This asks the
+ * LSP instead, the way the contacts, coils and variable boxes already do.
+ *
+ * Returns `undefined` when the LSP cannot answer, so the caller leaves the
+ * block alone rather than flashing red while the worker warms up — the same
+ * contract `isExpressionValidForType` keeps for its own `unavailable`.
+ */
+export async function isBlockInstanceInScope(
+  pouName: string,
+  name: string,
+  blockType: string,
+): Promise<boolean | undefined> {
+  const result = await resolveScopeExpressionType(pouName, name)
+  if (result.status === 'unavailable') return undefined
+  if (result.status === 'unknown') return false
+  return result.type.toLowerCase() === blockType.toLowerCase()
+}
+
+/**
  * Concrete `{definition, value}` to type a brand-new variable created from a
  * box's expected type. `boundSiblings` are the pins of the same block instance
  * that already have a variable on them — a generic pin (`ANY`, `ANY_NUM`, …)
