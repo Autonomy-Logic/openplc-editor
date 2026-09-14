@@ -119,16 +119,21 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     // on it together (`MBSERIAL_SHARES_DEBUG_SERIAL`); which of the two the
     // user talks to at a given moment is theirs to arrange, not ours to refuse.
     if (caps.modbusRtuServer) transports.push('rtu')
-    // The capability says the firmware CAN serve Modbus TCP; `networkInterfaces`
-    // says whether this board has a carrier to serve it over. Declaring one is
-    // how a package removes a carrier it cannot bring up -- an ESP32 with no
-    // RMII PHY compiles `MBTCP_ETHERNET` to `ETH.begin()` and never links -- so
-    // an empty list is a board that answers nothing, and offering TCP there
-    // would emit a stack the firmware has no hardware for.
+    // The capability says the firmware CAN serve Modbus TCP; this decides
+    // whether the board has a carrier to serve it over. Offering it without one
+    // emits `MBTCP` into a firmware with no stack -- on an ESP32 with no RMII
+    // PHY that compiles `MBTCP_ETHERNET` to `ETH.begin()` and never links.
     //
-    // Absent is not empty: a package that says nothing keeps both carriers on
-    // offer, which is right for any board that can take a W5x00 shield.
-    const hasNetwork = board.networkInterfaces === undefined || board.networkInterfaces.length > 0
+    // A package split for 4.4.0 states its carriers by SHIPPING a Network
+    // screen: the 29 devices declaring `WiFi: No` and `Ethernet: No` ship none.
+    // An unsplit package carries TCP inside its Modbus screen and ships no
+    // Network screen either, so its silence says nothing and both stay on
+    // offer -- reading it as a refusal would strip TCP from every board whose
+    // package has not been updated yet.
+    //
+    // `networkInterfaces: []` is an explicit refusal and wins over both.
+    const splitPackage = !!findScreen(screens, SERIAL_SCREEN)
+    const hasNetwork = board.networkInterfaces?.length !== 0 && (!splitPackage || !!findScreen(screens, NETWORK_SCREEN))
     if (caps.modbusTcpServer && hasNetwork) transports.push('tcp')
     if (transports.length === 0) return NO_SERVER
 

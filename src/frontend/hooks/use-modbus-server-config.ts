@@ -33,12 +33,10 @@ import {
   resolveModbusServerProfile,
   resolveRtuPort,
   resolveServerBaud,
+  resolveServerSlaveId,
 } from '../../middleware/shared/utils/modbus-server-profile'
 import { useOpenPLCStore } from '../store'
 import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-config'
-
-/** Slave id the firmware falls back to (`modbus_config.h`). */
-const DEFAULT_SLAVE_ID = 1
 
 export interface ModbusServerView {
   profile: ModbusServerProfile
@@ -157,7 +155,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       profile,
       transports,
       enabled: config?.enabled ?? false,
-      slaveId: config?.slaveId ?? DEFAULT_SLAVE_ID,
+      slaveId: resolveServerSlaveId(baudState, config?.slaveId),
       serialPort,
       baudRate: resolveServerBaud({
         onDefaultPort,

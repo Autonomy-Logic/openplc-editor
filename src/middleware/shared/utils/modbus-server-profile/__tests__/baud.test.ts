@@ -10,12 +10,14 @@
 
 import {
   DEFAULT_SERIAL_BAUD,
+  DEFAULT_SERVER_SLAVE_ID,
   isDefaultPort,
   readSerialBaudState,
   resolveDefaultPortBaud,
   resolveRs485Pin,
   resolveRtuPort,
   resolveServerBaud,
+  resolveServerSlaveId,
 } from '../baud'
 
 describe('resolveDefaultPortBaud', () => {
@@ -183,5 +185,34 @@ describe('isDefaultPort', () => {
     expect(isDefaultPort('', 'Serial')).toBe(true)
     expect(isDefaultPort('Serial', 'Serial')).toBe(true)
     expect(isDefaultPort('Serial1', 'Serial')).toBe(false)
+  })
+})
+
+/**
+ * The slave id was the last value resolved in two places: the emitter carried a
+ * legacy arm and the screen did not, so the screen showed 1 while the firmware
+ * compiled the legacy id.
+ */
+describe('resolveServerSlaveId', () => {
+  it('prefers the server, which is where the user sets it', () => {
+    expect(resolveServerSlaveId({ modbus_rtu: { rtu_slave_id: 7 } }, 9)).toBe(9)
+  })
+
+  it('falls back to the legacy screen id when the server carries none', () => {
+    // Reachable two ways: the migration drops a legacy id outside 1-247 rather
+    // than persist one the schema rejects, and a project already carrying a
+    // transports-shaped server skips migration while its screen state stays put.
+    expect(resolveServerSlaveId({ modbus_rtu: { rtu_slave_id: 7 } }, undefined)).toBe(7)
+  })
+
+  it('falls back to 1 when nothing states one', () => {
+    expect(resolveServerSlaveId({}, undefined)).toBe(DEFAULT_SERVER_SLAVE_ID)
+    expect(resolveServerSlaveId({}, undefined)).toBe(1)
+  })
+
+  it('narrows a legacy id off raw persisted state', () => {
+    expect(resolveServerSlaveId(readSerialBaudState({ modbus_rtu: { rtu_slave_id: 7 } }), undefined)).toBe(7)
+    // A screen field is free text; a non-integer must not reach the firmware.
+    expect(resolveServerSlaveId(readSerialBaudState({ modbus_rtu: { rtu_slave_id: '7' } }), undefined)).toBe(1)
   })
 })

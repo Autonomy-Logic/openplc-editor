@@ -34,6 +34,7 @@ import {
   resolveRs485Pin,
   resolveRtuPort,
   resolveServerBaud,
+  resolveServerSlaveId,
 } from '../../../../middleware/shared/utils/modbus-server-profile'
 
 /**
@@ -184,7 +185,14 @@ export function selectModbusServer(servers: readonly ModbusServerLike[] | undefi
  * quietly disagreeing with the firmware is the failure this area keeps
  * producing.
  */
-export { DEFAULT_SERIAL_BAUD, isDefaultPort, resolveDefaultPortBaud, resolveRs485Pin, resolveRtuPort }
+export {
+  DEFAULT_SERIAL_BAUD,
+  isDefaultPort,
+  resolveDefaultPortBaud,
+  resolveRs485Pin,
+  resolveRtuPort,
+  resolveServerSlaveId,
+}
 
 /**
  * Slave id the always-on debugger answers on, and therefore the one the editor
@@ -241,9 +249,9 @@ function formatIpForDefine(raw: string): string {
 // firmware still needs MBSERIAL_IFACE / MBSERIAL_BAUD / MBSERIAL_SLAVE
 // to compile (ModbusSlave.cpp uses them as object/literal values).
 // Keep these in sync if the screen schema's defaults change.
-const RTU_DEFAULTS = {
-  rtu_slave_id: 1,
-} as const
+//
+// The RTU slave id is not among them: it is resolved by
+// `resolveServerSlaveId`, which the screen calls too.
 
 const TCP_DEFAULTS = {
   tcp_interface: 'Ethernet' as const,
@@ -316,7 +324,7 @@ export function generateModbusDefines(
     // The server's id, on every port. On the default port the firmware answers
     // DEBUG_SLAVE alongside it for the editor's function codes, so the two share
     // the UART without sharing an address.
-    const slave = server?.slaveId ?? rtu.rtu_slave_id ?? RTU_DEFAULTS.rtu_slave_id
+    const slave = resolveServerSlaveId(state, server?.slaveId)
     lines.push(`#define MBSERIAL_IFACE ${iface}`)
     lines.push(`#define MBSERIAL_BAUD ${baud}`)
     lines.push(`#define MBSERIAL_SLAVE ${slave}`)

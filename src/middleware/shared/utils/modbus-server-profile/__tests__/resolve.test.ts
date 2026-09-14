@@ -227,22 +227,32 @@ describe('resolveModbusServerProfile', () => {
  * is the declaration this demand introduced to answer it.
  */
 describe('a baremetal board with no network hardware', () => {
-  it('does not offer TCP when the package declares an empty carrier list', () => {
-    // Offering it emits MBTCP / MBTCP_ETHERNET into a firmware with no stack:
-    // on an ESP32 with no RMII PHY that compiles to ETH.begin() and never links.
-    const profile = resolveModbusServerProfile(arduinoBoard({ networkInterfaces: [] }))
-    expect(profile.transports).toEqual(['rtu'])
+  it('does not offer TCP to a split package that ships no Network screen', () => {
+    // This is how all 29 devices declaring `WiFi: No` and `Ethernet: No` say so:
+    // they ship `serial` and no `network`, and declare no `networkInterfaces` at
+    // all. Keying on that field instead would have left TCP enabled on every one
+    // of them, emitting MBTCP into a firmware with no stack -- on an ESP32 with
+    // no RMII PHY that compiles to ETH.begin() and never links.
+    const noNetwork = arduinoBoard({ vpp: { screens: { Serial: {} } } })
+    expect(resolveModbusServerProfile(noNetwork).transports).toEqual(['rtu'])
   })
 
-  it('keeps TCP on offer when the package says nothing, which is not the same as empty', () => {
-    // Most boards can take a W5x00 shield, so silence must not remove a carrier.
-    expect(resolveModbusServerProfile(arduinoBoard()).transports).toEqual(['rtu', 'tcp'])
+  it('offers TCP to a split package that does ship one', () => {
+    const withNetwork = arduinoBoard({ vpp: { screens: { Serial: {}, Network: {} } } })
+    expect(resolveModbusServerProfile(withNetwork).transports).toEqual(['rtu', 'tcp'])
   })
 
-  it('offers TCP for a board that declares a carrier', () => {
-    expect(resolveModbusServerProfile(arduinoBoard({ networkInterfaces: ['Wi-Fi'] })).transports).toEqual([
-      'rtu',
-      'tcp',
-    ])
+  it('keeps TCP on offer for an unsplit package, whose silence means nothing', () => {
+    // A pre-4.4.0 package carries TCP inside its Modbus screen and ships no
+    // Network screen either. Reading that as a refusal would strip TCP from
+    // every board whose package has not been updated yet.
+    const legacy = arduinoBoard({ vpp: { screens: { Modbus: {} } } })
+    expect(legacy.vpp).toBeDefined()
+    expect(resolveModbusServerProfile(legacy).transports).toEqual(['rtu', 'tcp'])
+  })
+
+  it('honours an explicit empty carrier list even on an unsplit package', () => {
+    const refused = arduinoBoard({ vpp: { screens: { Modbus: {} } }, networkInterfaces: [] })
+    expect(resolveModbusServerProfile(refused).transports).toEqual(['rtu'])
   })
 })

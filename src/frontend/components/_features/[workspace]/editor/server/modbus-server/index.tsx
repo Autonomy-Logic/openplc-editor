@@ -328,9 +328,15 @@ const ModbusServerEditor = () => {
     },
     [actions],
   )
-  const transportHint = profile.transports.includes('rtu')
-    ? 'What the server answers on. Both means one board on two wires.'
-    : 'This target serves over the network only.'
+  // `FR07`: a disabled choice has to say WHY. Three cases, because a board that
+  // declares no network carrier is not the same as a target that has no serial
+  // path -- and the second sentence is the only thing telling the user the
+  // greyed-out option is the board's limit rather than a missing feature.
+  const transportHint = !profile.transports.includes('rtu')
+    ? 'This target serves over the network only.'
+    : profile.transports.includes('tcp')
+      ? 'What the server answers on. Both means one board on two wires.'
+      : 'What the server answers on. This board declares no network carrier, so Modbus TCP is not on offer.'
 
   // Text state for the inputs that commit on blur, so a half-typed number does
   // not reach the store and get clamped mid-keystroke.

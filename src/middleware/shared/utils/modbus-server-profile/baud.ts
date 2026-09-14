@@ -37,6 +37,7 @@ export interface SerialBaudScreenState {
     rtu_baud_rate?: string
     serial_port?: string
     rtu_interface?: string
+    rtu_slave_id?: number
     enable_rs485_en_pin?: boolean
     rtu_rs485_en_pin?: string
   }
@@ -105,6 +106,29 @@ export function resolveRtuPort(
     if (value) return value
   }
   return defaultSerial
+}
+
+/** What a server answers to when neither the project nor the screen state says. */
+export const DEFAULT_SERVER_SLAVE_ID = 1
+
+/**
+ * The slave id the Modbus server answers to.
+ *
+ * The last value that was resolved in two places. The emitter carried a legacy
+ * arm and the screen did not, so a server with no `slaveId` of its own beside
+ * leftover `modbus_rtu.rtu_slave_id` showed 1 on screen and compiled the legacy
+ * id into the firmware -- the exact disagreement this module exists to stop.
+ *
+ * Two live routes to that state: the migration drops a legacy id outside 1-247
+ * rather than persist one the schema rejects, and a project already carrying a
+ * `transports`-shaped server skips migration entirely while its screen state
+ * stays put.
+ */
+export function resolveServerSlaveId(state: SerialBaudScreenState, serverSlaveId: number | undefined): number {
+  if (typeof serverSlaveId === 'number' && Number.isInteger(serverSlaveId)) return serverSlaveId
+  const legacy = state.modbus_rtu?.rtu_slave_id
+  if (typeof legacy === 'number' && Number.isInteger(legacy)) return legacy
+  return DEFAULT_SERVER_SLAVE_ID
 }
 
 /** Whether `port` is the board's default UART, the one the editor is already on. */
@@ -178,6 +202,10 @@ export function readSerialBaudState(raw: Record<string, unknown> | undefined | n
     return typeof value === 'string' && value.length > 0 ? value : undefined
   }
 
+  const count = (source: Record<string, unknown> | undefined, key: string): number | undefined => {
+    const value = source?.[key]
+    return typeof value === 'number' && Number.isInteger(value) ? value : undefined
+  }
   const flag = (source: Record<string, unknown> | undefined, key: string): boolean | undefined => {
     const value = source?.[key]
     return typeof value === 'boolean' ? value : undefined
@@ -199,6 +227,7 @@ export function readSerialBaudState(raw: Record<string, unknown> | undefined | n
       rtu_baud_rate: text(rtu, 'rtu_baud_rate'),
       serial_port: text(rtu, 'serial_port'),
       rtu_interface: text(rtu, 'rtu_interface'),
+      rtu_slave_id: count(rtu, 'rtu_slave_id'),
       enable_rs485_en_pin: flag(rtu, 'enable_rs485_en_pin'),
       rtu_rs485_en_pin: text(rtu, 'rtu_rs485_en_pin'),
     },
