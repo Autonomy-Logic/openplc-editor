@@ -147,7 +147,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     // another one -- the divergence this whole module exists to prevent.
     const baudState = readSerialBaudState(vendorScreenData)
     const onDefaultPort = isDefaultPort(
-      resolveRtuPort(baudState, config?.serialPort, profile.defaultSerial),
+      resolveRtuPort(config?.serialPort, profile.defaultSerial),
       profile.defaultSerial,
     )
 
@@ -155,7 +155,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       profile,
       transports,
       enabled: config?.enabled ?? false,
-      slaveId: resolveServerSlaveId(baudState, config?.slaveId),
+      slaveId: resolveServerSlaveId(config?.slaveId),
       serialPort,
       baudRate: resolveServerBaud({
         onDefaultPort,

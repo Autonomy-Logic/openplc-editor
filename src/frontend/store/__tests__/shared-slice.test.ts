@@ -2735,8 +2735,8 @@ describe('createSharedSlice', () => {
       }
 
       // DOPE-442
-      describe('the pre-4.4.0 Modbus migration', () => {
-        /** A board whose Modbus still lives in the VPP screen sections. */
+      describe('a project saved before 4.4.0', () => {
+        /** A board whose Modbus lived in the VPP screen sections. */
         const legacyBoard = {
           deviceConfiguration: {
             deviceBoard: 'ESP32',
@@ -2748,46 +2748,19 @@ describe('createSharedSlice', () => {
           },
         }
 
-        it('registers the promoted server as UNSAVED so it reaches the disk', () => {
-          // The registry is built from the loaded project data, which by
-          // definition does not contain a server the migration just invented.
-          // Without an entry it is invisible to dirty tracking, the
-          // close-project check and the single-file save: the user closes with
-          // no prompt, nothing is written, and the migration runs again on the
-          // next open while the board compiles from sections the editor no
-          // longer shows.
+        it('opens with no Modbus server and leaves the old sections untouched', () => {
+          // 4.4.0 does not carry configuration forward. Nothing is promoted,
+          // nothing is rewritten, and the project is not dirtied on open -- the
+          // user creates the server again, and until then no Modbus is compiled.
           const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
           store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
-
-          const state = store.getState()
-          const migrated = state.project.data.servers?.find((server) => server.protocol === 'modbus-tcp')
-          expect(migrated).toBeDefined()
-
-          const entry = state.files[migrated?.name ?? '']
-          expect(entry).toBeDefined()
-          expect(entry?.type).toBe('server')
-          expect(entry?.saved).toBe(false)
-          expect(state.workspace.editingState).toBe('unsaved')
-        })
-
-        it('carries the UART and baud across from the legacy keys', () => {
-          const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
-          store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
-
-          const migrated = store.getState().project.data.servers?.[0]
-          expect(migrated?.modbusSlaveConfig).toMatchObject({
-            slaveId: 7,
-            serialPort: 'Serial2',
-            baudRate: 115200,
-          })
-        })
-
-        it('leaves a project with nothing to migrate saved and untouched', () => {
-          store.getState().sharedWorkspaceActions.handleOpenProjectResponse(makeMinimalProjectResponse())
 
           const state = store.getState()
           expect(state.project.data.servers ?? []).toHaveLength(0)
           expect(state.workspace.editingState).toBe('saved')
+          expect(state.deviceDefinitions.configuration.vendorScreenData).toEqual(
+            legacyBoard.deviceConfiguration.vendorScreenData,
+          )
         })
       })
 

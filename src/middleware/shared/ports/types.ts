@@ -1315,7 +1315,6 @@ export interface DebugConnectionConfig {
      * reads it from the project's own legacy screen state, because the packages
      * no longer declare the screen it lived on.
      */
-    legacySlaveId?: number
     jwtToken?: string
   }
 }

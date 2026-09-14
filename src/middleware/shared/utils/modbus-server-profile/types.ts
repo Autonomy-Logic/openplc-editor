@@ -116,7 +116,5 @@ export interface ModbusServerProfile {
     serial?: string
     /** Screen name declaring Ethernet / Wi-Fi bring-up, if any. */
     network?: string
-    /** Screen name declaring the Modbus sections themselves. */
-    modbus?: string
   }
 }

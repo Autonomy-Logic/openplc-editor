@@ -304,15 +304,9 @@ const ModbusServerEditor = () => {
   const rtuAvailable = profile.transports.includes('rtu')
   const boardSerialScreen = profile.vppScreens.serial
 
-  // Why a board page is missing, which is two different situations wearing one
-  // face. A pre-4.4.0 package still ships the Modbus screen it used to own, and
-  // that is the only thing that tells it apart from a target that has no vendor
-  // pages at all -- where the host OS really does own the ports.
-  const packagePredatesSplit = !!profile.vppScreens.modbus
-  const noBoardPage = (what: string): string =>
-    packagePredatesSplit
-      ? `This board's package predates 4.4.0 and ships no ${what} page. Update the package to reach it from here.`
-      : `The host operating system owns this target's ${what}.`
+  // A target with no vendor page for this: the host operating system owns the
+  // ports. On a baremetal board the package always ships one.
+  const noBoardPage = (what: string): string => `The host operating system owns this target's ${what}.`
   const rtuOnEditorPort =
     rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
 

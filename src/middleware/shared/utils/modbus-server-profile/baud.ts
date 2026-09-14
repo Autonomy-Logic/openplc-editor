@@ -1,12 +1,18 @@
 /**
- * The speed of a serial line, resolved the same way for the screen and the
- * compiler.
+ * The serial line, resolved the same way for the screen and the compiler.
  *
  * It lives here rather than beside the `defines.h` emitter for one reason: the
  * screen has to show exactly what the build will emit, and a hook may not import
- * from `backend/shared`. Two copies of the same fallback chain is how a screen
- * ends up quietly disagreeing with the firmware, which is the failure this area
- * keeps producing.
+ * from `backend/shared`. Two copies of the same chain is how a screen ends up
+ * quietly disagreeing with the firmware, which is the failure this area keeps
+ * producing.
+ *
+ * Every value below has exactly one source. The project's `PLCServer` owns the
+ * protocol -- which UART, its speed when the server has it to itself, the slave
+ * id. The board's package owns the physical line -- the default UART's speed and
+ * the RS-485 driver-enable pin, through the Serial screen. Nothing reads a
+ * pre-4.4.0 project's `modbus_rtu` section: 4.4.0 does not carry configuration
+ * forward, and a project from before it creates its server again.
  *
  * Byte-identical between openplc-editor and openplc-web.
  */
@@ -14,55 +20,20 @@
 /** What the firmware falls back to, and what every package declares. */
 export const DEFAULT_SERIAL_BAUD = '115200'
 
+/** What a server answers to when the project states nothing. */
+export const DEFAULT_SERVER_SLAVE_ID = 1
+
 /**
- * The slice of persisted VPP screen state these functions read. Declared
- * structurally so `backend/shared` can depend on this module without this module
- * depending back on it.
+ * The slice of persisted VPP screen state these functions read: the Serial
+ * screen, and only the fields it declares. Structural so `backend/shared` can
+ * depend on this module without this module depending back on it.
  */
 export interface SerialBaudScreenState {
   serial?: {
     baud_rate?: string
-    modbus_baud_rate?: string
-    modbus_port?: string
     enable_rs485_en_pin?: boolean
     rs485_en_pin?: string
   }
-  /** The pre-split spellings. `migrate-modbus-serial-fields` folds them into
-   *  `serial`, but it runs in the STORE while the compiler reads the project
-   *  from disk -- and on a board whose package was never split it never runs at
-   *  all. Reading only the new keys loses the user's wiring on exactly the
-   *  projects that still carry the old ones. */
-  modbus_rtu?: {
-    baud_rate?: string
-    rtu_baud_rate?: string
-    serial_port?: string
-    rtu_interface?: string
-    rtu_slave_id?: number
-    enable_rs485_en_pin?: boolean
-    rtu_rs485_en_pin?: string
-  }
-}
-
-/**
- * Speed of the board's default UART: the editor's own line, and the debugger's,
- * whether or not a Modbus server exists. It belongs to the package because it is
- * a property of that link rather than of any server.
- *
- * The `modbus_rtu` arms carry a package published before it declared a `serial`
- * section. The editor's version floor stops an old EDITOR meeting a new package;
- * nothing stops a new editor meeting an old package, which is what they are for.
- */
-export function resolveDefaultPortBaud(state: SerialBaudScreenState, rtuSharesDefaultPort = false): string {
-  const candidates = [state.serial?.baud_rate]
-  // The legacy arms are the RTU's own speed under its pre-split spellings, so
-  // they only describe THIS port when the RTU was on it. A project running RTU
-  // on Serial1 at 9600 must not bring the USB port up at 9600 -- the editor
-  // would then be dialling a speed nothing answers on. `serial.modbus_baud_rate`
-  // is where the fold lands that same value, so it belongs to the same arm.
-  if (rtuSharesDefaultPort) {
-    candidates.push(state.serial?.modbus_baud_rate, state.modbus_rtu?.baud_rate, state.modbus_rtu?.rtu_baud_rate)
-  }
-  return firstBaud(candidates)
 }
 
 /**
@@ -81,54 +52,24 @@ function firstBaud(candidates: Array<string | undefined>): string {
 }
 
 /**
+ * Speed of the board's default UART: the editor's own line, and the debugger's,
+ * whether or not a Modbus server exists. It belongs to the package because it is
+ * a property of that link rather than of any server.
+ */
+export function resolveDefaultPortBaud(state: SerialBaudScreenState): string {
+  return firstBaud([state.serial?.baud_rate])
+}
+
+/**
  * Which UART the Modbus RTU server answers on.
  *
  * One resolver, because the screen and the emitter each used to derive this and
  * a disagreement between them puts a read-only baud on screen while the build
  * emits `MBSERIAL_ON_SECONDARY` for a different port.
- *
- * Precedence matches `migrate-modbus-serial-fields`: the new key first, then the
- * two older spellings, then the board's default UART.
  */
-export function resolveRtuPort(
-  state: SerialBaudScreenState,
-  serverPort: string | undefined,
-  defaultSerial: string,
-): string {
-  const candidates = [
-    serverPort,
-    state.serial?.modbus_port,
-    state.modbus_rtu?.serial_port,
-    state.modbus_rtu?.rtu_interface,
-  ]
-  for (const candidate of candidates) {
-    const value = candidate?.trim()
-    if (value) return value
-  }
-  return defaultSerial
-}
-
-/** What a server answers to when neither the project nor the screen state says. */
-export const DEFAULT_SERVER_SLAVE_ID = 1
-
-/**
- * The slave id the Modbus server answers to.
- *
- * The last value that was resolved in two places. The emitter carried a legacy
- * arm and the screen did not, so a server with no `slaveId` of its own beside
- * leftover `modbus_rtu.rtu_slave_id` showed 1 on screen and compiled the legacy
- * id into the firmware -- the exact disagreement this module exists to stop.
- *
- * Two live routes to that state: the migration drops a legacy id outside 1-247
- * rather than persist one the schema rejects, and a project already carrying a
- * `transports`-shaped server skips migration entirely while its screen state
- * stays put.
- */
-export function resolveServerSlaveId(state: SerialBaudScreenState, serverSlaveId: number | undefined): number {
-  if (typeof serverSlaveId === 'number' && Number.isInteger(serverSlaveId)) return serverSlaveId
-  const legacy = state.modbus_rtu?.rtu_slave_id
-  if (typeof legacy === 'number' && Number.isInteger(legacy)) return legacy
-  return DEFAULT_SERVER_SLAVE_ID
+export function resolveRtuPort(serverPort: string | undefined, defaultSerial: string): string {
+  const value = serverPort?.trim()
+  return value ? value : defaultSerial
 }
 
 /** Whether `port` is the board's default UART, the one the editor is already on. */
@@ -138,17 +79,25 @@ export function isDefaultPort(port: string | undefined, defaultSerial: string): 
 }
 
 /**
+ * The slave id the Modbus server answers to.
+ *
+ * Trivial today, and deliberately still a function both sides call: this was the
+ * last value resolved in two places, and the screen showed one id while the
+ * firmware compiled another.
+ */
+export function resolveServerSlaveId(serverSlaveId: number | undefined): number {
+  return typeof serverSlaveId === 'number' && Number.isInteger(serverSlaveId) ? serverSlaveId : DEFAULT_SERVER_SLAVE_ID
+}
+
+/**
  * The RS-485 driver-enable pin, or `null` when the board drives none.
  *
- * Same reason as the port: the fields moved from `modbus_rtu` to `serial`, and
- * reading only the new home drops the pin on every project the fold has not
- * reached -- after which the transceiver never asserts DE and the board
- * receives but never answers.
+ * The package's, through the Serial screen: it is a property of the transceiver
+ * wired to that UART, not of whatever protocol happens to be speaking on it.
  */
 export function resolveRs485Pin(state: SerialBaudScreenState): string | null {
-  const enabled = state.serial?.enable_rs485_en_pin ?? state.modbus_rtu?.enable_rs485_en_pin
-  if (enabled !== true) return null
-  const pin = (state.serial?.rs485_en_pin ?? state.modbus_rtu?.rtu_rs485_en_pin)?.trim()
+  if (state.serial?.enable_rs485_en_pin !== true) return null
+  const pin = state.serial.rs485_en_pin?.trim()
   return pin ? pin : null
 }
 
@@ -160,10 +109,7 @@ export function resolveRs485Pin(state: SerialBaudScreenState): string | null {
  * route around the way it routes two slave ids by function code. So the
  * package's value wins and the screen shows it read-only.
  *
- * On a UART of its own the speed is the server's, and `serial.modbus_baud_rate`
- * is only a fallback: it is where the value lived before it became the server's,
- * so a project that has a server but no `baudRate` keeps building what it built
- * yesterday.
+ * On a UART of its own the speed is the server's.
  */
 export function resolveServerBaud(args: {
   onDefaultPort: boolean
@@ -171,15 +117,11 @@ export function resolveServerBaud(args: {
   state: SerialBaudScreenState
 }): string {
   const { onDefaultPort, serverBaud, state } = args
-  if (onDefaultPort) return resolveDefaultPortBaud(state, true)
-  // Same rule as the default port's: a fraction, a zero or a negative reaches
-  // the firmware as `Serial1.begin(...)` and either fails to compile or opens a
-  // dead line the screen confirms as configured.
+  if (onDefaultPort) return resolveDefaultPortBaud(state)
+  // A fraction, a zero or a negative reaches the firmware as `Serial1.begin(...)`
+  // and either fails to compile or opens a dead line the screen confirms as good.
   if (typeof serverBaud === 'number' && Number.isInteger(serverBaud) && serverBaud > 0) return String(serverBaud)
-  // The legacy arms are the RTU's own speed, and on a UART of its own the RTU is
-  // by definition the thing on it -- so unlike the default port, they always
-  // apply here.
-  return firstBaud([state.serial?.modbus_baud_rate, state.modbus_rtu?.baud_rate, state.modbus_rtu?.rtu_baud_rate])
+  return DEFAULT_SERIAL_BAUD
 }
 
 /**
@@ -191,45 +133,23 @@ export function resolveServerBaud(args: {
  * bad baud rate on screen and into the build.
  */
 export function readSerialBaudState(raw: Record<string, unknown> | undefined | null): SerialBaudScreenState {
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    value !== null && typeof value === 'object' && !Array.isArray(value)
-  const section = (name: string): Record<string, unknown> | undefined => {
-    const value = raw?.[name]
-    return isRecord(value) ? value : undefined
+  const value = raw?.['serial']
+  const serial = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined
+  const read = (key: string): unknown => (serial as Record<string, unknown> | undefined)?.[key]
+  const text = (key: string): string | undefined => {
+    const found = read(key)
+    return typeof found === 'string' && found.length > 0 ? found : undefined
   }
-  const text = (source: Record<string, unknown> | undefined, key: string): string | undefined => {
-    const value = source?.[key]
-    return typeof value === 'string' && value.length > 0 ? value : undefined
+  const flag = (key: string): boolean | undefined => {
+    const found = read(key)
+    return typeof found === 'boolean' ? found : undefined
   }
-
-  const count = (source: Record<string, unknown> | undefined, key: string): number | undefined => {
-    const value = source?.[key]
-    return typeof value === 'number' && Number.isInteger(value) ? value : undefined
-  }
-  const flag = (source: Record<string, unknown> | undefined, key: string): boolean | undefined => {
-    const value = source?.[key]
-    return typeof value === 'boolean' ? value : undefined
-  }
-
-  const serial = section('serial')
-  const rtu = section('modbus_rtu')
 
   return {
     serial: {
-      baud_rate: text(serial, 'baud_rate'),
-      modbus_baud_rate: text(serial, 'modbus_baud_rate'),
-      modbus_port: text(serial, 'modbus_port'),
-      enable_rs485_en_pin: flag(serial, 'enable_rs485_en_pin'),
-      rs485_en_pin: text(serial, 'rs485_en_pin'),
-    },
-    modbus_rtu: {
-      baud_rate: text(rtu, 'baud_rate'),
-      rtu_baud_rate: text(rtu, 'rtu_baud_rate'),
-      serial_port: text(rtu, 'serial_port'),
-      rtu_interface: text(rtu, 'rtu_interface'),
-      rtu_slave_id: count(rtu, 'rtu_slave_id'),
-      enable_rs485_en_pin: flag(rtu, 'enable_rs485_en_pin'),
-      rtu_rs485_en_pin: text(rtu, 'rtu_rs485_en_pin'),
+      baud_rate: text('baud_rate'),
+      enable_rs485_en_pin: flag('enable_rs485_en_pin'),
+      rs485_en_pin: text('rs485_en_pin'),
     },
   }
 }

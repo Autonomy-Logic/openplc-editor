@@ -138,7 +138,7 @@ describe('generateDefinesContent — simulator comms block', () => {
     const withEmptyState = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+      vppModbusState: {},
     })
     const withoutState = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
     // Same output either way — empty state collapses to no block.
@@ -152,11 +152,11 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('//Debugger\n#define DEBUGGER_ENABLED\n')
   })
 
-  it('emits DEBUGGER_ENABLED when the Modbus screen is present but disabled', () => {
+  it('emits DEBUGGER_ENABLED when the board has screen state but no Modbus server', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+      vppModbusState: {},
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
   })
@@ -165,10 +165,8 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: {
-        serial: { baud_rate: '9600' },
-        modbus_rtu: { enabled: true },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { enabled: true, transports: ['rtu' as const], port: 502 },
       defaultSerial: 'Serial',
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
@@ -198,12 +196,13 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // file. Emitting 115200 while MBSERIAL_BAUD said 9600 built a firmware the
   // editor could not talk to, and the user was told "No Firmware Detected" about
   // a board that was running fine.
-  it('aligns DEBUG_BAUD with MBSERIAL_BAUD for a published VPP (no `serial` section)', () => {
+  it('aligns DEBUG_BAUD with MBSERIAL_BAUD when the RTU shares the default port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: true, rtu_baud_rate: '9600', rtu_slave_id: 1 } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { enabled: true, transports: ['rtu' as const], port: 502 },
     })
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
@@ -214,12 +213,12 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // editor dials 9600 (spec params ignore `enabledWhen`), so a firmware built at
   // 115200 opened the port and answered nothing — "No Firmware Detected" on a
   // healthy board.
-  it('aligns DEBUG_BAUD with the screen baud when Modbus is DISABLED', () => {
+  it('takes DEBUG_BAUD from the Serial screen even with no Modbus server', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
     expect(out).toContain('#define DEBUG_BAUD 9600')
@@ -232,8 +231,8 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { serial: { baud_rate: '57600', modbus_baud_rate: '9600' } },
-      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
+      vppModbusState: { serial: { baud_rate: '57600' } },
+      modbusServer: { transports: ['rtu' as const], serialPort: 'Serial1', baudRate: 9600 },
     })
     // Two distinct ports, two distinct rates — and the debugger keeps the one
     // the package states for its own line.
@@ -273,12 +272,12 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // This used to be derived from the screen, and a stale value there addressed a
   // firmware framing on another id — every frame dropped at the id check and
   // reported as "No Firmware Detected".
-  it('emits DEBUG_SLAVE 1 whatever a legacy project left on the screen', () => {
+  it('emits DEBUG_SLAVE 1 whatever the board screens hold', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: false, rtu_slave_id: 7 } },
+      vppModbusState: { serial: {} },
     })
     expect(out).toContain('#define DEBUG_SLAVE 1')
     expect(out).not.toContain('#define MODBUS_ENABLED')

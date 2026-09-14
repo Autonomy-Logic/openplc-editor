@@ -118,7 +118,7 @@ describe('resolveModbusServerProfile', () => {
     })
 
     it('links out to the serial and network screens the package ships', () => {
-      expect(profile.vppScreens).toEqual({ serial: 'Serial', network: 'Network', modbus: 'Modbus' })
+      expect(profile.vppScreens).toEqual({ serial: 'Serial', network: 'Network' })
     })
   })
 
@@ -174,27 +174,9 @@ describe('resolveModbusServerProfile', () => {
     expect(profile.transports).toEqual([])
   })
 
-  describe('a package that has not been migrated', () => {
-    // Stage-by-stage rollout means an installed VPP may still carry the single
-    // pre-split screen. Only the links differ.
-    const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { Modbus: {} } } }))
-
-    it('still resolves as a baremetal target', () => {
-      expect(profile.configurablePort).toBe(true)
-    })
-
-    it('reports no serial or network screen to link to', () => {
-      expect(profile.vppScreens.serial).toBeUndefined()
-      expect(profile.vppScreens.network).toBeUndefined()
-      expect(profile.vppScreens.modbus).toBe('Modbus')
-    })
-  })
-
   it('matches screen names case-insensitively', () => {
-    const profile = resolveModbusServerProfile(
-      arduinoBoard({ vpp: { screens: { serial: {}, NETWORK: {}, modbus: {} } } }),
-    )
-    expect(profile.vppScreens).toEqual({ serial: 'serial', network: 'NETWORK', modbus: 'modbus' })
+    const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { serial: {}, NETWORK: {} } } }))
+    expect(profile.vppScreens).toEqual({ serial: 'serial', network: 'NETWORK' })
   })
 
   it('is still baremetal with no vpp metadata at all', () => {
@@ -240,19 +222,5 @@ describe('a baremetal board with no network hardware', () => {
   it('offers TCP to a split package that does ship one', () => {
     const withNetwork = arduinoBoard({ vpp: { screens: { Serial: {}, Network: {} } } })
     expect(resolveModbusServerProfile(withNetwork).transports).toEqual(['rtu', 'tcp'])
-  })
-
-  it('keeps TCP on offer for an unsplit package, whose silence means nothing', () => {
-    // A pre-4.4.0 package carries TCP inside its Modbus screen and ships no
-    // Network screen either. Reading that as a refusal would strip TCP from
-    // every board whose package has not been updated yet.
-    const legacy = arduinoBoard({ vpp: { screens: { Modbus: {} } } })
-    expect(legacy.vpp).toBeDefined()
-    expect(resolveModbusServerProfile(legacy).transports).toEqual(['rtu', 'tcp'])
-  })
-
-  it('honours an explicit empty carrier list even on an unsplit package', () => {
-    const refused = arduinoBoard({ vpp: { screens: { Modbus: {} } }, networkInterfaces: [] })
-    expect(resolveModbusServerProfile(refused).transports).toEqual(['rtu'])
   })
 })

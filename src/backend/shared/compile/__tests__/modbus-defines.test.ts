@@ -1,5 +1,30 @@
 import { DEBUG_SLAVE, generateModbusDefines, selectModbusServer } from '../steps/modbus-defines'
 
+/**
+ * The `//Comms Configuration` block of `defines.h`.
+ *
+ * One rule underneath every case here: the project's `PLCServer` says WHAT is
+ * served, and the board's package says what it is served OVER. Nothing reads a
+ * pre-4.4.0 project's `modbus_rtu` / `modbus_tcp` sections -- 4.4.0 does not
+ * carry configuration forward, and a project from before it creates its server
+ * again.
+ */
+
+/** A server as the project stores it, RTU on the board's default UART. */
+const rtuServer = {
+  enabled: true,
+  transports: ['rtu' as const],
+  slaveId: 7,
+  networkInterface: '0.0.0.0',
+  port: 502,
+}
+
+/** The same, on a UART the server has to itself. */
+const rtuOnSecondary = { ...rtuServer, serialPort: 'Serial2', baudRate: 19200 }
+
+/** TCP only. */
+const tcpServer = { enabled: true, transports: ['tcp' as const], networkInterface: '0.0.0.0', port: 502 }
+
 describe('DEBUG_SLAVE', () => {
   it('is 1, the id every board already in the field answers on', () => {
     expect(DEBUG_SLAVE).toBe(1)
@@ -7,450 +32,204 @@ describe('DEBUG_SLAVE', () => {
 })
 
 describe('generateModbusDefines', () => {
-  it('returns an empty string when neither RTU nor TCP is enabled', () => {
+  it('emits nothing without a server, because nothing else states what is served', () => {
     expect(generateModbusDefines({})).toBe('')
-    expect(generateModbusDefines({ modbus_rtu: {}, modbus_tcp: {} })).toBe('')
-    expect(generateModbusDefines({ modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } })).toBe('')
+    expect(generateModbusDefines({ serial: { baud_rate: '19200' }, network: { enabled: true } })).toBe('')
   })
 
-  it('emits the canonical RTU block for a project that predates the server', () => {
-    // Never opened by an editor that promotes the screen state, so the section
-    // is still the only statement of what is served. It has to compile to the
-    // same firmware it compiled to yesterday.
-    const out = generateModbusDefines({
-      serial: { baud_rate: '115200' },
-      modbus_rtu: { enabled: true },
-    })
-    expect(out).toBe(
-      [
-        '//Comms Configuration',
-        '#define MBSERIAL_IFACE Serial',
-        '#define MBSERIAL_BAUD 115200',
-        '#define MBSERIAL_SLAVE 1',
-        '#define MBSERIAL_SHARES_DEBUG_SERIAL',
-        '#define MBSERIAL',
-        '#define MODBUS_ENABLED',
-        '',
-      ].join('\n'),
-    )
+  it('emits nothing for a server that exists but is switched off', () => {
+    expect(generateModbusDefines({}, 'Serial', { ...rtuServer, enabled: false })).toBe('')
   })
 
-  it('lets the project server decide what is served', () => {
-    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
-      transports: ['rtu'],
-      serialPort: 'Serial1',
-      slaveId: 7,
-    })
-    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
-    expect(out).toContain('#define MBSERIAL_SLAVE 7')
-    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+  it('emits nothing for a server that serves no transport', () => {
+    expect(generateModbusDefines({}, 'Serial', { ...rtuServer, transports: [] })).toBe('')
   })
 
-  it('serves nothing when the server exists but is switched off', () => {
-    expect(
-      generateModbusDefines({ modbus_rtu: { enabled: true } }, 'Serial', {
-        enabled: false,
-        transports: ['rtu'],
-      }),
-    ).toBe('')
-  })
-
-  it('takes the server over the stale section it replaced', () => {
-    // A migrated project still carries the old section, because the migration
-    // copies rather than moves. The server is what counts.
-    const out = generateModbusDefines({ modbus_rtu: { enabled: true } }, 'Serial', { transports: ['tcp'] })
-    expect(out).not.toContain('#define MBSERIAL')
-    expect(out).toContain('#define MBTCP')
-  })
-
-  it('honours the server slave id on the default port, where the editor also listens', () => {
-    // The firmware answers DEBUG_SLAVE there too, routed by function code, so
-    // the server keeps its own address on the UART the editor is using. This
-    // used to be overridden with the editor's id, which is what made the field
-    // read-only on that port.
-    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
-      transports: ['rtu'],
-      serialPort: 'Serial',
-      slaveId: 7,
-    })
-    expect(out).toContain('#define MBSERIAL_SLAVE 7')
-    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
-  })
-
-  it('honours the server slave id on a UART of its own', () => {
-    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
-      transports: ['rtu'],
-      serialPort: 'Serial1',
-      slaveId: 7,
-    })
-    expect(out).toContain('#define MBSERIAL_SLAVE 7')
-  })
-
-  it('honors a non-default `defaultSerial` when deciding the shares flag', () => {
-    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial1', {
-      transports: ['rtu'],
-      serialPort: 'Serial1',
-    })
-    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
-    expect(out).toContain('#define MBSERIAL_BAUD 9600')
-    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
-  })
-
-  it('reads TCP network config from the network section', () => {
-    const out = generateModbusDefines({
-      network: {
-        interface: 'Wi-Fi',
-        wifi_ssid: 'MyNet',
-        wifi_password: 'super-secret',
-        enable_dhcp: true,
-      },
-      modbus_tcp: { enabled: true },
-    })
-    expect(out).toContain('#define MBTCP_SSID "MyNet"')
-    expect(out).toContain('#define MBTCP_PWD "super-secret"')
-    expect(out).toContain('#define MBTCP_WIFI')
-  })
-
-  it('takes the RTU port, its baud and the RS485 pin from the serial section', () => {
-    // The physical layer is the package's: which UART, how fast, which pin
-    // drives the RS-485 transceiver. The server says only that RTU is served.
-    const out = generateModbusDefines(
-      {
-        serial: {
-          baud_rate: '9600',
-          modbus_port: 'Serial2',
-          modbus_baud_rate: '19200',
-          enable_rs485_en_pin: true,
-          rs485_en_pin: '4',
-        },
-      },
-      'Serial',
-      { transports: ['rtu'], slaveId: 7 },
-    )
-    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
+  it('emits the canonical RTU block on the default port', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '19200' } }, 'Serial', rtuServer)
+    expect(out).toContain('#define MBSERIAL_IFACE Serial')
     expect(out).toContain('#define MBSERIAL_BAUD 19200')
     expect(out).toContain('#define MBSERIAL_SLAVE 7')
-    expect(out).toContain('#define MBSERIAL_TXPIN 4')
-    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
+    expect(out).toContain('#define MBSERIAL')
+    expect(out).toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('MBSERIAL_ON_SECONDARY')
   })
 
-  it('takes the secondary UART speed from the server, not from the screen', () => {
-    // The speed of a UART the editor is not on belongs to the server, like the
-    // slave id and the port itself. The screen value is only the fallback for a
-    // project that predates the move.
-    const out = generateModbusDefines({ serial: { baud_rate: '9600', modbus_baud_rate: '19200' } }, 'Serial', {
-      transports: ['rtu'],
-      serialPort: 'Serial2',
-      baudRate: 57600,
-    })
-    expect(out).toContain('#define MBSERIAL_BAUD 57600')
+  it('emits the secondary-UART shape when the server names another port', () => {
+    const out = generateModbusDefines({ serial: { baud_rate: '115200' } }, 'Serial', rtuOnSecondary)
+    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
     expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
+    expect(out).not.toContain('MBSERIAL_SHARES_DEBUG_SERIAL')
   })
 
-  it('ignores the server speed on the default port, where the editor already sets it', () => {
-    const out = generateModbusDefines({ serial: { baud_rate: '9600' } }, 'Serial', {
-      transports: ['rtu'],
-      serialPort: 'Serial',
-      baudRate: 57600,
-    })
-    expect(out).toContain('#define MBSERIAL_BAUD 9600')
+  it("honours a board whose default UART is not called 'Serial'", () => {
+    const out = generateModbusDefines({}, 'SerialUSB', rtuServer)
+    expect(out).toContain('#define MBSERIAL_IFACE SerialUSB')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
   })
 
-  it('shares the default port baud when the RTU stays on it', () => {
-    const out = generateModbusDefines({
-      serial: { baud_rate: '9600', modbus_port: 'Serial', modbus_baud_rate: '19200' },
-      modbus_rtu: { enabled: true },
+  it("carries the server's slave id on every port, including the editor's own", () => {
+    // The firmware answers DEBUG_SLAVE alongside it there and routes by function
+    // code, so the two share the UART without sharing an address.
+    expect(generateModbusDefines({}, 'Serial', rtuServer)).toContain('#define MBSERIAL_SLAVE 7')
+    expect(generateModbusDefines({}, 'Serial', rtuOnSecondary)).toContain('#define MBSERIAL_SLAVE 7')
+  })
+
+  it('falls back to slave id 1 when the project states none', () => {
+    const { slaveId: _dropped, ...noId } = rtuServer
+    expect(generateModbusDefines({}, 'Serial', noId)).toContain('#define MBSERIAL_SLAVE 1')
+  })
+
+  describe('the speed of the line', () => {
+    it("takes the package's value on the default port, where the editor already listens", () => {
+      const out = generateModbusDefines({ serial: { baud_rate: '19200' } }, 'Serial', { ...rtuServer, baudRate: 9600 })
+      expect(out).toContain('#define MBSERIAL_BAUD 19200')
     })
-    // modbus_baud_rate belongs to the SECONDARY port; on the default one the
-    // debugger and the RTU are the same line and share one speed.
-    expect(out).toContain('#define MBSERIAL_BAUD 9600')
-    expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
-  })
 
-  it('emits the listen port the server states', () => {
-    const out = generateModbusDefines({ network: {} }, 'Serial', { transports: ['tcp'], port: 5020 })
-    expect(out).toContain('#define MBTCP_PORT 5020')
-  })
-
-  it('falls back to 502, which is what the firmware listened on before the port was configurable', () => {
-    const out = generateModbusDefines({ modbus_tcp: { enabled: true } })
-    expect(out).toContain('#define MBTCP_PORT 502')
-  })
-
-  it('emits no MBTCP when the network section is explicitly disabled', () => {
-    // Modbus TCP cannot come up without a network. Emitting MBTCP anyway
-    // produced firmware that called mbconfig_ethernet_iface and never linked —
-    // a healthy board that answers nothing, which reads as broken hardware.
-    const out = generateModbusDefines({
-      network: { enabled: false, interface: 'Wi-Fi', wifi_ssid: 'MyNet' },
-      modbus_tcp: { enabled: true },
+    it("takes the server's value on a UART of its own", () => {
+      const out = generateModbusDefines({ serial: { baud_rate: '115200' } }, 'Serial', rtuOnSecondary)
+      expect(out).toContain('#define MBSERIAL_BAUD 19200')
     })
-    expect(out).not.toContain('#define MBTCP')
-    expect(out).not.toContain('MBTCP_WIFI')
-    expect(out).toBe('')
-  })
 
-  it('still emits MBSERIAL when the network is off but RTU is on', () => {
-    // The network gate is TCP's alone; RTU has nothing to do with it.
-    const out = generateModbusDefines({
-      network: { enabled: false },
-      modbus_rtu: { enabled: true },
-      modbus_tcp: { enabled: true },
+    it('falls back to 115200 when nothing states one', () => {
+      expect(generateModbusDefines({}, 'Serial', rtuServer)).toContain('#define MBSERIAL_BAUD 115200')
     })
-    expect(out).toContain('#define MBSERIAL')
-    expect(out).toContain('#define MODBUS_ENABLED')
-    expect(out).not.toContain('#define MBTCP')
   })
 
-  it('builds TCP when the network section exists but its toggle was never touched', () => {
-    // The form layout persists only fields the user edited, so someone who
-    // typed an SSID without touching "Enable Network" has no `enabled` key.
-    // Only an explicit `false` blocks; absence must not.
-    const out = generateModbusDefines({
-      network: { wifi_ssid: 'MyNet', interface: 'Wi-Fi' },
-      modbus_tcp: { enabled: true },
+  describe('the RS-485 driver-enable pin', () => {
+    it('emits MBSERIAL_TXPIN when the board declares the pin is wired', () => {
+      // Without it the transceiver never asserts DE and the board receives every
+      // request and answers none.
+      const state = { serial: { enable_rs485_en_pin: true, rs485_en_pin: '17' } }
+      expect(generateModbusDefines(state, 'Serial', rtuServer)).toContain('#define MBSERIAL_TXPIN 17')
     })
-    expect(out).toContain('#define MBTCP')
-    expect(out).toContain('#define MBTCP_SSID "MyNet"')
-  })
 
-  it('applies RTU schema defaults when only `enabled: true` is persisted (form-layout writes only touched fields)', () => {
-    // Real-world scenario: user toggles "Enable Modbus RTU" without
-    // editing baud/interface/slave — form-layout writes only the field
-    // that changed. ModbusSlave.cpp still expects MBSERIAL_IFACE,
-    // MBSERIAL_BAUD, MBSERIAL_SLAVE to compile (object reference +
-    // numeric literals), so the helper must fill them from screen
-    // defaults rather than leaving them undefined.
-    const out = generateModbusDefines({ modbus_rtu: { enabled: true } })
-    expect(out).toContain('#define MBSERIAL_IFACE Serial')
-    expect(out).toContain('#define MBSERIAL_BAUD 115200')
-    expect(out).toContain('#define MBSERIAL_SLAVE 1')
-    expect(out).toContain('#define MBSERIAL')
-    expect(out).toContain('#define MODBUS_ENABLED')
-  })
-
-  it('applies TCP `tcp_interface` default to Ethernet when only `enabled: true` is persisted', () => {
-    const out = generateModbusDefines({ modbus_tcp: { enabled: true } })
-    expect(out).toContain('#define MBTCP_ETHERNET')
-    expect(out).not.toContain('MBTCP_WIFI')
-  })
-
-  it('always emits MBTCP_MAC/IP/DNS/GATEWAY/SUBNET when MBTCP is on (Baremetal.ino references them unconditionally)', () => {
-    // Unset values land as `0` (single-byte arrays) so the sizeof()<4 cascade in
-    // Baremetal.ino falls through to mbconfig_ethernet_iface(mac, NULL, ...).
-    const out = generateModbusDefines({ modbus_tcp: { enabled: true, enable_dhcp: true } })
-    expect(out).toContain('#define MBTCP_MAC 0')
-    expect(out).toContain('#define MBTCP_IP 0')
-    expect(out).toContain('#define MBTCP_DNS 0')
-    expect(out).toContain('#define MBTCP_GATEWAY 0')
-    expect(out).toContain('#define MBTCP_SUBNET 0')
-  })
-
-  it('honors custom RTU values (non-default baud, slave id, UART)', () => {
-    const out = generateModbusDefines({ serial: { modbus_port: 'Serial1', modbus_baud_rate: '57600' } }, 'Serial', {
-      transports: ['rtu'],
-      slaveId: 42,
+    it('emits none when the checkbox is off, or on with no pin', () => {
+      const off = { serial: { enable_rs485_en_pin: false, rs485_en_pin: '17' } }
+      const blank = { serial: { enable_rs485_en_pin: true, rs485_en_pin: '' } }
+      expect(generateModbusDefines(off, 'Serial', rtuServer)).not.toContain('MBSERIAL_TXPIN')
+      expect(generateModbusDefines(blank, 'Serial', rtuServer)).not.toContain('MBSERIAL_TXPIN')
+      expect(generateModbusDefines({}, 'Serial', rtuServer)).not.toContain('MBSERIAL_TXPIN')
     })
-    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
-    expect(out).toContain('#define MBSERIAL_BAUD 57600')
-    expect(out).toContain('#define MBSERIAL_SLAVE 42')
   })
 
-  it('emits MBSERIAL_TXPIN only when the RS485 EN pin checkbox is on AND a pin value is set', () => {
-    const rtu = { transports: ['rtu' as const] }
-
-    // Pin set but checkbox off → no MBSERIAL_TXPIN (matches screen visibility gate).
-    const checkboxOff = generateModbusDefines(
-      { serial: { enable_rs485_en_pin: false, rs485_en_pin: 'D2' } },
-      'Serial',
-      rtu,
-    )
-    expect(checkboxOff).not.toContain('MBSERIAL_TXPIN')
-
-    // Checkbox on AND value set → emitted.
-    const checkboxOn = generateModbusDefines(
-      { serial: { enable_rs485_en_pin: true, rs485_en_pin: 'D2' } },
-      'Serial',
-      rtu,
-    )
-    expect(checkboxOn).toContain('#define MBSERIAL_TXPIN D2')
-
-    // Checkbox on but pin empty → skipped (defensive — no garbage #define).
-    const checkboxOnEmptyPin = generateModbusDefines(
-      { serial: { enable_rs485_en_pin: true, rs485_en_pin: '' } },
-      'Serial',
-      rtu,
-    )
-    expect(checkboxOnEmptyPin).not.toContain('MBSERIAL_TXPIN')
-  })
-
-  it('emits the canonical TCP Ethernet block with static IP', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: {
-        enabled: true,
-        tcp_interface: 'Ethernet',
-        tcp_mac_address: 'de:ad:be:ef:fe:ed',
-        enable_dhcp: false,
-        ip_address: '192.168.1.100',
-        dns: '8.8.8.8',
-        gateway: '192.168.1.1',
-        subnet: '255.255.255.0',
-      },
+  describe('the TCP listen port', () => {
+    it('emits the port the server states', () => {
+      expect(generateModbusDefines({ network: {} }, 'Serial', { ...tcpServer, port: 8502 })).toContain(
+        '#define MBTCP_PORT 8502',
+      )
     })
-    expect(out).toContain('#define MBTCP_MAC 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed')
-    expect(out).toContain('#define MBTCP_IP 192, 168, 1, 100')
-    expect(out).toContain('#define MBTCP_DNS 8, 8, 8, 8')
-    expect(out).toContain('#define MBTCP_GATEWAY 192, 168, 1, 1')
-    expect(out).toContain('#define MBTCP_SUBNET 255, 255, 255, 0')
-    expect(out).toContain('#define MBTCP_ETHERNET')
-    expect(out).toContain('#define MBTCP')
-    expect(out).toContain('#define MODBUS_ENABLED')
+
+    it('falls back to 502, which is what the firmware listened on before it was configurable', () => {
+      const { port: _dropped, ...noPort } = tcpServer
+      expect(generateModbusDefines({ network: {} }, 'Serial', noPort)).toContain('#define MBTCP_PORT 502')
+    })
   })
 
-  it('emits MBTCP_IP/DNS/GATEWAY/SUBNET as `0` placeholders when DHCP is enabled (sizeof<4 → DHCP path in Baremetal.ino)', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: {
-        enabled: true,
-        tcp_interface: 'Ethernet',
-        tcp_mac_address: 'de:ad:be:ef:fe:ed',
-        enable_dhcp: true,
-        // The user filled the static-host fields but then flipped DHCP on; the
-        // static values are intentionally not used.
-        ip_address: '192.168.1.100',
-        gateway: '192.168.1.1',
-        subnet: '255.255.255.0',
-        dns: '8.8.8.8',
-      },
+  describe('the network the TCP server answers over', () => {
+    it('emits no MBTCP when the project turned the network off', () => {
+      // Serving TCP over a network the project says to leave down produced
+      // firmware that compiled MBTCP, called mbconfig_ethernet_iface and never
+      // linked -- a healthy board that answers nothing.
+      const out = generateModbusDefines({ network: { enabled: false } }, 'Serial', tcpServer)
+      expect(out).toBe('')
     })
-    expect(out).toContain('#define MBTCP_MAC 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed')
-    expect(out).toContain('#define MBTCP_IP 0')
-    expect(out).toContain('#define MBTCP_DNS 0')
-    expect(out).toContain('#define MBTCP_GATEWAY 0')
-    expect(out).toContain('#define MBTCP_SUBNET 0')
-    expect(out).toContain('#define MBTCP_ETHERNET')
+
+    it('still emits MBSERIAL when the network is off but RTU is on', () => {
+      const both = { ...rtuServer, transports: ['rtu' as const, 'tcp' as const] }
+      const out = generateModbusDefines({ network: { enabled: false } }, 'Serial', both)
+      expect(out).toContain('#define MBSERIAL')
+      expect(out).not.toContain('#define MBTCP\n')
+    })
+
+    it('builds TCP when the section exists but its toggle was never touched', () => {
+      // The form layout persists only the fields the user touched, so a project
+      // where someone typed an SSID and never touched the toggle has no
+      // `enabled` at all; refusing that would trade one silent failure for another.
+      const out = generateModbusDefines({ network: { wifi_ssid: 'planta' } }, 'Serial', tcpServer)
+      expect(out).toContain('#define MBTCP')
+    })
+
+    it('emits the Ethernet block with a static address', () => {
+      const state = {
+        network: {
+          enabled: true,
+          interface: 'Ethernet' as const,
+          mac_address: 'DE:AD:BE:EF:FE:ED',
+          enable_dhcp: false,
+          ip_address: '192.168.0.50',
+          dns: '8.8.8.8',
+          gateway: '192.168.0.1',
+          subnet: '255.255.255.0',
+        },
+      }
+      const out = generateModbusDefines(state, 'Serial', tcpServer)
+      expect(out).toContain('#define MBTCP_ETHERNET')
+      expect(out).toContain('#define MBTCP_MAC 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed')
+      expect(out).toContain('#define MBTCP_IP 192, 168, 0, 50')
+      expect(out).toContain('#define MBTCP_DNS 8, 8, 8, 8')
+      expect(out).toContain('#define MBTCP_GATEWAY 192, 168, 0, 1')
+      expect(out).toContain('#define MBTCP_SUBNET 255, 255, 255, 0')
+      expect(out).not.toContain('MBTCP_WIFI')
+    })
+
+    it('emits address placeholders under DHCP, which is how the firmware selects it', () => {
+      // Baremetal.ino references five byte arrays unconditionally inside the
+      // `#ifdef MBTCP` block and uses `sizeof(arr) < 4` as a compile-time
+      // DHCP-vs-static selector. A missing macro fails compilation; a single-byte
+      // `0` is how "unset" is signalled.
+      const state = { network: { enabled: true, enable_dhcp: true, ip_address: '192.168.0.50' } }
+      const out = generateModbusDefines(state, 'Serial', tcpServer)
+      expect(out).toContain('#define MBTCP_IP 0')
+      expect(out).toContain('#define MBTCP_DNS 0')
+      expect(out).toContain('#define MBTCP_GATEWAY 0')
+      expect(out).toContain('#define MBTCP_SUBNET 0')
+    })
+
+    it('always emits all five, even with nothing configured', () => {
+      const out = generateModbusDefines({ network: {} }, 'Serial', tcpServer)
+      for (const macro of ['MBTCP_MAC', 'MBTCP_IP', 'MBTCP_DNS', 'MBTCP_GATEWAY', 'MBTCP_SUBNET']) {
+        expect(out).toContain(`#define ${macro} 0`)
+      }
+    })
+
+    it('emits the Wi-Fi specifics and drops MBTCP_ETHERNET', () => {
+      const state = {
+        network: { enabled: true, interface: 'Wi-Fi' as const, wifi_ssid: 'planta', wifi_password: 's3cr3t' },
+      }
+      const out = generateModbusDefines(state, 'Serial', tcpServer)
+      expect(out).toContain('#define MBTCP_SSID "planta"')
+      expect(out).toContain('#define MBTCP_PWD "s3cr3t"')
+      expect(out).toContain('#define MBTCP_WIFI')
+      expect(out).not.toContain('MBTCP_ETHERNET')
+    })
+
+    it('defaults to Ethernet when the section names no interface', () => {
+      expect(generateModbusDefines({ network: { enabled: true } }, 'Serial', tcpServer)).toContain(
+        '#define MBTCP_ETHERNET',
+      )
+    })
+
+    it('passes an already-formatted MAC or IP through untouched', () => {
+      // Escape hatch for shapes the formatter would mangle.
+      const state = { network: { enabled: true, mac_address: '0xAA,0xBB,0xCC,0xDD,0xEE,0xFF', ip_address: 'DHCP' } }
+      const out = generateModbusDefines(state, 'Serial', tcpServer)
+      expect(out).toContain('#define MBTCP_MAC 0xAA,0xBB,0xCC,0xDD,0xEE,0xFF')
+      expect(out).toContain('#define MBTCP_IP DHCP')
+    })
   })
 
-  it('emits Wi-Fi specifics (SSID, PWD, MBTCP_WIFI) and omits MBTCP_ETHERNET when interface is Wi-Fi', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: {
-        enabled: true,
-        tcp_interface: 'Wi-Fi',
-        tcp_wifi_ssid: 'MyNetwork',
-        tcp_wifi_password: 'super-secret',
-        enable_dhcp: true,
-      },
-    })
-    expect(out).toContain('#define MBTCP_SSID "MyNetwork"')
-    expect(out).toContain('#define MBTCP_PWD "super-secret"')
-    expect(out).toContain('#define MBTCP_WIFI')
-    expect(out).not.toContain('MBTCP_ETHERNET')
-  })
-
-  it('emits MBTCP_MAC as `0` placeholder when the field is empty (boards with built-in MAC ignore it)', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: { enabled: true, tcp_interface: 'Ethernet', enable_dhcp: true },
-    })
-    // Empty MAC → placeholder `0` so the .ino's `uint8_t mac[] = { MBTCP_MAC };`
-    // compiles. Wi-Fi-equipped boards (ESP8266, ESP32, etc.) ignore the MAC
-    // inside mbconfig_ethernet_iface, so the placeholder is harmless.
-    expect(out).toContain('#define MBTCP_MAC 0')
-    expect(out).toContain('#define MBTCP_ETHERNET')
-  })
-
-  it('combines RTU + TCP and emits MODBUS_ENABLED exactly once', () => {
-    const out = generateModbusDefines({
-      serial: { baud_rate: '9600' },
-      modbus_rtu: { enabled: true },
-      modbus_tcp: { enabled: true, tcp_interface: 'Ethernet', enable_dhcp: true },
-    })
+  it('combines RTU and TCP under one MODBUS_ENABLED', () => {
+    const both = { ...rtuServer, transports: ['rtu' as const, 'tcp' as const] }
+    const out = generateModbusDefines({ network: { enabled: true } }, 'Serial', both)
     expect(out).toContain('#define MBSERIAL')
     expect(out).toContain('#define MBTCP')
-    const occurrences = out.match(/#define MODBUS_ENABLED/g) ?? []
-    expect(occurrences).toHaveLength(1)
+    expect(out.match(/#define MODBUS_ENABLED/g)).toHaveLength(1)
   })
 
-  it('defaults to MBTCP_ETHERNET when tcp_interface is missing', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: { enabled: true, enable_dhcp: true },
-    })
-    expect(out).toContain('#define MBTCP_ETHERNET')
-    expect(out).not.toContain('MBTCP_WIFI')
-  })
-
-  it('passes pre-formatted MAC literals through untouched (escape hatch for non-standard shapes)', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: {
-        enabled: true,
-        tcp_interface: 'Ethernet',
-        tcp_mac_address: '0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed',
-        enable_dhcp: true,
-      },
-    })
-    expect(out).toContain('#define MBTCP_MAC 0xde, 0xad, 0xbe, 0xef, 0xfe, 0xed')
-  })
-
-  it('passes non-dotted IP strings through untouched', () => {
-    const out = generateModbusDefines({
-      modbus_tcp: {
-        enabled: true,
-        tcp_interface: 'Ethernet',
-        enable_dhcp: false,
-        ip_address: 'host.local',
-      },
-    })
-    expect(out).toContain('#define MBTCP_IP host.local')
-  })
-
-  it('omits the heading entirely when both transports are explicitly disabled', () => {
-    // Distinct from "neither block populated" — here we have data shapes but
-    // the gating booleans are off. Output is still empty so defines.h stays
-    // clean.
-    const out = generateModbusDefines({
-      modbus_rtu: { enabled: false },
-      modbus_tcp: { enabled: false, tcp_interface: 'Ethernet', enable_dhcp: true },
-    })
-    expect(out).toBe('')
-  })
-
-  it('output always ends with a trailing newline (so callers can concatenate)', () => {
-    const out = generateModbusDefines({
-      serial: { baud_rate: '115200' },
-      modbus_rtu: { enabled: true },
-    })
-    expect(out.endsWith('\n')).toBe(true)
-  })
-})
-
-/**
- * Turning the server off has to actually turn Modbus off, on every board.
- *
- * The two halves are wired through `selectModbusServer`, so this asserts them
- * together: the selector reports the disabled server rather than an absence,
- * and the emitter reads its empty transport list instead of falling back to
- * screen sections that a board's unsplit package still leaves switched on.
- */
-describe('a server the user switched off', () => {
-  const LEGACY_SECTIONS = {
-    modbus_rtu: { enabled: true, rtu_slave_id: 7, rtu_interface: 'Serial1' },
-    modbus_tcp: { enabled: true },
-  }
-
-  it('emits no Modbus, even though the legacy sections still say enabled', () => {
-    const off = [
-      {
-        name: 'mb_baremetal_server',
-        protocol: 'modbus-tcp',
-        modbusSlaveConfig: { enabled: false, transports: ['rtu' as const], slaveId: 7 },
-      },
-    ]
-    const { server } = selectModbusServer(off)
-    expect(generateModbusDefines(LEGACY_SECTIONS, 'Serial', server)).toBe('')
-  })
-
-  it('still emits from the legacy sections when the project has no server at all', () => {
-    const { server } = selectModbusServer([])
-    expect(generateModbusDefines(LEGACY_SECTIONS, 'Serial', server)).toContain('MBSERIAL')
+  it('ends with a trailing newline so callers can concatenate', () => {
+    expect(generateModbusDefines({}, 'Serial', rtuServer).endsWith('\n')).toBe(true)
   })
 })
 
@@ -472,21 +251,9 @@ describe('selectModbusServer', () => {
     expect(selectModbusServer([])).toEqual({})
   })
 
-  it('returns a server that exists but serves nothing, rather than nothing at all', () => {
-    // The emitter falls back to the legacy screen sections when it gets no
-    // server. Those sections still say `enabled: true` on a board whose package
-    // was never split, so reporting an absence here compiled RTU on a server
-    // the user had switched off.
-    expect(selectModbusServer([server('mb1', [])]).server).toMatchObject({ transports: [] })
-    expect(selectModbusServer([server('mb1', ['rtu'], false)]).server).toMatchObject({ enabled: false })
-  })
-
-  it('reports nothing for a pre-4.4.0 server that never declared transports', () => {
-    // That server is a Runtime v4 one carried by a project whose baremetal
-    // Modbus still lives in the screen sections. Treating it as "serves
-    // nothing" would silence a project that has always compiled from them.
-    const legacy = { name: 'mb1', protocol: 'modbus-tcp', modbusSlaveConfig: { enabled: true, port: 502 } }
-    expect(selectModbusServer([legacy])).toEqual({})
+  it('finds nothing in a server that serves nothing', () => {
+    expect(selectModbusServer([server('mb1', [])])).toEqual({})
+    expect(selectModbusServer([server('mb1', ['rtu'], false)])).toEqual({})
   })
 
   it('ignores a server of another protocol', () => {
@@ -516,93 +283,18 @@ describe('selectModbusServer', () => {
 })
 
 /**
- * The compiler reads the project from disk; `migrate-modbus-serial-fields` runs
- * in the store. So the emitter meets the pre-split spellings routinely -- before
- * the first save, always in a CLI process, and permanently on a board whose
- * package was never split -- and has to honour them.
+ * Deleting the server has to stop Modbus. It did not, for one release of this
+ * branch: the emitter fell back to the board's screen sections, which nothing
+ * ever cleared, so a board kept serving a configuration the user had removed.
+ * That fallback is gone with the rest of the pre-4.4.0 compatibility.
  */
-describe('a pre-4.4.0 project whose wiring is still under the old keys', () => {
-  const legacy = {
-    modbus_rtu: {
-      enabled: true,
-      rtu_slave_id: 7,
-      rtu_interface: 'Serial2',
-      rtu_baud_rate: '19200',
-      enable_rs485_en_pin: true,
-      rtu_rs485_en_pin: '17',
-    },
-  }
-
-  it('drives the RS-485 enable pin instead of leaving the transceiver mute', () => {
-    // Losing this emits no MBSERIAL_TXPIN, the DE pin is never asserted, and the
-    // board receives every request and answers none.
-    expect(generateModbusDefines(legacy, 'Serial')).toContain('#define MBSERIAL_TXPIN 17')
-  })
-
-  it('puts the RTU on the UART the project named, not on the default one', () => {
-    const out = generateModbusDefines(legacy, 'Serial')
-    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
-    expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
-    expect(out).toContain('#define MBSERIAL_BAUD 19200')
-  })
-
-  it('still prefers the new keys when the fold has already run', () => {
-    const folded = {
-      modbus_rtu: { enabled: true, rtu_interface: 'Serial2', rtu_rs485_en_pin: '17' },
-      serial: { modbus_port: 'Serial1', enable_rs485_en_pin: true, rs485_en_pin: '4' },
+describe('a server the user deleted', () => {
+  it('stops Modbus, whatever the board screens still hold', () => {
+    const { server } = selectModbusServer([])
+    const leftovers = {
+      serial: { baud_rate: '19200', enable_rs485_en_pin: true, rs485_en_pin: '17' },
+      network: { enabled: true, wifi_ssid: 'planta' },
     }
-    const out = generateModbusDefines(folded, 'Serial')
-    expect(out).toContain('#define MBSERIAL_IFACE Serial1')
-    expect(out).toContain('#define MBSERIAL_TXPIN 4')
-  })
-})
-
-/**
- * `NFR03`: promoting a project's Modbus to a `PLCServer` must not change the
- * firmware it compiles to. The measurement behind it was that exactly one line
- * moves, `DEBUG_SLAVE`, and that one is the editor's own link rather than the
- * server's.
- *
- * Asserted as an A/B here because it is the only form that stays true: it emits
- * ONE project's configuration through the legacy screen-section path and through
- * the migrated-server path, and compares the two outputs directly.
- */
-describe('NFR03 - the migration does not change the firmware', () => {
-  /** What a pre-4.4.0 project carries, all of it in the screen sections. */
-  const legacySections = {
-    modbus_rtu: {
-      enabled: true,
-      rtu_slave_id: 7,
-      rtu_interface: 'Serial2',
-      rtu_baud_rate: '19200',
-      enable_rs485_en_pin: true,
-      rtu_rs485_en_pin: '17',
-    },
-    modbus_tcp: { enabled: false },
-  }
-
-  /** The same configuration after `planVendorModbusMigration` promotes it. */
-  const migratedServer = {
-    enabled: true,
-    transports: ['rtu' as const],
-    slaveId: 7,
-    serialPort: 'Serial2',
-    baudRate: 19200,
-    networkInterface: '0.0.0.0',
-    port: 502,
-  }
-
-  it('emits the identical Modbus block through both paths', () => {
-    const before = generateModbusDefines(legacySections, 'Serial')
-    const after = generateModbusDefines(legacySections, 'Serial', migratedServer)
-    expect(after).toBe(before)
-  })
-
-  it('emits a block that is not empty, so the comparison above means something', () => {
-    const out = generateModbusDefines(legacySections, 'Serial', migratedServer)
-    expect(out).toContain('#define MBSERIAL_IFACE Serial2')
-    expect(out).toContain('#define MBSERIAL_BAUD 19200')
-    expect(out).toContain('#define MBSERIAL_SLAVE 7')
-    expect(out).toContain('#define MBSERIAL_TXPIN 17')
+    expect(generateModbusDefines(leftovers, 'Serial', server)).toBe('')
   })
 })

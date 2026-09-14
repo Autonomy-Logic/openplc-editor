@@ -48,8 +48,6 @@ const FALLBACK_DEFAULT_SERIAL = 'Serial'
 const SERIAL_SCREEN = 'serial'
 /** Canonical name of the network screen a split VPP ships. */
 const NETWORK_SCREEN = 'network'
-/** Canonical name of the Modbus screen every arduino-cli VPP ships. */
-const MODBUS_SCREEN = 'modbus'
 
 /**
  * Find a VPP screen by its canonical name, case-insensitively.
@@ -103,14 +101,10 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
   const caps = resolveTargetCapabilities(board)
   const screens = board.vpp?.screens
 
-  // Baremetal is the compiler, not a screen. It used to be recognised by the
-  // package shipping a Modbus screen, which stopped being a signal once that
-  // screen's contents became the editor's: a package with nothing left to put
-  // there ships none, and every board would have silently resolved as a
-  // Runtime v4 target. The screen is still accepted so a package published
-  // before the split keeps working.
-  const modbusScreen = findScreen(screens, MODBUS_SCREEN)
-  const isBaremetal = board.compiler === 'arduino-cli' || !!modbusScreen
+  // Baremetal is the compiler, and only the compiler. It used to also be
+  // recognised by the package shipping a Modbus screen, which was compatibility
+  // with a pre-4.4.0 package -- and 4.4.0 does not carry that compatibility.
+  const isBaremetal = board.compiler === 'arduino-cli'
 
   if (isBaremetal) {
     const transports: ModbusServerTransport[] = []
@@ -124,16 +118,12 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     // emits `MBTCP` into a firmware with no stack -- on an ESP32 with no RMII
     // PHY that compiles `MBTCP_ETHERNET` to `ETH.begin()` and never links.
     //
-    // A package split for 4.4.0 states its carriers by SHIPPING a Network
-    // screen: the 29 devices declaring `WiFi: No` and `Ethernet: No` ship none.
-    // An unsplit package carries TCP inside its Modbus screen and ships no
-    // Network screen either, so its silence says nothing and both stay on
-    // offer -- reading it as a refusal would strip TCP from every board whose
-    // package has not been updated yet.
-    //
-    // `networkInterfaces: []` is an explicit refusal and wins over both.
-    const splitPackage = !!findScreen(screens, SERIAL_SCREEN)
-    const hasNetwork = board.networkInterfaces?.length !== 0 && (!splitPackage || !!findScreen(screens, NETWORK_SCREEN))
+    // A package states its carriers by SHIPPING a Network screen: the 29
+    // devices declaring `WiFi: No` and `Ethernet: No` ship none, and offering
+    // TCP there emits `MBTCP` into a firmware with no stack -- on an ESP32 with
+    // no RMII PHY that compiles `MBTCP_ETHERNET` to `ETH.begin()` and never
+    // links. `networkInterfaces: []` is an explicit refusal and says the same.
+    const hasNetwork = board.networkInterfaces?.length !== 0 && !!findScreen(screens, NETWORK_SCREEN)
     if (caps.modbusTcpServer && hasNetwork) transports.push('tcp')
     if (transports.length === 0) return NO_SERVER
 
@@ -167,7 +157,6 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
       vppScreens: {
         serial: findScreen(screens, SERIAL_SCREEN),
         network: findScreen(screens, NETWORK_SCREEN),
-        modbus: modbusScreen,
       },
     }
   }
