@@ -65,7 +65,7 @@ import {
   extentForDataBlock,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,
-  IMAGE_TABLES,
+  tableForKey,
 } from '../../../../middleware/shared/utils/io-image/tables'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
@@ -452,11 +452,28 @@ function s7commExposure(
       .map((area) => ({ mapping: area.mapping, sizeBytes: area.sizeBytes })),
   ]
 
+  /* A DISABLED SERVER SIZES BUT DOES NOT BACK.
+   *
+   * Backing is the claim that something external gives the address meaning,
+   * and a server the runtime will not serve gives nothing meaning. With inputs
+   * backed (see above), skipping this check would let `AT %IW7 : INT` compile
+   * clean against a server that is switched off -- genuinely nothing producing
+   * it, which is the declaration BR14 exists to refuse.
+   *
+   * It still SIZES, deliberately, because `generateS7commConfig` ships the
+   * config regardless of `enabled` -- so the storage the file describes has to
+   * exist. That the emitter ignores `enabled` looks like a defect of its own,
+   * and the Modbus emitter has the same shape; settling it is what would let
+   * a disabled server stop sizing too. Until then, sizing follows the file
+   * that ships and backing follows what will actually run.
+   */
+  const serving = config.server?.enabled !== false
+
   for (const block of blocks) {
     // A system area may be enabled with no mapping yet, which publishes
     // nothing and sizes nothing.
     if (!block.mapping) continue
-    const table = IMAGE_TABLES.find((entry) => entry.key === block.mapping?.type)
+    const table = tableForKey(block.mapping.type)
     /* istanbul ignore next -- the schema admits only table names, so a block
        naming something else cannot reach here today. Sizing nothing for it is
        the safe reading if that ever changes. */
@@ -478,7 +495,7 @@ function s7commExposure(
     // always start at IEC index 0. S7comm blocks do not, which is what
     // startBuffer is for.
     claim(sizes, table.prefix, end)
-    markBacked(backed, table.prefix, start, end - start)
+    if (serving) markBacked(backed, table.prefix, start, end - start)
   }
 }
 

@@ -195,6 +195,18 @@ describe('manifest address prefixes (DOPE-615, B7)', () => {
     expect(isValidManifestPrefix('%ZZ')).toBe(false)
   })
 
+  it('warns once per channel, not once per render', () => {
+    // A pure resolver called per slot and per render: an unbounded stream of
+    // identical lines makes the log less useful rather than more.
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const channels = [{ name: 'repeat', type: 'analogInput', dataType: 'UINT', addressPrefix: '%MW' }]
+    withChannels(channels)
+    withChannels(channels)
+    withChannels(channels)
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
   it('drops the offending channel and keeps the rest', () => {
     // One bad channel must not take down the whole device screen.
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})

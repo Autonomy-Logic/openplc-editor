@@ -113,6 +113,11 @@ const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set([
   '%QL',
 ])
 
+/** Channels already reported, so the warning does not repeat every render.
+ *  Module-level and never cleared: a manifest does not change within a
+ *  session, and the point is to say it once. */
+const warnedChannels = new Set<string>()
+
 /** Whether a manifest channel names a prefix the schema allows. */
 export function isValidManifestPrefix(prefix: string): boolean {
   return MANIFEST_ADDRESS_PREFIXES.has(prefix)
@@ -164,11 +169,21 @@ export function resolveModuleChannels(
     if (isValidManifestPrefix(channel.addressPrefix)) return true
     // Warned rather than silent: the channel disappears from the screen, and
     // without this line there is nothing anywhere saying why.
-    console.warn(
-      `VPP manifest: channel "${channel.name}" declares address prefix ` +
-        `"${channel.addressPrefix}", which is not one the manifest schema allows ` +
-        `(${[...MANIFEST_ADDRESS_PREFIXES].join(', ')}). The channel is ignored.`,
-    )
+    //
+    // ONCE PER CHANNEL, not once per call. This is a pure resolver run per
+    // slot and per render, not a one-shot load step, so a manifest with one
+    // bad channel produced an unbounded stream of identical lines — which
+    // makes the log less useful rather than more, working against the reason
+    // the line exists at all.
+    const seen = `${channel.name}:${channel.addressPrefix}`
+    if (!warnedChannels.has(seen)) {
+      warnedChannels.add(seen)
+      console.warn(
+        `VPP manifest: channel "${channel.name}" declares address prefix ` +
+          `"${channel.addressPrefix}", which is not one the manifest schema allows ` +
+          `(${[...MANIFEST_ADDRESS_PREFIXES].join(', ')}). The channel is ignored.`,
+      )
+    }
     return false
   })
 }

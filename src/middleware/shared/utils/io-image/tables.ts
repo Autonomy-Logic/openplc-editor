@@ -89,13 +89,6 @@ export const IMAGE_AREAS_BAREMETAL: ReadonlySet<string> = new Set(
   IMAGE_TABLES.filter((table) => table.macro).map((table) => table.prefix),
 )
 
-/** How many elements of `table` a count in the file's unit amounts to.
- *  The BOOL tables are the only ones whose address unit and storage unit
- *  differ, and rounding UP is what keeps the slots of a partial byte
- *  addressable. */
-export function elementsFor(table: Pick<ImageTable, 'unit'>, count: number): number {
-  return table.unit === 'bits' ? Math.ceil(count / 8) : count
-}
 
 /**
  * How many BYTES one element of this table occupies.
@@ -156,8 +149,8 @@ export function extentForDataBlock(
   return { start: startBuffer * scale, end: (startBuffer + elements) * scale }
 }
 
-/** Look a table up by the prefix it stores, or `undefined` for a prefix no
- *  runtime has storage for (`%MB`). */
-export function tableForPrefix(prefix: string): (typeof IMAGE_TABLES)[number] | undefined {
-  return IMAGE_TABLES.find((table) => table.prefix === prefix)
+/** Look a table up by its name — the `image.conf` key, and what an S7comm
+ *  data block names. `undefined` for a name no runtime has a table for. */
+export function tableForKey(key: string): (typeof IMAGE_TABLES)[number] | undefined {
+  return IMAGE_TABLES.find((table) => table.key === key)
 }

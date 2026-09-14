@@ -604,6 +604,24 @@ describe('computeIoImage — S7comm exposure', () => {
     expect(image.sizes['%IW']).toBe(104)
   })
 
+  it('does NOT back when the server is switched off', () => {
+    // A server the runtime will not serve gives no address meaning. It still
+    // sizes, because generateS7commConfig ships the config regardless of
+    // `enabled`, so the storage that file describes has to exist.
+    const servers = [
+      {
+        name: 's7',
+        protocol: 's7comm',
+        s7commSlaveConfig: { server: { enabled: false }, dataBlocks: [block('int_input', 0, 16)] },
+      },
+    ]
+    const image = compute(
+      makeProject({ pous: [{ name: 'main', variables: [variable('v', '%IW2')] }], servers }),
+    )
+    expect(image.unbacked).toHaveLength(1)
+    expect(image.sizes['%IW']).toBe(8)
+  })
+
   it('backs an address the block does cover', () => {
     // The control, so the refusal above is not simply "nothing is ever backed".
     const image = compute(

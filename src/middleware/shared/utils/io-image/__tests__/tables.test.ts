@@ -15,12 +15,11 @@
  */
 
 import {
-  elementsFor,
   extentForDataBlock,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,
   IMAGE_TABLES,
-  tableForPrefix,
+  tableForKey,
 } from '../tables'
 
 describe('IMAGE_TABLES', () => {
@@ -50,14 +49,14 @@ describe('IMAGE_TABLES', () => {
     // Not an oversight to be tidied: the runtime declares byte_input and
     // byte_output but no byte_memory, so `%MB` has no storage anywhere.
     expect(IMAGE_TABLES.map((table) => table.key)).not.toContain('byte_memory')
-    expect(tableForPrefix('%MB')).toBeUndefined()
+    expect(tableForKey('byte_memory')).toBeUndefined()
   })
 
   it('gives every table exactly one prefix, and every prefix one table', () => {
     const prefixes = IMAGE_TABLES.map((table) => table.prefix)
     expect(new Set(prefixes).size).toBe(prefixes.length)
     for (const table of IMAGE_TABLES) {
-      expect(tableForPrefix(table.prefix)).toBe(table)
+      expect(tableForKey(table.key)).toBe(table)
     }
   })
 
@@ -121,22 +120,6 @@ describe('the area sets derived from it', () => {
   })
 })
 
-describe('elementsFor', () => {
-  it('rounds a bit count up to whole bytes', () => {
-    // Rounding down would make the slots of the partial byte unaddressable.
-    expect(elementsFor({ unit: 'bits' }, 0)).toBe(0)
-    expect(elementsFor({ unit: 'bits' }, 1)).toBe(1)
-    expect(elementsFor({ unit: 'bits' }, 8)).toBe(1)
-    expect(elementsFor({ unit: 'bits' }, 9)).toBe(2)
-  })
-
-  it('leaves every other unit alone', () => {
-    expect(elementsFor({ unit: 'words' }, 9)).toBe(9)
-    expect(elementsFor({ unit: 'dwords' }, 9)).toBe(9)
-    expect(elementsFor({ unit: 'lwords' }, 9)).toBe(9)
-    expect(elementsFor({ unit: 'bytes' }, 9)).toBe(9)
-  })
-})
 
 describe('extentForDataBlock', () => {
   // Asserted from BOTH directions, because the two conversions inside it pull

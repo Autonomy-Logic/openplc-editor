@@ -22,7 +22,7 @@
  */
 
 import { useOpenPLCStore } from '@root/frontend/store'
-import type { PLCVariable } from '@root/middleware/shared/ports/types'
+import type { PLCPou, PLCVariable } from '@root/middleware/shared/ports/types'
 import { isLiteralLocation } from '@root/middleware/shared/utils/iec-address/registry'
 
 /** One declaration of an output address: which POU, and what it is called. */
@@ -43,8 +43,12 @@ export interface OutputWriter {
 export type DuplicateOutputMap = ReadonlyMap<string, readonly OutputWriter[]>
 
 interface Cache {
-  pous: unknown
-  globals: unknown
+  /* Typed, not `unknown`. The sibling hook types the same fields, and the
+   * check the compiler gives up on with `unknown` is the only thing keeping
+   * this cache correct: that the identity being compared is the identity
+   * being read. */
+  pous: PLCPou[]
+  globals: PLCVariable[] | undefined
   map: DuplicateOutputMap
 }
 
