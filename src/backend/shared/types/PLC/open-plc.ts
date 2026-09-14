@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+import type { ImageTableKey } from '../../../../middleware/shared/utils/io-image/tables'
+import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
+
 import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
 // One source of truth for the IEC base-type list: the canonical
 // schema lives in `middleware/shared/ports/plc-schemas` and is
@@ -318,22 +321,15 @@ const ModbusSlaveConfigSchema = z.object({
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
 // S7Comm Buffer Type Enumeration
-const S7CommBufferTypeSchema = z.enum([
-  'bool_input',
-  'bool_output',
-  'bool_memory',
-  'byte_input',
-  'byte_output',
-  'int_input',
-  'int_output',
-  'int_memory',
-  'dint_input',
-  'dint_output',
-  'dint_memory',
-  'lint_input',
-  'lint_output',
-  'lint_memory',
-])
+/* The tables an S7comm data block may be mapped onto are the tables the
+ * runtime HAS, so the list is derived rather than transcribed. A table added
+ * to the runtime and forgotten here would be a block the user cannot declare;
+ * one removed and forgotten would be a block that sizes storage that is gone.
+ *
+ * `z.enum` needs a non-empty tuple literal, hence the cast on the spread. */
+const S7CommBufferTypeSchema = z.enum(
+  IMAGE_TABLES.map((table) => table.key) as [ImageTableKey, ...ImageTableKey[]],
+)
 type S7CommBufferType = z.infer<typeof S7CommBufferTypeSchema>
 
 // S7Comm Server Settings Schema

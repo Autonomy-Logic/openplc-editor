@@ -18,6 +18,7 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
+import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
 import type { IoImageSizes } from './compute-io-image'
 import { generateModbusDefines, resolveDebugBaud, resolveDebugSlave, type VppModbusScreenState } from './modbus-defines'
 
@@ -42,17 +43,13 @@ export type { VppModbusScreenState } from './modbus-defines'
  * writes `bool_input[BUFFER_SIZE][8]` and does not. Each emitter therefore
  * states its own unit rather than sharing a "converted" number.
  */
-const PROCESS_IMAGE_MACROS: ReadonlyArray<readonly [prefix: string, macro: string]> = [
-  ['%IX', 'MAX_DIGITAL_INPUT'],
-  ['%QX', 'MAX_DIGITAL_OUTPUT'],
-  ['%IW', 'MAX_ANALOG_INPUT'],
-  ['%QW', 'MAX_ANALOG_OUTPUT'],
-  ['%ID', 'MAX_REAL_INPUT'],
-  ['%QD', 'MAX_REAL_OUTPUT'],
-  ['%MW', 'MAX_MEMORY_WORD'],
-  ['%MD', 'MAX_MEMORY_DWORD'],
-  ['%ML', 'MAX_MEMORY_LWORD'],
-]
+/* The nine macros bare metal declares, and the order it declares them in,
+ * both derived from the one table list. Filtering that list to the entries
+ * carrying a macro yields exactly the order this file emitted when the nine
+ * were written out by hand, so no output moves. */
+const PROCESS_IMAGE_MACROS: ReadonlyArray<readonly [prefix: string, macro: string]> = IMAGE_TABLES.filter(
+  (table): table is typeof table & { macro: string } => table.macro !== undefined,
+).map((table) => [table.prefix, table.macro] as const)
 
 /**
  * Bit areas reach the firmware as a whole number of bytes (FR06, BR04, CON05).

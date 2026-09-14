@@ -53,6 +53,7 @@ import type { PLCProjectData } from '../types/PLC/open-plc'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import {
   computeIoImage,
+  describeDuplicateOutput,
   describeUnbackedLocation,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
@@ -452,7 +453,10 @@ async function runCompilePipelineInner(
     areas: isRuntimeV4 ? IMAGE_AREAS_RUNTIME_V4 : IMAGE_AREAS_BAREMETAL,
   })
 
-  if (sizesTheImage && (ioImage.unsupported.length > 0 || ioImage.unbacked.length > 0)) {
+  if (
+    sizesTheImage &&
+    (ioImage.unsupported.length > 0 || ioImage.unbacked.length > 0 || ioImage.duplicateOutputs.length > 0)
+  ) {
     // Both lists, not the first non-empty one: a project can carry each kind of
     // mistake, and reporting one round at a time turns a single fix into
     // several compile attempts.
@@ -461,6 +465,9 @@ async function runCompilePipelineInner(
     }
     for (const issue of ioImage.unbacked) {
       emit({ stage: 'validate', message: describeUnbackedLocation(issue), level: 'error' })
+    }
+    for (const issue of ioImage.duplicateOutputs) {
+      emit({ stage: 'validate', message: describeDuplicateOutput(issue), level: 'error' })
     }
     return bailError(emit, 'validate', 'Compilation aborted: every located variable needs an address that exists.')
   }

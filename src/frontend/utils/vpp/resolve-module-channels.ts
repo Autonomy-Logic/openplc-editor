@@ -82,6 +82,42 @@ export type ResolverModuleDef = {
 
 export type SlotFieldValue = string | number | boolean
 
+/**
+ * The address prefixes a VPP manifest may declare for a channel.
+ *
+ * The package schema (`schema/manifest.schema.json`, `addressPrefix`) admits
+ * exactly these eight: inputs and outputs, bit through lword. No byte-addressed
+ * prefix and no memory prefix.
+ *
+ * The editor enforces the same set rather than trusting the manifest, and the
+ * reason is narrow but real: `addressMapping` is typed `unknown` where the
+ * board entry is read (`backend/editor/hardware/types.ts`), so the string
+ * reaches `nextFreeAddress` unchecked. A manifest declaring `%MW` -- hand
+ * edited, from an older packaging tool, or simply wrong -- would then have
+ * memory allocated for it as if a module produced it, which is the one thing
+ * BR14 says nothing can do: memory has no external producer, and an address
+ * space that thinks otherwise is sized for a producer that is not there.
+ *
+ * A refused channel is DROPPED rather than throwing: one bad channel in a
+ * manifest must not take down the whole device screen, and a channel that
+ * allocates nothing is visibly missing in a way the user can report.
+ */
+const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set([
+  '%IX',
+  '%QX',
+  '%IW',
+  '%QW',
+  '%ID',
+  '%QD',
+  '%IL',
+  '%QL',
+])
+
+/** Whether a manifest channel names a prefix the schema allows. */
+export function isValidManifestPrefix(prefix: string): boolean {
+  return MANIFEST_ADDRESS_PREFIXES.has(prefix)
+}
+
 export function resolveModuleChannels(
   moduleDef: ResolverModuleDef | undefined,
   slotConfig: Record<string, SlotFieldValue> | undefined,
@@ -124,5 +160,15 @@ export function resolveModuleChannels(
       }
     }
   }
-  return out
+  return out.filter((channel) => {
+    if (isValidManifestPrefix(channel.addressPrefix)) return true
+    // Warned rather than silent: the channel disappears from the screen, and
+    // without this line there is nothing anywhere saying why.
+    console.warn(
+      `VPP manifest: channel "${channel.name}" declares address prefix ` +
+        `"${channel.addressPrefix}", which is not one the manifest schema allows ` +
+        `(${[...MANIFEST_ADDRESS_PREFIXES].join(', ')}). The channel is ignored.`,
+    )
+    return false
+  })
 }

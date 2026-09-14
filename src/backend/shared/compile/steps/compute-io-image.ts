@@ -58,6 +58,12 @@ import {
   prefixOf,
 } from '../../../../middleware/shared/utils/iec-address/registry'
 import type { AddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
+import {
+  extentForDataBlock,
+  IMAGE_AREAS_BAREMETAL,
+  IMAGE_AREAS_RUNTIME_V4,
+  IMAGE_TABLES,
+} from '../../../../middleware/shared/utils/io-image/tables'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
 /**
@@ -119,67 +125,53 @@ export interface UnsupportedArea {
   prefix: string
 }
 
+/** The slice of an S7comm mapping this step reads. Structural rather than
+ *  imported so the sizer stays free of the server schema's exact shape. */
+interface S7CommMappingLike {
+  type: string
+  startBuffer: number
+}
+
+/**
+ * Two declarations driving the same output slot.
+ *
+ * IEC located addresses are GLOBAL, but the editor's own duplicate check reads
+ * one variable list at a time (`validation/variables.ts`), so two POUs can each
+ * declare `AT %QX0.0` and both pass. Nothing downstream notices: the generated
+ * code assigns to the same storage from two places and the last write in the
+ * scan wins, which is a coin toss decided by POU order.
+ *
+ * Reported for OUTPUTS only. Two POUs reading one input is ordinary -- they
+ * read the same value -- and sharing a memory address is what memory is for.
+ * An output is the one direction where two writers contradict each other.
+ */
+export interface DuplicateOutput {
+  location: string
+  prefix: string
+  /** The slot both declarations cover, which for arrays need not be either
+   *  declaration's base address. */
+  slot: number
+  /** Both sides, in declaration order, so the message can name them. */
+  first: { scope: string; variableName: string }
+  second: { scope: string; variableName: string }
+}
+
 export interface IoImage {
   sizes: IoImageSizes
   /** Empty when every input and output declaration is backed. */
   unbacked: UnbackedLocation[]
   /** Empty when every declaration names an area the target actually has. */
   unsupported: UnsupportedArea[]
+  /** Empty when no two declarations drive the same output slot. */
+  duplicateOutputs: DuplicateOutput[]
 }
 
-/**
- * The areas the bare-metal firmware declares buffers for.
- *
- * Read off the `extern` declarations in `resources/sources/arduino/openplc.h`:
- * `bool_input`, `bool_output`, `int_input`, `int_output`, `real_input`,
- * `real_output`, `int_memory`, `dint_memory`, `lint_memory`. There is no
- * byte-addressed buffer of any kind and no bit-addressed MEMORY area, so
- * `%IB`, `%QB`, `%MB` and `%MX` name storage that does not exist.
- *
- * Deliberately the larger of the header's two MCU branches. The small-AVR
- * branch (ATmega328P and friends) declares no `real_*` and no memory arrays at
- * all, and telling the two apart would mean mapping an arduino-cli FQBN back
- * to its MCU define — a mapping the editor does not otherwise keep and that
- * would silently rot as cores are added. Permissive is the safe direction: the
- * cost is a variable that stays inert exactly as it does today, while being
- * strict would refuse to build projects that have been building for years.
- */
-export const IMAGE_AREAS_BAREMETAL: ReadonlySet<string> = new Set([
-  '%IX',
-  '%QX',
-  '%IW',
-  '%QW',
-  '%ID',
-  '%QD',
-  '%MW',
-  '%MD',
-  '%ML',
-])
+/* The two area sets are DERIVED, not listed here: which tables exist and
+ * which runtime declares each one is stated once, in
+ * `middleware/shared/utils/io-image/tables.ts`, and re-exported so the
+ * pipeline keeps importing them from the step that uses them. */
+export { IMAGE_AREAS_BAREMETAL, IMAGE_AREAS_RUNTIME_V4 }
 
-/**
- * The areas Runtime v4 declares tables for — the fourteen of
- * `core/src/plc_app/image_tables.h`, the same fourteen the S7comm buffer
- * enumeration in `types/PLC/open-plc.ts` names.
- *
- * Note the one gap: there is `byte_input` and `byte_output` but no
- * `byte_memory`, so `%MB` has no storage on v4 either.
- */
-export const IMAGE_AREAS_RUNTIME_V4: ReadonlySet<string> = new Set([
-  '%IX',
-  '%QX',
-  '%MX',
-  '%IB',
-  '%QB',
-  '%IW',
-  '%QW',
-  '%MW',
-  '%ID',
-  '%QD',
-  '%MD',
-  '%IL',
-  '%QL',
-  '%ML',
-])
 
 export interface ComputeIoImageInput {
   /** Compile-ready project data — locations already resolved from aliases to
@@ -339,53 +331,135 @@ function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<numb
  */
 function serverExposure(servers: PLCServer[] | undefined, backed: Map<string, Set<number>>): Record<string, number> {
   const sizes: Record<string, number> = {}
-  const server = (servers ?? []).find((entry) => entry.protocol === 'modbus-tcp' && entry.modbusSlaveConfig)
-  const mapping: ModbusBufferMapping | undefined = server?.modbusSlaveConfig?.bufferMapping
 
-  if (mapping) {
-    // Each IEC segment is laid out from index 0 of its own prefix space; only
-    // the Modbus offsets are sequential across segments. `address-mapping.ts`
-    // is the authority on that layout, and it agrees with the runtime plugin.
-    // EXPOSURE SIZES EVERY SEGMENT, BUT ONLY BACKS THE WRITABLE ONES.
-    //
-    // Backing means "something on the other side gives this address meaning",
-    // which for BR14 is what the area needs to not be inert. Holding registers
-    // and coils are writable by the master, so a `%QW` or `%QX` the server
-    // publishes has a counterpart: the master reads what the program wrote, or
-    // writes it itself. Either way it is drained.
-    //
-    // Discrete inputs and input registers are READ-ONLY to the master. Nothing
-    // writes `%IX` or `%IW` through them — the server only publishes whatever
-    // is already there. So exposing them cannot make an input backed, and
-    // treating it as if it did would let `AT %IW7 : INT` pass the gate with no
-    // pin, no master point and no EtherCAT channel anywhere, which is exactly
-    // the declaration BR14 exists to catch.
-    //
-    // They still SIZE, because the server has to have the storage to read
-    // from; they just do not vouch for anything living in it.
-    const sizing: Array<[string, number | undefined]> = [
-      ['%QW', mapping.holdingRegisters?.qwCount],
-      ['%MW', mapping.holdingRegisters?.mwCount],
-      ['%MD', mapping.holdingRegisters?.mdCount],
-      ['%ML', mapping.holdingRegisters?.mlCount],
-      ['%QX', mapping.coils?.qxBits],
-      ['%MX', mapping.coils?.mxBits],
-      ['%IX', mapping.discreteInputs?.ixBits],
-      ['%IW', mapping.inputRegisters?.iwCount],
-    ]
-    const WRITABLE_BY_THE_MASTER = new Set(['%QW', '%MW', '%MD', '%ML', '%QX', '%MX'])
+  // EVERY PROTOCOL, but still the FIRST server of each one.
+  //
+  // The generalisation that was missing is across protocols: a project with an
+  // S7comm server and no Modbus one used to size nothing at all from its
+  // servers, because this function only ever looked for `modbus-tcp`.
+  //
+  // What is NOT generalised is the count per protocol, and that is deliberate.
+  // Each emitter ships one file built from the FIRST server of its protocol
+  // carrying a config -- `generateModbusSlaveConfig` and `generateS7commConfig`
+  // both `.find(...)`. A second server of the same protocol never reaches the
+  // device, so sizing for its exposure would reserve memory nothing can use,
+  // which is BR10 backwards. The rule here mirrors the emitters rather than
+  // inventing one, and if they ever ship more than one, this follows.
+  const list = servers ?? []
+  const modbus = list.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig)
+  const s7comm = list.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig)
 
-    for (const [prefix, count] of sizing) {
-      // A count of zero is the `%MX` default and a legitimate answer: the
-      // segment exists and is switched off, so it exposes nothing and sizes
-      // nothing.
-      if (count === undefined || count <= 0) continue
-      claim(sizes, prefix, count)
-      if (WRITABLE_BY_THE_MASTER.has(prefix)) markBacked(backed, prefix, 0, count)
-    }
-  }
+  if (modbus?.modbusSlaveConfig) modbusExposure(modbus.modbusSlaveConfig.bufferMapping, sizes, backed)
+  if (s7comm?.s7commSlaveConfig) s7commExposure(s7comm.s7commSlaveConfig, sizes, backed)
 
   return sizes
+}
+
+/**
+ * What a Modbus server publishes.
+ *
+ * EXPOSURE SIZES EVERY SEGMENT, BUT ONLY BACKS THE WRITABLE ONES.
+ *
+ * Backing means "something on the other side gives this address meaning",
+ * which for BR14 is what the area needs to not be inert. Holding registers
+ * and coils are writable by the master, so a `%QW` or `%QX` the server
+ * publishes has a counterpart: the master reads what the program wrote, or
+ * writes it itself. Either way it is drained.
+ *
+ * Discrete inputs and input registers are READ-ONLY to the master. Nothing
+ * writes `%IX` or `%IW` through them -- the server only publishes whatever is
+ * already there. So exposing them cannot make an input backed, and treating
+ * it as if it did would let `AT %IW7 : INT` pass the gate with no pin, no
+ * master point and no EtherCAT channel anywhere, which is exactly the
+ * declaration BR14 exists to catch.
+ *
+ * They still SIZE, because the server has to have the storage to read from;
+ * they just do not vouch for anything living in it.
+ */
+function modbusExposure(
+  mapping: ModbusBufferMapping | undefined,
+  sizes: Record<string, number>,
+  backed: Map<string, Set<number>>,
+): void {
+  if (!mapping) return
+
+  // Each IEC segment is laid out from index 0 of its own prefix space; only
+  // the Modbus offsets are sequential across segments. `address-mapping.ts`
+  // is the authority on that layout, and it agrees with the runtime plugin.
+  const sizing: Array<[string, number | undefined]> = [
+    ['%QW', mapping.holdingRegisters?.qwCount],
+    ['%MW', mapping.holdingRegisters?.mwCount],
+    ['%MD', mapping.holdingRegisters?.mdCount],
+    ['%ML', mapping.holdingRegisters?.mlCount],
+    ['%QX', mapping.coils?.qxBits],
+    ['%MX', mapping.coils?.mxBits],
+    ['%IX', mapping.discreteInputs?.ixBits],
+    ['%IW', mapping.inputRegisters?.iwCount],
+  ]
+  const WRITABLE_BY_THE_MASTER = new Set(['%QW', '%MW', '%MD', '%ML', '%QX', '%MX'])
+
+  for (const [prefix, count] of sizing) {
+    // A count of zero is the `%MX` default and a legitimate answer: the
+    // segment exists and is switched off, so it exposes nothing and sizes
+    // nothing.
+    if (count === undefined || count <= 0) continue
+    claim(sizes, prefix, count)
+    if (WRITABLE_BY_THE_MASTER.has(prefix)) markBacked(backed, prefix, 0, count)
+  }
+}
+
+/**
+ * What an S7comm server publishes.
+ *
+ * EVERY BLOCK BACKS WHAT IT COVERS, INPUTS INCLUDED -- and that is the
+ * opposite of the Modbus answer above, for a reason that is a fact about the
+ * protocols rather than a preference.
+ *
+ * Modbus discrete inputs and input registers are read-only to the master BY
+ * THE PROTOCOL: there is no function code that writes them, so exposing an
+ * `%IX` through Modbus cannot put anything into it. S7comm has no such
+ * restriction, and the OpenPLC plugin implements none: its write path
+ * (`write_buffer_to_openplc_journal`, s7comm_plugin.cpp) dispatches every
+ * buffer type including `BUFFER_TYPE_BOOL_INPUT`, `BUFFER_TYPE_INT_INPUT`,
+ * `BUFFER_TYPE_DINT_INPUT` and `BUFFER_TYPE_LINT_INPUT`. An S7 client writes
+ * an input table as readily as an output one.
+ *
+ * So BR14's question -- is there something external giving this address
+ * meaning -- answers yes in both directions here. A block mapped onto
+ * `int_input` is a producer for the `%IW`s it covers, and a program reading
+ * them is reading what the client wrote rather than a constant zero.
+ *
+ * Both the data blocks and the three system areas (PE, PA, MK) are read: they
+ * carry the same mapping shape and reach the same tables, so leaving the
+ * system areas out would size an area the server is serving.
+ */
+function s7commExposure(
+  config: NonNullable<PLCServer['s7commSlaveConfig']>,
+  sizes: Record<string, number>,
+  backed: Map<string, Set<number>>,
+): void {
+  const blocks: Array<{ mapping?: S7CommMappingLike; sizeBytes: number }> = [
+    ...(config.dataBlocks ?? []),
+    ...[config.systemAreas?.peArea, config.systemAreas?.paArea, config.systemAreas?.mkArea]
+      .filter((area): area is NonNullable<typeof area> => Boolean(area?.enabled))
+      .map((area) => ({ mapping: area.mapping, sizeBytes: area.sizeBytes })),
+  ]
+
+  for (const block of blocks) {
+    // A system area may be enabled with no mapping yet, which publishes
+    // nothing and sizes nothing.
+    if (!block.mapping) continue
+    const table = IMAGE_TABLES.find((entry) => entry.key === block.mapping?.type)
+    /* istanbul ignore next -- the schema admits only table names, so a block
+       naming something else cannot reach here today. Sizing nothing for it is
+       the safe reading if that ever changes. */
+    if (!table) continue
+
+    const extent = extentForDataBlock(table, block.mapping.startBuffer, block.sizeBytes)
+    if (extent <= 0) continue
+    claim(sizes, table.prefix, extent)
+    markBacked(backed, table.prefix, 0, extent)
+  }
 }
 
 /**
@@ -479,6 +553,9 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
 
   const unbacked: UnbackedLocation[] = []
   const unsupported: UnsupportedArea[] = []
+  const duplicateOutputs: DuplicateOutput[] = []
+  /** prefix -> slot -> the first declaration that claimed it. Outputs only. */
+  const outputOwners = new Map<string, Map<number, { scope: string; variableName: string }>>()
 
   for (const { scope, name, location, slotCount } of locatedVariables(input.projectData)) {
     const parsed = parseAddress(location)
@@ -499,6 +576,35 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     if (!input.areas.has(prefix)) {
       unsupported.push({ scope, variableName: name, location, prefix })
       continue
+    }
+
+    if (directionOf(prefix) === 'Q') {
+      // Every slot the declaration covers, so a located array overlapping
+      // another one is caught at the slot they share rather than only when
+      // their base addresses match.
+      let owners = outputOwners.get(prefix)
+      if (!owners) {
+        owners = new Map()
+        outputOwners.set(prefix, owners)
+      }
+      for (let slot = parsed.linear; slot < parsed.linear + slotCount; slot++) {
+        const owner = owners.get(slot)
+        if (owner) {
+          duplicateOutputs.push({
+            location,
+            prefix,
+            slot,
+            first: owner,
+            second: { scope, variableName: name },
+          })
+          // One report per pair of declarations, not one per overlapping slot:
+          // a 4000-element array declared twice is one mistake.
+          break
+        }
+      }
+      for (let slot = parsed.linear; slot < parsed.linear + slotCount; slot++) {
+        if (!owners.has(slot)) owners.set(slot, { scope, variableName: name })
+      }
     }
 
     if (directionOf(prefix) === 'M') {
@@ -540,7 +646,7 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     })
   }
 
-  return { sizes, unbacked, unsupported }
+  return { sizes, unbacked, unsupported, duplicateOutputs }
 }
 
 /**
@@ -564,6 +670,27 @@ export function describeUnbackedLocation(issue: UnbackedLocation): string {
     `${issue.scope}: variable "${issue.variableName}" is located at ${issue.location}, ${reach}, ` +
     'and nothing produces that address — add the I/O module, Modbus point, EtherCAT channel or pin ' +
     'that drives it, expose it on the Modbus server, or move the variable to a memory address (%M).'
+  )
+}
+
+/**
+ * One-line rendering of two declarations driving the same output.
+ *
+ * Names BOTH, because either one may be the mistake and the user cannot tell
+ * which from an address alone -- and because the two are usually in different
+ * POUs, which is the whole reason the editor's per-list check missed it.
+ */
+export function describeDuplicateOutput(issue: DuplicateOutput): string {
+  const where =
+    issue.first.scope === issue.second.scope
+      ? `both in ${issue.first.scope}`
+      : `${issue.first.scope} and ${issue.second.scope}`
+  return (
+    `Two variables drive the same output: "${issue.first.variableName}" and ` +
+    `"${issue.second.variableName}" (${where}) both cover slot ${issue.slot} of ` +
+    `${issue.prefix}. IEC located addresses are global, so the last write in the scan ` +
+    'would win and which one that is depends on POU order — give one of them another ' +
+    'address, or have one read the other rather than both writing.'
   )
 }
 
