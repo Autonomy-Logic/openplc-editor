@@ -11,6 +11,8 @@ import {
   DEFAULT_CONTACT_BLOCK_HEIGHT,
   DEFAULT_CONTACT_BLOCK_WIDTH,
   DEFAULT_CONTACT_CONNECTOR_Y,
+  DEFAULT_EXECUTE_CONNECTOR_Y,
+  DEFAULT_EXECUTE_WIDTH,
   DEFAULT_PARALLEL_CONNECTOR_Y,
   DEFAULT_PARALLEL_HEIGHT,
   DEFAULT_PARALLEL_WIDTH,
@@ -24,12 +26,14 @@ import {
   DEFAULT_VARIABLE_CONNECTOR_Y,
   DEFAULT_VARIABLE_HEIGHT,
   DEFAULT_VARIABLE_WIDTH,
+  executeHeight,
 } from './utils/constants'
 import type {
   BlockBuilderProps,
   BlockVariant,
   CoilBuilderProps,
   ContactBuilderProps,
+  ExecuteBuilderProps,
   LadderBlockConnectedVariables,
   ParallelBuilderProps,
   ParallelNode,
@@ -158,6 +162,78 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     measured: {
       width: DEFAULT_COIL_BLOCK_WIDTH,
       height: DEFAULT_COIL_BLOCK_HEIGHT,
+    },
+    draggable: true,
+    selectable: true,
+    selected: true,
+  }
+}
+
+/**
+ * Build an Execute ("ST Block") node — a box carrying a raw ST snippet.
+ *
+ * Electrically a coil: one `EN` target on the left, one `ENO` source on
+ * the right, both anchored to the header strip's vertical centre so the
+ * rung wire enters at a fixed height regardless of how many lines of
+ * code the box holds.  Height is derived from the line count (clamped);
+ * past the clamp the box scrolls internally rather than growing the rung.
+ */
+export const buildExecuteNode = ({ id, posX, posY, handleX, handleY, code = '' }: ExecuteBuilderProps) => {
+  // `style.top` is what actually places the handle's DOM element, and React
+  // Flow draws every edge to the DOM position — `relY` alone is not enough.
+  // Omitting it left the handle at the element's default offset while the
+  // label sat on the pin row, which is what made the rung wire jog into the
+  // box. Mirrors `getBlockSize`'s handles exactly.
+  const inputHandle = buildHandle({
+    id: 'EN',
+    position: Position.Left,
+    isConnectable: false,
+    type: 'target',
+    glbX: handleX,
+    glbY: handleY,
+    relX: 0,
+    relY: DEFAULT_EXECUTE_CONNECTOR_Y,
+    style: { top: DEFAULT_EXECUTE_CONNECTOR_Y, left: 0 },
+  })
+  const outputHandle = buildHandle({
+    id: 'ENO',
+    position: Position.Right,
+    isConnectable: false,
+    type: 'source',
+    glbX: handleX + DEFAULT_EXECUTE_WIDTH,
+    glbY: handleY,
+    relX: DEFAULT_EXECUTE_WIDTH,
+    relY: DEFAULT_EXECUTE_CONNECTOR_Y,
+    style: { top: DEFAULT_EXECUTE_CONNECTOR_Y, right: 0 },
+  })
+  const handles = [inputHandle, outputHandle]
+  const height = executeHeight(code === '' ? 0 : code.split('\n').length)
+
+  return {
+    id,
+    type: 'execute',
+    position: { x: posX, y: posY },
+    data: {
+      handles,
+      code,
+      inputHandles: [inputHandle],
+      outputHandles: [outputHandle],
+      inputConnector: inputHandle,
+      outputConnector: outputHandle,
+      numericId: generateNumericUUID(),
+      // Carried for shape-compatibility with `BasicNodeData`; an Execute
+      // box binds no single variable — it references whatever its code does.
+      variable: { name: '' },
+      executionOrder: 0,
+      draggable: true,
+      selectable: true,
+      deletable: true,
+    },
+    width: DEFAULT_EXECUTE_WIDTH,
+    height,
+    measured: {
+      width: DEFAULT_EXECUTE_WIDTH,
+      height,
     },
     draggable: true,
     selectable: true,

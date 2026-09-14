@@ -17,6 +17,104 @@ const parser = new XMLParser({
   isArray: (name) => ARRAY_TAGS.has(name),
 })
 
+// Second parser, used only to recover whitespace-significant payloads.
+//
+// `trimValues` defaults to true and is global — fast-xml-parser has no
+// per-tag opt-out (`tagValueProcessor` receives the already-trimmed value,
+// `stopNodes` skips entity decoding). Harmless for everything else here, but
+// an Execute element's `<STCode>` is source code, and trimming eats its first
+// line's indentation. Flipping the flag globally would change every other
+// value, so the document is parsed again with trimming off and only the
+// STCode payloads are taken from it.
+const untrimmedParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@',
+  textNodeName: '$',
+  parseTagValue: false,
+  parseAttributeValue: false,
+  trimValues: false,
+  isArray: (name) => ARRAY_TAGS.has(name),
+})
+
+const EXECUTE_TYPE_NAME = 'EXECUTE'
+// Duplicated from `execute-plcopen.ts` rather than imported: this module is
+// the parser's entry point and must not pull in the generator-side surface.
+const EXECUTE_STCODE_URIS = ['http://openplc.org/plcopenxml/stcode', 'http://www.3s-software.com/plcopenxml/stcode']
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readStCodeText(node: Record<string, unknown>): string | null {
+  const addData = node.addData
+  if (!isRecord(addData)) return null
+  const entries = Array.isArray(addData.data) ? addData.data : [addData.data]
+  for (const entry of entries) {
+    if (!isRecord(entry) || typeof entry['@name'] !== 'string') continue
+    if (!EXECUTE_STCODE_URIS.includes(entry['@name'])) continue
+    const stCode = entry.STCode
+    if (typeof stCode === 'string') return stCode
+    if (isRecord(stCode) && typeof stCode['$'] === 'string') return stCode['$']
+    return ''
+  }
+  return null
+}
+
+/**
+ * Key for one Execute snippet. `@localId` is unique only within a POU, so a
+ * bare localId lets one POU's snippet overwrite another's when ids repeat.
+ */
+export function executeStCodeKey(pouName: string, localId: string): string {
+  return `${pouName}\u0000${localId}`
+}
+
+/**
+ * Map every Execute element to its untrimmed ST snippet, keyed by POU name and
+ * `@localId` — the pair both this pass and the main parse can name.
+ *
+ * A document with no Execute elements yields an empty map and costs one extra
+ * parse; that is the price of fast-xml-parser having no per-tag whitespace
+ * control.
+ */
+export function collectExecuteStCode(xml: string): Map<string, string> {
+  const found = new Map<string, string>()
+  let tree: unknown
+  try {
+    tree = untrimmedParser.parse(xml)
+  } catch {
+    // The main parse is the one that reports malformed input; this pass
+    // failing alone just means snippets fall back to their trimmed values.
+    return found
+  }
+
+  const walk = (value: unknown, pouName: string): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, pouName)
+      return
+    }
+    if (!isRecord(value)) return
+    if (value['@typeName'] === EXECUTE_TYPE_NAME) {
+      const localId = value['@localId']
+      const code = readStCodeText(value)
+      if (typeof localId === 'string' && code !== null) found.set(executeStCodeKey(pouName, localId), code)
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== 'pou') {
+        walk(child, pouName)
+        continue
+      }
+      // Entering a POU: everything below it is named by this POU.
+      for (const entry of Array.isArray(child) ? child : [child]) {
+        const name = isRecord(entry) && typeof entry['@name'] === 'string' ? entry['@name'] : pouName
+        walk(entry, name)
+      }
+    }
+  }
+
+  walk(tree, '')
+  return found
+}
+
 // Parses raw PLCopen XML text into the untyped object tree fast-xml-parser
 // produces. Deliberately returns `Record<string, unknown>`, not a typed
 // shape — the vendored xml-types zod schemas (xml-generator/old-editor/*)

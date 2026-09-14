@@ -12,6 +12,8 @@ const ALL_MODAL_TYPES: ModalTypes[] = [
   'block-ladder-element',
   'coil-ladder-element',
   'contact-ladder-element',
+  'execute-ladder-element',
+  'execute-fbd-element',
   'block-fbd-element',
   'create-project',
   'save-changes-project',

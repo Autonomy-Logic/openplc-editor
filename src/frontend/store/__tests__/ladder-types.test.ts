@@ -123,7 +123,7 @@ describe('Ladder Zod schemas', () => {
   })
 
   describe('zodLadderNodeTypesSchema', () => {
-    const validTypes = ['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable']
+    const validTypes = ['block', 'contact', 'coil', 'execute', 'parallel', 'powerRail', 'variable']
 
     it.each(validTypes)('accepts valid node type: %s', (type) => {
       const result = zodLadderNodeTypesSchema.safeParse(type)

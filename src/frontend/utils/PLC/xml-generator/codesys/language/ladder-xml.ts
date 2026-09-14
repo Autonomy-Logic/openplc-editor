@@ -20,6 +20,8 @@ import {
 } from '@root/middleware/shared/ports/xml-types/codesys/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
+import { buildExecuteAddData, EXECUTE_TYPE_NAME, isBlockLikeNodeType } from '../../../execute-plcopen'
+
 /**
  * Find the connections of a node in a rung.
  */
@@ -357,6 +359,31 @@ const rightRailToXML = (
   }
 }
 
+/**
+ * The `@formalParameter` a leaf element (contact / coil) writes for the source
+ * it reads from.
+ *
+ * Only a block-shaped source names a pin at all — a rail or another leaf has a
+ * single anonymous output. In this dialect a *function* block is additionally
+ * referenced by its name rather than by the pin id.
+ *
+ * The `variant` lookup is guarded on `type === 'block'` specifically: an
+ * Execute element is block-shaped in the XML but carries no `variant`, so
+ * reading one off it throws. It takes the pin-id branch, which is what its
+ * `ENO` needs.
+ */
+const leafSourceFormalParameter = (
+  connectionNode: Node | undefined,
+  connection: { '@formalParameter'?: string },
+): string | undefined => {
+  if (!isBlockLikeNodeType(connectionNode?.type)) return undefined
+  if (connectionNode?.type === 'block') {
+    const { variant } = (connectionNode as BlockNode<BlockVariant>).data
+    if (variant.type === 'function') return variant.name
+  }
+  return connection['@formalParameter']
+}
+
 const contactToXML = (
   contact: ContactNode,
   rung: RungLadderState,
@@ -388,12 +415,7 @@ const contactToXML = (
       connection: connections.map((connection) => {
         const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
-        const formalParameter =
-          connectionNode?.type === 'block'
-            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
-              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
-              : connection['@formalParameter']
-            : undefined
+        const formalParameter = leafSourceFormalParameter(connectionNode, connection)
         return {
           '@refLocalId': refLocalId,
           '@formalParameter': formalParameter,
@@ -432,12 +454,7 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
       connection: connections.map((connection) => {
         const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
-        const formalParameter =
-          connectionNode?.type === 'block'
-            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
-              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
-              : connection['@formalParameter']
-            : undefined
+        const formalParameter = leafSourceFormalParameter(connectionNode, connection)
         return {
           '@refLocalId': refLocalId,
           '@formalParameter': formalParameter,
@@ -446,6 +463,61 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
     },
     connectionPointOut: '',
     variable: coil.data.variable && coil.data.variable.name !== '' ? coil.data.variable.name : 'A',
+  }
+}
+
+/**
+ * Serialize an Execute ("ST Block") element in the CODESYS dialect.
+ *
+ * Same `<block typeName="EXECUTE">` shape as the old-editor generator, with
+ * this dialect's one extra rule applied: connections into a power rail are
+ * rewritten to the single shared left-rail localId, because CODESYS emits one
+ * rail per body rather than one per rung.
+ */
+const executeToXml = (
+  node: Node<BasicNodeData & { code: string }>,
+  rung: RungLadderState,
+  offsetY: number = 0,
+  leftRailId: string,
+) => {
+  const enHandle = node.data.inputConnector
+  const enoHandle = node.data.outputConnector
+  const connections = enHandle ? findConnections(node, rung, offsetY, enHandle.id) : []
+  const rail = rung.nodes.find((n) => n.type === 'powerRail' && (n as PowerRailNode).data.variant === 'left')
+  const remapped = connections.map((connection) =>
+    rail?.data.numericId === connection['@refLocalId'] ? { ...connection, '@refLocalId': leftRailId } : connection,
+  )
+
+  return {
+    '@localId': node.data.numericId,
+    '@typeName': EXECUTE_TYPE_NAME,
+    '@width': node.width as number,
+    '@height': node.height as number,
+    ...(node.data.executionOrder ? { '@executionOrderId': node.data.executionOrder } : {}),
+    position: { '@x': node.position.x, '@y': (node.position.y ?? 0) + offsetY },
+    inputVariables: {
+      variable: [
+        {
+          '@formalParameter': 'EN',
+          connectionPointIn: {
+            relPosition: { '@x': enHandle?.relPosition.x || 0, '@y': enHandle?.relPosition.y || 0 },
+            connection: remapped,
+          },
+        },
+      ],
+    },
+    inOutVariables: '',
+    outputVariables: {
+      variable: [
+        {
+          '@formalParameter': 'ENO',
+          connectionPointOut: {
+            relPosition: { '@x': enoHandle?.relPosition.x || 0, '@y': enoHandle?.relPosition.y || 0 },
+          },
+        },
+      ],
+    },
+    addData: buildExecuteAddData(node.data.code, 'codesys', 'ld'),
   }
 }
 
@@ -477,7 +549,9 @@ const blockToXml = (
           connection: connections.map((connection) => {
             const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
             const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
-            const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
+            const formalParameter = isBlockLikeNodeType(connectionNode?.type)
+              ? connection['@formalParameter']
+              : undefined
             return {
               '@refLocalId': refLocalId,
               '@formalParameter': formalParameter,
@@ -661,6 +735,11 @@ const ladderToXml = (rungs: RungLadderState[]) => {
           break
         case 'block':
           ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY, leftRailId))
+          break
+        case 'execute':
+          ladderXML.body.LD.block.push(
+            executeToXml(node as Node<BasicNodeData & { code: string }>, rung, offsetY, leftRailId) as BlockLadderXML,
+          )
           break
         case 'variable':
           if ((node as VariableNode).data.variable.name === '') return

@@ -209,4 +209,34 @@ export function serializePouScopeForQuery(
   return { text, position: { line: bodyLine, character: bodyExpr.length } }
 }
 
+/**
+ * Synthesize a self-contained ST document placing a MULTI-LINE body in
+ * `pou`'s scope, for diagnostics on an Execute ("ST Block") snippet.
+ *
+ * Thin wrapper over {@link serializePouScopeForQuery} — the shell it
+ * builds (real POU kind so `VAR_IN_OUT` stays legal, throwaway name so
+ * it can't collide with the POU's own `stub://` document, externals
+ * re-emitted as locals so they resolve without the CONFIGURATION, alias
+ * locations resolved to literal addresses) is exactly what a snippet
+ * needs too. The only difference is what the caller wants back: a
+ * completion query needs a cursor position, this needs the preamble's
+ * line count so `setBodyLineOffset` can shift the worker's diagnostics
+ * back onto the lines the user can actually see.
+ *
+ * `serializePouScopeForQuery` documents `bodyExpr` as single-line, and
+ * that constraint is real — but it applies only to the `character` half
+ * of the position it returns. `text` and the line count are correct for
+ * any body, which is why this wrapper takes the line and drops the rest
+ * rather than reimplementing the shell.
+ */
+export function serializePouScopeForBody(
+  pou: PLCPou,
+  body: string,
+  uniqueId?: number | string,
+  aliasIndex: ReadonlyMap<string, string> = EMPTY_ALIAS_INDEX,
+): { text: string; bodyLineOffset: number } {
+  const { text, position } = serializePouScopeForQuery(pou, body, uniqueId, aliasIndex)
+  return { text, bodyLineOffset: position.line }
+}
+
 export { OPAQUE_BODY_PLACEHOLDER, SCOPE_QUERY_POU_NAME }

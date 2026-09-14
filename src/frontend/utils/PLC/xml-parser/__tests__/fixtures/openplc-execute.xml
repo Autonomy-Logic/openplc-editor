@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://www.plcopen.org/xml/tc6_0201" xmlns:xsd="http://www.w3.org/2001/XMLSchema-instance" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:ns1="http://www.plcopen.org/xml/tc6_0201">
+  <fileHeader companyName="Unknown" productName="Unnamed" productVersion="1" creationDateTime="2026-08-28T18:13:26"/>
+  <contentHeader name="Unnamed" modificationDateTime="2026-08-28T18:13:26">
+    <coordinateInfo>
+      <fbd>
+        <scaling x="16" y="16"/>
+      </fbd>
+      <ld>
+        <scaling x="16" y="16"/>
+      </ld>
+      <sfc>
+        <scaling x="16" y="16"/>
+      </sfc>
+    </coordinateInfo>
+  </contentHeader>
+  <types>
+    <dataTypes/>
+    <pous>
+      <pou name="main" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="myVar">
+              <type>
+                <REAL/>
+              </type>
+            </variable>
+            <variable name="counter">
+              <type>
+                <INT/>
+              </type>
+            </variable>
+            <variable name="total">
+              <type>
+                <REAL/>
+              </type>
+            </variable>
+            <variable name="gate">
+              <type>
+                <BOOL/>
+              </type>
+            </variable>
+            <variable name="mode">
+              <type>
+                <INT/>
+              </type>
+            </variable>
+            <variable name="result">
+              <type>
+                <REAL/>
+              </type>
+            </variable>
+            <variable name="i">
+              <type>
+                <INT/>
+              </type>
+            </variable>
+          </localVars>
+        </interface>
+        <body>
+          <LD>
+            <leftPowerRail localId="7758567" width="3" height="40">
+              <position x="0" y="30"/>
+              <connectionPointOut formalParameter="">
+                <relPosition x="3" y="20"/>
+              </connectionPointOut>
+            </leftPowerRail>
+            <leftPowerRail localId="2342384" width="3" height="40">
+              <position x="0" y="312"/>
+              <connectionPointOut formalParameter="">
+                <relPosition x="3" y="20"/>
+              </connectionPointOut>
+            </leftPowerRail>
+            <rightPowerRail localId="9187596" width="3" height="40">
+              <position x="463" y="30"/>
+              <connectionPointIn>
+                <relPosition x="3" y="20"/>
+                <connection refLocalId="5987320" formalParameter="ENO">
+                  <position x="466" y="50"/>
+                  <position x="323" y="50"/>
+                </connection>
+              </connectionPointIn>
+            </rightPowerRail>
+            <rightPowerRail localId="912676" width="3" height="40">
+              <position x="1183" y="312"/>
+              <connectionPointIn>
+                <relPosition x="3" y="20"/>
+                <connection refLocalId="2115285" formalParameter="ENO">
+                  <position x="1186" y="332"/>
+                  <position x="1043" y="332"/>
+                </connection>
+              </connectionPointIn>
+            </rightPowerRail>
+            <block localId="5987320" typeName="EXECUTE" width="240" height="80">
+              <position x="83" y="14"/>
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <relPosition x="0" y="36"/>
+                    <connection refLocalId="7758567" formalParameter="left-rail">
+                      <position x="83" y="50"/>
+                      <position x="3" y="50"/>
+                    </connection>
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables/>
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut>
+                    <relPosition x="240" y="36"/>
+                  </connectionPointOut>
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://openplc.org/plcopenxml/stcode" handleUnknown="preserve">
+                  <STCode>myVar := myVar + 0.01;</STCode>
+                </data>
+              </addData>
+            </block>
+            <block localId="1218673" typeName="EXECUTE" width="240" height="116">
+              <position x="83" y="296"/>
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <relPosition x="0" y="36"/>
+                    <connection refLocalId="2342384" formalParameter="left-rail">
+                      <position x="83" y="332"/>
+                      <position x="3" y="332"/>
+                    </connection>
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables/>
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut>
+                    <relPosition x="240" y="36"/>
+                  </connectionPointOut>
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://openplc.org/plcopenxml/stcode" handleUnknown="preserve">
+                  <STCode>counter := counter + 1;
+total := total + 0.01;
+result := total * 2.0;</STCode>
+                </data>
+              </addData>
+            </block>
+            <block localId="1893208" typeName="EXECUTE" width="240" height="224">
+              <position x="443" y="296"/>
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <relPosition x="0" y="36"/>
+                    <connection refLocalId="1218673" formalParameter="ENO">
+                      <position x="443" y="332"/>
+                      <position x="323" y="332"/>
+                    </connection>
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables/>
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut>
+                    <relPosition x="240" y="36"/>
+                  </connectionPointOut>
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://openplc.org/plcopenxml/stcode" handleUnknown="preserve">
+                  <STCode>IF counter &gt; 100 THEN
+    counter := 0;
+ELSIF counter &lt; 0 THEN
+    counter := 100;
+END_IF;
+
+IF total &lt;&gt; 0.0 AND gate THEN
+    result := total / 2.0;
+END_IF;</STCode>
+                </data>
+              </addData>
+            </block>
+            <block localId="2115285" typeName="EXECUTE" width="240" height="278">
+              <position x="803" y="296"/>
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <relPosition x="0" y="36"/>
+                    <connection refLocalId="1893208" formalParameter="ENO">
+                      <position x="803" y="332"/>
+                      <position x="683" y="332"/>
+                    </connection>
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables/>
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut>
+                    <relPosition x="240" y="36"/>
+                  </connectionPointOut>
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://openplc.org/plcopenxml/stcode" handleUnknown="preserve">
+                  <STCode>total := 0.0;
+FOR i := 1 TO 10 BY 1 DO
+    total := total + REAL#1.5;
+END_FOR;
+
+CASE mode OF
+    0: result := 0.0;
+    1, 2: result := total;
+    3..5: result := total * 2.0;
+ELSE
+    result := -1.0;
+END_CASE;</STCode>
+                </data>
+              </addData>
+            </block>
+          </LD>
+        </body>
+        <documentation>
+          <xhtml:p><![CDATA[ ]]></xhtml:p>
+        </documentation>
+      </pou>
+      <pou name="test_FBD" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="myVar">
+              <type>
+                <REAL/>
+              </type>
+            </variable>
+            <variable name="myOut">
+              <type>
+                <BOOL/>
+              </type>
+            </variable>
+          </localVars>
+        </interface>
+        <body>
+          <FBD>
+            <block localId="8825997" typeName="EXECUTE" height="120" width="260">
+              <position x="304" y="176"/>
+              <inputVariables>
+                <variable formalParameter="EN">
+                  <connectionPointIn>
+                    <relPosition x="0" y="48"/>
+                    <connection refLocalId="8239758">
+                      <position x="400" y="256"/>
+                      <position x="312" y="256"/>
+                      <position x="312" y="208"/>
+                      <position x="224" y="208"/>
+                    </connection>
+                  </connectionPointIn>
+                </variable>
+              </inputVariables>
+              <inOutVariables/>
+              <outputVariables>
+                <variable formalParameter="ENO">
+                  <connectionPointOut>
+                    <relPosition x="260" y="48"/>
+                  </connectionPointOut>
+                </variable>
+              </outputVariables>
+              <addData>
+                <data name="http://openplc.org/plcopenxml/stcode" handleUnknown="preserve">
+                  <STCode>myVar := myVar + 0.01;</STCode>
+                </data>
+              </addData>
+            </block>
+            <inVariable localId="8239758" executionOrderId="0" height="32" width="128" negated="false">
+              <position x="112" y="208"/>
+              <connectionPointOut>
+                <relPosition x="112" y="16"/>
+              </connectionPointOut>
+              <expression>TRUE</expression>
+            </inVariable>
+            <outVariable localId="529102" executionOrderId="0" height="32" width="128" negated="false">
+              <position x="624" y="208"/>
+              <connectionPointIn>
+                <relPosition x="0" y="16"/>
+                <connection refLocalId="8825997">
+                  <position x="624" y="208"/>
+                  <position x="642" y="208"/>
+                  <position x="642" y="256"/>
+                  <position x="660" y="256"/>
+                </connection>
+              </connectionPointIn>
+              <expression>myOut</expression>
+            </outVariable>
+          </FBD>
+        </body>
+        <documentation>
+          <xhtml:p><![CDATA[ ]]></xhtml:p>
+        </documentation>
+      </pou>
+    </pous>
+  </types>
+  <instances>
+    <configurations>
+      <configuration name="Config0">
+        <resource name="Res0">
+          <task name="task0" priority="1" interval="T#20ms">
+            <pouInstance name="instance0" typeName="main"/>
+            <pouInstance name="instance1" typeName="test_FBD"/>
+          </task>
+        </resource>
+      </configuration>
+    </configurations>
+  </instances>
+</project>
