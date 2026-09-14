@@ -316,4 +316,38 @@ describe('a placed library block after project open', () => {
 
     expect(ringsRed(store)).toBe(true)
   })
+
+  it('settles once a pool that was stale at open is re-read', () => {
+    // What `openplc-cli library install` leaves behind: the editor hydrated
+    // its pool at start-up, the library was installed afterwards by another
+    // process, and the project that needs it opens against the stale pool --
+    // reported missing, block ringed red, and only a restart fixed it.
+    //
+    // App.tsx re-reads the pool whenever `project.meta.path` changes, which is
+    // the same signal that navigates start -> workspace. This is what that
+    // re-read has to achieve, and why nothing else has to be re-run: the refs
+    // come from the project, so the derived lists are rebuilt from the project
+    // that is now open.
+    store.getState().sharedWorkspaceActions.handleOpenProjectResponse(ladderProject('0.1.0') as never)
+    expect(store.getState().missingLibraries.map((l) => l.name)).toEqual(['libtest-basic'])
+    expect(ringsRed(store)).toBe(true)
+
+    store.getState().libraryActions.setSystemLibraries([library()])
+
+    expect(store.getState().missingLibraries).toEqual([])
+    expect(store.getState().enabledLibraries).toEqual(['libtest-basic'])
+  })
+
+  it('re-reading a pool that already had the library changes nothing', () => {
+    // The re-read fires on every open, so the ordinary case must be inert.
+    store.getState().libraryActions.setSystemLibraries([library()])
+    store.getState().sharedWorkspaceActions.handleOpenProjectResponse(ladderProject('0.1.0') as never)
+    const before = store.getState().libraries.system
+
+    store.getState().libraryActions.setSystemLibraries([library()])
+
+    expect(store.getState().missingLibraries).toEqual([])
+    expect(store.getState().libraries.system).toEqual(before)
+    expect(ringsRed(store)).toBe(false)
+  })
 })
