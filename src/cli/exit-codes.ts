@@ -45,6 +45,8 @@ export const ErrorCode = {
   InvalidArgument: 'invalid_argument',
   ProjectNotFound: 'project_not_found',
   ProjectInvalid: 'project_invalid',
+  /** A `devices/servers` or `devices/remote` file on disk could not be read. */
+  ProtocolFileUnreadable: 'protocol_file_unreadable',
   TargetUnknown: 'target_unknown',
   CompileFailed: 'compile_failed',
   SessionNotFound: 'session_not_found',

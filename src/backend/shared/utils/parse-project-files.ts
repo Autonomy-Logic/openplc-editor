@@ -67,6 +67,15 @@ export class UnrecoverablePouError extends Error {
   }
 }
 
+/** The first few zod issues as `path: message`, for a one-line reason. */
+function describeZodIssues(error: { issues: { path: (string | number | symbol)[]; message: string }[] }): string {
+  const shown = error.issues
+    .slice(0, 3)
+    .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('; ')
+  return error.issues.length > 3 ? `${shown}; +${error.issues.length - 3} more` : shown
+}
+
 export interface ParsedProjectData {
   meta: {
     name: string
@@ -119,6 +128,11 @@ export interface ParsedProjectData {
    *  can echo them back verbatim — an unreadable file must never be
    *  silently dropped from disk. */
   unparsedDataTypeFiles?: RawProjectFile[]
+  /** Server / remote-device files that could not be read.  A skipped file is
+   *  invisible in `projectData`, so a caller that writes the project back
+   *  overwrites a config it never saw.  Separate from `warnings` so a caller
+   *  can refuse rather than parse prose. */
+  unreadableProtocolFiles?: { relativePath: string; reason: string }[]
   /** True when the project still carries its data types inline in
    *  `project.json` and has no `datatypes/*.dt` on disk — i.e. it predates
    *  DOPE-385 and has never been saved by a `.dt`-writing build. The save
@@ -613,6 +627,8 @@ export function parseProjectFiles(
   }
 
   // Parse server configs with Zod validation (matching old backend behavior)
+  const unreadableProtocolFiles: { relativePath: string; reason: string }[] = []
+
   const servers: PLCServer[] = []
   for (const file of serverFiles) {
     try {
@@ -623,9 +639,11 @@ export function parseProjectFiles(
       } else {
         console.error(`[parseProjectFiles] Server "${file.relativePath}" Zod errors:`, result.error.issues)
         warnings.push(`Server file "${file.relativePath}" has invalid configuration and was skipped.`)
+        unreadableProtocolFiles.push({ relativePath: file.relativePath, reason: describeZodIssues(result.error) })
       }
     } catch {
-      // Skip unparseable JSON files
+      warnings.push(`Server file "${file.relativePath}" is not valid JSON and was skipped.`)
+      unreadableProtocolFiles.push({ relativePath: file.relativePath, reason: 'not valid JSON' })
     }
   }
 
@@ -640,9 +658,11 @@ export function parseProjectFiles(
       } else {
         console.error(`[parseProjectFiles] Remote device "${file.relativePath}" Zod errors:`, result.error.issues)
         warnings.push(`Remote device file "${file.relativePath}" has invalid configuration and was skipped.`)
+        unreadableProtocolFiles.push({ relativePath: file.relativePath, reason: describeZodIssues(result.error) })
       }
     } catch {
-      // Skip unparseable JSON files
+      warnings.push(`Remote device file "${file.relativePath}" is not valid JSON and was skipped.`)
+      unreadableProtocolFiles.push({ relativePath: file.relativePath, reason: 'not valid JSON' })
     }
   }
 
@@ -744,6 +764,7 @@ export function parseProjectFiles(
     warnings: warnings.length > 0 ? warnings : undefined,
     fatalErrors: fatalErrors.length > 0 ? fatalErrors : undefined,
     ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
+    ...(unreadableProtocolFiles.length > 0 ? { unreadableProtocolFiles } : {}),
     ...(dataTypeFiles.length === 0 && legacyDataTypes.length > 0 ? { dataTypesNeedMigration: true } : {}),
   }
 }

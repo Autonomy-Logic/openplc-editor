@@ -30,11 +30,18 @@ import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
 import { cliArgv } from './argv'
+import { runApply } from './commands/apply'
 import { buildProject, runBuild } from './commands/build'
+import { runCheck } from './commands/check'
 import { runCreate } from './commands/create'
 import { type DebugContext, runDebug } from './commands/debug'
+import { runDescribe } from './commands/describe'
 import { runDevices } from './commands/devices'
+import { runEsi } from './commands/esi'
 import { runInstallCli } from './commands/install-cli'
+import { runInstallSkill } from './commands/install-skill'
+import { runRuntime } from './commands/runtime'
+import { runSkill } from './commands/skill'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
 import { createProcessReporter, Reporter } from './output'
@@ -63,6 +70,23 @@ const BOOLEAN_FLAGS = [
   'force-new',
   // `create --force`: overwrite an existing destination instead of refusing it.
   'force',
+  // `upload --create-user`: bootstrap the first account on a fresh runtime.
+  // Unregistered it consumed the next token, so `--create-user ./project` ate
+  // the project path and the command failed asking for one.
+  'create-user',
+  // `check --protocols`: which conf/*.json the upload would carry.
+  'protocols',
+  // `check --emit-st`: include the generated ST in the result.
+  'emit-st',
+  // `check --lint`: report logic that compiles and does nothing.
+  'lint',
+  // `apply`: validate without writing, and delete what the spec omits.
+  'dry-run',
+  'prune',
+  // `describe --libraries`: include the block catalogue.
+  'libraries',
+  // `skill --list`.
+  'list',
   'keep-forces',
   'keep-going',
   'all',
@@ -79,8 +103,16 @@ Usage
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
+  openplc-cli runtime info --host <address>                 (version and capabilities; no login)
+  openplc-cli skill   [--list] [--name <skill>]            (the agent skill this build ships)
+  openplc-cli install-skill [--scope project|user] [--path <dir>]
+  openplc-cli describe <project> [--libraries] [--pou <name>]
+  openplc-cli apply   <spec.json>|- --project <dir> [--dry-run] [--prune]
+  openplc-cli check   <project> [--target <board>] [--pou <name>] [--emit-st] [--lint] [--protocols]
+  openplc-cli esi import <file.xml> --project <dir>         (add an ESI file for EtherCAT)
+  openplc-cli esi list --project <dir>                      (ids and device indices to reference)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
-  openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
+  openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes] [--create-user]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
   openplc-cli debug list
   openplc-cli debug status | list-vars | read | force | unforce | start | stop | watch | poll | unwatch
@@ -193,8 +225,22 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runCreate(args, reporter)).exitCode
     case 'devices':
       return (await runDevices(args, reporter)).exitCode
+    case 'runtime':
+      return (await runRuntime(args, reporter)).exitCode
+    case 'esi':
+      return (await runEsi(args, reporter)).exitCode
     case 'install-cli':
       return (await runInstallCli(args, reporter)).exitCode
+    case 'apply':
+      return (await runApply(args, reporter)).exitCode
+    case 'describe':
+      return (await runDescribe(args, reporter)).exitCode
+    case 'skill':
+      return runSkill(args, reporter).exitCode
+    case 'install-skill':
+      return runInstallSkill(args, reporter).exitCode
+    case 'check':
+      return (await runCheck(args, reporter)).exitCode
     case 'compile':
       return (await runBuild(args, reporter, { withUpload: false })).exitCode
     case 'upload':
@@ -282,7 +328,13 @@ function daemonSpawnArgs(): string[] {
 
   // Dev: Electron was handed this bundle's path, and webpack leaves __filename
   // as the real runtime path (`node: { __filename: false }`).
-  const script = process.argv[1] ?? __filename
+  //
+  // NOT `process.argv[1]`: on Linux `main/entry.ts` re-execs with
+  // `--ozone-platform=headless --disable-gpu` in front of the script, so argv[1]
+  // is a switch there — truthy, so `?? __filename` never fired and every
+  // `debug open` on Linux died on it. Take the first argument that looks like a
+  // bundle instead.
+  const script = process.argv.slice(1).find((argument) => argument.endsWith('.js')) ?? __filename
   if (!script.endsWith('.js')) {
     throw new Error(
       `Cannot locate the CLI bundle to spawn a debug session (resolved "${script}"). ` +

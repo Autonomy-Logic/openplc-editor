@@ -2,15 +2,7 @@ import { produce } from 'immer'
 import type { StoreApi } from 'zustand'
 import { StateCreator } from 'zustand'
 
-import type {
-  ModbusIOPoint,
-  OpcUaServerConfig,
-  PLCServer,
-  PLCVariable,
-  S7CommLogging,
-  S7CommPlcIdentity,
-  S7CommServerSettings,
-} from '../../../../middleware/shared/ports/types'
+import type { ModbusIOPoint, PLCServer, PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
   type AddressPool,
   buildAddressPool,
@@ -56,6 +48,12 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import {
+  DEFAULT_OPCUA_SERVER_CONFIG,
+  DEFAULT_S7COMM_LOGGING,
+  DEFAULT_S7COMM_PLC_IDENTITY,
+  DEFAULT_S7COMM_SERVER_SETTINGS,
+} from '../../../utils/protocol/server-defaults'
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -66,68 +64,6 @@ const fail = (message: string, title?: string): ProjectResponse => ({ ok: false,
 
 /** IEC identifiers are case-insensitive — the rule every element-name lookup folds by. */
 const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
-
-// Default S7Comm configurations
-const DEFAULT_S7COMM_SERVER_SETTINGS: S7CommServerSettings = {
-  enabled: false,
-  bindAddress: '0.0.0.0',
-  port: 102,
-  maxClients: 32,
-  workIntervalMs: 100,
-  sendTimeoutMs: 3000,
-  recvTimeoutMs: 3000,
-  pingTimeoutMs: 10000,
-  pduSize: 480,
-}
-
-const DEFAULT_S7COMM_PLC_IDENTITY: S7CommPlcIdentity = {
-  name: 'OpenPLC Runtime',
-  moduleType: 'CPU 315-2 PN/DP',
-  serialNumber: 'S C-OPENPLC01',
-  copyright: 'OpenPLC Project',
-  moduleName: 'OpenPLC',
-}
-
-const DEFAULT_S7COMM_LOGGING: S7CommLogging = {
-  logConnections: true,
-  logDataAccess: false,
-  logErrors: true,
-}
-
-// Default OPC-UA configuration
-const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
-  server: {
-    enabled: false,
-    name: 'OpenPLC OPC UA Server',
-    applicationUri: 'urn:openplc:opcua:server',
-    productUri: 'urn:openplc:runtime',
-    bindAddress: '0.0.0.0',
-    port: 4840,
-    endpointPath: '/openplc/opcua',
-  },
-  securityProfiles: [
-    {
-      id: 'default-insecure',
-      name: 'insecure',
-      enabled: true,
-      securityPolicy: 'None',
-      securityMode: 'None',
-      authMethods: ['Anonymous'],
-    },
-  ],
-  security: {
-    serverCertificateStrategy: 'auto_self_signed',
-    serverCertificateCustom: null,
-    serverPrivateKeyCustom: null,
-    trustedClientCertificates: [],
-  },
-  users: [],
-  cycleTimeMs: 100,
-  addressSpace: {
-    namespaceUri: 'urn:openplc:opcua:namespace',
-    nodes: [],
-  },
-}
 
 function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
   if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {

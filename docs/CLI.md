@@ -191,17 +191,70 @@ Machine-readable when stdout is not a terminal, human-readable when it is;
 
 ### Exit codes
 
-| Code | Meaning                                                |
-| ---- | ------------------------------------------------------ |
-| 0    | ok                                                     |
-| 2    | usage — unknown command, missing or malformed argument |
-| 3    | not found — project, file or session                   |
-| 4    | compile failed                                         |
-| 5    | connection — could not reach the target, or lost it    |
-| 6    | auth — credentials refused                             |
-| 7    | target error — the device reported failure             |
-| 8    | timeout                                                |
-| 70   | internal — a bug in the CLI                            |
+| Code | Meaning                                                                                |
+| ---- | -------------------------------------------------------------------------------------- |
+| 0    | ok                                                                                     |
+| 2    | usage — unknown command, missing or malformed argument                                 |
+| 3    | not found — project, file or session                                                   |
+| 4    | compile failed                                                                         |
+| 5    | connection — could not reach the target, or lost it                                    |
+| 6    | auth — credentials refused                                                             |
+| 7    | target error — the device reported failure, or the project on disk refuses the command |
+| 8    | timeout                                                                                |
+| 70   | internal — a bug in the CLI                                                            |
+
+## Protocols
+
+A project's `servers` and `remoteDevices` are part of the `apply` spec, and
+`describe` emits them back. The runtime decides which protocol plugins to load
+from which `conf/*.json` files the upload carries, and offers no way to read a
+configuration back, so:
+
+```sh
+openplc-cli check ./project --lint --protocols
+```
+
+runs the same generators the upload runs and prints the exact file set. That
+file set is the enable state.
+
+```
+Protocol configs this project would upload:
+  modbusSlave    conf/modbus_slave.json
+  modbusMaster   conf/modbus_master.json
+  s7comm         conf/s7comm.json
+  opcua          (not generated — the plugin stays off)
+  ethercat       (not generated — the plugin stays off)
+```
+
+Three things that are not obvious:
+
+- A server's `enabled: false` means "no config file" for Modbus and OPC-UA, and
+  the plugin never starts. **S7comm still ships its config**, by design: that
+  plugin reads the flag itself and declines to serve.
+- `describe` **redacts** `security.serverPrivateKeyCustom` and every
+  `users[].passwordHash`; `apply` **preserves** them when the spec omits them, so
+  a round trip does not destroy a key. Write the field to change it.
+- Allocated addresses — a Modbus point's `iecLocation`, an EtherCAT channel's —
+  are reported under a sibling `protocolAddresses` key, never inside `spec`.
+  Allocation decides them, so a spec carrying them would stop round-tripping.
+
+A server or remote-device file that does not load is a **refusal**, not a
+warning: `describe` and `apply` both exit 7 with `protocol_file_unreadable`
+rather than reporting a project that is not the one on disk, or overwriting a
+config nobody read.
+
+### EtherCAT devices
+
+An EtherCAT slave is authored from the vendor's ESI file, which the project
+keeps in its own repository:
+
+```sh
+openplc-cli esi import ./EL7041.xml --project ./project   # adds the file
+openplc-cli esi list --project ./project                  # ids and device indices
+```
+
+`esi list` prints what a spec needs: the repository id (a file name works too)
+and the `deviceIndex` of each device inside the file.
 
 ## Credentials
 
@@ -258,24 +311,27 @@ point of naming a timeout is that the default was wrong for this run.
 
 ### Flags, by command
 
-| Flag                   | Command                             | Meaning                                                                                             |
-| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `--session <id>`       | any `debug` subcommand              | which session, when several are open                                                                |
-| `--idle-timeout <ms>`  | `debug open`                        | idle budget; `0` disables (see above)                                                               |
-| `--force-new`          | `debug open`                        | start a session even if one is already open for this project and target                             |
-| `--upload-if-needed`   | `debug open`                        | upload first when the target's program does not match                                               |
-| `--var <name>`         | `read`, `force`, `unforce`           | the variable, when you would rather not pass it positionally                                        |
-| `--value <literal>`    | `force`                             | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                    |
-| `--filter <substring>` | `list-vars`                         | only variables whose path contains it                                                               |
-| `--interval <ms>`      | `watch`                             | sampling cadence; floor 20 ms                                                                       |
-| `--since <seq>`        | `poll`                              | only samples after this sequence number                                                             |
-| `--keep-forces`        | `close`                             | leave forced variables pinned                                                                       |
-| `--all`                | `close`                             | every session, not just one                                                                         |
-| `--keep-going`         | `exec`                              | run the remaining lines after one fails                                                             |
-| `--force`              | `create`                            | overwrite an existing destination                                                                   |
-| `--clean`              | `compile`, `upload`                 | discard the build directory first                                                                   |
-| `-y`, `--yes`          | `upload`                            | skip the confirmation                                                                               |
-| `--create-user`        | `upload`, `debug open`              | permission to create the FIRST user on a fresh runtime v4, using the credentials you already passed |
+| Flag                   | Command                    | Meaning                                                                                                      |
+| ---------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `--session <id>`       | any `debug` subcommand     | which session, when several are open                                                                         |
+| `--idle-timeout <ms>`  | `debug open`               | idle budget; `0` disables (see above)                                                                        |
+| `--force-new`          | `debug open`               | start a session even if one is already open for this project and target                                      |
+| `--upload-if-needed`   | `debug open`               | upload first when the target's program does not match                                                        |
+| `--var <name>`         | `read`, `force`, `unforce` | the variable, when you would rather not pass it positionally                                                 |
+| `--value <literal>`    | `force`                    | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                             |
+| `--filter <substring>` | `list-vars`                | only variables whose path contains it                                                                        |
+| `--interval <ms>`      | `watch`                    | sampling cadence; floor 20 ms                                                                                |
+| `--since <seq>`        | `poll`                     | drops samples up to this sequence number; the buffer is drained either way, so it is not a rewindable cursor |
+| `--keep-forces`        | `close`                    | leave forced variables pinned                                                                                |
+| `--all`                | `close`                    | every session, not just one                                                                                  |
+| `--keep-going`         | `exec`                     | run the remaining lines after one fails                                                                      |
+| `--force`              | `create`                   | overwrite an existing destination                                                                            |
+| `--clean`              | `compile`, `upload`        | discard the build directory first                                                                            |
+| `-y`, `--yes`          | `upload`                   | skip the confirmation                                                                                        |
+| `--create-user`        | `upload`                   | permission to create the FIRST user on a fresh runtime v4, using the credentials you already passed          |
+| `--protocols`          | `check`                    | which `conf/*.json` the upload would carry — the runtime's enable state, computed without a device           |
+| `--prune`              | `apply`                    | delete what the spec stopped mentioning, including servers and remote devices                                |
+| `--project <dir>`      | `esi`                      | the project whose ESI repository to read or add to                                                           |
 
 `watch` **records** into a buffer inside the session rather than streaming, so a
 transient that happens between two of your own commands is still there when you

@@ -232,14 +232,18 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs
 - **Framework:** Jest + jsdom
 - **Test files:** `*.test.ts(x)`, `*.spec.ts(x)`, or `__tests__/` directories
 - **E2E:** Playwright (`/e2e`), Chromium only
-- **Coverage thresholds** (100% functions/lines/statements required):
-  - `src/frontend/store/slices/`
-  - `src/frontend/utils/`
-  - `src/backend/shared/`
-  - `src/middleware/adapters/editor/`
+- **Coverage thresholds** — per-directory aggregates, not 100%. Branches are not
+  enforced anywhere. From `jest.config.json`, as functions/lines/statements:
+  - `src/frontend/store/slices/` — 98 / 98 / 97
+  - `src/frontend/utils/` — 97 / 95 / 95
+  - `src/backend/shared/` — 76 / 77 / 75
+  - `src/middleware/adapters/editor/` — 87 / 85 / 85
+  - `src/cli/` is **not collected at all**, so it faces no threshold
 - **Mocks:** `configs/mocks/` for file stubs; `identity-obj-proxy` for CSS modules
 
-When adding new code to covered directories, you must add corresponding tests to maintain 100% coverage.
+The thresholds are aggregates over the whole directory, so an untested new file
+drags its bucket below the line and fails the run. Add tests alongside new code
+in those directories.
 
 ## Code Style
 
@@ -330,7 +334,7 @@ on its `main` push. (Ideally `package.json.version` should be derived from
 1. Create `types.ts`, `slice.ts`, `index.ts` in `src/frontend/store/slices/<name>/`
 2. Add the slice type to `RootState` union in `src/frontend/store/index.ts`
 3. Spread the slice creator in `createOpenPLCStore()`
-4. Add tests to maintain 100% coverage
+4. Add tests to keep the directory's coverage bucket above its threshold
 
 ### When adding a new POU language or type:
 1. Update project parser (`src/backend/shared/utils/parse-project-files.ts`)

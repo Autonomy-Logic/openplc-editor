@@ -45,21 +45,49 @@ interface ModbusSlaveConfig {
   buffer_mapping: ModbusSlaveBufferMapping
 }
 
+/** Sink for non-fatal diagnostics, wired to the build console. */
+type ModbusSlaveConfigLog = (message: string) => void
+
 /**
  * Generates the Modbus Slave plugin configuration JSON from the project's servers.
  * Returns null if there are no enabled Modbus TCP servers configured.
  *
+ * The runtime enables the plugin by the presence of `conf/modbus_slave.json`,
+ * so a disabled server must produce null — shipping the file opens the port.
+ *
  * @param servers - Array of PLCServer from the project data
+ * @param log - Optional sink for non-fatal diagnostics (e.g. a second Modbus server)
  * @returns The Modbus Slave configuration as a JSON string, or null if no servers are configured
  */
-export const generateModbusSlaveConfig = (servers: PLCServer[] | undefined): string | null => {
+export const generateModbusSlaveConfig = (
+  servers: PLCServer[] | undefined,
+  log?: ModbusSlaveConfigLog,
+): string | null => {
   if (!servers || servers.length === 0) {
     return null
   }
 
-  const modbusServer = servers.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig)
+  const enabledServers = servers.filter(
+    (server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig?.enabled,
+  )
 
-  if (!modbusServer || !modbusServer.modbusSlaveConfig) {
+  // The runtime takes one Modbus slave config. A second enabled server is
+  // dropped rather than merged, so say which one won instead of picking
+  // silently by array order.
+  if (enabledServers.length > 1) {
+    const dropped = enabledServers
+      .slice(1)
+      .map((server) => server.name)
+      .join(', ')
+    log?.(
+      `Modbus slave: more than one enabled Modbus TCP server (${enabledServers.map((s) => s.name).join(', ')}). ` +
+        `Using "${enabledServers[0].name}"; ignoring ${dropped}.`,
+    )
+  }
+
+  const modbusServer = enabledServers[0]
+
+  if (!modbusServer?.modbusSlaveConfig) {
     return null
   }
 
@@ -100,6 +128,7 @@ export type {
   ModbusSlaveBufferMapping,
   ModbusSlaveCoils,
   ModbusSlaveConfig,
+  ModbusSlaveConfigLog,
   ModbusSlaveDiscreteInputs,
   ModbusSlaveHoldingRegisters,
   ModbusSlaveInputRegisters,

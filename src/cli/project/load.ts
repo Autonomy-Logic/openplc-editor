@@ -18,9 +18,11 @@
  */
 
 import { HardwareModule } from '@root/backend/editor/hardware'
+import { LibraryManagerModule } from '@root/backend/editor/library-manager'
 import { ProjectService } from '@root/backend/editor/services'
 import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
 import { openPLCStoreBase } from '@root/frontend/store'
+import { stlibsToSystemLibraries } from '@root/frontend/utils/stlib-to-system-library'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
 export interface LoadedProject {
@@ -35,9 +37,69 @@ export interface LoadedProject {
   vendorScreenData: Record<string, unknown> | undefined
   communicationPort: string | undefined
   warnings: string[]
+  /**
+   * `executeSaveProject` refuses silently on either of these — `canEdit` false
+   * (set when the open response carried fatal errors) returns `{success:false}`
+   * through a toast that goes nowhere headless, and an ephemeral project refuses
+   * a `'user'` save. A writing command must check them rather than exit 0 having
+   * written nothing.
+   */
+  canEdit: boolean
+  isEphemeral: boolean
+  /**
+   * Server / remote-device files on disk that failed to load.  Their configs
+   * are absent from `data`, so `describe` under-reports the project and an
+   * `apply` naming the same server would overwrite a file it never read.
+   * Writing and reporting commands must refuse rather than warn.
+   */
+  unreadableProtocolFiles: { relativePath: string; reason: string }[]
 }
 
 export type LoadProjectResult = { success: true; project: LoadedProject } | { success: false; error: string }
+
+/**
+ * The message for a project holding a protocol file that would not load, or
+ * null when every one was read.
+ *
+ * A skipped file is silent: the server is simply absent from the store, so
+ * `describe` reports a project that is not the one on disk, and an `apply`
+ * declaring that same name writes over a config nobody read. Both refuse.
+ */
+export function unreadableProtocolFilesMessage(project: LoadedProject): string | null {
+  if (project.unreadableProtocolFiles.length === 0) return null
+  const listed = project.unreadableProtocolFiles.map((file) => `  ${file.relativePath} — ${file.reason}`).join('\n')
+  return (
+    `${project.unreadableProtocolFiles.length} protocol file(s) in this project could not be read, ` +
+    `so its configuration is not what is on disk:\n${listed}\n` +
+    'Fix or remove the file(s) first — continuing would overwrite them.'
+  )
+}
+
+/**
+ * Load the installed libraries into the store, returning any warning rather
+ * than throwing: a project that references no library still compiles, so a
+ * damaged library store must not stop the build.
+ *
+ * Two reads, as the renderer does: `loadAll` carries the POU lists the pool is
+ * built from, `listInstalled` carries the bundled flag the archive shape has no
+ * room for.
+ */
+function hydrateLibraries(): string[] {
+  try {
+    const libraries = new LibraryManagerModule()
+    const actions = openPLCStoreBase.getState().libraryActions
+    actions.setSystemLibraries(stlibsToSystemLibraries(libraries.loadAll()))
+    actions.setBundledLibraryNames(
+      libraries
+        .listInstalled()
+        .filter((library) => library.bundled)
+        .map((library) => library.name),
+    )
+    return []
+  } catch (err) {
+    return [`warning: could not read the installed libraries: ${err instanceof Error ? err.message : String(err)}`]
+  }
+}
 
 export async function loadProject(projectPath: string): Promise<LoadProjectResult> {
   // The main process's own reader, so the CLI sees exactly the file set the
@@ -79,6 +141,13 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
   // leave those resolvers looking at an empty one, and the CLI would have to
   // reimplement them. One project per process is the same assumption the editor
   // makes, and a CLI invocation is one project.
+  // The library pool, BEFORE the project opens. `handleOpenProjectResponse`
+  // reads `libraries.system` and re-stamps every placed block against it in the
+  // same call, and `setProjectLibraries` derives the enabled/missing lists from
+  // it — both see an empty pool if this runs after. Mirrors `hydrateLibraries`
+  // in App.tsx, which is the renderer's equivalent.
+  const libraryWarnings = hydrateLibraries()
+
   openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
 
   const state = openPLCStoreBase.getState()
@@ -92,7 +161,10 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
       board: state.deviceDefinitions.configuration.deviceBoard,
       vendorScreenData: state.deviceDefinitions.configuration.vendorScreenData,
       communicationPort: state.deviceDefinitions.configuration.communicationPort,
-      warnings: parsed.warnings ?? [],
+      warnings: [...libraryWarnings, ...(parsed.warnings ?? [])],
+      canEdit: state.workspace.canEdit,
+      isEphemeral: state.workspace.isEphemeralProject,
+      unreadableProtocolFiles: parsed.unreadableProtocolFiles ?? [],
     },
   }
 }

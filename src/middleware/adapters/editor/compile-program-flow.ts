@@ -22,7 +22,13 @@ import {
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
-import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
+import type {
+  BoardInfo,
+  CompileProgressEvent,
+  CompileResult,
+  PLCProjectData,
+  StructuredCompileError,
+} from '../../shared/ports/types'
 import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type { IpcProjectData } from './compiler-adapter'
 import { decodeMessage, inferStage, toIpcProjectData } from './compiler-adapter'
@@ -86,11 +92,40 @@ export interface CompileProgramTransport {
   runCompileProgram: (compileArgs: CompileProgramIpcArgs, onMessage: (data: Record<string, unknown>) => void) => void
 }
 
-export async function compileProgramFlow(
-  args: CompileProgramArgs,
-  transport: CompileProgramTransport,
+/**
+ * What a compile needs resolved before the pipeline is touched.
+ *
+ * Split out so `openplc-cli check` can transpile a project without building it
+ * and still see exactly what a build would see. Re-deriving these steps would
+ * mean a check that passes on a project the compiler rejects, which is worse
+ * than no check.
+ */
+export interface PreparedProject {
+  /** POUs after the library graft and preprocessing — schema shape. */
+  processedData: PLCProjectData
+  boardInfo: BoardInfo | undefined
+  boardCore: string | null
+  isSimulator: boolean
+  pythonSupport: { supported: boolean; targetLabel: string } | undefined
+  archives: StlibArchiveDTO[]
+}
+
+export type PrepareProjectResult = { ok: true; prepared: PreparedProject } | { ok: false; error: string }
+
+/**
+ * Board resolution, capability gating, the library C/C++ graft and POU
+ * preprocessing — everything `compileProgramFlow` does before it builds the IPC
+ * argument tuple.
+ *
+ * Needs only two of the transport's three calls; `runCompileProgram` is not
+ * reached, which is what lets a non-building caller pass a transport with no
+ * runtime behind it.
+ */
+export async function prepareProjectForCompile(
+  args: Pick<CompileProgramArgs, 'projectData' | 'boardTarget' | 'isSimulator'>,
+  transport: Pick<CompileProgramTransport, 'getAvailableBoards' | 'loadAllLibraries'>,
   onProgress: (event: CompileProgressEvent) => void,
-): Promise<CompileResult> {
+): Promise<PrepareProjectResult> {
   const boards = await transport.getAvailableBoards()
   const boardInfo = boards.get(args.boardTarget)
   const boardCore = boardInfo?.core ?? null
@@ -124,7 +159,7 @@ export async function compileProgramFlow(
       `These libraries ship C/C++ or Python blocks without their source, so they cannot be built: ${missingSources.join(', ')}. ` +
       'Reinstall them from a build that includes sources.'
     onProgress({ stage: 'st', message: error, level: 'error' })
-    return { success: false, error }
+    return { ok: false, error }
   }
 
   const dataWithLibCpp = injectLibraryBlocks(args.projectData, archives)
@@ -149,10 +184,25 @@ export async function compileProgramFlow(
 
   if (validationFailed) {
     return {
-      success: false,
+      ok: false,
       error: validationError ?? 'POU validation failed. Check C/C++ code for missing setup()/loop() functions.',
     }
   }
+
+  return {
+    ok: true,
+    prepared: { processedData, boardInfo, boardCore, isSimulator, pythonSupport, archives },
+  }
+}
+
+export async function compileProgramFlow(
+  args: CompileProgramArgs,
+  transport: CompileProgramTransport,
+  onProgress: (event: CompileProgressEvent) => void,
+): Promise<CompileResult> {
+  const preparation = await prepareProjectForCompile(args, transport, onProgress)
+  if (!preparation.ok) return { success: false, error: preparation.error }
+  const { processedData, boardCore } = preparation.prepared
 
   const ipcData = toIpcProjectData(processedData)
 
