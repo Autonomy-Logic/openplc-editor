@@ -113,13 +113,7 @@ jobs:
 
           # The mirror PR shares this PR's branch name, so try it first: scanning by
           # recency alone stops finding it as soon as newer PRs pile up in front.
-          PR_JSON=$(echo "$PR_JSON" | HEAD_BRANCH="$HEAD_BRANCH" python3 -c "
-import json, os, sys
-prs = json.load(sys.stdin)
-head = os.environ['HEAD_BRANCH']
-prs.sort(key=lambda p: p['headRefName'] != head)
-print(json.dumps(prs))
-")
+          PR_JSON=$(echo "$PR_JSON" | jq --arg head "$HEAD_BRANCH" 'sort_by(.headRefName != $head)')
 
           PR_COUNT=$(echo "$PR_JSON" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
           echo "pr_count=$PR_COUNT" >> "$GITHUB_OUTPUT"
