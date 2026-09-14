@@ -32,6 +32,7 @@ Design notes that outlive the skeleton:
 
 #include <open62541.h>
 #include <open62541_arduino.h>
+#include <string.h>
 
 #include "opcua_log.h"
 #include "baremetal_net.h"
@@ -68,6 +69,27 @@ Design notes that outlive the skeleton:
 #define OPCUA_SCAN_BUDGET_US 1000u
 #endif
 
+/** Serve namespace zero from the library's const flash table.
+ *
+ *  Only valid against a library built with UA_NS0=NONE: in that configuration
+ *  upstream expects an external nodestore to have namespace zero pre-loaded.
+ *  Off by default so a MINIMAL library behaves exactly as before. Worth
+ *  18,992 bytes of arena when on. */
+#ifndef OPCUA_NS0_FROM_FLASH
+#define OPCUA_NS0_FROM_FLASH false
+#endif
+
+// The library configuration and this flag have to agree, and the failure when
+// they do not is silent: a NONE library with the flag off compiles cleanly and
+// then serves an empty address space, because nothing ever built namespace
+// zero. Catch it here instead.
+#if !defined(UA_NAMESPACE_ZERO_MINIMAL) && !OPCUA_NS0_FROM_FLASH
+#error "open62541 was built with UA_NAMESPACE_ZERO=NONE but OPCUA_NS0_FROM_FLASH is off: nothing would provide namespace zero."
+#endif
+#if defined(UA_NAMESPACE_ZERO_MINIMAL) && OPCUA_NS0_FROM_FLASH
+#error "OPCUA_NS0_FROM_FLASH needs a library built with UA_NS0=NONE; a MINIMAL library builds namespace zero in RAM and ships no flash table."
+#endif
+
 namespace {
 
 /** The server's heap.
@@ -86,6 +108,9 @@ __attribute__((used)) alignas(8) uint8_t g_opcua_arena[OPCUA_ARENA_SIZE];
  *  lets OPC-UA and S7Comm share one slot pool, which is a resource decision
  *  belonging to the product rather than to either protocol. */
 bm_net::Listener g_listener(OPCUA_PORT, BM_NET_OPCUA_SLOTS);
+
+/** The flash nodestore, so populate() can tell it our namespace index. */
+UA_Nodestore* g_nodestore = nullptr;
 
 bool       g_started  = false;
 uint32_t   g_overruns = 0;
@@ -175,6 +200,13 @@ uint32_t opcua_overrun_count()
     return g_overruns;
 }
 
+/** The flash nodestore, for opcua_nodes_populate() to bind our namespace to.
+ *  A function rather than a shared global so the storage stays in one TU. */
+UA_Nodestore* opcua_server_nodestore()
+{
+    return g_nodestore;
+}
+
 void opcua_init()
 {
     if (g_started)
@@ -209,34 +241,77 @@ void opcua_init()
 
     OPCUA_LOG("[ua] arena %lu bytes, allocator bound",
               (unsigned long)sizeof(g_opcua_arena));
-    g_server = UA_Server_new();
+    // Build the CONFIG before the server, not after.
+    //
+    // UA_Server_new() would construct namespace zero on the way out, so a
+    // nodestore installed afterwards arrives too late to serve it. Configuring
+    // first lets the flash nodestore be in place before any of that happens --
+    // which is the whole point when namespace zero is const in flash.
+    static UA_ServerConfig bootConfig;
+    memset(&bootConfig, 0, sizeof(bootConfig));
+
+    // The minimal config installs the EventLoop and the TCP ConnectionManager
+    // through the factories the library supplies (the _POSIX-named forwarders).
+    if (UA_ServerConfig_setMinimalCustomBuffer(&bootConfig, OPCUA_PORT, nullptr, 8192, 8192)
+        != UA_STATUSCODE_GOOD)
+    {
+        OPCUA_LOG("[ua] setMinimalCustomBuffer FAILED");
+        return;
+    }
+
+    // Namespace index 0 here means "not assigned yet" -- our own namespace
+    // index is only known once the server has been created and
+    // UA_Server_addNamespace() has returned it, so opcua_nodes_populate()
+    // calls UA_Nodestore_flashSetNamespace() with it later.
+    UA_Arduino_FlashNodeSource src;
+    memset(&src, 0, sizeof(src));
+    src.materialise = [](UA_UInt16 nsIdx, UA_UInt32 numericId,
+                         UA_VariableNode* out, void*) -> bool {
+        return opcua_nodes_materialise((UA_UInt16)numericId, nsIdx, out);
+    };
+    src.dematerialise = [](UA_VariableNode* node, void*) {
+        opcua_nodes_dematerialise(node);
+    };
+    src.count = [](void*) -> UA_UInt16 { return opcua_nodes_count(); };
+    src.idAt  = [](UA_UInt16 index, void*) -> UA_UInt32 {
+        return (UA_UInt32)opcua_nodes_id_at(index);
+    };
+    src.namespaceIndex = 0;
+    src.context        = nullptr;
+
+    UA_Nodestore* flash = UA_Nodestore_newFlash(&src, bootConfig.nodestore,
+                                                bootConfig.logging,
+                                                OPCUA_NODE_POOL_SLOTS,
+                                                OPCUA_NS0_FROM_FLASH);
+    if (flash == nullptr)
+    {
+        OPCUA_LOG("[ua] flash nodestore FAILED");
+        return;
+    }
+    bootConfig.nodestore = flash;
+    g_nodestore = flash;
+
+    g_server = UA_Server_newWithConfig(&bootConfig);
     if (g_server == nullptr)
     {
         UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
-        OPCUA_LOG("[ua] UA_Server_new FAILED hw=%lu fail=%lu largest=%lu",
+        OPCUA_LOG("[ua] UA_Server_newWithConfig FAILED hw=%lu fail=%lu largest=%lu",
                   (unsigned long)st.highWater, (unsigned long)st.failures,
                   (unsigned long)st.largestFree);
         return;
     }
     {
         UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
-        OPCUA_LOG("[ua] UA_Server_new ok  inuse=%lu hw=%lu", (unsigned long)st.inUse,
+        OPCUA_LOG("[ua] server ok  inuse=%lu hw=%lu", (unsigned long)st.inUse,
                   (unsigned long)st.highWater);
     }
-
+    // From here on the SERVER's config is the live one.
+    //
+    // UA_Server_newWithConfig() copies the config in and then memsets the
+    // caller's copy to zero -- it takes ownership. Continuing to use the local
+    // one would mean configuring a zeroed struct: the first symptom was access
+    // control refusing to install because securityPoliciesSize had become 0.
     UA_ServerConfig* config = UA_Server_getConfig(g_server);
-
-    // Minimal config first: it installs the EventLoop and the TCP
-    // ConnectionManager through the factories our arch layer supplies (the
-    // _POSIX-named forwarders the library supplies).
-    if (UA_ServerConfig_setMinimalCustomBuffer(config, OPCUA_PORT, nullptr, 8192, 8192)
-        != UA_STATUSCODE_GOOD)
-    {
-        OPCUA_LOG("[ua] setMinimalCustomBuffer FAILED");
-        UA_Server_delete(g_server);
-        g_server = nullptr;
-        return;
-    }
     OPCUA_LOG("[ua] config set");
 
     if (!apply_and_verify_limits(config))

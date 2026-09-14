@@ -350,32 +350,15 @@ UA_StatusCode opcua_nodes_populate(UA_Server* server, UA_UInt16* out_ns_index)
     // Swap the default nodestore for the flash-backed one now that the
     // namespace index is known. Namespace zero has already been built into the
     // inner store during server creation and is carried over untouched.
-    UA_ServerConfig* cfg = UA_Server_getConfig(server);
-
-    // The library owns the mechanism -- keep nodes in flash, materialise into
-    // a small pool, delegate everything outside our namespace. What is ours is
-    // the table it reads, which the project generator emitted.
-    UA_Arduino_FlashNodeSource source;
-    source.materialise = [](UA_UInt16 nsIdx, UA_UInt32 numericId,
-                            UA_VariableNode* out, void*) -> bool {
-        return opcua_nodes_materialise((UA_UInt16)numericId, nsIdx, out);
-    };
-    source.dematerialise = [](UA_VariableNode* node, void*) {
-        opcua_nodes_dematerialise(node);
-    };
-    source.count = [](void*) -> UA_UInt16 { return opcua_nodes_count(); };
-    source.idAt  = [](UA_UInt16 index, void*) -> UA_UInt32 {
-        return (UA_UInt32)opcua_nodes_id_at(index);
-    };
-    source.namespaceIndex = ns;
-    source.context        = nullptr;
-
-    UA_Nodestore* flash = UA_Nodestore_newFlash(&source, cfg->nodestore,
-                                                cfg->logging,
-                                                OPCUA_NODE_POOL_SLOTS);
+    // The nodestore was installed before the server existed (see opcua_init:
+    // namespace zero has to be servable by the time UA_Server_newWithConfig
+    // runs). All that is left is telling it which namespace our own nodes are
+    // in, which only became known when addNamespace returned just now.
+    extern UA_Nodestore* opcua_server_nodestore();
+    UA_Nodestore* flash = opcua_server_nodestore();
     if (flash == nullptr)
-        return UA_STATUSCODE_BADOUTOFMEMORY;
-    cfg->nodestore = flash;
+        return UA_STATUSCODE_BADINTERNALERROR;
+    UA_Nodestore_flashSetNamespace(flash, ns);
 
 #if OPCUA_NODE_COUNT > 0
     // The nodes themselves are already in flash and need no adding. What the
@@ -407,6 +390,11 @@ UA_StatusCode opcua_nodes_populate(UA_Server* server, UA_UInt16* out_ns_index)
         }
     }
 #endif
+    {
+        uint16_t ovUsed = 0; uint32_t ovRef = 0;
+        UA_Arduino_getNs0OverlayStats(&ovUsed, &ovRef);
+        OPCUA_LOG("[ns] ns0 overlay: used=%u refused=%lu", (unsigned)ovUsed, (unsigned long)ovRef);
+    }
     return UA_STATUSCODE_GOOD;
 }
 
