@@ -16,6 +16,7 @@ import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 import {
   computeIoImage,
   describeDuplicateOutput,
+  describeIoImageSizes,
   describeUnbackedLocation,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
@@ -130,7 +131,7 @@ const compute = (projectData: PLCProjectData, extra: Partial<Parameters<typeof c
 describe('computeIoImage — sizing from producers', () => {
   it('sizes nothing for an empty project', () => {
     // FR21 / BR12: the floor is zero, and zero is expressed by absence.
-    expect(compute(makeProject({}))).toEqual({ sizes: {}, unbacked: [], unsupported: [], duplicateOutputs: [] })
+    expect(compute(makeProject({}))).toEqual({ sizes: {}, origins: {}, unbacked: [], unsupported: [], duplicateOutputs: [] })
   })
 
   it('sizes an area from the pins that claim it', () => {
@@ -937,7 +938,7 @@ describe('computeIoImage — BR14, an address with no producer', () => {
         },
       ],
     })
-    expect(compute(project)).toEqual({ sizes: {}, unbacked: [], unsupported: [], duplicateOutputs: [] })
+    expect(compute(project)).toEqual({ sizes: {}, origins: {}, unbacked: [], unsupported: [], duplicateOutputs: [] })
   })
 })
 
@@ -1089,4 +1090,131 @@ describe('computeIoImage — array extents that cannot be read', () => {
 
   it('falls back to one slot for a dimension entry with no dimension', () =>
     oneSlot({ definition: 'array', data: { dimensions: [{}] } }))
+})
+
+describe('computeIoImage — where each number came from', () => {
+  const s7Block = (type: string, startBuffer: number, sizeBytes: number) => [
+    {
+      name: 's7',
+      protocol: 's7comm',
+      s7commSlaveConfig: {
+        server: { enabled: true },
+        dataBlocks: [{ dbNumber: 1, description: '', sizeBytes, mapping: { type, startBuffer, bitAddressing: false } }],
+      },
+    },
+  ]
+
+  const modbusServer = (bufferMapping: unknown) => [
+    {
+      name: 'mb',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: true, networkInterface: '', port: 502, bufferMapping },
+    },
+  ]
+
+  it('names the producers when a pin set the number', () => {
+    const image = compute(makeProject({}), { devicePinMapping: pins('%IX0.0', '%IX0.1') })
+    expect(image.origins).toEqual({ '%IX': 'producers' })
+  })
+
+  it('names the Modbus server when its exposure set the number', () => {
+    const image = compute(makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 40 } }) }))
+    expect(image.origins).toEqual({ '%QW': 'modbus-server' })
+  })
+
+  it('names the S7comm server when a data block set the number', () => {
+    const image = compute(makeProject({ servers: s7Block('int_output', 0, 128) }))
+    expect(image.origins).toEqual({ '%QW': 's7comm-server' })
+  })
+
+  it('names the program when a memory declaration set the number', () => {
+    // Memory is its own producer (BR14/FR24), so unlike an input or an output
+    // its declaration SIZES the area — the one case where the program itself
+    // is the origin.
+    const image = compute(makeProject({ pous: [{ name: 'main', variables: [variable('m', '%MW7')] }] }))
+    expect(image.sizes).toEqual({ '%MW': 8 })
+    expect(image.origins).toEqual({ '%MW': 'declarations' })
+  })
+
+  it('names the LARGER claimant when two contributors size the same area', () => {
+    const image = compute(
+      makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 40 } }) }),
+      { devicePinMapping: pins('%QW0') },
+    )
+    expect(image.sizes).toEqual({ '%QW': 40 })
+    expect(image.origins).toEqual({ '%QW': 'modbus-server' })
+  })
+
+  it('leaves the EARLIER claimant named on a tie', () => {
+    // `claim` only overwrites on a strictly larger number and the contributors
+    // run in a fixed order, so equal claims always resolve the same way — the
+    // log has to be as deterministic as the sizes are (FR07).
+    const image = compute(
+      makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 1 } }) }),
+      { devicePinMapping: pins('%QW0') },
+    )
+    expect(image.sizes).toEqual({ '%QW': 1 })
+    expect(image.origins).toEqual({ '%QW': 'producers' })
+  })
+
+  it('drops the origin with the area when the target has no such buffer', () => {
+    // The two records are filtered together: an origin left behind for an area
+    // that was removed would be named in a log line for a size that is gone.
+    const image = compute(makeProject({ servers: modbusServer({ coils: { mxBits: 16 } }) }), {
+      areas: IMAGE_AREAS_BAREMETAL,
+    })
+    expect(image.sizes).toEqual({})
+    expect(image.origins).toEqual({})
+  })
+})
+
+describe('describeIoImageSizes', () => {
+  const modbusServer = (bufferMapping: unknown) => [
+    {
+      name: 'mb',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: true, networkInterface: '', port: 502, bufferMapping },
+    },
+  ]
+
+  it('says nothing about a project that sizes nothing', () => {
+    expect(describeIoImageSizes(compute(makeProject({})))).toEqual([])
+  })
+
+  it('names the area, the size, the unit and the source', () => {
+    const image = compute(makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 40 } }) }))
+    expect(describeIoImageSizes(image)).toEqual(['%QW sized to 40 words from Modbus server exposure'])
+  })
+
+  it('drops the plural for a single element', () => {
+    const image = compute(makeProject({}), { devicePinMapping: pins('%QW0') })
+    expect(describeIoImageSizes(image)).toEqual(['%QW sized to 1 word from address producers'])
+  })
+
+  it('follows the image.conf order rather than insertion order', () => {
+    // A reader goes down the log, the file and the runtime header in step, so
+    // the order here is IMAGE_TABLES'. %MW is claimed FIRST below and must
+    // still come last: it is the eleventh table and %IX is the first.
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('m', '%MW0')] }],
+        servers: modbusServer({ discreteInputs: { ixBits: 8 }, holdingRegisters: { qwCount: 2 } }),
+      }),
+    )
+    expect(describeIoImageSizes(image)).toEqual([
+      '%IX sized to 8 bits from Modbus server exposure',
+      '%QW sized to 2 words from Modbus server exposure',
+      '%MW sized to 1 word from memory declarations in the program',
+    ])
+  })
+
+  it('is stable across two runs of the same project', () => {
+    // FR07 reaches the log too: the same project must produce the same lines,
+    // or a user comparing two builds sees a difference that is not one.
+    const project = makeProject({
+      pous: [{ name: 'main', variables: [variable('m', '%MW3')] }],
+      servers: modbusServer({ coils: { qxBits: 24 } }),
+    })
+    expect(describeIoImageSizes(compute(project))).toEqual(describeIoImageSizes(compute(project)))
+  })
 })

@@ -510,6 +510,60 @@ describe('runCompilePipeline — I/O image gate', () => {
     expect(defines).toContain('#define MAX_MEMORY_WORD 0')
   })
 
+  it('says in the build log where each sized area came from', async () => {
+    // The size on its own is untraceable: three contributors can size an area
+    // and the image takes the largest, so %QW = 4 might be the program's
+    // producers or a Modbus config nobody has opened in a year. Naming the
+    // source is what stops the user guessing which one to change.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const lines = events.filter((e) => e.message.includes('sized to')).map((e) => e.message)
+    expect(lines).toEqual([
+      '%IX sized to 1 bit from address producers',
+      '%QW sized to 4 words from address producers',
+    ])
+  })
+
+  it('says nothing about sizes for a target that keeps its firmware defaults', async () => {
+    // v3 and the simulator are not sized, so a line here would describe an
+    // image neither of them receives.
+    //
+    // %MW7 and not an output address: memory is its own producer, so it sizes
+    // an area with no pins and no server in the project. An output would size
+    // nothing here whatever the gate did, and the test would pass without
+    // exercising it — which is exactly what it did before this comment.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MW7'),
+        isSimulator: false,
+        isRuntimeV3: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v3',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(events.filter((e) => e.message.includes('sized to'))).toEqual([])
+  })
+
   it('leaves the simulator defines.h without a process image block', async () => {
     // It keeps openplc.h's own fallbacks, so its defines.h is byte-identical
     // to what it was before any of this existed.

@@ -55,6 +55,7 @@ import {
   computeIoImage,
   describeDuplicateOutput,
   describeUnbackedLocation,
+  describeIoImageSizes,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,
@@ -478,6 +479,28 @@ async function runCompilePipelineInner(
       emit({ stage: 'validate', message: describeDuplicateOutput(issue), level: 'error' })
     }
     return bailError(emit, 'validate', 'Compilation aborted: every located variable needs an address that exists.')
+  }
+
+  // WHERE EACH NUMBER CAME FROM, not just what it is.
+  //
+  // Both emitters are downstream of here — the `#define` block for bare metal
+  // and `image.conf` for v4 — so this is the one place that serves both, the
+  // same reason the sizer itself is called here rather than in each branch.
+  //
+  // The size alone is untraceable. Three contributors can size an area and the
+  // image takes the largest, so `%QW = 1024` might be the program's producers
+  // or might be a Modbus slave config nobody has opened in a year, and which
+  // one it is decides what the user changes. That is sharpest for a project
+  // that came from somewhere else: it arrives with a `bufferMapping` and an
+  // `s7commSlaveConfig` already in it, and nothing in the editor says so.
+  //
+  // Info level and only for the targets that actually size: v3 and the
+  // simulator keep their firmware defaults, so a line here would describe an
+  // image neither of them receives.
+  if (sizesTheImage) {
+    for (const line of describeIoImageSizes(ioImage)) {
+      emit({ stage: 'validate', message: line, level: 'info' })
+    }
   }
 
   // ---------------------------------------------------------------------

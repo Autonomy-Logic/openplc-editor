@@ -68,6 +68,7 @@ import {
   extentForDataBlock,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,
+  IMAGE_TABLES,
   tableForKey,
 } from '../../../../middleware/shared/utils/io-image/tables'
 import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
@@ -94,6 +95,29 @@ import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
  * un-pad, and a project exposing six coils would have advertised eight.
  */
 export type IoImageSizes = Readonly<Record<string, number>>
+
+/**
+ * WHICH contributor set an area's number.
+ *
+ * Recorded because the number alone cannot be traced back. A project on disk
+ * carries producers, a Modbus slave config and an S7comm one all at once, and
+ * the image takes the largest of them per area — so "why is `%QW` 1024 here
+ * and 8 in the other project?" has three possible answers and today's build
+ * log gives none of them. Guessing is the failure mode this removes: the log
+ * says where each number came from, so the user changes the right thing.
+ *
+ * `'declarations'` is a MEMORY-ONLY origin, and the asymmetry is the rule
+ * itself. Memory is its own producer (BR14/FR24), so `AT %MW0 : ARRAY [0..9]`
+ * sizes `%MW` — without that, a program using scratch memory and no server
+ * would be handed zero memory words (BR15). An input or output declaration is
+ * checked AGAINST the image and never grows it (FR02), so it can never be the
+ * origin of a size.
+ */
+export type IoImageOrigin = 'producers' | 'modbus-server' | 's7comm-server' | 'declarations'
+
+/** What each sized area's number came from. A prefix absent from `sizes` is
+ *  absent here too — zero has no origin to name. */
+export type IoImageOrigins = Readonly<Record<string, IoImageOrigin>>
 
 /**
  * A located input or output declaration with no producer at its address —
@@ -169,6 +193,8 @@ export interface DuplicateOutput {
 
 export interface IoImage {
   sizes: IoImageSizes
+  /** Where each sized area's number came from. Same keys as `sizes`. */
+  origins: IoImageOrigins
   /** Empty when every input and output declaration is backed. */
   unbacked: UnbackedLocation[]
   /** Empty when every declaration names an area the target actually has. */
@@ -236,16 +262,35 @@ function directionOf(prefix: string): string {
   return prefix.charAt(1)
 }
 
+/** The running sizes and, for each one, who put it there. */
+interface SizeTally {
+  sizes: Record<string, number>
+  origins: Record<string, IoImageOrigin>
+}
+
 /**
- * Raise `sizes[prefix]` to `slots` if it is not already at least that.
+ * Raise `tally.sizes[prefix]` to `slots` if it is not already at least that,
+ * recording `origin` when it wins.
  *
  * No guard against a non-positive `slots`: the comparison against a default
  * of zero already declines it, so a zero or (hand-edited) negative count
  * leaves the prefix absent, which is how zero is expressed here anyway.
+ *
+ * STRICTLY greater, so a TIE leaves the earlier claimant named. That is a
+ * choice and not an accident: contributors are applied in a fixed order
+ * (producers, then Modbus, then S7comm, then memory declarations), so equal
+ * claims always resolve the same way and the log is as deterministic as the
+ * sizes are (FR07). Naming one
+ * of several equal claimants is honest -- it says which one the number is at
+ * least as large as -- and naming all of them would make the common case read
+ * like a conflict.
  */
-function claim(sizes: Record<string, number>, prefix: string, slots: number): void {
-  const current = sizes[prefix] ?? 0
-  if (slots > current) sizes[prefix] = slots
+function claim(tally: SizeTally, prefix: string, slots: number, origin: IoImageOrigin): void {
+  const current = tally.sizes[prefix] ?? 0
+  if (slots > current) {
+    tally.sizes[prefix] = slots
+    tally.origins[prefix] = origin
+  }
 }
 
 /** Mark slots `[from, from + count)` of `prefix` as having a producer. */
@@ -369,9 +414,9 @@ function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<numb
 function serverExposure(
   servers: PLCServer[] | undefined,
   serverCapabilities: ServerCapabilities,
+  tally: SizeTally,
   backed: Map<string, Set<number>>,
-): Record<string, number> {
-  const sizes: Record<string, number> = {}
+): void {
 
   // EVERY PROTOCOL, but still the FIRST server of each one.
   //
@@ -411,10 +456,8 @@ function serverExposure(
     ? list.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig)
     : undefined
 
-  if (modbus?.modbusSlaveConfig) modbusExposure(modbus.modbusSlaveConfig.bufferMapping, sizes, backed)
-  if (s7comm?.s7commSlaveConfig) s7commExposure(s7comm.s7commSlaveConfig, sizes, backed)
-
-  return sizes
+  if (modbus?.modbusSlaveConfig) modbusExposure(modbus.modbusSlaveConfig.bufferMapping, tally, backed)
+  if (s7comm?.s7commSlaveConfig) s7commExposure(s7comm.s7commSlaveConfig, tally, backed)
 }
 
 /**
@@ -440,7 +483,7 @@ function serverExposure(
  */
 function modbusExposure(
   mapping: ModbusBufferMapping | undefined,
-  sizes: Record<string, number>,
+  tally: SizeTally,
   backed: Map<string, Set<number>>,
 ): void {
   if (!mapping) return
@@ -465,7 +508,7 @@ function modbusExposure(
     // segment exists and is switched off, so it exposes nothing and sizes
     // nothing.
     if (count === undefined || count <= 0) continue
-    claim(sizes, prefix, count)
+    claim(tally, prefix, count, 'modbus-server')
     if (WRITABLE_BY_THE_MASTER.has(prefix)) markBacked(backed, prefix, 0, count)
   }
 }
@@ -497,7 +540,7 @@ function modbusExposure(
  */
 function s7commExposure(
   config: NonNullable<PLCServer['s7commSlaveConfig']>,
-  sizes: Record<string, number>,
+  tally: SizeTally,
   backed: Map<string, Set<number>>,
 ): void {
   const blocks: Array<{ mapping?: S7CommMappingLike; sizeBytes: number }> = [
@@ -549,7 +592,7 @@ function s7commExposure(
     // The Modbus path above may legitimately mark from zero: its segments
     // always start at IEC index 0. S7comm blocks do not, which is what
     // startBuffer is for.
-    claim(sizes, table.prefix, end)
+    claim(tally, table.prefix, end, 's7comm-server')
     if (serving) markBacked(backed, table.prefix, start, end - start)
   }
 }
@@ -634,20 +677,28 @@ function declaredSlotCount(variableType: PLCVariable['type'] | undefined): numbe
  */
 export function computeIoImage(input: ComputeIoImageInput): IoImage {
   const backed = new Map<string, Set<number>>()
-  const sizes: Record<string, number> = producerClaims(input, backed)
-
-  for (const [prefix, count] of Object.entries(
-    serverExposure(input.projectData.servers, input.serverCapabilities, backed),
-  )) {
-    claim(sizes, prefix, count)
+  // ORDER IS THE TIE-BREAK, and it is fixed here rather than anywhere else:
+  // producers, then the servers, then the memory declarations further down.
+  // `claim` only overwrites on a strictly larger number, so equal claims leave
+  // the earlier contributor named and the log never changes between two runs
+  // of the same project (FR07).
+  const tally: SizeTally = { sizes: {}, origins: {} }
+  for (const [prefix, count] of Object.entries(producerClaims(input, backed))) {
+    claim(tally, prefix, count, 'producers')
   }
+  serverExposure(input.projectData.servers, input.serverCapabilities, tally, backed)
+
+  const sizes = tally.sizes
 
   // A producer or a server can only have claimed an area the target has, but
   // project.json is a file on disk and a target switch moves the goalposts, so
   // never SIZE an area the runtime declares no buffer for — the emitters would
   // otherwise be asked for a macro or a table key that does not exist.
   for (const prefix of Object.keys(sizes)) {
-    if (!input.areas.has(prefix)) delete sizes[prefix]
+    if (!input.areas.has(prefix)) {
+      delete sizes[prefix]
+      delete tally.origins[prefix]
+    }
   }
 
   const unbacked: UnbackedLocation[] = []
@@ -722,7 +773,7 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
       // `AT %MW0 : ARRAY [0..10000000] OF WORD` inserted ten million Set
       // entries in the main process before the platform compiler ever got to
       // refuse the size.
-      claim(sizes, prefix, parsed.linear + slotCount)
+      claim(tally, prefix, parsed.linear + slotCount, 'declarations')
       continue
     }
 
@@ -750,7 +801,7 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     })
   }
 
-  return { sizes, unbacked, unsupported, duplicateOutputs }
+  return { sizes, origins: tally.origins, unbacked, unsupported, duplicateOutputs }
 }
 
 /**
@@ -822,4 +873,50 @@ export function describeUnsupportedArea(issue: UnsupportedArea, boardTarget: str
     `"${boardTarget}" has no ${issue.prefix} area at all — its runtime declares no buffer of that ` +
     'kind, so no address in it can be read or written. Use a different address area.'
   )
+}
+
+/** How each origin reads in the build log. Written out rather than derived
+ *  from the union member, because "modbus-server" is an identifier and the
+ *  log is read by someone who did not write it. */
+const ORIGIN_LABELS: Record<IoImageOrigin, string> = {
+  producers: 'address producers',
+  'modbus-server': 'Modbus server exposure',
+  's7comm-server': 'S7comm server exposure',
+  declarations: 'memory declarations in the program',
+}
+
+/**
+ * The sized areas, one line each, saying WHERE the number came from.
+ *
+ * This exists because the size on its own is untraceable. Three contributors
+ * can size an area and the image takes the largest, so a user looking at
+ * `%QW = 1024` cannot tell whether the program's producers need that much or
+ * whether a Modbus slave config nobody has opened in a year is holding the
+ * floor up — and the difference decides what they change. The number alone
+ * makes them guess; this says it.
+ *
+ * It matters most for a project that already exists on disk. A new project
+ * grows its producers under the user's eye, but an imported one arrives with a
+ * `bufferMapping` and an `s7commSlaveConfig` already in it, and that is
+ * exactly when "why is this area this big?" has no answer in the editor.
+ *
+ * IMAGE_TABLES ORDER, not insertion order and not alphabetical: the same
+ * order `image.conf` is written in and the runtime header declares, so a
+ * reader can go down the log, the file and the header in step. Areas that came
+ * out at zero are left out — they have no number to attribute, and listing all
+ * fourteen every build would bury the handful that carry something.
+ */
+export function describeIoImageSizes(image: IoImage): string[] {
+  return IMAGE_TABLES.filter((table) => (image.sizes[table.prefix] ?? 0) > 0).map((table) => {
+    const size = image.sizes[table.prefix]
+    const origin = image.origins[table.prefix]
+    /* istanbul ignore next -- `origins` is written by the same `claim` that
+       writes `sizes`, so a sized area always has one. Defensive because the
+       two are separate records: a future contributor that sets a size without
+       going through `claim` must not make the log lie about its source. */
+    const from = origin ? ORIGIN_LABELS[origin] : 'an unrecorded source'
+    // Every unit name is a plural noun, so one of anything drops the final s.
+    const unit = size === 1 ? table.unit.slice(0, -1) : table.unit
+    return `${table.prefix} sized to ${size} ${unit} from ${from}`
+  })
 }
