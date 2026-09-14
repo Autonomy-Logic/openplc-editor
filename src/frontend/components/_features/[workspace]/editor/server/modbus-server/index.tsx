@@ -638,15 +638,9 @@ const ModbusServerEditor = () => {
           </Panel>
 
           <Panel title='Buffer Mapping'>
-            <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-              {profile.configurableBuffers
-                ? 'How many addresses each IEC segment gets.'
-                : 'Sized by the firmware at compile time.'}
-            </p>
-
-            {!profile.configurableBuffers && !profile.derivedCounts && (
-              <p className='text-xs text-amber-700 dark:text-amber-400'>
-                This target reports no Modbus buffer sizes, so no address map can be shown.
+            {profile.configurableBuffers && (
+              <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                How many addresses each IEC segment gets.
               </p>
             )}
 

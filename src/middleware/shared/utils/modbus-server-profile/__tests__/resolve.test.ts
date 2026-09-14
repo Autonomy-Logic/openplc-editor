@@ -107,12 +107,12 @@ describe('resolveModbusServerProfile', () => {
       expect(profile.fixedPort).toBe(502)
     })
 
-    it('reports no buffer counts at all', () => {
-      // They are chosen by an MCU-family macro inside a header the build never
-      // reports back, and nothing in the project declares them. Sizing the I/O
-      // image, and therefore knowing its size, belongs to DOPE-615; this screen
-      // says so rather than showing a map it would be guessing at.
-      expect(profile.derivedCounts).toBeNull()
+    it('reports the counts the firmware compiles with', () => {
+      // Not an estimate: `init_mbregs` allocates the Modbus banks straight from
+      // the same MAX_* constants, so this is what the board answers on.
+      expect(profile.derivedCounts).toEqual({ QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 })
+      // Nothing in the project can move them, so there is no floor or ceiling
+      // to offer -- that arrives with DOPE-615.
       expect(profile.minCounts).toBeNull()
       expect(profile.maxCounts).toBeNull()
     })
@@ -186,7 +186,7 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile({ compiler: 'arduino-cli' })
     expect(profile.configurablePort).toBe(true)
     expect(profile.fixedPort).toBe(502)
-    expect(profile.derivedCounts).toBeNull()
+    expect(profile.derivedCounts).not.toBeNull()
   })
 
   it('treats the Simulator as a plc-server target so a v4 project keeps its config', () => {
@@ -222,5 +222,32 @@ describe('a baremetal board with no network hardware', () => {
   it('offers TCP to a split package that does ship one', () => {
     const withNetwork = arduinoBoard({ vpp: { screens: { Serial: {}, Network: {} } } })
     expect(resolveModbusServerProfile(withNetwork).transports).toEqual(['rtu', 'tcp'])
+  })
+})
+
+/**
+ * `openplc.h` carries two I/O size tables behind one `#if` on the MCU macro. The
+ * editor never compiles, so it reads the board's FQBN -- the same string
+ * arduino-cli takes `build.mcu` from.
+ */
+describe('the firmware size table a board compiles with', () => {
+  const counts = (platform?: string) => resolveModbusServerProfile(arduinoBoard({ platform }))?.derivedCounts
+
+  it('gives the four small AVRs the table with no Modbus memory at all', () => {
+    // `%MW`, `%MD` and `%ML` are 0 in that branch: an Uno serves none.
+    for (const platform of ['arduino:avr:uno', 'arduino:avr:nano', 'arduino:avr:leonardo', 'arduino:avr:micro']) {
+      expect(counts(platform)).toEqual({ QW: 32, MW: 0, MD: 0, ML: 0, QX: 32, MX: 0, IX: 8, IW: 6 })
+    }
+  })
+
+  it('gives the Mega the large table, though it shares the AVR core', () => {
+    // `core` alone cannot tell these apart -- both are `arduino:avr`.
+    expect(counts('arduino:avr:mega')).toEqual({ QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 })
+  })
+
+  it('gives every other board the large table, as the header does', () => {
+    for (const platform of ['esp32:esp32:esp32', 'rp2040:rp2040:rpipico', 'arduino:samd:mkrwifi1010', undefined]) {
+      expect(counts(platform)?.MW).toBe(20)
+    }
   })
 })
