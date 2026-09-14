@@ -25,8 +25,36 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
+
+_TRACKED_CACHE: dict[Path, set[str] | None] = {}
+
+
+def tracked_files(repo: Path) -> set[str] | None:
+    """Repo-relative paths git tracks, or None if `repo` is not a git repo.
+
+    The comparison is about what the two REPOSITORIES contain, not what happens
+    to be sitting in a working directory. Walking the filesystem meant a stale
+    ignored tree on a developer's machine failed the gate while CI passed --
+    resources/sources/MatIEC, gitignored and untracked since strucpp replaced
+    it, produced exactly that. Build output, .DS_Store and half-deleted
+    experiments are the same class of noise."""
+    repo = repo.resolve()
+    if repo in _TRACKED_CACHE:
+        return _TRACKED_CACHE[repo]
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "-z"],
+            capture_output=True, check=True,
+        ).stdout.decode()
+        result: set[str] | None = {p for p in out.split("\0") if p}
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Not a git repo, or no git available: fall back to the filesystem.
+        result = None
+    _TRACKED_CACHE[repo] = result
+    return result
 
 SURFACES = [
     "frontend",
@@ -66,7 +94,6 @@ MAPPED_SURFACES = [
         "editor_only_prefixes": [
             "avr-libstdcpp/",         # AVR toolchain ships no C++ stdlib
             "hal/",                   # ~30 per-board HALs; web simulates one
-            "MatIEC/",                # IEC compiler support library
             "show_properties_dummy/", # desktop sketch-probe stub
         ],
     },
@@ -96,11 +123,21 @@ def collect_hashes(root: Path, surface: str) -> dict[str, str]:
     base = root / surface
     if not base.exists():
         return {}
+    repo = root.parent
+    tracked = tracked_files(repo)
     result = {}
     for path in sorted(base.rglob("*")):
-        if path.is_file() and not is_test_file(path):
-            rel = str(path.relative_to(root))
-            result[rel] = hash_file(path)
+        if not path.is_file() or is_test_file(path):
+            continue
+        if tracked is not None:
+            try:
+                repo_rel = str(path.resolve().relative_to(repo.resolve()))
+            except ValueError:
+                continue
+            if repo_rel not in tracked:
+                continue
+        rel = str(path.relative_to(root))
+        result[rel] = hash_file(path)
     return result
 
 
@@ -129,16 +166,30 @@ def compare_surface(
     }
 
 
-def collect_all_hashes(base: Path, exts: list[str] | None = None) -> dict[str, str]:
-    """Hash every file under `base`, keyed by the path relative to `base`.
-    When `exts` is given, only files with one of those suffixes are included."""
+def collect_all_hashes(
+    base: Path, exts: list[str] | None = None, repo: Path | None = None
+) -> dict[str, str]:
+    """Hash every tracked file under `base`, keyed by the path relative to
+    `base`. When `exts` is given, only files with one of those suffixes are
+    included. Untracked and ignored files are skipped — see tracked_files()."""
     result = {}
     if not base.exists():
         return result
     ext_set = set(exts) if exts else None
+    tracked = tracked_files(repo) if repo is not None else None
     for path in sorted(base.rglob("*")):
-        if path.is_file() and not is_test_file(path) and (ext_set is None or path.suffix in ext_set):
-            result[str(path.relative_to(base))] = hash_file(path)
+        if not path.is_file() or is_test_file(path):
+            continue
+        if ext_set is not None and path.suffix not in ext_set:
+            continue
+        if tracked is not None:
+            try:
+                repo_rel = str(path.resolve().relative_to(repo.resolve()))
+            except ValueError:
+                continue
+            if repo_rel not in tracked:
+                continue
+        result[str(path.relative_to(base))] = hash_file(path)
     return result
 
 
@@ -152,8 +203,8 @@ def compare_mapped(web_repo: Path, editor_repo: Path, mapped: dict) -> dict:
     web_base = web_repo / mapped["web"]
     editor_base = editor_repo / mapped["editor"]
     exts = mapped.get("exts")
-    web_hashes = collect_all_hashes(web_base, exts)
-    editor_hashes = collect_all_hashes(editor_base, exts)
+    web_hashes = collect_all_hashes(web_base, exts, web_repo)
+    editor_hashes = collect_all_hashes(editor_base, exts, editor_repo)
 
     editor_only = tuple(mapped.get("editor_only_prefixes", ()))
 
