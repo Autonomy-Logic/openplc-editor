@@ -430,10 +430,10 @@ const Project = () => {
                 <ProjectTreeLeaf
                   leafLang='devOrchestrators'
                   leafType='device'
-                  label='Orchestrators'
+                  label='Edge Devices'
                   onClick={() =>
                     handleCreateTab({
-                      name: 'Orchestrators',
+                      name: 'Edge Devices',
                       path: `/device/orchestrators`,
                       elementType: { type: 'device', derivation: 'orchestrators' },
                     })
