@@ -8,8 +8,8 @@ Surfaces checked (same src-relative path in both repos):
   - backend/shared/    (application logic, use cases)
   - __architecture__/  (validation scripts)
 
-Mapped surfaces (different path per repo, compared by structure within
-the mapped base — see MAPPED_SURFACES):
+Mapped surfaces (different path per repo, compared BOTH WAYS within the
+mapped base, minus declared desktop-only trees — see MAPPED_SURFACES):
   - bare-metal-runtime  (editor: resources/sources/{arduino,Baremetal};
                          web:    src/assets/firmware/{arduino,Baremetal})
 
@@ -39,12 +39,19 @@ SURFACES = [
 # plain src-relative entry in SURFACES). `editor`/`web` are repo-root-relative
 # (the repo root is the parent of the --editor-root/--web-root src dirs).
 #
-# Checked ONE-WAY (web is a subset of the editor's tree): every file the web
-# bundle ships under `web` must be byte-identical to the editor's `editor`
-# tree at the same relative path. Editor-only files are NOT flagged — the
-# editor's resources/sources/hal/ also carries ~30 per-board HALs the web
-# bundle (AVR8js simulator only) does not ship. A content edit to any shared
-# runtime file still surfaces as a hash mismatch.
+# Checked BOTH WAYS. The editor's tree is a superset, but only in trees the
+# web bundle deliberately does not ship — those are listed in
+# `editor_only_prefixes` and anything outside them must exist on both sides.
+#
+# This used to be one-way ("web is a subset, so editor-only files are not
+# flagged"), which left a hole big enough to lose a file through: web's
+# Baremetal.ino `#include "udp_scan.h"` while web did not ship udp_scan.h, and
+# the gate stayed green because it only ever walked web's files looking for
+# them in the editor. A file DELETED from web, or one ADDED to the editor that
+# web also needs, was invisible.
+#
+# So the asymmetry is now declared rather than assumed. Adding a genuinely
+# desktop-only tree means adding it here, in a diff a reviewer sees.
 MAPPED_SURFACES = [
     {
         "name": "bare-metal-runtime",
@@ -54,6 +61,14 @@ MAPPED_SURFACES = [
         # its own bundler glue here (e.g. an index.ts that imports the sources
         # as strings) which the editor does not have.
         "exts": [".cpp", ".hpp", ".c", ".h", ".ino"],
+        # Editor-only by design. Each is a desktop-compile concern the web
+        # bundle (AVR8js simulator) has no use for:
+        "editor_only_prefixes": [
+            "avr-libstdcpp/",         # AVR toolchain ships no C++ stdlib
+            "hal/",                   # ~30 per-board HALs; web simulates one
+            "MatIEC/",                # IEC compiler support library
+            "show_properties_dummy/", # desktop sketch-probe stub
+        ],
     },
 ]
 
@@ -128,25 +143,39 @@ def collect_all_hashes(base: Path, exts: list[str] | None = None) -> dict[str, s
 
 
 def compare_mapped(web_repo: Path, editor_repo: Path, mapped: dict) -> dict:
-    """One-way check: every (filtered) file the web bundle ships under
-    `mapped['web']` must exist and be byte-identical in the editor tree at
-    `mapped['editor']`. Editor-only files are not flagged (web ships a
-    subset)."""
+    """Two-way check over the mapped trees.
+
+    Every (filtered) file must exist on both sides and be byte-identical,
+    EXCEPT editor files under one of `editor_only_prefixes` — trees the web
+    bundle deliberately does not ship. Everything else being symmetric is what
+    stops a file going missing on one side unnoticed."""
     web_base = web_repo / mapped["web"]
     editor_base = editor_repo / mapped["editor"]
-    web_hashes = collect_all_hashes(web_base, mapped.get("exts"))
+    exts = mapped.get("exts")
+    web_hashes = collect_all_hashes(web_base, exts)
+    editor_hashes = collect_all_hashes(editor_base, exts)
+
+    editor_only = tuple(mapped.get("editor_only_prefixes", ()))
 
     diffs = []
-    for rel, h in sorted(web_hashes.items()):
-        editor_path = editor_base / rel
-        if not editor_path.is_file():
+    for rel in sorted(set(web_hashes) | set(editor_hashes)):
+        in_web = rel in web_hashes
+        in_editor = rel in editor_hashes
+        if in_web and not in_editor:
             diffs.append({"file": rel, "reason": "only_in_web"})
-        elif hash_file(editor_path) != h:
+        elif in_editor and not in_web:
+            # Declared desktop-only trees are the one legitimate asymmetry.
+            if rel.startswith(editor_only):
+                continue
+            diffs.append({"file": rel, "reason": "only_in_editor"})
+        elif web_hashes[rel] != editor_hashes[rel]:
             diffs.append({"file": rel, "reason": "hash_mismatch"})
 
+    checked = len(set(web_hashes) | {r for r in editor_hashes
+                                     if not r.startswith(editor_only)})
     return {
         "match": len(diffs) == 0,
-        "files_checked": len(web_hashes),
+        "files_checked": checked,
         "diffs": diffs,
         "mapped": {"editor": mapped["editor"], "web": mapped["web"]},
     }
