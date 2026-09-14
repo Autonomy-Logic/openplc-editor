@@ -72,6 +72,26 @@ export function clipSymbolsToWindow(symbols: LspDocumentSymbol[], lineWindow?: L
 }
 
 /**
+ * The leaf symbols the window leaves out above it. A container reaching
+ * into the window (the POU wrapping a body editor's slice) is not itself
+ * an entry, and neither is one holding earlier children: their leaves
+ * are. Body editors list these as bound outline entries.
+ */
+export function symbolsBeforeWindow(symbols: LspDocumentSymbol[], lineWindow: LspLineWindow): LspDocumentSymbol[] {
+  const before: LspDocumentSymbol[] = []
+  for (const sym of symbols) {
+    if (sym.range.start.line >= lineWindow.startLine) continue
+    if (sym.children && sym.children.length > 0) {
+      before.push(...symbolsBeforeWindow(sym.children, lineWindow))
+      continue
+    }
+    if (sym.range.end.line >= lineWindow.startLine) continue
+    before.push(sym)
+  }
+  return before
+}
+
+/**
  * True when the model's rendering of the window matches the LSP
  * document's own lines. Formatting edits carry columns computed
  * against the LSP document, so a drifted buffer must not apply them.
@@ -90,4 +110,22 @@ export function modelMatchesDocumentWindow(
     if (modelLines[modelStart + i] !== documentLines[lineWindow.startLine + i]) return false
   }
   return true
+}
+
+/**
+ * Per-line form of {@link modelMatchesDocumentWindow}: true for the LSP
+ * lines whose text the model still shows unchanged. Semantic tokens carry
+ * their own line, so an edit only has to cost the lines it moved.
+ */
+export function modelMatchesDocumentLines(
+  modelText: string,
+  documentText: string,
+  lineOffset: number,
+): (lspLine: number) => boolean {
+  const modelLines = modelText.split(/\r?\n/)
+  const documentLines = documentText.split(/\r?\n/)
+  return (lspLine) => {
+    const modelLine = lspLine - lineOffset
+    return modelLine >= 0 && modelLines[modelLine] === documentLines[lspLine]
+  }
 }

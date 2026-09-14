@@ -30,15 +30,18 @@
 import { getIecVariableLineMap } from '../../utils/generate-iec-variables-to-string'
 import { generatePythonLspPreamble, type PythonLspPreamble } from '../../utils/python/generatePythonLspPreamble'
 import {
+  createLspDocumentMirror,
   deleteBodyLineOffset,
   getBodyLineOffset,
   type LanguageService,
-  lspLocationsToMonaco,
+  lspMirrorUri,
+  lspRangeToMonaco,
+  type NavigateToTarget,
+  registerDefinitionOpener,
   setBodyLineOffset,
   startLanguageService,
-  suppressNoDefinitionFound,
 } from '../lsp-shared'
-import { redirectPythonDefinitionToStore } from './goto-definition-redirect'
+import { redirectPythonNavTarget } from './goto-definition-redirect'
 import type { PythonLspService, PythonLspStartOptions } from './types'
 
 const PYTHON_LANGUAGE_ID = 'python'
@@ -96,6 +99,23 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
     return preamble.text + body
   }
 
+  // Every document Pyright sees, as a model Monaco can preview.
+  const mirror = monacoApi ? createLspDocumentMirror(monacoApi) : null
+
+  // Activation-time navigation: a preamble target crosses into the IEC
+  // variables text through the entry's maps, a body target lands in the body.
+  const navigateToStore: NavigateToTarget = (target) => {
+    const entry = [...entryByUri.values()].find((e) => e.lspUri === target.uri)
+    if (!entry) return false
+    return redirectPythonNavTarget(target, {
+      sourceUri: entry.lspUri,
+      sourcePouName: entry.pouName,
+      variableNameByPreambleLine: entry.preamble.variableNameByPreambleLine,
+      iecVariableLineMap: entry.iecVariableLineMap,
+    })
+  }
+  const opener = monacoApi ? registerDefinitionOpener(monacoApi, navigateToStore) : null
+
   const sharedService: LanguageService = startLanguageService({
     languageId: PYTHON_LANGUAGE_ID,
     workerName: PYTHON_WORKER_NAME,
@@ -124,67 +144,23 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
     },
     resolveDiagnosticsModelUri: modelUriFor,
 
-    // Go-to-definition routing.  Two layers, in order:
-    //
-    //   1. **Store redirect** (`redirectPythonDefinitionToStore`):
-    //      for targets in the source URI's preamble, open the POU
-    //      tab, switch the variables panel to code mode, and place
-    //      the variables-code-editor cursor at the declaration.
-    //      Mirrors the ST LSP's `redirectDefinitionToStore`.  Body
-    //      targets in the same URI route through `routeToPouBody`
-    //      so the navigation goes through the store and the tab
-    //      list stays consistent.
-    //
-    //   2. **URI-reachability filter** (fallback):
-    //
-    //        - Click on a stdlib name (`print`, `os.path`, …) →
-    //          Pyright returns a Location targeting the bundled
-    //          typeshed (`file:///typeshed/stdlib/builtins.pyi`).
-    //          Monaco has no model for that URI, so opening the
-    //          peek widget throws `Model not found` and crashes
-    //          the renderer.  Drop those before they reach Monaco.
-    //        - Anything that survives the drop is a navigable
-    //          in-model target the redirect didn't claim — hand it
-    //          to Monaco unchanged.
-    //
-    // Returning `suppressNoDefinitionFound` keeps Monaco quiet
-    // (no banner, no peek) when there's nowhere navigable to go.
-    definitionInterceptors: [
-      (locations, model, position, monacoApi) => {
-        const modelUri = model.uri.toString()
-        const entry = entryByUri.get(modelUri)
-
-        // Pyright's Locations come back with the LSP URI (model URI
-        // + `.py`).  Compare against entry.lspUri inside the
-        // redirect so the "same document?" check matches; the
-        // routeTo* helpers only need the POU name + IEC line/col
-        // they get from the maps.
-        if (entry) {
-          for (const loc of locations) {
-            const handled = redirectPythonDefinitionToStore(loc, {
-              sourceUri: entry.lspUri,
-              sourcePouName: entry.pouName,
-              variableNameByPreambleLine: entry.preamble.variableNameByPreambleLine,
-              iecVariableLineMap: entry.iecVariableLineMap,
-            })
-            if (handled) return suppressNoDefinitionFound(model, position, monacoApi)
-          }
-        }
-
-        // Nothing redirectable.  Fall back to filtering out targets
-        // Monaco can't open (typeshed stubs, external imports).
-        // Pyright reports targets in LSP-URI space (with `.py`); the
-        // model lookup needs the extension-less Monaco model URI.
-        const navigable = locations.filter((loc) =>
-          monacoApi.editor.getModels().some((m) => m.uri.toString() === modelUriFor(loc.uri)),
-        )
-
-        if (navigable.length === 0) {
-          return suppressNoDefinitionFound(model, position, monacoApi)
-        }
-        return lspLocationsToMonaco(navigable, monacoApi) ?? null
-      },
-    ],
+    // Go-to-definition targets.  Pyright answers in LSP-URI space (model
+    // URI + `.py`).  A body target stays in the source model; a preamble
+    // target resolves to the document mirror, so the preview shows the
+    // declaration Pyright saw; anything outside the source document
+    // (typeshed stubs, external imports) is dropped — Monaco has no
+    // model for it, and Python POUs are single-document.  Navigation
+    // runs from `navigateToStore` on activation only.
+    mapDefinitionLocation: (loc, source) => {
+      const entry = entryByUri.get(source.modelUri)
+      if (!entry || loc.uri !== entry.lspUri) return null
+      const bodyOffset = getBodyLineOffset(entry.lspUri)
+      if (loc.range.start.line >= bodyOffset) {
+        return { uri: source.modelUri, range: lspRangeToMonaco(loc.range, bodyOffset) }
+      }
+      return { uri: lspMirrorUri(loc.uri), range: lspRangeToMonaco(loc.range, 0) }
+    },
+    navigateOutline: navigateToStore,
 
     markerOwner: MARKER_OWNER,
     diagnosticSource: DIAGNOSTIC_SOURCE,
@@ -322,12 +298,16 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       entryByUri.set(uri, { pouName, lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
       void pyrightConnection?.sendNotification('pyright/createFile', { kind: 'create', uri: lspUri })
-      sharedService.openDocument(lspUri, augmentedDocument(uri, bodyText))
+      const text = augmentedDocument(uri, bodyText)
+      mirror?.set(lspUri, text)
+      sharedService.openDocument(lspUri, text)
     },
 
     notifyBodyChange(uri, bodyText) {
       const lspUri = lspUriFor(uri)
-      sharedService.changeDocument(lspUri, augmentedDocument(uri, bodyText))
+      const text = augmentedDocument(uri, bodyText)
+      mirror?.set(lspUri, text)
+      sharedService.changeDocument(lspUri, text)
     },
 
     notifyVariablesChange(uri, variables, bodyText, dataTypes = []) {
@@ -344,7 +324,9 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       const iecVariableLineMap = getIecVariableLineMap(variables)
       entryByUri.set(uri, { pouName: existing?.pouName ?? '', lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
-      sharedService.changeDocument(lspUri, augmentedDocument(uri, bodyText))
+      const text = augmentedDocument(uri, bodyText)
+      mirror?.set(lspUri, text)
+      sharedService.changeDocument(lspUri, text)
     },
 
     detachPou(uri) {
@@ -352,6 +334,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       // file from pyright's in-memory FS so the workspace member
       // count returns to zero when no Python POU is open.
       const lspUri = lspUriFor(uri)
+      mirror?.delete(lspUri)
       sharedService.closeDocument(lspUri)
       void pyrightConnection?.sendNotification('pyright/deleteFile', { kind: 'delete', uri: lspUri })
       entryByUri.delete(uri)
@@ -359,6 +342,8 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
     },
 
     dispose() {
+      opener?.dispose()
+      mirror?.dispose()
       sharedService.dispose()
       entryByUri.clear()
     },
