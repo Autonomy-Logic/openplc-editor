@@ -30,6 +30,9 @@ interface RegistryCache {
 // rebuilds and replaces the cache. Single-entry is enough because the
 // inputs together identify a single canonical registry — there's
 // nothing to keep around from prior states.
+/** Shared empty array, so "this board has no pins" keeps a stable identity. */
+const NO_PINS: DevicePin[] = []
+
 let cache: RegistryCache | null = null
 
 export function useAliasRegistry(): AliasRegistry {
@@ -39,7 +42,15 @@ export function useAliasRegistry(): AliasRegistry {
   // contribute claims to the address pool.
   const pinsByBoard = useOpenPLCStore((s) => s.deviceDefinitions.pinMapping.pinsByBoard)
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
-  const pins = pinsByBoard[deviceBoard] ?? []
+  /* A module-level constant, not `?? []`. A fresh array literal on every render
+   * makes `cache.pins === pins` false for any board with no pin-mapping bucket,
+   * so the registry rebuilds for every cell consuming it no matter what the
+   * other three keys do — defeating the cache this hook is built around, and
+   * independently of the board-info key added below.
+   *
+   * The overlap with the producer resolver is what makes it worth fixing here:
+   * a board that does not resolve is exactly the state with no bucket. */
+  const pins = pinsByBoard[deviceBoard] ?? NO_PINS
   const vsd = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const remoteDevices = useOpenPLCStore((s) => s.project.data.remoteDevices)
   // NOT `useTargetCapabilities`, which answers "no producers at all" for a
