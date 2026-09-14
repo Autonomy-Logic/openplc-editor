@@ -450,6 +450,14 @@ async function runCompilePipelineInner(
     // that declares nothing, which reads as "no producers at all" and would
     // size every area to zero and then refuse the build.
     capabilities: resolveAddressProducerCapabilities(boardEntry),
+    // The STRICT resolver here, unlike the producer one above, and the
+    // difference is deliberate. For producers, a board that does not resolve
+    // has to read as permissive or the store and the compiler disagree about
+    // which addresses are taken. For servers the safe direction is the other
+    // way: a target we cannot place has not been shown to run any server, and
+    // sizing the firmware from a config it may never receive is the failure
+    // this scoping exists to prevent.
+    serverCapabilities: resolveTargetCapabilities(boardEntry),
     areas: isRuntimeV4 ? IMAGE_AREAS_RUNTIME_V4 : IMAGE_AREAS_BAREMETAL,
   })
 

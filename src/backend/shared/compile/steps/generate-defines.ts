@@ -36,12 +36,20 @@ export type { VppModbusScreenState } from './modbus-defines'
  * `IMAGE_AREAS_BAREMETAL` refuses a declaration in one of those areas before
  * the build gets here, which is what keeps the two lists in step.
  *
- * THE UNIT IS BITS FOR THE TWO BIT AREAS, and that is the opposite of
- * `image.conf` for Runtime v4, whose BOOL tables count bytes. The difference
- * is real and lives in the declarations: bare metal writes
- * `bool_input[MAX_DIGITAL_INPUT/8][8]` and divides here, while the runtime
- * writes `bool_input[BUFFER_SIZE][8]` and does not. Each emitter therefore
- * states its own unit rather than sharing a "converted" number.
+ * THE UNIT IS BITS FOR THE TWO BIT AREAS, and so is `image.conf`'s. The two
+ * emitters do NOT differ in unit -- both carry the unit the addresses use --
+ * they differ in PADDING, and only this one pads.
+ *
+ * Bare metal declares `bool_input[MAX_DIGITAL_INPUT/8][8]` and divides, so a
+ * count that is not a whole number of bytes rounds down in the firmware and
+ * the slots of the partial byte become unaddressable. Runtime v4 receives the
+ * exact figure and converts on its own side, where it knows the storage shape,
+ * and the Modbus config derives exact coil counts from it.
+ *
+ * Getting this backwards is how a factor of eight appears the next time either
+ * emitter is edited, which is the specific thing splitting them was meant to
+ * prevent: a comment claiming a unit difference where only a padding
+ * difference exists reads as an instruction to convert.
  */
 /* The nine macros bare metal declares, and the order it declares them in,
  * both derived from the one table list. Filtering that list to the entries

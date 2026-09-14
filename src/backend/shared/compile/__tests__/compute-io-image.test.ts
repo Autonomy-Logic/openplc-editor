@@ -11,6 +11,7 @@
 import type { DevicePin } from '@root/middleware/shared/ports/types'
 import type { AddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
+import { getArrayTotalElements } from '@root/frontend/utils/PLC/array-codegen-helpers'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 import {
   computeIoImage,
@@ -112,10 +113,16 @@ const modbusMaster = (...addresses: string[]) => [
 
 /** Runtime v4's area set unless a case says otherwise: it is the wider of the
  *  two, so a case about sizing is not accidentally also a case about areas. */
+/** A target that runs every server, which is what the exposure cases assume. */
+const ALL_SERVERS = { modbusTcpServer: true, opcuaServer: true, s7Server: true }
+/** A target that runs none — bare metal, and what a retargeted project meets. */
+const NO_SERVERS = { modbusTcpServer: false, opcuaServer: false, s7Server: false }
+
 const compute = (projectData: PLCProjectData, extra: Partial<Parameters<typeof computeIoImage>[0]> = {}) =>
   computeIoImage({
     projectData,
     capabilities: ALL_ACTIVE,
+    serverCapabilities: ALL_SERVERS,
     areas: IMAGE_AREAS_RUNTIME_V4,
     ...extra,
   })
@@ -337,6 +344,47 @@ describe('computeIoImage — server exposure', () => {
       }),
     )
     expect(image.sizes).toEqual({})
+  })
+
+  it('sizes NOTHING from a server the target does not run', () => {
+    // A server config outlives a target change: retarget from Runtime v4 to a
+    // bare-metal board and `servers` stays in project.json, hidden in the UI
+    // rather than removed. bufferMapping only reaches a device through
+    // generateRuntimeConfs, which runs under isRuntimeV4 alone — so sizing
+    // from it here hands the firmware MAX_* macros derived from a slave
+    // config that board will never run.
+    const image = compute(makeProject({ servers: serverWith({ holdingRegisters: { qwCount: 1024 } }) }), {
+      serverCapabilities: NO_SERVERS,
+      areas: IMAGE_AREAS_BAREMETAL,
+    })
+    expect(image.sizes).toEqual({})
+  })
+
+  it('does not BACK an address for a server the target does not run', () => {
+    // The worse half. markBacked would make the phantom exposure vouch for
+    // those addresses, so an output declaration would pass the BR14 gate on a
+    // target where nothing whatsoever produces it.
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('v', '%QW0')] }],
+        servers: serverWith({ holdingRegisters: { qwCount: 16 } }),
+      }),
+      { serverCapabilities: NO_SERVERS, areas: IMAGE_AREAS_BAREMETAL },
+    )
+    expect(image.unbacked).toHaveLength(1)
+    expect(image.unbacked[0].location).toBe('%QW0')
+  })
+
+  it('still sizes and backs when the target does run the server', () => {
+    // The control: the scoping must not break the ordinary case.
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('v', '%QW0')] }],
+        servers: serverWith({ holdingRegisters: { qwCount: 16 } }),
+      }),
+    )
+    expect(image.sizes).toEqual({ '%QW': 16 })
+    expect(image.unbacked).toEqual([])
   })
 
   it('takes the same server the config emitter takes', () => {
@@ -568,6 +616,49 @@ describe('computeIoImage — S7comm exposure', () => {
       makeProject({ servers: s7Server([block('int_output', 0, 8), block('int_output', 50, 8)]) }),
     )
     expect(image.sizes).toEqual({ '%QW': 54 })
+  })
+
+  it('sizes and backs NOTHING when the target does not run an S7 server', () => {
+    // The same scoping the Modbus path gets, and for the same reason: an
+    // s7commSlaveConfig outlives a target change and is never removed from
+    // project.json, so a bare-metal board would otherwise be sized from a
+    // config it will never receive — and the block would VOUCH for %IW2,
+    // letting the declaration past the BR14 gate with no producer anywhere.
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('v', '%IW2')] }],
+        servers: s7Server([block('int_input', 0, 16)]),
+      }),
+      { serverCapabilities: NO_SERVERS, areas: IMAGE_AREAS_BAREMETAL },
+    )
+    expect(image.sizes).toEqual({})
+    expect(image.unbacked).toHaveLength(1)
+    expect(image.unbacked[0].location).toBe('%IW2')
+  })
+
+  it('scopes the two protocols independently', () => {
+    // One flag per protocol, not one flag for "servers": a Runtime v4 target
+    // that speaks Modbus but not S7 must size from the Modbus config and
+    // ignore the S7 one, rather than all-or-nothing on either.
+    const image = compute(
+      makeProject({
+        servers: [
+          {
+            name: 'mb',
+            protocol: 'modbus-tcp',
+            modbusSlaveConfig: {
+              enabled: true,
+              networkInterface: '',
+              port: 502,
+              bufferMapping: { holdingRegisters: { qwCount: 16 } },
+            },
+          },
+          ...s7Server([block('int_input', 0, 16)]),
+        ],
+      }),
+      { serverCapabilities: { modbusTcpServer: true, opcuaServer: false, s7Server: false } },
+    )
+    expect(image.sizes).toEqual({ '%QW': 16 })
   })
 
   it('BACKS an input block, unlike Modbus', () => {
@@ -923,6 +1014,44 @@ describe('the messages', () => {
     expect(message).toContain('"Arduino Uno" has no %MX area at all')
     // Different remedy from the unbacked message: no producer would help.
     expect(message).not.toContain('nothing produces')
+  })
+})
+
+describe('computeIoImage — an array whose lower bound is negative', () => {
+  // IEC allows it, and the editor already reserves slots for one through
+  // `parseDimensionRange` -> `slotsClaimedBy`. A second parser here rejected
+  // the minus sign and fell back to a single slot, so the validator and the
+  // sizer disagreed about the same declaration: eleven words reserved in the
+  // editor, one word sized in the image, and eleven written into it.
+
+  /** A project whose one POU declares `array`. */
+  const withArray = (array: PLCVariable) =>
+    compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
+
+  it('counts every element of ARRAY [-5..5]', () => {
+    expect(withArray(arrayVar('v', '%MW0', -5, 5)).sizes).toEqual({ '%MW': 11 })
+  })
+
+  it('counts an array that is entirely negative', () => {
+    expect(withArray(arrayVar('v', '%MW0', -10, -1)).sizes).toEqual({ '%MW': 10 })
+  })
+
+  it('agrees with the editor about how many slots it claims', () => {
+    // The two answers that used to differ, asserted against each other: the
+    // editor reserved eleven and this sized one.
+    expect(withArray(arrayVar('v', '%MW0', -5, 5)).sizes['%MW']).toBe(
+      getArrayTotalElements(arrayVar('v', '%MW0', -5, 5)),
+    )
+  })
+
+  it('checks the whole extent against the producers on an output', () => {
+    // The gate half: with only the base slot checked, a declaration whose tail
+    // ran past every producer passed.
+    const image = compute(makeProject({ pous: [{ name: 'main', variables: [arrayVar('v', '%QW0', -2, 2)] }] }), {
+      devicePinMapping: pins('%QW0', '%QW1'),
+    })
+    expect(image.unbacked).toHaveLength(1)
+    expect(image.unbacked[0].slotCount).toBe(5)
   })
 })
 

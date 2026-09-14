@@ -24,16 +24,22 @@
  * are fourteen, and the set has one asymmetry worth knowing: `byte_input` and
  * `byte_output` exist but there is no `byte_memory`, so `%MB` has no storage.
  *
- * THE UNIT IS THE TABLE'S OWN, WHICH IS NOT ALWAYS THE ADDRESS'S
+ * THE UNIT IS THE ADDRESS'S OWN, AND IT TRAVELS WITH THE NUMBER
  * -------------------------------------------------------------
- * Every value is a count of that table's elements — how long the runtime has
- * to make the array. For eleven tables that is the same as the number of
- * addresses (`int_memory[N]` holds N `%MW`s). For the three BOOL tables it is
- * not: they are declared `IEC_BOOL *table[N][8]`, so N is a count of BYTES
- * while `%QX` addresses bits. A bits-for-bytes mixup here would produce an
- * image eight times too small and no diagnostic anywhere, so the conversion is
- * done once, here, and asserted in the tests. Sizes arrive as multiples of 8
- * (FR06), which is what makes the division exact.
+ * Every value carries the unit the addresses of that table use, as a word:
+ * `int_output=4 words`, `bool_output=6 bits`. Nothing here converts anything.
+ *
+ * The three BOOL tables are the reason the unit is written down at all. Their
+ * STORAGE is `IEC_BOOL *table[N][8]`, so N counts bytes, while `%QX` addresses
+ * bits — the one place where a table's storage unit and its address unit
+ * differ. This file emits bits and the runtime divides, once, where the
+ * storage shape is known. A value read in the wrong unit is an image eight
+ * times too small with no diagnostic on either side, which is what the unit
+ * word exists to make impossible.
+ *
+ * Nothing pads either: the sizer reports a raw high-water mark. FR06's
+ * multiple-of-8 rule belongs to `generate-defines.ts`, the only consumer that
+ * declares `bool_input[MAX/8][8]` and divides.
  *
  * WHY EVERY KEY IS WRITTEN, INCLUDING ZEROS
  * -----------------------------------------
