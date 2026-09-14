@@ -62,11 +62,39 @@ function filesThatBuildAPool(): string[] {
     .filter((path) => !path.includes(join('utils', 'iec-address')))
 }
 
+/**
+ * The pool builders, by name.
+ *
+ * THE EXACT SET AND NOT A COUNT, which a `>=` guard cannot give. With nine
+ * files found and a floor of eight, one file that quietly stops matching --
+ * renamed helper, a builder moved behind an indirection -- leaves that file
+ * unchecked by every assertion below while the suite stays green. That is the
+ * silent pass this guard exists to prevent, one level down from where it was
+ * looking.
+ *
+ * Failing on an ADDITION is the point rather than the cost. A new pool builder
+ * is exactly the event this suite is here for, and the failure names the file
+ * and asks its author to confirm it resolves the producer way. Updating this
+ * list is one line, and it is the moment the question gets asked.
+ */
+const POOL_BUILDERS = [
+  join('src', 'backend', 'shared', 'compile', 'steps', 'compute-io-image.ts'),
+  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'configuration', 'components', 'pin-mapping-table.tsx'),
+  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'configuration', 'vendor-screen', 'layouts', 'io-table-layout.tsx'),
+  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'configuration', 'vendor-screen', 'layouts', 'module-slots-layout.tsx'),
+  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'ethercat', 'ethercat-device-editor.tsx'),
+  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'ethercat', 'index.tsx'),
+  join('src', 'frontend', 'hooks', 'use-alias-registry.ts'),
+  join('src', 'frontend', 'hooks', 'use-device-configuration.ts'),
+  join('src', 'frontend', 'store', 'slices', 'project', 'slice.ts'),
+]
+
 describe('address pools are scoped by the producer resolver', () => {
-  it('finds the pool builders at all', () => {
-    // A guard on the guard: a rename that makes the grep match nothing would
-    // otherwise turn this whole suite into a silent pass.
-    expect(filesThatBuildAPool().length).toBeGreaterThanOrEqual(8)
+  it('finds exactly the pool builders it is meant to', () => {
+    // A guard on the guard: a rename that makes the matcher match nothing --
+    // or one file fewer -- would otherwise turn this whole suite into a
+    // silent pass.
+    expect(filesThatBuildAPool().sort()).toEqual([...POOL_BUILDERS].sort())
   })
 
   it.each(filesThatBuildAPool())('%s never resolves capabilities strictly', (path) => {
