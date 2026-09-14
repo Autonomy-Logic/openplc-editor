@@ -267,9 +267,10 @@ const BAREMETAL_DEFAULT_TCP_PORT = 502
  * without Modbus configured.
  *
  * Defaults are applied per-field when the persisted state lacks the
- * value (see comment on `RTU_DEFAULTS` above for the rationale). The
- * `enable_*` gates remain authoritative — defaults only kick in for
- * fields under an active section.
+ * value (see the comment on `TCP_DEFAULTS` above for the rationale; the
+ * RTU side resolves through `middleware/shared`, which the screen calls
+ * too). The `enable_*` gates remain authoritative — defaults only kick
+ * in for fields under an active section.
  *
  * The output always ends with a trailing newline so callers can
  * concatenate without adding their own.
