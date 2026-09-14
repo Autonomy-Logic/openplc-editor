@@ -21,9 +21,9 @@ resolve differently here than it does for Runtime v4.
 #include <Arduino.h>
 
 #include <open62541.h>
+#include <open62541_arduino.h>
 
 #include "opcua_nodes.h"
-#include "opcua_nodestore.h"
 #include "opcua_log.h"
 #include "opcua_types.h"
 
@@ -110,7 +110,7 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
     {
         // The value was read from the PLC just now, so "now" is honest — even
         // though the wall clock itself is a build epoch plus uptime on a part
-        // with no RTC (see opcua_arch.cpp).
+        // with no RTC (see the library's clock).
         value->sourceTimestamp = UA_DateTime_now();
         value->hasSourceTimestamp = true;
     }
@@ -187,7 +187,7 @@ bool any_role_may_write(uint8_t perms)
  * so the ziptree's per-node RAM was paying to store something already `const`.
  * Measured: 476 B of arena per node, 19,032 B for 40 nodes, and a Browse over
  * 40 nodes then failed with BadOutOfMemory because the arena had nothing
- * contiguous left. These functions let opcua_nodestore.cpp hand open62541 a
+ * contiguous left. These functions let the flash nodestore hand open62541 a
  * node built on demand into a small fixed pool instead.
  * ------------------------------------------------------------------------- */
 
@@ -351,7 +351,28 @@ UA_StatusCode opcua_nodes_populate(UA_Server* server, UA_UInt16* out_ns_index)
     // namespace index is known. Namespace zero has already been built into the
     // inner store during server creation and is carried over untouched.
     UA_ServerConfig* cfg = UA_Server_getConfig(server);
-    UA_Nodestore* flash = opcua_nodestore_new(cfg->nodestore, ns);
+
+    // The library owns the mechanism -- keep nodes in flash, materialise into
+    // a small pool, delegate everything outside our namespace. What is ours is
+    // the table it reads, which the project generator emitted.
+    UA_Arduino_FlashNodeSource source;
+    source.materialise = [](UA_UInt16 nsIdx, UA_UInt32 numericId,
+                            UA_VariableNode* out, void*) -> bool {
+        return opcua_nodes_materialise((UA_UInt16)numericId, nsIdx, out);
+    };
+    source.dematerialise = [](UA_VariableNode* node, void*) {
+        opcua_nodes_dematerialise(node);
+    };
+    source.count = [](void*) -> UA_UInt16 { return opcua_nodes_count(); };
+    source.idAt  = [](UA_UInt16 index, void*) -> UA_UInt32 {
+        return (UA_UInt32)opcua_nodes_id_at(index);
+    };
+    source.namespaceIndex = ns;
+    source.context        = nullptr;
+
+    UA_Nodestore* flash = UA_Nodestore_newFlash(&source, cfg->nodestore,
+                                                cfg->logging,
+                                                OPCUA_NODE_POOL_SLOTS);
     if (flash == nullptr)
         return UA_STATUSCODE_BADOUTOFMEMORY;
     cfg->nodestore = flash;

@@ -31,10 +31,9 @@ Design notes that outlive the skeleton:
 #if OPCUA_ENABLED
 
 #include <open62541.h>
+#include <open62541_arduino.h>
 
-#include "opcua_arena.h"
 #include "opcua_log.h"
-#include "opcua_arch.h"
 #include "baremetal_net.h"
 #include "opcua_auth.h"
 #include "opcua_nodes.h"
@@ -70,6 +69,23 @@ Design notes that outlive the skeleton:
 #endif
 
 namespace {
+
+/** The server's heap.
+ *
+ *  Sized by the project's OPC-UA screen (OPCUA_ARENA_SIZE) and handed to the
+ *  library at init. Static at file scope, so it is a link-time reservation:
+ *  an over-budget project fails to link on the developer's machine rather
+ *  than exhausting at runtime on the device. */
+__attribute__((used)) alignas(8) uint8_t g_opcua_arena[OPCUA_ARENA_SIZE];
+
+/** Our listening socket.
+ *
+ *  The library opens none: Arduino's `Server` base class is `begin()` and
+ *  nothing else, so there is no portable accept and a library that owned the
+ *  listener would need a table of board names. Owning it here is also what
+ *  lets OPC-UA and S7Comm share one slot pool, which is a resource decision
+ *  belonging to the product rather than to either protocol. */
+bm_net::Listener g_listener(OPCUA_PORT, BM_NET_OPCUA_SLOTS);
 
 bool       g_started  = false;
 uint32_t   g_overruns = 0;
@@ -164,45 +180,55 @@ void opcua_init()
     if (g_started)
         return;
 
-    // Reset the arena. This is also the reachable reference that keeps the
-    // arena in .bss at all — see the note in opcua_arena.cpp about
-    // --gc-sections discarding a static array nothing demonstrably reads.
-    opcua_arena_reset();
-
-    // Point open62541's allocator at the arena BEFORE anything allocates.
+    // Hand the library its heap.
     //
-    // The library is built with UA_ENABLE_MALLOC_SINGLETON, so UA_malloc and
-    // friends are function pointers rather than compile-time bindings to the
-    // standard allocator. Setting them here is what actually makes the arena
-    // the server's heap; without it the arena would be reserved, counted in
-    // the budget, and never touched while open62541 allocated from the newlib
-    // heap the user program shares.
-    UA_mallocSingleton  = opcua_arena_malloc;
-    UA_freeSingleton    = opcua_arena_free;
-    UA_callocSingleton  = opcua_arena_calloc;
-    UA_reallocSingleton = opcua_arena_realloc;
+    // The arena lives HERE, in generated-project scope, not in the library:
+    // its size comes from the project's OPC-UA settings, and a library cannot
+    // see a generated header -- arduino-cli does not put the sketch include
+    // path on library compilation. Passing the buffer is also the reachable
+    // reference that keeps it in .bss at all, --gc-sections having been
+    // measured discarding a static array nothing demonstrably reads.
+    UA_Arduino_setArena(g_opcua_arena, sizeof(g_opcua_arena));
 
-    OPCUA_LOG("[ua] arena reset, allocator bound");
+    // Size the transport from the same settings, for the same reason.
+    UA_Arduino_configureTcp(BM_NET_OPCUA_SLOTS, 8192);
+
+    // The two things Arduino's abstract `Client` cannot answer, supplied by
+    // the seam that does know: whether a write would block, and when a client
+    // slot may go back to the shared pool.
+    UA_Arduino_setCanSendCallback(
+        [](Client* c, size_t n, void*) { return bm_net::can_send(c, n); }, nullptr);
+    UA_Arduino_setClosedCallback(
+        [](Client* c, void*) { bm_net::release(c); }, nullptr);
+
+    if (!g_listener.begin())
+    {
+        OPCUA_LOG("[ua] listener begin FAILED on port %d", (int)OPCUA_PORT);
+        return;
+    }
+
+    OPCUA_LOG("[ua] arena %lu bytes, allocator bound",
+              (unsigned long)sizeof(g_opcua_arena));
     g_server = UA_Server_new();
     if (g_server == nullptr)
     {
-        opcua_arena_stats_t st; opcua_arena_get_stats(&st);
+        UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
         OPCUA_LOG("[ua] UA_Server_new FAILED hw=%lu fail=%lu largest=%lu",
-                  (unsigned long)st.high_water, (unsigned long)st.failures,
-                  (unsigned long)st.largest_free);
+                  (unsigned long)st.highWater, (unsigned long)st.failures,
+                  (unsigned long)st.largestFree);
         return;
     }
     {
-        opcua_arena_stats_t st; opcua_arena_get_stats(&st);
-        OPCUA_LOG("[ua] UA_Server_new ok  inuse=%lu hw=%lu", (unsigned long)st.in_use,
-                  (unsigned long)st.high_water);
+        UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
+        OPCUA_LOG("[ua] UA_Server_new ok  inuse=%lu hw=%lu", (unsigned long)st.inUse,
+                  (unsigned long)st.highWater);
     }
 
     UA_ServerConfig* config = UA_Server_getConfig(g_server);
 
     // Minimal config first: it installs the EventLoop and the TCP
     // ConnectionManager through the factories our arch layer supplies (the
-    // _POSIX-named forwarders — see opcua_arch.cpp).
+    // _POSIX-named forwarders the library supplies).
     if (UA_ServerConfig_setMinimalCustomBuffer(config, OPCUA_PORT, nullptr, 8192, 8192)
         != UA_STATUSCODE_GOOD)
     {
@@ -245,9 +271,9 @@ void opcua_init()
     }
 
     {
-        opcua_arena_stats_t st; opcua_arena_get_stats(&st);
+        UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
         OPCUA_LOG("[ua] nodes added (%d) inuse=%lu hw=%lu", (int)OPCUA_NODE_COUNT,
-                  (unsigned long)st.in_use, (unsigned long)st.high_water);
+                  (unsigned long)st.inUse, (unsigned long)st.highWater);
     }
 
     UA_StatusCode startRc = UA_Server_run_startup(g_server);
@@ -259,10 +285,10 @@ void opcua_init()
     }
 
     {
-        opcua_arena_stats_t st; opcua_arena_get_stats(&st);
+        UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
         OPCUA_LOG("[ua] run_startup rc=0x%08lx inuse=%lu hw=%lu largest=%lu",
-                  (unsigned long)startRc, (unsigned long)st.in_use,
-                  (unsigned long)st.high_water, (unsigned long)st.largest_free);
+                  (unsigned long)startRc, (unsigned long)st.inUse,
+                  (unsigned long)st.highWater, (unsigned long)st.largestFree);
     }
     g_started = true;
     OPCUA_LOG("[ua] LISTENING on %d", (int)OPCUA_PORT);
@@ -286,10 +312,10 @@ void opcuatask(uint32_t slack_us)
         {
             s_next = now_ms + 15000;
             opcua_log_netstats("tick");
-            opcua_arena_stats_t st; opcua_arena_get_stats(&st);
+            UA_Arduino_ArenaStats st; UA_Arduino_getArenaStats(&st);
             OPCUA_LOG("[arena] inuse=%lu hw=%lu fail=%lu largest=%lu",
-                      (unsigned long)st.in_use, (unsigned long)st.high_water,
-                      (unsigned long)st.failures, (unsigned long)st.largest_free);
+                      (unsigned long)st.inUse, (unsigned long)st.highWater,
+                      (unsigned long)st.failures, (unsigned long)st.largestFree);
             OPCUA_LOG("[scan] budget=%luus overruns=%lu max=%luus avg=%luus calls=%lu",
                       (unsigned long)OPCUA_SCAN_BUDGET_US, (unsigned long)g_overruns,
                       (unsigned long)g_max_us,
@@ -335,6 +361,22 @@ void opcuatask(uint32_t slack_us)
     // Non-blocking by construction: our EventLoop's run() ignores the timeout
     // because sleeping here would stop the PLC logic. One iterate per scan;
     // pending work waits for the next one.
+    // Accept before iterating. We own the listening socket (see g_listener);
+    // the library only ever receives connected clients. One per pass keeps the
+    // work bounded, and bm_net recycles slots whose peer has gone, so this
+    // cannot run the table out.
+    if (g_server != nullptr)
+    {
+        Client* incoming = g_listener.accept();
+        if (incoming != nullptr &&
+            UA_Arduino_acceptClient(incoming) != UA_STATUSCODE_GOOD)
+        {
+            // Server full. Closing now is the honest answer: the client
+            // retries, whereas holding it consumes a slot for nothing.
+            bm_net::release(incoming);
+        }
+    }
+
     const unsigned long t0 = micros();
     if (g_server != nullptr)
         UA_Server_run_iterate(g_server, 0);
@@ -347,7 +389,7 @@ void opcuatask(uint32_t slack_us)
     if (spent > 50000u)
         OPCUA_LOG("[scan] SPIKE %luus  t0=%lu t1=%lu arena_inuse=%lu",
                   (unsigned long)spent, (unsigned long)t0, (unsigned long)t1,
-                  (unsigned long)({ opcua_arena_stats_t _s; opcua_arena_get_stats(&_s); _s.in_use; }));
+                  (unsigned long)({ UA_Arduino_ArenaStats _s; UA_Arduino_getArenaStats(&_s); _s.inUse; }));
     if (spent > g_max_us)
         g_max_us = spent;
     g_total_us += spent;

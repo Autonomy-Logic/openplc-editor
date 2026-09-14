@@ -36,7 +36,7 @@ UA_UInt16 opcua_nodes_id_at(UA_UInt16 index);
  *  ~476 B/node the ziptree charged.
  *
  *  The caller owns `out` and must never let open62541 free its contents --
- *  see opcua_nodestore.cpp, which is the only intended caller. */
+ *  see the library's flash nodestore, the only intended caller. */
 bool opcua_nodes_materialise(UA_UInt16 numeric_id, UA_UInt16 ns, UA_VariableNode* out);
 
 /** Release what opcua_nodes_materialise() allocated (the reference arrays).
