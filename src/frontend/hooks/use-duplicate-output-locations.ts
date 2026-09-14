@@ -25,8 +25,22 @@ import { useOpenPLCStore } from '@root/frontend/store'
 import type { PLCVariable } from '@root/middleware/shared/ports/types'
 import { isLiteralLocation } from '@root/middleware/shared/utils/iec-address/registry'
 
-/** `'%QX0.0'` -> the names of every variable declaring exactly that address. */
-export type DuplicateOutputMap = ReadonlyMap<string, readonly string[]>
+/** One declaration of an output address: which POU, and what it is called. */
+export interface OutputWriter {
+  /** The POU, or `'Global Variables'` for a configuration global. */
+  scope: string
+  name: string
+}
+
+/** `'%QX0.0'` -> every declaration of exactly that address.
+ *
+ * SCOPE AND NAME, not the name alone. The whole point of the warning is that
+ * the two declarations are usually in DIFFERENT POUs, where the same name is
+ * entirely ordinary -- `run`, `motor_on`, `out`. Keyed by name only, a cell
+ * excluding itself removed the other writer too and the tooltip rendered with
+ * an empty list while the glyph still showed. The scope is also the thing the
+ * user needs in order to go and fix it. */
+export type DuplicateOutputMap = ReadonlyMap<string, readonly OutputWriter[]>
 
 interface Cache {
   pous: unknown
@@ -50,18 +64,18 @@ export function useDuplicateOutputLocations(): DuplicateOutputMap {
   // nothing changed.
   if (cache && cache.pous === pous && cache.globals === globals) return cache.map
 
-  const map = new Map<string, string[]>()
-  const collect = (variables: PLCVariable[] | undefined): void => {
+  const map = new Map<string, OutputWriter[]>()
+  const collect = (scope: string, variables: PLCVariable[] | undefined): void => {
     for (const variable of variables ?? []) {
       const location = variable.location ?? ''
       if (!isOutputLocation(location)) continue
-      const names = map.get(location)
-      if (names) names.push(variable.name)
-      else map.set(location, [variable.name])
+      const writers = map.get(location)
+      if (writers) writers.push({ scope, name: variable.name })
+      else map.set(location, [{ scope, name: variable.name }])
     }
   }
-  for (const pou of pous) collect(pou.interface?.variables)
-  collect(globals)
+  for (const pou of pous) collect(pou.name, pou.interface?.variables)
+  collect('Global Variables', globals)
 
   cache = { pous, globals, map }
   return map

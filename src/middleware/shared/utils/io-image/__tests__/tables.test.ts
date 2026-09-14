@@ -143,42 +143,55 @@ describe('extentForDataBlock', () => {
   // opposite ways and a single-direction test passes with either one inverted.
 
   it('turns wire bytes into elements: 128 bytes of a word table is 64 words', () => {
-    expect(extentForDataBlock({ unit: 'words' }, 0, 128)).toBe(64)
+    expect(extentForDataBlock({ unit: 'words' }, 0, 128).end).toBe(64)
   })
 
   it('and the other way: 64 words of a word table is 128 bytes on the wire', () => {
     // The inverse, stated as the size a block must declare to reach 64 words.
-    expect(extentForDataBlock({ unit: 'words' }, 0, 64 * 2)).toBe(64)
-    expect(extentForDataBlock({ unit: 'words' }, 0, 63 * 2)).toBe(63)
+    expect(extentForDataBlock({ unit: 'words' }, 0, 64 * 2).end).toBe(64)
+    expect(extentForDataBlock({ unit: 'words' }, 0, 63 * 2).end).toBe(63)
   })
 
   it('converts each width by its own byte count', () => {
-    expect(extentForDataBlock({ unit: 'bytes' }, 0, 8)).toBe(8)
-    expect(extentForDataBlock({ unit: 'words' }, 0, 8)).toBe(4)
-    expect(extentForDataBlock({ unit: 'dwords' }, 0, 8)).toBe(2)
-    expect(extentForDataBlock({ unit: 'lwords' }, 0, 8)).toBe(1)
+    expect(extentForDataBlock({ unit: 'bytes' }, 0, 8).end).toBe(8)
+    expect(extentForDataBlock({ unit: 'words' }, 0, 8).end).toBe(4)
+    expect(extentForDataBlock({ unit: 'dwords' }, 0, 8).end).toBe(2)
+    expect(extentForDataBlock({ unit: 'lwords' }, 0, 8).end).toBe(1)
   })
 
   it('drops a partial element rather than rounding it up', () => {
     // Three bytes of a word table is one addressable word. Rounding up would
     // size storage for a word the block does not actually carry.
-    expect(extentForDataBlock({ unit: 'words' }, 0, 3)).toBe(1)
-    expect(extentForDataBlock({ unit: 'lwords' }, 0, 7)).toBe(0)
+    expect(extentForDataBlock({ unit: 'words' }, 0, 3).end).toBe(1)
+    expect(extentForDataBlock({ unit: 'lwords' }, 0, 7).end).toBe(0)
   })
 
   it('reports a BOOL block in bits while taking its start in elements', () => {
     // The one table where the two units differ. A block at element 2, four
     // bytes long, covers bytes 2..5 — bits 16..47 — so it needs 48 bits.
-    expect(extentForDataBlock({ unit: 'bits' }, 2, 4)).toBe(48)
-    expect(extentForDataBlock({ unit: 'bits' }, 0, 1)).toBe(8)
+    expect(extentForDataBlock({ unit: 'bits' }, 2, 4).end).toBe(48)
+    expect(extentForDataBlock({ unit: 'bits' }, 0, 1).end).toBe(8)
   })
 
   it('and the other way for BOOL: 48 bits is six bytes from element zero', () => {
-    expect(extentForDataBlock({ unit: 'bits' }, 0, 6)).toBe(48)
+    expect(extentForDataBlock({ unit: 'bits' }, 0, 6).end).toBe(48)
+  })
+
+  it('reports where the block STARTS, not only where it ends', () => {
+    // The half that used to be missing. A block at element 100 produces
+    // nothing below 100, and backing from zero would vouch for a hundred
+    // addresses the plugin never writes.
+    expect(extentForDataBlock({ unit: 'words' }, 100, 8)).toEqual({ start: 100, end: 104 })
+    expect(extentForDataBlock({ unit: 'words' }, 0, 8)).toEqual({ start: 0, end: 4 })
+  })
+
+  it('scales the start the same way it scales the end, for a BOOL table', () => {
+    // Element 2 of a bool table is bit 16, not bit 2.
+    expect(extentForDataBlock({ unit: 'bits' }, 2, 4)).toEqual({ start: 16, end: 48 })
   })
 
   it('adds the start buffer, because the image is contiguous', () => {
-    expect(extentForDataBlock({ unit: 'words' }, 100, 8)).toBe(104)
-    expect(extentForDataBlock({ unit: 'words' }, 0, 0)).toBe(0)
+    expect(extentForDataBlock({ unit: 'words' }, 100, 8).end).toBe(104)
+    expect(extentForDataBlock({ unit: 'words' }, 0, 0).end).toBe(0)
   })
 })

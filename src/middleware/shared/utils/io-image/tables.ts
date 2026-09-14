@@ -138,14 +138,22 @@ const ADDRESSES_PER_ELEMENT: Record<ImageUnit, number> = {
  *
  * Getting either backwards sizes an area by a factor of two, four or eight,
  * with no diagnostic: the block simply stops answering partway through.
+ *
+ * RETURNS BOTH ENDS, and the caller needs both for different things. `end` is
+ * the high-water mark, which is what SIZES the area, because the image is a
+ * contiguous buffer and a block reaching address 103 needs 104 of them.
+ * `start` is where the block's coverage actually begins, which is what BACKS:
+ * a block at `startBuffer` 100 produces nothing at all below 100, and saying
+ * otherwise would vouch for addresses the plugin never writes.
  */
 export function extentForDataBlock(
   table: Pick<ImageTable, 'unit'>,
   startBuffer: number,
   sizeBytes: number,
-): number {
+): { start: number; end: number } {
   const elements = Math.floor(sizeBytes / BYTES_PER_ELEMENT[table.unit])
-  return (startBuffer + elements) * ADDRESSES_PER_ELEMENT[table.unit]
+  const scale = ADDRESSES_PER_ELEMENT[table.unit]
+  return { start: startBuffer * scale, end: (startBuffer + elements) * scale }
 }
 
 /** Look a table up by the prefix it stores, or `undefined` for a prefix no

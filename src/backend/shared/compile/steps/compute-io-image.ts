@@ -50,12 +50,15 @@
 
 import type { DevicePin, ModbusBufferMapping, PLCServer } from '../../../../middleware/shared/ports/types'
 import type { PoolVppIoInput } from '../../../../middleware/shared/utils/iec-address'
+import type { AddressClass, ParsedAddress } from '../../../../middleware/shared/utils/iec-address/registry'
 import {
   activeKindsFor,
   allocateAddresses,
   migrateToRegistry,
+  formatAddress,
   parseAddress,
   prefixOf,
+  slotRangesOverlap,
 } from '../../../../middleware/shared/utils/iec-address/registry'
 import type { AddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import {
@@ -146,14 +149,18 @@ interface S7CommMappingLike {
  * An output is the one direction where two writers contradict each other.
  */
 export interface DuplicateOutput {
-  location: string
   prefix: string
-  /** The slot both declarations cover, which for arrays need not be either
-   *  declaration's base address. */
+  /** The address class, carried so the message can render `slot` back into an
+   *  address through `formatAddress` rather than reimplementing the bit maths. */
+  cls: AddressClass
+  /** The first slot both declarations cover, which for two arrays is neither
+   *  one's base address. Linear within the prefix space, so for a bit class it
+   *  counts BITS — `%QX3.2` is slot 26. Render it with `formatAddress` rather
+   *  than showing the number, which no user can map back to what they typed. */
   slot: number
-  /** Both sides, in declaration order, so the message can name them. */
-  first: { scope: string; variableName: string }
-  second: { scope: string; variableName: string }
+  /** Both sides, in declaration order, each with the address as WRITTEN. */
+  first: { scope: string; variableName: string; location: string }
+  second: { scope: string; variableName: string; location: string }
 }
 
 export interface IoImage {
@@ -455,10 +462,23 @@ function s7commExposure(
        the safe reading if that ever changes. */
     if (!table) continue
 
-    const extent = extentForDataBlock(table, block.mapping.startBuffer, block.sizeBytes)
-    if (extent <= 0) continue
-    claim(sizes, table.prefix, extent)
-    markBacked(backed, table.prefix, 0, extent)
+    const { start, end } = extentForDataBlock(table, block.mapping.startBuffer, block.sizeBytes)
+    if (end <= start) continue
+
+    // SIZES to the high-water mark and BACKS only what the block covers, and
+    // the two are not the same range. A block at startBuffer 100 makes the
+    // area 104 long because the image is contiguous, but it produces nothing
+    // whatsoever below 100 -- backing from zero would vouch for a hundred
+    // addresses the plugin never writes, and `AT %IW0 : INT` would compile
+    // clean and read zero forever on the machine. That is the declaration BR14
+    // exists to refuse, and it is the same per-slot rule `producerClaims` and
+    // the unbacked loop already apply.
+    //
+    // The Modbus path above may legitimately mark from zero: its segments
+    // always start at IEC index 0. S7comm blocks do not, which is what
+    // startBuffer is for.
+    claim(sizes, table.prefix, end)
+    markBacked(backed, table.prefix, start, end - start)
   }
 }
 
@@ -554,8 +574,18 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
   const unbacked: UnbackedLocation[] = []
   const unsupported: UnsupportedArea[] = []
   const duplicateOutputs: DuplicateOutput[] = []
-  /** prefix -> slot -> the first declaration that claimed it. Outputs only. */
-  const outputOwners = new Map<string, Map<number, { scope: string; variableName: string }>>()
+  /**
+   * Outputs already declared, per prefix, as RANGES rather than slots.
+   *
+   * One entry per declaration, not per element. The obvious version kept a
+   * slot -> owner map, which puts one Map entry — with an object value — per
+   * declared element in the Electron main process: `AT %QW0 : ARRAY
+   * [0..10000000] OF WORD` inserts ten million of them before the platform
+   * compiler ever gets to refuse the size. That is the same blow-up the memory
+   * branch below carries a comment about having removed, and `slotRangesOverlap`
+   * is the primitive the registry already owns for exactly this.
+   */
+  const declaredOutputs = new Map<string, Array<{ at: ParsedAddress; slots: number; scope: string; variableName: string; location: string }>>()
 
   for (const { scope, name, location, slotCount } of locatedVariables(input.projectData)) {
     const parsed = parseAddress(location)
@@ -579,32 +609,27 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     }
 
     if (directionOf(prefix) === 'Q') {
-      // Every slot the declaration covers, so a located array overlapping
-      // another one is caught at the slot they share rather than only when
-      // their base addresses match.
-      let owners = outputOwners.get(prefix)
-      if (!owners) {
-        owners = new Map()
-        outputOwners.set(prefix, owners)
+      // Range against range, so a located array overlapping another one is
+      // caught at the slot they share rather than only when their base
+      // addresses match — and at a cost proportional to the number of
+      // DECLARATIONS rather than the number of elements they cover.
+      const declared = declaredOutputs.get(prefix) ?? []
+      const clash = declared.find((other) => slotRangesOverlap(other.at, other.slots, parsed, slotCount))
+      if (clash) {
+        duplicateOutputs.push({
+          prefix,
+          cls: parsed.cls,
+          // The first slot the two actually share, which for two arrays is
+          // neither one's base address.
+          slot: Math.max(clash.at.linear, parsed.linear),
+          first: { scope: clash.scope, variableName: clash.variableName, location: clash.location },
+          second: { scope, variableName: name, location },
+        })
       }
-      for (let slot = parsed.linear; slot < parsed.linear + slotCount; slot++) {
-        const owner = owners.get(slot)
-        if (owner) {
-          duplicateOutputs.push({
-            location,
-            prefix,
-            slot,
-            first: owner,
-            second: { scope, variableName: name },
-          })
-          // One report per pair of declarations, not one per overlapping slot:
-          // a 4000-element array declared twice is one mistake.
-          break
-        }
-      }
-      for (let slot = parsed.linear; slot < parsed.linear + slotCount; slot++) {
-        if (!owners.has(slot)) owners.set(slot, { scope, variableName: name })
-      }
+      // One entry per declaration, reported once per pair: a 4000-element
+      // array declared twice is one mistake, not four thousand errors.
+      declared.push({ at: parsed, slots: slotCount, scope, variableName: name, location })
+      declaredOutputs.set(prefix, declared)
     }
 
     if (directionOf(prefix) === 'M') {
@@ -685,12 +710,23 @@ export function describeDuplicateOutput(issue: DuplicateOutput): string {
     issue.first.scope === issue.second.scope
       ? `both in ${issue.first.scope}`
       : `${issue.first.scope} and ${issue.second.scope}`
+
+  /* The ADDRESS, not the slot number. `slot` is linear within the prefix
+   * space, so for a bit class it counts bits and two variables at %QX3.2 would
+   * be reported as "slot 26" — leaving the user to divide by eight to get back
+   * to what they typed, in the commonest duplicate-output case there is. */
+  const at = formatAddress(issue.cls, issue.slot)
+  const addresses =
+    issue.first.location === issue.second.location
+      ? `both at ${issue.first.location}`
+      : `${issue.first.location} and ${issue.second.location}, which overlap at ${at}`
+
   return (
     `Two variables drive the same output: "${issue.first.variableName}" and ` +
-    `"${issue.second.variableName}" (${where}) both cover slot ${issue.slot} of ` +
-    `${issue.prefix}. IEC located addresses are global, so the last write in the scan ` +
-    'would win and which one that is depends on POU order — give one of them another ' +
-    'address, or have one read the other rather than both writing.'
+    `"${issue.second.variableName}" (${where}), ${addresses}. IEC located addresses ` +
+    'are global, so the last write in the scan would win and which one that is ' +
+    'depends on POU order — give one of them another address, or have one read the ' +
+    'other rather than both writing.'
   )
 }
 

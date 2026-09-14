@@ -560,15 +560,20 @@ const EditableLocationCell = ({
   // the variable is alias-bound, the literal address when manual. The
   // combobox `value` is the same string, so picking an alias option (whose
   // value is the alias name) or typing a literal both operate on `location`.
+  /* Excluded by SCOPE AND NAME together. Filtering by name alone removed the
+   * other writer too whenever both were called the same thing -- which is the
+   * common case, because the two declarations are usually in different POUs
+   * and `run` or `out` is an ordinary name in each. The tooltip then rendered
+   * with an empty list while the glyph still showed. */
   const otherWriters = (duplicateOutputs.get(locationValue) ?? []).filter(
-    (name) => name !== variable?.name,
+    (writer) => !(writer.name === variable?.name && writer.scope === editor.meta.name),
   )
   const warningTooltip = isOrphaned
     ? `Alias "${cellValue}" is not declared by any active I/O source — this variable is unlocated at compile time.`
     : locationConflict
       ? `Address ${cellValue} conflicts with alias "${locationConflict.aliasName}" assigned to "${locationConflict.variableName}". Two variables cannot share a location.`
       : isDuplicateOutput
-        ? `Output ${cellValue} is also driven by ${otherWriters.map((name) => `"${name}"`).join(', ')}. IEC located addresses are global, so the last write in the scan would win — the compiler refuses this.`
+        ? `Output ${cellValue} is also driven by ${otherWriters.map((writer) => `"${writer.name}" in ${writer.scope}`).join(', ')}. IEC located addresses are global, so the last write in the scan would win — the compiler refuses this.`
         : undefined
 
   // The warning glyph must stay visible whether or not the row is selected.

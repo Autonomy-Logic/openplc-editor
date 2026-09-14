@@ -459,6 +459,49 @@ describe('computeIoImage — two declarations on one output', () => {
     expect(describeDuplicateOutput(image.duplicateOutputs[0])).toContain('both in main')
   })
 
+  it('reports the ADDRESS, not the linear slot number', () => {
+    // `slot` counts BITS for a bit class, so two variables at %QX3.2 are slot
+    // 26. Printing that leaves the user to divide by eight to get back to what
+    // they typed, in the commonest duplicate-output case there is.
+    const image = compute(pousWith(['motor', 'run', '%QX3.2'], ['pump', 'start', '%QX3.2']))
+    const message = describeDuplicateOutput(image.duplicateOutputs[0])
+    expect(message).toContain('%QX3.2')
+    expect(message).not.toContain('slot 26')
+  })
+
+  it('names the overlap address when two arrays clash at neither base', () => {
+    const image = compute(
+      makeProject({
+        pous: [
+          { name: 'a', variables: [arrayVar('first', '%QW0', 0, 9)] },
+          { name: 'b', variables: [arrayVar('second', '%QW5', 0, 9)] },
+        ],
+      }),
+    )
+    const message = describeDuplicateOutput(image.duplicateOutputs[0])
+    expect(message).toContain('%QW0')
+    expect(message).toContain('%QW5')
+    expect(message).toContain('%QW5')
+  })
+
+  it('does not walk a huge located array element by element', () => {
+    // The memory branch carries a comment about having removed exactly this,
+    // and the output branch reintroduced it — one Map entry with an OBJECT
+    // value per declared element, in the Electron main process, before the
+    // platform compiler ever gets to refuse the size.
+    const started = Date.now()
+    const image = compute(
+      makeProject({
+        pous: [
+          { name: 'a', variables: [arrayVar('first', '%QW0', 0, 10_000_000)] },
+          { name: 'b', variables: [arrayVar('second', '%QW0', 0, 10_000_000)] },
+        ],
+      }),
+    )
+    expect(image.duplicateOutputs).toHaveLength(1)
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
+
   it('describes the clash so either side can be the one that moves', () => {
     const image = compute(pousWith(['motor', 'run', '%QX0.0'], ['pump', 'start', '%QX0.0']))
     const message = describeDuplicateOutput(image.duplicateOutputs[0])
@@ -541,6 +584,35 @@ describe('computeIoImage — S7comm exposure', () => {
     )
     expect(image.unbacked).toEqual([])
     expect(image.sizes['%IW']).toBe(8)
+  })
+
+  it('does NOT back an address below the block start', () => {
+    // The case no test covered: `still refuses an input address the block does
+    // not reach` uses startBuffer 0 and probes ABOVE the extent, and `adds the
+    // start buffer` asserts only sizes. A block at word 100 produces nothing
+    // whatsoever at word 0, and backing from zero let `AT %IW0 : INT` compile
+    // clean and read zero forever on the machine.
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('v', '%IW0')] }],
+        servers: s7Server([block('int_input', 100, 8)]),
+      }),
+    )
+    expect(image.unbacked).toHaveLength(1)
+    expect(image.unbacked[0].location).toBe('%IW0')
+    // It still SIZES to the high-water mark: the image is contiguous.
+    expect(image.sizes['%IW']).toBe(104)
+  })
+
+  it('backs an address the block does cover', () => {
+    // The control, so the refusal above is not simply "nothing is ever backed".
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('v', '%IW100')] }],
+        servers: s7Server([block('int_input', 100, 8)]),
+      }),
+    )
+    expect(image.unbacked).toEqual([])
   })
 
   it('still refuses an input address the block does not reach', () => {
