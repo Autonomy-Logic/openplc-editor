@@ -82,6 +82,14 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       // false, which silently disables `vpp_config.h` emission for
       // every VPP arduino-cli target (Opta, future P1AM VPP).
       compiler: boardInfo.compiler,
+      // What the board can serve Modbus OVER. `resolveModbusServerProfile` reads
+      // these to decide which transports are on offer, and the pipeline calls it
+      // with exactly the same inputs the screen uses — dropping them here is
+      // what left the emitter compiling `MBTCP` for boards with no carrier.
+      ...(boardInfo.vppScreenNames ? { vppScreenNames: boardInfo.vppScreenNames } : {}),
+      ...(boardInfo.serialPorts ? { serialPorts: boardInfo.serialPorts } : {}),
+      ...(boardInfo.defaultSerial ? { defaultSerial: boardInfo.defaultSerial } : {}),
+      ...(boardInfo.networkInterfaces ? { networkInterfaces: boardInfo.networkInterfaces } : {}),
       ...(boardInfo.source === 'vpp' ? { vpp: true } : {}),
       ...(boardInfo.capabilities ? { capabilities: boardInfo.capabilities } : {}),
     } as unknown as BoardHalsBuildEntry

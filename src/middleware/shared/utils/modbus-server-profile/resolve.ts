@@ -9,12 +9,15 @@
  */
 
 import { resolveTargetCapabilities } from '../target-capabilities'
-import type { ModbusSegment, ModbusServerProfile, ModbusServerTransport } from './types'
+import type { ModbusSegment, ModbusSegmentCounts, ModbusServerProfile, ModbusServerTransport } from './types'
 
 /** Minimal slice of BoardInfo the resolver reads. Loosely typed so a test
  *  fixture can hand over what it has instead of asserting a whole board. */
 export type ModbusBoardInfoLike = {
   compiler?: string
+  /** The board's fully-qualified name, e.g. `arduino:avr:uno`. Picks which of
+   *  the firmware's two I/O size tables this board compiles with. */
+  platform?: string
   capabilities?: Record<string, unknown>
   vpp?: { screens?: Record<string, unknown> } | null
   /** TCP carriers the board can actually bring up, from `device.networkInterfaces`.
@@ -35,6 +38,40 @@ const RUNTIME_SEGMENTS: ModbusSegment[] = ['QW', 'MW', 'MD', 'ML', 'QX', 'MX', '
  */
 const BAREMETAL_SEGMENTS: ModbusSegment[] = ['QW', 'MW', 'MD', 'ML', 'QX', 'IX', 'IW']
 
+/**
+ * The firmware's I/O buffer sizes, mirroring `resources/sources/arduino/openplc.h`.
+ *
+ * That header carries two tables behind one `#if`, and the difference is not a
+ * rounding: the small one has no `%MW`, `%MD` or `%ML` at all. `init_mbregs`
+ * (`Baremetal.ino:257`) allocates the Modbus banks straight from these, so they
+ * are what a board actually answers on -- not an estimate.
+ *
+ * The `#if` tests `__AVR_ATmega328P__ || __AVR_ATmega168__ || __AVR_ATmega32U4__
+ * || __AVR_ATmega16U4__`, macros the compiler defines from `build.mcu`. The
+ * editor never compiles, so it maps from the board's FQBN instead -- the same
+ * string arduino-cli reads that value from.
+ *
+ * ADDING AN AVR BOARD: if its MCU is one of those four, add it to
+ * `SMALL_AVR_PLATFORMS`. Anything absent falls to the large table, which is what
+ * the header's own `#else` does for every other MCU.
+ */
+const SMALL_AVR_COUNTS: ModbusSegmentCounts = { QW: 32, MW: 0, MD: 0, ML: 0, QX: 32, MX: 0, IX: 8, IW: 6 }
+const DEFAULT_COUNTS: ModbusSegmentCounts = { QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 }
+
+/** The catalogue's `arduino:avr:` boards whose MCU lands in the small table.
+ *  `arduino:avr:mega` is an ATmega2560 and deliberately absent. */
+const SMALL_AVR_PLATFORMS = new Set([
+  'arduino:avr:uno',
+  'arduino:avr:nano',
+  'arduino:avr:leonardo',
+  'arduino:avr:micro',
+])
+
+/** Counts the board compiles with, read off its FQBN. */
+function firmwareCounts(platform: string | undefined): ModbusSegmentCounts {
+  return platform && SMALL_AVR_PLATFORMS.has(platform) ? SMALL_AVR_COUNTS : DEFAULT_COUNTS
+}
+
 /** Port `modbus_tcp.cpp` hard-codes on every baremetal transport. */
 const BAREMETAL_TCP_PORT = 502
 
@@ -48,8 +85,6 @@ const FALLBACK_DEFAULT_SERIAL = 'Serial'
 const SERIAL_SCREEN = 'serial'
 /** Canonical name of the network screen a split VPP ships. */
 const NETWORK_SCREEN = 'network'
-/** Canonical name of the Modbus screen every arduino-cli VPP ships. */
-const MODBUS_SCREEN = 'modbus'
 
 /**
  * Find a VPP screen by its canonical name, case-insensitively.
@@ -103,14 +138,10 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
   const caps = resolveTargetCapabilities(board)
   const screens = board.vpp?.screens
 
-  // Baremetal is the compiler, not a screen. It used to be recognised by the
-  // package shipping a Modbus screen, which stopped being a signal once that
-  // screen's contents became the editor's: a package with nothing left to put
-  // there ships none, and every board would have silently resolved as a
-  // Runtime v4 target. The screen is still accepted so a package published
-  // before the split keeps working.
-  const modbusScreen = findScreen(screens, MODBUS_SCREEN)
-  const isBaremetal = board.compiler === 'arduino-cli' || !!modbusScreen
+  // Baremetal is the compiler, and only the compiler. It used to also be
+  // recognised by the package shipping a Modbus screen, which was compatibility
+  // with a pre-4.3.0 package -- and 4.3.0 does not carry that compatibility.
+  const isBaremetal = board.compiler === 'arduino-cli'
 
   if (isBaremetal) {
     const transports: ModbusServerTransport[] = []
@@ -119,16 +150,17 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     // on it together (`MBSERIAL_SHARES_DEBUG_SERIAL`); which of the two the
     // user talks to at a given moment is theirs to arrange, not ours to refuse.
     if (caps.modbusRtuServer) transports.push('rtu')
-    // The capability says the firmware CAN serve Modbus TCP; `networkInterfaces`
-    // says whether this board has a carrier to serve it over. Declaring one is
-    // how a package removes a carrier it cannot bring up -- an ESP32 with no
-    // RMII PHY compiles `MBTCP_ETHERNET` to `ETH.begin()` and never links -- so
-    // an empty list is a board that answers nothing, and offering TCP there
-    // would emit a stack the firmware has no hardware for.
+    // The capability says the firmware CAN serve Modbus TCP; this decides
+    // whether the board has a carrier to serve it over. Offering it without one
+    // emits `MBTCP` into a firmware with no stack -- on an ESP32 with no RMII
+    // PHY that compiles `MBTCP_ETHERNET` to `ETH.begin()` and never links.
     //
-    // Absent is not empty: a package that says nothing keeps both carriers on
-    // offer, which is right for any board that can take a W5x00 shield.
-    const hasNetwork = board.networkInterfaces === undefined || board.networkInterfaces.length > 0
+    // A package states its carriers by SHIPPING a Network screen: the 29
+    // devices declaring `WiFi: No` and `Ethernet: No` ship none, and offering
+    // TCP there emits `MBTCP` into a firmware with no stack -- on an ESP32 with
+    // no RMII PHY that compiles `MBTCP_ETHERNET` to `ETH.begin()` and never
+    // links. `networkInterfaces: []` is an explicit refusal and says the same.
+    const hasNetwork = board.networkInterfaces?.length !== 0 && !!findScreen(screens, NETWORK_SCREEN)
     if (caps.modbusTcpServer && hasNetwork) transports.push('tcp')
     if (transports.length === 0) return NO_SERVER
 
@@ -152,17 +184,12 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
       serialPorts: board.serialPorts ?? [],
       defaultSerial: board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL,
       fixedPort: BAREMETAL_TCP_PORT,
-      // The editor cannot know them: they are chosen by an MCU-family macro
-      // inside a header the build never reports back, and nothing in the
-      // project declares them. The screen says so rather than showing a map it
-      // would be guessing at.
-      derivedCounts: null,
+      derivedCounts: firmwareCounts(board.platform),
       minCounts: null,
       maxCounts: null,
       vppScreens: {
         serial: findScreen(screens, SERIAL_SCREEN),
         network: findScreen(screens, NETWORK_SCREEN),
-        modbus: modbusScreen,
       },
     }
   }

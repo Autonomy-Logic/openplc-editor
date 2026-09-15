@@ -107,18 +107,18 @@ describe('resolveModbusServerProfile', () => {
       expect(profile.fixedPort).toBe(502)
     })
 
-    it('reports no buffer counts at all', () => {
-      // They are chosen by an MCU-family macro inside a header the build never
-      // reports back, and nothing in the project declares them. Sizing the I/O
-      // image, and therefore knowing its size, belongs to DOPE-615; this screen
-      // says so rather than showing a map it would be guessing at.
-      expect(profile.derivedCounts).toBeNull()
+    it('reports the counts the firmware compiles with', () => {
+      // Not an estimate: `init_mbregs` allocates the Modbus banks straight from
+      // the same MAX_* constants, so this is what the board answers on.
+      expect(profile.derivedCounts).toEqual({ QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 })
+      // Nothing in the project can move them, so there is no floor or ceiling
+      // to offer -- that arrives with DOPE-615.
       expect(profile.minCounts).toBeNull()
       expect(profile.maxCounts).toBeNull()
     })
 
     it('links out to the serial and network screens the package ships', () => {
-      expect(profile.vppScreens).toEqual({ serial: 'Serial', network: 'Network', modbus: 'Modbus' })
+      expect(profile.vppScreens).toEqual({ serial: 'Serial', network: 'Network' })
     })
   })
 
@@ -174,27 +174,9 @@ describe('resolveModbusServerProfile', () => {
     expect(profile.transports).toEqual([])
   })
 
-  describe('a package that has not been migrated', () => {
-    // Stage-by-stage rollout means an installed VPP may still carry the single
-    // pre-split screen. Only the links differ.
-    const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { Modbus: {} } } }))
-
-    it('still resolves as a baremetal target', () => {
-      expect(profile.configurablePort).toBe(true)
-    })
-
-    it('reports no serial or network screen to link to', () => {
-      expect(profile.vppScreens.serial).toBeUndefined()
-      expect(profile.vppScreens.network).toBeUndefined()
-      expect(profile.vppScreens.modbus).toBe('Modbus')
-    })
-  })
-
   it('matches screen names case-insensitively', () => {
-    const profile = resolveModbusServerProfile(
-      arduinoBoard({ vpp: { screens: { serial: {}, NETWORK: {}, modbus: {} } } }),
-    )
-    expect(profile.vppScreens).toEqual({ serial: 'serial', network: 'NETWORK', modbus: 'modbus' })
+    const profile = resolveModbusServerProfile(arduinoBoard({ vpp: { screens: { serial: {}, NETWORK: {} } } }))
+    expect(profile.vppScreens).toEqual({ serial: 'serial', network: 'NETWORK' })
   })
 
   it('is still baremetal with no vpp metadata at all', () => {
@@ -204,7 +186,7 @@ describe('resolveModbusServerProfile', () => {
     const profile = resolveModbusServerProfile({ compiler: 'arduino-cli' })
     expect(profile.configurablePort).toBe(true)
     expect(profile.fixedPort).toBe(502)
-    expect(profile.derivedCounts).toBeNull()
+    expect(profile.derivedCounts).not.toBeNull()
   })
 
   it('treats the Simulator as a plc-server target so a v4 project keeps its config', () => {
@@ -215,7 +197,7 @@ describe('resolveModbusServerProfile', () => {
 })
 
 /**
- * A package published before 4.4.0 declares no `io` block. The screen used to
+ * A package published before 4.3.0 declares no `io` block. The screen used to
  * answer that by showing nothing — no counts, no address map — on a board that
  * plainly has both, which is what a user hits the moment they upgrade the
  * editor without updating their packages.
@@ -227,22 +209,45 @@ describe('resolveModbusServerProfile', () => {
  * is the declaration this demand introduced to answer it.
  */
 describe('a baremetal board with no network hardware', () => {
-  it('does not offer TCP when the package declares an empty carrier list', () => {
-    // Offering it emits MBTCP / MBTCP_ETHERNET into a firmware with no stack:
-    // on an ESP32 with no RMII PHY that compiles to ETH.begin() and never links.
-    const profile = resolveModbusServerProfile(arduinoBoard({ networkInterfaces: [] }))
-    expect(profile.transports).toEqual(['rtu'])
+  it('does not offer TCP to a split package that ships no Network screen', () => {
+    // This is how all 29 devices declaring `WiFi: No` and `Ethernet: No` say so:
+    // they ship `serial` and no `network`, and declare no `networkInterfaces` at
+    // all. Keying on that field instead would have left TCP enabled on every one
+    // of them, emitting MBTCP into a firmware with no stack -- on an ESP32 with
+    // no RMII PHY that compiles to ETH.begin() and never links.
+    const noNetwork = arduinoBoard({ vpp: { screens: { Serial: {} } } })
+    expect(resolveModbusServerProfile(noNetwork).transports).toEqual(['rtu'])
   })
 
-  it('keeps TCP on offer when the package says nothing, which is not the same as empty', () => {
-    // Most boards can take a W5x00 shield, so silence must not remove a carrier.
-    expect(resolveModbusServerProfile(arduinoBoard()).transports).toEqual(['rtu', 'tcp'])
+  it('offers TCP to a split package that does ship one', () => {
+    const withNetwork = arduinoBoard({ vpp: { screens: { Serial: {}, Network: {} } } })
+    expect(resolveModbusServerProfile(withNetwork).transports).toEqual(['rtu', 'tcp'])
+  })
+})
+
+/**
+ * `openplc.h` carries two I/O size tables behind one `#if` on the MCU macro. The
+ * editor never compiles, so it reads the board's FQBN -- the same string
+ * arduino-cli takes `build.mcu` from.
+ */
+describe('the firmware size table a board compiles with', () => {
+  const counts = (platform?: string) => resolveModbusServerProfile(arduinoBoard({ platform }))?.derivedCounts
+
+  it('gives the four small AVRs the table with no Modbus memory at all', () => {
+    // `%MW`, `%MD` and `%ML` are 0 in that branch: an Uno serves none.
+    for (const platform of ['arduino:avr:uno', 'arduino:avr:nano', 'arduino:avr:leonardo', 'arduino:avr:micro']) {
+      expect(counts(platform)).toEqual({ QW: 32, MW: 0, MD: 0, ML: 0, QX: 32, MX: 0, IX: 8, IW: 6 })
+    }
   })
 
-  it('offers TCP for a board that declares a carrier', () => {
-    expect(resolveModbusServerProfile(arduinoBoard({ networkInterfaces: ['Wi-Fi'] })).transports).toEqual([
-      'rtu',
-      'tcp',
-    ])
+  it('gives the Mega the large table, though it shares the AVR core', () => {
+    // `core` alone cannot tell these apart -- both are `arduino:avr`.
+    expect(counts('arduino:avr:mega')).toEqual({ QW: 32, MW: 20, MD: 20, ML: 20, QX: 56, MX: 0, IX: 56, IW: 32 })
+  })
+
+  it('gives every other board the large table, as the header does', () => {
+    for (const platform of ['esp32:esp32:esp32', 'rp2040:rp2040:rpipico', 'arduino:samd:mkrwifi1010', undefined]) {
+      expect(counts(platform)?.MW).toBe(20)
+    }
   })
 })

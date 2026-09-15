@@ -2872,7 +2872,7 @@ class CompilerModule {
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
-    // Baremetal serves Modbus too since 4.4.0, so the warning is for the targets
+    // Baremetal serves Modbus too since 4.3.0, so the warning is for the targets
     // that genuinely ignore a server. `openplc-compiler` is the Runtime v3
     // toolchain, which ships no Modbus slave; the simulator has one but takes
     // its configuration from the fixed MODBUS_ENABLED block rather than from
@@ -3233,8 +3233,6 @@ class CompilerModule {
         vppModbusState = {
           serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
-          modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
-          modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
         }
       } catch {
         // No configuration.json — leave state undefined; for ethernet boards the
@@ -3251,18 +3249,17 @@ class CompilerModule {
       // every ethernet target, overriding any screen value and seeding it when the
       // project never configured one, preserving only the IP the user set.
       if (uploadsOverEthernet) {
-        const ip =
-          vppModbusState?.modbus_tcp?.ip_address || vppModbusState?.network?.ip_address || configuredIp || '192.168.2.4'
+        const ip = vppModbusState?.network?.ip_address || configuredIp || '192.168.2.4'
         // Ethernet is static-only on these boards (no DHCP — the bootloader's
         // recovery stack has no DHCP client). Seed a full, sane static config so
         // the firmware never falls back to the Arduino stack's byte-order-buggy
         // subnet class-default (which would mis-derive e.g. 255.0.0.0 for a
         // 192.168.x address and corrupt the persisted network record). Any value
-        // the user set on the Modbus screen is preserved.
+        // the user set on the Network screen is preserved.
         const gwFromIp = (a: string) => a.replace(/\.\d+$/, '.1')
-        const subnet = vppModbusState?.modbus_tcp?.subnet || vppModbusState?.network?.subnet || '255.255.255.0'
-        const gateway = vppModbusState?.modbus_tcp?.gateway || vppModbusState?.network?.gateway || gwFromIp(ip)
-        const dns = vppModbusState?.modbus_tcp?.dns || vppModbusState?.network?.dns || gateway
+        const subnet = vppModbusState?.network?.subnet || '255.255.255.0'
+        const gateway = vppModbusState?.network?.gateway || gwFromIp(ip)
+        const dns = vppModbusState?.network?.dns || gateway
         vppModbusState = {
           ...(vppModbusState ?? {}),
           network: {
@@ -3270,14 +3267,6 @@ class CompilerModule {
             enabled: true,
             interface: 'Ethernet',
             enable_dhcp: false,
-            ip_address: ip,
-            subnet,
-            gateway,
-            dns,
-          },
-          modbus_tcp: {
-            ...(vppModbusState?.modbus_tcp ?? {}),
-            enabled: true,
             ip_address: ip,
             subnet,
             gateway,

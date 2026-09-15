@@ -304,23 +304,22 @@ const ModbusServerEditor = () => {
   const rtuAvailable = profile.transports.includes('rtu')
   const boardSerialScreen = profile.vppScreens.serial
 
-  // Why a board page is missing, which is two different situations wearing one
-  // face. A pre-4.4.0 package still ships the Modbus screen it used to own, and
-  // that is the only thing that tells it apart from a target that has no vendor
-  // pages at all -- where the host OS really does own the ports.
-  const packagePredatesSplit = !!profile.vppScreens.modbus
-  const noBoardPage = (what: string): string =>
-    packagePredatesSplit
-      ? `This board's package predates 4.4.0 and ships no ${what} page. Update the package to reach it from here.`
-      : `The host operating system owns this target's ${what}.`
+  // A target with no vendor page for this: the host operating system owns the
+  // ports. On a baremetal board the package always ships one.
+  const noBoardPage = (what: string): string => `The host operating system owns this target's ${what}.`
   const rtuOnEditorPort =
     rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
 
+  // No fallback value. When the stored transports survive the board's filter this
+  // names the matching choice; when they do not it is empty and the Select shows
+  // its placeholder, which is the only honest thing to show -- falling back to
+  // `'tcp'` displayed "Modbus TCP" on a board that cannot serve it, directly
+  // above a header already saying the server was not serving yet.
   const transportChoiceValue =
     TRANSPORT_CHOICES.find(
       (choice) =>
         choice.transports.length === transports.length && choice.transports.every((t) => transports.includes(t)),
-    )?.value ?? 'tcp'
+    )?.value ?? ''
   const onTransportChange = useCallback(
     (value: string) => {
       const choice = TRANSPORT_CHOICES.find((entry) => entry.value === value)
@@ -328,9 +327,15 @@ const ModbusServerEditor = () => {
     },
     [actions],
   )
-  const transportHint = profile.transports.includes('rtu')
-    ? 'What the server answers on. Both means one board on two wires.'
-    : 'This target serves over the network only.'
+  // `FR07`: a disabled choice has to say WHY. Three cases, because a board that
+  // declares no network carrier is not the same as a target that has no serial
+  // path -- and the second sentence is the only thing telling the user the
+  // greyed-out option is the board's limit rather than a missing feature.
+  const transportHint = !profile.transports.includes('rtu')
+    ? 'This target serves over the network only.'
+    : profile.transports.includes('tcp')
+      ? 'What the server answers on. Both means one board on two wires.'
+      : 'What the server answers on. This board declares no network carrier, so Modbus TCP is not on offer.'
 
   // Text state for the inputs that commit on blur, so a half-typed number does
   // not reach the store and get clamped mid-keystroke.
@@ -638,15 +643,9 @@ const ModbusServerEditor = () => {
           </Panel>
 
           <Panel title='Buffer Mapping'>
-            <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-              {profile.configurableBuffers
-                ? 'How many addresses each IEC segment gets.'
-                : 'Sized by the firmware at compile time.'}
-            </p>
-
-            {!profile.configurableBuffers && !profile.derivedCounts && (
-              <p className='text-xs text-amber-700 dark:text-amber-400'>
-                This target reports no Modbus buffer sizes, so no address map can be shown.
+            {profile.configurableBuffers && (
+              <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                How many addresses each IEC segment gets.
               </p>
             )}
 

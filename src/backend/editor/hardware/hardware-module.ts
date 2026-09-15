@@ -245,6 +245,7 @@ class HardwareModule {
         draft.set(board, {
           compiler: boardData.compiler,
           core: boardData.core,
+          ...(boardData.platform ? { platform: boardData.platform } : {}),
           preview: boardData.preview,
           specs: boardData.specs,
           coreVersion: coreVersion ?? undefined,
@@ -350,6 +351,7 @@ class HardwareModule {
             core: device.target.core ?? '',
             // Upload transport ("ethernet" for the LOGO! 8.2; serial default).
             uploadMethod: device.target.uploadMethod,
+            ...(device.target.platform ? { platform: device.target.platform } : {}),
             preview: device.preview,
             specs: device.specs ?? {},
             pins: {

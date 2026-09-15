@@ -129,17 +129,32 @@ const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
   },
 }
 
-function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
+/**
+ * What a new Modbus server answers on, decided by the target it is created for.
+ *
+ * A microcontroller gets RTU: nearly every VPP board has a UART and most have no
+ * network at all, so RTU is the transport that is almost always there. A Runtime
+ * v4 target gets TCP, which is the only one it serves.
+ *
+ * Seeding `['tcp']` everywhere is what made a board with no network carrier
+ * compile `MBTCP` into a firmware with no stack the moment the user switched the
+ * server on -- the screen offered only RTU while the store still said TCP. The
+ * build narrows transports to what the board can carry regardless, so this is
+ * the choice that keeps the common case from ever reaching that narrowing.
+ */
+function seedTransports(live: ProjectSliceRoot): ('rtu' | 'tcp')[] {
+  return resolveBoardInfo(live)?.compiler === 'arduino-cli' ? ['rtu'] : ['tcp']
+}
+
+function initializeServerProtocolConfig(serverData: PLCServer, transports: ('rtu' | 'tcp')[]): PLCServer {
   if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
     return {
       ...serverData,
       // `transports` has to be a real array from the start. `selectModbusServer`
-      // only considers a server that declares one -- a server without it is a
-      // pre-4.4.0 shape whose Modbus still lives in the board's screen sections
-      // -- so seeding nothing made a newly created server invisible to the
-      // build while the screen, defaulting the same field to `['tcp']`, said it
-      // was serving Modbus TCP.
-      modbusSlaveConfig: { enabled: false, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 },
+      // only considers a server that declares one, so seeding nothing made a
+      // newly created server invisible to the build while the screen, defaulting
+      // the same field, said it was serving.
+      modbusSlaveConfig: { enabled: false, transports, networkInterface: '0.0.0.0', port: 502 },
     }
   }
   if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
@@ -1712,7 +1727,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.servers) slice.project.data.servers = []
-          slice.project.data.servers.push(initializeServerProtocolConfig(dto.data))
+          slice.project.data.servers.push(initializeServerProtocolConfig(dto.data, seedTransports(getState())))
         }),
       )
       return ok()

@@ -7,11 +7,15 @@
  * speed, the RS-485 pin, the network. Protocol is the editor's, the physical
  * layer is the package's, and this function is where the two meet.
  *
- * The screen is declared in `packages/com.openplc.arduino/screens/modbus.json`
- * (shared across all Arduino-family VPP packages); its values land in
- * `DeviceConfiguration.vendorScreenData` under keys `modbus_rtu` and
- * `modbus_tcp` (one per `section.id` in the screen JSON, resolved by
+ * The screens are declared in `packages/com.openplc.arduino/screens/serial.json`
+ * and `network.json` (shared across all Arduino-family VPP packages); their
+ * values land in `DeviceConfiguration.vendorScreenData` under the keys `serial`
+ * and `network` (one per `section.id` in the screen JSON, resolved by
  * `getSectionPersistenceKey` in `frontend/utils/vpp/persistence-keys.ts`).
+ *
+ * WHICH transports reach this emitter is narrowed by `narrowModbusTransports`
+ * against the board's own carriers before it is called -- serving TCP over a
+ * network the board does not have produces firmware that never links.
  *
  * The macros emitted here are the same set the historical
  * `communicationConfiguration` pipeline used (removed in commit
@@ -24,7 +28,7 @@
  * exact names.
  *
  * Pure function — no I/O, no electron, no store. Caller is responsible
- * for fishing `modbus_rtu` and `modbus_tcp` out of `vendorScreenData`.
+ * for fishing `serial` and `network` out of `vendorScreenData`.
  */
 
 import {
@@ -34,6 +38,7 @@ import {
   resolveRs485Pin,
   resolveRtuPort,
   resolveServerBaud,
+  resolveServerSlaveId,
 } from '../../../../middleware/shared/utils/modbus-server-profile'
 
 /**
@@ -42,19 +47,16 @@ import {
  * VPP screen field set evolves.
  */
 export interface VppModbusScreenState {
-  /** Serial-port section. Owns everything about the physical line: the
-   *  default port's speed (the debugger's, and Modbus RTU's when they share
-   *  it), which UART Modbus RTU answers on, that UART's own speed, and the
-   *  RS485 driver-enable pin.
+  /** Serial-port section. Owns the physical line the package is responsible
+   *  for: the default UART's speed -- the debugger's, and Modbus RTU's when
+   *  they share that port -- and the RS-485 driver-enable pin.
    *
-   *  These four moved here from `modbus_rtu` when the unified Modbus server
-   *  screen took that section over: the native screen renders `modbus_rtu`
-   *  itself, so any field left in it had nowhere to appear. The old spellings
-   *  are still read as a fallback -- see the `modbus_rtu` members below. */
+   *  Which UART the server answers on, and its speed when it has one to itself,
+   *  are the server's and arrive through `ModbusServerCompileConfig`. Nothing
+   *  here reads a pre-4.3.0 `modbus_rtu` section: 4.3.0 carries no configuration
+   *  forward, and a project from before it creates its server again. */
   serial?: {
     baud_rate?: string
-    modbus_port?: string
-    modbus_baud_rate?: string
     enable_rs485_en_pin?: boolean
     rs485_en_pin?: string
   }
@@ -67,33 +69,6 @@ export interface VppModbusScreenState {
     mac_address?: string
     wifi_ssid?: string
     wifi_password?: string
-    enable_dhcp?: boolean
-    ip_address?: string
-    gateway?: string
-    subnet?: string
-    dns?: string
-  }
-  /** Pre-4.4.0 protocol state, kept only as a fallback for a project whose
-   *  baremetal Modbus has not yet been promoted to a `PLCServer` -- one saved
-   *  by an older editor and compiled without being opened. The wiring fields
-   *  that used to live here are gone: `migrate-modbus-serial-fields` moves
-   *  them into `serial`, so reading them would be reading a value the editor
-   *  no longer writes. */
-  modbus_rtu?: {
-    enabled?: boolean
-    rtu_slave_id?: number
-    baud_rate?: string
-    rtu_baud_rate?: string
-  }
-  modbus_tcp?: {
-    enabled?: boolean
-    // Legacy network fields, still read: nothing migrates them into `network`,
-    // and dropping the fallback would lose a pre-split project's Wi-Fi
-    // credentials on upgrade. The protocol fields beside them are gone.
-    tcp_interface?: 'Ethernet' | 'Wi-Fi'
-    tcp_mac_address?: string
-    tcp_wifi_ssid?: string
-    tcp_wifi_password?: string
     enable_dhcp?: boolean
     ip_address?: string
     gateway?: string
@@ -131,46 +106,61 @@ interface ModbusServerLike {
  * The one Modbus server a firmware build can honour, or the conflict to refuse.
  *
  * A baremetal firmware serves exactly one slave: `modbus.slaveid` is a single
- * global and `init_mbregs` is called once. The editor still lets a project
- * carry several, on purpose -- a project moves between targets, and a server
- * that a Runtime v4 build serves happily should not have to be deleted to
- * build for a microcontroller. So the refusal belongs here, at the point where
- * a single answer is actually required, and it names the servers in conflict
- * rather than saying a number.
+ * global and `init_mbregs` is called once. The editor still lets a project carry
+ * several, on purpose -- a project moves between targets, and a server a Runtime
+ * v4 build serves happily should not have to be deleted to build for a
+ * microcontroller. So the refusal belongs here, at the point where a single
+ * answer is actually required, and it names the servers in conflict rather than
+ * saying a number.
  *
- * Existing and serving are two different questions, and this answers both.
- * `generateModbusDefines` falls back to the legacy screen sections when it gets
- * no server, so returning nothing for a server the user switched OFF let the
- * old `modbus_rtu.enabled` decide -- and on a board whose package was never
- * split that section is still there, still true, and never cleared. Turning the
- * server off then compiled RTU anyway. A server that exists and serves nothing
- * is therefore returned, so the emitter sees an empty transport list rather
- * than an absence.
- *
- * Only a server on the new model can do that, which is what `Array.isArray`
- * checks. A pre-4.4.0 project can carry a `modbus-tcp` server with no
- * `transports` at all -- one meant for Runtime v4 -- alongside the baremetal
- * screen sections; treating that as "serves nothing" would silence a project
- * that has always compiled its Modbus from those sections.
+ * Nothing serving means no Modbus. There is no fallback to fall back to.
  */
 export function selectModbusServer(servers: readonly ModbusServerLike[] | undefined): {
   server?: ModbusServerCompileConfig
   conflict?: string[]
 } {
-  const declared = (servers ?? []).filter(
+  const serving = (servers ?? []).filter(
     (entry) =>
-      entry.protocol === 'modbus-tcp' && entry.modbusSlaveConfig && Array.isArray(entry.modbusSlaveConfig.transports),
+      entry.protocol === 'modbus-tcp' &&
+      entry.modbusSlaveConfig &&
+      entry.modbusSlaveConfig.enabled !== false &&
+      (entry.modbusSlaveConfig.transports?.length ?? 0) > 0,
   )
-  const serving = declared.filter(
-    (entry) => entry.modbusSlaveConfig?.enabled !== false && (entry.modbusSlaveConfig?.transports?.length ?? 0) > 0,
-  )
-
   if (serving.length > 1) return { conflict: serving.map((entry) => entry.name) }
-  if (serving.length === 1) return { server: serving[0].modbusSlaveConfig }
-  // Nothing serving, but the project does carry a server: hand it back so the
-  // emitter reads an empty transport list and does not reopen the fallback.
-  if (declared.length > 0) return { server: declared[0].modbusSlaveConfig }
-  return {}
+  return serving.length === 1 ? { server: serving[0].modbusSlaveConfig } : {}
+}
+
+/**
+ * Narrow a server's transports to the ones the board can actually carry.
+ *
+ * The project says WHAT is served and the board says what it can be served
+ * OVER, and the two have to meet somewhere. They used to meet only on the
+ * screen: `resolveModbusServerProfile` decided which transports to offer while
+ * this emitter took `server.transports` verbatim. A server seeded with `['tcp']`
+ * on a board that ships no Network screen therefore compiled `MBTCP` into a
+ * firmware with no network stack, and no `MBSERIAL` either -- a board that
+ * answers on nothing, which reads as dead hardware.
+ *
+ * `dropped` is reported rather than swallowed: the difference between the
+ * firmware asked for and the firmware built is exactly the thing a user cannot
+ * discover on a microcontroller.
+ *
+ * Returns the server unchanged when nothing is dropped, so the common path
+ * allocates nothing, and `undefined` when nothing survives -- there is no such
+ * thing as a server that serves no transport.
+ */
+export function narrowModbusTransports(
+  server: ModbusServerCompileConfig | undefined,
+  allowed: readonly ('rtu' | 'tcp')[],
+  onDropped: (dropped: ('rtu' | 'tcp')[]) => void,
+): ModbusServerCompileConfig | undefined {
+  if (!server) return undefined
+  const requested = server.transports ?? []
+  const dropped = requested.filter((transport) => !allowed.includes(transport))
+  if (dropped.length === 0) return server
+  onDropped(dropped)
+  const kept = requested.filter((transport) => allowed.includes(transport))
+  return kept.length > 0 ? { ...server, transports: kept } : undefined
 }
 
 /**
@@ -184,7 +174,14 @@ export function selectModbusServer(servers: readonly ModbusServerLike[] | undefi
  * quietly disagreeing with the firmware is the failure this area keeps
  * producing.
  */
-export { DEFAULT_SERIAL_BAUD, isDefaultPort, resolveDefaultPortBaud, resolveRs485Pin, resolveRtuPort }
+export {
+  DEFAULT_SERIAL_BAUD,
+  isDefaultPort,
+  resolveDefaultPortBaud,
+  resolveRs485Pin,
+  resolveRtuPort,
+  resolveServerSlaveId,
+}
 
 /**
  * Slave id the always-on debugger answers on, and therefore the one the editor
@@ -241,9 +238,9 @@ function formatIpForDefine(raw: string): string {
 // firmware still needs MBSERIAL_IFACE / MBSERIAL_BAUD / MBSERIAL_SLAVE
 // to compile (ModbusSlave.cpp uses them as object/literal values).
 // Keep these in sync if the screen schema's defaults change.
-const RTU_DEFAULTS = {
-  rtu_slave_id: 1,
-} as const
+//
+// The RTU slave id is not among them: it is resolved by
+// `resolveServerSlaveId`, which the screen calls too.
 
 const TCP_DEFAULTS = {
   tcp_interface: 'Ethernet' as const,
@@ -259,9 +256,10 @@ const BAREMETAL_DEFAULT_TCP_PORT = 502
  * without Modbus configured.
  *
  * Defaults are applied per-field when the persisted state lacks the
- * value (see comment on `RTU_DEFAULTS` above for the rationale). The
- * `enable_*` gates remain authoritative — defaults only kick in for
- * fields under an active section.
+ * value (see the comment on `TCP_DEFAULTS` above for the rationale; the
+ * RTU side resolves through `middleware/shared`, which the screen calls
+ * too). The `enable_*` gates remain authoritative — defaults only kick
+ * in for fields under an active section.
  *
  * The output always ends with a trailing newline so callers can
  * concatenate without adding their own.
@@ -271,19 +269,13 @@ export function generateModbusDefines(
   defaultSerial: string = 'Serial',
   server?: ModbusServerCompileConfig,
 ): string {
-  const rtu = state.modbus_rtu ?? {}
-  const tcp = state.modbus_tcp ?? {}
   const net = state.network ?? {}
 
-  // The project's server is authoritative about what is served. A project that
-  // predates it -- never opened by an editor that promotes the screen state --
-  // still says so in the screen sections, and must keep compiling to the same
-  // firmware it compiled to yesterday.
-  // `null` means no server at all -- fall back to the sections. An empty array
-  // means a server that exists and serves nothing, which is not the same thing
-  // and must not reopen the fallback.
-  const served = server ? (server.enabled === false ? [] : (server.transports ?? [])) : null
-  const rtuOn = served ? served.includes('rtu') : rtu.enabled === true
+  // The project's server is the only thing that says what is served. No server,
+  // no Modbus: 4.3.0 does not read a pre-4.3.0 project's `modbus_rtu` section,
+  // so a project from before it has to create its server again.
+  const served = server && server.enabled !== false ? (server.transports ?? []) : []
+  const rtuOn = served.includes('rtu')
   // Modbus TCP needs a network, and after the screen split the network is a
   // section of its own with its own switch. Serving TCP over a network the
   // project says to leave down produced firmware that compiled MBTCP, called
@@ -295,7 +287,7 @@ export function generateModbusDefines(
   // touched the toggle has no `enabled` at all; refusing to build that would
   // trade one silent failure for another. A pre-split project has no `network`
   // section whatsoever and keeps building exactly as it did.
-  const tcpOn = (served ? served.includes('tcp') : tcp.enabled === true) && net.enabled !== false
+  const tcpOn = served.includes('tcp') && net.enabled !== false
 
   if (!rtuOn && !tcpOn) return ''
 
@@ -307,7 +299,7 @@ export function generateModbusDefines(
     // port and the "is it the default one" question come from the shared
     // resolver, because the screen asks the same two and a disagreement puts a
     // read-only baud on screen while the build emits MBSERIAL_ON_SECONDARY.
-    const iface = resolveRtuPort(state, server?.serialPort, defaultSerial)
+    const iface = resolveRtuPort(server?.serialPort, defaultSerial)
     const onDefaultPort = isDefaultPort(iface, defaultSerial)
     // The default port's speed is the editor's line and the package's to state;
     // a UART of its own belongs to the server. One UART has one speed, and
@@ -316,7 +308,7 @@ export function generateModbusDefines(
     // The server's id, on every port. On the default port the firmware answers
     // DEBUG_SLAVE alongside it for the editor's function codes, so the two share
     // the UART without sharing an address.
-    const slave = server?.slaveId ?? rtu.rtu_slave_id ?? RTU_DEFAULTS.rtu_slave_id
+    const slave = resolveServerSlaveId(server?.slaveId)
     lines.push(`#define MBSERIAL_IFACE ${iface}`)
     lines.push(`#define MBSERIAL_BAUD ${baud}`)
     lines.push(`#define MBSERIAL_SLAVE ${slave}`)
@@ -337,8 +329,7 @@ export function generateModbusDefines(
   }
 
   if (tcpOn) {
-    // Network config comes from the Phase 2 `network` section, falling back to
-    // the legacy `modbus_tcp` fields for pre-migration projects.
+    // Network config comes from the `network` section the package ships.
     //
     // MBTCP_MAC / MBTCP_IP / MBTCP_DNS / MBTCP_GATEWAY / MBTCP_SUBNET are
     // referenced unconditionally inside the `#ifdef MBTCP` block in
@@ -346,15 +337,15 @@ export function generateModbusDefines(
     // DHCP-vs-static selector). A missing macro fails compilation; an unset
     // value is signalled by a single-byte `0` so the `< 4` check fires and the
     // runtime falls back to the DHCP/NULL path.
-    const mac = net.mac_address ?? tcp.tcp_mac_address
-    const ifaceSel = net.interface ?? tcp.tcp_interface ?? TCP_DEFAULTS.tcp_interface
-    const dhcpOn = (net.enable_dhcp ?? tcp.enable_dhcp) === true
-    const ip = net.ip_address ?? tcp.ip_address
-    const dns = net.dns ?? tcp.dns
-    const gateway = net.gateway ?? tcp.gateway
-    const subnet = net.subnet ?? tcp.subnet
-    const ssid = net.wifi_ssid ?? tcp.tcp_wifi_ssid
-    const pwd = net.wifi_password ?? tcp.tcp_wifi_password
+    const mac = net.mac_address
+    const ifaceSel = net.interface ?? TCP_DEFAULTS.tcp_interface
+    const dhcpOn = net.enable_dhcp === true
+    const ip = net.ip_address
+    const dns = net.dns
+    const gateway = net.gateway
+    const subnet = net.subnet
+    const ssid = net.wifi_ssid
+    const pwd = net.wifi_password
 
     lines.push(`#define MBTCP_MAC ${mac ? formatMacForDefine(mac) : '0'}`)
     lines.push(`#define MBTCP_IP ${!dhcpOn && ip ? formatIpForDefine(ip) : '0'}`)

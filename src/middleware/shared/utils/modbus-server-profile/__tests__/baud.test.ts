@@ -1,70 +1,41 @@
 /**
- * The speed of a serial line, which the screen displays and the compiler emits.
+ * The serial line resolved once, for the screen and the compiler alike.
  *
- * These two used to be derived in separate places, and the failure that produces
- * is specific: the port opens, so it is not "no response", and nothing decodes,
- * so it reads as "no firmware" — and the user is told to reflash a board that is
- * running perfectly well. One resolver is the fix; these tests are what keeps it
- * honest about the shapes real projects persist.
+ * What these pin is not arithmetic: it is that each value has exactly ONE
+ * source. The screen and the `defines.h` emitter call these same functions, and
+ * every defect this area has produced came from the two deriving a value
+ * independently and drifting apart.
  */
 
 import {
   DEFAULT_SERIAL_BAUD,
+  DEFAULT_SERVER_SLAVE_ID,
   isDefaultPort,
   readSerialBaudState,
   resolveDefaultPortBaud,
   resolveRs485Pin,
   resolveRtuPort,
   resolveServerBaud,
+  resolveServerSlaveId,
 } from '../baud'
 
 describe('resolveDefaultPortBaud', () => {
-  it('prefers an explicit `serial` section when a package declares one', () => {
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '57600' }, modbus_rtu: { rtu_baud_rate: '9600' } })).toBe(
-      '57600',
-    )
+  it("carries the package's value for the board's default UART", () => {
+    expect(resolveDefaultPortBaud({ serial: { baud_rate: '57600' } })).toBe('57600')
   })
 
-  it('falls back to the RTU section when the RTU is on this very port', () => {
-    // A new editor can meet an old package: the version floor only stops the
-    // other direction. Pre-split, the RTU and the debugger shared the default
-    // UART, so the RTU's baud IS this port's.
-    expect(resolveDefaultPortBaud({ modbus_rtu: { rtu_baud_rate: '9600' } }, true)).toBe('9600')
-    expect(resolveDefaultPortBaud({ modbus_rtu: { baud_rate: '19200' } }, true)).toBe('19200')
-    // And where the fold lands that same value.
-    expect(resolveDefaultPortBaud({ serial: { modbus_baud_rate: '19200' } }, true)).toBe('19200')
-  })
-
-  it('ignores the RTU baud when the RTU is on a SECOND port', () => {
-    // That number describes the other UART. Applying it here brings the USB
-    // port up at a speed nothing answers on, and the editor reports "No
-    // Firmware Detected" on a healthy board.
-    expect(resolveDefaultPortBaud({ modbus_rtu: { rtu_baud_rate: '9600' } })).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveDefaultPortBaud({ serial: { modbus_baud_rate: '9600' } })).toBe(DEFAULT_SERIAL_BAUD)
-    // The port's own declared speed still wins, whatever the RTU is doing.
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '57600' }, modbus_rtu: { rtu_baud_rate: '9600' } })).toBe(
-      '57600',
-    )
-  })
-
-  it('falls back for a project that states nothing', () => {
+  it('falls back when the project states nothing', () => {
     expect(resolveDefaultPortBaud({})).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveDefaultPortBaud({ serial: {} })).toBe(DEFAULT_SERIAL_BAUD)
   })
 
   it('falls through a value that is not a positive integer', () => {
     // This is the number the editor dials to reach the debugger, so a bad one
-    // locks the board out with nothing on screen to say why.
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '' } })).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: 'fast' } })).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '0' } })).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '-9600' } })).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '96.00' } })).toBe(DEFAULT_SERIAL_BAUD)
-  })
-
-  it('takes the next candidate when the first is unusable', () => {
-    expect(resolveDefaultPortBaud({ serial: { baud_rate: '' }, modbus_rtu: { rtu_baud_rate: '9600' } }, true)).toBe(
-      '9600',
-    )
+    // locks the board out with nothing on screen to say why. `??` alone would
+    // return a persisted empty string.
+    for (const bad of ['', 'fast', '0', '-9600', '96.00', ' ']) {
+      expect(resolveDefaultPortBaud({ serial: { baud_rate: bad } })).toBe(DEFAULT_SERIAL_BAUD)
+    }
   })
 
   it('normalises surrounding whitespace', () => {
@@ -73,107 +44,39 @@ describe('resolveDefaultPortBaud', () => {
 })
 
 describe('resolveServerBaud', () => {
-  const state = { serial: { baud_rate: '19200', modbus_baud_rate: '38400' } }
-
-  it("takes the default port's speed when the server is on that port", () => {
-    // One UART has one speed, and the editor is already on it. Unlike the slave
-    // id, no firmware routing makes two values possible here.
+  it("takes the package's value on the default port, whatever the server says", () => {
+    // One UART has one speed, the editor is already on it, and bit timing is not
+    // something the firmware can route around the way it routes two slave ids.
+    const state = { serial: { baud_rate: '19200' } }
     expect(resolveServerBaud({ onDefaultPort: true, serverBaud: 9600, state })).toBe('19200')
   })
 
-  it("takes the server's own speed on a UART of its own", () => {
-    expect(resolveServerBaud({ onDefaultPort: false, serverBaud: 9600, state })).toBe('9600')
+  it("takes the server's value on a UART of its own", () => {
+    expect(resolveServerBaud({ onDefaultPort: false, serverBaud: 9600, state: {} })).toBe('9600')
   })
 
-  it('falls back to where the value used to live, so an existing project keeps building the same firmware', () => {
-    // A project that already carries a server but no `baudRate`: the value is
-    // still sitting in the screen state the package no longer renders.
-    expect(resolveServerBaud({ onDefaultPort: false, serverBaud: undefined, state })).toBe('38400')
+  it('refuses a server value that could not reach the firmware intact', () => {
+    // `Serial1.begin(0)` opens a dead line the screen would confirm as configured;
+    // a fraction does not compile at all.
+    for (const bad of [0, -9600, 96.5, Number.NaN]) {
+      expect(resolveServerBaud({ onDefaultPort: false, serverBaud: bad, state: {} })).toBe(DEFAULT_SERIAL_BAUD)
+    }
   })
 
-  it('falls back to the default when neither the server nor the project states one', () => {
+  it('falls back when a secondary-port server states no baud', () => {
     expect(resolveServerBaud({ onDefaultPort: false, serverBaud: undefined, state: {} })).toBe(DEFAULT_SERIAL_BAUD)
   })
-
-  it('ignores a stored value that is not a finite number', () => {
-    expect(resolveServerBaud({ onDefaultPort: false, serverBaud: Number.NaN, state })).toBe('38400')
-  })
 })
 
-describe('readSerialBaudState', () => {
-  it('reads the two sections it cares about', () => {
-    const read = readSerialBaudState({
-      serial: { baud_rate: '9600', modbus_baud_rate: '19200' },
-      modbus_rtu: { rtu_baud_rate: '38400' },
-      network: { enabled: true },
-    })
-
-    expect(read.serial?.baud_rate).toBe('9600')
-    expect(read.serial?.modbus_baud_rate).toBe('19200')
-    expect(read.modbus_rtu?.rtu_baud_rate).toBe('38400')
+describe('resolveRtuPort', () => {
+  it("takes the server's port when it names one", () => {
+    expect(resolveRtuPort('Serial2', 'Serial')).toBe('Serial2')
   })
 
-  it('survives a project file that holds anything at all under those keys', () => {
-    // This is a user's project, and a wrong type here would put a bad rate on
-    // screen and into the build rather than fail loudly.
-    expect(readSerialBaudState({ serial: 'nine thousand six hundred', modbus_rtu: null })).toEqual({
-      serial: { baud_rate: undefined, modbus_baud_rate: undefined },
-      modbus_rtu: { baud_rate: undefined, rtu_baud_rate: undefined },
-    })
-    expect(readSerialBaudState({ serial: { baud_rate: 9600 } }).serial?.baud_rate).toBeUndefined()
-    expect(readSerialBaudState({ serial: { baud_rate: '' } }).serial?.baud_rate).toBeUndefined()
-  })
-
-  it('handles no screen state at all', () => {
-    expect(resolveDefaultPortBaud(readSerialBaudState(undefined))).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveDefaultPortBaud(readSerialBaudState(null))).toBe(DEFAULT_SERIAL_BAUD)
-  })
-})
-
-/**
- * The RTU's UART and its RS-485 pin moved from `modbus_rtu` into `serial`, and
- * `migrate-modbus-serial-fields` folds the old spellings forward -- but it runs
- * in the STORE while the compiler reads the project from disk, and on a board
- * whose package was never split it never runs at all. Reading only the new keys
- * loses the wiring on exactly the projects that still carry the old ones.
- */
-describe('the legacy wiring keys', () => {
-  it('resolves the RTU port through all three spellings, newest first', () => {
-    expect(resolveRtuPort({ serial: { modbus_port: 'Serial1' } }, undefined, 'Serial')).toBe('Serial1')
-    expect(resolveRtuPort({ modbus_rtu: { serial_port: 'Serial2' } }, undefined, 'Serial')).toBe('Serial2')
-    expect(resolveRtuPort({ modbus_rtu: { rtu_interface: 'Serial3' } }, undefined, 'Serial')).toBe('Serial3')
-  })
-
-  it('lets the server override every screen key, and falls back to the board default', () => {
-    expect(resolveRtuPort({ serial: { modbus_port: 'Serial1' } }, 'Serial2', 'Serial')).toBe('Serial2')
-    expect(resolveRtuPort({}, undefined, 'Serial')).toBe('Serial')
-  })
-
-  it('reads the RS-485 driver-enable pin from the legacy section too', () => {
-    // Without this the transceiver never asserts DE and the board receives but
-    // never answers -- silent, with no warning on any path.
-    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: true, rs485_en_pin: '4' } })).toBe('4')
-    expect(resolveRs485Pin({ modbus_rtu: { enable_rs485_en_pin: true, rtu_rs485_en_pin: '17' } })).toBe('17')
-  })
-
-  it('reports no pin when the project never enabled one, or enabled one with no pin', () => {
-    expect(resolveRs485Pin({})).toBeNull()
-    expect(resolveRs485Pin({ modbus_rtu: { rtu_rs485_en_pin: '17' } })).toBeNull()
-    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: true, rs485_en_pin: '' } })).toBeNull()
-  })
-
-  it('narrows the legacy keys off raw persisted state', () => {
-    const state = readSerialBaudState({
-      modbus_rtu: {
-        rtu_interface: 'Serial2',
-        rtu_baud_rate: '19200',
-        enable_rs485_en_pin: true,
-        rtu_rs485_en_pin: '17',
-      },
-    })
-    expect(resolveRtuPort(state, undefined, 'Serial')).toBe('Serial2')
-    expect(resolveRs485Pin(state)).toBe('17')
-    expect(resolveDefaultPortBaud(state, true)).toBe('19200')
+  it("falls back to the board's default UART", () => {
+    expect(resolveRtuPort(undefined, 'Serial')).toBe('Serial')
+    expect(resolveRtuPort('', 'Serial')).toBe('Serial')
+    expect(resolveRtuPort('  ', 'Serial')).toBe('Serial')
   })
 })
 
@@ -183,5 +86,69 @@ describe('isDefaultPort', () => {
     expect(isDefaultPort('', 'Serial')).toBe(true)
     expect(isDefaultPort('Serial', 'Serial')).toBe(true)
     expect(isDefaultPort('Serial1', 'Serial')).toBe(false)
+  })
+})
+
+describe('resolveServerSlaveId', () => {
+  it("takes the server's id, which is where the user sets it", () => {
+    expect(resolveServerSlaveId(7)).toBe(7)
+  })
+
+  it('falls back to 1 when the project states none', () => {
+    expect(resolveServerSlaveId(undefined)).toBe(DEFAULT_SERVER_SLAVE_ID)
+    expect(resolveServerSlaveId(undefined)).toBe(1)
+  })
+
+  it('refuses a non-integer rather than passing it to the firmware', () => {
+    expect(resolveServerSlaveId(7.5)).toBe(1)
+  })
+})
+
+describe('resolveRs485Pin', () => {
+  it('reports the pin only when the board declares the driver-enable is wired', () => {
+    // Without it the transceiver never asserts DE and the board receives every
+    // request and answers none -- silent, with no warning on any path.
+    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: true, rs485_en_pin: '17' } })).toBe('17')
+  })
+
+  it('reports nothing when it is off, unset, or enabled with no pin', () => {
+    expect(resolveRs485Pin({})).toBeNull()
+    expect(resolveRs485Pin({ serial: { rs485_en_pin: '17' } })).toBeNull()
+    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: false, rs485_en_pin: '17' } })).toBeNull()
+    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: true, rs485_en_pin: '' } })).toBeNull()
+  })
+})
+
+describe('readSerialBaudState', () => {
+  it('narrows the Serial screen off raw persisted state', () => {
+    const state = readSerialBaudState({
+      serial: { baud_rate: '19200', enable_rs485_en_pin: true, rs485_en_pin: '17' },
+    })
+    expect(resolveDefaultPortBaud(state)).toBe('19200')
+    expect(resolveRs485Pin(state)).toBe('17')
+  })
+
+  it('survives a project file whose values are the wrong type', () => {
+    // A user's project file, not our data: a number where a string belongs would
+    // otherwise put a bad baud rate on screen and into the build.
+    const state = readSerialBaudState({ serial: { baud_rate: 19200, enable_rs485_en_pin: 'yes', rs485_en_pin: 17 } })
+    expect(resolveDefaultPortBaud(state)).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveRs485Pin(state)).toBeNull()
+  })
+
+  it('survives a missing or malformed serial section', () => {
+    for (const raw of [undefined, null, {}, { serial: null }, { serial: 'nope' }, { serial: [] }]) {
+      expect(resolveDefaultPortBaud(readSerialBaudState(raw))).toBe(DEFAULT_SERIAL_BAUD)
+    }
+  })
+
+  it('ignores a pre-4.3.0 project entirely', () => {
+    // 4.3.0 does not carry configuration forward: a project from before it
+    // creates its Modbus server again, and nothing here reads the old section.
+    const legacy = readSerialBaudState({
+      modbus_rtu: { rtu_baud_rate: '9600', rtu_interface: 'Serial2', rtu_rs485_en_pin: '17' },
+    })
+    expect(resolveDefaultPortBaud(legacy)).toBe(DEFAULT_SERIAL_BAUD)
+    expect(resolveRs485Pin(legacy)).toBeNull()
   })
 })

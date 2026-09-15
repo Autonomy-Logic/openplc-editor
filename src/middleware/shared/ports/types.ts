@@ -700,6 +700,13 @@ export interface BoardInfo {
   /** Upload transport for arduino-cli targets: "ethernet" (LOGO! 8.2) is
    *  flashed over the network; absent/"serial" is the default USB path. */
   uploadMethod?: 'serial' | 'ethernet'
+  /**
+   * The board's fully-qualified name, e.g. `arduino:avr:uno`. The same string
+   * arduino-cli reads `build.mcu` from, which is what selects the firmware's
+   * I/O buffer sizes in `resources/sources/arduino/openplc.h` -- `core` alone
+   * cannot tell an Uno from a Mega. Absent for hals.json targets.
+   */
+  platform?: string
   preview: string
   specs: Record<string, string>
   coreVersion?: string
@@ -1326,12 +1333,11 @@ export interface DebugConnectionConfig {
     baudRate?: number
     slaveId?: number
     /**
-     * An id a board flashed before 4.4.0 may still answer the editor on, tried
+     * An id a board flashed before 4.3.0 may still answer the editor on, tried
      * only after `slaveId` has gone unanswered. Not a manifest field: the editor
      * reads it from the project's own legacy screen state, because the packages
      * no longer declare the screen it lived on.
      */
-    legacySlaveId?: number
     jwtToken?: string
   }
 }

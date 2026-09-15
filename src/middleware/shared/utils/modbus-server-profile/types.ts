@@ -61,25 +61,24 @@ export interface ModbusServerProfile {
    *  never appear in the address map — a `%MX` row on an Arduino is a lie. */
   segments: ModbusSegment[]
 
-  /** The user sizes the buffers. On a `plc-server` target this is always true.
-   *  On a baremetal target it is true only when the board's package declares
-   *  BOTH its firmware defaults and a ceiling to raise them to -- otherwise
-   *  there is nothing the user could change and the screen shows the counts
-   *  read-only. */
+  /** The user sizes the buffers. True on a `plc-server` target, whose plugin
+   *  honours them through `conf/modbus_slave.json`. False on baremetal, where
+   *  they are compile-time `MAX_*` constants that also dimension the IEC
+   *  pointer arrays -- an I/O-image property rather than a Modbus setting, and
+   *  DOPE-615's to derive from the project. */
   configurableBuffers: boolean
 
-  /** Lowest value each segment may take. On a baremetal target this is the
-   *  firmware default, because these counts also dimension the IEC pointer
-   *  arrays and shrinking one drops I/O with no diagnostic; growth is the only
-   *  direction offered. `null` where there is no floor. */
+  /** Lowest value each segment may take, `null` where there is no floor.
+   *  Meaningful only alongside `configurableBuffers`. */
   minCounts: ModbusSegmentCounts | null
 
-  /** Highest value each segment may take, from the board's declared ceilings.
-   *  `null` where the target imposes none. */
+  /** Highest value each segment may take, `null` where the target imposes
+   *  none. Meaningful only alongside `configurableBuffers`. */
   maxCounts: ModbusSegmentCounts | null
 
-  /** The user picks the TCP listen port. False where the firmware hard-codes
-   *  it (baremetal listens on 502 in three places in `modbus_tcp.cpp`). */
+  /** The user picks the TCP listen port. True on baremetal too: the firmware
+   *  reads `MBTCP_PORT` and only falls back to 502 when nothing defines it
+   *  (`modbus_tcp.cpp:12`). */
   configurablePort: boolean
 
   /** The user picks which local interface the server binds to. Meaningless on
@@ -102,9 +101,11 @@ export interface ModbusServerProfile {
    *  false; otherwise the default for a newly created server. */
   fixedPort: number
 
-  /** Buffer counts to display when `configurableBuffers` is false. `null` only
-   *  on a target that serves no Modbus at all; a baremetal board always has
-   *  counts, because the firmware always compiles with some. */
+  /** Buffer counts to display when `configurableBuffers` is false. `null`
+   *  wherever the editor cannot know them, which since the DOPE-615 split is
+   *  every baremetal target: the sizes are chosen by an MCU-family macro inside
+   *  a header the build never reports back, and nothing in the project declares
+   *  them. The screen says so rather than showing a map it would be guessing. */
   derivedCounts: ModbusSegmentCounts | null
 
   /** The board carries its RTU/TCP hardware settings in VPP screens the
@@ -115,7 +116,5 @@ export interface ModbusServerProfile {
     serial?: string
     /** Screen name declaring Ethernet / Wi-Fi bring-up, if any. */
     network?: string
-    /** Screen name declaring the Modbus sections themselves. */
-    modbus?: string
   }
 }

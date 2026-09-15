@@ -2,7 +2,7 @@
  * One Modbus-server view over one store.
  *
  * Every target's Modbus server is a `PLCServer` in `project.data.servers`,
- * written to `devices/servers/<name>.json` -- baremetal included, since 4.4.0.
+ * written to `devices/servers/<name>.json` -- baremetal included, since 4.3.0.
  * Protocol configuration is the editor's, so there is no second store and no
  * fork at each call site: what differs between a microcontroller and a Runtime
  * v4 target is which fields the target lets the user set, and saying that is
@@ -33,12 +33,10 @@ import {
   resolveModbusServerProfile,
   resolveRtuPort,
   resolveServerBaud,
+  resolveServerSlaveId,
 } from '../../middleware/shared/utils/modbus-server-profile'
 import { useOpenPLCStore } from '../store'
 import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-config'
-
-/** Slave id the firmware falls back to (`modbus_config.h`). */
-const DEFAULT_SLAVE_ID = 1
 
 export interface ModbusServerView {
   profile: ModbusServerProfile
@@ -149,7 +147,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     // another one -- the divergence this whole module exists to prevent.
     const baudState = readSerialBaudState(vendorScreenData)
     const onDefaultPort = isDefaultPort(
-      resolveRtuPort(baudState, config?.serialPort, profile.defaultSerial),
+      resolveRtuPort(config?.serialPort, profile.defaultSerial),
       profile.defaultSerial,
     )
 
@@ -157,7 +155,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       profile,
       transports,
       enabled: config?.enabled ?? false,
-      slaveId: config?.slaveId ?? DEFAULT_SLAVE_ID,
+      slaveId: resolveServerSlaveId(config?.slaveId),
       serialPort,
       baudRate: resolveServerBaud({
         onDefaultPort,

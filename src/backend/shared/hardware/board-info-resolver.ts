@@ -210,6 +210,23 @@ export interface BoardBuildInfo {
   vppPackageId?: string
   vppDeviceId?: string
   vppPackagePath?: string
+  /** Names of the configuration screens the device declares (the keys of
+   *  `device.screens`, not their contents).
+   *
+   *  The compile side needs them for one question only: does this board ship a
+   *  Network screen? That is how a package states it has a TCP carrier, and
+   *  `resolveModbusServerProfile` reads it to decide whether Modbus TCP is on
+   *  offer at all. Without it the pipeline cannot tell an ESP32 with Wi-Fi from
+   *  an ATmega with nothing, and emits `MBTCP` into both. */
+  vppScreenNames?: string[]
+
+  // Physical transport the board exposes ------------------------------------
+  /** Hardware UARTs, from the manifest device's `serialPorts`. */
+  serialPorts?: string[]
+  /** The UART the debugger answers on, from `defaultSerial`. Absent → `Serial`. */
+  defaultSerial?: string
+  /** TCP carriers the board can bring up, from `networkInterfaces`. */
+  networkInterfaces?: string[]
 
   // Debug-channel resolver spec --------------------------------------------
   /** Declarative debug spec consumed by `resolveDebugConnection`.
@@ -301,6 +318,15 @@ export class BoardInfoResolver {
     }
     if (device.target.coreVersion) info.coreVersion = device.target.coreVersion
     if (device.target.uploadMethod) info.uploadMethod = device.target.uploadMethod
+
+    // The physical transport the board exposes, and which screens it ships.
+    // The renderer's `BoardInfo` has carried these since the screen split; the
+    // compile side never received them, so the emitter had no way to know what
+    // the board can actually serve over.
+    if (device.screens) info.vppScreenNames = Object.keys(device.screens)
+    if (device.serialPorts) info.serialPorts = device.serialPorts
+    if (device.defaultSerial) info.defaultSerial = device.defaultSerial
+    if (device.networkInterfaces) info.networkInterfaces = device.networkInterfaces
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)

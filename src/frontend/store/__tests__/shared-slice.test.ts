@@ -850,7 +850,7 @@ describe('createSharedSlice', () => {
         const second = await store.getState().datatypeActions.rename('Chassis', 'Frame')
 
         expect(second.ok).toBe(false)
-        expect(second.message).toBe('Another data type rename is awaiting confirmation')
+        expect(second.message).toBe('Another data type change is awaiting confirmation')
         // The first request's resolver is untouched and still completes.
         expect(store.getState().pendingDatatypeRename).toBe(pendingBefore)
         store.getState().datatypeActions.respondToPendingRename(true)
@@ -945,6 +945,142 @@ describe('createSharedSlice', () => {
         expect(result).toEqual({ ok: true })
         const headless = store.getState().project.data.pous.find((p) => p.name === 'Headless')
         expect(headless?.interface?.variables[0].type.value).toBe('NewDT')
+      })
+    })
+
+    describe('deleteRequest with references (impact modal)', () => {
+      beforeEach(() => {
+        store.getState().datatypeActions.create({ name: 'OldDT', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Chassis', derivation: 'structure' })
+        store.getState().projectActions.updateDatatype('Chassis', {
+          name: 'Chassis',
+          derivation: 'structure',
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+        store.getState().projectActions.setPouVariables({
+          pouName: 'Main',
+          variables: [
+            {
+              name: 'motor',
+              class: 'local',
+              type: { definition: 'user-data-type', value: 'olddt' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        })
+      })
+
+      const dataTypeNames = () => store.getState().project.data.dataTypes.map((d) => d.name)
+
+      it('parks a pending delete instead of opening the confirm modal', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        const pending = store.getState().pendingDatatypeDelete
+        expect(pending?.name).toBe('OldDT')
+        expect(pending?.impact.totalReferences).toBe(2)
+        expect(Array.from(pending?.impact.byPou.entries() ?? [])).toEqual([
+          ['Main', 1],
+          ['Chassis', 1],
+        ])
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('confirm deletes the type and leaves the references in place', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.respondToPendingDelete(true)
+
+        const state = store.getState()
+        expect(state.pendingDatatypeDelete).toBeNull()
+        expect(dataTypeNames()).toEqual(['Chassis'])
+        expect(state.pendingDeletions).toContain('datatypes/OldDT.dt')
+        expect(state.files['OldDT']).toBeUndefined()
+        expect(state.project.data.pous[0].interface?.variables[0].type.value).toBe('olddt')
+        expect(state.project.data.dataTypes[0]).toMatchObject({
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+      })
+
+      it('cancel leaves the store untouched', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.respondToPendingDelete(false)
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+        expect(store.getState().pendingDeletions).toHaveLength(0)
+      })
+
+      it('ignores a second request while one is awaiting confirmation', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.deleteRequest('Chassis')
+
+        expect(store.getState().pendingDatatypeDelete?.name).toBe('OldDT')
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+      })
+
+      it('respondToPendingDelete without a pending request is a no-op', () => {
+        store.getState().datatypeActions.respondToPendingDelete(true)
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('refuses a delete request while a rename is awaiting confirmation', async () => {
+        const rename = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        const pendingRename = store.getState().pendingDatatypeRename
+
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+        expect(store.getState().pendingDatatypeRename).toBe(pendingRename)
+
+        store.getState().datatypeActions.respondToPendingRename(false)
+        await rename
+      })
+
+      it('refuses a rename while a delete is awaiting confirmation', async () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        const result = await store.getState().datatypeActions.rename('OldDT', 'NewDT')
+
+        expect(result).toEqual({ ok: false, message: 'Another data type change is awaiting confirmation' })
+        expect(store.getState().pendingDatatypeDelete?.name).toBe('OldDT')
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('drops a pending delete when the project is closed', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        expect(store.getState().pendingDatatypeDelete).not.toBeNull()
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+      })
+
+      it('cancels a pending rename when the project is closed', async () => {
+        const rename = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(store.getState().pendingDatatypeRename).not.toBeNull()
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+        // Without the resolver being fired, this await would never settle.
+        await expect(rename).resolves.toEqual({
+          ok: false,
+          cancelled: true,
+          message: 'Rename cancelled',
+        })
+      })
+
+      it('skips the modal when nothing references the type', () => {
+        store.getState().datatypeActions.deleteRequest('Chassis')
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').data).toEqual({
+          name: 'Chassis',
+          elementType: 'datatype',
+        })
       })
     })
 
@@ -2735,8 +2871,8 @@ describe('createSharedSlice', () => {
       }
 
       // DOPE-442
-      describe('the pre-4.4.0 Modbus migration', () => {
-        /** A board whose Modbus still lives in the VPP screen sections. */
+      describe('a project saved before 4.3.0', () => {
+        /** A board whose Modbus lived in the VPP screen sections. */
         const legacyBoard = {
           deviceConfiguration: {
             deviceBoard: 'ESP32',
@@ -2748,46 +2884,19 @@ describe('createSharedSlice', () => {
           },
         }
 
-        it('registers the promoted server as UNSAVED so it reaches the disk', () => {
-          // The registry is built from the loaded project data, which by
-          // definition does not contain a server the migration just invented.
-          // Without an entry it is invisible to dirty tracking, the
-          // close-project check and the single-file save: the user closes with
-          // no prompt, nothing is written, and the migration runs again on the
-          // next open while the board compiles from sections the editor no
-          // longer shows.
+        it('opens with no Modbus server and leaves the old sections untouched', () => {
+          // 4.3.0 does not carry configuration forward. Nothing is promoted,
+          // nothing is rewritten, and the project is not dirtied on open -- the
+          // user creates the server again, and until then no Modbus is compiled.
           const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
           store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
-
-          const state = store.getState()
-          const migrated = state.project.data.servers?.find((server) => server.protocol === 'modbus-tcp')
-          expect(migrated).toBeDefined()
-
-          const entry = state.files[migrated?.name ?? '']
-          expect(entry).toBeDefined()
-          expect(entry?.type).toBe('server')
-          expect(entry?.saved).toBe(false)
-          expect(state.workspace.editingState).toBe('unsaved')
-        })
-
-        it('carries the UART and baud across from the legacy keys', () => {
-          const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
-          store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
-
-          const migrated = store.getState().project.data.servers?.[0]
-          expect(migrated?.modbusSlaveConfig).toMatchObject({
-            slaveId: 7,
-            serialPort: 'Serial2',
-            baudRate: 115200,
-          })
-        })
-
-        it('leaves a project with nothing to migrate saved and untouched', () => {
-          store.getState().sharedWorkspaceActions.handleOpenProjectResponse(makeMinimalProjectResponse())
 
           const state = store.getState()
           expect(state.project.data.servers ?? []).toHaveLength(0)
           expect(state.workspace.editingState).toBe('saved')
+          expect(state.deviceDefinitions.configuration.vendorScreenData).toEqual(
+            legacyBoard.deviceConfiguration.vendorScreenData,
+          )
         })
       })
 
