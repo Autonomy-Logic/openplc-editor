@@ -8,7 +8,7 @@ import {
   describeSource,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { createColumnHelper } from '@tanstack/react-table'
 
 import { GenericTable } from '../../../../../../_atoms/generic-table'
@@ -72,7 +72,7 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
           vendorIoMapping: { entries: ioMapping },
           remoteDevices: state.project.data.remoteDevices,
         },
-        resolveTargetCapabilities(boardInfo),
+        resolveAddressProducerCapabilities(boardInfo),
       )
       const registry = buildAliasRegistry(pool)
       const validation = validateAliasEdit(registry, value, sourceRef)
