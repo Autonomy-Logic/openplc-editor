@@ -17,6 +17,8 @@ export interface OrchestratorDevice {
   name: string
   status: string | null
   active: boolean
+  /** Whether this vPLC holds the Device's backplane I/O. Absent means the host did not say, not `false`. */
+  backplaneAccess?: boolean
 }
 
 /**
