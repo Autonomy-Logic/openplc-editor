@@ -28,7 +28,7 @@ import { WorkspaceScreen } from './frontend/screens/workspace-screen'
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
-import { editorPorts, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
+import { editorPorts, packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { PlatformProvider } from './middleware/shared/providers'
 
 /**
@@ -74,6 +74,11 @@ openPLCStoreBase.subscribe(
   (state) => state.project.meta.path,
   () => hydrateLibraries(),
 )
+
+// Fetch the VPP catalog once, now, so a build can tell the user a newer
+// package exists without waiting on the network to find out. Nothing awaits
+// this and nothing reports its failure: offline simply means no such notice.
+void packageUpdateNotifier.prime()
 
 // Register the basedpyright worker URL so the Monaco-side adapter
 // can spin up the Python LSP on first POU open.  No service

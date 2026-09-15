@@ -159,7 +159,18 @@ export type CompileLibraryIpcArgs = [
   nativePous: NativePouRef[],
 ]
 
-export function createEditorCompilerAdapter(): CompilerPort {
+/**
+ * Cross-port collaborators the compiler adapter cannot build itself.
+ *
+ * `findPackageUpdateNotice` reaches the package catalogue, which belongs to a
+ * different port, so it is injected at the platform wiring rather than reached
+ * for from here. Optional so a test can construct the adapter bare.
+ */
+export interface EditorCompilerAdapterDeps {
+  findPackageUpdateNotice?: (packageId: string) => Promise<string | null>
+}
+
+export function createEditorCompilerAdapter(deps: EditorCompilerAdapterDeps = {}): CompilerPort {
   return {
     /**
      * The Build / Build & Upload flow.
@@ -179,6 +190,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
           getAvailableBoards: () => window.bridge.getAvailableBoards(),
           loadAllLibraries: async () => (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[],
           runCompileProgram: (compileArgs, onMessage) => window.bridge.runCompileProgram(compileArgs, onMessage),
+          findPackageUpdateNotice: deps.findPackageUpdateNotice,
         },
         onProgress,
       )

@@ -227,10 +227,31 @@ export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
 export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
 
 // Modbus
+
+/** Wire transports a Modbus endpoint answers on, shared by the slave and the
+ *  master: the same two wires carry both roles. */
+export type ModbusTransport = 'rtu' | 'tcp'
+
+/** Modbus RTU parity, shared by the slave and the master. */
+export type ModbusParity = 'N' | 'E' | 'O'
+
 export interface ModbusSlaveConfig {
   enabled: boolean
+  /** Transports this server answers on. RTU and TCP together are ONE server
+   *  with two transports, never two servers. Absent means TCP, which is what
+   *  every project saved before baremetal gained a real `PLCServer` implies. */
+  transports?: ModbusTransport[]
   networkInterface: string
   port: number
+  /** Meaningful on RTU, where it is the only addressing there is. On TCP the
+   *  MBAP unit id is a gateway routing field and is not filtered on. */
+  slaveId?: number
+  // RTU wiring, mirroring the master's serial half.
+  serialPort?: string
+  baudRate?: number
+  parity?: ModbusParity
+  stopBits?: number
+  dataBits?: number
   bufferMapping?: ModbusBufferMapping
 }
 
@@ -266,7 +287,7 @@ export interface ModbusRemoteTcpConfig {
   port?: number
   serialPort?: string
   baudRate?: number
-  parity?: 'N' | 'E' | 'O'
+  parity?: ModbusParity
   stopBits?: number
   dataBits?: number
   slaveId?: number
@@ -678,6 +699,13 @@ export interface PlatformOption {
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
+  /**
+   * The board's fully-qualified name, e.g. `arduino:avr:uno`. The same string
+   * arduino-cli reads `build.mcu` from, which is what selects the firmware's
+   * I/O buffer sizes in `resources/sources/arduino/openplc.h` -- `core` alone
+   * cannot tell an Uno from a Mega. Absent for hals.json targets.
+   */
+  platform?: string
   preview: string
   specs: Record<string, string>
   coreVersion?: string
@@ -712,6 +740,14 @@ export interface BoardInfo {
    *  debugger runs. Mirrors the manifest device's `defaultSerial`. Absent →
    *  `Serial`. */
   defaultSerial?: string
+  /**
+   * TCP carriers this board can actually bring up, mirrored from the manifest
+   * device's `networkInterfaces`. Read by the Network screen's interface
+   * picker via `optionsRef: 'board.networkInterfaces'`. Absent → both Ethernet
+   * and Wi-Fi stay on offer, which is right for any board that takes a W5x00
+   * shield; it is declared only to REMOVE a carrier the firmware can't serve.
+   */
+  networkInterfaces?: string[]
   /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
@@ -937,6 +973,11 @@ export interface PackageManifest {
     /** Name of the default serial port (usually the USB CDC port). Surfaced onto
      *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
     defaultSerial?: string
+    /** TCP carriers this device can bring up. Surfaced onto
+     *  `BoardInfo.networkInterfaces` and consumed by the Network screen via
+     *  `optionsRef: 'board.networkInterfaces'`. Declared only to REMOVE a
+     *  carrier the firmware can't serve. */
+    networkInterfaces?: string[]
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the
@@ -1281,6 +1322,12 @@ export interface DebugConnectionConfig {
     port?: string
     baudRate?: number
     slaveId?: number
+    /**
+     * An id a board flashed before 4.4.0 may still answer the editor on, tried
+     * only after `slaveId` has gone unanswered. Not a manifest field: the editor
+     * reads it from the project's own legacy screen state, because the packages
+     * no longer declare the screen it lived on.
+     */
     jwtToken?: string
   }
 }

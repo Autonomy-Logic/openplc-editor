@@ -3017,10 +3017,16 @@ class CompilerModule {
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
-    if (!isRuntimeV4 && hasServers) {
+    // Baremetal serves Modbus too since 4.4.0, so the warning is for the targets
+    // that genuinely ignore a server. `openplc-compiler` is the Runtime v3
+    // toolchain, which ships no Modbus slave; the simulator has one but takes
+    // its configuration from the fixed MODBUS_ENABLED block rather than from
+    // the project.
+    const targetIgnoresServers = boardRuntime === 'openplc-compiler' || boardRuntime === 'simulator'
+    if (!isRuntimeV4 && targetIgnoresServers && hasServers) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
-        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
+        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. The server configurations will be ignored during compilation.`,
       })
     }
     if (!isRuntimeV4 && hasRemoteDevices) {
@@ -3367,8 +3373,6 @@ class CompilerModule {
         vppModbusState = {
           serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
-          modbus_rtu: vendorScreenData['modbus_rtu'] as VppModbusScreenState['modbus_rtu'],
-          modbus_tcp: vendorScreenData['modbus_tcp'] as VppModbusScreenState['modbus_tcp'],
         }
       } catch {
         // No configuration.json — leave undefined so the shared
