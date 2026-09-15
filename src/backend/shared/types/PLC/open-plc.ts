@@ -14,6 +14,8 @@ import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/sh
 // drifted from the runtime uppercase one and caused projects to
 // fail validation on open.
 import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
+import type { ImageTableKey } from '../../../../middleware/shared/utils/io-image/tables'
+import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 
@@ -318,22 +320,13 @@ const ModbusSlaveConfigSchema = z.object({
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
 // S7Comm Buffer Type Enumeration
-const S7CommBufferTypeSchema = z.enum([
-  'bool_input',
-  'bool_output',
-  'bool_memory',
-  'byte_input',
-  'byte_output',
-  'int_input',
-  'int_output',
-  'int_memory',
-  'dint_input',
-  'dint_output',
-  'dint_memory',
-  'lint_input',
-  'lint_output',
-  'lint_memory',
-])
+/* The tables an S7comm data block may be mapped onto are the tables the
+ * runtime HAS, so the list is derived rather than transcribed. A table added
+ * to the runtime and forgotten here would be a block the user cannot declare;
+ * one removed and forgotten would be a block that sizes storage that is gone.
+ *
+ * `z.enum` needs a non-empty tuple literal, hence the cast on the spread. */
+const S7CommBufferTypeSchema = z.enum(IMAGE_TABLES.map((table) => table.key) as [ImageTableKey, ...ImageTableKey[]])
 type S7CommBufferType = z.infer<typeof S7CommBufferTypeSchema>
 
 // S7Comm Server Settings Schema
@@ -363,7 +356,13 @@ type S7CommPlcIdentity = z.infer<typeof S7CommPlcIdentitySchema>
 // S7Comm Buffer Mapping Schema
 const S7CommBufferMappingSchema = z.object({
   type: S7CommBufferTypeSchema,
-  startBuffer: z.number().min(0).max(1023),
+  // 65535, not 1023: 1023 was the runtime's old fixed BUFFER_SIZE, copied
+  // here as if it were a property of S7comm. The image is sized from the
+  // project now, so the only ceiling left is the ABI's own — a located
+  // variable's index is a uint16 (CON03, strucpp_abi.hpp), which makes 65535
+  // the highest addressable element. The bound stays: an unbounded start
+  // buffer would be a number with no meaning rather than a freedom.
+  startBuffer: z.number().min(0).max(65535),
   bitAddressing: z.boolean(),
 })
 type S7CommBufferMapping = z.infer<typeof S7CommBufferMappingSchema>

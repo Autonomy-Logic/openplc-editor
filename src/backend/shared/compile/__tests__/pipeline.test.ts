@@ -358,6 +358,335 @@ describe('runCompilePipeline — blank FBD variable guard', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Step 0a: the I/O image gate (DOPE-615)
+// ---------------------------------------------------------------------------
+
+describe('runCompilePipeline — I/O image gate', () => {
+  const pouLocating = (location: string) => ({
+    type: 'program',
+    data: {
+      name: 'main',
+      language: 'st',
+      documentation: '',
+      body: { language: 'st', value: '' },
+      variables: [{ name: 'valve', location }],
+    },
+  })
+
+  const withPou = (location: string) =>
+    ({ ...projectDataFixture, pous: [pouLocating(location)] }) as unknown as PLCProjectData
+
+  /** A real arduino-cli target. The default fixture is the SIMULATOR, which is
+   *  exempt from the gate, so a case about the gate has to say so. */
+  const arduinoArgs = (overrides: Partial<RunCompilePipelineArgs> = {}) =>
+    makeArgs({
+      isSimulator: false,
+      boardRuntime: 'arduino-cli',
+      boardTarget: 'Arduino Mega 2560',
+      boardEntry: {
+        platform: 'arduino:avr:mega',
+        core: 'arduino:avr',
+        define: ['__AVR_ATmega2560__'],
+        compiler: 'arduino-cli',
+      } as RunCompilePipelineArgs['boardEntry'],
+      compileOnly: true,
+      ...overrides,
+    })
+
+  it('WARNS about two writers on one output and still compiles', async () => {
+    // IEC 61131-3 does not forbid declaring one located variable in two POUs,
+    // so the editor does not either -- which write survives is the
+    // programmer's business. What the compile owes them is the fact that the
+    // addresses are global and POU order decides the winner, which neither
+    // declaration shows on its own. So: a warning, and the build carries on.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const twoWriters = {
+      ...projectDataFixture,
+      pous: [
+        pouLocating('%QW3'),
+        {
+          type: 'program',
+          data: {
+            name: 'second',
+            language: 'st',
+            documentation: '',
+            body: { language: 'st', value: '' },
+            variables: [{ name: 'pump', location: '%QW3' }],
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      arduinoArgs({
+        projectData: twoWriters,
+        devicePinMapping: [{ pin: '3', pinType: 'analogOutput', address: '%QW3' }] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const warned = events.filter((e) => e.message.includes('drive the same output'))
+    expect(warned).toHaveLength(1)
+    expect(warned[0].level).toBe('warning')
+    // Both names, because either one may be the mistake.
+    expect(warned[0].message).toContain('valve')
+    expect(warned[0].message).toContain('pump')
+    // And it never says the compiler refuses it, because it does not.
+    expect(warned[0].message).not.toContain('refuse')
+  })
+
+  it('bails before transpilation when an output declaration has no producer', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const result = await runCompilePipeline(arduinoArgs({ projectData: withPou('%QW3859') }), port, emit)
+
+    expect(result.success).toBe(false)
+    // The gate sits before Step 1, so nothing downstream ran.
+    expect(port.transpileToSt).not.toHaveBeenCalled()
+    const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(validateError?.message).toContain('"valve"')
+    expect(validateError?.message).toContain('%QW3859')
+    expect(events.some((e) => e.message === 'Stopping compilation process.')).toBe(true)
+  })
+
+  it('names the board when the area does not exist on this target', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    // Bare metal declares no bool_memory, so %MX is not an address there.
+    const result = await runCompilePipeline(arduinoArgs({ projectData: withPou('%MX0.1') }), port, emit)
+
+    expect(result.success).toBe(false)
+    const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(validateError?.message).toContain('"Arduino Mega 2560" has no %MX area at all')
+  })
+
+  it('accepts %MX on the runtime-v4 branch, which does have bool_memory', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MX0.1'),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a declaration a pin produces', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW0'),
+        devicePinMapping: [{ pin: '3', pinType: 'analogOutput', address: '%QW0' }] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('ships the sizes to the device as image.conf', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MW7'),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    const bundle = jest.mocked(materialize).mock.calls[0][0].bundle
+    // %MW7 is one word past index 7, so the table needs eight.
+    expect(bundle['image.conf']).toContain('int_memory=8')
+    // Unconditional, so every area appears — zero included.
+    expect(bundle['image.conf']).toContain('bool_output=0')
+    expect(events.some((e) => e.message.includes('Generated image.conf'))).toBe(true)
+  })
+
+  it('emits the sizes into defines.h on the arduino-cli path', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const files = jest.mocked(port.compileArduino).mock.calls[0][0].files as Record<string, string>
+    const defines = Object.entries(files).find(([name]) => name.endsWith('defines.h'))?.[1] ?? ''
+    expect(defines).toContain('//Process image')
+    // %QW3 is one word past index 3, and one %IX bit rounds to a whole byte.
+    expect(defines).toContain('#define MAX_ANALOG_OUTPUT 4')
+    expect(defines).toContain('#define MAX_DIGITAL_INPUT 8')
+    // Areas the project does not touch are handed zero, not the fallback.
+    expect(defines).toContain('#define MAX_MEMORY_WORD 0')
+  })
+
+  it('says in the build log where each sized area came from', async () => {
+    // The size on its own is untraceable: three contributors can size an area
+    // and the image takes the largest, so %QW = 4 might be the program's
+    // producers or a Modbus config nobody has opened in a year. Naming the
+    // source is what stops the user guessing which one to change.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const lines = events.filter((e) => e.message.includes('sized to')).map((e) => e.message)
+    expect(lines).toEqual(['%IX sized to 1 bit from address producers', '%QW sized to 4 words from address producers'])
+  })
+
+  it('says nothing about sizes for a target that keeps its firmware defaults', async () => {
+    // v3 and the simulator are not sized, so a line here would describe an
+    // image neither of them receives.
+    //
+    // %MW7 and not an output address: memory is its own producer, so it sizes
+    // an area with no pins and no server in the project. An output would size
+    // nothing here whatever the gate did, and the test would pass without
+    // exercising it — which is exactly what it did before this comment.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MW7'),
+        isSimulator: false,
+        isRuntimeV3: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v3',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(events.filter((e) => e.message.includes('sized to'))).toEqual([])
+  })
+
+  it('leaves the simulator defines.h without a process image block', async () => {
+    // It keeps openplc.h's own fallbacks, so its defines.h is byte-identical
+    // to what it was before any of this existed.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(makeArgs(), port, emit)
+
+    const files = jest.mocked(port.compileArduino).mock.calls[0][0].files as Record<string, string>
+    const defines = Object.entries(files).find(([name]) => name.endsWith('defines.h'))?.[1] ?? ''
+    expect(defines).not.toContain('Process image')
+  })
+
+  it('exempts the simulator, which has no producers by construction', async () => {
+    // Its capability block hides the pin table and nothing seeds pins, so
+    // PINMASK_DIN is empty and simulator.cpp's I/O loops run zero times.
+    // Gating it would refuse a project for a producer the user cannot create.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(makeArgs({ projectData: withPou('%QW3859') }), port, emit)
+
+    expect(result.success).toBe(true)
+  })
+
+  it('exempts runtime v3, whose image we neither size nor know', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%QW3859'),
+        isSimulator: false,
+        isRuntimeV3: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v3',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('reports both kinds of mistake in one run', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const projectData = {
+      ...projectDataFixture,
+      pous: [
+        {
+          type: 'program',
+          data: {
+            name: 'main',
+            language: 'st',
+            documentation: '',
+            body: { language: 'st', value: '' },
+            variables: [
+              { name: 'flag', location: '%MX0.1' },
+              { name: 'valve', location: '%QW7' },
+            ],
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    await runCompilePipeline(arduinoArgs({ projectData }), port, emit)
+
+    // One fix per compile attempt would turn this into two round trips. The
+    // trailing entry is `bailError`'s own summary line.
+    const errors = events.filter((e) => e.stage === 'validate' && e.level === 'error')
+    expect(errors).toHaveLength(3)
+    expect(errors[0].message).toContain('no %MX area at all')
+    expect(errors[1].message).toContain('nothing produces that address')
+    expect(errors[2].message).toContain('Compilation aborted')
+  })
+})
+
 describe('runCompilePipeline — arduino direct path', () => {
   it('uploads to the physical board when isSimulator=false and not compileOnly', async () => {
     const port = makePort()

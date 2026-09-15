@@ -123,6 +123,83 @@ describe('allocateAddresses', () => {
   })
 
   it('handles an empty consumer list', () => {
-    expect(allocateAddresses([])).toEqual({ assignments: {}, conflicts: [] })
+    expect(allocateAddresses([])).toEqual({ assignments: {}, conflicts: [], slotCounts: {} })
+  })
+})
+
+describe('allocateAddresses slotCounts', () => {
+  it('counts slots per prefix, independent spaces', () => {
+    const { slotCounts } = allocateAddresses([
+      consumer('c1', 0, [
+        { channelId: 'a', class: bit },
+        { channelId: 'b', class: bit },
+        { channelId: 'w', class: word },
+      ]),
+    ])
+    expect(slotCounts).toEqual({ '%IX': 2, '%QW': 1 })
+  })
+
+  it('omits a prefix nobody claimed instead of reporting zero', () => {
+    const { slotCounts } = allocateAddresses([consumer('c1', 0, [{ channelId: 'w', class: word }])])
+    expect(slotCounts['%IX']).toBeUndefined()
+    // Which is how a caller reads it: absent and zero are the same thing.
+    expect(slotCounts['%IX'] ?? 0).toBe(0)
+  })
+
+  it('reports the high-water mark, not the channel count', () => {
+    // Two channels, but a pinned one sits at index 9, so the space needs 10
+    // slots — the gap below it is unusable, not free to omit.
+    const { slotCounts } = allocateAddresses([
+      consumer('c1', 0, [
+        { channelId: 'p', class: word, pinned: '%QW9' },
+        { channelId: 'a', class: word },
+      ]),
+    ])
+    expect(slotCounts).toEqual({ '%QW': 10 })
+  })
+
+  it('counts bit spaces in bits, leaving the byte rounding to the caller', () => {
+    // %IX1.2 is linear bit 10, so the space needs 11 bits. Rounding up to a
+    // whole byte belongs to the firmware buffer, not here.
+    const { slotCounts } = allocateAddresses([consumer('c1', 0, [{ channelId: 'p', class: bit, pinned: '%IX1.2' }])])
+    expect(slotCounts).toEqual({ '%IX': 11 })
+  })
+
+  it('ignores unparseable pinned addresses, as the reservation does', () => {
+    const { slotCounts } = allocateAddresses([
+      consumer('c1', 0, [{ channelId: 'weird', class: word, pinned: 'NOT_AN_ADDRESS' }]),
+    ])
+    expect(slotCounts).toEqual({})
+  })
+
+  it('counts a contested address once', () => {
+    const { conflicts, slotCounts } = allocateAddresses([
+      consumer('c1', 0, [
+        { channelId: 'first', class: word, pinned: '%QW5' },
+        { channelId: 'second', class: word, pinned: '%QW5' },
+      ]),
+    ])
+    expect(conflicts).toHaveLength(1)
+    expect(slotCounts).toEqual({ '%QW': 6 })
+  })
+
+  it('counts only the active kinds', () => {
+    const consumers: RegistryConsumer[] = [
+      { id: 'pins', kind: 'pin-mapping', order: 0, channels: [{ channelId: 'a', class: word }] },
+      { id: 'mb', kind: 'modbus-tcp-remote', order: 1, channels: [{ channelId: 'a', class: word }] },
+    ]
+    expect(allocateAddresses(consumers).slotCounts).toEqual({ '%QW': 2 })
+    expect(allocateAddresses(consumers, { activeKinds: new Set(['modbus-tcp-remote']) }).slotCounts).toEqual({
+      '%QW': 1,
+    })
+  })
+
+  it('is stable regardless of the order the consumers arrive in', () => {
+    const channels = (n: number): RegistryConsumer['channels'] =>
+      Array.from({ length: n }, (_, i) => ({ channelId: `ch${i}`, class: word }))
+    const a = consumer('a', 0, channels(3))
+    const b = consumer('b', 1, channels(4))
+    expect(allocateAddresses([a, b]).slotCounts).toEqual(allocateAddresses([b, a]).slotCounts)
+    expect(allocateAddresses([a, b]).slotCounts).toEqual({ '%QW': 7 })
   })
 })

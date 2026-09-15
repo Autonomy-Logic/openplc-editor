@@ -11,18 +11,16 @@
  */
 
 import { useOpenPLCStore } from '@root/frontend/store'
-import type { DevicePin, PLCRemoteDevice } from '@root/middleware/shared/ports/types'
+import type { BoardInfo, DevicePin, PLCRemoteDevice } from '@root/middleware/shared/ports/types'
 import type { AliasRegistry } from '@root/middleware/shared/utils/iec-address'
 import { buildAddressPool, buildAliasRegistry } from '@root/middleware/shared/utils/iec-address'
-import type { TargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-
-import { useTargetCapabilities } from './use-target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 interface RegistryCache {
   pins: DevicePin[]
   vsd: Record<string, unknown> | undefined
   remoteDevices: PLCRemoteDevice[] | undefined
-  capabilities: TargetCapabilities
+  boardInfo: BoardInfo | undefined
   registry: AliasRegistry
 }
 
@@ -32,6 +30,9 @@ interface RegistryCache {
 // rebuilds and replaces the cache. Single-entry is enough because the
 // inputs together identify a single canonical registry — there's
 // nothing to keep around from prior states.
+/** Shared empty array, so "this board has no pins" keeps a stable identity. */
+const NO_PINS: DevicePin[] = []
+
 let cache: RegistryCache | null = null
 
 export function useAliasRegistry(): AliasRegistry {
@@ -41,17 +42,37 @@ export function useAliasRegistry(): AliasRegistry {
   // contribute claims to the address pool.
   const pinsByBoard = useOpenPLCStore((s) => s.deviceDefinitions.pinMapping.pinsByBoard)
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
-  const pins = pinsByBoard[deviceBoard] ?? []
+  /* A module-level constant, not `?? []`. A fresh array literal on every render
+   * makes `cache.pins === pins` false for any board with no pin-mapping bucket,
+   * so the registry rebuilds for every cell consuming it no matter what the
+   * other three keys do — defeating the cache this hook is built around, and
+   * independently of the board-info key added below.
+   *
+   * The overlap with the producer resolver is what makes it worth fixing here:
+   * a board that does not resolve is exactly the state with no bucket. */
+  const pins = pinsByBoard[deviceBoard] ?? NO_PINS
   const vsd = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const remoteDevices = useOpenPLCStore((s) => s.project.data.remoteDevices)
-  const capabilities = useTargetCapabilities()
+  // NOT `useTargetCapabilities`, which answers "no producers at all" for a
+  // board that does not resolve — the VPP package is not installed, the
+  // project came from another machine, or the catalogue has not loaded yet.
+  // That answer is right for gating a UI element and wrong for scoping a
+  // pool: an empty pool makes every claimed address look free, so the alias
+  // registry stops seeing the conflicts it exists to report (DOPE-615, C1).
+  //
+  // Cached on the BOARD INFO rather than on the resolved block, because the
+  // resolver spreads a board's own capability object and so returns a fresh
+  // reference every call. Comparing that would miss the cache on every render
+  // and rebuild the registry for every cell consuming it.
+  const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
+  const boardInfo = availableBoards.get(deviceBoard)
 
   if (
     cache &&
     cache.pins === pins &&
     cache.vsd === vsd &&
     cache.remoteDevices === remoteDevices &&
-    cache.capabilities === capabilities
+    cache.boardInfo === boardInfo
   ) {
     return cache.registry
   }
@@ -68,10 +89,10 @@ export function useAliasRegistry(): AliasRegistry {
       vendorIoMapping: { entries: ioMapping },
       remoteDevices,
     },
-    capabilities,
+    resolveAddressProducerCapabilities(boardInfo),
   )
   const registry = buildAliasRegistry(pool)
 
-  cache = { pins, vsd, remoteDevices, capabilities, registry }
+  cache = { pins, vsd, remoteDevices, boardInfo, registry }
   return registry
 }
