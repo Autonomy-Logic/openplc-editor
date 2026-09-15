@@ -242,6 +242,12 @@ describe('rewriteDeclaredTypeName', () => {
     )
   })
 
+  it('keeps CRLF terminators', () => {
+    expect(rewriteDeclaredTypeName('TYPE\r\n  Color : (Red);\r\nEND_TYPE\r\n', 'Shade')).toBe(
+      'TYPE\r\n  Shade : (Red);\r\nEND_TYPE\r\n',
+    )
+  })
+
   it('returns null when there is no declaration to rename', () => {
     expect(rewriteDeclaredTypeName('  Color : (Red);\n', 'Shade')).toBeNull()
     expect(rewriteDeclaredTypeName('TYPE\n  Color (Red);\nEND_TYPE\n', 'Shade')).toBeNull()

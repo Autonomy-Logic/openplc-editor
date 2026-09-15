@@ -177,17 +177,18 @@ export function parseDataTypeFromText(content: string, expectedName?: string): P
  * fall back to re-serializing the type.
  */
 export function rewriteDeclaredTypeName(content: string, newName: string): string | null {
-  const lines = content.split(/\r?\n/)
-  const typeIndex = lines.findIndex((line) => /^TYPE$/i.test(line.trim()))
+  // Capturing split keeps each terminator, so a CRLF buffer stays CRLF.
+  const parts = content.split(/(\r?\n)/)
+  const typeIndex = parts.findIndex((part, index) => index % 2 === 0 && /^TYPE$/i.test(part.trim()))
   if (typeIndex === -1) return null
 
-  for (let index = typeIndex + 1; index < lines.length; index++) {
-    const line = lines[index]
+  for (let index = typeIndex + 2; index < parts.length; index += 2) {
+    const line = parts[index]
     if (line.trim() === '') continue
     const match = declaredNameRegex.exec(line)
     if (!match) return null
-    lines[index] = `${match[1]}${newName}${line.slice(match[0].length)}`
-    return lines.join('\n')
+    parts[index] = `${match[1]}${newName}${line.slice(match[0].length)}`
+    return parts.join('')
   }
   return null
 }
