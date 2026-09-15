@@ -1,17 +1,22 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { CloudUpload } from 'lucide-react'
 import { ComponentProps, useEffect, useRef, useState } from 'react'
 
-import { useProject } from '../../../../middleware/shared/providers'
+import { useCapabilities, useEdgeAccountPort, useProject } from '../../../../middleware/shared/providers'
+import { useEdgeAccount } from '../../../hooks/use-edge-account'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { File } from '../../_atoms/file'
 import { toast } from '../../_features/[app]/toast/use-toast'
+import { UploadToCloudModal } from '../../_features/[start]/upload-to-cloud'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
   searchNameFilterValue: string
+  /** A local project was published to Autonomy Edge; reported up since the start screen owns both lists. */
+  onProjectUploaded?: () => void
 }
 
-const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRecentProjectProps) => {
+const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...props }: IDisplayRecentProjectProps) => {
   const {
     workspace: { recent },
     workspaceActions: { setRecent },
@@ -20,6 +25,15 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
   } = useOpenPLCStore()
 
   const project = useProject()
+  const caps = useCapabilities()
+  const edgeAccount = useEdgeAccountPort()
+
+  // canPublish also requires the platform to implement the call: the web build has no local projects to publish.
+  const { status: accountStatus } = useEdgeAccount(caps.hasEdgeAccount, edgeAccount)
+  const canPublish = accountStatus === 'signed-in' && project.uploadProjectToCloud !== undefined
+
+  /** The project whose upload dialog is open, if any. */
+  const [projectToUpload, setProjectToUpload] = useState<{ name: string; path: string } | null>(null)
 
   const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
@@ -109,11 +123,8 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     })
   }
 
-  // "Remove from list" — disk untouched. Fires immediately, no
-  // confirmation: the project files stay where they are, re-opening
-  // the project re-adds it to recents. The sibling "Delete project"
-  // action routes through the confirm-delete-project modal because
-  // its blast radius is `rm -rf` on the project directory.
+  // Disk untouched, fires immediately: re-opening the project re-adds it to recents.
+  // "Delete project" routes through a confirm modal instead, since its blast radius is rm -rf.
   const handleRemoveFromList = async (projectPath: string) => {
     const result = await project.removeRecentProject(projectPath)
     if (!result.success) {
@@ -149,13 +160,8 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
               projectPath={proj.path}
               lastModified={projectTimes[proj.path]}
             />
-            {/* 3-dot overflow menu — always visible, positioned on
-             *  the SVG folder BODY's top-right (not the tab above
-             *  it). The folder shape's body starts at y≈33 inside a
-             *  160px-tall card, so `top-10` (40px) sits just inside
-             *  the blue body and leaves the tab clean. Stops click
-             *  propagation so opening the menu doesn't also fire
-             *  the card's onClick (open project). */}
+            {/* top-10 sits just inside the folder body's SVG shape, clear of the tab above it.
+                Stops click propagation so opening the menu doesn't also fire the card's onClick. */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
@@ -177,6 +183,19 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
                   onCloseAutoFocus={(e) => e.preventDefault()}
                   className='z-[60] min-w-[180px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900'
                 >
+                  {canPublish && (
+                    <DropdownMenu.Item
+                      onSelect={() => setProjectToUpload({ name: proj.name, path: proj.path })}
+                      className={cn(
+                        'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                        // blue-500 for the hover tint: text-brand's var() can't take Tailwind's /5 opacity modifier.
+                        'text-brand hover:bg-blue-500/5 dark:hover:bg-blue-500/10',
+                      )}
+                    >
+                      <CloudUpload className='h-3.5 w-3.5 text-brand' />
+                      Upload to Cloud
+                    </DropdownMenu.Item>
+                  )}
                   <DropdownMenu.Item
                     onSelect={() => void handleRemoveFromList(proj.path)}
                     className={cn(
@@ -207,6 +226,31 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
           </div>
         ))}
       </div>
+
+      {/* One dialog for the whole list rather than one per card: only a single upload can
+          be in flight, and mounting a modal per project would have every card ask Edge for
+          the folder list. */}
+      {projectToUpload && (
+        <UploadToCloudModal
+          open
+          onOpenChange={(next) => {
+            if (!next) setProjectToUpload(null)
+          }}
+          projectPath={projectToUpload.path}
+          projectName={projectToUpload.name}
+          onUploaded={() => {
+            toast({
+              title: 'Uploaded to Autonomy Edge',
+              description: `${projectToUpload.name} is now on your account. The copy on this computer is unchanged.`,
+              variant: 'default',
+            })
+            setProjectToUpload(null)
+            // Before the toast is even read: the project belongs at the top of the cloud
+            // list, and seeing it land there is the confirmation that matters.
+            onProjectUploaded?.()
+          }}
+        />
+      )}
     </section>
   )
 }

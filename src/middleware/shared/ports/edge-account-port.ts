@@ -1,21 +1,6 @@
-/**
- * The Autonomy Edge account, as the frontend is allowed to see it.
- *
- * The account UI — the avatar, the menu, the sign-in dialog — needs to ask who is
- * signed in, sign someone in or out, and know where Edge's own pages live. All of
- * that is adapter knowledge: it speaks to a specific API over cookies on a shared
- * parent domain, and only the web build has it at all.
- *
- * This port is what keeps that knowledge out of `frontend/`. The components used to
- * import `adapters/web/services/edge-account` directly, which the architecture
- * validator forbids for good reason: `frontend/` is a surface mirrored into the
- * desktop editor, and a direct adapter import compiles that app against an API it
- * does not talk to.
- *
- * OPTIONAL on `PlatformPorts`, like `ai` and `esi`: the desktop editor has no Edge
- * account and sets `capabilities.hasEdgeAccount` to false. Gate on the capability,
- * not on the port being present.
- */
+/** The Edge account as the frontend may see it. Optional on `PlatformPorts`: gate on `capabilities.hasEdgeAccount`. */
+
+import { z } from 'zod'
 
 /** Mirrors Edge's `UserProfile`, narrowed to what the account UI renders. */
 export interface EdgeUser {
@@ -29,16 +14,7 @@ export interface EdgeUser {
   emailVerifiedAt?: string | null
 }
 
-/**
- * What asking "who is signed in?" actually established.
- *
- * `unknown` is the whole reason this is not just `EdgeUser | null`. A request that
- * never reached the server says NOTHING about whether a session exists, and
- * collapsing it into "nobody is signed in" put a blocking sign-in dialog over a
- * perfectly valid session every time the network blipped for a second — over an
- * editor holding unsaved work, with no way out until the window happened to be
- * refocused. The caller has to be able to tell the two apart and hold its ground.
- */
+/** `unknown` is not `no-session`: a request that never reached the server says nothing about the session. */
 export type EdgeUserRead =
   | { status: 'signed-in'; user: EdgeUser }
   /** The server answered, and there is no usable session. */
@@ -48,14 +24,35 @@ export type EdgeUserRead =
 
 export type EdgeSignInOutcome =
   | { status: 'signed-in'; user: EdgeUser }
-  /**
-   * Credentials were right but the address is unverified. Edge answers 200 with
-   * null tokens for this — NOT an error — so reporting it as a failed sign-in
-   * would send the user hunting for a wrong password.
-   */
+  /** Credentials were right but the address is unverified; Edge answers 200 with null tokens, not an error. */
   | { status: 'email-unverified'; email: string }
   | { status: 'invalid-credentials' }
   | { status: 'failed' }
+
+/** Runtime check: the desktop's `EdgeUserRead` arrives over IPC, where an annotation establishes nothing. */
+export const EdgeUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  username: z.string(),
+  profileImage: z.string().nullish(),
+  customInitials: z.string().nullish(),
+  initialsColor: z.string().nullish(),
+  emailVerifiedAt: z.string().nullish(),
+}) satisfies z.ZodType<EdgeUser>
+
+export const EdgeUserReadSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('signed-in'), user: EdgeUserSchema }),
+  z.object({ status: z.literal('no-session') }),
+  z.object({ status: z.literal('unknown') }),
+]) satisfies z.ZodType<EdgeUserRead>
+
+export const EdgeSignInOutcomeSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('signed-in'), user: EdgeUserSchema }),
+  z.object({ status: z.literal('email-unverified'), email: z.string() }),
+  z.object({ status: z.literal('invalid-credentials') }),
+  z.object({ status: z.literal('failed') }),
+]) satisfies z.ZodType<EdgeSignInOutcome>
 
 /** The providers Edge itself offers. */
 export type EdgeOAuthProviderId = 'google' | 'microsoft' | 'apple'
@@ -65,13 +62,7 @@ export interface EdgeOAuthProvider {
   label: string
 }
 
-/**
- * Why a renewal failed, when one did.
- *
- * `expired` and `no-session` are both 401s from the same endpoint, and telling
- * them apart is what stops a stranger who followed a shared project link being
- * told that *their* session ended.
- */
+/** `expired` and `no-session` are both 401s from the same endpoint; only one is the user's own session ending. */
 export interface EdgeSessionState {
   /** True once a renewal has definitively failed. */
   isExpired(): boolean
@@ -81,12 +72,7 @@ export interface EdgeSessionState {
   onExpired(listener: () => void): () => void
   /** Fires when a session that HAD died works again. Returns an unsubscribe function. */
   onRestored(listener: () => void): () => void
-  /**
-   * Announce that the session works again. A no-op unless something was
-   * previously announced dead, so it is safe to call on any healthy read — which
-   * is the point: a provider flow completes in another tab, and the only way this
-   * one finds out is by observing a request succeed.
-   */
+  /** Announce that the session works again. No-op unless something was announced dead, so safe on any healthy read. */
   markRestored(): void
 }
 
@@ -94,17 +80,9 @@ export interface EdgeAccountPort {
   /** Origin of the Edge SPA, for the pages the editor links out to. */
   frontendBaseUrl: string
   oauthProviders: readonly EdgeOAuthProvider[]
-  /**
-   * Where to send the browser to start a provider flow.
-   *
-   * `returnTo` is carried through the provider and back, so the round trip lands
-   * on the app that started it rather than on Edge.
-   */
+  /** `returnTo` is carried through the provider so the round trip lands on the app that started it. */
   oauthUrl(provider: EdgeOAuthProviderId, returnTo: string): string
-  /**
-   * Who is signed in — and, when that could not be established, the fact that it
-   * could not be. See `EdgeUserRead`: a network failure is not a signed-out user.
-   */
+  /** See `EdgeUserRead`: a network failure is not a signed-out user. */
   fetchUser(): Promise<EdgeUserRead>
   /** e.g. `Pro Plan`; null when the account has no active subscription. */
   fetchPlanCaption(): Promise<string | null>

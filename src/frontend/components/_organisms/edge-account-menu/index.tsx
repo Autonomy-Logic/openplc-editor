@@ -1,44 +1,26 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { LayoutDashboard, LogOut, Settings, User } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import type { EdgeUser } from '../../../../middleware/shared/ports/edge-account-port'
+import { cn } from '../../../utils/cn'
 import { EdgeAvatar } from '../../_atoms/edge-avatar'
 
-/**
- * The signed-in user's menu, built to Edge's user-dropdown pattern: a tinted
- * header card identifying the account, then sections of icon-and-label items
- * separated by rules, with Sign out last.
- *
- * Same pattern, not the same code: Edge's version lives in a design system this
- * repo cannot import, so the treatment is rebuilt from the palette available here
- * in place of Edge's `primary`/`muted` tokens.
- *
- * Signing out ends the ONE session both apps share, so Edge goes too. That is the
- * point of this menu existing in the editor at all.
- *
- * Deliberately fewer items than Edge's. Context switching, Admin, Forum, What's
- * new and the theme toggle are either Edge-only concerns or features this app does
- * not have; inventing entries to pad out the shape would give the user dead ends.
- */
+/** The signed-in user's menu, after Edge's user-dropdown pattern. Sign out ends the session both apps share. */
 interface EdgeAccountMenuProps {
   user: EdgeUser
-  /**
-   * e.g. `Pro Plan`. Omitted from the card when null rather than replaced with a
-   * guess, which is how Edge handles an account with no active subscription.
-   */
+  /** e.g. `Pro Plan`; omitted from the card when null. */
   planCaption?: string | null
   onSignOut: () => void
-  /**
-   * Origin of the Edge SPA. Passed in rather than read from the environment: this
-   * component lives in a surface the desktop editor mirrors, where no such
-   * environment exists.
-   */
+  /** Origin of the Edge SPA. Passed in: the mirrored desktop editor has no such environment. */
   edgeBaseUrl: string
-  /**
-   * Which way the menu opens. Defaults to `right` because this lives in the
-   * activity bar, a ~48px strip — a menu dropping straight down would be clipped
-   * by the window edge on short viewports.
-   */
+  /** Size/shape for the trigger avatar; the start screen's text menu needs it to match 20px icons. */
+  avatarClassName?: string
+  /** Rendered inside the trigger after the avatar, so the name beside it is a click target too. */
+  label?: ReactNode
+  /** Trigger geometry, for a caller that needs it to match a row of other controls. */
+  triggerClassName?: string
+  /** Defaults to `right`: in the ~48px activity bar a menu dropping down is clipped on short viewports. */
   side?: 'right' | 'bottom'
 }
 
@@ -47,11 +29,18 @@ const ITEM_CLASSES =
 const ICON_CLASSES = 'h-4 w-4 shrink-0 text-neutral-500 dark:text-neutral-400'
 const LABEL_CLASSES = 'text-sm text-neutral-900 dark:text-neutral-100'
 
-const EdgeAccountMenu = ({ user, planCaption, onSignOut, edgeBaseUrl, side = 'right' }: EdgeAccountMenuProps) => {
+const EdgeAccountMenu = ({
+  user,
+  planCaption,
+  onSignOut,
+  edgeBaseUrl,
+  side = 'right',
+  avatarClassName,
+  label,
+  triggerClassName,
+}: EdgeAccountMenuProps) => {
   const edgeBase = edgeBaseUrl
-  // Same destinations Edge's own dropdown navigates to. `/profile` rather than
-  // `/{username}`: the latter is the public profile page, not the account one the
-  // menu item means. `/dashboard` redirects itself to `/{slug}/dashboard`.
+  // Same destinations as Edge's own dropdown. `/profile`, not `/{username}`: the latter is the public page.
   const dashboardUrl = new URL('/dashboard', edgeBase).toString()
   const profileUrl = new URL('/profile', edgeBase).toString()
   const settingsUrl = new URL('/profile/settings', edgeBase).toString()
@@ -62,14 +51,19 @@ const EdgeAccountMenu = ({ user, planCaption, onSignOut, edgeBaseUrl, side = 'ri
         <button
           type='button'
           aria-label={`Account: ${user.name}`}
-          className='cursor-pointer rounded-full outline-none ring-offset-1 focus-visible:ring-2 focus-visible:ring-brand'
+          className={cn(
+            'cursor-pointer rounded-full outline-none ring-offset-1 focus-visible:ring-2 focus-visible:ring-brand',
+            triggerClassName,
+          )}
         >
           <EdgeAvatar
             name={user.name}
             imageSrc={user.profileImage}
             customInitials={user.customInitials}
             initialsColor={user.initialsColor}
+            className={avatarClassName}
           />
+          {label}
         </button>
       </DropdownMenu.Trigger>
 
@@ -80,12 +74,8 @@ const EdgeAccountMenu = ({ user, planCaption, onSignOut, edgeBaseUrl, side = 'ri
           sideOffset={12}
           className='z-50 w-72 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-lg dark:border-neutral-800 dark:bg-neutral-900'
         >
-          {/* Header card. The tint marks the account as this menu's subject rather
-              than one of its actions, the same way Edge treats it. Uses the palette
-              blue with an opacity modifier — the idiom the activity bar already
-              uses for its own highlights — rather than `brand/5`, because `brand`
-              resolves to a `var()` holding a hex and Tailwind 3 cannot reliably
-              apply an opacity modifier to that. */}
+          {/* blue-500/5 rather than brand/5: `brand` is a var() holding a hex, and
+              Tailwind 3 cannot apply an opacity modifier to that. */}
           <div className='flex items-center gap-3 rounded-md border border-blue-500/20 bg-blue-500/5 px-3 py-2.5'>
             <EdgeAvatar
               className='size-10'

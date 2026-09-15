@@ -24,10 +24,6 @@ import type { TabsSlice } from '../tabs'
 import type { VersionControlSlice } from '../version-control'
 import type { WorkspaceSlice } from '../workspace'
 
-// ---------------------------------------------------------------------------
-// Root state type for shared slice (it orchestrates across all slices)
-// ---------------------------------------------------------------------------
-
 export type SharedRootState = AISlice &
   ProjectSlice &
   FileSlice &
@@ -45,19 +41,11 @@ export type SharedRootState = AISlice &
   VersionControlSlice &
   SharedSlice
 
-// ---------------------------------------------------------------------------
-// Response type
-// ---------------------------------------------------------------------------
-
 export type SharedResponse = {
   ok: boolean
   title?: string
   message?: string
 }
-
-// ---------------------------------------------------------------------------
-// POU History (undo/redo)
-// ---------------------------------------------------------------------------
 
 export type PouHistorySnapshot = {
   variables: PLCVariable[]
@@ -77,10 +65,6 @@ export type PouHistory = {
   /** Depth of the past stack when the file was last saved. null = never saved or diverged. */
   savedAtDepth: number | null
 }
-
-// ---------------------------------------------------------------------------
-// Shared Slice Actions
-// ---------------------------------------------------------------------------
 
 export type PouActions = {
   create: (args: {
@@ -187,24 +171,21 @@ export type OpenProjectResponseData = {
   /** Warnings from parsing (e.g. dropped files that failed validation).
    *  Recoverable: the project opens normally and these surface in the Console. */
   warnings?: string[]
-  /** POUs that could not be parsed at all (DOPE-592). Non-empty means the
-   *  project opens EMPTY and read-only with these on the Console, never with
-   *  content — a blank canvas would look legitimate and the first save would
-   *  write it over the user's real diagram. */
+  /** POUs that failed to parse entirely. Non-empty means the project opens EMPTY and
+   *  read-only with these on the Console, never with partial content — a blank canvas
+   *  would look legitimate and the first save would overwrite the user's real diagram. */
   fatalErrors?: string[]
   /** `datatypes/*.dt` files that failed to parse on load, preserved
    *  raw so the save flow echoes them back verbatim. */
   unparsedDataTypeFiles?: RawProjectFile[]
   /** True when the project still carries its data types inline in
-   *  `project.json` with no `datatypes/*.dt` on disk — it predates DOPE-385
-   *  and still owes a migration. */
+   *  `project.json` with no `datatypes/*.dt` on disk and still owes a migration. */
   dataTypesNeedMigration?: boolean
-  /**
-   * Edit permission flag forwarded from `ProjectResponse.data.canEdit`.
-   * `false` puts the workspace in read-only mode; `true` / `undefined`
-   * keep it fully editable.  Absent ⇒ desktop editor or dev-local; both
-   * have no remote permission concept so the editor stays unrestricted.
-   */
+  /** Every file's bytes as the reader handed them over, keyed by relative path; echoed back verbatim for unedited files. */
+  rawLoadedFiles?: Record<string, string>
+  /** Edit permission flag forwarded from `ProjectResponse.data.canEdit`. `false` puts the
+   *  workspace in read-only mode; absent means desktop/dev-local, which have no remote
+   *  permission concept and stay unrestricted. */
   canEdit?: boolean
 }
 
@@ -215,45 +196,22 @@ export type SharedWorkspaceActions = {
   closeFile: (name: string) => { success: boolean }
   /** Remove a tab and select the next one. Does NOT check save state. */
   forceCloseFile: (name: string) => { success: boolean }
-  /**
-   * Close project: checks save state, shows save-changes modal if unsaved,
-   * or clears all state if saved. Returns `{ pendingConfirmation: true }`
-   * when the modal was opened so the caller can defer post-close work
-   * (e.g. host navigation) until the modal resolves.
-   */
+  /** Close project: checks save state, shows save-changes modal if unsaved, or clears all
+   *  state if saved. Returns `{ pendingConfirmation: true }` when the modal was opened, so
+   *  the caller can defer post-close work (e.g. host navigation) until it resolves. */
   closeProject: () => { pendingConfirmation: boolean }
-  /**
-   * Whether closing the project right now would lose work.
-   *
-   * The rule `closeProject` applies, exposed on its own for a caller that has
-   * to REPLACE the project rather than merely close it — retrieving from a
-   * device — and so needs its own save-changes context to come back to. Asking
-   * this instead of re-deriving the condition is what keeps the two in step: a
-   * caller that spelled the rule out again would silently start discarding work
-   * the day the rule changes.
-   */
+  /** Whether closing the project right now would lose work — the same rule `closeProject`
+   *  applies, exposed for a caller that must REPLACE the project (e.g. retrieving from a
+   *  device) rather than merely close it, so both stay in step with one rule. */
   hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
-  /**
-   * Populate store with project data returned from a ProjectPort open call.
-   * Sets project state, device config, files, libraries, flows, and opens main POU tab.
-   */
+  /** Populate store with project data returned from a ProjectPort open call.
+   *  Sets project state, device config, files, libraries, flows, and opens main POU tab. */
   handleOpenProjectResponse: (data: OpenProjectResponseData) => void
-  /**
-   * Load a project retrieved from a device.
-   *
-   * The shared tail of both platforms' retrieve adapters. What differs between
-   * them is only where the files come from — the desktop unpacks an archive to
-   * a scratch directory and reads it back, web parses the same archive straight
-   * into memory — and both then have to do exactly this: load the parsed
-   * project, and mark it as having no location the user chose.
-   *
-   * Written twice, it went wrong twice: the desktop's tail shipped missing the
-   * load, and web's marked the project ephemeral a second time after the picker
-   * had already done it. Same shape as `build-upload-snapshot`, where two thin
-   * platform readers meet one shared builder.
-   */
+  /** Load a project retrieved from a device — the shared tail of both platforms' retrieve
+   *  adapters (only the archive source differs): load the parsed project and mark it as
+   *  having no location the user chose. */
   openRetrievedProject: (data: OpenProjectResponseData) => void
 }
 
