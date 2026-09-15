@@ -161,3 +161,43 @@ describe('generateModbusSlaveConfig', () => {
     expect(Object.keys(JSON.parse(withSerial!))).toEqual(['network_configuration', 'buffer_mapping'])
   })
 })
+
+/**
+ * The master switch has to mean something on Runtime v4 too.
+ *
+ * The runtime's plugin has no switch of its own: it comes up if and only if
+ * `conf/modbus_slave.json` is in the bundle. So a disabled server producing a
+ * config is a server the user turned off and the runtime served anyway -- the
+ * same toggle working on baremetal and lying here.
+ */
+describe('generateModbusSlaveConfig — a disabled server is not served', () => {
+  const server = (name: string, enabled: boolean, port: number): PLCServer => ({
+    name,
+    protocol: 'modbus-tcp',
+    modbusSlaveConfig: { enabled, networkInterface: '0.0.0.0', port },
+  })
+
+  it('emits nothing at all for a server the user switched off', () => {
+    // `null` is what keeps the file out of the bundle, and keeping the file out
+    // is the only way to express "off" to this plugin.
+    expect(generateModbusSlaveConfig([server('Off', false, 502)])).toBeNull()
+  })
+
+  it('emits nothing when every server in the project is off', () => {
+    expect(generateModbusSlaveConfig([server('A', false, 502), server('B', false, 5020)])).toBeNull()
+  })
+
+  it('skips a disabled server to reach the enabled one behind it', () => {
+    // A project may carry several. Taking the first with a config regardless of
+    // `enabled` handed the runtime the wrong one.
+    const result = generateModbusSlaveConfig([server('Off', false, 502), server('On', true, 5020)])
+
+    expect(result).not.toBeNull()
+    expect(JSON.parse(result!).network_configuration.port).toBe(5020)
+  })
+
+  it('still serves an enabled server, unchanged', () => {
+    const result = generateModbusSlaveConfig([server('On', true, 502)])
+    expect(JSON.parse(result!).network_configuration.port).toBe(502)
+  })
+})
