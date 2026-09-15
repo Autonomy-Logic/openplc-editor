@@ -9,7 +9,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 // In a debug-only build this whole TU compiles to nothing, saving flash/SRAM.
 #ifdef MODBUS_ENABLED
 
-bool init_mbregs(uint8_t size_holding, uint8_t size_dint_memory, uint8_t size_lint_memory, uint8_t size_coils, uint8_t size_inputregs, uint8_t size_inputstatus)
+bool init_mbregs(uint16_t size_holding, uint16_t size_dint_memory, uint16_t size_lint_memory, uint16_t size_coils, uint16_t size_inputregs, uint16_t size_inputstatus)
 {
     //Save sizes
     modbus.holding_size = size_holding;
@@ -62,9 +62,14 @@ bool init_mbregs(uint8_t size_holding, uint8_t size_dint_memory, uint8_t size_li
     return true;
 }
 
+// byte_addr is uint16_t, not uint8_t: addr is already a 16-bit Modbus
+// address, so addr/8 overflows a uint8_t past 2040 coils. The callers
+// bound `addr` against *_size before getting here, and *_size is now
+// itself 16-bit -- narrowing the index would put the truncation back one
+// step further down.
 bool get_discrete(uint16_t addr, bool regtype)
 {
-    uint8_t byte_addr = addr / 8;
+    uint16_t byte_addr = addr / 8;
     uint8_t bit_addr = addr % 8;
     if (regtype == COILS)
         return bitRead(modbus.coils[byte_addr], bit_addr);
@@ -74,7 +79,7 @@ bool get_discrete(uint16_t addr, bool regtype)
 
 void write_discrete(uint16_t addr, bool regtype, bool value)
 {
-    uint8_t byte_addr = addr / 8;
+    uint16_t byte_addr = addr / 8;
     uint8_t bit_addr = addr % 8;
     if (regtype == COILS)
         bitWrite(modbus.coils[byte_addr], bit_addr, value);
@@ -116,7 +121,9 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
 
     uint16_t val;
     uint16_t i = 0;
-    uint8_t pos = 0;
+    // uint16_t, not uint8_t: pos indexes dint_memory/lint_memory, whose
+    // sizes come from the MAX_MEMORY_* macros and are no longer capped at 255.
+    uint16_t pos = 0;
 	while(numregs--)
     {
         if ((startreg + i) < modbus.holding_size)
@@ -177,7 +184,9 @@ void writeSingleRegister(uint16_t reg, uint16_t value)
         return;
     }
 
-    uint8_t pos = 0;
+    // uint16_t, not uint8_t: pos indexes dint_memory/lint_memory, whose
+    // sizes come from the MAX_MEMORY_* macros and are no longer capped at 255.
+    uint16_t pos = 0;
 
     if (reg < modbus.holding_size)
     {
@@ -254,7 +263,9 @@ void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t byte
 
     uint16_t value;
     uint16_t i = 0;
-    uint8_t pos = 0;
+    // uint16_t, not uint8_t: pos indexes dint_memory/lint_memory, whose
+    // sizes come from the MAX_MEMORY_* macros and are no longer capped at 255.
+    uint16_t pos = 0;
 	while(numoutputs--)
     {
         value = (uint16_t)mb_frame[7+i*2] << 8 | (uint16_t)mb_frame[8+i*2];
@@ -350,7 +361,12 @@ void readCoils(uint16_t startreg, uint16_t numregs)
 	while (numregs)
     {
         i = (totregs - numregs--) / 8;
-		if (get_discrete((uint8_t)startreg, COILS))
+		// No (uint8_t) cast on startreg: it is a 16-bit coil address, and
+		// truncating it aliased every coil above 255 onto a low one --
+		// FC 0x01 answered with the wrong bit and no error. Harmless while
+		// no board had more than 56 coils; reachable as soon as one does
+		// (openplc-editor#296). readInputStatus below never had the cast.
+		if (get_discrete(startreg, COILS))
 			bitSet(mb_frame[3+i], bitn);
 		else
 			bitClear(mb_frame[3+i], bitn);

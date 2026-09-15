@@ -56,21 +56,28 @@ protocol, transport, register and debug layers agree on the same contracts.
 // exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
 #define MB_PLC_CTRL_REFUSED_SWITCH       0x86
 
-//Modbus registers struct
+// Modbus registers struct
+//
+// The *_size fields are uint16_t, not uint8_t: they are populated from the
+// MAX_* process-image macros, and a board with an expansion backplane sizes
+// those well past 255 (a 15-slot P1AM reaches 240 discrete points per
+// direction). As uint8_t the assignment in init_mbregs truncated silently --
+// 256 coils became 0 -- and the register map came up wrong with no
+// diagnostic anywhere (openplc-editor#296).
 struct MBinfo {
     uint8_t slaveid;
     uint16_t *holding;
-    uint8_t holding_size;
+    uint16_t holding_size;
     uint32_t *dint_memory;
-    uint8_t dint_memory_size;
+    uint16_t dint_memory_size;
     uint64_t *lint_memory;
-    uint8_t lint_memory_size;
+    uint16_t lint_memory_size;
     uint8_t *coils;
-    uint8_t coils_size;
+    uint16_t coils_size;
     uint16_t *input_regs;
-    uint8_t input_regs_size;
+    uint16_t input_regs_size;
     uint8_t *input_status;
-    uint8_t input_status_size;
+    uint16_t input_status_size;
 };
 
 //Function Codes
