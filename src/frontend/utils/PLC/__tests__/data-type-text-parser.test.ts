@@ -8,7 +8,7 @@
  */
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
 import { serializeDataTypeToText } from '../data-type-serializer'
-import { parseDataTypeFromText } from '../data-type-text-parser'
+import { parseDataTypeFromText, rewriteDeclaredTypeName } from '../data-type-text-parser'
 
 const roundTrip = (dt: PLCDataType) => parseDataTypeFromText(serializeDataTypeToText(dt), dt.name)
 
@@ -216,5 +216,35 @@ describe('parseDataTypeFromText errors', () => {
     const result = parseDataTypeFromText('TYPE\n  Other : (Red);\nEND_TYPE\n', 'Color')
     expect(result.error).toMatch(/does not match the expected name "Color"/)
     expect(result.error).toMatch(/rename the data type via the project tree/)
+  })
+})
+
+describe('rewriteDeclaredTypeName', () => {
+  it('renames a structure without touching the rest of the buffer', () => {
+    const content = 'TYPE\n  Motor : STRUCT\n    Speed : INT; (* rpm *)\n  END_STRUCT;\nEND_TYPE\n'
+    expect(rewriteDeclaredTypeName(content, 'Pump')).toBe(
+      'TYPE\n  Pump : STRUCT\n    Speed : INT; (* rpm *)\n  END_STRUCT;\nEND_TYPE\n',
+    )
+  })
+
+  it('renames an enumeration and an array', () => {
+    expect(rewriteDeclaredTypeName('TYPE\n  Color : (Red, Green);\nEND_TYPE\n', 'Shade')).toBe(
+      'TYPE\n  Shade : (Red, Green);\nEND_TYPE\n',
+    )
+    expect(rewriteDeclaredTypeName('TYPE\n  Bank : ARRAY [1..4] OF INT;\nEND_TYPE\n', 'Row')).toBe(
+      'TYPE\n  Row : ARRAY [1..4] OF INT;\nEND_TYPE\n',
+    )
+  })
+
+  it('skips blank lines and tolerates a lowercase keyword', () => {
+    expect(rewriteDeclaredTypeName('type\n\n\tColor : (Red);\nEND_TYPE\n', 'Shade')).toBe(
+      'type\n\n\tShade : (Red);\nEND_TYPE\n',
+    )
+  })
+
+  it('returns null when there is no declaration to rename', () => {
+    expect(rewriteDeclaredTypeName('  Color : (Red);\n', 'Shade')).toBeNull()
+    expect(rewriteDeclaredTypeName('TYPE\n  Color (Red);\nEND_TYPE\n', 'Shade')).toBeNull()
+    expect(rewriteDeclaredTypeName('TYPE\n', 'Shade')).toBeNull()
   })
 })
