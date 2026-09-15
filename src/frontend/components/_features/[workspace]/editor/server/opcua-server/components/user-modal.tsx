@@ -32,17 +32,10 @@ const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = 
   { value: 'engineer', label: 'Engineer', description: 'Full administrative access' },
 ]
 
-// No hashing here, deliberately.
-//
-// How a credential is STORED is a property of the target device, not of this
-// dialog -- and this dialog has no idea what the target is. Hashing here meant
-// choosing PBKDF2 at 600 000 iterations before the board was necessarily even
-// selected, and nothing ever re-derived it afterwards, so a project authored
-// for Runtime v4 and later pointed at a microcontroller carried a credential
-// that microcontroller could not verify at any acceptable cost.
-//
-// The password is stored as typed and the BUILD derives whatever the selected
-// target declares via `capabilities.opcua.passwordScheme`. See
+// No hashing here, deliberately: how a credential is stored is a property of the
+// target device, and this dialog has no idea what the target is. The password is
+// stored as typed and the build derives whatever the selected target declares
+// via `capabilities.opcua.passwordScheme`. See
 // backend/shared/compile/opcua-credentials.ts.
 
 export const UserModal = ({

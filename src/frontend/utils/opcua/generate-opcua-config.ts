@@ -142,16 +142,13 @@ interface RuntimePluginConfig {
 }
 
 /**
- * What `buildOpcUaRuntimeConfig` hands back: the resolved v4 runtime config
- * plus the project-model server settings.
+ * What `buildOpcUaRuntimeConfig` hands back: the resolved v4 runtime config plus
+ * the project-model server settings.
  *
- * Both halves exist because the two consumers need different slices of the
- * same work. Runtime v4 wants only `runtime`, serialised. The baremetal
- * `opcua_config.h` generator wants the resolved address space from `runtime`
- * AND the port / bind address / endpoint path from `server` — which
- * `buildServerConfig` folds into a single `endpoint_url` string, and
- * re-parsing that back into components would be a needless round trip through
- * a format neither side wants.
+ * Runtime v4 wants only `runtime`, serialised. The baremetal `opcua_config.h`
+ * generator wants the resolved address space from `runtime` and the port / bind
+ * address / endpoint path from `server`, which `buildServerConfig` folds into a
+ * single `endpoint_url`.
  */
 export interface ResolvedOpcUaConfig {
   /** The Runtime v4 plugin config. `config.address_space` is the valuable

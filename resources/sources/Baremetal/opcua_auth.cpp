@@ -15,12 +15,9 @@ See opcua_auth.h for why the iteration count is the interesting part.
 #include "opcua_auth.h"
 #include "opcua_log.h"
 
-/** Most iterations this target will actually execute.
- *
- *  Deliberately NOT the same knob as the VPP's `kdfIterations`: that says what
- *  the editor SHOULD hash with, this says what the runtime will tolerate being
- *  asked to do inside a scan cycle. They coincide when the project is built
- *  for this target and diverge when a hash was produced elsewhere. */
+/** Most iterations this target will actually execute. Not the same knob as the
+ *  VPP's `kdfIterations`: that says what the editor should hash with, this says
+ *  what the runtime will tolerate inside a scan cycle. */
 #ifndef OPCUA_KDF_MAX_ITERATIONS
 #define OPCUA_KDF_MAX_ITERATIONS 20000u
 #endif
@@ -113,14 +110,9 @@ void sha256_final(Sha256* c, uint8_t out[32])
     }
 }
 
-// ---------------------------------------------------------------------------
-// HMAC-SHA256, with the key schedule hoisted out of the PBKDF2 loop.
-//
-// PBKDF2 repeats HMAC with the SAME key tens of thousands of times, so the
-// inner and outer padded-key states are computed once and copied per
-// iteration. That is the single biggest win available without hardware: it
+// HMAC-SHA256, with the key schedule hoisted out of the PBKDF2 loop: the inner
+// and outer padded-key states are computed once and copied per iteration, which
 // removes two block compressions per iteration out of four.
-// ---------------------------------------------------------------------------
 
 struct HmacKey { Sha256 inner; Sha256 outer; };
 
@@ -194,25 +186,16 @@ bool opcua_auth_verify(const char* password, size_t password_len, const char* st
     if (stored == nullptr)
         return false;
 
-    // plain:<password>
-    //
-    // What this target asks the build for. The editor holds the project's
-    // password and the BUILD derives whatever the target declares in
-    // `capabilities.opcua.passwordScheme`, so this runtime never has to run a
-    // KDF it cannot afford -- PBKDF2 costs ~124 us/iteration here and
-    // open62541 verifies synchronously inside one scan, which at the 600 000
-    // iterations a Linux runtime uses would be 74 seconds of stopped PLC.
-    //
-    // It is a weaker credential at rest and that is stated plainly in
-    // OPCUA.md. It is also not the weak link: this target runs OPC-UA without
-    // encryption, so the password already crosses the network in the clear,
-    // and its flash has no secure boot.
+    // plain:<password> -- what this target asks the build for, so this runtime
+    // never runs a KDF it cannot afford. A weaker credential at rest, but this
+    // target runs OPC-UA without encryption, so the password already crosses the
+    // network in clear.
     if (strncmp(stored, "plain:", 6) == 0)
     {
         const char* want_pw = stored + 6;
         const size_t want_len = strlen(want_pw);
-        // Constant-time in the comparison, and length-checked first so the
-        // loop below cannot read past either buffer.
+        // Constant-time in the comparison, and length-checked first so the loop
+        // below cannot read past either buffer.
         uint8_t diff = (uint8_t)((want_len == password_len) ? 0 : 1);
         const size_t n = (want_len < password_len) ? want_len : password_len;
         for (size_t i = 0; i < n; i++)
@@ -234,19 +217,11 @@ bool opcua_auth_verify(const char* password, size_t password_len, const char* st
         return false;
     p++;
 
-    // Hard ceiling, and it protects the scan cycle rather than the password.
-    //
-    // PBKDF2 here costs ~124 us/iteration measured on a LOGO! 8.2 (20,000
-    // iterations in 2.475 s), and open62541's AccessControl::activateSession
-    // is synchronous with no deferral path in a single-threaded build -- so
-    // the whole KDF runs inside one UA_Server_run_iterate, inside one scan.
-    // At the editor's default of 600,000 that is 74 SECONDS of stalled PLC,
-    // triggerable by any client that knows a username. At the 100,000 the LOGO
-    // capability declares it is still 12.4 s.
-    //
-    // Refusing is the only safe answer: a PLC may not stop controlling its
-    // process because someone tried to log in. See plan §4.4 -- the real fix
-    // is encryption plus hardware SHA-256 (Phase 4), not a bigger budget.
+    // Hard ceiling, protecting the scan cycle rather than the password.
+    // open62541's AccessControl::activateSession is synchronous with no deferral
+    // path in a single-threaded build, so the whole KDF runs inside one scan; at
+    // a Linux runtime's default iteration count that is over a minute of stalled
+    // PLC, triggerable by any client that knows a username.
     if (iters > OPCUA_KDF_MAX_ITERATIONS)
     {
         OPCUA_LOG("[auth] REFUSED: hash needs %lu iterations, target allows %lu "
@@ -302,10 +277,10 @@ uint32_t opcua_auth_last_us(void) { return g_last_us; }
 
 namespace {
 
-/** open62541 hands us the username and the CLEARTEXT password (it has already
- *  undone whatever the token's security policy applied), which is exactly what
- *  the KDF needs and the only point in the system where the password exists in
- *  the clear. It is not copied or logged. */
+/** open62541 hands us the username and the cleartext password (it has already
+ *  undone whatever the token's security policy applied), which is the only point
+ *  in the system where the password exists in the clear. It is not copied or
+ *  logged. */
 UA_StatusCode login_cb(const UA_String* userName, const UA_ByteString* password,
                        size_t loginSize, const UA_UsernamePasswordLogin* logins,
                        void** sessionContext, void* loginContext)
@@ -314,15 +289,10 @@ UA_StatusCode login_cb(const UA_String* userName, const UA_ByteString* password,
     if (userName == nullptr || password == nullptr)
         return UA_STATUSCODE_BADUSERACCESSDENIED;
 
-    // An ANONYMOUS token reaches this callback too, with an empty username --
-    // the default access control consults the callback for every token type,
-    // not just UserName. Rejecting it here refused anonymous logins on every
-    // project that declares no users at all, which is most of them.
-    //
-    // Reaching this point with an empty username already means anonymous is
-    // permitted: allowAnonymous is false whenever users are declared, and the
-    // token handler refuses anonymous with BadIdentityTokenInvalid before the
-    // callback is ever called.
+    // An anonymous token reaches this callback too, with an empty username,
+    // because the default access control consults the callback for every token
+    // type. Reaching here empty already means anonymous is permitted:
+    // allowAnonymous is false whenever users are declared.
     if (userName->length == 0)
         return UA_STATUSCODE_GOOD;
 
@@ -336,8 +306,8 @@ UA_StatusCode login_cb(const UA_String* userName, const UA_ByteString* password,
         if (!opcua_auth_verify((const char*)password->data, password->length,
                                OPCUA_USERS[i].password_hash))
             break;   // right user, wrong password: do not try the others
-        // The role rides on the session so per-role permissions can use it
-        // once they are enforced per session rather than any-role.
+        // The role rides on the session so per-role permissions can use it once
+        // they are enforced per session rather than any-role.
         if (sessionContext != nullptr)
             *sessionContext = (void*)(uintptr_t)OPCUA_USERS[i].role;
         return UA_STATUSCODE_GOOD;
@@ -355,41 +325,29 @@ UA_StatusCode opcua_auth_install(UA_ServerConfig* config)
     if (config == nullptr)
         return UA_STATUSCODE_BADINVALIDARGUMENT;
 
-    // With users declared, anonymous is off: declaring users and still
-    // accepting anonymous would make them decorative.
+    // With users declared, anonymous is off: declaring users and still accepting
+    // anonymous would make them decorative.
     const UA_Boolean allow_anonymous = (OPCUA_USER_COUNT == 0);
 
     // One placeholder login entry, and it is not optional.
     //
     // UA_AccessControl_default only registers the UserName token policy on the
-    // endpoint when usernamePasswordLoginSize > 0 -- a callback alone
-    // registers nothing, so the endpoint advertised no UserName token and
-    // every login failed with BadIdentityTokenInvalid before the callback was
-    // ever reached. The entry's contents are never consulted: the token
-    // handler calls the loginCallback INSTEAD of matching the static list.
+    // endpoint when usernamePasswordLoginSize > 0; a callback alone registers
+    // nothing. The entry's contents are never consulted, because the token
+    // handler calls the loginCallback instead of matching the static list.
     static UA_UsernamePasswordLogin placeholder;
     placeholder.username = UA_STRING_NULL;
     placeholder.password = UA_STRING_NULL;
 
-    // Username tokens travel in the clear on a #None endpoint, and open62541
-    // refuses that by default -- selectTokenPolicy() skips a UserName policy
-    // when both the channel and the token policy are #None unless this flag is
-    // set, which is why every login failed with BadIdentityTokenInvalid before
-    // the access-control callback was ever reached.
-    //
-    // Opting in is the only way username auth can exist on this target at all:
-    // the TM4C1294NCPDT has no TRNG and no crypto acceleration, so there is no
-    // encrypting SecurityPolicy to carry the token (§6.1, plan). The password
-    // is therefore exposed to anyone who can see the traffic. That is a real
-    // limitation of a #None server and belongs in the user-facing docs, not
-    // buried here -- but it is strictly better than the alternative on offer,
-    // which is no authentication at all.
+    // Username tokens travel in the clear on a #None endpoint and open62541
+    // refuses that by default: selectTokenPolicy() skips a UserName policy when
+    // both channel and token policy are #None unless this flag is set. Opting in
+    // is the only way username auth can exist with no encrypting SecurityPolicy.
     config->allowNonePolicyPassword = true;
 
-    // Username tokens travel in the clear on a #None endpoint. That is a
-    // property of running without encryption, not of this code, and the
-    // library warns about it too; it is why the VPP's security capability and
-    // the user-facing docs have to say so plainly.
+    // Username tokens travel in the clear on a #None endpoint. A property of
+    // running without encryption, not of this code; the library warns about it
+    // too, and the VPP's security capability has to say so.
     const UA_StatusCode rc = UA_AccessControl_defaultWithLoginCallback(
         config, allow_anonymous, nullptr,
         (OPCUA_USER_COUNT > 0) ? 1 : 0, &placeholder, login_cb, nullptr);

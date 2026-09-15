@@ -3,15 +3,10 @@ opcua_nodes.cpp - the address space and the data plane
 Copyright (C) 2026 Autonomy Logic
 
 Turns the generated OPCUA_NODES[] table into open62541 variable nodes whose
-values come straight from the PLC, with no copy in between.
-
-Every node is a DATA SOURCE, not a value-holding variable. That is the whole
-data plane: a read calls openplc_debug_read(arr, elem, ...) against
-the table the compiler already emitted for the debugger, so the client always
-sees the live value, there is no shadow copy to keep in sync, and there is no
-mirroring loop running at scan rate. The (arr, elem) pair in each row is the
-same coordinate the editor resolved from debug-map.json, so a variable cannot
-resolve differently here than it does for Runtime v4.
+values come straight from the PLC, with no copy in between. Every node is a data
+source: a read calls openplc_debug_read(arr, elem, ...) against the table the
+compiler emitted for the debugger, so there is no shadow copy and no mirroring
+loop at scan rate.
 */
 
 #include "opcua_config.h"
@@ -27,32 +22,23 @@ resolve differently here than it does for Runtime v4.
 #include "opcua_log.h"
 #include "opcua_types.h"
 
-// The debug table, reached through the extern "C" shims rather than by
-// including debug_dispatch.hpp here. Exactly the route modbus_debug.cpp takes,
-// and for the same reason: this TU is compiled by arduino-cli with the core's
-// default C++ standard, while the strucpp runtime needs gnu++17 and lives in
-// the precompiled OpenPLCUserLib archive. Including its template headers on
-// this side of the boundary is the std-mismatch ABI break the precompile
-// pipeline exists to prevent -- and it dragged in std::numeric_limits<T>::min()
-// under Arduino's min/max macros, which is why this file used to have to #undef
-// four of them before it could compile at all.
+// The debug table, reached through the extern "C" shims rather than by including
+// debug_dispatch.hpp -- the same route modbus_debug.cpp takes. This TU uses the
+// core's default C++ standard while the strucpp runtime needs gnu++17 and lives
+// in a precompiled archive, so including its templates here is an ABI break.
 #include "arduino_runtime_glue.h"
 
 namespace {
 
 /** TypeTag -> UA_DataType index.
  *
- *  Indexed by the tag stored in each OPCUA_NODES[] row, which is an ABI with
- *  generate-opcua-header.ts and with opcua_types.py. Keep all three in step:
- *  a mismatch here hands the encoder the wrong byte width and the client
- *  receives plausible garbage rather than an error.
+ *  Indexed by the tag stored in each OPCUA_NODES[] row, an ABI with
+ *  generate-opcua-header.ts and opcua_types.py. Keep all three in step: a
+ *  mismatch hands the encoder the wrong byte width.
  *
- *  TIME / DATE / TOD / DT are IEC time types with no direct OPC-UA scalar of
- *  the same width; they are exposed as the integers they already are on the
- *  wire rather than converted, so no precision is invented. STRING / WSTRING
- *  are not exposed at all yet — handle_read returns 0 for them (the runtime
- *  calls them a "string stub"), so publishing them would mean publishing
- *  nothing. */
+ *  TIME / DATE / TOD / DT have no OPC-UA scalar of the same width, so they are
+ *  exposed as the integers they already are on the wire. STRING / WSTRING are
+ *  not exposed: handle_read returns 0 for them. */
 const UA_UInt32 kTagToUaType[] = {
     UA_TYPES_BOOLEAN,  // TAG_BOOL
     UA_TYPES_SBYTE,    // TAG_SINT
@@ -89,8 +75,7 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
                         UA_DataValue* value)
 {
     (void)server; (void)sessionId; (void)sessionContext; (void)nodeId;
-    // IndexRange on a scalar is meaningless; refusing is what the spec asks
-    // for rather than silently ignoring the range.
+    // IndexRange on a scalar is meaningless; refusing is what the spec asks for.
     if (range != nullptr)
         return UA_STATUSCODE_BADINDEXRANGEINVALID;
 
@@ -108,9 +93,8 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
     value->hasValue = true;
     if (includeSourceTimeStamp)
     {
-        // The value was read from the PLC just now, so "now" is honest — even
-        // though the wall clock itself is a build epoch plus uptime on a part
-        // with no RTC (see the library's clock).
+        // The value was read from the PLC just now, so "now" is honest, even
+        // though the wall clock is a build epoch plus uptime on a part with no RTC.
         value->sourceTimestamp = UA_DateTime_now();
         value->hasSourceTimestamp = true;
     }
@@ -134,9 +118,8 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
         return UA_STATUSCODE_BADTYPEMISMATCH;
     }
 
-    // Insist on the exact type. Accepting a near-miss and coercing it would
-    // mean a client writing an Int32 to a BOOL silently sets something, and
-    // the PLC is the wrong place to be lenient about that.
+    // Insist on the exact type: coercing a near-miss would let a client writing
+    // an Int32 to a BOOL silently set something.
     const UA_DataType* want = &UA_TYPES[kTagToUaType[row->tag]];
     if (value->value.type != want)
     {
@@ -154,10 +137,9 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
               row->browse_name, (unsigned)row->arr, (unsigned)row->elem,
               (unsigned)width, (unsigned)status);
 
-    // STATUS_OK is 0x7E, NOT zero — the debugger's status codes are chosen so
-    // the editor's wire parsers can tell them apart, and zero is not one of
-    // them. Comparing against 0 reported every SUCCESSFUL write to the client
-    // as BadNotWritable while the value had in fact landed in the PLC.
+    // STATUS_OK is 0x7E, not zero -- the debugger's status codes are chosen so
+    // the editor's wire parsers can tell them apart. Comparing against 0 reports
+    // every successful write to the client as BadNotWritable.
     return (status == OPENPLC_DEBUG_STATUS_OK)
                ? UA_STATUSCODE_GOOD
                : UA_STATUSCODE_BADNOTWRITABLE;
@@ -165,12 +147,10 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
 
 /** Any-role writability.
  *
- *  The per-role r/w/rw bitmap in each row is the real access-control answer,
- *  but enforcing it per session needs the authenticated role, which arrives
- *  with username auth (still to come). Until then a node is advertised
- *  writable if ANY role may write it, and read-only otherwise — so a
- *  read-only variable is never presented as writable, which is the direction
- *  that matters. */
+ *  The per-role bitmap in each row is the real access-control answer, but
+ *  enforcing it per session needs the authenticated role. Until then a node is
+ *  advertised writable if any role may write it, so a read-only variable is
+ *  never presented as writable. */
 bool any_role_may_write(uint8_t perms)
 {
     return opcua_can_write(perms, OPCUA_ROLE_VIEWER)
@@ -181,14 +161,9 @@ bool any_role_may_write(uint8_t perms)
 } // namespace
 
 /* ---------------------------------------------------------------------------
- * Materialisation for the flash nodestore
- *
- * The address space is fixed when the project is compiled and never changes,
- * so the ziptree's per-node RAM was paying to store something already `const`.
- * Measured: 476 B of arena per node, 19,032 B for 40 nodes, and a Browse over
- * 40 nodes then failed with BadOutOfMemory because the arena had nothing
- * contiguous left. These functions let the flash nodestore hand open62541 a
- * node built on demand into a small fixed pool instead.
+ * Materialisation for the flash nodestore. The address space is fixed at
+ * compile time, so the ziptree's per-node RAM (measured 476 B of arena per node)
+ * was storing something already `const`. These build a node on demand instead.
  * ------------------------------------------------------------------------- */
 
 namespace {
@@ -196,15 +171,11 @@ namespace {
 /** Build this node's two references -- forward HasTypeDefinition to
  *  BaseDataVariableType, inverse Organizes from the Objects folder.
  *
- *  They are IDENTICAL for every node, so the obvious move is one shared static
- *  instance. That is a trap: open62541 grows a node's reference array with
- *  UA_realloc, and it does exactly that when a reference is added naming this
- *  node as the target. Realloc on a shared static -- or on a pointer into
- *  flash -- is undefined behaviour, so each materialised node gets its own
- *  allocation instead. ~40 B, bounded by the pool size, freed on release.
- *
- *  Discarding any edit made to it is not a loss: flash is the truth, and the
- *  inverse Organizes the server would be trying to add is already here. */
+ *  They are identical for every node, but one shared static is a trap:
+ *  open62541 grows a node's reference array with UA_realloc when a reference
+ *  naming this node as target is added, and realloc on a shared static or on a
+ *  pointer into flash is undefined behaviour. Each materialised node therefore
+ *  gets its own allocation, freed on release. */
 UA_NodeId g_id_basedatavariabletype = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);
 UA_NodeId g_id_objectsfolder        = UA_NODEID_NUMERIC(0, UA_NS0ID_OBJECTSFOLDER);
 
@@ -229,8 +200,8 @@ bool build_refs(UA_NodeHead* h, const char* name)
     h->displayName = dn;
 
     // The two target ids are namespace-zero constants shared by every node.
-    // Sharing them is safe where sharing the reference ARRAY is not: open62541
-    // grows the array with UA_realloc, but never writes through a target id.
+    // Safe where sharing the reference ARRAY is not: open62541 grows the array
+    // with UA_realloc, but never writes through a target id.
     targets[0].targetId       = UA_NodePointer_fromNodeId(&g_id_basedatavariabletype);
     targets[0].targetNameHash = 0;
     targets[1].targetId       = UA_NodePointer_fromNodeId(&g_id_objectsfolder);
@@ -291,19 +262,18 @@ bool opcua_nodes_materialise(UA_UInt16 numeric_id, UA_UInt16 ns, UA_VariableNode
     UA_NodeHead* h = &out->head;
     h->nodeId     = UA_NODEID_NUMERIC(ns, row->node_id);
     h->nodeClass  = UA_NODECLASS_VARIABLE;
-    // Names point INTO FLASH. Nothing may free them, which is why deleteNode
-    // in the nodestore must never run over one of these.
+    // Names point into flash, so nothing may free them: deleteNode in the
+    // nodestore must never run over one of these.
     h->browseName.namespaceIndex = ns;
     h->browseName.name  = UA_STRING((char*)row->browse_name);
-    // displayName is a singly-linked list of localised texts, not a scalar.
-    // One entry, allocated with the references so release frees them together.
+    // displayName is a singly-linked list of localised texts, not a scalar. One
+    // entry, allocated with the references so release frees them together.
     h->displayName = nullptr;
     if (!build_refs(h, row->browse_name))
         return false;
-    // Read-only ATTRIBUTES. The value is writable through the callback below
-    // when permissions allow; everything else about the node is fixed at
-    // compile time, and a zero writeMask makes the server say so before it
-    // ever reaches the shared, non-copied data above.
+    // Read-only attributes. The value is writable through the callback below
+    // when permissions allow; everything else is fixed at compile time, and a
+    // zero writeMask makes the server say so before it reaches the shared data.
     h->writeMask        = 0;
     h->context          = (void*)row;
 
@@ -328,9 +298,9 @@ void opcua_nodes_dematerialise(UA_VariableNode* node)
     if (node == nullptr || node->head.references == nullptr)
         return;
     // Free in the shape build_refs() allocated, and only if the array still
-    // looks like ours. If open62541 grew it, it did so with UA_realloc on our
-    // own allocation, so freeing the array is still correct -- what we must
-    // not do is free the per-target NodeIds twice.
+    // looks like ours. If open62541 grew it, it used UA_realloc on our own
+    // allocation, so freeing the array is correct; the per-target NodeIds must
+    // not be freed twice.
     UA_NodeReferenceKind* kinds = node->head.references;
     if (kinds[0].targets.array != nullptr)
         UA_free(kinds[0].targets.array);   // the target ids are shared statics
@@ -347,13 +317,10 @@ UA_StatusCode opcua_nodes_populate(UA_Server* server, UA_UInt16* out_ns_index)
     if (out_ns_index != nullptr)
         *out_ns_index = ns;
 
-    // Swap the default nodestore for the flash-backed one now that the
-    // namespace index is known. Namespace zero has already been built into the
-    // inner store during server creation and is carried over untouched.
-    // The nodestore was installed before the server existed (see opcua_init:
-    // namespace zero has to be servable by the time UA_Server_newWithConfig
-    // runs). All that is left is telling it which namespace our own nodes are
-    // in, which only became known when addNamespace returned just now.
+    // Swap the default nodestore for the flash-backed one now that the namespace
+    // index is known. The nodestore was installed before the server existed, so
+    // namespace zero is already built into the inner store and carried over
+    // untouched; all that is left is naming our own namespace.
     extern UA_Nodestore* opcua_server_nodestore();
     UA_Nodestore* flash = opcua_server_nodestore();
     if (flash == nullptr)
@@ -361,12 +328,10 @@ UA_StatusCode opcua_nodes_populate(UA_Server* server, UA_UInt16* out_ns_index)
     UA_Nodestore_flashSetNamespace(flash, ns);
 
 #if OPCUA_NODE_COUNT > 0
-    // The nodes themselves are already in flash and need no adding. What the
-    // Objects folder does need is a forward reference to each of them, or a
-    // Browse of Objects will not find them -- open62541 follows forward
-    // references from the node being browsed. That is 8 B per node
-    // (UA_ReferenceTarget) in the inner store, against the 476 B per node the
-    // zip-tree charged to hold the node itself.
+    // The nodes themselves are already in flash and need no adding, but the
+    // Objects folder needs a forward reference to each or a Browse of Objects
+    // will not find them. That is 8 B per node in the inner store, against the
+    // 476 B the zip-tree charged to hold the node itself.
     for (uint16_t i = 0; i < OPCUA_NODE_COUNT; i++)
     {
         const opcua_node_t* row = &OPCUA_NODES[i];
@@ -379,9 +344,9 @@ UA_StatusCode opcua_nodes_populate(UA_Server* server, UA_UInt16* out_ns_index)
             UA_NODEID_NUMERIC(0, UA_NS0ID_ORGANIZES),
             UA_EXPANDEDNODEID_NUMERIC(ns, row->node_id),
             true);
-        // The matching inverse reference is already part of every flash node,
-        // so the server trying to add it again is expected and harmless: the
-        // edit lands on the materialised copy and is discarded on release.
+        // The matching inverse reference is already part of every flash node, so
+        // the server trying to add it again is expected and harmless: the edit
+        // lands on the materialised copy and is discarded on release.
         if (rc != UA_STATUSCODE_GOOD && rc != UA_STATUSCODE_BADDUPLICATEREFERENCENOTALLOWED)
         {
             OPCUA_LOG("[ns] addReference failed for node %u rc=0x%08lx",

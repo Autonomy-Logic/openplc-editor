@@ -1,30 +1,15 @@
 /*
  * udp_scan.h -- network-discovery ("Search") responder for baremetal runtimes.
  *
- * Answers the OpenPLC editor's discovery probe so the device appears in the
- * editor's device-search list. The editor broadcasts the ASCII magic
- * "OPENPLC_DISCOVER_V1" to UDP :33333 and reads replies as JSON, taking the
- * device IP from the UDP source address (see the editor's discover-runtimes).
- * We reply, unicast, to the sender with an advertisement.
+ * The editor broadcasts "OPENPLC_DISCOVER_V1" to UDP :33333 and reads replies as
+ * JSON, taking the device IP from the UDP source address. We reply unicast with
+ * "mac" (so units sharing a default IP stay distinguishable) and "device".
  *
  * Feature-gated, not board-gated: compiled in only when the build defines
- * SUPPORTS_UDP_SCAN (declared per target, e.g. from a VPP's HAL compiler flags).
- * Uses only the generic Arduino UDP + Ethernet API, so any target whose network
- * library provides EthernetUDP / Ethernet.macAddress() can opt in.
+ * SUPPORTS_UDP_SCAN. Uses only the generic Arduino UDP + Ethernet API.
  *
- * The reply carries:
- *   - "mac": the device MAC (unique per unit) so devices are distinguishable
- *     even when several share a default IP;
- *   - "device"/"hostname": a brand/type string a VPP supplies at link time via
- *     the weak symbol OPLC_DEVICE_NAME (see below); a build that supplies none
- *     stays generic.
- *
- * Brand string: a VPP declares its identity by defining OPLC_DEVICE_NAME in its
- * HAL (a strong symbol overriding the weak default provided by the runtime).
- * This avoids passing a spaced string through compiler flags, which arduino-cli
- * does not preserve. Fallback is a generic label when no VPP defines it.
- *
- * Header-only; lives with the runtime sources, not in any one board's core.
+ * A VPP declares its identity by defining OPLC_DEVICE_NAME in its HAL, a strong
+ * symbol overriding the weak default. Header-only.
  */
 #ifndef UDP_SCAN_H
 #define UDP_SCAN_H

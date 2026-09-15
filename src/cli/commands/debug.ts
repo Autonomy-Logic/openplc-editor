@@ -230,12 +230,9 @@ async function runOpen(args: ParsedArgs, reporter: Reporter, context: DebugConte
   }
 
   // Credentials are required only by targets controlled over a runtime API
-  // (runtime v4 websocket). A baremetal board reached over Modbus (TCP or RTU)
-  // or a runtime v3 over Modbus TCP has nothing to log in to, and demanding a
-  // password for it would be a rule the editor GUI does not have. We can't tell
-  // which the target is until the daemon resolves its capabilities, so accept
-  // whatever credentials were provided (validating a typo) and let the daemon's
-  // own auth gate (open-session.ts, keyed on the resolved channel) decide.
+  // (runtime v4 websocket); a board reached over Modbus has nothing to log in to.
+  // We cannot tell which until the daemon resolves capabilities, so accept
+  // whatever was provided and let the daemon's own auth gate decide.
   const credentials = resolveOptionalRuntimeCredentials(args)
   if ('error' in credentials) {
     return reporter.failure({ code: ErrorCode.MissingArgument, message: credentials.error }, ExitCode.Usage)

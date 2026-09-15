@@ -1,21 +1,16 @@
 /**
  * Author the `src/s7comm_config.h` content for a baremetal arduino-cli target.
  *
- * Sibling of `generate-opcua-header.ts`, and deliberately much smaller — which
- * is the honest reflection of the protocol rather than a shortcut. OPC-UA
- * publishes NAMED variables, so its generator has to resolve every path
- * through `debug-map.json`, pack per-role permissions, and emit a node table.
- * An S7 area is a flat run of bytes over a located buffer that already exists,
- * so the whole address space is `(area, db, buffer, startIndex, length)`.
+ * Sibling of `generate-opcua-header.ts`, and much smaller: OPC-UA publishes
+ * named variables and has to resolve every path through `debug-map.json`, while
+ * an S7 area is a flat run of bytes over a located buffer, so the whole address
+ * space is `(area, db, buffer, startIndex, length)`.
  *
- * The mapping is Runtime v4's, unchanged: the editor's S7 screen already asks
- * "which buffer, starting where", and the v4 plugin already consumes exactly
- * that. Parity means a project moved between targets addresses the same
- * variable the same way, and inventing a second mapping for baremetal would be
- * a second thing to be wrong.
+ * The mapping is Runtime v4's, unchanged, so a project moved between targets
+ * addresses the same variable the same way.
  *
- * `s7comm_types.h` declares the record this instantiates. The two are halves of
- * one ABI: move a field on one side and the other must move with it.
+ * `s7comm_types.h` declares the record this instantiates; the two are halves of
+ * one ABI.
  */
 
 import type { S7TargetProfile } from '@root/middleware/shared/utils/target-capabilities/types'
@@ -35,10 +30,8 @@ const BUFFER_CODE: Record<string, string> = {
  * Buffers the editor accepts that an arduino-cli build has no array for.
  *
  * Runtime v3/v4 define all of these; `openplc.h` on a baremetal target defines
- * none of them. Naming them here rather than letting them fall through the
- * lookup means the user gets "this target has no bool_memory buffer" instead of
- * "unknown mapping", which is the difference between a message that says what
- * to change and one that says something went wrong.
+ * none. Naming them here gives the user "this target has no bool_memory buffer"
+ * instead of "unknown mapping".
  */
 const UNSUPPORTED_ON_BAREMETAL: Record<string, string> = {
   bool_memory: 'bool_memory (%MX)',
@@ -107,10 +100,9 @@ export interface S7CommSlaveConfigLike {
 }
 
 export interface GenerateS7CommHeaderInput {
-  /** The project's S7 slave config, or `null` when the project has no enabled
-   *  S7 server — the generator then emits a DISABLED header rather than
-   *  nothing, so the runtime's unconditional `#include "s7comm_config.h"`
-   *  still resolves and the server compiles out. */
+  /** The project's S7 slave config, or `null` when the project has no enabled S7
+   *  server; the generator then emits a disabled header so the runtime's
+   *  unconditional `#include "s7comm_config.h"` still resolves. */
   config: S7CommSlaveConfigLike | null
   /** The target's S7 profile, already defaulted by `resolveTargetCapabilities`. */
   profile: S7TargetProfile
@@ -150,12 +142,9 @@ const resolveBuffer = (
 }
 
 /**
- * Collect the areas that survive validation.
- *
- * Everything refused here is refused at BUILD time with a message naming the
- * block, which is the whole point: the alternative is a device that accepts a
- * connection and then answers some addresses and not others, and a user with
- * no way to tell which.
+ * Collect the areas that survive validation. Everything refused here is refused
+ * at build time with a message naming the block, rather than shipping a device
+ * that answers some addresses and not others.
  */
 export function collectS7Areas(
   config: S7CommSlaveConfigLike,
@@ -164,8 +153,8 @@ export function collectS7Areas(
 ): EmittedArea[] {
   const areas: EmittedArea[] = []
 
-  // System areas first, so they read in protocol order (PE, PA, MK) ahead of
-  // the data blocks — the order a Wireshark capture shows them in.
+  // System areas first, so they read in protocol order (PE, PA, MK) ahead of the
+  // data blocks.
   const system: Array<[string, S7CommSystemAreaLike | undefined, string]> = [
     ['S7COMM_AREA_PE', config.systemAreas?.peArea, 'the process-input area (PE)'],
     ['S7COMM_AREA_PA', config.systemAreas?.paArea, 'the process-output area (PA)'],
@@ -182,9 +171,9 @@ export function collectS7Areas(
       sizeBytes: spec.sizeBytes,
       buffer,
       startIndex: spec.mapping?.startBuffer ?? 0,
-      // The process-INPUT area is what the field wires drive. A client that
+      // The process-input area is what the field wires drive. A client that
       // writes it is writing a value the next input refresh overwrites, which
-      // looks like the write was lost. Refusing is the honest answer.
+      // looks like the write was lost.
       writable: areaCode !== 'S7COMM_AREA_PE',
       label,
     })
@@ -253,9 +242,8 @@ export function generateS7CommHeaderContent(input: GenerateS7CommHeaderInput): s
   const areas = collectS7Areas(config, profile, warn)
 
   if (areas.length === 0) {
-    // A server with no areas would accept connections and answer every read
-    // with "out of range". Compiling it out and saying so is more useful than
-    // shipping a server that cannot serve anything.
+    // A server with no areas would accept connections and answer every read with
+    // "out of range". Compiling it out and saying so is more useful.
     warn(
       'S7Comm: the server is enabled but no area could be mapped on this target, ' + 'so it was left out of the build.',
     )
@@ -266,9 +254,9 @@ export function generateS7CommHeaderContent(input: GenerateS7CommHeaderInput): s
     return `${lines.join('\n')}\n`
   }
 
-  // The negotiated PDU is the smaller of what the project asked for and what
-  // the target says it can buffer. Clamped here rather than on the device so
-  // the number in the image is the number in the build log.
+  // The negotiated PDU is the smaller of what the project asked for and what the
+  // target says it can buffer. Clamped here rather than on the device so the
+  // number in the image is the number in the build log.
   const pduSize = Math.min(Math.max(config.server.pduSize, 240), profile.pduSize)
   if (config.server.pduSize > profile.pduSize) {
     warn(
@@ -289,11 +277,9 @@ export function generateS7CommHeaderContent(input: GenerateS7CommHeaderInput): s
 
   lines.push('#define S7COMM_ENABLED 1')
   lines.push('')
-  // Self-contained on purpose: the table below is typed on s7comm_area_t, and
-  // this header is pulled in by several TUs in whatever order they happen to
-  // include it. Relying on the includer to have declared the record first is
-  // the sort of ordering dependency that compiles for months and then breaks
-  // when someone adds an include.
+  // Self-contained on purpose: the table below is typed on s7comm_area_t and
+  // this header is pulled in by several TUs in whatever order they include it,
+  // so it must not depend on the includer declaring the record first.
   lines.push('#include "s7comm_types.h"')
   lines.push('')
   lines.push('// ---- Server ----')

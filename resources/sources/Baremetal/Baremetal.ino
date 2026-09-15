@@ -36,28 +36,20 @@
 #include "ModbusSlave.h"
 #endif
 
-// Protocol servers. Included unconditionally: each facade is defined either
-// way and the whole implementation compiles out when the target's VPP does
-// not declare the capability -- OPCUA_ENABLED 0 in the generated
-// opcua_config.h, S7COMM_ENABLED 0 in s7comm_config.h.
-//
-// The CALL SITES below are still guarded, because an unconditional call to an
-// empty function is not free: the call survives, and so does evaluating its
-// argument, which here means a micros() the compiler cannot prove it may drop.
-// Measured at 64 bytes of flash. Small, but "costs nothing when disabled" is a
-// property that is either true or it is not.
+// Protocol servers. Included unconditionally: each facade is defined either way
+// and the implementation compiles out when the target's VPP does not declare the
+// capability. The call sites below are still guarded, because an unconditional
+// call to an empty function keeps the call and the evaluation of its argument.
 #include "opcua_server.h"
 #include "opcua_log.h"
 #include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
 
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
-// only targets that declare SUPPORTS_UDP_SCAN (e.g. via a VPP's HAL flags) pull
-// it in; unrelated to Modbus.
+// only targets declaring SUPPORTS_UDP_SCAN pull it in; unrelated to Modbus.
 #if defined(SUPPORTS_UDP_SCAN)
 #include "udp_scan.h"
 // Weak NULL default for the discovery brand/type string. A VPP declares its
-// identity by defining a strong OPLC_DEVICE_NAME in its HAL, which overrides
-// this; a build with no VPP identity stays generic.
+// identity with a strong OPLC_DEVICE_NAME in its HAL, which overrides this.
 extern "C" { const char *OPLC_DEVICE_NAME __attribute__((weak)) = 0; }
 #endif
 
@@ -311,13 +303,10 @@ void setup()
 #endif
 
 #if defined(BOARD_LOGO8)
-    // The LOGO! core defers its SysTick/millis() time base (its reset path skips
-    // the Energia _init that would start it, because that must not run before the
-    // network stack is up). Start it here -- the network is now initialised, so it
-    // is safe -- and BEFORE setupCycleDelay() so the scan-cycle baseline (last_run)
-    // is captured from a running micros(); otherwise the first cycle underflows and
-    // the scan runs unthrottled. 1 ms tick at 120 MHz; the 120 MHz PLL and global
-    // interrupts are already set up by the board init and the network stack.
+    // The LOGO! core defers its SysTick/millis() time base, because its reset
+    // path skips the Energia _init that would start it. Start it here and before
+    // setupCycleDelay(), so the scan-cycle baseline is captured from a running
+    // micros(); otherwise the first cycle underflows and the scan runs unthrottled.
     (*(volatile uint32_t *)0xE000E014u) = (F_CPU / 1000U) - 1U;  /* SYST_RVR */
     (*(volatile uint32_t *)0xE000E018u) = 0U;                    /* SYST_CVR */
     (*(volatile uint32_t *)0xE000E010u) = 0x00000007U;           /* SYST_CSR: CLK|TICKINT|EN */
@@ -532,21 +521,14 @@ void scheduler()
     #endif
 
     // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
-    // Modbus have had theirs. Each is handed what remains and declines to run
-    // unless that covers its worst case, so neither can extend the cycle.
-    // No-ops when disabled.
+    // Modbus. Each is handed what remains and declines to run unless that covers
+    // its worst case, so neither can extend the cycle. No-ops when disabled.
     //
-    // cycle_slack_us() is called TWICE, deliberately. The protocols share one
-    // budget rather than having one each: the second sees what the first
-    // actually spent. Passing one cached number to both would let two
-    // protocols each politely take "their" slack and together overrun.
+    // cycle_slack_us() is called twice deliberately: the protocols share one
+    // budget, so the second sees what the first actually spent.
     //
-    // Guarded rather than relying on the no-op bodies. Both task functions
-    // compile to `return` when their protocol is disabled, but the CALL and
-    // its argument survive -- and cycle_slack_us() calls micros(), which the
-    // compiler cannot prove is side-effect free and so cannot drop. Measured
-    // at 64 bytes of flash for a project with no S7 server, which is 64 bytes
-    // more than "costs nothing when disabled" allows.
+    // Guarded rather than relying on the no-op bodies, because the call and its
+    // micros() argument survive when the body compiles to `return`.
     #if OPCUA_ENABLED
         opcuatask(cycle_slack_us());
     #endif
@@ -593,16 +575,11 @@ void loop()
     }
     #endif
 
-    // OPC-UA gets the same inter-cycle slack Modbus does.
-    //
-    // Servicing it only from scheduler() capped it at one message per scan
-    // while Modbus was polled twice per cycle, so an OPC-UA exchange took
-    // systematically longer than a Modbus one for no reason other than where
-    // the call sat. No 10 ms guard is needed here: opcuatask() is given the
-    // real remaining slack and decides for itself, which is a tighter test
-    // than a fixed threshold and the same one scheduler() uses.
-    //
-    // Guarded for the same reason as in scheduler() -- see the note there.
+    // OPC-UA gets the same inter-cycle slack Modbus does. Servicing it only from
+    // scheduler() capped it at one message per scan while Modbus was polled
+    // twice per cycle. No fixed guard is needed here: opcuatask() is given the
+    // real remaining slack and decides for itself. Guarded for the same reason
+    // as in scheduler().
     #if OPCUA_ENABLED
         opcuatask(cycle_slack_us());
     #endif

@@ -55,11 +55,9 @@ protocol, transport, register and debug layers agree on the same contracts.
 // warning rather than a generic failure. It doesn't collide with Modbus
 // exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
 #define MB_PLC_CTRL_REFUSED_SWITCH       0x86
-// MB_FC_REBOOT_BOOTLOADER only: the request was well-formed but REFUSED because
-// the device's programming lock is engaged. It is deliberately not an error
-// code: the editor's response is to keep asking for a few seconds while the
-// user clears the lock at the device, not to fail the upload outright. Distinct
-// from every other status here and from the Modbus exceptions (0x01-0x04).
+// MB_FC_REBOOT_BOOTLOADER only: well-formed but refused because the device's
+// programming lock is engaged. Not an error code, because the editor keeps
+// asking for a few seconds while the user clears the lock at the device.
 #define MB_REFUSED_LOCKED                0x6C
 
 //Modbus registers struct

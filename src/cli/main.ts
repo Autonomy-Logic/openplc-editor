@@ -330,10 +330,9 @@ async function main(): Promise<void> {
   const isDaemon = process.argv.includes('--cli-daemon')
   installNeverHangGuards({ exitWhenOutputClosed: !isDaemon })
 
-  // The daemon reads its config from stdin and never parses argv. It cannot see
-  // the parent's --user-data flag, so the parent forwards the resolved userData
-  // dir via OPENPLC_USER_DATA — align to it here so installed VPP boards (e.g.
-  // the LOGO) resolve the same way they did for the parent's compile/upload.
+  // The daemon reads its config from stdin and never parses argv, so it cannot
+  // see the parent's --user-data flag; the parent forwards the resolved dir via
+  // OPENPLC_USER_DATA and we align to it here.
   if (isDaemon) {
     alignUserDataWithEditor(process.env.OPENPLC_USER_DATA || undefined)
     await runDaemonFromStdin()

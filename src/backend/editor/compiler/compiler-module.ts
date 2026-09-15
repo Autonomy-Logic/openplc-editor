@@ -530,14 +530,10 @@ class CompilerModule {
   /**
    * Which libraries arduino-cli has, according to the cache.
    *
-   * `null` means "unknown", NOT "none" — and the distinction is the whole
-   * point. The startup refresh that writes this file is wrapped in a
-   * tolerate-and-warn, so on a machine where it failed (a cold Windows VM
-   * where the arduino-cli spawn is slow, say) the file is absent or stale.
-   * Reading that as an empty list made every library look missing, so every
-   * compile re-ran `arduino-cli lib install` for all twenty of them — and
-   * arduino-cli checks each one online before reporting "already installed",
-   * which is where the Windows compile time went.
+   * `null` means "unknown", not "none": the startup refresh that writes this
+   * file tolerates failure, so it can be absent or stale. Reading that as an
+   * empty list makes every library look missing and re-runs
+   * `arduino-cli lib install` for all of them on every compile.
    */
   async getArduinoInstalledLibraries(): Promise<string[] | null> {
     try {
@@ -547,18 +543,14 @@ class CompilerModule {
       if (!Array.isArray(content)) return null
       return content.map((lib) => Object.keys(lib)[0]).filter((name): name is string => typeof name === 'string')
     } catch {
-      // Missing or corrupt. "I do not know" — see above.
+      // Missing or corrupt: "I do not know", see above.
       return null
     }
   }
 
   /**
-   * Add names to the installed-library cache after a successful install.
-   *
-   * Without this the cache only ever reflects what was true at startup, so a
-   * library installed during a compile still looks missing on the next one
-   * and is reinstalled for the rest of the session. Writing back is what
-   * makes `lib install` run once per library rather than once per build.
+   * Add names to the installed-library cache after a successful install, so a
+   * library installed during a compile is not reinstalled on the next one.
    */
   async recordLibrariesInstalled(names: string[]): Promise<void> {
     if (names.length === 0) return
@@ -568,7 +560,7 @@ class CompilerModule {
       const existing = await CompilerModule.readJSONFile<Array<Record<string, string>>>(path)
       if (Array.isArray(existing)) entries = existing
     } catch {
-      // No cache yet — start one rather than losing the fact we just installed.
+      // No cache yet; start one rather than losing the fact we just installed.
     }
     const known = new Set(entries.map((lib) => Object.keys(lib)[0]))
     for (const name of names) {
@@ -1184,19 +1176,15 @@ class CompilerModule {
     const installedLibraries = await this.getArduinoInstalledLibraries()
 
     // `null` is "the cache could not be read", not "nothing is installed".
-    // Treating the two alike is what made every compile reinstall all twenty
-    // global libraries on a machine whose startup refresh had failed.
-    //
     // When we genuinely do not know, rebuild the cache from arduino-cli once
-    // rather than guessing — one spawn now, against one per build forever.
+    // rather than guessing: one spawn now, against one per build forever.
     const known = installedLibraries ?? (await this.refreshInstalledLibraryCache(handleOutputData))
 
     const missingLibraries = requiredLibraries.filter((lib) => !known.includes(lib))
     const missingThirdParty = thirdPartyLibraries.filter((lib) => !known.includes(lib.name))
 
     // Git-url libraries first: they are the ones a target genuinely cannot
-    // compile without, and installing them is a clone rather than an index
-    // lookup.
+    // compile without, and installing them is a clone rather than an index lookup.
     if (missingThirdParty.length > 0) {
       await this.installThirdPartyLibraries(missingThirdParty, handleOutputData)
     }
@@ -1237,20 +1225,15 @@ class CompilerModule {
       executeCommand.on('close', (code) => {
         if (code === 0) {
           handleOutputData(`All libraries installed!`, 'info')
-          // Record them, or the cache still says "missing" and the next
-          // compile reinstalls the same set — which is exactly the loop that
-          // made Windows builds slow.
+          // Record them, or the cache still says "missing" and the next compile
+          // reinstalls the same set.
           void this.recordLibrariesInstalled(missingLibraries)
           resolve({ success: true })
         } else {
-          // Soft failure — log a warning with the libs we couldn't
-          // install and arduino-cli's stderr, then resolve cleanly.
-          // The build continues; if the missing library is actually
-          // required, the arduino-cli compile step will fail with a
-          // precise header-not-found error.  If the library is
-          // already available from a non-managed source (sketchbook,
-          // system install) the compile succeeds and the warning is
-          // benign.
+          // Soft failure: warn with the libraries we could not install and
+          // arduino-cli's stderr, then resolve cleanly. If one is genuinely
+          // required the compile fails with a precise header-not-found error;
+          // if it is available from a non-managed source the warning is benign.
           const trimmedStderr = stderrData.trim()
           handleOutputData(
             `Warning: arduino-cli lib install exited with code ${code} for: ${missingLibraries.join(', ')}. ` +
@@ -1265,11 +1248,8 @@ class CompilerModule {
   }
 
   /**
-   * Rebuild the installed-library cache from arduino-cli.
-   *
-   * Only called when the cache could not be read at all. One spawn, once,
-   * against reinstalling every library on every build for the rest of the
-   * session.
+   * Rebuild the installed-library cache from arduino-cli. Only called when the
+   * cache could not be read at all.
    */
   async refreshInstalledLibraryCache(handleOutputData: HandleOutputDataCallback): Promise<string[]> {
     let binaryPath = this.arduinoCliBinaryPath
@@ -1301,12 +1281,10 @@ class CompilerModule {
   /**
    * Install libraries that are not in the Arduino index, by git URL.
    *
-   * Needs `library.enable_unsafe_install` in the editor's arduino-cli.yaml —
-   * arduino-cli refuses `--git-url` outright without it. That setting is
-   * scoped to the editor's own config file, so it does not loosen a user's
-   * own arduino-cli or the Arduino IDE.
-   *
-   * No ref is pinned: the library's default branch is what production uses.
+   * Needs `library.enable_unsafe_install` in the editor's arduino-cli.yaml,
+   * which is scoped to the editor's own config file, so it does not loosen a
+   * user's own arduino-cli or the Arduino IDE. No ref is pinned: the library's
+   * default branch is what production uses.
    */
   async installThirdPartyLibraries(
     libraries: ThirdPartyLibraryRequest[],
@@ -1337,8 +1315,7 @@ class CompilerModule {
             resolve(true)
           } else {
             // Soft failure, as with index libraries: the compile step is the
-            // source of truth and will fail with a header-not-found that
-            // names the file, which is more useful than guessing here.
+            // source of truth and fails with a header-not-found that names the file.
             handleOutputData(
               `Warning: could not install ${library.name} from ${library.gitUrl} (exit ${code}). ` +
                 `Continuing — the compile will fail with a missing header if it was genuinely needed.` +
@@ -2018,11 +1995,10 @@ class CompilerModule {
     communicationPort?: string
     /**
      * Upload transport declared by the board's VPP target. Absent/"serial"
-     * (default): `--port` is a serial device. "ethernet" (LOGO! 8.2): the
-     * board's core does a network upload, so `--port` carries the device IP,
-     * sourced from the persisted `runtimeIpAddress`. arduino-cli accepts a
-     * network address as `--port`; the core's platform.txt upload recipe
-     * consumes it as `{upload.port.address}`.
+     * (default): `--port` is a serial device. "ethernet": the board's core does
+     * a network upload, so `--port` carries the device IP from the persisted
+     * `runtimeIpAddress` and the core's platform.txt recipe consumes it as
+     * `{upload.port.address}`.
      */
     uploadMethod?: 'serial' | 'ethernet'
     handleOutputData: HandleOutputDataCallback
@@ -2039,22 +2015,16 @@ class CompilerModule {
           await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         port = isEthernet ? runtimeIpAddress : persistedPort
       } catch {
-        // No devices/configuration.json yet — drop into the
-        // "no port specified" branch below for a clear user message.
+        // No devices/configuration.json yet: drop into the "no port specified"
+        // branch below for a clear user message.
       }
     }
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
     if (!port) {
-      // THROW rather than return. `uploadArduinoBoard` only awaits this call
-      // and reports `{ ok: true }` on any normal return, so bailing out here
-      // told the pipeline the board had been flashed when nothing was sent.
-      //
-      // That used to be masked: the error-level log line set the compile
-      // flow's `hasError`, which failed the build for the wrong reason. The
-      // outcome now comes from the pipeline's verdict, so a step that cannot
-      // run has to fail through the channel the verdict is built from — the
-      // catch in `uploadArduinoBoard` turns this into `{ ok: false }`.
+      // Throw rather than return: `uploadArduinoBoard` only awaits this call and
+      // reports `{ ok: true }` on any normal return, so bailing out here would
+      // tell the pipeline the board had been flashed when nothing was sent.
       throw new Error(
         isEthernet
           ? 'No device IP specified — set the device IP address in Board Settings'
@@ -2074,11 +2044,9 @@ class CompilerModule {
       ])
 
       let stderrData = ''
-      // Tail of stdout, kept for the failure message. An upload tool that
-      // explains itself on stdout (the reason it refused, what the user should
-      // do about it) would otherwise leave the thrown error saying only
-      // "failed with code N" while the actual explanation scrolled past in the
-      // console. Bounded so a chatty tool cannot grow this without limit.
+      // Tail of stdout, kept for the failure message, so an upload tool that
+      // explains its refusal on stdout does not leave the thrown error saying
+      // only "failed with code N". Bounded so a chatty tool cannot grow it.
       const stdoutTail: string[] = []
 
       child.stdout.on('data', (data: Buffer) => {
@@ -3219,9 +3187,9 @@ class CompilerModule {
     // never enables Modbus — at which point the debugger can't
     // talk to it (failing MD5 verification after retries).
     let vppModbusState: VppModbusScreenState | undefined
-    // Ethernet-upload boards (e.g. Siemens LOGO! 8.2) reach the editor ONLY over
-    // the network. Known before the config read so the mandate below applies even
-    // when there is no configuration.json.
+    // Ethernet-upload boards reach the editor only over the network. Known
+    // before the config read so the mandate below applies even when there is no
+    // configuration.json.
     const uploadsOverEthernet = (boardEntry as { uploadMethod?: string } | undefined)?.uploadMethod === 'ethernet'
     if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
@@ -3235,27 +3203,23 @@ class CompilerModule {
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
         }
       } catch {
-        // No configuration.json — leave state undefined; for ethernet boards the
-        // mandate below still forces Modbus TCP on, and for serial boards the
-        // shared pipeline skips the Modbus block entirely (pre-VPP behaviour).
+        // No configuration.json: leave state undefined. For ethernet boards the
+        // mandate below still forces Modbus TCP on; for serial boards the shared
+        // pipeline skips the Modbus block entirely.
       }
 
-      // Modbus TCP is MANDATORY on ethernet-upload boards and CANNOT be turned
-      // off: it is the device's only comms path (disabling it makes the LOGO
-      // unreachable), it is how the debugger connects and the upload flow reboots
-      // the device, and MODBUS_ENABLED is what makes the firmware allocate its I/O
-      // buffers — without it Baremetal.ino skips mapEmptyBuffers() and the HAL
-      // dereferences NULL input pointers on the first scan. So FORCE it on for
-      // every ethernet target, overriding any screen value and seeding it when the
-      // project never configured one, preserving only the IP the user set.
+      // Modbus TCP is mandatory on ethernet-upload boards and cannot be turned
+      // off: it is the device's only comms path, it is how the debugger connects
+      // and how the upload flow reboots the device, and MODBUS_ENABLED is what
+      // makes the firmware allocate its I/O buffers -- without it Baremetal.ino
+      // skips mapEmptyBuffers() and the HAL dereferences NULL input pointers on
+      // the first scan. Force it on, preserving only the IP the user set.
       if (uploadsOverEthernet) {
         const ip = vppModbusState?.network?.ip_address || configuredIp || '192.168.2.4'
-        // Ethernet is static-only on these boards (no DHCP — the bootloader's
-        // recovery stack has no DHCP client). Seed a full, sane static config so
-        // the firmware never falls back to the Arduino stack's byte-order-buggy
-        // subnet class-default (which would mis-derive e.g. 255.0.0.0 for a
-        // 192.168.x address and corrupt the persisted network record). Any value
-        // the user set on the Network screen is preserved.
+        // Ethernet is static-only on these boards: the bootloader's recovery
+        // stack has no DHCP client. Seed a full static config so the firmware
+        // never falls back to the Arduino stack's byte-order-buggy subnet
+        // class-default. Any value the user set on the Network screen is kept.
         const gwFromIp = (a: string) => a.replace(/\.\d+$/, '.1')
         const subnet = vppModbusState?.network?.subnet || '255.255.255.0'
         const gateway = vppModbusState?.network?.gateway || gwFromIp(ip)

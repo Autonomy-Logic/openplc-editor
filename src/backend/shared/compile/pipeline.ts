@@ -136,8 +136,8 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
   coreVersion?: string
   /** Upload transport for arduino-cli targets. Absent/"serial" (default):
-   *  serial-port upload. "ethernet" (LOGO! 8.2): network upload — the device
-   *  IP is passed as arduino-cli's `--port`. From `target.uploadMethod`. */
+   *  serial-port upload. "ethernet": network upload, with the device IP passed
+   *  as arduino-cli's `--port`. From `target.uploadMethod`. */
   uploadMethod?: 'serial' | 'ethernet'
   /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
    *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
@@ -626,15 +626,10 @@ async function runCompilePipelineInner(
     let confs
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
-      // Derive each OPC-UA user's stored credential for THIS target, once, before
-      // anything consumes `servers`. Both consumers — Runtime v4's
-      // `opcua_config.json` and the baremetal `OPCUA_USERS[]` table — then see a
-      // credential the selected device can actually verify.
-      //
-      // This is the point that knows both the project and the target, which is
-      // exactly why the derivation lives here rather than in the editor's user
-      // dialog: storage format is a device property, and the dialog has no idea
-      // what the device is. See ./opcua-credentials.ts.
+      // Derive each OPC-UA user's stored credential for this target, once,
+      // before anything consumes `servers`. This is the point that knows both
+      // the project and the target, and the storage format is a device property.
+      // See ./opcua-credentials.ts.
       const opcuaCredentialServers = materialiseOpcUaCredentials(
         processedData.servers,
         targetCapabilities.opcua,
@@ -953,9 +948,8 @@ async function runCompilePipelineInner(
     {
       libId: '',
       extraLibraries: boardEntry.extra_libraries ?? [],
-      // Capability-driven, not board-name-driven: a target gets the OPC-UA
-      // stack because it declares `opcuaServer`, so adding a board is a
-      // manifest change rather than a code change.
+      // Capability-driven, not board-name-driven: a target gets the OPC-UA stack
+      // because it declares `opcuaServer`.
       thirdPartyLibraries: selectThirdPartyLibraries(targetCapabilities),
     },
     makePlatformLog(emit, 'lib-install'),
@@ -995,23 +989,16 @@ async function runCompilePipelineInner(
   // place (drivers can still `#include "vpp_config.h"` unconditionally).
   const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
 
-  // OPC-UA config header — emitted only for baremetal targets whose VPP
-  // flips `opcuaServer: true`.  Reuses the SAME resolved address space the
-  // Runtime v4 branch above hands to `generateRuntimeConfs`, so a variable
-  // resolves to one `(arr, elem)` pair regardless of which runtime is being
-  // built; two resolvers would be two chances to serve the wrong value for
-  // the right name.
-  //
-  // A project with no enabled OPC-UA server still gets a header (a disabled
-  // one) rather than none, because the runtime includes it unconditionally.
+  // OPC-UA config header, emitted only for baremetal targets whose VPP flips
+  // `opcuaServer: true`. Reuses the same resolved address space the Runtime v4
+  // branch hands to `generateRuntimeConfs`, so a variable resolves to one
+  // `(arr, elem)` pair whichever runtime is built. A project with no enabled
+  // server still gets a disabled header, because the runtime includes it always.
   let opcuaConfigH: string | undefined
   if (targetCapabilities.opcuaServer && targetCapabilities.opcua) {
     try {
-      // Same derivation as the Runtime v4 branch, for the same reason: the
-      // credential this device stores is this device's property, and here is
-      // where the target is known. A LOGO! declaring `passwordScheme: plain`
-      // gets `plain:<password>`; anything declaring nothing gets the PBKDF2
-      // string Runtime v4 has always consumed.
+      // Same derivation as the Runtime v4 branch: the credential this device
+      // stores is this device's property, and here is where the target is known.
       const opcuaCredentialServers = materialiseOpcUaCredentials(
         processedData.servers,
         targetCapabilities.opcua,
@@ -1041,14 +1028,9 @@ async function runCompilePipelineInner(
     }
   }
 
-  // S7Comm config header — emitted only for baremetal targets whose VPP flips
-  // `s7Server: true`. Much less work than the OPC-UA branch above, and the
-  // reason is the protocol rather than the effort: an S7 area is a flat run of
-  // bytes over a located buffer that already exists, so there is no address
-  // space to resolve and no debug map to consult.
-  //
-  // A project with no enabled S7 server still gets a header (a disabled one)
-  // rather than none, because the runtime includes it unconditionally.
+  // S7Comm config header, emitted only for baremetal targets whose VPP flips
+  // `s7Server: true`. A project with no enabled S7 server still gets a disabled
+  // header rather than none, because the runtime includes it unconditionally.
   let s7commConfigH: string | undefined
   if (targetCapabilities.s7Server && targetCapabilities.s7) {
     try {
@@ -1158,9 +1140,8 @@ async function runCompilePipelineInner(
       // caller didn't supply one (editor: fall back to the disk-
       // persisted value in `devices/configuration.json`).
       port: communicationPort ?? '',
-      // Upload transport declared by the board's VPP target. Default
-      // "serial"; "ethernet" (LOGO! 8.2) makes the editor pass the
-      // device IP (from configuration runtimeIpAddress) as --port.
+      // Upload transport declared by the board's VPP target. Default "serial";
+      // "ethernet" makes the editor pass the device IP as --port.
       uploadMethod: boardEntry.uploadMethod,
     },
     makePlatformLog(emit, 'upload'),

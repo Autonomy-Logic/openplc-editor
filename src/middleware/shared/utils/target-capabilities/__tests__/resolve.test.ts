@@ -29,15 +29,11 @@ describe('resolveTargetCapabilities', () => {
   })
 
   it('fills the nested profiles even with no capability block at all', () => {
-    // THE REGRESSION THIS GUARDS. The resolver used to return the preset
-    // unchanged when a board carried no `capabilities`, which left `opcua`
-    // undefined on a target whose PRESET enables the server. The pipeline
-    // tests `capability && profile` before emitting a config header, so such a
-    // target silently got no server: the capability said yes, the profile said
-    // nothing.
-    //
-    // It is also what lets a VPP published before these profiles existed keep
-    // working untouched — nothing has to be rebuilt to pick up a new field.
+    // The regression this guards: the resolver used to return the preset
+    // unchanged when a board carried no `capabilities`, leaving `opcua`
+    // undefined on a target whose preset enables the server. The pipeline tests
+    // `capability && profile` before emitting a config header, so such a target
+    // silently got no server.
     const caps = resolveTargetCapabilities({ compiler: 'simulator' })
     expect(caps.opcuaServer).toBe(true)
     expect(caps.opcua).toBeDefined()

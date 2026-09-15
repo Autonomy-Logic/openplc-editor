@@ -348,9 +348,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       // Ethernet handoff: the program upload and the debugger's Modbus-TCP status
       // polls share the one Ethernet link, so leaving the connection up lets the
-      // polls collide with the transfer and fail it. Drop the connection before
-      // the build and reconnect afterwards (to the possibly-changed IP). Only
-      // reconnect if it was connected here; a user who wasn't connected stays so.
+      // polls collide with the transfer. Drop it before the build and reconnect
+      // afterwards, only if it was connected here.
       const willEthUpload = doUpload && isEthernetUpload
       let ethWasConnected = false
       if (willEthUpload && useOpenPLCStore.getState().deviceConnection.status === 'connected') {

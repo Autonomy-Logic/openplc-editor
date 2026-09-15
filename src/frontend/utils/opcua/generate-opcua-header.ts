@@ -2,40 +2,17 @@
  * Author the `src/opcua_config.h` content for a baremetal arduino-cli target
  * whose VPP declares `opcuaServer: true`.
  *
- * Runtime v4 gets its OPC-UA configuration as `conf/opcua.json`, loaded at
- * start-up. Baremetal has no filesystem, so every byte of configuration has
- * to be baked into flash at compile time — exactly as `vpp_config.h` and
- * `defines.h` already are. This module is that contract.
+ * Runtime v4 loads `conf/opcua.json` at start-up; baremetal has no filesystem,
+ * so configuration is baked into flash at compile time. The address space is
+ * reused rather than re-derived: the caller passes the `ResolvedOpcUaConfig`
+ * that `buildOpcUaRuntimeConfig` produced, so both runtimes resolve a variable
+ * to the same `(arr, elem)`.
  *
- * The address space is reused, not re-derived: the caller passes the
- * `ResolvedOpcUaConfig` that `buildOpcUaRuntimeConfig` already produced, so a
- * baremetal target and a v4 target resolve `%I` / `%Q` / `%M`, nested struct
- * fields and array bases through the same code against the same
- * `debug-map.json`. That matters beyond tidiness — two resolvers would be two
- * chances to disagree about which `(arr, elem)` a variable lives at, and the
- * symptom would be a device serving the wrong value for the right name.
+ * Emits `OPCUA_*` scalar defines, `OPCUA_NODES[]` and `OPCUA_USERS[]`.
+ * Structures and arrays are flattened into individual leaf nodes so no single
+ * OPC-UA value is ever large.
  *
- * Shape:
- *
- *   - `OPCUA_*` scalar defines for the server identity and every dimension
- *     the VPP declared (arena, session and operation limits, security level,
- *     hardware facts).
- *   - `OPCUA_NODES[]` — one `const` record per leaf, carrying the `(arr, elem)`
- *     pair the runtime feeds to `strucpp::debug::handle_read` / `handle_write`,
- *     the `TypeTag` for dispatch, and a packed permission bitmap.
- *   - `OPCUA_USERS[]` — username + PBKDF2 hash + role, for the chunked KDF.
- *
- * Structures and arrays are FLATTENED into individual leaf nodes here rather
- * than being emitted as composite types. That is not a simplification, it is
- * the design: a struct exposed as a folder of child nodes means no single
- * OPC-UA value is ever large, so a client reading a whole struct issues a Read
- * of N nodes which `maxNodesPerRead` already chunks — no `ExtensionObject`
- * encoder and no multi-kilobyte `UA_Variant` on a part with tens of KB to
- * spare. Array elements are flattened for the same reason.
- *
- * Pure function: no fs I/O, no DOM, no global state. Caller writes the
- * returned string to `src/opcua_config.h` in the firmware bundle. Mirrors the
- * style of `generate-vpp-config.ts`.
+ * Pure function: no fs I/O, no DOM, no global state.
  */
 
 import type { OpcUaTargetProfile } from '@root/middleware/shared/utils/target-capabilities/types'
@@ -43,16 +20,15 @@ import type { OpcUaTargetProfile } from '@root/middleware/shared/utils/target-ca
 import type { ResolvedOpcUaConfig, RuntimeStructureField, RuntimeVariablePermissions } from './generate-opcua-config'
 
 /**
- * IEC type name → `strucpp::debug::TypeTag`.
+ * IEC type name -> `strucpp::debug::TypeTag`.
  *
- * This table is an ABI, not a convenience: the values are the indices of the
- * `TypeTag` enum in `resources/strucpp/runtime/debug_table.hpp`, which is what
- * `read_entry()` dispatches on. Append only, never reorder — and keep it in
- * step with the runtime's `opcua_types.h` mirror and with the Python plugin's
- * `opcua_types.py`, so both runtimes agree about what a `TIME` is.
+ * An ABI: the values are the indices of the `TypeTag` enum in
+ * `resources/strucpp/runtime/debug_table.hpp`, which `read_entry()` dispatches
+ * on. Append only, never reorder, and keep in step with the runtime's
+ * `opcua_types.h` and the Python plugin's `opcua_types.py`.
  *
  * The key is the compiler-canonical datatype string from `debug-map.json`
- * (upper-cased), never the project-model datatype, which can drift.
+ * (upper-cased), never the project-model datatype.
  */
 const TYPE_TAGS: Record<string, number> = {
   BOOL: 0,
@@ -87,22 +63,18 @@ const PERM_WRITE = 2
 const ROLE_SHIFT = { viewer: 0, operator: 2, engineer: 4 } as const
 
 export interface GenerateOpcUaHeaderInput {
-  /** Resolved config from `buildOpcUaRuntimeConfig`. Pass `null` (or omit)
-   *  for a project with no enabled OPC-UA server — the generator then emits a
-   *  disabled header rather than nothing, so the runtime's unconditional
-   *  `#include "opcua_config.h"` still resolves. */
+  /** Resolved config from `buildOpcUaRuntimeConfig`. Pass `null` (or omit) for a
+   *  project with no enabled OPC-UA server; the generator then emits a disabled
+   *  header so the runtime's unconditional include still resolves. */
   resolved: ResolvedOpcUaConfig | null
   /** The target's OPC-UA profile, already defaulted by
    *  `resolveTargetCapabilities`. */
   profile: OpcUaTargetProfile
-  /** Wall-clock base baked into the image, as a Unix timestamp in seconds.
-   *
-   *  OPC-UA stamps every value with a `DateTime`, and a part with no RTC has
-   *  nothing to derive one from but uptime. Baking the build time gives
-   *  timestamps that are wrong by the device's downtime rather than wrong by
-   *  24 years, which is the difference between a client showing a stale date
-   *  and a client rejecting the response. Injected rather than read from the
-   *  clock here so the generator stays pure and its output reproducible. */
+  /** Wall-clock base baked into the image, as a Unix timestamp in seconds. A
+   *  part with no RTC has only uptime to derive a `DateTime` from, so baking the
+   *  build time makes timestamps wrong by the device's downtime rather than by
+   *  decades. Injected rather than read from the clock so the generator stays
+   *  pure and its output reproducible. */
   buildEpochSeconds: number
 }
 
@@ -132,11 +104,9 @@ const packPermissions = (permissions: RuntimeVariablePermissions): number => {
 /**
  * Resolve a datatype string to its `TypeTag`.
  *
- * Returns `null` for anything unrecognised, and the caller DROPS the node
- * rather than substituting a default. A wrong tag is worse than a missing
- * node: `read_entry` would hand the wrong number of bytes to the encoder and
- * the client would receive plausible garbage, whereas a dropped node is
- * visible in the build log and in the client's browse tree.
+ * Returns `null` for anything unrecognised, and the caller drops the node rather
+ * than substituting a default: a wrong tag would hand the encoder the wrong
+ * number of bytes, whereas a dropped node is visible in the build log.
  */
 const typeTagFor = (datatype: string | null | undefined): number | null => {
   if (!datatype) return null
@@ -149,11 +119,9 @@ const cString = (value: string): string =>
   `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`
 
 /**
- * Flatten one structure field subtree into leaves.
- *
- * Complex parents (a nested struct or FB instance) carry no address of their
- * own — `arr` / `elem` are null and only their children are addressable — so
- * they contribute nothing but a browse-name prefix.
+ * Flatten one structure field subtree into leaves. Complex parents (a nested
+ * struct or FB instance) carry no address of their own, so they contribute
+ * nothing but a browse-name prefix.
  */
 const flattenFields = (
   fields: RuntimeStructureField[],
@@ -185,11 +153,8 @@ const flattenFields = (
 }
 
 /**
- * Build the leaf table from a resolved address space.
- *
- * Also returns what it had to drop, so the caller can surface it: silently
- * shipping a smaller address space than the user configured is the kind of
- * thing that gets discovered by a SCADA integrator, not by us.
+ * Build the leaf table from a resolved address space, and return what it had to
+ * drop so the caller can surface it.
  */
 export const collectOpcUaNodes = (
   resolved: ResolvedOpcUaConfig,
@@ -224,8 +189,7 @@ export const collectOpcUaNodes = (
 
   // Array elements become individual leaves at consecutive `elem` offsets.
   // `maxArrayLength` is enforced per array, not against the node budget, so a
-  // single oversized array is reported as such instead of appearing as a
-  // mysterious node-count overflow.
+  // single oversized array is reported as such.
   for (const array of space.arrays) {
     const length = Math.min(array.length, profile.maxArrayLength)
     const tag = typeTagFor(array.datatype)
@@ -250,8 +214,7 @@ export const collectOpcUaNodes = (
   }
 
   // Truncate to the declared ceiling rather than emitting a table the arena
-  // cannot serve. The caller turns `overflowed` into a build warning; the
-  // editor's Address Space tab is where this should be prevented, and this is
+  // cannot serve. The caller turns `overflowed` into a build warning; this is
   // the backstop for a project that arrives from elsewhere.
   const overflowed = Math.max(0, nodes.length - profile.maxNodes)
   return { nodes: nodes.slice(0, profile.maxNodes), dropped, overflowed }
@@ -260,11 +223,9 @@ export const collectOpcUaNodes = (
 const SECURITY_LEVELS = { none: 0, sign: 1, 'sign-and-encrypt': 2 } as const
 
 /**
- * Render `opcua_config.h`.
- *
- * Always emits the include guard, `OPCUA_ENABLED`, and a trailing `#endif`, so
- * the header is safe to `#include` unconditionally on every target — the
- * runtime's OPC-UA translation units compile to nothing when
+ * Render `opcua_config.h`. Always emits the include guard, `OPCUA_ENABLED` and a
+ * trailing `#endif`, so the header is safe to include unconditionally on every
+ * target: the OPC-UA translation units compile to nothing when
  * `OPCUA_ENABLED == 0`.
  */
 export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): string => {
@@ -296,10 +257,8 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
   lines.push('#define OPCUA_ENABLED 1')
   lines.push('')
   // Self-contained on purpose: the tables below are typed on opcua_node_t /
-  // opcua_user_t, and this header is pulled in by several TUs in whatever
-  // order they happen to include it. Relying on the includer to have declared
-  // the records first is the sort of ordering dependency that compiles for
-  // months and then breaks when someone adds an include.
+  // opcua_user_t and this header is pulled in by several TUs in whatever order
+  // they include it, so it must not depend on the includer declaring them first.
   lines.push('#include "opcua_types.h"')
   lines.push('')
   lines.push('// ---- Server identity ----')
@@ -310,13 +269,9 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
   lines.push(`#define OPCUA_PORT ${server.port}`)
   lines.push(`#define OPCUA_ENDPOINT_PATH ${cString(server.endpointPath)}`)
   lines.push(`#define OPCUA_NAMESPACE_URI ${cString(resolved.runtime.config.address_space.namespace_uri)}`)
-  // How often the server MUST be serviced, from the project's OPC-UA screen.
-  //
-  // This is the same `cycleTimeMs` Runtime v4 uses as its subscription push
-  // cycle. The baremetal server has no subscriptions, so it means the plainer
-  // thing here: the longest the server may go unserviced. It is a GUARANTEE,
-  // not a cap -- opcuatask() also runs opportunistically whenever the scan
-  // cycle has slack, exactly as Modbus does.
+  // How often the server must be serviced, from the project's OPC-UA screen.
+  // The same `cycleTimeMs` Runtime v4 uses as its subscription push cycle. A
+  // guarantee, not a cap: opcuatask() also runs whenever the scan has slack.
   lines.push(`#define OPCUA_SYNC_INTERVAL_MS ${resolved.runtime.config.cycle_time_ms}u`)
   lines.push('')
   lines.push('// ---- Declared by the VPP: memory and protocol limits ----')

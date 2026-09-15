@@ -1,18 +1,14 @@
 /**
- * Derive the credential a TARGET stores from the password a PROJECT holds.
+ * Derive the credential a target stores from the password a project holds.
  *
  * How a password is stored is a property of the device, not of the editor, so
- * this runs at build time — the one point that knows both the project and the
- * selected target. The editor used to hash in the user dialog, at a fixed
- * 600 000 PBKDF2 iterations, before the board had necessarily been chosen;
- * nothing ever re-derived it, so a project authored for Runtime v4 and later
- * pointed at a microcontroller carried a credential that device could not
- * verify at any cost it could afford.
+ * this runs at build time, the one point that knows both the project and the
+ * selected target. Hashing in the user dialog at a fixed iteration count, before
+ * the board had necessarily been chosen, left projects carrying a credential the
+ * selected device could not verify at any cost it could afford.
  *
- * Schemes are tagged by prefix, which is the convention OpenPLC already uses —
- * Runtime v4's `verify_password` dispatches on `pbkdf2:` vs `$2a$`/`$2b$`
- * (bcrypt) today. Adding one more tag is how this system was already built to
- * grow.
+ * Schemes are tagged by prefix, the convention Runtime v4's `verify_password`
+ * already dispatches on.
  */
 
 import { pbkdf2Sync, randomBytes } from 'node:crypto'
@@ -31,17 +27,16 @@ type UserLike = {
   passwordHash?: string | null
 }
 
-/** `pbkdf2:sha256:<iterations>$<salt-b64>$<hash-b64>` — byte-for-byte the
- *  format Runtime v4 already produces and consumes. */
+/** `pbkdf2:sha256:<iterations>$<salt-b64>$<hash-b64>`, byte-for-byte the format
+ *  Runtime v4 produces and consumes. */
 function pbkdf2Credential(password: string, iterations: number): string {
   const salt = randomBytes(SALT_BYTES)
   const hash = pbkdf2Sync(password, new Uint8Array(salt), iterations, KEY_BYTES, 'sha256')
   return `pbkdf2:sha256:${iterations}$${salt.toString('base64')}$${hash.toString('base64')}`
 }
 
-/** `plain:<password>` — tagged so the runtime never has to guess, and so a
- *  credential's scheme is visible in the generated artefact rather than
- *  inferred from its shape. */
+/** `plain:<password>`, tagged so the runtime never has to guess and a
+ *  credential's scheme is visible in the generated artefact. */
 function plainCredential(password: string): string {
   return `plain:${password}`
 }
@@ -66,10 +61,9 @@ export function deriveOpcUaCredential(
     return scheme === 'plain' ? plainCredential(user.password) : pbkdf2Credential(user.password, iterations)
   }
 
-  // No password to derive from: an older project that only kept the hash.
-  // Pass it through — it still works on any target whose scheme produced it —
-  // but say so when the target wants something else, because the failure
-  // otherwise shows up as a login the device rejects for no visible reason.
+  // No password to derive from: an older project that only kept the hash. Pass
+  // it through, but say so when the target wants something else, because the
+  // failure otherwise shows up as a login the device rejects for no visible reason.
   if (typeof user.passwordHash === 'string' && user.passwordHash.length > 0) {
     const looksPbkdf2 = user.passwordHash.startsWith('pbkdf2:')
     const wantsPbkdf2 = scheme === 'pbkdf2-sha256'
@@ -87,12 +81,9 @@ export function deriveOpcUaCredential(
 }
 
 /**
- * Return a copy of `servers` whose OPC-UA users carry the credential this
- * target stores, ready for both consumers: Runtime v4's `opcua_config.json`
- * and the baremetal `OPCUA_USERS[]` table.
- *
- * Pure with respect to its input — the project's plaintext is never mutated,
- * so a rebuild for a different target derives cleanly from the same source.
+ * Return a copy of `servers` whose OPC-UA users carry the credential this target
+ * stores, ready for both Runtime v4's `opcua_config.json` and the baremetal
+ * `OPCUA_USERS[]` table. The project's plaintext is never mutated.
  */
 export function materialiseOpcUaCredentials<T>(
   servers: T,

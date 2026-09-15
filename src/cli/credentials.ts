@@ -47,17 +47,12 @@ export function resolveRuntimeCredentials(args: ParsedArgs): RuntimeCredentialsI
 }
 
 /**
- * Credentials for a command that only SOMETIMES needs them.
+ * Credentials for a command that only sometimes needs them.
  *
  * `debug open` reaches targets that log in (runtime v4 websocket) and targets
- * that do not (a baremetal board over Modbus TCP/RTU, runtime v3 over Modbus
- * TCP). The command layer can't yet know which — the board's capabilities are
- * resolved later, inside the session daemon (`open-session.ts`), which already
- * demands auth only for targets that need it. So: if the user supplied ANY
- * credential input, validate it (a typo is still an error); if none, return
- * empty and let the daemon decide. This stops the front door from demanding a
- * password for a baremetal LOGO reached over Ethernet — the editor GUI has no
- * such gate either.
+ * that do not (a board over Modbus). The command layer cannot know which until
+ * the session daemon resolves the board's capabilities, so validate any
+ * credential the user supplied and otherwise return empty and let it decide.
  */
 export function resolveOptionalRuntimeCredentials(args: ParsedArgs): RuntimeCredentialsInput | { error: string } {
   const provided =

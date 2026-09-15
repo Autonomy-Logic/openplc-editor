@@ -55,21 +55,10 @@ describe('generateCBlocksCode', () => {
 
   it("undefines Arduino.h's macros that shadow std names, before the std headers", () => {
     // Regression guard: Arduino/Energia define `min` / `max` / `abs` / `round`
-    // as preprocessor macros that wreck `<algorithm>` / `<limits>` / `<chrono>`
-    // (pulled in transitively by the strucpp headers behind c_blocks.h).
-    // Order must be:
-    //   include <Arduino.h>  ->  #undef ...  ->  #include "c_blocks.h"
-    //
-    // `round` is listed because it actually shipped broken: Energia defines
-    // `round(x)`, `<chrono>` declares `chrono::round<ToDur>()`, and the macro
-    // swallowed it — every C-block build on a Tiva core died inside <chrono>
-    // with an error naming a file the user never wrote. The other three were
-    // guarded and this one was not, so the set is now asserted as a set.
-    // Energia's GPIO port letters `PA`..`PT` joined for the same reason from
-    // the other direction: `PT` is also the preset-time input of every IEC
-    // timer, so a project holding a TON expanded the generated struct field
-    // into `IEC_TIME 18;`, and `PR` did the same to a block instance named for
-    // a pulse relay. Asserted as a family, since any of them can collide.
+    // as macros that wreck `<algorithm>` / `<limits>` / `<chrono>`, pulled in
+    // behind c_blocks.h. Order must be <Arduino.h> -> #undef -> c_blocks.h.
+    // Energia's port letters `PA`..`PT` are asserted as a family for the same
+    // reason: `PT` is also the preset-time input of every IEC timer.
     const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
     const code = 'void setup() { }\nvoid loop() { }'
     const result = generateCBlocksCode([{ name: 'B', code, variables }])

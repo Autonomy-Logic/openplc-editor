@@ -78,10 +78,9 @@ extern "C" __attribute__((weak)) uint8_t hardwareStateSwitch(void)
     return PLC_SWITCH_RUN;
 }
 
-// Weak default: boards with no resident firmware bootloader can't honour the
-// Modbus reboot-to-bootloader command (FC 0x4C), so this is a no-op and the
-// board keeps running. A HAL whose device has such a bootloader provides a
-// strong extern "C" override that arms + performs the reset (see openplc.h).
+// Weak default: a board with no resident firmware bootloader cannot honour the
+// Modbus reboot-to-bootloader command (FC 0x4C), so this is a no-op. A HAL whose
+// device has one provides a strong extern "C" override (see openplc.h).
 extern "C" __attribute__((weak)) void hardwareRebootToBootloader(void)
 {
 }

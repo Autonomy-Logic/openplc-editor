@@ -63,23 +63,13 @@ SURFACES = [
     "__architecture__",
 ]
 
-# Surfaces that live at a DIFFERENT path in each repo (so they can't be a
-# plain src-relative entry in SURFACES). `editor`/`web` are repo-root-relative
-# (the repo root is the parent of the --editor-root/--web-root src dirs).
+# Surfaces that live at a DIFFERENT path in each repo (so they can't be a plain
+# src-relative entry in SURFACES). `editor`/`web` are repo-root-relative.
 #
-# Checked BOTH WAYS. The editor's tree is a superset, but only in trees the
-# web bundle deliberately does not ship — those are listed in
-# `editor_only_prefixes` and anything outside them must exist on both sides.
-#
-# This used to be one-way ("web is a subset, so editor-only files are not
-# flagged"), which left a hole big enough to lose a file through: web's
-# Baremetal.ino `#include "udp_scan.h"` while web did not ship udp_scan.h, and
-# the gate stayed green because it only ever walked web's files looking for
-# them in the editor. A file DELETED from web, or one ADDED to the editor that
-# web also needs, was invisible.
-#
-# So the asymmetry is now declared rather than assumed. Adding a genuinely
-# desktop-only tree means adding it here, in a diff a reviewer sees.
+# Checked BOTH WAYS. The editor's tree is a superset only in trees the web bundle
+# deliberately does not ship; those are listed in `editor_only_prefixes` and
+# anything outside them must exist on both sides. A one-way check hid files
+# deleted from web and files added to the editor that web also needs.
 MAPPED_SURFACES = [
     {
         "name": "bare-metal-runtime",

@@ -26,17 +26,12 @@ UA_UInt16 opcua_nodes_count(void);
 /** The numeric NodeId of the `index`-th declared node, for iteration. */
 UA_UInt16 opcua_nodes_id_at(UA_UInt16 index);
 
-/** Fill `out` with the node whose numeric id is `numeric_id`, or return false
- *  if no such node was declared.
+/** Fill `out` with the node whose numeric id is `numeric_id`, or return false if
+ *  no such node was declared.
  *
- *  Everything the node needs that is constant lives in flash and is POINTED AT
- *  rather than copied: the browse name, the display name text, the reference
- *  arrays, the type id. Only the fixed-size `UA_VariableNode` shell is written,
- *  which is what makes a materialised node cost a pool slot rather than the
- *  ~476 B/node the ziptree charged.
- *
- *  The caller owns `out` and must never let open62541 free its contents --
- *  see the library's flash nodestore, the only intended caller. */
+ *  Everything constant lives in flash and is pointed at rather than copied, so
+ *  only the fixed-size `UA_VariableNode` shell is written. The caller owns `out`
+ *  and must never let open62541 free its contents. */
 bool opcua_nodes_materialise(UA_UInt16 numeric_id, UA_UInt16 ns, UA_VariableNode* out);
 
 /** Release what opcua_nodes_materialise() allocated (the reference arrays).

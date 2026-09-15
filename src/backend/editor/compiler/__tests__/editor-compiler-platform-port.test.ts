@@ -214,11 +214,9 @@ describe('createEditorCompilerPlatformPort', () => {
   })
 
   it('installArduinoLib forwards third-party libraries as a separate list', async () => {
-    // Index-installed and git-installed libraries travel separately all the
-    // way down because they are installed by different arduino-cli
-    // invocations — `lib install <name>` versus `lib install --git-url`.
-    // Flattening them into one list here would send a clone URL to the
-    // Library Manager, which has never heard of it.
+    // Index-installed and git-installed libraries travel separately all the way
+    // down, because they are installed by different arduino-cli invocations:
+    // `lib install <name>` versus `lib install --git-url`.
     const handleLibraryInstallation = jest.fn(async () => undefined)
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleLibraryInstallation }), makeContext())
     await port.installArduinoLib(

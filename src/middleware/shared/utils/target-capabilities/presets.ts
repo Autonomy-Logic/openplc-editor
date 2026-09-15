@@ -36,24 +36,13 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
 }
 
 /**
- * Conservative baseline for a baremetal OPC-UA server. A VPP declares only
- * the fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only the
+ * fields it raises; `resolveTargetCapabilities` fills the rest from here.
  *
- * The numbers are deliberately the SAFE end of every axis, because the failure
- * mode of guessing high is a device that links but dies in the field:
- *
- *   - `maxSessions: 1` — each session is 16 KB of protocol-mandated buffers
- *     (Part 6 §6.7.1's 8192-byte floor, both directions). This is the one
- *     setting where a plausible-looking manifest value silently multiplies the
- *     arena, so the safe value is the default and raising it is deliberate.
- *   - `arenaBytes: 32 KB` — one session's buffers plus channel/session state
- *     plus the node scratch pool, with margin. Revise from a measured build,
- *     never from this comment.
- *   - `security: 'none'`, `certificates: false` — the honest default for a
- *     part whose crypto abilities are unknown, and it keeps mbedTLS out of
- *     the link. `hw` is all-false for the same reason.
- *   - The operation limits are sized so a single Read never needs more
- *     scratch than `nodePoolSlots` covers.
+ * The numbers are the safe end of every axis: `maxSessions: 1` because each
+ * session is 16 KB of protocol-mandated buffers, `arenaBytes: 32 KB` to cover
+ * one session plus channel state plus the node pool, `security: 'none'` with
+ * all-false `hw` to keep mbedTLS out of the link.
  */
 export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   arenaBytes: 32 * 1024,
@@ -68,34 +57,21 @@ export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   security: 'none',
   certificates: false,
   subscriptions: false,
-  // 600 000 and PBKDF2 by default: that is what the editor hard-coded and what
-  // Runtime v4 consumes, so a target declaring nothing keeps working exactly as
-  // it did. Constrained targets opt DOWN explicitly.
+  // 600 000 and PBKDF2 by default, matching what Runtime v4 consumes, so a
+  // target declaring nothing keeps working. Constrained targets opt down.
   kdfIterations: 600_000,
   passwordScheme: 'pbkdf2-sha256',
   hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
 }
 
 /**
- * What a target gets when it declares `s7Server` and nothing else.
+ * What a target gets when it declares `s7Server` and nothing else. Below Runtime
+ * v4's numbers, because v4 is a Linux process with a thread per client and this
+ * is a microcontroller where each client is a PDU pair in .bss.
  *
- * Deliberately below Runtime v4's numbers (32 clients, 64 DBs, 960-byte PDUs).
- * v4 is a Linux process with a thread per client; this is a microcontroller
- * where each client is a PDU pair in .bss and the whole area table is flash. A
- * VPP that has measured the room raises them; nothing infers them.
- *
- * `szl` ON, which reverses the initial guess. It was off while the plan's
- * Phase 0 question — which real clients actually need identification — was
- * open, and off because Snap7 spends 352 bytes of flash on a template for SZL
- * 0x001C alone. Measured, building the record from the project's identity
- * instead costs *228 bytes total*, and the clients that need it (TIA Portal,
- * several HMIs) refuse to talk to a device without it. At that price the
- * compatible default is to answer.
- *
- * `pduSize` 240 for the same reason: it is what an S7-300 offers and what
- * every client copes with. The server always negotiates down to the smaller of
- * its ceiling and the client's proposal, so a target that raises this never
- * breaks a client that wanted less.
+ * `szl` is on because the clients that need it refuse to talk to a device
+ * without it, at ~228 bytes. `pduSize` 240 is what an S7-300 offers and what
+ * every client copes with.
  */
 export const DEFAULT_S7_PROFILE: S7TargetProfile = {
   maxClients: 2,

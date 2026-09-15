@@ -17,13 +17,13 @@ namespace bm_net {
 
 namespace {
 
-/** Client storage, SHARED by every listener.
+/** Client storage, shared by every listener.
  *
- *  Concrete objects, not `Client*`, and owned here for the reason spelled out
- *  in the header: every Arduino server's `accept()` returns a client BY VALUE,
- *  so a pointer handed upward has to point at storage that outlives the call.
- *  `in_use` rather than relying on `connected()` because a slot stays ours
- *  between the peer closing and the server noticing. */
+ *  Concrete objects, not `Client*`, and owned here because every Arduino
+ *  server's `accept()` returns a client by value, so a pointer handed upward has
+ *  to point at storage that outlives the call. `in_use` rather than
+ *  `connected()` because a slot stays ours between the peer closing and the
+ *  server noticing. */
 struct Slot
 {
     bm_client_impl_t client;
@@ -34,12 +34,9 @@ struct Slot
 Slot g_slots[BM_NET_MAX_CLIENTS];
 bool g_pool_ready = false;
 
-/** Listener ids are handed out in construction order. Two is all there is
- *  (OPC-UA and S7Comm); the registry exists so adding a third needs no thought.
- *
- *  Kept here rather than on the Listener because the admission test has to ask
- *  about the OTHER listeners, and a static registry is the smallest way to let
- *  it -- four bytes, versus threading a list through every call. */
+/** Listener ids are handed out in construction order. Kept here rather than on
+ *  the Listener because the admission test has to ask about the other
+ *  listeners. */
 #define BM_NET_MAX_LISTENERS 4
 uint8_t g_next_listener_id = 0;
 uint8_t g_reserves[BM_NET_MAX_LISTENERS] = { 0, 0, 0, 0 };
@@ -64,9 +61,8 @@ uint8_t free_slots()
     return n;
 }
 
-/** Slots that must stay available so every OTHER listener can still reach its
- *  floor. Taking one of these would be taking a slot someone else is
- *  guaranteed. */
+/** Slots that must stay available so every other listener can still reach its
+ *  floor. */
 uint8_t owed_to_others(uint8_t me)
 {
     uint8_t owed = 0;
@@ -107,11 +103,10 @@ bool Listener::begin()
 
     ensure_pool();
 
-    // NOTE: no Ethernet.begin() / WiFi.begin() here. The interface is already
-    // up -- Modbus TCP configured it from the project's network screen before
-    // the PLC started scanning. Re-initialising it would reset the link out
-    // from under a live Modbus session and, on a static-IP build, put two
-    // claims on one address.
+    // No Ethernet.begin() / WiFi.begin() here: the interface is already up,
+    // configured by Modbus TCP from the project's network screen before the PLC
+    // started scanning. Re-initialising it would reset the link out from under a
+    // live Modbus session and, on a static-IP build, put two claims on one address.
     impl_.begin();
     started_ = true;
     return true;
@@ -122,36 +117,24 @@ Client* Listener::accept()
     if (!started_)
         return nullptr;
 
-    // accept(), not available().
-    //
-    // available() hands back ANY established connection, round-robin, whether
-    // or not it is new -- so a server that keeps per-connection state cannot
-    // tell an arrival from a peer it already holds. accept() hands each
-    // connection over exactly once, which is the semantic this layer needs and
-    // the one Arduino Ethernet >= 2.0 and the ESP32 core both settled on (the
-    // latter having deprecated available() outright).
-    //
-    // Everything that used to be here -- an eight-deep sweep of the underlying
-    // table, and a dedupe keyed on the remote port -- existed only to
-    // reconstruct that semantic from the outside, and could not do it
-    // correctly: the port it compared was read back THROUGH the handle, so a
-    // recycled slot reported the new peer's port and a genuinely new
-    // connection was misread as one already held. Fixed in the core.
+    // accept(), not available(). available() hands back any established
+    // connection, round-robin, whether or not it is new, so a server keeping
+    // per-connection state cannot tell an arrival from a peer it already holds.
+    // accept() hands each connection over exactly once, which is what Arduino
+    // Ethernet >= 2.0 and the ESP32 core both settled on.
     bm_client_impl_t incoming = impl_.accept();
     if (!incoming)
         return nullptr;
 
-    // Below our own floor we are always served. Above it we may take a slot
-    // only if doing so still leaves every other listener able to reach ITS
-    // floor -- otherwise a protocol in a reconnect burst empties the pool under
-    // a quieter one, which is exactly what was measured: an OPC-UA session drop
-    // reconnects hard, and for the moment it took, S7 connections were refused.
+    // Below our own floor we are always served. Above it we may take a slot only
+    // if that still leaves every other listener able to reach its floor;
+    // otherwise a protocol in a reconnect burst empties the pool under a quieter one.
     const uint8_t mine = held_by(id_);
     if (mine >= reserve_ && free_slots() <= owed_to_others(id_))
     {
         // Nothing left. Drop it now rather than leaving it half-accepted: a
-        // client refused at the TCP layer retries immediately, and a
-        // connection we neither serve nor close sits in the backlog.
+        // client refused at the TCP layer retries immediately, and a connection
+        // we neither serve nor close sits in the backlog.
         OPCUA_LOG("[net] accept REFUSED (listener %u holds %u/%u, %u free, %u owed)",
                   (unsigned)id_, (unsigned)mine, (unsigned)reserve_,
                   (unsigned)free_slots(), (unsigned)owed_to_others(id_));
@@ -220,11 +203,8 @@ void release(Client* client)
 void poll()
 {
     // Every adapter selected in baremetal_net.h drives its stack from an
-    // interrupt (the Tiva EMAC handler on the LOGO!, the Wi-Fi task on the
-    // ESP32, the shield's SPI polling inside EthernetClient), so there is
-    // nothing cooperative to service here today. The hook is kept because the
-    // alternative is callers learning which stack they are on, which is
-    // exactly the knowledge this seam exists to contain.
+    // interrupt, so there is nothing cooperative to service here today. The hook
+    // is kept so callers never have to learn which stack they are on.
 }
 
 void close_all()

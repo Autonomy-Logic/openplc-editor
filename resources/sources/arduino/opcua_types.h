@@ -13,14 +13,9 @@ field on one side and the other must move with it.
 
 #include <stdint.h>
 
-// ---------------------------------------------------------------------------
-// Permission bitmap.
-//
-// Two bits per role, packed into one byte: viewer 0-1, operator 2-3,
-// engineer 4-5.  A byte rather than three enums because it is per-node data
-// living in flash next to a few thousand siblings, and because the check on
-// the hot path is then a shift and a mask.
-// ---------------------------------------------------------------------------
+// Permission bitmap: two bits per role packed into one byte (viewer 0-1,
+// operator 2-3, engineer 4-5). A byte rather than three enums because it is
+// per-node flash data and the hot-path check is then a shift and a mask.
 #define OPCUA_PERM_READ   0x1u
 #define OPCUA_PERM_WRITE  0x2u
 
@@ -44,20 +39,11 @@ static inline bool opcua_can_write(uint8_t packed, uint8_t role)
     return (opcua_perm_for_role(packed, role) & OPCUA_PERM_WRITE) != 0;
 }
 
-// ---------------------------------------------------------------------------
-// One addressable leaf.
-//
-// `arr` / `elem` are the strucpp debug-table coordinates, which is the whole
-// reason this server is cheap to build: reading a node is
-// `strucpp::debug::handle_read(arr, elem, dest)` against a table the compiler
-// already emitted, so there is no shadow copy of the PLC state to keep in
-// sync and no scan-rate mirroring loop.
-//
-// `tag` is a `strucpp::debug::TypeTag` value.  It is duplicated here rather
-// than including `debug_table.hpp` because that header is C++ and pulls the
-// generated program's type surface with it; the OPC-UA layer only needs the
-// integer, and the generator asserts the same table.
-// ---------------------------------------------------------------------------
+// One addressable leaf. `arr` / `elem` are the strucpp debug-table coordinates,
+// so reading a node is `handle_read(arr, elem, dest)` against a table the
+// compiler already emitted. `tag` is a `strucpp::debug::TypeTag`, duplicated
+// here rather than including the C++ `debug_table.hpp`; the generator asserts
+// the same table.
 typedef struct
 {
     uint16_t    node_id;      // numeric NodeId in the server's namespace
@@ -68,10 +54,9 @@ typedef struct
     uint8_t     perms;        // packed, see above
 } opcua_node_t;
 
-/** A username/password user.  `password_hash` is the editor's
- *  `pbkdf2:sha256:<iters>$<salt>$<hash>` string, verified by a KDF that is
- *  chunked across scan cycles — at the iteration counts involved a
- *  single-shot verify would stall the PLC for seconds. */
+/** A username/password user. `password_hash` is the editor's
+ *  `pbkdf2:sha256:<iters>$<salt>$<hash>` string, verified by a KDF chunked
+ *  across scan cycles. */
 typedef struct
 {
     const char* username;

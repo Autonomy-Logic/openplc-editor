@@ -115,39 +115,17 @@ void updateOutputBuffers();
 uint8_t hardwareStateSwitch(void);
 
 /* ---- Optional: reboot into the device's firmware bootloader ------------
- * Weak default in arduino_runtime_glue.cpp is a no-op, so a HAL that does not
- * define this leaves the board running (no bootloader to enter). A HAL whose
- * device has a resident bootloader (e.g. the Siemens LOGO! second-stage
- * loader) overrides it with a strong extern "C" definition that resets the
- * MCU into that bootloader so the editor can re-flash over the network without
- * a physical power-cycle.
- *
- * Invoked from the Modbus debug FC 0x4C handler AFTER the response frame has
- * been built. Because the transport sends that frame only once the handler
- * returns, an implementation MUST NOT reset synchronously here -- it must ARM
- * the reset and perform it slightly later (e.g. on the next updateOutputBuffers
- * call), so the ack reaches the wire before the link drops. ---------------- */
+ * Weak default is a no-op; a HAL whose device has a resident bootloader
+ * overrides it so the editor can re-flash over the network. Invoked from the
+ * Modbus FC 0x4C handler after the response frame is built but before the
+ * transport sends it, so an implementation must ARM the reset, not perform it. */
 void hardwareRebootToBootloader(void);
 
 /* ---- Optional: programming lock ---------------------------------------
- * A device that can be locked at the panel (the LOGO!'s "Program lock" menu)
- * reports it here. The runtime consults it before honouring a request that
- * would replace or interrupt the running program -- today that is the
- * reboot-to-bootloader FC 0x4C -- and answers MB_REFUSED_LOCKED instead of
- * carrying it out.
- *
- * Weak default in arduino_runtime_glue.cpp returns 0, so a board with no lock
- * behaves exactly as it did before this interface existed.
- *
- * Called from the Modbus handler, so it MUST return quickly and MUST NOT
- * block: cache the state rather than reading a slow bus here.
- *
- * hardwarePromptUnlock() is the paired notification -- "someone just tried to
- * program you and was refused". A HAL with a display asks the user there
- * whether to unlock (the LOGO! lights its backlight and puts the question on
- * the panel). It MUST return immediately: the answer arrives asynchronously as
- * a later change of hardwareProgrammingLocked(), never as a return value, and
- * the caller must not be blocked waiting for a human. Weak default: no-op. */
+ * A device that can be locked at the panel reports it here; the runtime checks
+ * it before honouring reboot-to-bootloader FC 0x4C. Both are called from the
+ * Modbus handler and must return immediately without blocking: the unlock answer
+ * arrives as a later change of hardwareProgrammingLocked(). */
 uint8_t hardwareProgrammingLocked(void);
 void    hardwarePromptUnlock(void);
 

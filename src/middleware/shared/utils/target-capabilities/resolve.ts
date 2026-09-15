@@ -31,12 +31,9 @@ import type { OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './
 /**
  * A capability block as a VPP manifest actually writes it.
  *
- * `Partial<TargetCapabilities>` is not quite right: it makes the top-level
- * keys optional but still demands a COMPLETE `opcua` / `s7` profile, while the
- * documented contract for both is "declare only what you raise"
- * (`{ maxSessions: 2 }` and nothing else). The nested blocks have to be
- * partial too, which is exactly what the resolver functions below already
- * accept — this type just says so.
+ * `Partial<TargetCapabilities>` makes the top-level keys optional but still
+ * demands a complete `opcua` / `s7` profile, while the contract for both is
+ * "declare only what you raise". The nested blocks have to be partial too.
  */
 export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7'> & {
   opcua?: Partial<OpcUaTargetProfile>
@@ -124,13 +121,11 @@ function inferFromCompiler(boardInfo: BoardInfoLike): TargetCapabilities {
  */
 /**
  * Fill an OPC-UA profile from `DEFAULT_OPCUA_PROFILE`, so a VPP manifest can
- * declare only what it raises (`{ maxSessions: 2 }` and nothing else).
+ * declare only what it raises.
  *
- * Merged one level deep plus `hw`, because a manifest that sets
- * `hw: { trng: true }` means "this part has a TRNG", not "and it has no
- * SHA-256 accelerator either" — a shallow spread would silently drop the
- * unmentioned hardware facts to `undefined` and the generated header would
- * emit them as absent rather than false.
+ * Merged one level deep plus `hw`: a manifest that sets `hw: { trng: true }`
+ * means "this part has a TRNG", not "and no SHA-256 accelerator either", and a
+ * shallow spread would drop the unmentioned hardware facts to `undefined`.
  */
 function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined): OpcUaTargetProfile {
   if (!declared) return DEFAULT_OPCUA_PROFILE
@@ -143,9 +138,7 @@ function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined):
 
 /**
  * Fill an S7 profile from `DEFAULT_S7_PROFILE`, so a VPP manifest can declare
- * only what it raises (`{ maxClients: 4 }` and nothing else).
- *
- * A flat merge suffices here — unlike the OPC-UA profile there is no nested
+ * only what it raises. A flat merge suffices: unlike OPC-UA there is no nested
  * `hw` block, because classic S7 has no crypto to accelerate.
  */
 function resolveS7Profile(declared: Partial<S7TargetProfile> | undefined): S7TargetProfile {
@@ -158,37 +151,16 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
 
   const base = inferFromCompiler(boardInfo)
 
-  // The spread may put a PARTIAL nested profile on `merged`; both are replaced
+  // The spread may put a partial nested profile on `merged`; both are replaced
   // with fully-resolved ones immediately below, so the partial never escapes.
-  // The assertion is the narrow, local statement of that.
   const declared = boardInfo.capabilities
   const merged = { ...base, ...(declared ?? {}) } as TargetCapabilities
 
-  // ---------------------------------------------------------------------
-  // Nested profiles are ALWAYS resolved, whether or not the manifest
-  // mentioned them — and whether or not it carried a capability block at all.
-  //
-  // This used to return `base` early when there was no `capabilities` block,
-  // which left `opcua` / `s7` undefined on any target whose PRESET enables a
-  // server. The pipeline tests `capability && profile` before emitting a
-  // config header, so such a target silently got no server: the capability
-  // said yes and the profile said nothing.
-  //
-  // It also means a VPP published before these profiles existed keeps working
-  // as it is. A manifest that says `opcuaServer: true` and stops there gets
-  // the defaults, so nothing has to be rebuilt to pick up a new field --
-  // which is the whole point of having defaults rather than requirements.
-  //
-  // The defaults are deliberately the MOST COMPATIBLE rather than the most
-  // capable: OPC-UA with no security policy, no certificates and no assumed
-  // crypto hardware; S7 with two clients and the 240-byte PDU every client
-  // copes with. A target that can do more says so; one that says nothing gets
-  // the configuration that works everywhere.
-  //
-  // Still gated on the server flag itself, because a profile on a target that
-  // cannot host a server is noise -- and that flag is a real per-target fact
-  // (open62541 needs ~190 KB of flash), so it cannot be defaulted on.
-  // ---------------------------------------------------------------------
+  // Nested profiles are always resolved, even when the manifest carried no
+  // capability block: returning `base` early left `opcua` / `s7` undefined on a
+  // target whose preset enables a server, and the pipeline tests
+  // `capability && profile` before emitting a config header. Still gated on the
+  // server flag, because a profile on a target that cannot host one is noise.
   if (merged.opcuaServer) {
     merged.opcua = resolveOpcUaProfile(declared?.opcua)
   }
