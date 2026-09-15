@@ -52,14 +52,16 @@ function sourceFiles(dir: string): string[] {
 /** Every source file that builds an address pool, found rather than listed:
  *  a hard-coded list is the thing that goes stale. */
 function filesThatBuildAPool(): string[] {
-  return sourceFiles('src')
-    .filter((path) => {
-      const source = readFileSync(path, 'utf-8')
-      return source.includes('buildAddressPool(') || source.includes('allocateAddresses(')
-    })
-    // The pool machinery itself, which takes capabilities as an argument and
-    // resolves nothing.
-    .filter((path) => !path.includes(join('utils', 'iec-address')))
+  return (
+    sourceFiles('src')
+      .filter((path) => {
+        const source = readFileSync(path, 'utf-8')
+        return source.includes('buildAddressPool(') || source.includes('allocateAddresses(')
+      })
+      // The pool machinery itself, which takes capabilities as an argument and
+      // resolves nothing.
+      .filter((path) => !path.includes(join('utils', 'iec-address')))
+  )
 }
 
 /**
@@ -79,10 +81,55 @@ function filesThatBuildAPool(): string[] {
  */
 const POOL_BUILDERS = [
   join('src', 'backend', 'shared', 'compile', 'steps', 'compute-io-image.ts'),
-  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'configuration', 'components', 'pin-mapping-table.tsx'),
-  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'configuration', 'vendor-screen', 'layouts', 'io-table-layout.tsx'),
-  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'configuration', 'vendor-screen', 'layouts', 'module-slots-layout.tsx'),
-  join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'ethercat', 'ethercat-device-editor.tsx'),
+  join(
+    'src',
+    'frontend',
+    'components',
+    '_features',
+    '[workspace]',
+    'editor',
+    'device',
+    'configuration',
+    'components',
+    'pin-mapping-table.tsx',
+  ),
+  join(
+    'src',
+    'frontend',
+    'components',
+    '_features',
+    '[workspace]',
+    'editor',
+    'device',
+    'configuration',
+    'vendor-screen',
+    'layouts',
+    'io-table-layout.tsx',
+  ),
+  join(
+    'src',
+    'frontend',
+    'components',
+    '_features',
+    '[workspace]',
+    'editor',
+    'device',
+    'configuration',
+    'vendor-screen',
+    'layouts',
+    'module-slots-layout.tsx',
+  ),
+  join(
+    'src',
+    'frontend',
+    'components',
+    '_features',
+    '[workspace]',
+    'editor',
+    'device',
+    'ethercat',
+    'ethercat-device-editor.tsx',
+  ),
   join('src', 'frontend', 'components', '_features', '[workspace]', 'editor', 'device', 'ethercat', 'index.tsx'),
   join('src', 'frontend', 'hooks', 'use-alias-registry.ts'),
   join('src', 'frontend', 'hooks', 'use-device-configuration.ts'),
