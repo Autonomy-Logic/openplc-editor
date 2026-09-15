@@ -233,7 +233,7 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
 
     // Recognises Edge's `/unauthorized?reason=oauth_failed` so the user sees a real
     // message instead of waiting out the timeout; everything else is held to the allowlist.
-    win.webContents.on('will-navigate', (event, url) => {
+    const guardNavigation = (event: { preventDefault: () => void }, url: string) => {
       if (url.includes('reason=oauth_failed')) {
         finish({ status: 'failed', reason: 'provider-declined' })
 
@@ -243,7 +243,12 @@ export function runOAuthFlow(provider: EdgeOAuthProviderId): Promise<OAuthFlowRe
       if (!isAllowedOAuthNavigation(url, provider)) {
         event.preventDefault()
       }
-    })
+    }
+
+    win.webContents.on('will-navigate', guardNavigation)
+    // A provider chains through redirects rather than navigations, and those do not raise
+    // `will-navigate`; without this the allowlist only covers the first hop.
+    win.webContents.on('will-redirect', guardNavigation)
 
     win.on('closed', () => {
       finish({ status: 'cancelled' })

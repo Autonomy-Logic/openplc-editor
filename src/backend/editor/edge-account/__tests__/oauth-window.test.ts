@@ -255,6 +255,24 @@ describe('runOAuthFlow', () => {
     await expect(flow).resolves.toEqual({ status: 'cancelled' })
   })
 
+  // A provider chains through 302s, which raise `will-redirect` and not `will-navigate`:
+  // guarding only the latter left every hop after the first unchecked.
+  it('holds a redirect to the same allowlist as a navigation', async () => {
+    const flow = runOAuthFlow('google')
+    const win = lastWindow()
+
+    const blocked = navigation()
+    win.handlers['will-redirect'](blocked, 'https://evil.example/phish')
+    expect(blocked.preventDefault).toHaveBeenCalledTimes(1)
+
+    const allowed = navigation()
+    win.handlers['will-redirect'](allowed, 'https://accounts.google.com/o/oauth2/auth')
+    expect(allowed.preventDefault).not.toHaveBeenCalled()
+
+    win.windowHandlers.closed()
+    await expect(flow).resolves.toEqual({ status: 'cancelled' })
+  })
+
   it('reads the failed-flow redirect as declined', async () => {
     const flow = runOAuthFlow('microsoft')
     const win = lastWindow()

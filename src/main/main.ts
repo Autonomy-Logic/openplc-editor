@@ -6,6 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
@@ -27,17 +28,6 @@ import { getErrorMessage } from '../frontend/utils/get-error-message'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-
-/** True for an `http(s):` URL — the only kind `shell.openExternal` is handed. */
-function isWebUrl(candidate: string): boolean {
-  try {
-    const { protocol } = new URL(candidate)
-
-    return protocol === 'https:' || protocol === 'http:'
-  } catch {
-    return false
-  }
-}
 
 enableMapSet()
 

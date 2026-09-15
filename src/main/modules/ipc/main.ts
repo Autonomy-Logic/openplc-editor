@@ -57,6 +57,7 @@ import {
   pruneRetrievedProjects,
   RETAINED_RETRIEVALS,
 } from '@root/backend/editor/project/materialize-retrieved-project'
+import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import type {
   DebugAnchorResult,
   DebugDeviceIdResult,
@@ -1212,6 +1213,13 @@ class MainProcessBridge implements MainIpcModule {
 
   // App and system handlers
   handleOpenExternalLink = async (_event: IpcMainInvokeEvent, url: string) => {
+    // `shell.openExternal` hands anything to the OS, so a `file:` or `javascript:` URL
+    // arriving over IPC must not reach it.
+    if (typeof url !== 'string' || !isWebUrl(url)) {
+      logger.warn(`Refused to open a non-web external link: ${String(url).slice(0, 120)}`)
+      return { success: false, error: 'Only http(s) links can be opened.' }
+    }
+
     try {
       await shell.openExternal(url)
       return { success: true }

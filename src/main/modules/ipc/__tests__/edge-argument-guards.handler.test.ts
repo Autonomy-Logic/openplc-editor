@@ -4,6 +4,8 @@ import { createCommit, createStash, discardChanges } from '@root/backend/editor/
 import { saveCloudProject } from '@root/backend/editor/edge-projects'
 import type { WriteProjectFiles } from '@root/middleware/shared/ports/project-port'
 
+import { shell } from 'electron'
+
 import MainProcessBridge from '../main'
 
 jest.mock('electron', () => ({
@@ -131,4 +133,23 @@ describe('the cloud save channel', () => {
 
     expect(save).toHaveBeenCalledWith(VALID_SAVE)
   })
+})
+
+describe('an external link', () => {
+  it('reaches the shell when it is http(s)', async () => {
+    await expect(bridge.handleOpenExternalLink(EVENT, 'https://autonomylogic.com/buy')).resolves.toEqual({
+      success: true,
+    })
+    expect(shell.openExternal).toHaveBeenCalledWith('https://autonomylogic.com/buy')
+  })
+
+  // `shell.openExternal` hands the string to the OS, so the renderer must not be able to
+  // reach a local file or a script through this channel.
+  it.each(['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,<script>alert(1)</script>', 'not a url'])(
+    'is refused when it is %s',
+    async (url) => {
+      await expect(bridge.handleOpenExternalLink(EVENT, url)).resolves.toMatchObject({ success: false })
+      expect(shell.openExternal).not.toHaveBeenCalled()
+    },
+  )
 })
