@@ -4,12 +4,18 @@
  *
  * IEC located addresses are GLOBAL. The variables table's own duplicate check
  * reads one variable list at a time, so two POUs can each declare `AT %QX0.0`
- * and both pass; the compiler refuses it (`computeIoImage`), but only once the
- * user has finished and pressed build.
+ * and both pass, and nothing anywhere says so until the build warns about it.
  *
- * This is the same fact answered while editing. It is the literal-against-
- * literal counterpart of the alias scan `useProjectAliasBindings` already
- * does, and it is project-wide for the same reason that one is.
+ * A WARNING AND NOT A REFUSAL, on both sides. IEC 61131-3 does not forbid the
+ * same located variable in two POUs, so the editor does not either: which
+ * write survives is the programmer's business. What the editor owes them is
+ * the fact that the addresses are global and the surviving write therefore
+ * depends on POU order, which neither declaration shows on its own.
+ *
+ * This is that fact answered while editing rather than at build time. It is
+ * the literal-against-literal counterpart of the alias scan
+ * `useProjectAliasBindings` already does, and it is project-wide for the same
+ * reason that one is.
  *
  * OUTPUTS ONLY, matching the compile-time rule: two POUs reading one input is
  * ordinary, and sharing a memory address is what memory is for. An output is

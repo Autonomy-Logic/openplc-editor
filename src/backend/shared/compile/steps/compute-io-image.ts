@@ -835,6 +835,12 @@ export function describeUnbackedLocation(issue: UnbackedLocation): string {
  * Names BOTH, because either one may be the mistake and the user cannot tell
  * which from an address alone -- and because the two are usually in different
  * POUs, which is the whole reason the editor's per-list check missed it.
+ *
+ * WORDED AS A WARNING, not a refusal. IEC 61131-3 does not forbid declaring one
+ * located variable in two POUs, so the compile reports this and carries on:
+ * which write survives is the programmer's call. The sentence therefore states
+ * the consequence -- last write wins, and POU order decides which -- and offers
+ * the fix conditionally, rather than telling them to change something.
  */
 export function describeDuplicateOutput(issue: DuplicateOutput): string {
   const where =
@@ -855,9 +861,9 @@ export function describeDuplicateOutput(issue: DuplicateOutput): string {
   return (
     `Two variables drive the same output: "${issue.first.variableName}" and ` +
     `"${issue.second.variableName}" (${where}), ${addresses}. IEC located addresses ` +
-    'are global, so the last write in the scan would win and which one that is ' +
-    'depends on POU order — give one of them another address, or have one read the ' +
-    'other rather than both writing.'
+    'are global, so the last write in the scan wins and which one that is depends ' +
+    'on POU order. If that is not what you meant, give one of them another address, ' +
+    'or have one read the other rather than both writing.'
   )
 }
 

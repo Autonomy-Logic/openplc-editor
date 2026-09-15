@@ -394,6 +394,52 @@ describe('runCompilePipeline — I/O image gate', () => {
       ...overrides,
     })
 
+  it('WARNS about two writers on one output and still compiles', async () => {
+    // IEC 61131-3 does not forbid declaring one located variable in two POUs,
+    // so the editor does not either -- which write survives is the
+    // programmer's business. What the compile owes them is the fact that the
+    // addresses are global and POU order decides the winner, which neither
+    // declaration shows on its own. So: a warning, and the build carries on.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const twoWriters = {
+      ...projectDataFixture,
+      pous: [
+        pouLocating('%QW3'),
+        {
+          type: 'program',
+          data: {
+            name: 'second',
+            language: 'st',
+            documentation: '',
+            body: { language: 'st', value: '' },
+            variables: [{ name: 'pump', location: '%QW3' }],
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      arduinoArgs({
+        projectData: twoWriters,
+        devicePinMapping: [{ pin: '3', pinType: 'analogOutput', address: '%QW3' }] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const warned = events.filter((e) => e.message.includes('drive the same output'))
+    expect(warned).toHaveLength(1)
+    expect(warned[0].level).toBe('warning')
+    // Both names, because either one may be the mistake.
+    expect(warned[0].message).toContain('valve')
+    expect(warned[0].message).toContain('pump')
+    // And it never says the compiler refuses it, because it does not.
+    expect(warned[0].message).not.toContain('refuse')
+  })
+
   it('bails before transpilation when an output declaration has no producer', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()

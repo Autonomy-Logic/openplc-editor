@@ -507,9 +507,12 @@ const EditableLocationCell = ({
   // Two literals on one OUTPUT address, which the per-list duplicate check
   // cannot see: it reads this POU's variables, and the other declaration is
   // usually in another POU or the global scope. Same glyph, same reasoning as
-  // the alias conflict above — the compiler refuses this (DOPE-615, B5), and
-  // saying so while the user is still typing is cheaper than saying it at
-  // build time. Inputs and memory are excluded: only two WRITERS contradict.
+  // the alias conflict above, and the same verdict as the compile: a WARNING,
+  // never a refusal. IEC 61131-3 permits it, so the editor permits it too —
+  // what it owes the user is the fact that the last write wins and which one
+  // that is depends on POU order. Saying it while they are still typing is
+  // cheaper than saying it at build time. Inputs and memory are excluded:
+  // only two WRITERS contradict.
   const duplicateOutputs = useDuplicateOutputLocations()
   const isDuplicateOutput = isLocationCell && (duplicateOutputs.get(locationValue)?.length ?? 0) > 1
   const hasLocationWarning = isOrphaned || isManualConflict || isDuplicateOutput
@@ -572,7 +575,7 @@ const EditableLocationCell = ({
     : locationConflict
       ? `Address ${cellValue} conflicts with alias "${locationConflict.aliasName}" assigned to "${locationConflict.variableName}". Two variables cannot share a location.`
       : isDuplicateOutput
-        ? `Output ${cellValue} is also driven by ${otherWriters.map((writer) => `"${writer.name}" in ${writer.scope}`).join(', ')}. IEC located addresses are global, so the last write in the scan would win — the compiler refuses this.`
+        ? `Output ${cellValue} is also driven by ${otherWriters.map((writer) => `"${writer.name}" in ${writer.scope}`).join(', ')}. IEC located addresses are global, so the last write in the scan would win, and which one that is depends on POU order.`
         : undefined
 
   // The warning glyph must stay visible whether or not the row is selected.

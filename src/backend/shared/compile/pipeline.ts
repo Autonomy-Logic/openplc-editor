@@ -462,10 +462,7 @@ async function runCompilePipelineInner(
     areas: isRuntimeV4 ? IMAGE_AREAS_RUNTIME_V4 : IMAGE_AREAS_BAREMETAL,
   })
 
-  if (
-    sizesTheImage &&
-    (ioImage.unsupported.length > 0 || ioImage.unbacked.length > 0 || ioImage.duplicateOutputs.length > 0)
-  ) {
+  if (sizesTheImage && (ioImage.unsupported.length > 0 || ioImage.unbacked.length > 0)) {
     // Both lists, not the first non-empty one: a project can carry each kind of
     // mistake, and reporting one round at a time turns a single fix into
     // several compile attempts.
@@ -475,10 +472,23 @@ async function runCompilePipelineInner(
     for (const issue of ioImage.unbacked) {
       emit({ stage: 'validate', message: describeUnbackedLocation(issue), level: 'error' })
     }
-    for (const issue of ioImage.duplicateOutputs) {
-      emit({ stage: 'validate', message: describeDuplicateOutput(issue), level: 'error' })
-    }
     return bailError(emit, 'validate', 'Compilation aborted: every located variable needs an address that exists.')
+  }
+
+  // TWO WRITERS ON ONE OUTPUT IS A WARNING, NOT A REFUSAL.
+  //
+  // IEC 61131-3 does not forbid it: a located variable may be declared in more
+  // than one POU, and which write survives is then the programmer's business,
+  // not the editor's. Where the standard does not restrict, neither do we.
+  //
+  // It is still worth saying. The addresses are global, so the last write in
+  // the scan wins and which one that is depends on POU order — a fact that is
+  // invisible in either declaration on its own. So the compile reports it and
+  // continues, and the amber glyph says the same thing at edit time.
+  if (sizesTheImage) {
+    for (const issue of ioImage.duplicateOutputs) {
+      emit({ stage: 'validate', message: describeDuplicateOutput(issue), level: 'warning' })
+    }
   }
 
   // WHERE EACH NUMBER CAME FROM, not just what it is.
