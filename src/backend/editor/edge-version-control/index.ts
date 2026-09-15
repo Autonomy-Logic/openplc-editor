@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 import type { VersionControlFailure, VersionControlResult } from '../../../middleware/shared/ports/version-control-port'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
-import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
+import { parseJsonBody } from '../edge-account/edge-http'
 import { logger } from '../services'
 
 /** Matches the web build's axios timeout. */
@@ -30,17 +30,37 @@ const CaptionSchema = z.string().catch('')
 /** A counter the server may omit. Absent reads as zero rather than as a failure. */
 const CountSchema = z.number().catch(0)
 
-/** The top-level 409 body shared by the carry rejection and the merge refusal. */
+/** The 409 body shared by the carry rejection and the merge refusal; every field is optional. */
 const ConflictBodySchema = z.object({
-  hasConflicts: z.boolean().nullish(),
   conflictedFiles: z.array(z.string()).nullish(),
   message: z.string().nullish(),
 })
 
+/**
+ * Edge's exception filter answers `{ timestamp, path, method, statusCode, error: <nest body> }`,
+ * so the reason sits one level down; a few routes answer the bare body.
+ */
+const WrappedErrorSchema = z.object({ error: z.record(z.unknown()) })
+
+/** The Nest body of a failure: from inside the exception filter's envelope when there is one, bare otherwise. */
+function unwrapErrorBody(body: string): unknown {
+  const parsed = parseJsonBody(body)
+  const wrapped = WrappedErrorSchema.safeParse(parsed)
+
+  return wrapped.success ? wrapped.data.error : parsed
+}
+
+/** Whatever of {@link ConflictBodySchema} the 409 body carried; a body carrying none of it is still a conflict. */
+function conflictFieldsFrom(body: string): z.infer<typeof ConflictBodySchema> {
+  const parsed = ConflictBodySchema.safeParse(unwrapErrorBody(body))
+
+  return parsed.success ? parsed.data : {}
+}
+
 /** Nest puts the reason in `message`, as a string or an array of strings. */
 function messageFromBody(body: string, status: number): string {
-  const parsed = parseJsonBodyAs(body, FailureBodySchema)
-  const raw = parsed?.message
+  const parsed = FailureBodySchema.safeParse(unwrapErrorBody(body))
+  const raw = parsed.success ? parsed.data.message : undefined
 
   if (Array.isArray(raw) && raw.length > 0) {
     return raw.join('; ')
@@ -58,7 +78,7 @@ async function call<Schema extends z.ZodTypeAny>(
   target: Route,
   schema: Schema,
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
-  on409?: (body: string) => EdgeVcFailure | null,
+  on409?: (body: string) => EdgeVcFailure,
 ): Promise<EdgeVcResult<z.infer<Schema>>> {
   if (!target.ok) {
     // Never sent: a request this side refused to form.
@@ -93,11 +113,8 @@ async function call<Schema extends z.ZodTypeAny>(
   }
 
   if (status === 409 && on409) {
-    const failure = on409(body)
-
-    if (failure) {
-      return { ok: false, failure }
-    }
+    // The route was given a handler because a 409 on it means one thing; the body only fills in the detail.
+    return { ok: false, failure: on409(body) }
   }
 
   if (status >= 400) {
@@ -129,7 +146,7 @@ async function call<Schema extends z.ZodTypeAny>(
 async function callVoid(
   target: Route,
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
-  on409?: (body: string) => EdgeVcFailure | null,
+  on409?: (body: string) => EdgeVcFailure,
 ): Promise<EdgeVcResult<null>> {
   const result = await call(target, z.unknown(), init, on409)
 
@@ -141,24 +158,24 @@ async function callVoid(
   return result.ok ? { ok: true, data: null } : result
 }
 
-/** The carry rejection: the 409 body is at the top level, not inside `data`; `hasConflicts` is the discriminator. */
-function carryConflict(body: string): EdgeVcFailure | null {
-  const payload = parseJsonBodyAs(body, ConflictBodySchema)
-
-  return payload?.hasConflicts ? { kind: 'carry-conflict', conflictedFiles: payload.conflictedFiles ?? [] } : null
+/**
+ * The carry rejection: a 409 on the switch route IS the conflict. Edge rethrows it as a plain
+ * `ConflictException`, which carries no `hasConflicts` flag, so the status is the whole signal;
+ * the files are read from the body when it happens to list them.
+ */
+function carryConflict(body: string): EdgeVcFailure {
+  return { kind: 'carry-conflict', conflictedFiles: conflictFieldsFrom(body).conflictedFiles ?? [] }
 }
 
-/** The merge refusal; same top-level body and discriminator as the carry rejection. */
-function mergeConflict(body: string): EdgeVcFailure | null {
-  const payload = parseJsonBodyAs(body, ConflictBodySchema)
+/** The merge refusal; same reasoning as the carry rejection, plus the server's caption when it sent one. */
+function mergeConflict(body: string): EdgeVcFailure {
+  const { conflictedFiles, message } = conflictFieldsFrom(body)
 
-  return payload?.hasConflicts
-    ? {
-        kind: 'merge-conflict',
-        conflictedFiles: payload.conflictedFiles ?? [],
-        message: payload.message ?? 'The merge has conflicts that need resolving',
-      }
-    : null
+  return {
+    kind: 'merge-conflict',
+    conflictedFiles: conflictedFiles ?? [],
+    message: message ?? 'The merge has conflicts that need resolving',
+  }
 }
 
 /** Apply and pop answer 409 when the stash will not go on cleanly. */

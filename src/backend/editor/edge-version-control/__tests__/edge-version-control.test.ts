@@ -328,6 +328,26 @@ describe('the four kinds of failure stay apart', () => {
     })
   })
 
+  it('reads the reason from inside the exception filter envelope', async () => {
+    request.mockResolvedValueOnce({
+      status: 403,
+      // The filter wraps Nest's body under `error`; reading the root found nothing and the
+      // user was told only "Autonomy Edge answered 403."
+      body: JSON.stringify({
+        timestamp: '2026-09-15T00:00:00.000Z',
+        path: '/projects/p1/branches',
+        method: 'POST',
+        statusCode: 403,
+        error: { statusCode: 403, message: 'Read-only project', error: 'Forbidden' },
+      }),
+    })
+
+    await expect(createBranch('p1', 'x')).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'http', status: 403, message: 'Read-only project' },
+    })
+  })
+
   it('joins a validation error list into something readable', async () => {
     request.mockResolvedValueOnce({
       status: 400,
@@ -361,14 +381,37 @@ describe('the two conflicts the UI can recover from', () => {
     })
   })
 
-  it('treats a 409 without hasConflicts as an ordinary failure', async () => {
-    request.mockResolvedValueOnce({ status: 409, body: JSON.stringify({ message: 'Branch already exists' }) })
+  it('reads the blocked files through the exception filter envelope', async () => {
+    request.mockResolvedValueOnce({
+      status: 409,
+      // What the wire actually carries: the Nest body sits under `error`, one level down.
+      body: JSON.stringify({
+        timestamp: '2026-09-15T00:00:00.000Z',
+        path: '/projects/p1/branches/switch',
+        method: 'POST',
+        statusCode: 409,
+        error: { statusCode: 409, conflictedFiles: ['pous/programs/main.st'], error: 'Conflict' },
+      }),
+    })
 
-    // Only `hasConflicts` means a carry was rejected. Reading every 409 on the route as
-    // a carry conflict would reopen the conflict modal with an empty file list.
     await expect(switchBranch('p1', 'feature', 'carry')).resolves.toEqual({
       ok: false,
-      failure: { kind: 'http', status: 409, message: 'Branch already exists' },
+      failure: { kind: 'carry-conflict', conflictedFiles: ['pous/programs/main.st'] },
+    })
+  })
+
+  it('still names a blocked carry when the 409 carries no files at all', async () => {
+    request.mockResolvedValueOnce({
+      status: 409,
+      body: JSON.stringify({ statusCode: 409, message: 'Cannot carry changes', error: 'Conflict' }),
+    })
+
+    // Edge rethrows the rejection as a plain `ConflictException`, which has no `hasConflicts`
+    // flag: a 409 on this route can only mean the carry was refused, so demanding the flag
+    // dropped every real conflict into the generic HTTP failure.
+    await expect(switchBranch('p1', 'feature', 'carry')).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'carry-conflict', conflictedFiles: [] },
     })
   })
 
@@ -488,13 +531,68 @@ describe('merging', () => {
     })
   })
 
-  it('treats a 409 without hasConflicts as an ordinary failure', async () => {
-    request.mockResolvedValueOnce({ status: 409, body: JSON.stringify({ message: 'Nothing to merge' }) })
+  it('reads the conflict through the exception filter envelope', async () => {
+    request.mockResolvedValueOnce({
+      status: 409,
+      body: JSON.stringify({
+        timestamp: '2026-09-15T00:00:00.000Z',
+        path: '/projects/p1/branches/merge',
+        method: 'POST',
+        statusCode: 409,
+        error: {
+          statusCode: 409,
+          message: 'Merge has conflicts in pous/programs/main.st',
+          conflictedFiles: ['pous/programs/main.st'],
+          error: 'Conflict',
+        },
+      }),
+    })
 
-    // Otherwise the resolver opens with an empty file list.
-    await expect(
-      mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' }),
-    ).resolves.toMatchObject({ failure: { kind: 'http', status: 409 } })
+    await expect(mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })).resolves.toEqual({
+      ok: false,
+      failure: {
+        kind: 'merge-conflict',
+        conflictedFiles: ['pous/programs/main.st'],
+        message: 'Merge has conflicts in pous/programs/main.st',
+      },
+    })
+  })
+
+  it('still names a conflict on a bare 409 that carries no files', async () => {
+    request.mockResolvedValueOnce({
+      status: 409,
+      body: JSON.stringify({ statusCode: 409, message: 'Merge has conflicts', error: 'Conflict' }),
+    })
+
+    // Edge's `ConflictException` has no `hasConflicts` flag; the status is the whole signal.
+    await expect(mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'merge-conflict', conflictedFiles: [], message: 'Merge has conflicts' },
+    })
+  })
+
+  it('captions a conflict itself when the 409 body says nothing', async () => {
+    request.mockResolvedValueOnce({ status: 409, body: '{}' })
+
+    await expect(mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'merge-conflict', conflictedFiles: [], message: 'The merge has conflicts that need resolving' },
+    })
+  })
+
+  it('surfaces the server message on a failure that is not a conflict', async () => {
+    request.mockResolvedValueOnce({
+      status: 400,
+      body: JSON.stringify({
+        statusCode: 400,
+        error: { statusCode: 400, message: 'Failed to merge branches: nothing to merge', error: 'Bad Request' },
+      }),
+    })
+
+    await expect(mergeBranches({ projectId: 'p1', sourceBranch: 'feature', targetBranch: 'main' })).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'http', status: 400, message: 'Failed to merge branches: nothing to merge' },
+    })
   })
 
   it('does NOT report a merge as failed when the server never answered', async () => {
