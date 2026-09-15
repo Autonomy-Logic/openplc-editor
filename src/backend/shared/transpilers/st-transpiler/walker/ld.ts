@@ -25,6 +25,7 @@ import {
   type ProgramChunk,
   TRUE_NODE,
 } from '../core/path-tree'
+import { resolveConversionFunctionName } from '../helpers/block-library'
 import { computeConnectionTypes, pinOut, type TypeContext } from './connection-types'
 import {
   asBlockData,
@@ -176,7 +177,7 @@ export function emitLdBody(body: RFBody, typeContext?: TypeContext): EmitResult 
     connectorExprs: new Map(),
     yOffset: new Map(),
     warnings: [],
-    connTypes: typeContext ? computeConnectionTypes(body, typeContext) : new Map(),
+    connTypes: typeContext ? computeConnectionTypes(body, typeContext) : new Map<string, string>(),
   }
 
   // Index every node + edge from every rung up front.  Sinks are then
@@ -855,10 +856,23 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
   }
   if (primaryName === null) return
 
+  // Polymorphic IEC 61131-3 conversion blocks (`TO_INT`, `TO_UINT`,
+  // `TO_REAL`, …) are placed with the generic shorthand as their type
+  // name, but that shorthand isn't itself a real ST function — only
+  // the fully qualified `<SRC>_TO_<DST>` family is (matiec/strucpp both
+  // reject a bare `TO_INT(...)` call).  Resolve it here from whatever
+  // is wired directly into the block's single input; leave the name
+  // untouched when it can't be resolved (unconnected input, upstream
+  // isn't a plain variable, or the source type has no defined
+  // conversion to this destination) so an unresolvable case still
+  // surfaces the same "undefined function" error it always did,
+  // rather than silently emitting a different wrong name.
+  const callName = resolveConversionCallName(state, node, data) ?? data.typeName
+
   state.program.push([state.currentIndent, []])
   state.program.push([primaryName, [...info, 'output', 0]])
   state.program.push([' := ', []])
-  state.program.push([data.typeName, [...info, 'type']])
+  state.program.push([callName, [...info, 'type']])
   state.program.push(['(', []])
   for (let i = 0; i < parts.length; i++) {
     if (i > 0) state.program.push([', ', []])
@@ -944,6 +958,26 @@ function firstIncomingForHandle(state: WalkerState, blockId: string, handle: str
     if (edge.targetHandle === handle) return edge
   }
   return undefined
+}
+
+/**
+ * Resolve a polymorphic `TO_<TYPE>` block's concrete ST call name
+ * (e.g. `REAL_TO_INT`) from the inferred type of whatever is wired into
+ * its single input. Returns `null` for anything that
+ * isn't a `TO_<TYPE>` block, has zero or more than one formal input
+ * (every supported conversion function takes exactly one),
+ * an unconnected upstream, or a source type with no supported conversion.
+ */
+function resolveConversionCallName(state: WalkerState, node: RFNode, data: BlockData): string | null {
+  if (data.inputs.length !== 1) return null
+  const edge = firstIncomingForHandle(state, node.id, data.inputs[0])
+  if (edge === undefined) return null
+  const upstream = state.byId.get(edge.source)
+  if (upstream === undefined) return null
+  const sourcePin = upstream.type === 'block' ? pinOut(edge.source, edge.sourceHandle ?? '') : pinOut(edge.source)
+  const sourceType = state.connTypes.get(sourcePin)
+  if (sourceType === undefined) return null
+  return resolveConversionFunctionName(data.typeName, sourceType)
 }
 
 /* ─────────────────────────── helpers ────────────────────────────────────── */
