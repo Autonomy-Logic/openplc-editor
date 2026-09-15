@@ -1166,7 +1166,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // __XWORD) and user-POU pin changes alike. A no-op when nothing is stale.
       const systemLibraries = getState().libraries.system
       const userPous = pous.filter((pou) => pou.pouType !== 'program')
-      const userPouNames = userPous.map((pou) => pou.name)
+      const userPouNames = userPous.map((pou) => pou.name.toUpperCase())
       let restampedCount = 0
       // POUs holding a block still drawn with the old two-sided VAR_IN_OUT pin. Counted, never
       // converted: the fix rewires the diagram, so it belongs to the block's update badge and
@@ -1185,7 +1185,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         for (const node of nodes ?? []) {
           if (!hasLegacyInOutOutputHandle(node as Parameters<typeof hasLegacyInOutOutputHandle>[0])) continue
           const name = (node as { data?: { variant?: { name?: string } } }).data?.variant?.name
-          if (name !== undefined && userPouNames.includes(name)) convertibleInOutPous.add(pouName)
+          if (name !== undefined && userPouNames.includes(name.toUpperCase())) convertibleInOutPous.add(pouName)
           else if (name !== undefined) libraryInOutBlocks.add(name)
         }
       }

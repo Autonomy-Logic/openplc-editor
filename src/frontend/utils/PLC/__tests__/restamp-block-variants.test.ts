@@ -272,6 +272,43 @@ describe('restampFlowBlockVariants — blocks backed by a project POU', () => {
   })
 })
 
+describe('restampFlowBlockVariants — malformed or oddly cased data', () => {
+  it('matches a library POU name case-insensitively', () => {
+    const node = makeStaleAdrNode()
+    node.data.variant.name = 'adr'
+    const flow = { rung: { nodes: [node] } }
+
+    const changed = restampFlowBlockVariants([flow], makeSystemLibraries(), [])
+
+    expect(changed).toBe(1)
+    expect(node.data.variant.variables[0].type.value).toBe('__XWORD')
+  })
+
+  it('skips a block whose persisted variant has no variables array', () => {
+    const node = makeStaleAdrNode()
+    delete (node.data.variant as { variables?: unknown }).variables
+    const flow = { rung: { nodes: [node] } }
+
+    expect(() => restampFlowBlockVariants([flow], makeSystemLibraries(), [])).not.toThrow()
+  })
+
+  it('skips a pin node whose block variant has no variables array', () => {
+    const blockNode = makeStaleUserBlockNode()
+    delete (blockNode.data.variant as { variables?: unknown }).variables
+    const pinNode = makePinNode()
+    const flow = { rung: { nodes: [blockNode, pinNode] } }
+
+    expect(() =>
+      restampFlowBlockVariants(
+        [flow],
+        [],
+        [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+      ),
+    ).not.toThrow()
+    expect(pinNode.data.block.variableType.type.value).toBe('OLDSTRUCT')
+  })
+})
+
 describe('restampFlowBlockVariants — ladder pin nodes', () => {
   it("refreshes the pin node's cached type from the block it connects to", () => {
     const pinNode = makePinNode()

@@ -37,13 +37,14 @@ type VariantVariableType = VariantVariable['type']
 /** Pin types of one definition, keyed by variable name. IEC names are case-insensitive. */
 type PinTypes = Map<string, VariantVariableType>
 
-/** Index every library POU by name, for O(1) lookup. */
+/** Index every library POU by name, for O(1) lookup. IEC names are case-insensitive. */
 function indexLibraryPous(systemLibraries: SystemLibrary[]): Map<string, SystemLibrary['pous'][number]> {
   const byName = new Map<string, SystemLibrary['pous'][number]>()
   for (const library of systemLibraries) {
     for (const pou of library.pous) {
       // First definition wins; bundled libraries don't collide on name.
-      if (!byName.has(pou.name)) byName.set(pou.name, pou)
+      const key = pou.name.toUpperCase()
+      if (!byName.has(key)) byName.set(key, pou)
     }
   }
   return byName
@@ -102,11 +103,13 @@ function restampBlockNodes(
     if (node?.type !== 'block') continue
     const variant = node.data?.variant
     const name = variant?.name
-    if (!variant || !name) continue
+    // `node.data` is `z.any()` in the flow schema, so a hand-edited or
+    // half-migrated project can reach here without a usable variant.
+    if (!variant || !name || !Array.isArray(variant.variables)) continue
 
     // The project owns its own POUs, so they win over a library of the same name.
     const userPou = userPousByName.get(name.toUpperCase())
-    const libPou = userPou ? undefined : libraryPousByName.get(name)
+    const libPou = userPou ? undefined : libraryPousByName.get(name.toUpperCase())
     if (!userPou && !libPou) continue
     const pinTypes = userPou ? userPouPinTypes(userPou) : libraryPinTypes(libPou!)
 
@@ -130,7 +133,7 @@ function restampPinNodes(nodes: Array<BlockBearingNode & PinBearingNode>): numbe
   for (const node of nodes) {
     const variant = node?.type === 'block' ? node.data?.variant : undefined
     const id = (node as { id?: string }).id
-    if (variant && typeof id === 'string') variantsByBlockId.set(id, variant)
+    if (variant && Array.isArray(variant.variables) && typeof id === 'string') variantsByBlockId.set(id, variant)
   }
   if (variantsByBlockId.size === 0) return 0
 
