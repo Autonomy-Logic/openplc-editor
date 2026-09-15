@@ -141,6 +141,28 @@ interface RuntimePluginConfig {
   address_space: RuntimeAddressSpace
 }
 
+/**
+ * What `buildOpcUaRuntimeConfig` hands back: the resolved v4 runtime config
+ * plus the project-model server settings.
+ *
+ * Both halves exist because the two consumers need different slices of the
+ * same work. Runtime v4 wants only `runtime`, serialised. The baremetal
+ * `opcua_config.h` generator wants the resolved address space from `runtime`
+ * AND the port / bind address / endpoint path from `server` — which
+ * `buildServerConfig` folds into a single `endpoint_url` string, and
+ * re-parsing that back into components would be a needless round trip through
+ * a format neither side wants.
+ */
+export interface ResolvedOpcUaConfig {
+  /** The Runtime v4 plugin config. `config.address_space` is the valuable
+   *  part: every configured variable path already resolved to an
+   *  `(arr, elem)` pair against strucpp's `debug-map.json`. */
+  runtime: RuntimeConfig
+  /** Project-model server settings, unresolved because they need no
+   *  resolution. */
+  server: OpcUaServerConfig['server']
+}
+
 interface RuntimeConfig {
   name: string
   protocol: 'OPC-UA'
@@ -432,12 +454,12 @@ const parseDebugMapToInfoMap = (content: string): Map<string, DebugLeafInfo> => 
  * @param onWarn - Optional sink for "dropped X" warnings
  * @returns JSON string for opcua.json or null if no enabled OPC-UA server
  */
-export const generateOpcUaConfig = (
+export const buildOpcUaRuntimeConfig = (
   servers: PLCServer[] | undefined,
   debugMapContent: string,
   instances: PLCInstanceInfo[],
   onWarn?: (message: string) => void,
-): string | null => {
+): ResolvedOpcUaConfig | null => {
   // 1. Find OPC-UA server configuration
   if (!servers || servers.length === 0) {
     return null
@@ -496,8 +518,28 @@ export const generateOpcUaConfig = (
     },
   }
 
-  // 4. Return as JSON string (wrapped in array as expected by runtime)
-  return JSON.stringify([runtimeConfig], null, 2)
+  return { runtime: runtimeConfig, server: config.server }
+}
+
+/**
+ * Author `conf/opcua.json` for Runtime v4.
+ *
+ * Thin wrapper over `buildOpcUaRuntimeConfig` — kept as its own export
+ * because the serialised form is a CONTRACT: the surrounding array, the
+ * two-space indent and the key order are what the v4 plugin reads, and the
+ * module's byte-identical-output guarantee is about this string. Callers that
+ * want the resolved data (the baremetal header generator) take the object
+ * instead of parsing this back.
+ */
+export const generateOpcUaConfig = (
+  servers: PLCServer[] | undefined,
+  debugMapContent: string,
+  instances: PLCInstanceInfo[],
+  onWarn?: (message: string) => void,
+): string | null => {
+  const resolved = buildOpcUaRuntimeConfig(servers, debugMapContent, instances, onWarn)
+  if (!resolved) return null
+  return JSON.stringify([resolved.runtime], null, 2)
 }
 
 /**

@@ -79,7 +79,28 @@ export function reconcileArduinoCliConfig(existing: string, shipped: string): st
     }
   }
 
-  // 2. Retire the obsolete colour suppression.
+  // 2. Enable --git-url installs.
+  //
+  // Existing users have a config written before third-party libraries
+  // existed, and without this their next compile for an OPC-UA target fails
+  // at `lib install` with "--git-url and --zip-path are disabled by default"
+  // rather than anything that names the cause. Migrating is the whole point
+  // of this reconciler.
+  //
+  // Only ever set to true, never removed: a user who deliberately turned it
+  // off would be re-enabling something they disabled, but the editor cannot
+  // compile those targets without it, and leaving them with an unexplained
+  // failure is worse.
+  const library = doc.get('library')
+  if (library === undefined || library === null || isMap(library)) {
+    const current = isMap(library) ? library.get('enable_unsafe_install') : undefined
+    if (current !== true) {
+      doc.setIn(['library', 'enable_unsafe_install'], true)
+      changed = true
+    }
+  }
+
+  // 3. Retire the obsolete colour suppression.
   if (isMap(output) && output.has('no_color')) {
     output.delete('no_color')
     changed = true

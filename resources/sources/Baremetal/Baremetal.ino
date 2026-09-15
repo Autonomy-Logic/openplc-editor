@@ -36,6 +36,20 @@
 #include "ModbusSlave.h"
 #endif
 
+// Protocol servers. Included unconditionally: each facade is defined either
+// way and the whole implementation compiles out when the target's VPP does
+// not declare the capability -- OPCUA_ENABLED 0 in the generated
+// opcua_config.h, S7COMM_ENABLED 0 in s7comm_config.h.
+//
+// The CALL SITES below are still guarded, because an unconditional call to an
+// empty function is not free: the call survives, and so does evaluating its
+// argument, which here means a micros() the compiler cannot prove it may drop.
+// Measured at 64 bytes of flash. Small, but "costs nothing when disabled" is a
+// property that is either true or it is not.
+#include "opcua_server.h"
+#include "opcua_log.h"
+#include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets that declare SUPPORTS_UDP_SCAN (e.g. via a VPP's HAL flags) pull
 // it in; unrelated to Modbus.
@@ -226,12 +240,18 @@ void setup()
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
-            // NOTE (single-serial model): the debugger and Modbus RTU share one
-            // mb_serialport. When MBSERIAL_SHARES_DEBUG_SERIAL is defined the RTU
-            // port IS the debugger's default serial, so this single begin() also
-            // brings up the debugger. Running the debugger on the default USB
-            // serial while RTU uses a *different* UART simultaneously would need
-            // a second serial handler — a documented follow-up.
+            // Two models, chosen by which UART the project gave Modbus RTU:
+            //
+            //  - MBSERIAL_SHARES_DEBUG_SERIAL: the RTU port IS the debugger's
+            //    default serial, so the single begin() above brings up both and
+            //    one mb_serialport serves them.
+            //  - MBSERIAL_ON_SECONDARY: the RTU has its own UART and the
+            //    debugger keeps the default one, begun further up. `handle_serial`
+            //    polls both, each with its own RX assembly buffer.
+            //
+            // The second case was once listed here as an unimplemented
+            // follow-up; it landed in 4b3c1386f and is now the normal shape,
+            // since the editor's connection occupies the default port.
         #elif defined(DEBUGGER_ENABLED)
             // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
             // still needs the default serial up on mb_serialport to respond.
@@ -261,6 +281,19 @@ void setup()
 
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
+
+        // OPC-UA listens on top of the interface Modbus just configured, so it
+        // has to come after mbconfig_*_iface() and must not re-init the link
+        // itself (see baremetal_net.h). No-op when OPC-UA is disabled.
+        #if OPCUA_ENABLED
+            opcua_log_begin();
+            opcua_init();
+        #endif
+        // S7Comm, same contract: the interface is already up, this only opens
+        // port 102.
+        #if S7COMM_ENABLED
+            s7comm_init();
+        #endif
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
@@ -471,6 +504,17 @@ void modbusTask()
 // =============================================================================
 // SCHEDULER
 // =============================================================================
+/** How much of the current scan cycle is still unspent.
+ *
+ *  Zero once the cycle is already over budget, so a late caller is told there
+ *  is no room rather than being handed a huge number from unsigned wraparound.
+ *  OPC-UA uses this to decide whether it may run at all; see opcuatask(). */
+static inline uint32_t cycle_slack_us()
+{
+    const unsigned long used = micros() - last_run;
+    return (used >= scan_cycle) ? 0u : (uint32_t)(scan_cycle - used);
+}
+
 void scheduler()
 {
     runtime_plc_cycle();
@@ -485,6 +529,29 @@ void scheduler()
         // Debug-only: poll the serial transport for debugger requests. No buffer
         // sync (modbusTask's mirror loops) because there are no operation buffers.
         mbtask();
+    #endif
+
+    // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
+    // Modbus have had theirs. Each is handed what remains and declines to run
+    // unless that covers its worst case, so neither can extend the cycle.
+    // No-ops when disabled.
+    //
+    // cycle_slack_us() is called TWICE, deliberately. The protocols share one
+    // budget rather than having one each: the second sees what the first
+    // actually spent. Passing one cached number to both would let two
+    // protocols each politely take "their" slack and together overrun.
+    //
+    // Guarded rather than relying on the no-op bodies. Both task functions
+    // compile to `return` when their protocol is disabled, but the CALL and
+    // its argument survive -- and cycle_slack_us() calls micros(), which the
+    // compiler cannot prove is side-effect free and so cannot drop. Measured
+    // at 64 bytes of flash for a project with no S7 server, which is 64 bytes
+    // more than "costs nothing when disabled" allows.
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
     #endif
 
     if (!first_cycle)
@@ -524,6 +591,23 @@ void loop()
     {
         mbtask();
     }
+    #endif
+
+    // OPC-UA gets the same inter-cycle slack Modbus does.
+    //
+    // Servicing it only from scheduler() capped it at one message per scan
+    // while Modbus was polled twice per cycle, so an OPC-UA exchange took
+    // systematically longer than a Modbus one for no reason other than where
+    // the call sat. No 10 ms guard is needed here: opcuatask() is given the
+    // real remaining slack and decides for itself, which is a tighter test
+    // than a fixed threshold and the same one scheduler() uses.
+    //
+    // Guarded for the same reason as in scheduler() -- see the note there.
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
     #endif
 
     #ifdef SIMULATOR_MODE

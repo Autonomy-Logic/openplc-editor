@@ -80,12 +80,58 @@ describe('generateCBlocksCode', () => {
 
     // Asserted as a set, and reported as one: a bare index comparison would
     // say "expected -1 to be greater than 123" without naming the macro.
-    const placement = ['min', 'max', 'abs', 'round', 'PA', 'PB', 'PC', 'PD', 'PE', 'PF', 'PG', 'PH', 'PJ', 'PK', 'PL', 'PM', 'PN', 'PP', 'PQ', 'PR', 'PS', 'PT'].map((name) => {
+    const placement = [
+      'min',
+      'max',
+      'abs',
+      'round',
+      'PA',
+      'PB',
+      'PC',
+      'PD',
+      'PE',
+      'PF',
+      'PG',
+      'PH',
+      'PJ',
+      'PK',
+      'PL',
+      'PM',
+      'PN',
+      'PP',
+      'PQ',
+      'PR',
+      'PS',
+      'PT',
+    ].map((name) => {
       const at = result.indexOf(`#undef ${name}`)
       return { name, present: at > -1, afterArduino: at > arduinoIdx, beforeHeader: at > -1 && strucppIdx > at }
     })
     expect(placement).toEqual(
-      ['min', 'max', 'abs', 'round', 'PA', 'PB', 'PC', 'PD', 'PE', 'PF', 'PG', 'PH', 'PJ', 'PK', 'PL', 'PM', 'PN', 'PP', 'PQ', 'PR', 'PS', 'PT'].map((name) => ({
+      [
+        'min',
+        'max',
+        'abs',
+        'round',
+        'PA',
+        'PB',
+        'PC',
+        'PD',
+        'PE',
+        'PF',
+        'PG',
+        'PH',
+        'PJ',
+        'PK',
+        'PL',
+        'PM',
+        'PN',
+        'PP',
+        'PQ',
+        'PR',
+        'PS',
+        'PT',
+      ].map((name) => ({
         name,
         present: true,
         afterArduino: true,
@@ -167,7 +213,10 @@ describe('generateCBlocksCode', () => {
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
     // Strip the baseline's Arduino macro scrubbing (`#undef min` / `max` / `abs`
     // — see baseline) before asserting no per-variable undefs.
-    const withoutArduinoUndefs = result.replace(/^#undef\s+(min|max|abs|round|PA|PB|PC|PD|PE|PF|PG|PH|PJ|PK|PL|PM|PN|PP|PQ|PR|PS|PT)\s*$/gm, '')
+    const withoutArduinoUndefs = result.replace(
+      /^#undef\s+(min|max|abs|round|PA|PB|PC|PD|PE|PF|PG|PH|PJ|PK|PL|PM|PN|PP|PQ|PR|PS|PT)\s*$/gm,
+      '',
+    )
     expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)
   })
 

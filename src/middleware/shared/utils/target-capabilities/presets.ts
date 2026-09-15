@@ -10,7 +10,7 @@
  * updated yet.
  */
 
-import type { AddressProducerCapabilities, TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /**
  * Every address producer active. NOT a target preset — no board reports this,
@@ -35,6 +35,76 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
   ethercat: true,
 }
 
+/**
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only
+ * the fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ *
+ * The numbers are deliberately the SAFE end of every axis, because the failure
+ * mode of guessing high is a device that links but dies in the field:
+ *
+ *   - `maxSessions: 1` — each session is 16 KB of protocol-mandated buffers
+ *     (Part 6 §6.7.1's 8192-byte floor, both directions). This is the one
+ *     setting where a plausible-looking manifest value silently multiplies the
+ *     arena, so the safe value is the default and raising it is deliberate.
+ *   - `arenaBytes: 32 KB` — one session's buffers plus channel/session state
+ *     plus the node scratch pool, with margin. Revise from a measured build,
+ *     never from this comment.
+ *   - `security: 'none'`, `certificates: false` — the honest default for a
+ *     part whose crypto abilities are unknown, and it keeps mbedTLS out of
+ *     the link. `hw` is all-false for the same reason.
+ *   - The operation limits are sized so a single Read never needs more
+ *     scratch than `nodePoolSlots` covers.
+ */
+export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
+  arenaBytes: 32 * 1024,
+  maxNodes: 256,
+  maxSessions: 1,
+  nodePoolSlots: 8,
+  maxNodesPerRead: 20,
+  maxNodesPerWrite: 20,
+  maxNodesPerBrowse: 10,
+  maxReferencesPerNode: 32,
+  maxArrayLength: 256,
+  security: 'none',
+  certificates: false,
+  subscriptions: false,
+  // 600 000 and PBKDF2 by default: that is what the editor hard-coded and what
+  // Runtime v4 consumes, so a target declaring nothing keeps working exactly as
+  // it did. Constrained targets opt DOWN explicitly.
+  kdfIterations: 600_000,
+  passwordScheme: 'pbkdf2-sha256',
+  hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
+}
+
+/**
+ * What a target gets when it declares `s7Server` and nothing else.
+ *
+ * Deliberately below Runtime v4's numbers (32 clients, 64 DBs, 960-byte PDUs).
+ * v4 is a Linux process with a thread per client; this is a microcontroller
+ * where each client is a PDU pair in .bss and the whole area table is flash. A
+ * VPP that has measured the room raises them; nothing infers them.
+ *
+ * `szl` ON, which reverses the initial guess. It was off while the plan's
+ * Phase 0 question — which real clients actually need identification — was
+ * open, and off because Snap7 spends 352 bytes of flash on a template for SZL
+ * 0x001C alone. Measured, building the record from the project's identity
+ * instead costs *228 bytes total*, and the clients that need it (TIA Portal,
+ * several HMIs) refuse to talk to a device without it. At that price the
+ * compatible default is to answer.
+ *
+ * `pduSize` 240 for the same reason: it is what an S7-300 offers and what
+ * every client copes with. The server always negotiates down to the smaller of
+ * its ceiling and the client's proposal, so a target that raises this never
+ * breaks a client that wanted less.
+ */
+export const DEFAULT_S7_PROFILE: S7TargetProfile = {
+  maxClients: 2,
+  pduSize: 240,
+  maxDataBlocks: 8,
+  szl: true,
+  writeEnabled: true,
+}
+
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
   vppIo: false,
@@ -44,6 +114,11 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Simulator runs no Modbus slave at all — the flags are UX, so a
+  // project authored for another target keeps its server config while the
+  // user simulates it. It has no VPP Modbus screen, so it resolves to the
+  // `plc-server` profile, where RTU is not on offer anyway.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   // RTU over the emulated virtual serial port the in-process simulator
@@ -69,6 +144,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: false,
   ethercat: false,
   modbusTcpServer: false,
+  modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
   debuggerTransports: ['modbus-tcp'],
@@ -99,6 +175,9 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Runtime v4 Modbus slave plugin is a TCP listener; there is no serial
+  // path in it.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   debuggerTransports: ['websocket'],
@@ -121,7 +200,16 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   vppIo: false,
   modbusTcpRemote: false,
   ethercat: false,
-  modbusTcpServer: false,
+  // The baremetal firmware serves both, gated by the VPP Modbus screen's
+  // per-transport toggles. These read `false` until DOPE-442 because the
+  // config lived in a vendor screen the Servers UX could not see; now that
+  // one screen renders both stores, hiding the target's real capability is
+  // what would be wrong.
+  //
+  // A board still only gets the screen when its VPP declares a Modbus screen,
+  // so a package that has not been migrated is unaffected.
+  modbusTcpServer: true,
+  modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
   // Arduino targets speak RTU over USB always; some also speak TCP

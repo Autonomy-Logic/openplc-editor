@@ -11,6 +11,22 @@ board_manager:
       - https://raw.githubusercontent.com/VEA-SRL/IRUINO_Library/main/package_vea_index.json
       - https://github.com/CONTROLLINO-PLC/controllino_rp2/releases/download/global/package_controllino_rp2_index.json
       - https://downloads.arduino.cc/packages/package_zephyr_index.json
+library:
+  # Required for \`lib install --git-url\`, which is how the editor installs the
+  # third-party libraries some targets need (open62541 for OPC-UA, and more to
+  # come). arduino-cli refuses --git-url outright without it:
+  #
+  #   --git-url and --zip-path are disabled by default
+  #
+  # There is no alternative: the library index URL is hardcoded in the
+  # arduino-cli binary, so a private library registry is not possible, and
+  # \`board_manager.additional_urls\` covers platforms only, not libraries.
+  #
+  # Scope is narrow. Every arduino-cli invocation the editor makes carries
+  # \`--config-file\` pointing at THIS file, so the setting applies to the
+  # editor's own commands and nothing else — a user's own arduino-cli, or the
+  # Arduino IDE, keeps its default protection.
+  enable_unsafe_install: true
 `
 
 export const HISTORY_DATA = {

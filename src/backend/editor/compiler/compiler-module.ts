@@ -182,6 +182,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog } from 'electron'
 import JSZip from 'jszip'
 
+import type { ThirdPartyLibraryRequest } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
@@ -520,19 +521,65 @@ class CompilerModule {
     return coreControlFileContent
   }
 
-  async getArduinoInstalledLibraries() {
-    const libraryControlFilePath = join(
-      electronApp.getPath('userData'),
-      'User',
-      'Runtime',
-      'arduino-library-control.json',
-    )
-    const libraryControlFileContent =
-      await CompilerModule.readJSONFile<Array<Record<string, string>>>(libraryControlFilePath)
+  /** Where the installed-library cache lives. Written once at startup from
+   *  `arduino-cli lib list`, and kept current by `recordLibrariesInstalled`. */
+  static libraryControlFilePath(): string {
+    return join(electronApp.getPath('userData'), 'User', 'Runtime', 'arduino-library-control.json')
+  }
 
-    const installedLibraries = libraryControlFileContent.map((lib) => Object.keys(lib)[0])
+  /**
+   * Which libraries arduino-cli has, according to the cache.
+   *
+   * `null` means "unknown", NOT "none" — and the distinction is the whole
+   * point. The startup refresh that writes this file is wrapped in a
+   * tolerate-and-warn, so on a machine where it failed (a cold Windows VM
+   * where the arduino-cli spawn is slow, say) the file is absent or stale.
+   * Reading that as an empty list made every library look missing, so every
+   * compile re-ran `arduino-cli lib install` for all twenty of them — and
+   * arduino-cli checks each one online before reporting "already installed",
+   * which is where the Windows compile time went.
+   */
+  async getArduinoInstalledLibraries(): Promise<string[] | null> {
+    try {
+      const content = await CompilerModule.readJSONFile<Array<Record<string, string>>>(
+        CompilerModule.libraryControlFilePath(),
+      )
+      if (!Array.isArray(content)) return null
+      return content.map((lib) => Object.keys(lib)[0]).filter((name): name is string => typeof name === 'string')
+    } catch {
+      // Missing or corrupt. "I do not know" — see above.
+      return null
+    }
+  }
 
-    return installedLibraries
+  /**
+   * Add names to the installed-library cache after a successful install.
+   *
+   * Without this the cache only ever reflects what was true at startup, so a
+   * library installed during a compile still looks missing on the next one
+   * and is reinstalled for the rest of the session. Writing back is what
+   * makes `lib install` run once per library rather than once per build.
+   */
+  async recordLibrariesInstalled(names: string[]): Promise<void> {
+    if (names.length === 0) return
+    const path = CompilerModule.libraryControlFilePath()
+    let entries: Array<Record<string, string>> = []
+    try {
+      const existing = await CompilerModule.readJSONFile<Array<Record<string, string>>>(path)
+      if (Array.isArray(existing)) entries = existing
+    } catch {
+      // No cache yet — start one rather than losing the fact we just installed.
+    }
+    const known = new Set(entries.map((lib) => Object.keys(lib)[0]))
+    for (const name of names) {
+      if (!known.has(name)) entries.push({ [name]: 'installed' })
+    }
+    try {
+      await writeFile(path, JSON.stringify(entries, null, 2), { flag: 'w' })
+    } catch (err) {
+      // Best-effort: a cache we could not update costs time, not correctness.
+      console.warn(`Could not update the installed-library cache: ${getErrorMessage(err)}`)
+    }
   }
 
   /**
@@ -1123,7 +1170,11 @@ class CompilerModule {
    * library is genuinely unresolvable, compile fails with a precise
    * "header not found" error pointing at the file that needed it.
    */
-  async handleLibraryInstallation(extraLibraries: string[], handleOutputData: HandleOutputDataCallback) {
+  async handleLibraryInstallation(
+    extraLibraries: string[],
+    handleOutputData: HandleOutputDataCallback,
+    thirdPartyLibraries: ThirdPartyLibraryRequest[] = [],
+  ) {
     const requiredLibraries = Array.from(new Set([...CompilerModule.GLOBAL_LIBRARIES, ...extraLibraries]))
 
     if (extraLibraries.length > 0) {
@@ -1131,7 +1182,24 @@ class CompilerModule {
     }
 
     const installedLibraries = await this.getArduinoInstalledLibraries()
-    const missingLibraries = requiredLibraries.filter((lib) => !installedLibraries.includes(lib))
+
+    // `null` is "the cache could not be read", not "nothing is installed".
+    // Treating the two alike is what made every compile reinstall all twenty
+    // global libraries on a machine whose startup refresh had failed.
+    //
+    // When we genuinely do not know, rebuild the cache from arduino-cli once
+    // rather than guessing — one spawn now, against one per build forever.
+    const known = installedLibraries ?? (await this.refreshInstalledLibraryCache(handleOutputData))
+
+    const missingLibraries = requiredLibraries.filter((lib) => !known.includes(lib))
+    const missingThirdParty = thirdPartyLibraries.filter((lib) => !known.includes(lib.name))
+
+    // Git-url libraries first: they are the ones a target genuinely cannot
+    // compile without, and installing them is a clone rather than an index
+    // lookup.
+    if (missingThirdParty.length > 0) {
+      await this.installThirdPartyLibraries(missingThirdParty, handleOutputData)
+    }
 
     if (missingLibraries.length === 0) {
       handleOutputData(`All required libraries are already installed.`, 'info')
@@ -1169,6 +1237,10 @@ class CompilerModule {
       executeCommand.on('close', (code) => {
         if (code === 0) {
           handleOutputData(`All libraries installed!`, 'info')
+          // Record them, or the cache still says "missing" and the next
+          // compile reinstalls the same set — which is exactly the loop that
+          // made Windows builds slow.
+          void this.recordLibrariesInstalled(missingLibraries)
           resolve({ success: true })
         } else {
           // Soft failure — log a warning with the libs we couldn't
@@ -1192,37 +1264,97 @@ class CompilerModule {
     })
   }
 
-  // TODO: This method is used to update the index of the Arduino libraries.
-  // We should validate if this is necessary and if it works correctly.
-  async handleLibraryUpdateIndex(handleOutputData: HandleOutputDataCallback) {
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      let binaryPath = this.arduinoCliBinaryPath
-      const [flag, configFilePath] = this.arduinoCliBaseParameters
+  /**
+   * Rebuild the installed-library cache from arduino-cli.
+   *
+   * Only called when the cache could not be read at all. One spawn, once,
+   * against reinstalling every library on every build for the rest of the
+   * session.
+   */
+  async refreshInstalledLibraryCache(handleOutputData: HandleOutputDataCallback): Promise<string[]> {
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
 
-      if (CompilerModule.HOST_PLATFORM === 'win32') {
-        // INFO: On Windows, we need to add the .exe extension to the binary path.
-        binaryPath += '.exe'
-      }
-      const executeCommand = spawn(binaryPath, ['lib', 'update-index', flag, configFilePath])
-
-      let stderrData = ''
-
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
+    return new Promise<string[]>((resolve) => {
+      const child = spawn(binaryPath, ['lib', 'list', '--json', ...this.arduinoCliBaseParameters])
+      let stdout = ''
+      child.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString()
       })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
+      child.on('error', () => resolve([]))
+      child.on('close', () => {
+        try {
+          const parsed = JSON.parse(stdout) as { installed_libraries?: Array<{ library?: { name?: string } }> }
+          const names = (parsed.installed_libraries ?? [])
+            .map((entry) => entry.library?.name)
+            .filter((name): name is string => typeof name === 'string')
+          void this.recordLibrariesInstalled(names)
+          resolve(names)
+        } catch {
+          handleOutputData('Could not read the installed-library list; assuming none are installed.', 'warning')
+          resolve([])
         }
       })
     })
+  }
+
+  /**
+   * Install libraries that are not in the Arduino index, by git URL.
+   *
+   * Needs `library.enable_unsafe_install` in the editor's arduino-cli.yaml —
+   * arduino-cli refuses `--git-url` outright without it. That setting is
+   * scoped to the editor's own config file, so it does not loosen a user's
+   * own arduino-cli or the Arduino IDE.
+   *
+   * No ref is pinned: the library's default branch is what production uses.
+   */
+  async installThirdPartyLibraries(
+    libraries: ThirdPartyLibraryRequest[],
+    handleOutputData: HandleOutputDataCallback,
+  ): Promise<void> {
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
+
+    for (const library of libraries) {
+      handleOutputData(`Installing ${library.name} (${library.reason}) from ${library.gitUrl}...`, 'info')
+
+      const ok = await new Promise<boolean>((resolve) => {
+        const child = spawn(binaryPath, [
+          'lib',
+          'install',
+          '--git-url',
+          library.gitUrl,
+          ...this.arduinoCliBaseParameters,
+        ])
+        let stderrData = ''
+        child.stdout?.on('data', (data: Buffer) => handleOutputData(data))
+        child.stderr?.on('data', (data: Buffer) => {
+          stderrData += data.toString()
+        })
+        child.on('error', () => resolve(false))
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(true)
+          } else {
+            // Soft failure, as with index libraries: the compile step is the
+            // source of truth and will fail with a header-not-found that
+            // names the file, which is more useful than guessing here.
+            handleOutputData(
+              `Warning: could not install ${library.name} from ${library.gitUrl} (exit ${code}). ` +
+                `Continuing — the compile will fail with a missing header if it was genuinely needed.` +
+                (stderrData.trim() ? `\n${stderrData.trim()}` : ''),
+              'warning',
+            )
+            resolve(false)
+          }
+        })
+      })
+
+      if (ok) {
+        handleOutputData(`${library.name} installed.`, 'info')
+        await this.recordLibrariesInstalled([library.name])
+      }
+    }
   }
 
   // handlePatchGeneratedFiles is no longer needed.
@@ -2740,10 +2872,16 @@ class CompilerModule {
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
-    if (!isRuntimeV4 && hasServers) {
+    // Baremetal serves Modbus too since 4.4.0, so the warning is for the targets
+    // that genuinely ignore a server. `openplc-compiler` is the Runtime v3
+    // toolchain, which ships no Modbus slave; the simulator has one but takes
+    // its configuration from the fixed MODBUS_ENABLED block rather than from
+    // the project.
+    const targetIgnoresServers = boardRuntime === 'openplc-compiler' || boardRuntime === 'simulator'
+    if (!isRuntimeV4 && targetIgnoresServers && hasServers) {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
-        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. Modbus Server is only supported on OpenPLC Runtime v4. The server configurations will be ignored during compilation.`,
+        message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. The server configurations will be ignored during compilation.`,
       })
     }
     if (!isRuntimeV4 && hasRemoteDevices) {
@@ -3114,10 +3252,7 @@ class CompilerModule {
       // project never configured one, preserving only the IP the user set.
       if (uploadsOverEthernet) {
         const ip =
-          vppModbusState?.modbus_tcp?.ip_address ||
-          vppModbusState?.network?.ip_address ||
-          configuredIp ||
-          '192.168.2.4'
+          vppModbusState?.modbus_tcp?.ip_address || vppModbusState?.network?.ip_address || configuredIp || '192.168.2.4'
         // Ethernet is static-only on these boards (no DHCP — the bootloader's
         // recovery stack has no DHCP client). Seed a full, sane static config so
         // the firmware never falls back to the Arduino stack's byte-order-buggy
@@ -3125,10 +3260,8 @@ class CompilerModule {
         // 192.168.x address and corrupt the persisted network record). Any value
         // the user set on the Modbus screen is preserved.
         const gwFromIp = (a: string) => a.replace(/\.\d+$/, '.1')
-        const subnet =
-          vppModbusState?.modbus_tcp?.subnet || vppModbusState?.network?.subnet || '255.255.255.0'
-        const gateway =
-          vppModbusState?.modbus_tcp?.gateway || vppModbusState?.network?.gateway || gwFromIp(ip)
+        const subnet = vppModbusState?.modbus_tcp?.subnet || vppModbusState?.network?.subnet || '255.255.255.0'
+        const gateway = vppModbusState?.modbus_tcp?.gateway || vppModbusState?.network?.gateway || gwFromIp(ip)
         const dns = vppModbusState?.modbus_tcp?.dns || vppModbusState?.network?.dns || gateway
         vppModbusState = {
           ...(vppModbusState ?? {}),
