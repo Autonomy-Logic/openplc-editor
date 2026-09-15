@@ -20,6 +20,9 @@
  * `emit` callback (progress events).  No disk I/O, no globals.
  */
 
+import { buildOpcUaRuntimeConfig, generateOpcUaHeaderContent } from '../../../frontend/utils/opcua'
+import type { S7CommSlaveConfigLike } from '../../../frontend/utils/s7comm'
+import { generateS7CommHeaderContent } from '../../../frontend/utils/s7comm'
 import { isVersionAtLeast } from '../../../frontend/utils/semver'
 import type {
   CompilerPlatformPort,
@@ -48,6 +51,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
+import { materialiseOpcUaCredentials } from './opcua-credentials'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
@@ -55,6 +59,7 @@ import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
+import { selectThirdPartyLibraries } from './third-party-libraries'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -130,6 +135,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
   coreVersion?: string
+  /** Upload transport for arduino-cli targets. Absent/"serial" (default):
+   *  serial-port upload. "ethernet": network upload, with the device IP passed
+   *  as arduino-cli's `--port`. From `target.uploadMethod`. */
+  uploadMethod?: 'serial' | 'ethernet'
   /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
    *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
    *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
@@ -617,8 +626,18 @@ async function runCompilePipelineInner(
     let confs
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
+      // Derive each OPC-UA user's stored credential for this target, once,
+      // before anything consumes `servers`. This is the point that knows both
+      // the project and the target, and the storage format is a device property.
+      // See ./opcua-credentials.ts.
+      const opcuaCredentialServers = materialiseOpcUaCredentials(
+        processedData.servers,
+        targetCapabilities.opcua,
+        (message) => emit({ stage: 'confs', message, level: 'warning' }),
+      )
+
       confs = generateRuntimeConfs({
-        servers: processedData.servers as never,
+        servers: opcuaCredentialServers as never,
         remoteDevices: processedData.remoteDevices as never,
         instances: processedData.configuration.resource.instances.map(
           (inst: { name: string; task: string; program: string }) => ({
@@ -926,7 +945,13 @@ async function runCompilePipelineInner(
   // returns false.
   emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
   const libInstall = await port.installArduinoLib(
-    { libId: '', extraLibraries: boardEntry.extra_libraries ?? [] },
+    {
+      libId: '',
+      extraLibraries: boardEntry.extra_libraries ?? [],
+      // Capability-driven, not board-name-driven: a target gets the OPC-UA stack
+      // because it declares `opcuaServer`.
+      thirdPartyLibraries: selectThirdPartyLibraries(targetCapabilities),
+    },
     makePlatformLog(emit, 'lib-install'),
   )
   if (!libInstall.ok) {
@@ -964,6 +989,70 @@ async function runCompilePipelineInner(
   // place (drivers can still `#include "vpp_config.h"` unconditionally).
   const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
 
+  // OPC-UA config header, emitted only for baremetal targets whose VPP flips
+  // `opcuaServer: true`. Reuses the same resolved address space the Runtime v4
+  // branch hands to `generateRuntimeConfs`, so a variable resolves to one
+  // `(arr, elem)` pair whichever runtime is built. A project with no enabled
+  // server still gets a disabled header, because the runtime includes it always.
+  let opcuaConfigH: string | undefined
+  if (targetCapabilities.opcuaServer && targetCapabilities.opcua) {
+    try {
+      // Same derivation as the Runtime v4 branch: the credential this device
+      // stores is this device's property, and here is where the target is known.
+      const opcuaCredentialServers = materialiseOpcUaCredentials(
+        processedData.servers,
+        targetCapabilities.opcua,
+        (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      )
+      const resolvedOpcUa = buildOpcUaRuntimeConfig(
+        opcuaCredentialServers as never,
+        debugMapJson,
+        processedData.configuration.resource.instances.map((inst: { name: string; task: string; program: string }) => ({
+          name: inst.name,
+          task: inst.task,
+          program: inst.program,
+        })),
+        (message: string) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      )
+      opcuaConfigH = generateOpcUaHeaderContent({
+        resolved: resolvedOpcUa,
+        profile: targetCapabilities.opcua,
+        buildEpochSeconds: Math.floor(Date.now() / 1000),
+      })
+    } catch (error) {
+      return bailError(
+        emit,
+        'firmware-bundle',
+        `Error generating OPC-UA config header: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  // S7Comm config header, emitted only for baremetal targets whose VPP flips
+  // `s7Server: true`. A project with no enabled S7 server still gets a disabled
+  // header rather than none, because the runtime includes it unconditionally.
+  let s7commConfigH: string | undefined
+  if (targetCapabilities.s7Server && targetCapabilities.s7) {
+    try {
+      const s7Server = (processedData.servers ?? []).find(
+        (server: { protocol?: string; s7commSlaveConfig?: unknown }) =>
+          server.protocol === 's7comm' && server.s7commSlaveConfig,
+      ) as { s7commSlaveConfig?: S7CommSlaveConfigLike } | undefined
+
+      s7commConfigH = generateS7CommHeaderContent({
+        config: s7Server?.s7commSlaveConfig ?? null,
+        profile: targetCapabilities.s7,
+        warn: (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      })
+    } catch (error) {
+      return bailError(
+        emit,
+        'firmware-bundle',
+        `Error generating S7Comm config header: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
@@ -975,6 +1064,8 @@ async function runCompilePipelineInner(
     cBlocks,
     definesH,
     vppConfigH,
+    opcuaConfigH,
+    s7commConfigH,
     firmwareSkeleton,
   })
 
@@ -1049,6 +1140,9 @@ async function runCompilePipelineInner(
       // caller didn't supply one (editor: fall back to the disk-
       // persisted value in `devices/configuration.json`).
       port: communicationPort ?? '',
+      // Upload transport declared by the board's VPP target. Default "serial";
+      // "ethernet" makes the editor pass the device IP as --port.
+      uploadMethod: boardEntry.uploadMethod,
     },
     makePlatformLog(emit, 'upload'),
   )

@@ -491,7 +491,7 @@ const Project = () => {
           {/* Vendor screens from VPP packages — hidden for libraries.
            *
            *  Every screen the package declares is listed, the Modbus one
-           *  included. A package built for 4.4.0 ships none: its Modbus became
+           *  included. A package built for 4.3.0 ships none: its Modbus became
            *  the native screen under Servers. A package built before that still
            *  ships one, and it is the ONLY place that state can be seen — the
            *  defines emitter falls back to it whenever the project has no

@@ -46,6 +46,13 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
                 (ETH.config(ip, gateway, subnet, dns));
 
         #else
+            // The module's chip select, when the board says where it is. Both
+            // libraries default to pin 10 (the Uno shield's wiring), which is
+            // wrong on every board that is not an Uno -- the Pico's SPI0 CS is
+            // 17. Must precede begin(), which is what talks to the chip.
+            #ifdef MBTCP_ETH_CS
+                Ethernet.init(MBTCP_ETH_CS);
+            #endif
             if (ip == NULL)
                 Ethernet.begin(mac);
             else if (dns == NULL)

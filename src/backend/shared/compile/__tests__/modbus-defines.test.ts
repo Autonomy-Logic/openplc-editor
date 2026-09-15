@@ -5,7 +5,7 @@ import { DEBUG_SLAVE, generateModbusDefines, narrowModbusTransports, selectModbu
  *
  * One rule underneath every case here: the project's `PLCServer` says WHAT is
  * served, and the board's package says what it is served OVER. Nothing reads a
- * pre-4.4.0 project's `modbus_rtu` / `modbus_tcp` sections -- 4.4.0 does not
+ * pre-4.3.0 project's `modbus_rtu` / `modbus_tcp` sections -- 4.3.0 does not
  * carry configuration forward, and a project from before it creates its server
  * again.
  */
@@ -286,7 +286,7 @@ describe('selectModbusServer', () => {
  * Deleting the server has to stop Modbus. It did not, for one release of this
  * branch: the emitter fell back to the board's screen sections, which nothing
  * ever cleared, so a board kept serving a configuration the user had removed.
- * That fallback is gone with the rest of the pre-4.4.0 compatibility.
+ * That fallback is gone with the rest of the pre-4.3.0 compatibility.
  */
 describe('a server the user deleted', () => {
   it('stops Modbus, whatever the board screens still hold', () => {

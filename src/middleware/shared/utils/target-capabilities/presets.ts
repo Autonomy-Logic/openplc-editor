@@ -10,7 +10,7 @@
  * updated yet.
  */
 
-import type { AddressProducerCapabilities, TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /**
  * Every address producer active. NOT a target preset — no board reports this,
@@ -33,6 +33,52 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
   vppIo: true,
   modbusTcpRemote: true,
   ethercat: true,
+}
+
+/**
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only the
+ * fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ *
+ * The numbers are the safe end of every axis: `maxSessions: 1` because each
+ * session is 16 KB of protocol-mandated buffers, `arenaBytes: 32 KB` to cover
+ * one session plus channel state plus the node pool, `security: 'none'` with
+ * all-false `hw` to keep mbedTLS out of the link.
+ */
+export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
+  arenaBytes: 32 * 1024,
+  maxNodes: 256,
+  maxSessions: 1,
+  nodePoolSlots: 8,
+  maxNodesPerRead: 20,
+  maxNodesPerWrite: 20,
+  maxNodesPerBrowse: 10,
+  maxReferencesPerNode: 32,
+  maxArrayLength: 256,
+  security: 'none',
+  certificates: false,
+  subscriptions: false,
+  // 600 000 and PBKDF2 by default, matching what Runtime v4 consumes, so a
+  // target declaring nothing keeps working. Constrained targets opt down.
+  kdfIterations: 600_000,
+  passwordScheme: 'pbkdf2-sha256',
+  hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
+}
+
+/**
+ * What a target gets when it declares `s7Server` and nothing else. Below Runtime
+ * v4's numbers, because v4 is a Linux process with a thread per client and this
+ * is a microcontroller where each client is a PDU pair in .bss.
+ *
+ * `szl` is on because the clients that need it refuse to talk to a device
+ * without it, at ~228 bytes. `pduSize` 240 is what an S7-300 offers and what
+ * every client copes with.
+ */
+export const DEFAULT_S7_PROFILE: S7TargetProfile = {
+  maxClients: 2,
+  pduSize: 240,
+  maxDataBlocks: 8,
+  szl: true,
+  writeEnabled: true,
 }
 
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {

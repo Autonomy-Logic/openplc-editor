@@ -140,6 +140,19 @@ uint16_t openplc_debug_size(uint8_t arr, uint16_t elem);
 uint16_t openplc_debug_read(uint8_t arr, uint16_t elem, uint8_t* dest);
 uint8_t  openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing, const uint8_t* bytes, uint16_t len);
 
+// Write a value WITHOUT forcing it: the plain "set it now, the program may change
+// it next scan" write an OPC-UA or fieldbus write means. openplc_debug_set()
+// forces, and a forced variable is one the PLC program can never move again.
+uint8_t  openplc_debug_write(uint8_t arr, uint16_t elem, const uint8_t* bytes, uint16_t len);
+
+// strucpp::debug::STATUS_* as plain macros, so a caller on this side of the
+// boundary can interpret what openplc_debug_set / _write return without
+// including the C++ runtime header. arduino_runtime_glue.cpp static_asserts
+// these against the real constants. Note that success is 0x7E and not zero.
+#define OPENPLC_DEBUG_STATUS_OK             0x7E
+#define OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS  0x81
+#define OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE 0x82
+
 #ifdef __cplusplus
 }
 #endif
