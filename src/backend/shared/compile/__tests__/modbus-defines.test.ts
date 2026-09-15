@@ -1,4 +1,4 @@
-import { DEBUG_SLAVE, generateModbusDefines, selectModbusServer } from '../steps/modbus-defines'
+import { DEBUG_SLAVE, generateModbusDefines, narrowModbusTransports, selectModbusServer } from '../steps/modbus-defines'
 
 /**
  * The `//Comms Configuration` block of `defines.h`.
@@ -296,5 +296,58 @@ describe('a server the user deleted', () => {
       network: { enabled: true, wifi_ssid: 'planta' },
     }
     expect(generateModbusDefines(leftovers, 'Serial', server)).toBe('')
+  })
+})
+
+/**
+ * A board can only serve what it has a carrier for.
+ *
+ * The project states transports and the board states carriers; until these,
+ * only the screen intersected them, and the emitter took the project's word.
+ * A server seeded `['tcp']` on a board with no network therefore compiled
+ * `MBTCP` into a firmware with no stack and no `MBSERIAL` beside it.
+ */
+describe('narrowModbusTransports', () => {
+  const server = { enabled: true, transports: ['rtu', 'tcp'] as ('rtu' | 'tcp')[], slaveId: 7 }
+
+  it('returns the server untouched when the board carries everything asked for', () => {
+    const onDropped = jest.fn()
+    expect(narrowModbusTransports(server, ['rtu', 'tcp'], onDropped)).toBe(server)
+    expect(onDropped).not.toHaveBeenCalled()
+  })
+
+  it('drops the transport the board cannot carry and keeps the rest', () => {
+    const onDropped = jest.fn()
+    const narrowed = narrowModbusTransports(server, ['rtu'], onDropped)
+
+    expect(narrowed?.transports).toEqual(['rtu'])
+    // Everything else about the server survives -- the slave id is the user's.
+    expect(narrowed?.slaveId).toBe(7)
+    expect(onDropped).toHaveBeenCalledWith(['tcp'])
+  })
+
+  it('reports the drop rather than swallowing it', () => {
+    // On a microcontroller there is no console. If the build does not say the
+    // transport was left out, nothing ever will.
+    const onDropped = jest.fn()
+    narrowModbusTransports({ enabled: true, transports: ['tcp'] }, ['rtu'], onDropped)
+    expect(onDropped).toHaveBeenCalledWith(['tcp'])
+  })
+
+  it('yields no server at all when nothing survives', () => {
+    // A server that serves no transport is not a server, and the emitter must
+    // see `undefined` rather than an empty list it would read as "no Modbus".
+    expect(narrowModbusTransports({ enabled: true, transports: ['tcp'] }, ['rtu'], jest.fn())).toBeUndefined()
+  })
+
+  it('passes an absent server straight through', () => {
+    expect(narrowModbusTransports(undefined, ['rtu'], jest.fn())).toBeUndefined()
+  })
+
+  it('emits nothing once a TCP-only server is narrowed away on a board with no network', () => {
+    // The bench failure, end to end: this exact input used to produce the full
+    // MBTCP block -- MBTCP_ETHERNET into a firmware with no stack.
+    const narrowed = narrowModbusTransports({ enabled: true, transports: ['tcp'] }, ['rtu'], jest.fn())
+    expect(generateModbusDefines({}, 'Serial', narrowed)).toBe('')
   })
 })

@@ -310,11 +310,16 @@ const ModbusServerEditor = () => {
   const rtuOnEditorPort =
     rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
 
+  // No fallback value. When the stored transports survive the board's filter this
+  // names the matching choice; when they do not it is empty and the Select shows
+  // its placeholder, which is the only honest thing to show -- falling back to
+  // `'tcp'` displayed "Modbus TCP" on a board that cannot serve it, directly
+  // above a header already saying the server was not serving yet.
   const transportChoiceValue =
     TRANSPORT_CHOICES.find(
       (choice) =>
         choice.transports.length === transports.length && choice.transports.every((t) => transports.includes(t)),
-    )?.value ?? 'tcp'
+    )?.value ?? ''
   const onTransportChange = useCallback(
     (value: string) => {
       const choice = TRANSPORT_CHOICES.find((entry) => entry.value === value)

@@ -327,6 +327,17 @@ function landBoardCatalogue(store: ReturnType<typeof makeStore>) {
   })
 }
 
+/** Seed a microcontroller target — `compiler: 'arduino-cli'` is what makes a
+ *  board baremetal, and what decides the transport a new Modbus server gets. */
+function seedBaremetalBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      ['Arduino Uno', { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {} }],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('Arduino Uno')
+}
+
 function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
   landBoardCatalogue(store)
   store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
@@ -1970,12 +1981,31 @@ describe('createProjectSlice', () => {
     })
 
     it('seeds transports, so the new server is visible to the build', () => {
-      // `selectModbusServer` only considers a server that declares `transports`
-      // -- one without it is the pre-4.4.0 shape whose Modbus still lives in the
-      // board's screen sections. Seeding none made a freshly created server
-      // invisible to the compile, which then fell back to those sections; on a
-      // 4.4.0 package there are none, so the firmware came out with Modbus
-      // entirely off while the screen said "Serving Modbus TCP".
+      // `selectModbusServer` only considers a server that declares `transports`.
+      // Seeding none made a freshly created server invisible to the compile,
+      // so the firmware came out with Modbus entirely off while the screen said
+      // it was serving.
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
+    it('seeds RTU on a microcontroller, which is the transport those boards all have', () => {
+      // Seeding TCP everywhere is what let a board with no network carrier
+      // compile MBTCP into a firmware with no stack the moment the user switched
+      // the server on: the screen offered RTU only, the store still said TCP.
+      seedBaremetalBoard(store)
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['rtu'])
+    })
+
+    it('seeds TCP on a Runtime v4 target, which serves nothing else', () => {
+      seedRuntimeV4Board(store)
       store.getState().projectActions.createServer({
         data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
       })

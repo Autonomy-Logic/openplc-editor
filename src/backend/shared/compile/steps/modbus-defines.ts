@@ -7,11 +7,15 @@
  * speed, the RS-485 pin, the network. Protocol is the editor's, the physical
  * layer is the package's, and this function is where the two meet.
  *
- * The screen is declared in `packages/com.openplc.arduino/screens/modbus.json`
- * (shared across all Arduino-family VPP packages); its values land in
- * `DeviceConfiguration.vendorScreenData` under keys `modbus_rtu` and
- * `modbus_tcp` (one per `section.id` in the screen JSON, resolved by
+ * The screens are declared in `packages/com.openplc.arduino/screens/serial.json`
+ * and `network.json` (shared across all Arduino-family VPP packages); their
+ * values land in `DeviceConfiguration.vendorScreenData` under the keys `serial`
+ * and `network` (one per `section.id` in the screen JSON, resolved by
  * `getSectionPersistenceKey` in `frontend/utils/vpp/persistence-keys.ts`).
+ *
+ * WHICH transports reach this emitter is narrowed by `narrowModbusTransports`
+ * against the board's own carriers before it is called -- serving TCP over a
+ * network the board does not have produces firmware that never links.
  *
  * The macros emitted here are the same set the historical
  * `communicationConfiguration` pipeline used (removed in commit
@@ -24,7 +28,7 @@
  * exact names.
  *
  * Pure function — no I/O, no electron, no store. Caller is responsible
- * for fishing `modbus_rtu` and `modbus_tcp` out of `vendorScreenData`.
+ * for fishing `serial` and `network` out of `vendorScreenData`.
  */
 
 import {
@@ -43,19 +47,16 @@ import {
  * VPP screen field set evolves.
  */
 export interface VppModbusScreenState {
-  /** Serial-port section. Owns everything about the physical line: the
-   *  default port's speed (the debugger's, and Modbus RTU's when they share
-   *  it), which UART Modbus RTU answers on, that UART's own speed, and the
-   *  RS485 driver-enable pin.
+  /** Serial-port section. Owns the physical line the package is responsible
+   *  for: the default UART's speed -- the debugger's, and Modbus RTU's when
+   *  they share that port -- and the RS-485 driver-enable pin.
    *
-   *  These four moved here from `modbus_rtu` when the unified Modbus server
-   *  screen took that section over: the native screen renders `modbus_rtu`
-   *  itself, so any field left in it had nowhere to appear. The old spellings
-   *  are still read as a fallback -- see the `modbus_rtu` members below. */
+   *  Which UART the server answers on, and its speed when it has one to itself,
+   *  are the server's and arrive through `ModbusServerCompileConfig`. Nothing
+   *  here reads a pre-4.4.0 `modbus_rtu` section: 4.4.0 carries no configuration
+   *  forward, and a project from before it creates its server again. */
   serial?: {
     baud_rate?: string
-    modbus_port?: string
-    modbus_baud_rate?: string
     enable_rs485_en_pin?: boolean
     rs485_en_pin?: string
   }
@@ -127,6 +128,39 @@ export function selectModbusServer(servers: readonly ModbusServerLike[] | undefi
   )
   if (serving.length > 1) return { conflict: serving.map((entry) => entry.name) }
   return serving.length === 1 ? { server: serving[0].modbusSlaveConfig } : {}
+}
+
+/**
+ * Narrow a server's transports to the ones the board can actually carry.
+ *
+ * The project says WHAT is served and the board says what it can be served
+ * OVER, and the two have to meet somewhere. They used to meet only on the
+ * screen: `resolveModbusServerProfile` decided which transports to offer while
+ * this emitter took `server.transports` verbatim. A server seeded with `['tcp']`
+ * on a board that ships no Network screen therefore compiled `MBTCP` into a
+ * firmware with no network stack, and no `MBSERIAL` either -- a board that
+ * answers on nothing, which reads as dead hardware.
+ *
+ * `dropped` is reported rather than swallowed: the difference between the
+ * firmware asked for and the firmware built is exactly the thing a user cannot
+ * discover on a microcontroller.
+ *
+ * Returns the server unchanged when nothing is dropped, so the common path
+ * allocates nothing, and `undefined` when nothing survives -- there is no such
+ * thing as a server that serves no transport.
+ */
+export function narrowModbusTransports(
+  server: ModbusServerCompileConfig | undefined,
+  allowed: readonly ('rtu' | 'tcp')[],
+  onDropped: (dropped: ('rtu' | 'tcp')[]) => void,
+): ModbusServerCompileConfig | undefined {
+  if (!server) return undefined
+  const requested = server.transports ?? []
+  const dropped = requested.filter((transport) => !allowed.includes(transport))
+  if (dropped.length === 0) return server
+  onDropped(dropped)
+  const kept = requested.filter((transport) => allowed.includes(transport))
+  return kept.length > 0 ? { ...server, transports: kept } : undefined
 }
 
 /**
