@@ -76,7 +76,7 @@ Design notes that outlive the skeleton:
  *  Off by default so a MINIMAL library behaves exactly as before. Worth
  *  18,992 bytes of arena when on. */
 #ifndef OPCUA_NS0_FROM_FLASH
-#define OPCUA_NS0_FROM_FLASH false
+#define OPCUA_NS0_FROM_FLASH true
 #endif
 
 // The library configuration and this flag have to agree, and the failure when
@@ -279,7 +279,17 @@ void opcua_init()
     src.namespaceIndex = 0;
     src.context        = nullptr;
 
-    UA_Nodestore* flash = UA_Nodestore_newFlash(&src, bootConfig.nodestore,
+    // Drop the default ziptree when namespace zero comes from flash: with
+    // ns0 const and the project's own nodes const, it would hold nothing while
+    // costing 2,640 bytes of arena. Freeing it here rather than handing it over
+    // is the difference between an unused allocation and no allocation.
+    UA_Nodestore* inner = bootConfig.nodestore;
+    if (OPCUA_NS0_FROM_FLASH && inner != nullptr && inner->free != nullptr)
+    {
+        inner->free(inner);
+        inner = nullptr;
+    }
+    UA_Nodestore* flash = UA_Nodestore_newFlash(&src, inner,
                                                 bootConfig.logging,
                                                 OPCUA_NODE_POOL_SLOTS,
                                                 OPCUA_NS0_FROM_FLASH);
