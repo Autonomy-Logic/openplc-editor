@@ -415,7 +415,7 @@ const GlobalVariableListEditor = ({ listName }: GlobalVariableListEditorProps) =
         </div>
       </div>
 
-      <div aria-label='Global variable list content container' className='flex h-full w-full flex-col overflow-hidden'>
+      <div aria-label='Global variable list content container' className='flex h-full w-full flex-col overflow-auto'>
         {display === 'table' ? (
           <GlobalVariableListTable
             listName={listName}
