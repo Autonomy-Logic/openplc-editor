@@ -2,6 +2,13 @@
  * @jest-environment jsdom
  */
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import {
+  __clearBodyLineOffsetsForTests,
+  getBodyLineOffset as mockGetBodyLineOffset,
+  setBodyLineOffset as mockRealSetBodyLineOffset,
+} from '../../lsp-shared/body-offsets'
+import { lspRangeToMonaco as mockLspRangeToMonaco } from '../../lsp-shared/converters'
+import { lspMirrorUri as mockLspMirrorUri } from '../../lsp-shared/lsp-mirror'
 
 // Mock the shared orchestrator BEFORE importing the service so the
 // service module pulls in the mock.  The mock returns a stub
@@ -12,17 +19,25 @@ const setBodyLineOffset = jest.fn()
 const deleteBodyLineOffset = jest.fn()
 
 jest.mock('../../lsp-shared', () => {
-  // Re-export everything else by re-requiring the real module under a
-  // different specifier — keeps imports of types / converters live for
-  // anything we haven't mocked.  But for the names we DO mock, route
-  // through the jest.fn so each test can introspect call args.
+  // The orchestrator and the offset writes go through jest.fns so each
+  // test can introspect call args; the offset also reaches the real
+  // registry, and the pure helpers are the real ones, so the definition
+  // mapper under test computes what it would in the app.
   return {
     startLanguageService: (opts: unknown) => startLanguageService(opts),
-    setBodyLineOffset: (...args: unknown[]) => setBodyLineOffset(...args),
+    setBodyLineOffset: (uri: string, offset: number) => {
+      setBodyLineOffset(uri, offset)
+      mockRealSetBodyLineOffset(uri, offset)
+    },
     deleteBodyLineOffset: (...args: unknown[]) => deleteBodyLineOffset(...args),
+    getBodyLineOffset: (uri: string) => mockGetBodyLineOffset(uri),
+    lspRangeToMonaco: (range: unknown, offset: number) =>
+      mockLspRangeToMonaco(range as Parameters<typeof mockLspRangeToMonaco>[0], offset),
+    lspMirrorUri: (uri: string) => mockLspMirrorUri(uri),
   }
 })
 
+import type { StartLanguageServiceOptions } from '../../lsp-shared/start-language-service'
 import { startPythonLsp } from '../index'
 
 interface MockLanguageService {
@@ -91,6 +106,7 @@ const POU_NAME = 'MyPou'
 
 beforeEach(() => {
   jest.clearAllMocks()
+  __clearBodyLineOffsetsForTests()
 })
 
 describe('startPythonLsp configuration', () => {
@@ -321,5 +337,53 @@ describe('dispose', () => {
     service.dispose()
 
     expect(mockService.dispose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('definition targets', () => {
+  const at = (uri: string, line: number) => ({
+    uri,
+    range: { start: { line, character: 0 }, end: { line, character: 9 } },
+  })
+
+  function attachedMapper() {
+    installMockSharedService()
+    const service = startPythonLsp({ workerUrl: 'about:blank' })
+    service.attachPou(POU_URI, POU_NAME, [makeBoolVar('red_light')], 'print(red_light)\n')
+    const opts = startLanguageService.mock.calls[0][0] as StartLanguageServiceOptions
+    const preambleLines = mockGetBodyLineOffset(POU_LSP_URI)
+    const source = { modelUri: POU_URI, lspUri: POU_LSP_URI, lineOffset: preambleLines }
+    return { map: opts.mapDefinitionLocation!, navigate: opts.navigateOutline!, source, preambleLines }
+  }
+
+  it('keeps a body target in the source model, shifted past the preamble', () => {
+    const { map, source, preambleLines } = attachedMapper()
+    expect(preambleLines).toBeGreaterThan(0)
+
+    expect(map(at(POU_LSP_URI, preambleLines + 2), source)).toEqual({
+      uri: POU_URI,
+      range: { startLineNumber: 3, startColumn: 1, endLineNumber: 3, endColumn: 10 },
+    })
+  })
+
+  it('sends a preamble target to the document mirror, unshifted', () => {
+    const { map, source, preambleLines } = attachedMapper()
+
+    expect(map(at(POU_LSP_URI, preambleLines - 1), source)).toEqual({
+      uri: mockLspMirrorUri(POU_LSP_URI),
+      range: { startLineNumber: preambleLines, startColumn: 1, endLineNumber: preambleLines, endColumn: 10 },
+    })
+  })
+
+  it('drops a target outside the source document, such as a typeshed stub', () => {
+    const { map, source } = attachedMapper()
+
+    expect(map(at('file:///typeshed/stdlib/builtins.pyi', 40), source)).toBeNull()
+  })
+
+  it('declines to navigate a document it never attached', () => {
+    const { navigate } = attachedMapper()
+
+    expect(navigate({ uri: 'file:///Other.py', lineLsp: 0, characterLsp: 0 })).toBe(false)
   })
 })

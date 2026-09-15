@@ -42,7 +42,13 @@ import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { dataTypeLineSpans } from '../../utils/PLC/data-type-serializer'
 import { serializeGlobalVariableListsToTypes } from '../../utils/PLC/global-variable-list-serializer'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
-import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../lsp-shared/definition-redirect'
+import {
+  type NavTarget,
+  normaliseLocation,
+  routeToPou,
+  routeToPouBody,
+  routeToPouPreamble,
+} from '../lsp-shared/definition-redirect'
 import {
   DATA_TYPES_URI,
   DT_VIEW_FRAME_LINE_COUNT,
@@ -287,8 +293,11 @@ function redirectGlobalVariableList(lineLsp: number): boolean {
 }
 
 export function redirectDefinitionToStore(loc: Location | LocationLink): boolean {
-  const target = normaliseLocation(loc)
+  return redirectNavTargetToStore(normaliseLocation(loc))
+}
 
+/** Route a target in LSP coordinates through the store; false when nothing here owns its URI. */
+export function redirectNavTargetToStore(target: NavTarget): boolean {
   // Resource-globals doc → open the Resource editor (globals table) rather than
   // the synthesised (non-editable) CONFIGURATION declaration.
   if (target.uri === RESOURCE_GLOBALS_URI) {

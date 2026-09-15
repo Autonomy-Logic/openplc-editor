@@ -13,8 +13,10 @@
  *     under webpack; injected for tests).
  *   - Provider hooks: the `pouvars://` URI rewrite (variables-text
  *     view targets a different LSP doc than its Monaco model);
- *     definition redirects to the Zustand store / graphical
- *     editor.
+ *     definition targets mapped onto the document mirror.
+ *   - Navigation into the Zustand store / graphical editor, run from
+ *     the editor opener and outline activation only — never while
+ *     a definition is merely being resolved.
  *   - Diagnostics mirror onto the `pouvars://` model so var-block
  *     errors surface in the variables editor too, replayed when that
  *     model mounts after the last publish.
@@ -32,7 +34,6 @@ import {
   type CompletionList,
   CompletionRequest,
   type Diagnostic,
-  type Location as LspLocation,
   type MessageConnection,
 } from 'vscode-languageserver-protocol'
 
@@ -40,16 +41,19 @@ import { openPLCStoreBase } from '../../store'
 import { dataTypeLineSpans, serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-serializer'
 import {
+  createLspDocumentMirror,
   getBodyLineOffset,
   type LanguageService,
   lspDiagnosticToMonaco,
+  type NavigateToTarget,
+  registerDefinitionOpener,
   shiftSemanticTokensToBody,
   startLanguageService,
-  suppressNoDefinitionFound,
 } from '../lsp-shared'
 import { parseScopedCompletionType } from './completion-type'
+import { mapStDefinitionLocation } from './definition-locations'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
-import { redirectDefinitionToStore } from './goto-definition-redirect'
+import { redirectNavTargetToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
 import { diagnosticsInVarBlocks, pouVarsTokenViewport } from './pouvars-context'
 import { type PrintSemanticTokens, registerPrintSemanticTokensApi } from './print-tokens-api'
@@ -159,6 +163,13 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 
   let serviceConnection: MessageConnection | null = null
 
+  // Every document the worker sees, as a model Monaco can preview.
+  const mirror = monacoApi ? createLspDocumentMirror(monacoApi) : null
+
+  // Graphical stubs open their editor; everything else goes through the store.
+  const navigateToStore: NavigateToTarget = (target) =>
+    redirectToGraphicalPou(target.uri) || redirectNavTargetToStore(target)
+
   const sharedService: LanguageService = startLanguageService({
     languageId: ST_LANGUAGE_ID,
     workerName: ST_WORKER_NAME,
@@ -170,25 +181,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     signatureHelpTriggerCharacters: ['(', ','],
     resolveLspContext: resolveStLspContext,
     getLspDocumentText: getSyncedDocumentText,
-    definitionInterceptors: monacoApi
-      ? [
-          // Reroute graphical-POU stubs to the graphical editor.
-          (locations: LspLocation[], model, position) => {
-            const stubLocation = locations.find((l) => redirectToGraphicalPou(l.uri))
-            if (stubLocation) return suppressNoDefinitionFound(model, position, monacoApi)
-            return undefined
-          },
-          // Route variable-declaration and cross-POU targets through
-          // the Zustand store.
-          (locations, model, position) => {
-            const primary = locations[0]
-            if (primary && redirectDefinitionToStore(primary)) {
-              return suppressNoDefinitionFound(model, position, monacoApi)
-            }
-            return undefined
-          },
-        ]
-      : [],
+    mapDefinitionLocation: mapStDefinitionLocation,
+    navigateOutline: navigateToStore,
 
     // Rename intentionally not configured.  Default capabilities
     // advertise prepareSupport, but no Monaco rename provider is
@@ -294,6 +288,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       if (varsPou !== null) applyPouVarsDiagnostics(api, varsPou, MARKER_OWNER, DIAGNOSTIC_SOURCE)
     })
     viewSyncDisposables.push(() => onModelAdded.dispose())
+    const opener = registerDefinitionOpener(api, navigateToStore)
+    viewSyncDisposables.push(() => opener.dispose())
   }
 
   // ---------------------------------------------------------------------------
@@ -544,14 +540,17 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     },
 
     openDocument(uri, content) {
+      mirror?.set(uri, content)
       sharedService.openDocument(uri, content)
     },
 
     changeDocument(uri, content, externalVersion) {
+      mirror?.set(uri, content)
       sharedService.changeDocument(uri, content, externalVersion)
     },
 
     closeDocument(uri) {
+      mirror?.delete(uri)
       sharedService.closeDocument(uri)
     },
 
@@ -562,6 +561,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       viewSyncDisposables.length = 0
       lastDataTypeDiagnostics = []
       lastPouDiagnostics.clear()
+      mirror?.dispose()
       sharedService.dispose()
     },
   }
