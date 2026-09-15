@@ -34,6 +34,7 @@ Design notes that outlive the skeleton:
 #include <open62541_arduino.h>
 #include <string.h>
 
+
 #include "opcua_log.h"
 #include "baremetal_net.h"
 #include "opcua_auth.h"
@@ -76,7 +77,7 @@ Design notes that outlive the skeleton:
  *  Off by default so a MINIMAL library behaves exactly as before. Worth
  *  18,992 bytes of arena when on. */
 #ifndef OPCUA_NS0_FROM_FLASH
-#define OPCUA_NS0_FROM_FLASH true
+#define OPCUA_NS0_FROM_FLASH false
 #endif
 
 // The library configuration and this flag have to agree, and the failure when
