@@ -531,10 +531,7 @@ describe('runCompilePipeline — I/O image gate', () => {
     )
 
     const lines = events.filter((e) => e.message.includes('sized to')).map((e) => e.message)
-    expect(lines).toEqual([
-      '%IX sized to 1 bit from address producers',
-      '%QW sized to 4 words from address producers',
-    ])
+    expect(lines).toEqual(['%IX sized to 1 bit from address producers', '%QW sized to 4 words from address producers'])
   })
 
   it('says nothing about sizes for a target that keeps its firmware defaults', async () => {

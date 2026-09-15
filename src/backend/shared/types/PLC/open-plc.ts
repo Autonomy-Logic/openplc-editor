@@ -1,8 +1,5 @@
 import { z } from 'zod'
 
-import type { ImageTableKey } from '../../../../middleware/shared/utils/io-image/tables'
-import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
-
 import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
 // One source of truth for the IEC base-type list: the canonical
 // schema lives in `middleware/shared/ports/plc-schemas` and is
@@ -17,6 +14,8 @@ import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/sh
 // drifted from the runtime uppercase one and caused projects to
 // fail validation on open.
 import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
+import type { ImageTableKey } from '../../../../middleware/shared/utils/io-image/tables'
+import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 
@@ -327,9 +326,7 @@ type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
  * one removed and forgotten would be a block that sizes storage that is gone.
  *
  * `z.enum` needs a non-empty tuple literal, hence the cast on the spread. */
-const S7CommBufferTypeSchema = z.enum(
-  IMAGE_TABLES.map((table) => table.key) as [ImageTableKey, ...ImageTableKey[]],
-)
+const S7CommBufferTypeSchema = z.enum(IMAGE_TABLES.map((table) => table.key) as [ImageTableKey, ...ImageTableKey[]])
 type S7CommBufferType = z.infer<typeof S7CommBufferTypeSchema>
 
 // S7Comm Server Settings Schema

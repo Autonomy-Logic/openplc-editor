@@ -102,16 +102,7 @@ export type SlotFieldValue = string | number | boolean
  * manifest must not take down the whole device screen, and a channel that
  * allocates nothing is visibly missing in a way the user can report.
  */
-const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set([
-  '%IX',
-  '%QX',
-  '%IW',
-  '%QW',
-  '%ID',
-  '%QD',
-  '%IL',
-  '%QL',
-])
+const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set(['%IX', '%QX', '%IW', '%QW', '%ID', '%QD', '%IL', '%QL'])
 
 /** Channels already reported, so the warning does not repeat every render.
  *  Module-level and never cleared: a manifest does not change within a

@@ -74,9 +74,7 @@ export type ImageTableKey = (typeof IMAGE_TABLES)[number]['key']
  * Note the gap this makes visible: `byte_input` and `byte_output` exist but
  * there is no `byte_memory`, so `%MB` has no storage on v4 at all.
  */
-export const IMAGE_AREAS_RUNTIME_V4: ReadonlySet<string> = new Set(
-  IMAGE_TABLES.map((table) => table.prefix),
-)
+export const IMAGE_AREAS_RUNTIME_V4: ReadonlySet<string> = new Set(IMAGE_TABLES.map((table) => table.prefix))
 
 /**
  * The areas bare metal declares buffers for — the ones with a macro.
@@ -88,7 +86,6 @@ export const IMAGE_AREAS_RUNTIME_V4: ReadonlySet<string> = new Set(
 export const IMAGE_AREAS_BAREMETAL: ReadonlySet<string> = new Set(
   IMAGE_TABLES.filter((table) => table.macro).map((table) => table.prefix),
 )
-
 
 /**
  * How many BYTES one element of this table occupies.

@@ -14,13 +14,7 @@
  * declaration order of `core/src/plc_app/image_tables.h`.
  */
 
-import {
-  extentForDataBlock,
-  IMAGE_AREAS_BAREMETAL,
-  IMAGE_AREAS_RUNTIME_V4,
-  IMAGE_TABLES,
-  tableForKey,
-} from '../tables'
+import { extentForDataBlock, IMAGE_AREAS_BAREMETAL, IMAGE_AREAS_RUNTIME_V4, IMAGE_TABLES, tableForKey } from '../tables'
 
 describe('IMAGE_TABLES', () => {
   it('lists the fourteen tables in the header declaration order', () => {
@@ -119,7 +113,6 @@ describe('the area sets derived from it', () => {
     ])
   })
 })
-
 
 describe('extentForDataBlock', () => {
   // Asserted from BOTH directions, because the two conversions inside it pull

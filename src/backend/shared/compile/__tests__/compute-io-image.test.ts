@@ -131,7 +131,13 @@ const compute = (projectData: PLCProjectData, extra: Partial<Parameters<typeof c
 describe('computeIoImage — sizing from producers', () => {
   it('sizes nothing for an empty project', () => {
     // FR21 / BR12: the floor is zero, and zero is expressed by absence.
-    expect(compute(makeProject({}))).toEqual({ sizes: {}, origins: {}, unbacked: [], unsupported: [], duplicateOutputs: [] })
+    expect(compute(makeProject({}))).toEqual({
+      sizes: {},
+      origins: {},
+      unbacked: [],
+      unsupported: [],
+      duplicateOutputs: [],
+    })
   })
 
   it('sizes an area from the pins that claim it', () => {
@@ -613,9 +619,7 @@ describe('computeIoImage — S7comm exposure', () => {
   })
 
   it('takes the largest extent when blocks overlap a table', () => {
-    const image = compute(
-      makeProject({ servers: s7Server([block('int_output', 0, 8), block('int_output', 50, 8)]) }),
-    )
+    const image = compute(makeProject({ servers: s7Server([block('int_output', 0, 8), block('int_output', 50, 8)]) }))
     expect(image.sizes).toEqual({ '%QW': 54 })
   })
 
@@ -707,9 +711,7 @@ describe('computeIoImage — S7comm exposure', () => {
         s7commSlaveConfig: { server: { enabled: false }, dataBlocks: [block('int_input', 0, 16)] },
       },
     ]
-    const image = compute(
-      makeProject({ pous: [{ name: 'main', variables: [variable('v', '%IW2')] }], servers }),
-    )
+    const image = compute(makeProject({ pous: [{ name: 'main', variables: [variable('v', '%IW2')] }], servers }))
     expect(image.unbacked).toHaveLength(1)
     expect(image.sizes['%IW']).toBe(8)
   })
@@ -743,7 +745,11 @@ describe('computeIoImage — S7comm exposure', () => {
     const image = compute(
       makeProject({
         servers: s7Server([], {
-          paArea: { enabled: true, sizeBytes: 16, mapping: { type: 'int_output', startBuffer: 0, bitAddressing: false } },
+          paArea: {
+            enabled: true,
+            sizeBytes: 16,
+            mapping: { type: 'int_output', startBuffer: 0, bitAddressing: false },
+          },
         }),
       }),
     )
@@ -762,7 +768,11 @@ describe('computeIoImage — S7comm exposure', () => {
     const image = compute(
       makeProject({
         servers: s7Server([], {
-          paArea: { enabled: false, sizeBytes: 16, mapping: { type: 'int_output', startBuffer: 0, bitAddressing: false } },
+          paArea: {
+            enabled: false,
+            sizeBytes: 16,
+            mapping: { type: 'int_output', startBuffer: 0, bitAddressing: false },
+          },
         }),
       }),
     )
@@ -770,9 +780,7 @@ describe('computeIoImage — S7comm exposure', () => {
   })
 
   it('ignores an enabled system area with no mapping yet', () => {
-    const image = compute(
-      makeProject({ servers: s7Server([], { mkArea: { enabled: true, sizeBytes: 16 } }) }),
-    )
+    const image = compute(makeProject({ servers: s7Server([], { mkArea: { enabled: true, sizeBytes: 16 } }) }))
     expect(image.sizes).toEqual({})
   })
 
@@ -781,7 +789,12 @@ describe('computeIoImage — S7comm exposure', () => {
       {
         name: 'mb',
         protocol: 'modbus-tcp',
-        modbusSlaveConfig: { enabled: true, networkInterface: '', port: 502, bufferMapping: { holdingRegisters: { qwCount: 10 } } },
+        modbusSlaveConfig: {
+          enabled: true,
+          networkInterface: '',
+          port: 502,
+          bufferMapping: { holdingRegisters: { qwCount: 10 } },
+        },
       },
       ...s7Server([block('int_memory', 0, 40)]),
     ]
@@ -1026,8 +1039,7 @@ describe('computeIoImage — an array whose lower bound is negative', () => {
   // editor, one word sized in the image, and eleven written into it.
 
   /** A project whose one POU declares `array`. */
-  const withArray = (array: PLCVariable) =>
-    compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
+  const withArray = (array: PLCVariable) => compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
 
   it('counts every element of ARRAY [-5..5]', () => {
     expect(withArray(arrayVar('v', '%MW0', -5, 5)).sizes).toEqual({ '%MW': 11 })
@@ -1137,10 +1149,9 @@ describe('computeIoImage — where each number came from', () => {
   })
 
   it('names the LARGER claimant when two contributors size the same area', () => {
-    const image = compute(
-      makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 40 } }) }),
-      { devicePinMapping: pins('%QW0') },
-    )
+    const image = compute(makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 40 } }) }), {
+      devicePinMapping: pins('%QW0'),
+    })
     expect(image.sizes).toEqual({ '%QW': 40 })
     expect(image.origins).toEqual({ '%QW': 'modbus-server' })
   })
@@ -1149,10 +1160,9 @@ describe('computeIoImage — where each number came from', () => {
     // `claim` only overwrites on a strictly larger number and the contributors
     // run in a fixed order, so equal claims always resolve the same way — the
     // log has to be as deterministic as the sizes are (FR07).
-    const image = compute(
-      makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 1 } }) }),
-      { devicePinMapping: pins('%QW0') },
-    )
+    const image = compute(makeProject({ servers: modbusServer({ holdingRegisters: { qwCount: 1 } }) }), {
+      devicePinMapping: pins('%QW0'),
+    })
     expect(image.sizes).toEqual({ '%QW': 1 })
     expect(image.origins).toEqual({ '%QW': 'producers' })
   })

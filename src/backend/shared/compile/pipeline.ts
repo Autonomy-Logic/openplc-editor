@@ -54,8 +54,8 @@ import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-fir
 import {
   computeIoImage,
   describeDuplicateOutput,
-  describeUnbackedLocation,
   describeIoImageSizes,
+  describeUnbackedLocation,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,

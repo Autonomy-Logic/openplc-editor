@@ -511,8 +511,7 @@ const EditableLocationCell = ({
   // saying so while the user is still typing is cheaper than saying it at
   // build time. Inputs and memory are excluded: only two WRITERS contradict.
   const duplicateOutputs = useDuplicateOutputLocations()
-  const isDuplicateOutput =
-    isLocationCell && (duplicateOutputs.get(locationValue)?.length ?? 0) > 1
+  const isDuplicateOutput = isLocationCell && (duplicateOutputs.get(locationValue)?.length ?? 0) > 1
   const hasLocationWarning = isOrphaned || isManualConflict || isDuplicateOutput
 
   // When the input is blurred, we'll call our table meta's updateData function

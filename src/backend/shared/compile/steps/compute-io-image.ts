@@ -48,22 +48,19 @@
  * Pure function: no fs I/O, no store, no platform coupling.
  */
 
+import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
 import type { DevicePin, ModbusBufferMapping, PLCServer } from '../../../../middleware/shared/ports/types'
 import type { PoolVppIoInput } from '../../../../middleware/shared/utils/iec-address'
 import type { AddressClass, ParsedAddress } from '../../../../middleware/shared/utils/iec-address/registry'
 import {
   activeKindsFor,
   allocateAddresses,
-  migrateToRegistry,
   formatAddress,
+  migrateToRegistry,
   parseAddress,
   prefixOf,
   slotRangesOverlap,
 } from '../../../../middleware/shared/utils/iec-address/registry'
-import type {
-  AddressProducerCapabilities,
-  ServerCapabilities,
-} from '../../../../middleware/shared/utils/target-capabilities'
 import {
   extentForDataBlock,
   IMAGE_AREAS_BAREMETAL,
@@ -71,7 +68,10 @@ import {
   IMAGE_TABLES,
   tableForKey,
 } from '../../../../middleware/shared/utils/io-image/tables'
-import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
+import type {
+  AddressProducerCapabilities,
+  ServerCapabilities,
+} from '../../../../middleware/shared/utils/target-capabilities'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
 /**
@@ -208,7 +208,6 @@ export interface IoImage {
  * `middleware/shared/utils/io-image/tables.ts`, and re-exported so the
  * pipeline keeps importing them from the step that uses them. */
 export { IMAGE_AREAS_BAREMETAL, IMAGE_AREAS_RUNTIME_V4 }
-
 
 export interface ComputeIoImageInput {
   /** Compile-ready project data — locations already resolved from aliases to
@@ -417,7 +416,6 @@ function serverExposure(
   tally: SizeTally,
   backed: Map<string, Set<number>>,
 ): void {
-
   // EVERY PROTOCOL, but still the FIRST server of each one.
   //
   // The generalisation that was missing is across protocols: a project with an
@@ -715,7 +713,10 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
    * branch below carries a comment about having removed, and `slotRangesOverlap`
    * is the primitive the registry already owns for exactly this.
    */
-  const declaredOutputs = new Map<string, Array<{ at: ParsedAddress; slots: number; scope: string; variableName: string; location: string }>>()
+  const declaredOutputs = new Map<
+    string,
+    Array<{ at: ParsedAddress; slots: number; scope: string; variableName: string; location: string }>
+  >()
 
   for (const { scope, name, location, slotCount } of locatedVariables(input.projectData)) {
     const parsed = parseAddress(location)

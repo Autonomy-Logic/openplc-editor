@@ -17,8 +17,8 @@
  * into the in-memory file map sent to `/compile-arduino`).
  */
 
-import type { DevicePin } from '../../types/PLC/devices'
 import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
+import type { DevicePin } from '../../types/PLC/devices'
 import type { IoImageSizes } from './compute-io-image'
 import { generateModbusDefines, resolveDebugBaud, resolveDebugSlave, type VppModbusScreenState } from './modbus-defines'
 

@@ -59,9 +59,7 @@ describe('useDuplicateOutputLocations', () => {
     const writers = result.current.get('%QX0.0') ?? []
     expect(writers).toHaveLength(2)
     // Excluding "myself in motor" still leaves the other one.
-    expect(writers.filter((w) => !(w.name === 'run' && w.scope === 'motor'))).toEqual([
-      { scope: 'pump', name: 'run' },
-    ])
+    expect(writers.filter((w) => !(w.name === 'run' && w.scope === 'motor'))).toEqual([{ scope: 'pump', name: 'run' }])
   })
 
   it('names the configuration global scope', () => {
