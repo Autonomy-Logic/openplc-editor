@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import type { ReferenceImpactAnalysis } from '../../../utils/variable-references/types'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../modal'
 
@@ -10,9 +12,12 @@ type RenameImpactModalProps = {
   impact: ReferenceImpactAnalysis<unknown>
   // Copy overrides — defaults keep the original variable-rename wording.
   title?: string
+  /** Replaces the "Renaming X to Y will affect:" line. */
+  description?: ReactNode
   affectedListLabel?: string
   byKindLabel?: string
   confirmLabel?: string
+  confirmDescription?: string
   cancelLabel?: string
   cancelDescription?: string
   onConfirm: () => void
@@ -26,9 +31,11 @@ export const RenameImpactModal = ({
   changes,
   impact,
   title = 'Variable Changes: Impact Analysis',
+  description,
   affectedListLabel = 'Affected POUs:',
   byKindLabel = 'By Editor Type:',
   confirmLabel = 'Yes, rename references',
+  confirmDescription = 'All references will be updated to use the new name',
   cancelLabel = 'No, keep references unchanged',
   cancelDescription = 'References will remain with the old name and will no longer match the renamed variable, causing them to become unresolved references',
   onConfirm,
@@ -51,7 +58,9 @@ export const RenameImpactModal = ({
 
         <div className='flex flex-col gap-3 overflow-y-auto'>
           <div className='text-xs text-neutral-600 dark:text-neutral-50'>
-            {hasMultipleChanges ? (
+            {description !== undefined ? (
+              <p className='mb-2'>{description}</p>
+            ) : hasMultipleChanges ? (
               <>
                 <p className='mb-2 font-medium'>The following variable changes will affect:</p>
                 <ul className='mb-2 list-inside list-disc space-y-1'>
@@ -134,8 +143,7 @@ export const RenameImpactModal = ({
             <p className='font-medium'>What would you like to do?</p>
             <ul className='mt-2 list-inside list-disc space-y-1'>
               <li>
-                <span className='font-semibold'>{confirmLabel}:</span> All references will be updated to use the new
-                name
+                <span className='font-semibold'>{confirmLabel}:</span> {confirmDescription}
               </li>
               <li>
                 <span className='font-semibold'>{cancelLabel}:</span> {cancelDescription}

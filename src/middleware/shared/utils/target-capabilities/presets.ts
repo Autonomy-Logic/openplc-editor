@@ -44,6 +44,11 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Simulator runs no Modbus slave at all — the flags are UX, so a
+  // project authored for another target keeps its server config while the
+  // user simulates it. It has no VPP Modbus screen, so it resolves to the
+  // `plc-server` profile, where RTU is not on offer anyway.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   // RTU over the emulated virtual serial port the in-process simulator
@@ -69,6 +74,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: false,
   ethercat: false,
   modbusTcpServer: false,
+  modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
   debuggerTransports: ['modbus-tcp'],
@@ -99,6 +105,9 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Runtime v4 Modbus slave plugin is a TCP listener; there is no serial
+  // path in it.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   debuggerTransports: ['websocket'],
@@ -121,7 +130,16 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   vppIo: false,
   modbusTcpRemote: false,
   ethercat: false,
-  modbusTcpServer: false,
+  // The baremetal firmware serves both, gated by the VPP Modbus screen's
+  // per-transport toggles. These read `false` until DOPE-442 because the
+  // config lived in a vendor screen the Servers UX could not see; now that
+  // one screen renders both stores, hiding the target's real capability is
+  // what would be wrong.
+  //
+  // A board still only gets the screen when its VPP declares a Modbus screen,
+  // so a package that has not been migrated is unaffected.
+  modbusTcpServer: true,
+  modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
   // Arduino targets speak RTU over USB always; some also speak TCP

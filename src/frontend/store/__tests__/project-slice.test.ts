@@ -327,6 +327,17 @@ function landBoardCatalogue(store: ReturnType<typeof makeStore>) {
   })
 }
 
+/** Seed a microcontroller target — `compiler: 'arduino-cli'` is what makes a
+ *  board baremetal, and what decides the transport a new Modbus server gets. */
+function seedBaremetalBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      ['Arduino Uno', { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {} }],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('Arduino Uno')
+}
+
 function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
   landBoardCatalogue(store)
   store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
@@ -1969,6 +1980,39 @@ describe('createProjectSlice', () => {
       expect(servers[0].modbusSlaveConfig?.port).toBe(502)
     })
 
+    it('seeds transports, so the new server is visible to the build', () => {
+      // `selectModbusServer` only considers a server that declares `transports`.
+      // Seeding none made a freshly created server invisible to the compile,
+      // so the firmware came out with Modbus entirely off while the screen said
+      // it was serving.
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
+    it('seeds RTU on a microcontroller, which is the transport those boards all have', () => {
+      // Seeding TCP everywhere is what let a board with no network carrier
+      // compile MBTCP into a firmware with no stack the moment the user switched
+      // the server on: the screen offered RTU only, the store still said TCP.
+      seedBaremetalBoard(store)
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['rtu'])
+    })
+
+    it('seeds TCP on a Runtime v4 target, which serves nothing else', () => {
+      seedRuntimeV4Board(store)
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
     it('creates an s7comm server with default config', () => {
       const result = store.getState().projectActions.createServer({
         data: { name: 'S7Server', protocol: 's7comm' },
@@ -2026,6 +2070,15 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.servers).toHaveLength(1)
       expect(store.getState().project.data.servers![0].name).toBe('B')
+    })
+
+    it('queues the file for deletion, so the save actually removes it from disk', () => {
+      // Dropping it from the array only changes memory. Without the queue entry
+      // the next save leaves `devices/servers/A.json` behind and the server
+      // returns on the following open.
+      seedServer(store, makeModbusTcpServer('A'))
+      store.getState().projectActions.deleteServer('A')
+      expect(store.getState().pendingDeletions).toContain('devices/servers/A.json')
     })
 
     it('returns ok even when server not found', () => {

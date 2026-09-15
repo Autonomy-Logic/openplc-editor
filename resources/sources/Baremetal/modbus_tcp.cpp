@@ -6,12 +6,19 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "modbus_tcp.h"
 #include "modbus_pdu.h"   // process_mbpacket
 
+// The listen port travels with the project's Modbus server. A firmware built
+// before it did -- or by a toolchain that does not emit it -- keeps the IANA
+// default it always listened on.
+#ifndef MBTCP_PORT
+    #define MBTCP_PORT 502
+#endif
+
 #ifdef MBTCP_ETHERNET
 #ifdef BOARD_ESP32
-    WiFiServer mb_server(502);
+    WiFiServer mb_server(MBTCP_PORT);
 	WiFiClient mb_serverClients[MAX_SRV_CLIENTS];
 #else
-    EthernetServer mb_server(502);
+    EthernetServer mb_server(MBTCP_PORT);
 #endif
     uint8_t mb_mbap[MBAP_SIZE];
 #ifdef BOARD_PORTENTA
@@ -20,7 +27,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #endif
 
 #ifdef MBTCP_WIFI
-    WiFiServer mb_server(502);
+    WiFiServer mb_server(MBTCP_PORT);
     uint8_t mb_mbap[MBAP_SIZE];
 #if defined(BOARD_ESP8266) || defined(BOARD_ESP32) || defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
     WiFiClient mb_serverClients[MAX_SRV_CLIENTS];

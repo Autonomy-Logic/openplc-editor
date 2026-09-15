@@ -81,6 +81,19 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
   // makes, and a CLI invocation is one project.
   openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
 
+  // Re-apply the board list now that the project is in the store. One migration
+  // hangs off this action and reads project state: the fold of the pre-split
+  // `modbus_rtu` wiring keys into `serial`, which is gated on the board's package
+  // shipping a `serial` screen and so cannot run before the boards resolve. In
+  // the GUI the project lands first and the boards arrive after, so it fires
+  // once; here the order is reversed and it fired against an empty store,
+  // meaning a CLI compile and a GUI compile of the same on-disk project could
+  // disagree. Idempotent by construction -- it returns the input unchanged when
+  // nothing moved.
+  openPLCStoreBase
+    .getState()
+    .deviceActions.setAvailableOptions({ availableBoards: await new HardwareModule().getAvailableBoards() })
+
   const state = openPLCStoreBase.getState()
   return {
     success: true,

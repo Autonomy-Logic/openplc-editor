@@ -2,6 +2,7 @@
  * Editor platform adapter — wires all port interfaces to Electron IPC bridge (`window.bridge.*`).
  */
 
+import { APP_VERSION } from '../frontend/data/constants/app-version'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorAIAdapter } from './adapters/editor/ai-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
@@ -14,6 +15,7 @@ import { createEditorNavigationAdapter } from './adapters/editor/navigation-adap
 import { openFetchedProject } from './adapters/editor/open-fetched-project'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
+import { createPackageUpdateNotifier } from './adapters/editor/package-update-notice'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
@@ -51,8 +53,20 @@ const editorRuntime = createEditorRuntimeAdapter(() => _runtimeIpAddress)
  */
 editorRuntime.openFetchedProject = (project) => openFetchedProject(project, editorProject)
 
+const editorPackages = createEditorPackageAdapter()
+
+/**
+ * Tells a build whether the board's package has a newer, editor-compatible
+ * release. Exported so the app root can `prime()` it at startup: the catalogue
+ * is fetched once, off the build's critical path, and every build after that
+ * reads the answer without touching the network.
+ */
+export const packageUpdateNotifier = createPackageUpdateNotifier(editorPackages, APP_VERSION)
+
 export const editorPorts: PlatformPorts = {
-  compiler: createEditorCompilerAdapter(),
+  compiler: createEditorCompilerAdapter({
+    findPackageUpdateNotice: (packageId) => packageUpdateNotifier.notice(packageId),
+  }),
   runtime: editorRuntime,
   debugger: createEditorDebuggerAdapter(),
   simulator: createEditorSimulatorAdapter(),
@@ -63,7 +77,7 @@ export const editorPorts: PlatformPorts = {
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
-  packages: createEditorPackageAdapter(),
+  packages: editorPackages,
   esi: createEditorEsiAdapter(() => _projectPath),
   versionControl: createEditorVersionControlAdapter(),
   navigation: createEditorNavigationAdapter(),

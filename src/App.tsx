@@ -35,7 +35,7 @@ import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
-import { editorPorts, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
+import { editorPorts, packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
 
 /**
@@ -71,6 +71,11 @@ hydrateLibraries()
 // install/uninstall/CDN change.  Subscriber lives outside React to
 // catch events fired before any component mounts.
 editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
+
+// Fetch the VPP catalog once, now, so a build can tell the user a newer
+// package exists without waiting on the network to find out. Nothing awaits
+// this and nothing reports its failure: offline simply means no such notice.
+void packageUpdateNotifier.prime()
 
 // Register the basedpyright worker URL so the Monaco-side adapter
 // can spin up the Python LSP on first POU open.  No service
