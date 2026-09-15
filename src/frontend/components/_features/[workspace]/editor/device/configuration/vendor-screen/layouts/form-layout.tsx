@@ -1,7 +1,7 @@
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
+import { FieldHelpIcon, TooltipProvider } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
@@ -53,30 +53,6 @@ type FormLayoutProps = {
   section: ScreenSection
 }
 
-// Small "info" glyph that reveals the field's help text on hover.
-function FieldHelpIcon({ text }: { text: string }) {
-  return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label='Field help'
-          className='inline-flex h-3.5 w-3.5 cursor-help select-none items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 focus:outline-none focus-visible:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
-        >
-          <svg viewBox='0 0 16 16' fill='none' className='h-3.5 w-3.5'>
-            <circle cx='8' cy='8' r='7' stroke='currentColor' strokeWidth='1.5' />
-            <path d='M8 7.25v4.25' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
-            <circle cx='8' cy='4.75' r='0.85' fill='currentColor' />
-          </svg>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side='right' align='start' sideOffset={6} className='text-xs'>
-        {text}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 function FormLayout({ section }: FormLayoutProps) {
   const fields = (section.fields ?? []) as FieldDef[]
 
@@ -86,6 +62,10 @@ function FormLayout({ section }: FormLayoutProps) {
   // serial-port picker reading `board.serialPorts`).
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
   const currentBoardInfo = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards.get(deviceBoard))
+
+  // Board context for `optionsRef`. `modbusSerialPorts` is derived rather than
+  // declared by the package: it is the board's UART list with the default one
+
   // Single-source-of-truth for the per-section storage key — see
   // `getSectionPersistenceKey` in ../index.tsx.  Every layout that
   // persists must derive its key through this helper so the
@@ -171,9 +151,7 @@ function FormLayout({ section }: FormLayoutProps) {
                         align='center'
                         side='bottom'
                       >
-                        {resolveFieldOptions(field, {
-                          board: currentBoardInfo as Record<string, unknown> | undefined,
-                        }).map((opt) => {
+                        {resolveFieldOptions(field, { board: currentBoardInfo }).map((opt) => {
                           const value = typeof opt === 'string' ? opt : opt.value
                           const label = typeof opt === 'string' ? opt : opt.label
                           return (

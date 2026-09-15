@@ -3,6 +3,8 @@ import type {
   EthercatConfig,
   ModbusBufferMapping,
   ModbusIOGroup,
+  ModbusParity,
+  ModbusTransport,
   OpcUaNodeConfig,
   OpcUaSecurityProfile,
   OpcUaTrustedCertificate,
@@ -299,8 +301,15 @@ export type ProjectActions = {
     name: string,
     config: {
       enabled?: boolean
+      transports?: ModbusTransport[]
       networkInterface?: string
       port?: number
+      slaveId?: number
+      serialPort?: string
+      baudRate?: number
+      parity?: ModbusParity
+      stopBits?: number
+      dataBits?: number
       bufferMapping?: Partial<ModbusBufferMapping>
     },
   ) => ProjectResponse

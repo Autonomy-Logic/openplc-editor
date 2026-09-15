@@ -42,6 +42,7 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: false,
   ethercat: false,
   modbusTcpServer: false,
+  modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
   debuggerTransports: [],
