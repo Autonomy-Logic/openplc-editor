@@ -394,6 +394,52 @@ describe('runCompilePipeline — I/O image gate', () => {
       ...overrides,
     })
 
+  it('WARNS about two writers on one output and still compiles', async () => {
+    // IEC 61131-3 does not forbid declaring one located variable in two POUs,
+    // so the editor does not either -- which write survives is the
+    // programmer's business. What the compile owes them is the fact that the
+    // addresses are global and POU order decides the winner, which neither
+    // declaration shows on its own. So: a warning, and the build carries on.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const twoWriters = {
+      ...projectDataFixture,
+      pous: [
+        pouLocating('%QW3'),
+        {
+          type: 'program',
+          data: {
+            name: 'second',
+            language: 'st',
+            documentation: '',
+            body: { language: 'st', value: '' },
+            variables: [{ name: 'pump', location: '%QW3' }],
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      arduinoArgs({
+        projectData: twoWriters,
+        devicePinMapping: [{ pin: '3', pinType: 'analogOutput', address: '%QW3' }] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const warned = events.filter((e) => e.message.includes('drive the same output'))
+    expect(warned).toHaveLength(1)
+    expect(warned[0].level).toBe('warning')
+    // Both names, because either one may be the mistake.
+    expect(warned[0].message).toContain('valve')
+    expect(warned[0].message).toContain('pump')
+    // And it never says the compiler refuses it, because it does not.
+    expect(warned[0].message).not.toContain('refuse')
+  })
+
   it('bails before transpilation when an output declaration has no producer', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -508,6 +554,57 @@ describe('runCompilePipeline — I/O image gate', () => {
     expect(defines).toContain('#define MAX_DIGITAL_INPUT 8')
     // Areas the project does not touch are handed zero, not the fallback.
     expect(defines).toContain('#define MAX_MEMORY_WORD 0')
+  })
+
+  it('says in the build log where each sized area came from', async () => {
+    // The size on its own is untraceable: three contributors can size an area
+    // and the image takes the largest, so %QW = 4 might be the program's
+    // producers or a Modbus config nobody has opened in a year. Naming the
+    // source is what stops the user guessing which one to change.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const lines = events.filter((e) => e.message.includes('sized to')).map((e) => e.message)
+    expect(lines).toEqual(['%IX sized to 1 bit from address producers', '%QW sized to 4 words from address producers'])
+  })
+
+  it('says nothing about sizes for a target that keeps its firmware defaults', async () => {
+    // v3 and the simulator are not sized, so a line here would describe an
+    // image neither of them receives.
+    //
+    // %MW7 and not an output address: memory is its own producer, so it sizes
+    // an area with no pins and no server in the project. An output would size
+    // nothing here whatever the gate did, and the test would pass without
+    // exercising it — which is exactly what it did before this comment.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MW7'),
+        isSimulator: false,
+        isRuntimeV3: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v3',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(events.filter((e) => e.message.includes('sized to'))).toEqual([])
   })
 
   it('leaves the simulator defines.h without a process image block', async () => {

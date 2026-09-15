@@ -52,6 +52,7 @@
  * string into the upload bundle.
  */
 
+import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
 import type { IoImageSizes } from './compute-io-image'
 
 /**
@@ -63,22 +64,6 @@ import type { IoImageSizes } from './compute-io-image'
  * able to go down both in step. Fixed order is also what makes the output
  * byte-stable for the same project (FR07).
  */
-const TABLES: ReadonlyArray<{ key: string; prefix: string; unit: string }> = [
-  { key: 'bool_input', prefix: '%IX', unit: 'bits' },
-  { key: 'bool_output', prefix: '%QX', unit: 'bits' },
-  { key: 'byte_input', prefix: '%IB', unit: 'bytes' },
-  { key: 'byte_output', prefix: '%QB', unit: 'bytes' },
-  { key: 'int_input', prefix: '%IW', unit: 'words' },
-  { key: 'int_output', prefix: '%QW', unit: 'words' },
-  { key: 'dint_input', prefix: '%ID', unit: 'dwords' },
-  { key: 'dint_output', prefix: '%QD', unit: 'dwords' },
-  { key: 'lint_input', prefix: '%IL', unit: 'lwords' },
-  { key: 'lint_output', prefix: '%QL', unit: 'lwords' },
-  { key: 'int_memory', prefix: '%MW', unit: 'words' },
-  { key: 'dint_memory', prefix: '%MD', unit: 'dwords' },
-  { key: 'lint_memory', prefix: '%ML', unit: 'lwords' },
-  { key: 'bool_memory', prefix: '%MX', unit: 'bits' },
-]
 
 /** Bumped whenever a reader would misread an older file. Version 2 is the
  *  first version any device has ever seen: version 1 was written but never
@@ -116,7 +101,7 @@ export function generateImageConf(sizes: IoImageSizes): string {
     `format_version=${FORMAT_VERSION}`,
   ]
 
-  for (const table of TABLES) {
+  for (const table of IMAGE_TABLES) {
     lines.push(`${table.key}=${sizes[table.prefix] ?? 0} ${table.unit}`)
   }
 

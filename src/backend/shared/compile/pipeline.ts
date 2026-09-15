@@ -53,6 +53,8 @@ import type { PLCProjectData } from '../types/PLC/open-plc'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import {
   computeIoImage,
+  describeDuplicateOutput,
+  describeIoImageSizes,
   describeUnbackedLocation,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
@@ -471,6 +473,44 @@ async function runCompilePipelineInner(
       emit({ stage: 'validate', message: describeUnbackedLocation(issue), level: 'error' })
     }
     return bailError(emit, 'validate', 'Compilation aborted: every located variable needs an address that exists.')
+  }
+
+  // TWO WRITERS ON ONE OUTPUT IS A WARNING, NOT A REFUSAL.
+  //
+  // IEC 61131-3 does not forbid it: a located variable may be declared in more
+  // than one POU, and which write survives is then the programmer's business,
+  // not the editor's. Where the standard does not restrict, neither do we.
+  //
+  // It is still worth saying. The addresses are global, so the last write in
+  // the scan wins and which one that is depends on POU order — a fact that is
+  // invisible in either declaration on its own. So the compile reports it and
+  // continues, and the amber glyph says the same thing at edit time.
+  if (sizesTheImage) {
+    for (const issue of ioImage.duplicateOutputs) {
+      emit({ stage: 'validate', message: describeDuplicateOutput(issue), level: 'warning' })
+    }
+  }
+
+  // WHERE EACH NUMBER CAME FROM, not just what it is.
+  //
+  // Both emitters are downstream of here — the `#define` block for bare metal
+  // and `image.conf` for v4 — so this is the one place that serves both, the
+  // same reason the sizer itself is called here rather than in each branch.
+  //
+  // The size alone is untraceable. Three contributors can size an area and the
+  // image takes the largest, so `%QW = 1024` might be the program's producers
+  // or might be a Modbus slave config nobody has opened in a year, and which
+  // one it is decides what the user changes. That is sharpest for a project
+  // that came from somewhere else: it arrives with a `bufferMapping` and an
+  // `s7commSlaveConfig` already in it, and nothing in the editor says so.
+  //
+  // Info level and only for the targets that actually size: v3 and the
+  // simulator keep their firmware defaults, so a line here would describe an
+  // image neither of them receives.
+  if (sizesTheImage) {
+    for (const line of describeIoImageSizes(ioImage)) {
+      emit({ stage: 'validate', message: line, level: 'info' })
+    }
   }
 
   // ---------------------------------------------------------------------
