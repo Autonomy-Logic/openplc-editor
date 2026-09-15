@@ -111,9 +111,21 @@ export default class MenuBuilder {
     return response
   }
 
-  async handleOpenProjectByPath(projectPath: string) {
-    const response = await this.projectService.openProjectByPath(projectPath)
-    this.mainWindow.webContents.send('project:open-recent-accelerator', response)
+  /**
+   * Open Recent — hand the renderer the PATH and let it open the project the
+   * same way every other entry point does.
+   *
+   * This used to read the project here and send the service response across,
+   * which crashed the renderer twice over: the response is an envelope
+   * (`{ success, data }`) and was passed on as though it were the payload, and
+   * the payload it wraps is raw file content that has never been through
+   * `parseProjectFiles`. The store action then set `meta` and `data` from two
+   * fields that do not exist on it, and the first component to read
+   * `project.data` threw. A failed open took the same route, so a project that
+   * had been moved or deleted crashed instead of raising a toast.
+   */
+  handleOpenProjectByPath(projectPath: string) {
+    this.mainWindow.webContents.send('project:open-recent-accelerator', projectPath)
   }
 
   handleCloseTab() {

@@ -28,7 +28,6 @@ import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
-import { BuildLibraryButton } from '../../_molecules/workspace-activity-bar/default/build-library'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
 import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
@@ -460,59 +459,73 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build Library (.stlib)
   // ---------------------------------------------------------------------------
 
-  const handleBuildLibrary = useCallback(async () => {
-    if (isCompiling) return
+  const handleBuildLibrary = useCallback(
+    async (overrides?: { cleanBuild?: boolean }) => {
+      if (isCompiling) return
 
-    // Reveal the console and re-attach to the tail (see handleBuild).
-    requestConsoleFollow()
+      // Reveal the console and re-attach to the tail (see handleBuild).
+      requestConsoleFollow()
 
-    // Always save before building.  The manifest tab and any POU
-    // bodies may have edits the workspace-level `editingState`
-    // doesn't track (each editor manages its own dirty flag against
-    // its file-slice entry), and the build pipeline reads everything
-    // off disk — `library.json`, `pous/**`, and the rest — so a
-    // stale on-disk copy would compile from the previous session's
-    // content.  `executeSaveProject` is the same full-project save
-    // the PLC build invokes; it walks every file the project owns
-    // and flushes the in-memory buffer to disk before the build
-    // starts.
-    const saved = await executeSave()
-    if (!saved) return
+      // Always save before building.  The manifest tab and any POU
+      // bodies may have edits the workspace-level `editingState`
+      // doesn't track (each editor manages its own dirty flag against
+      // its file-slice entry), and the build pipeline reads everything
+      // off disk — `library.json`, `pous/**`, and the rest — so a
+      // stale on-disk copy would compile from the previous session's
+      // content.  `executeSaveProject` is the same full-project save
+      // the PLC build invokes; it walks every file the project owns
+      // and flushes the in-memory buffer to disk before the build
+      // starts.
+      const saved = await executeSave()
+      if (!saved) return
 
-    if (!compiler.compileLibrary) {
-      addLog({
-        level: 'error',
-        message: 'Current platform does not implement library builds.',
-      })
-      return
-    }
-
-    setIsCompiling(true)
-    addLog({ level: 'info', message: 'Library build started' })
-
-    try {
-      const result = await compiler.compileLibrary({ projectData, projectPath: projectMeta.path }, (event) => {
-        if (!event.message) return
-        addLog({
-          level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
-          message: event.message,
-        })
-      })
-      if (!result.success) {
+      if (!compiler.compileLibrary) {
         addLog({
           level: 'error',
-          message: result.error ?? 'Library build failed.',
+          message: 'Current platform does not implement library builds.',
         })
+        return
       }
-    } catch (err) {
+
+      setIsCompiling(true)
       addLog({
-        level: 'error',
-        message: `Library build error: ${getErrorMessage(err)}`,
+        level: 'info',
+        message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
       })
-    } finally {
-      setIsCompiling(false)
-    }
-  }, [compiler, projectData, projectMeta, addLog, isCompiling, canEdit, executeSave, requestConsoleFollow])
+
+      try {
+        const result = await compiler.compileLibrary(
+          { projectData, projectPath: projectMeta.path, cleanBuild: overrides?.cleanBuild ?? false },
+          (event) => {
+            if (!event.message) return
+            addLog({
+              level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
+              message: event.message,
+            })
+          },
+        )
+        if (!result.success) {
+          addLog({
+            level: 'error',
+            message: result.error ?? 'Library build failed.',
+          })
+        } else if (result.verification && !result.verification.success) {
+          addLog({
+            level: 'warning',
+            message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
+          })
+        }
+      } catch (err) {
+        addLog({
+          level: 'error',
+          message: `Library build error: ${getErrorMessage(err)}`,
+        })
+      } finally {
+        setIsCompiling(false)
+      }
+    },
+    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave, requestConsoleFollow],
+  )
 
   // ---------------------------------------------------------------------------
   // Debug Library — run the library's blocks on the simulator
@@ -1122,13 +1135,28 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           the debugger attached — the only way to see a library actually
           execute. */}
       {projectCaps.hasLibraryBuild && (
-        <TooltipSidebarWrapperButton tooltipContent={isCompiling ? 'Building library…' : 'Build Library'}>
-          <BuildLibraryButton
-            onClick={() => void handleBuildLibrary()}
-            disabled={isCompiling}
-            className={cn(isCompiling && disabledButtonClass)}
-          />
-        </TooltipSidebarWrapperButton>
+        // No outer `TooltipSidebarWrapperButton`: `BuildOptionsPopover`
+        // already renders its own Radix tooltip via `triggerTooltip`,
+        // and the wrapper's tooltip persisted on top of the popover
+        // contents once the menu opened (PLC build button doesn't wrap
+        // either — same idiom here for consistency).
+        <BuildOptionsPopover
+          disabled={isCompiling}
+          triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
+          libraryMode={true}
+          uploadAvailable={false}
+          uploadDisabledReason='library builds do not upload'
+          onSelect={(option: BuildOption) => {
+            switch (option) {
+              case 'build-only':
+                void handleBuildLibrary({ cleanBuild: false })
+                break
+              case 'clean-upload':
+                void handleBuildLibrary({ cleanBuild: true })
+                break
+            }
+          }}
+        />
       )}
       {projectCaps.hasLibraryDebug && (
         <TooltipSidebarWrapperButton

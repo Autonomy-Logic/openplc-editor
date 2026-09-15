@@ -35,6 +35,18 @@ export type MissingLibrary = {
   version?: string
 }
 
+/**
+ * A library the project pins below a version already installed here.
+ * Drives the update prompt.
+ */
+export type OutdatedLibrary = {
+  name: string
+  /** Version the project's `libraries[]` records. */
+  pinned: string
+  /** Every installed version, newest first. */
+  available: string[]
+}
+
 export type LibraryActions = {
   setSystemLibraries: (libraries: SystemLibrary[]) => void
   addLibrary: (name: string, type: 'function' | 'function-block') => void
@@ -61,6 +73,13 @@ export type LibraryActions = {
    */
   setProjectLibraries: (refs: LibraryProjectRef[]) => void
   /**
+   * Pin an enabled library to one of its installed versions.  No-op
+   * when the project does not reference the library.  Re-derives the
+   * effective pool, so placed blocks and the compile see the same
+   * version.
+   */
+  setLibraryVersion: (name: string, version: string) => void
+  /**
    * Record which names in the system pool are bundled / canonical.
    * Called by the app's library hydration after `listInstalled()` —
    * the bundled flag isn't carried by `SystemLibrary` itself, so the
@@ -70,6 +89,10 @@ export type LibraryActions = {
 }
 
 export type LibrarySliceExtra = {
+  /** Every installed library, one entry per installed VERSION.  The
+   *  per-project view is `libraries.system`, narrowed from this by the
+   *  project's pins. */
+  installedLibraries: SystemLibrary[]
   /** Names of non-bundled libraries enabled for the current project.
    *  Bundled libraries are always-on and intentionally not tracked
    *  here. */
@@ -82,6 +105,8 @@ export type LibrarySliceExtra = {
   /** Project-referenced libraries the system pool currently can't
    *  resolve.  Drives the missing-libraries modal post-project-open. */
   missingLibraries: MissingLibrary[]
+  /** Project-pinned libraries with a newer version installed. */
+  outdatedLibraries: OutdatedLibrary[]
 }
 
 export type LibrarySlice = import('../../../../middleware/shared/ports/library-types').LibraryState &

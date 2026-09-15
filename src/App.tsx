@@ -64,6 +64,16 @@ hydrateLibraries()
 // install/uninstall/CDN change.  Subscriber lives outside React to
 // catch events fired before any component mounts.
 editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
+// And again whenever a project opens. The pool is hydrated once at start-up,
+// so a library installed since by another process — `openplc-cli library
+// install`, or a second editor — is not in it, and a project that uses that
+// library opens reporting it missing; only a restart fixed it. Re-reading is
+// enough on its own: `setSystemLibraries` derives the enabled, missing and
+// outdated lists from the project's own refs each time it runs.
+openPLCStoreBase.subscribe(
+  (state) => state.project.meta.path,
+  () => hydrateLibraries(),
+)
 
 // Fetch the VPP catalog once, now, so a build can tell the user a newer
 // package exists without waiting on the network to find out. Nothing awaits

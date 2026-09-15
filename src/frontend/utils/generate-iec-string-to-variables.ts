@@ -1,7 +1,7 @@
 import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { DEBUG_STRING_CAP } from './variable-sizes'
+import { MAX_STRING_LENGTH, parseStringLength } from './iec-types-registry'
 
 /**
  * Block header with its optional IEC qualifiers, e.g. `VAR RETAIN PERSISTENT`.
@@ -101,17 +101,23 @@ export const DISALLOWED_LOCATION_CLASSES: ReadonlyArray<PLCVariable['class']> = 
 // `parseArrayType` has declined it, and `parseArrayType` declines blank bounds.
 // Both guards are below; between them, a comma reaches the store only as part of
 // a well-formed multi-dimensional ARRAY.
+//
+// It also accepts `*`, the bound of a variable-length array
+// (`values : ARRAY [*] OF INT;`), and `(` / `)` for a declared string length
+// (`name : STRING(23);`). The parentheses cannot swallow a `(*` comment: the
+// group is lazy and must be followed by `;`, and anything before that
+// semicolon is rejected by `baseTypeSchema` and `identifierRegex`.
 
 // Primary format: name : type AT location := initialValue ; (* documentation *)
 const lineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\],\.]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s*:\s*(?<type>[\w\s\[\]\(\),\.\*]+?)(?:\s+AT\s+(?<location>[\w\d\._%]+))?\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 // Alternate format: name AT location : type := initialValue ; (* documentation *)
 // This format is used by some IEC 61131-3 tools and older versions of OpenPLC Editor
 const alternateLineRegex =
   // eslint-disable-next-line no-useless-escape
-  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\],\.]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
+  /^\s*(?<name>\w+)\s+AT\s+(?<location>[\w\d\._%]+)\s*:\s*(?<type>[\w\s\[\]\(\),\.\*]+?)\s*(?::=\s*(?<initialValue>[^;]+?))?\s*;\s*(?:\(\*\s*(?<documentation>.*?)\s*\*\))?$/
 
 const guessErrorReason = (line: string): string => {
   if (!line.includes(';')) return 'missing semicolon (;) at the end of the declaration'
@@ -135,13 +141,45 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
  * Returns null if not an array type, otherwise returns the parsed array type definition.
  * Also consumed by the data-type text parser (`PLC/data-type-text-parser.ts`).
  */
+/**
+ * A `STRING(...)` / `WSTRING[...]` declaration, whatever sits between the
+ * delimiters. Matching the shape commits the writer to a length, so anything
+ * `parseStringLength` will not accept from here — `STRING[]`, `STRING(abc)`,
+ * `STRING(0)`, `STRING(999)`, the mismatched `STRING(23]` — is a mistake to
+ * report rather than a type name to keep.
+ */
+const SIZED_STRING_SHAPE = /^(W?STRING)\s*[([]\s*([^)\]]*?)\s*[)\]]$/i
+
+/**
+ * The declaration's type name and the length it got wrong, or `null` when the
+ * type is not sized-string-shaped or its length is one we can carry.
+ */
+const badStringLength = (typeStr: string): { typeName: string; got: string } | null => {
+  const shape = SIZED_STRING_SHAPE.exec(typeStr)
+  if (!shape) return null
+  const { length, valid } = parseStringLength(typeStr)
+  // `parseStringLength` reports `valid: true` with no length for an
+  // unqualified name, so the undefined case must be caught explicitly.
+  if (length !== undefined && valid) return null
+  return { typeName: shape[1].toUpperCase(), got: shape[2] }
+}
+
 export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
-  // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
-  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*)\s*$/i)
+  // ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally
+  // namespaced) that may carry a declared string length —
+  // `ARRAY [0..3] OF STRING(23)`.
+  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*(?:\s*[([]\s*\d+\s*[)\]])?)\s*$/i)
   if (!arrayMatch) return null
 
   const dimensionsStr = arrayMatch[1]
   const baseTypeStr = arrayMatch[2].trim()
+
+  // An element's length is held to the same rule as a scalar's. Without this
+  // the element fails `baseTypeSchema` and is kept as a user data type named
+  // `STRING(0)`, which is then persisted and emitted verbatim into generated
+  // ST. Refusing the array here lets the caller report it as the syntax error
+  // it is.
+  if (badStringLength(baseTypeStr)) return null
 
   // Parse dimensions (can be comma-separated for multi-dimensional arrays)
   const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())
@@ -201,10 +239,27 @@ export const parseIecStringToVariables = (
   // declaration under it inherits the same value until END_VAR.
   let currentFlag: PLCVariable['flag'] | undefined
 
+  let inComment = false
+
   lines.forEach((rawLine, idx) => {
     const lineNumber = idx + 1
     const line = rawLine.trim()
     if (line === '') return
+
+    // A comment on a line of its own, which is legal ST and is how a long VAR
+    // block is given section headings — on one line or spread over several.
+    //
+    // Only a comment that STARTS a line is skipped: a trailing one still
+    // belongs to the declaration in front of it, and is parsed as its
+    // documentation.
+    if (inComment) {
+      if (line.includes('*)')) inComment = false
+      return
+    }
+    if (line.startsWith('(*')) {
+      if (!line.includes('*)')) inComment = true
+      return
+    }
 
     const blockStart = line.match(blockStartRegex)
     if (blockStart) {
@@ -250,6 +305,24 @@ export const parseIecStringToVariables = (
 
     const parsedType = type.trim()
 
+    // A length-qualified string — `STRING(23)`, `WSTRING(8)`. STruC++ emits
+    // `IECStringVar<23>` at 54 bytes where a plain STRING is 518. Square
+    // brackets are accepted and normalised to the parenthesised form.
+    //
+    // Checked in element position as well as scalar, and before the array
+    // dispatch, because the two paths fail differently and both fail quietly:
+    // a bad scalar is stored as a user data type named "STRING(0)", and a bad
+    // element leaves the whole declaration as one named
+    // "ARRAY[0..1] OF STRING(0)". Either is emitted verbatim into generated ST.
+    const arrayElement = /^ARRAY\s*\[[^\]]+\]\s+OF\s+(.+)$/i.exec(parsedType)
+    const badLength = badStringLength(arrayElement ? arrayElement[1].trim() : parsedType)
+    if (badLength) {
+      throw new Error(
+        `Syntax error on line ${lineNumber}: "${line}". ` +
+          `${badLength.typeName} takes a length from 1 to ${MAX_STRING_LENGTH}, got "${badLength.got}".`,
+      )
+    }
+
     // Check if it's an array type first
     const arrayType = parseArrayType(parsedType)
     if (arrayType) {
@@ -276,35 +349,6 @@ export const parseIecStringToVariables = (
     if (parsedType.includes(',')) {
       throw new Error(
         `Syntax error on line ${lineNumber}: "${line}". A comma is only allowed between inline ARRAY bounds (e.g. "ARRAY[0..1, 0..2] OF INT"), and no bound may be empty.`,
-      )
-    }
-
-    // A length-qualified string (`STRING[20]`, `WSTRING[8]`) is legal IEC and
-    // legal CODESYS, and STruC++ does not accept it. Left alone it is not even
-    // recognised as a string: it becomes a user data type literally named
-    // "STRING[20]", which is persisted, shown in the type cell, and emitted
-    // verbatim into the generated ST — where the compiler fails with
-    // `Expected Semicolon, found [` pointing at a line the user never wrote.
-    //
-    // Refusing here says what is true today. The transport carries a fixed
-    // DEBUG_STRING_CAP-character budget, so a declared length would not be honoured even if
-    // it parsed; when the compiler grows the declaration, this guard is the one
-    // place that has to change.
-    // Both shapes it can take: on its own (`msg : STRING[20]`) and as an ARRAY's
-    // element type (`tags : ARRAY [0..3] OF STRING[20]`). The array form needs
-    // its own alternative because `parseArrayType` only accepts a bare
-    // identifier after `OF`, so a length-qualified element matches nothing and
-    // used to fall through every branch to the compiler — which then reported
-    // `Expected Semicolon, found [` at a column the user never wrote, plus two
-    // cascading errors on the FOLLOWING line, so even the line number misled.
-    const lengthQualifiedString =
-      /^(W?STRING)\s*\[\s*[^\]]*\]$/i.exec(parsedType) ??
-      /^ARRAY\s*\[[^\]]*\]\s+OF\s+(W?STRING)\s*\[\s*[^\]]*\]\s*$/i.exec(parsedType)
-    if (lengthQualifiedString) {
-      const keyword = lengthQualifiedString[1].toUpperCase()
-      throw new Error(
-        `Syntax error on line ${lineNumber}: "${line}". A declared length is not supported on ${keyword} — ` +
-          `use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`,
       )
     }
 

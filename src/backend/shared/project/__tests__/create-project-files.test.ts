@@ -99,6 +99,10 @@ describe('buildProjectFileContent', () => {
       expect(built.libraryManifest).toBeUndefined()
     })
 
+    it('does not emit a resources README — a program has no resources', () => {
+      expect(built.libraryResourcesReadme).toBeUndefined()
+    })
+
     describe('default POU body per language', () => {
       it('seeds a ladder rung container for LD projects', () => {
         const ld = buildProjectFileContent({ name: 'P', type: 'plc-project', language: 'ld', time: 'T#20ms' })
@@ -141,6 +145,14 @@ describe('buildProjectFileContent', () => {
 
     it('tags the project meta as plc-library', () => {
       expect(built.project.meta.type).toBe('plc-library')
+    })
+
+    it('emits a resources README describing the folder-per-library layout', () => {
+      // `resources/` is created empty, and an empty directory does not survive
+      // a commit, so the README is what carries the convention to the author.
+      expect(built.libraryResourcesReadme).toBeDefined()
+      expect(built.libraryResourcesReadme).toContain('library.properties')
+      expect(built.libraryResourcesReadme).toContain('src/')
     })
 
     it('emits a library manifest with snake_case namespace auto-fill', () => {

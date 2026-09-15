@@ -121,17 +121,30 @@ testAccelerator('onAbout', 'about', 'aboutModalAccelerator')
 testAccelerator('onQuitApp', 'quitApp', 'quitAppRequest')
 
 describe('onOpenRecent', () => {
-  it('registers a bridge listener and passes response data to the callback', () => {
+  // The channel carries the PATH of the project to open, and nothing else.
+  // It used to carry the main process's whole `openProjectByPath` response,
+  // which the renderer passed on as if it were the parsed payload — so every
+  // Open Recent set the project's `meta` and `data` to undefined and the first
+  // component to read them threw.
+  it('registers a bridge listener and passes the project path to the callback', () => {
     const cb = jest.fn()
     adapter.onOpenRecent(cb)
 
     expect(window.bridge.openRecentAccelerator).toHaveBeenCalledTimes(1)
 
-    const mockEvent = {}
-    const mockResponse = { projectPath: '/some/path' }
-    fire('openRecent', mockEvent, mockResponse)
+    fire('openRecent', {}, '/some/path')
 
-    expect(cb).toHaveBeenCalledWith(mockResponse)
+    expect(cb).toHaveBeenCalledWith('/some/path')
+  })
+
+  it('passes undefined rather than a payload it cannot use', () => {
+    const cb = jest.fn()
+    adapter.onOpenRecent(cb)
+
+    // A version-skewed main process still sending the old response envelope.
+    fire('openRecent', {}, { success: true, data: { meta: {}, content: {} } })
+
+    expect(cb).toHaveBeenCalledWith(undefined)
   })
 
   it('returns an unsubscribe function that deactivates the callback', () => {
@@ -139,7 +152,7 @@ describe('onOpenRecent', () => {
     const unsub = adapter.onOpenRecent(cb)
 
     unsub()
-    fireIfRegistered('openRecent', {}, { projectPath: '/x' })
+    fireIfRegistered('openRecent', {}, '/x')
 
     expect(cb).not.toHaveBeenCalled()
   })

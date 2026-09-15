@@ -1,7 +1,7 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { generateCBlocksCode } from '../generateCBlocksCode'
 
-const makeScalarVar = (name: string, cls: 'input' | 'output', baseType: string): PLCVariable => ({
+const makeScalarVar = (name: string, cls: 'input' | 'output' | 'inOut', baseType: string): PLCVariable => ({
   name,
   class: cls,
   type: { definition: 'base-type', value: baseType },
@@ -284,5 +284,52 @@ describe('generateCBlocksCode', () => {
     expect(result).toContain('#undef tempVar')
     expect(result).toContain('#undef ioVar')
     expect(result).not.toContain('#undef hasBeenInitialized')
+  })
+
+  it('does not alias a generic pin as if it were a project type', () => {
+    // A generic pin is a `user-data-type` by shape but names no project type:
+    // it resolves to the runtime's own IEC_ANY. Aliasing it emitted
+    // `using ANY_INT = strucpp::ANY_INT;` for a type that does not exist, and
+    // only a block declaring one would find out.
+    const result = generateCBlocksCode([
+      {
+        name: 'SCALE',
+        code: 'void setup() { }\nvoid loop() { }',
+        variables: [
+          {
+            name: 'raw',
+            class: 'input',
+            type: { definition: 'user-data-type', value: 'ANY_INT' },
+            location: '',
+            documentation: '',
+            debug: false,
+          },
+        ],
+      },
+    ])
+
+    expect(result).not.toContain('using ANY_INT')
+    expect(result).not.toContain('strucpp::ANY_INT')
+  })
+
+  it('still aliases a real project type', () => {
+    const result = generateCBlocksCode([
+      {
+        name: 'DRIVE',
+        code: 'void setup() { }\nvoid loop() { }',
+        variables: [
+          {
+            name: 'motor',
+            class: 'input',
+            type: { definition: 'user-data-type', value: 'MOTOR' },
+            location: '',
+            documentation: '',
+            debug: false,
+          },
+        ],
+      },
+    ])
+
+    expect(result).toContain('using MOTOR = strucpp::MOTOR;')
   })
 })
