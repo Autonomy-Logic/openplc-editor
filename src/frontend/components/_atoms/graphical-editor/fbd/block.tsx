@@ -1,3 +1,4 @@
+import type { SystemLibrary } from '@root/middleware/shared/ports/library-types'
 import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
@@ -13,6 +14,7 @@ import {
 } from '../../../../utils/graphical/in-out-pin-rules'
 import { isLegalIdentifier } from '../../../../utils/keywords'
 import { newUuid } from '../../../../utils/new-uuid'
+import { findLibraryPou } from '../../../../utils/PLC/library-block-divergence'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -373,6 +375,39 @@ export const BlockNodeElement = <T extends object>({
 const BLOCK_CORNER_RADIUS = 6
 const EXECUTION_ORDER_BADGE_INSET = BLOCK_CORNER_RADIUS / 2
 
+/**
+ * An installed library's POU in the shape the node rebuild reads.
+ *
+ * The rebuild was written for a POU the project owns, which keeps its pins under
+ * `interface.variables` and its kind under `pouType`. A library POU carries the
+ * same facts under different names, so it is translated here rather than the
+ * rebuild being taught about two shapes.
+ */
+function libraryPouAsProjectPou(
+  variant: { name?: string },
+  systemLibraries: SystemLibrary[],
+  projectPous: Array<{ name: string }>,
+) {
+  const libraryPou = findLibraryPou(
+    variant as BlockVariant,
+    systemLibraries,
+    projectPous.map((pou) => pou.name),
+  )
+  if (!libraryPou) return undefined
+  return {
+    name: libraryPou.name,
+    documentation: libraryPou.documentation,
+    pouType: libraryPou.type,
+    interface: {
+      // `id` is how a project POU's pin is tracked across a rename; a library
+      // pin has no such identity, and the remap falls back to the name.
+      variables: libraryPou.variables.map((pin) => ({ ...pin, id: undefined as string | undefined })),
+      // A library function returns through its OUT pin.
+      returnType: libraryPou.variables.find((pin) => pin.name === 'OUT')?.type?.value ?? '',
+    },
+  }
+}
+
 const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
   const pouName = useBoundPou()
@@ -629,9 +664,13 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     if (!variant) return
 
     const libMatch = libraries.user.find((lib) => lib.name === variant.name && lib.type === variant.type)
-    if (!libMatch) return
+    const projectPou = libMatch ? pous.find((pou) => pou.name === libMatch.name) : undefined
 
-    const libPou = pous.find((pou) => pou.name === libMatch.name)
+    // A block out of an installed library has no POU in the project, so its
+    // interface comes from the library instead. The rebuild below REPLACES the
+    // node rather than editing it, which is what a block growing a pin needs:
+    // the canvas keeps the handles it registered against the old one.
+    const libPou = projectPou ?? libraryPouAsProjectPou(variant, libraries.system, pous)
     if (!libPou) return
 
     const blockVariant = node.data.variant as BlockVariant

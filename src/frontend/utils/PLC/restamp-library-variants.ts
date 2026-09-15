@@ -432,10 +432,15 @@ function lineFor(change: RestampChange, count: number, pous: Set<string>): strin
         `delete and re-place ${verb(count, 'it', 'them')}.`
       )
     case 'pin-added':
-      return (
-        `${block}: the library added pin ${pin} (${to}). ${plural(count, 'placed block')}${at} ` +
-        `${verb(count, 'does not draw', 'do not draw')} it yet.`
-      )
+      // Applied and not-applied read the same until this is said out loud, and
+      // a block that just grew the pin still reporting "does not draw it yet"
+      // is how a working update gets mistaken for a broken one.
+      return change.applied
+        ? `${block}: the library added pin ${pin} (${to}). ${plural(count, 'placed block')}${at} ` +
+            `now ${verb(count, 'draws', 'draw')} it.`
+        : `${block}: the library added pin ${pin} (${to}). ${plural(count, 'placed block')}${at} ` +
+            `${verb(count, 'does not draw', 'do not draw')} it yet — hover the block and click its update badge.`
+
     case 'pin-removed':
       return (
         `${block}: the library removed pin ${pin}. ${plural(count, 'placed block')}${at} still ` +
