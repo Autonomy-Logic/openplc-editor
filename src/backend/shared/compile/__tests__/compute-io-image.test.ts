@@ -638,8 +638,7 @@ describe('computeIoImage — an array whose lower bound is negative', () => {
   // editor, one word sized in the image, and eleven written into it.
 
   /** A project whose one POU declares `array`. */
-  const withArray = (array: PLCVariable) =>
-    compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
+  const withArray = (array: PLCVariable) => compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
 
   it('counts every element of ARRAY [-5..5]', () => {
     expect(withArray(arrayVar('v', '%MW0', -5, 5)).sizes).toEqual({ '%MW': 11 })

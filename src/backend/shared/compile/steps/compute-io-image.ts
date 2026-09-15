@@ -48,6 +48,7 @@
  * Pure function: no fs I/O, no store, no platform coupling.
  */
 
+import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
 import type { DevicePin, ModbusBufferMapping, PLCServer } from '../../../../middleware/shared/ports/types'
 import type { PoolVppIoInput } from '../../../../middleware/shared/utils/iec-address'
 import {
@@ -61,7 +62,6 @@ import type {
   AddressProducerCapabilities,
   ServerCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
-import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
 /**
