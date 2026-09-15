@@ -631,6 +631,26 @@ describe('createEditorCompilerAdapter', () => {
   })
 
   describe('compileLibrary', () => {
+    it("hands the installed libraries' function blocks to the POU preprocessor", async () => {
+      // A library's own Python POU may instantiate a function block that another
+      // library ships, so the preprocessor needs the same pin source a program
+      // build gets. With no library installed the list is empty and the mapping
+      // never runs, which is why it takes an installed one to exercise.
+      ;(window.bridge.loadAllLibraries as jest.Mock).mockResolvedValue([
+        { manifest: { name: 'motor_lib', functionBlocks: [{ name: 'Driver', inputs: [], outputs: [], inouts: [] }] } },
+      ])
+
+      const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, () => {})
+      await flushMicrotasks()
+      libraryCallback!({ libraryBuildResult: { success: true, libraryName: 'demo_lib' } })
+      libraryCallback!({ closePort: true })
+
+      await promise
+
+      expect(window.bridge.loadAllLibraries).toHaveBeenCalled()
+      expect(window.bridge.runCompileLibrary).toHaveBeenCalled()
+    })
+
     it('posts project path + IPC data to runCompileLibrary and resolves the structured result', async () => {
       const progressEvents: CompileProgressEvent[] = []
       const promise = adapter.compileLibrary!({ projectData: mockProjectData, projectPath: '/lib/project' }, (event) =>
@@ -651,16 +671,18 @@ describe('createEditorCompilerAdapter', () => {
 
       const result = await promise
 
-      // Args: [projectPath, ipcDataForBuild, nativePous]
-      // 3rd arg: the native-POU inventory, taken from the RAW project data
+      // Args: [projectPath, ipcDataForBuild, ipcDataForVerify, cleanBuild, nativePous]
+      // 5th arg: the native-POU inventory, taken from the RAW project data
       // before `preprocessPous` lowered every native body to bridge ST and
       // rewrote its language tag. The main process cannot derive it.
-      //
-      // There is no verify-pass project data and no `cleanBuild` flag: the
-      // build runs strucpp and nothing else, so there is no second preprocess
-      // pass to send and no verification cache to bypass.
       expect(window.bridge.runCompileLibrary).toHaveBeenCalledWith(
-        ['/lib/project', expect.objectContaining({ pous: expect.any(Array) }), expect.any(Array)],
+        [
+          '/lib/project',
+          expect.objectContaining({ pous: expect.any(Array) }),
+          expect.objectContaining({ pous: expect.any(Array) }),
+          false,
+          expect.any(Array),
+        ],
         expect.any(Function),
       )
       expect(result).toEqual({
@@ -770,7 +792,7 @@ describe('createEditorCompilerAdapter', () => {
       await promise
 
       const args = (window.bridge.runCompileLibrary as jest.Mock).mock.calls[0][0] as unknown[]
-      expect(args[2]).toEqual([{ name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' }])
+      expect(args[4]).toEqual([{ name: 'CPP_SCALE', language: 'cpp', relPath: 'pous/function-blocks/CPP_SCALE.cpp' }])
     })
 
     it('defaults non-error log levels to info when logLevel is missing', async () => {

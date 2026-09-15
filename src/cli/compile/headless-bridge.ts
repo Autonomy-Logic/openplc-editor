@@ -16,6 +16,8 @@ import type { CompileProgressChannel } from '@root/backend/editor/compiler/types
 import { LibraryManagerModule } from '@root/backend/editor/library-manager'
 import type { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 
+import type { EnabledArchives, LibraryRef } from '../../middleware/shared/ports/library-types'
+
 /**
  * A progress channel for a headless caller.
  *
@@ -63,7 +65,7 @@ export interface HeadlessCompileBridge {
    *  while the GUI attributed them correctly -- the kind of difference between
    *  the two front ends this bridge exists to prevent. */
   getRuntimeUsername: () => string | null
-  loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+  loadEnabledArchives: (refs: ReadonlyArray<LibraryRef>) => EnabledArchives
 }
 
 /**
@@ -96,6 +98,6 @@ export function createHeadlessCompileBridge(runtime: RuntimeApiClient | null): H
 
     getRuntimeUsername: () => runtime?.tokens.getUsername() ?? null,
 
-    loadEnabledArchives: (enabledNames) => libraries.loadEnabledArchives(enabledNames),
+    loadEnabledArchives: (refs) => libraries.loadEnabledArchives(refs),
   }
 }

@@ -1,5 +1,9 @@
 import { cBlockExternalVariables, cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
-import { isArrayVariable, multiDimensionalContainerType } from '../../../../frontend/utils/PLC/array-codegen-helpers'
+import {
+  isArrayVariable,
+  isDescriptorPinType,
+  multiDimensionalContainerType,
+} from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 
 type CppPouData = {
@@ -168,7 +172,14 @@ const generateUserTypeAliases = (cppPous: CppPouData[], userTypeNames: Iterable<
       // `derived` is a function block instance, `user-data-type` a structure or
       // enumeration. A block may name either — casting to an enumeration, or
       // declaring a local of an FB class — so both belong in scope.
-      if (variable.type.definition === 'user-data-type' || variable.type.definition === 'derived') {
+      // A generic pin looks like a user type by name, but names no project
+      // type: it resolves to the runtime's own `IEC_ANY`, so aliasing it would
+      // emit `using ANY_INT = strucpp::ANY_INT;` for a type that does not
+      // exist.
+      if (
+        (variable.type.definition === 'user-data-type' || variable.type.definition === 'derived') &&
+        !isDescriptorPinType(variable.type.value)
+      ) {
         referenced.add(variable.type.value.toUpperCase())
       }
       if (variable.type.definition === 'array' && variable.type.data?.baseType.definition === 'user-data-type') {

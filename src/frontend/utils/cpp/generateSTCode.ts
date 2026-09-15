@@ -1,10 +1,18 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { getArrayStartIndex, isArrayVariable, multiDimensionalContainerType } from '../PLC/array-codegen-helpers'
+import {
+  getArrayStartIndex,
+  isArrayVariable,
+  isVariableLengthArray,
+  multiDimensionalContainerType,
+} from '../PLC/array-codegen-helpers'
 import { cBlockExternalVariables, cBlockInterfaceVariables } from './block-interface'
 
 type STCodeGenerationParams = {
   pouName: string
   allVariables: PLCVariable[]
+  /** Names of the function blocks in scope, upper-cased. A pin typed by one is
+   *  an alias for the caller's instance and the field already holds a pointer. */
+  functionBlockNames?: ReadonlySet<string>
 }
 
 /**
@@ -28,17 +36,44 @@ type STCodeGenerationParams = {
  *   index in one `operator()` call — so the container itself is passed and the
  *   block indexes it as `grid(i, j)`, the same accessor the compiler's own
  *   generated code uses.
+ *
+ * - Variable-length arrays: `vars.NAME = &NAME`, for the same reason as a
+ *   multi-dimensional one. The pin is an `ArrayView<n>D`, whose bounds are not
+ *   known until the call, so passing the first element would drop the only
+ *   record of how many elements there are — and there is no lower bound yet to
+ *   offset by. Passing the view keeps `lower_bound()` / `upper_bound()` / `at()`
+ *   reachable from the block.
  */
-const generateVariableAssignment = (variable: PLCVariable): string => {
+/**
+ * The member's name in the generated class.
+ *
+ * A member whose name matches its own type is mangled with a trailing
+ * underscore, because `&NODE` would otherwise name the type rather than the
+ * member. The struct field keeps the plain name; only the address taken here
+ * follows the class.
+ */
+const memberName = (variable: PLCVariable): string => {
   const name = variable.name.toUpperCase()
-  if (multiDimensionalContainerType(variable)) {
-    return `vars.${name} = &${name};\n`
+  const typeName = variable.type.value?.toUpperCase()
+  return typeName === name ? `${name}_` : name
+}
+
+const generateVariableAssignment = (variable: PLCVariable, functionBlockNames?: ReadonlySet<string>): string => {
+  const name = variable.name.toUpperCase()
+  const member = memberName(variable)
+  // A function block passed as an in-out is aliased rather than copied, so the
+  // member is already a pointer at the caller's instance.
+  if (functionBlockNames?.has((variable.type.value ?? '').toUpperCase())) {
+    return `vars.${name} = ${member};\n`
+  }
+  if (multiDimensionalContainerType(variable) || isVariableLengthArray(variable)) {
+    return `vars.${name} = &${member};\n`
   }
   if (isArrayVariable(variable)) {
     const startIndex = getArrayStartIndex(variable)
-    return `vars.${name} = &${name}[${startIndex}] - ${startIndex};\n`
+    return `vars.${name} = &${member}[${startIndex}] - ${startIndex};\n`
   }
-  return `vars.${name} = &${name};\n`
+  return `vars.${name} = &${member};\n`
 }
 
 /**
@@ -94,7 +129,7 @@ const wrapInGlobalLocks = (externals: PLCVariable[], call: string): string => {
 }
 
 const generateSTCode = (params: STCodeGenerationParams): string => {
-  const { pouName, allVariables } = params
+  const { pouName, allVariables, functionBlockNames } = params
 
   const structName = `${pouName.toUpperCase()}_VARS`
   const setupFunctionName = `${pouName.toLowerCase()}_setup`
@@ -102,7 +137,7 @@ const generateSTCode = (params: STCodeGenerationParams): string => {
 
   let variableAssignments = ''
   for (const variable of cBlockInterfaceVariables(allVariables)) {
-    variableAssignments += generateVariableAssignment(variable)
+    variableAssignments += generateVariableAssignment(variable, functionBlockNames)
   }
 
   // Externals are filled inside the lock wrapper instead, immediately before

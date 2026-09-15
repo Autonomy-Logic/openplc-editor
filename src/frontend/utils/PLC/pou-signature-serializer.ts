@@ -77,6 +77,11 @@ function buildDeclarationLine(pou: PLCPou): string {
   if (pou.pouType === 'function' && pou.interface?.returnType) {
     return `${startKeyword} ${pou.name} : ${pou.interface.returnType}`
   }
+  // The LSP needs the base too: without it a derived block appears to have only
+  // its own pins and methods, so every inherited one reads as undefined.
+  if (pou.interface?.extends) {
+    return `${startKeyword} ${pou.name} EXTENDS ${pou.interface.extends}`
+  }
   return `${startKeyword} ${pou.name}`
 }
 

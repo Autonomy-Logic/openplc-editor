@@ -47,7 +47,7 @@ function project(overrides: { libraries?: Array<{ name: string; version: string 
 function archive(
   name: string,
   blocks: Array<{ name: string; language: 'cpp' | 'python'; file?: string; source?: string | null }> = [],
-  opts: { stBlocks?: string[] } = {},
+  opts: { stBlocks?: string[]; namespace?: string; types?: Array<{ name: string; kind: string }> } = {},
 ): StlibArchiveDTO {
   const sources: Array<{ fileName: string; source: string }> = []
   const functionBlocks: unknown[] = (opts.stBlocks ?? []).map((n) => ({
@@ -72,7 +72,16 @@ function archive(
     if (source !== null) sources.push({ fileName, source })
   }
 
-  return { manifest: { name, version: '1.0.0', functionBlocks }, sources } as unknown as StlibArchiveDTO
+  return {
+    manifest: {
+      name,
+      version: '1.0.0',
+      functionBlocks,
+      ...(opts.namespace ? { namespace: opts.namespace } : {}),
+      ...(opts.types ? { types: opts.types } : {}),
+    },
+    sources,
+  } as unknown as StlibArchiveDTO
 }
 
 // -- tests --------------------------------------------------------------------

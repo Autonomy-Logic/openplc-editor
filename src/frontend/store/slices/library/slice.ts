@@ -1,8 +1,9 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { compareSemver } from '../../../utils/semver'
 import type { SharedRootState } from '../shared/types'
-import type { LibraryProjectRef, LibrarySlice } from './types'
+import type { LibraryProjectRef, LibrarySlice, OutdatedLibrary, SystemLibrary } from './types'
 
 /**
  * The library slice is created with a narrow `LibrarySlice` state
@@ -38,9 +39,11 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       system: [],
       user: [],
     },
+    installedLibraries: [],
     enabledLibraries: [],
     bundledLibraryNames: [],
     missingLibraries: [],
+    outdatedLibraries: [],
     libraryActions: {
       setSystemLibraries: (libraries) => {
         // Strip malformed POU entries at the source — keep only
@@ -56,13 +59,15 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
         }))
         setState(
           produce((state: LibrarySlice) => {
-            state.libraries.system = sanitized
-            // System pool changed — refresh the derived diff against
-            // the project's current durable list.  Empty when the
-            // project slice isn't wired (slim test harness).
+            // `sanitized` carries every installed version; `system` carries
+            // the one this project uses.  Kept apart so switching a project's
+            // pinned version needs no round trip to the main process.
+            state.installedLibraries = sanitized
             const refs = readProjectRefs()
-            state.enabledLibraries = computeEnabled(sanitized, refs)
-            state.missingLibraries = computeMissing(sanitized, refs)
+            state.libraries.system = effectivePool(sanitized, refs)
+            state.enabledLibraries = computeEnabled(state.libraries.system, refs)
+            state.missingLibraries = computeMissing(state.libraries.system, refs)
+            state.outdatedLibraries = computeOutdated(sanitized, refs)
           }),
         )
       },
@@ -147,8 +152,27 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
             // Mirror into the project slice (when present) so the
             // durable list and the derived view stay in sync.
             mutateProjectRefs(state, () => refs.map((r) => ({ name: r.name, version: r.version })))
+            // Re-derive: the project may pin versions other than the newest.
+            const installed = poolToNarrow(state)
+            state.libraries.system = effectivePool(installed, refs)
             state.enabledLibraries = computeEnabled(state.libraries.system, refs)
             state.missingLibraries = computeMissing(state.libraries.system, refs)
+            state.outdatedLibraries = computeOutdated(installed, refs)
+          }),
+        )
+      },
+      setLibraryVersion: (name, version) => {
+        setState(
+          produce((state: LibrarySlice) => {
+            let refs = readProjectRefs()
+            if (!refs.some((ref) => ref.name === name)) return
+            refs = refs.map((ref) => (ref.name === name ? { name, version } : ref))
+            mutateProjectRefs(state, () => refs)
+            const installed = poolToNarrow(state)
+            state.libraries.system = effectivePool(installed, refs)
+            state.enabledLibraries = computeEnabled(state.libraries.system, refs)
+            state.missingLibraries = computeMissing(state.libraries.system, refs)
+            state.outdatedLibraries = computeOutdated(installed, refs)
           }),
         )
       },
@@ -161,6 +185,69 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       },
     },
   }
+}
+
+/**
+ * What to narrow the project's view from.
+ *
+ * `installedLibraries` is empty until the pool has been hydrated, and
+ * narrowing an empty list would blank `libraries.system` -- which drops every
+ * library block's type and marks its instance variable unresolvable. Fall back
+ * to the pool already on show, which for one version per library is the same
+ * list.
+ */
+function poolToNarrow(state: LibrarySlice): SystemLibrary[] {
+  return state.installedLibraries.length > 0 ? state.installedLibraries : state.libraries.system
+}
+
+/** Installed libraries grouped by name, insertion order preserved. */
+function groupByName(installed: SystemLibrary[]): Map<string, SystemLibrary[]> {
+  const byName = new Map<string, SystemLibrary[]>()
+  for (const library of installed) {
+    const found = byName.get(library.name)
+    if (found) found.push(library)
+    else byName.set(library.name, [library])
+  }
+  return byName
+}
+
+const newestFirst = (libraries: SystemLibrary[]): SystemLibrary[] =>
+  [...libraries].sort((a, b) => compareSemver(b.version, a.version))
+
+/**
+ * One library per name: the version the project pins, or the newest installed.
+ *
+ * Two versions of one library cannot share a compile, and placing a block from
+ * one while building against the other is the same mistake in the editor, so
+ * the pool the UI sees is narrowed the same way the compile is.
+ */
+function effectivePool(installed: SystemLibrary[], refs: LibraryProjectRef[]): SystemLibrary[] {
+  const pinned = new Map(refs.map((ref) => [ref.name, ref.version]))
+  const out: SystemLibrary[] = []
+  for (const [name, versions] of groupByName(installed)) {
+    if (versions.length === 1) {
+      out.push(versions[0])
+      continue
+    }
+    const want = pinned.get(name)
+    out.push(versions.find((library) => library.version === want) ?? newestFirst(versions)[0])
+  }
+  return out
+}
+
+/** Libraries the project pins below a version it already has installed. */
+function computeOutdated(installed: SystemLibrary[], refs: LibraryProjectRef[]): OutdatedLibrary[] {
+  const byName = groupByName(installed)
+  const outdated: OutdatedLibrary[] = []
+  for (const ref of refs) {
+    const versions = byName.get(ref.name)
+    if (!versions || !ref.version) continue
+    const available = newestFirst(versions).map((library) => library.version)
+    if (compareSemver(available[0], ref.version) > 0) {
+      outdated.push({ name: ref.name, pinned: ref.version, available })
+    }
+  }
+  return outdated
 }
 
 function computeEnabled(pool: LibrarySlice['libraries']['system'], refs: LibraryProjectRef[]): string[] {

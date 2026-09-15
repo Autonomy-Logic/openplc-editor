@@ -2,6 +2,7 @@ import { FocusEvent, memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
+import { isBlockInstanceInScope } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
@@ -465,6 +466,21 @@ const Block = <T extends object>(block: BlockProps<T>) => {
 
     const variable = variables.selected
     if (!variable) {
+      // A qualified name is a global variable list member (`NET.node`), which
+      // is not in this POU's interface under any spelling. Ask the LSP, which
+      // knows the lists, instead of calling it wrong.
+      const instanceName = (node.data as BasicNodeData).variable?.name ?? ''
+      if (instanceName.includes('.')) {
+        const blockTypeName = (node.data as BlockNodeData<BlockVariant>).variant.name
+        let cancelled = false
+        void isBlockInstanceInScope(pouName, instanceName, blockTypeName).then((inScope) => {
+          // `undefined` means the LSP could not answer; leave the block alone.
+          if (!cancelled && inScope !== undefined) setWrongVariable(!inScope)
+        })
+        return () => {
+          cancelled = true
+        }
+      }
       setWrongVariable(true)
       return
     }

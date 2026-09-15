@@ -30,6 +30,7 @@
  * from one to the other without re-deriving inputs.
  */
 
+import type { BundleFile } from '../../../../middleware/shared/utils/library/bundle-file'
 import type { CppPouData as CppPouDataCode } from '../../utils/cpp/generateCBlocksCode'
 import { generateCBlocksCode } from '../../utils/cpp/generateCBlocksCode'
 import type { CppPouData as CppPouDataHeader } from '../../utils/cpp/generateCBlocksHeader'
@@ -51,6 +52,10 @@ export interface ComposeFirmwareBundleInput {
    *      `examples/Baremetal/c_blocks_code.cpp` alone.  Otherwise
    *      pass `generateCBlocksCode(originalCppPous)` and the
    *      static file gets overwritten with the user-facing version. */
+  /** Libraries the enabled `.stlib` archives carry, each an ordinary
+   *  library folder.  `path` is relative to that folder's root and is
+   *  written as-is.  Empty when no enabled library ships resources. */
+  libraryResources: Array<{ name: string; files: Array<{ path: string; content: string; encoding?: 'base64' }> }>
   cBlocks: {
     header: string
     code: string | null
@@ -94,9 +99,21 @@ export type CBlocksCodePou = CppPouDataCode
  * `cBlocks` input shape" case.  Caller can either use this or hand
  * the composer the pre-rendered strings directly.
  */
+/**
+ * `userTypeNames` spells pin types; `aliasTypeNames` is what gets a `using`.
+ *
+ * They differ because they answer different questions. A pin typed by an
+ * enabled library's enumeration has to be spelled `IEC_<NAME>`, so the header
+ * needs every type in scope, the project's and the libraries'. An alias, on the
+ * other hand, only compiles if the compiler declared that type for THIS build,
+ * and it declares a library's type when something uses it. Aliasing the rest
+ * names types that were never emitted. Pass the project's own types here; a
+ * library type a block actually names is picked up from the pins.
+ */
 export function buildCBlocksFromPous(
   originalCppPous: CppPouDataCode[],
   userTypeNames: Iterable<string> = [],
+  aliasTypeNames: Iterable<string> = userTypeNames,
 ): ComposeFirmwareBundleInput['cBlocks'] {
   if (originalCppPous.length === 0) {
     // Editor's behaviour: leave the static `c_blocks.h` baseline
@@ -110,7 +127,7 @@ export function buildCBlocksFromPous(
   }))
   return {
     header: generateCBlocksHeader(headers, userTypeNames),
-    code: generateCBlocksCode(originalCppPous, userTypeNames),
+    code: generateCBlocksCode(originalCppPous, aliasTypeNames),
   }
 }
 
@@ -121,6 +138,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * Assemble the firmware file tree.
  *
  * Layout produced (paths relative to project root):
+ *  - `libraries/<name>/…`                            — one Arduino library per resource library
  *  - `examples/Baremetal/Baremetal.ino`              — from skeleton
  *  - `src/c_blocks_code.cpp`                         — written when `cBlocks.code !== null`
  *  - `examples/Baremetal/modules/...`                — from skeleton (Arduino library helpers)
@@ -132,20 +150,57 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  *  - `src/<strucpp-runtime-header>.hpp`              — from skeleton (strucpp runtime headers)
  *  - other skeleton entries                          — passed through verbatim
  *
- * Ordering: skeleton first, then overwrites.  Strucpp output
- * overwrites any same-named skeleton file (strucpp generally adds
- * new files; collisions are intentional when they happen).
+ * Ordering: resource libraries first, then the skeleton, then
+ * overwrites, so a collision resolves in the build's favour.
+ * Strucpp output overwrites any same-named skeleton file
+ * (strucpp generally adds new files; collisions are intentional when
+ * they happen).
  * `c_blocks.h` and `defines.h` overwrite the skeleton's static
  * stubs.  `c_blocks_code.cpp` is overwritten ONLY when the project
  * has C/C++ POUs — otherwise the static baseline stays.
  */
-export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton } = input
+/**
+ * A stand-in `library.properties` for a folder that ships none.  Without one
+ * arduino-cli reads the folder as a 1.0 legacy library and ignores everything
+ * below its root; with one it compiles `src/` recursively.  `architectures=*`
+ * so the target never filters it out.
+ */
+function libraryProperties(name: string): string {
+  return [
+    `name=${name}`,
+    'version=1.0.0',
+    'author=OpenPLC Editor',
+    'maintainer=OpenPLC Editor <noreply@autonomylogic.com>',
+    'sentence=Resources shipped by an OpenPLC library',
+    'paragraph=Materialised from the library archive so its C/C++ blocks compile against the sources they were built with.',
+    'category=Other',
+    'architectures=*',
+    '',
+  ].join('\n')
+}
 
-  // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
+export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, BundleFile> {
+  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton, libraryResources } = input
+
+  const files: Record<string, BundleFile> = {}
+
+  // Each folder is written as it stands and named with its own `--library`,
+  // which is what makes arduino-cli compile everything under its `src/`.
+  // They sit beside the sketch, so a resource cannot shadow a firmware file.
+  for (const library of libraryResources) {
+    const root = `libraries/${library.name}`
+    for (const file of library.files) {
+      files[`${root}/${file.path}`] = file.encoding === 'base64' ? { base64: file.content } : file.content
+    }
+    if (!library.files.some((file) => file.path === 'library.properties')) {
+      files[`${root}/library.properties`] = libraryProperties(library.name)
+    }
+  }
+
+  // Skeleton next (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
   // entries.
-  const files: Record<string, string> = { ...firmwareSkeleton }
+  Object.assign(files, firmwareSkeleton)
 
   // Copied, not moved: the sketch still compiles its own copy next to openplc_retain_weak.cpp.
   for (const header of VENDOR_FACING_CONTRACT_HEADERS) {

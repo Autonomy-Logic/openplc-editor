@@ -71,8 +71,14 @@ describe('uninstall', () => {
   it('normalises a successful bridge response into a Result', async () => {
     const result = await adapter.uninstall('oscat')
 
-    expect(window.bridge.uninstallLibrary).toHaveBeenCalledWith('oscat')
+    expect(window.bridge.uninstallLibrary).toHaveBeenCalledWith('oscat', undefined)
     expect(result).toEqual({ success: true })
+  })
+
+  it('forwards a version so one build can be removed', async () => {
+    await adapter.uninstall('oscat', '1.2.3')
+
+    expect(window.bridge.uninstallLibrary).toHaveBeenCalledWith('oscat', '1.2.3')
   })
 
   it('passes through the bridge-supplied error', async () => {

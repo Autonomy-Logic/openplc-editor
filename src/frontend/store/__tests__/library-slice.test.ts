@@ -354,4 +354,106 @@ describe('createLibrarySlice', () => {
       expect(store.getState().enabledLibraries).toEqual([])
     })
   })
+  describe('multiple installed versions', () => {
+    const twoVersions = () => [
+      makeSystemLibrary({ name: 'node-uio', version: '0.0.2' }),
+      makeSystemLibrary({ name: 'node-uio', version: '0.0.1' }),
+      makeSystemLibrary({ name: 'other', version: '1.0.0' }),
+    ]
+
+    it('keeps every version installed but exposes one per name', () => {
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+
+      expect(store.getState().installedLibraries).toHaveLength(3)
+      expect(store.getState().libraries.system.map((l) => `${l.name}@${l.version}`)).toEqual([
+        'node-uio@0.0.2',
+        'other@1.0.0',
+      ])
+    })
+
+    it('exposes the version the project pins, not the newest', () => {
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+      store.getState().libraryActions.setProjectLibraries([{ name: 'node-uio', version: '0.0.1' }])
+
+      expect(store.getState().libraries.system.find((l) => l.name === 'node-uio')?.version).toBe('0.0.1')
+    })
+
+    it('falls back to the newest when the pinned version is not installed', () => {
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+      store.getState().libraryActions.setProjectLibraries([{ name: 'node-uio', version: '9.9.9' }])
+
+      expect(store.getState().libraries.system.find((l) => l.name === 'node-uio')?.version).toBe('0.0.2')
+      // Resolved, so not missing.
+      expect(store.getState().missingLibraries).toEqual([])
+    })
+
+    it('reports a pinned library that has a newer version installed', () => {
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+      store.getState().libraryActions.setProjectLibraries([{ name: 'node-uio', version: '0.0.1' }])
+
+      expect(store.getState().outdatedLibraries).toEqual([
+        { name: 'node-uio', pinned: '0.0.1', available: ['0.0.2', '0.0.1'] },
+      ])
+    })
+
+    it('reports nothing outdated when the project pins the newest', () => {
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+      store.getState().libraryActions.setProjectLibraries([{ name: 'node-uio', version: '0.0.2' }])
+
+      expect(store.getState().outdatedLibraries).toEqual([])
+    })
+
+    /** `setLibraryVersion` reads the project's durable list, which the slim
+     *  harness does not have; seed the shape it reads. */
+    const withProjectSlice = () =>
+      store.setState({ project: { data: { libraries: [] } } } as unknown as Parameters<typeof store.setState>[0])
+
+    it('setLibraryVersion repins and re-derives the effective pool', () => {
+      withProjectSlice()
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+      store.getState().libraryActions.setProjectLibraries([{ name: 'node-uio', version: '0.0.2' }])
+
+      store.getState().libraryActions.setLibraryVersion('node-uio', '0.0.1')
+
+      expect(store.getState().libraries.system.find((l) => l.name === 'node-uio')?.version).toBe('0.0.1')
+      expect(store.getState().outdatedLibraries).toEqual([
+        { name: 'node-uio', pinned: '0.0.1', available: ['0.0.2', '0.0.1'] },
+      ])
+    })
+
+    it('setLibraryVersion is a no-op for a library the project does not use', () => {
+      withProjectSlice()
+      store.getState().libraryActions.setSystemLibraries(twoVersions())
+      store.getState().libraryActions.setProjectLibraries([])
+
+      store.getState().libraryActions.setLibraryVersion('node-uio', '0.0.1')
+
+      expect(store.getState().libraries.system.find((l) => l.name === 'node-uio')?.version).toBe('0.0.2')
+    })
+
+    it('never blanks a pool it was not given the installed list for', () => {
+      // The pool can be on show before `installedLibraries` is populated.
+      // Narrowing an empty list there would drop every library block's type,
+      // which leaves each FB instance variable unresolvable and rings the
+      // block red.
+      withProjectSlice()
+      store.setState({ libraries: { system: [makeSystemLibrary({ name: 'node-uio' })], user: [] } } as never)
+
+      store.getState().libraryActions.setProjectLibraries([{ name: 'node-uio', version: '1.0' }])
+
+      expect(store.getState().libraries.system.map((l) => l.name)).toEqual(['node-uio'])
+      expect(store.getState().missingLibraries).toEqual([])
+    })
+
+    it('orders versions by semver, not lexically', () => {
+      store
+        .getState()
+        .libraryActions.setSystemLibraries([
+          makeSystemLibrary({ name: 'lib', version: '0.9.0' }),
+          makeSystemLibrary({ name: 'lib', version: '0.10.0' }),
+        ])
+
+      expect(store.getState().libraries.system[0].version).toBe('0.10.0')
+    })
+  })
 })
