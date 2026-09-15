@@ -526,6 +526,43 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceAvailableOptions.availableBoards.get('Arduino Uno')).toBeDefined()
     })
 
+    it('leaves the wiring alone for a board whose package has not been split', () => {
+      // That board still renders the old Modbus screen, which reads
+      // modbus_rtu.rtu_interface directly; migrating would mirror the bug.
+      const store = makeStore()
+      const legacy = { modbus_rtu: { enabled: true, rtu_interface: 'Serial2' } }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'Old Board',
+          communicationPort: '',
+          selectedPlatformOptions: {},
+          vendorScreenData: legacy,
+        },
+      })
+      const boards = new Map<string, BoardInfo>([
+        [
+          'Old Board',
+          {
+            compiler: 'arduino-cli',
+            core: 'esp32',
+            preview: '',
+            specs: {},
+            vpp: {
+              packageId: 'com.openplc.legacy',
+              vendor: 'v',
+              deviceId: 'd',
+              packagePath: '/fake',
+              screens: { Modbus: {} },
+              moduleSystem: null,
+            },
+          },
+        ],
+      ])
+      store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
+
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(legacy)
+    })
+
     it('sets available communication ports', () => {
       const store = makeStore()
       const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
