@@ -19,6 +19,7 @@ import {
   envelopeFromWriteProjectFiles,
   getInEnvelope,
   type IncomingApiProjectFiles,
+  mergeEnvelopeOverExisting,
   setInEnvelope,
 } from '../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
@@ -275,9 +276,17 @@ async function writeEnvelope(
 /** Save a whole cloud project. */
 export async function saveCloudProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
   try {
+    // Read first: the save endpoint deletes by omission, and the generated envelope holds
+    // only what this editor models, so a file it does not know about would be erased.
+    const read = await readEnvelope(files.projectPath)
+
+    if (!read.ok) {
+      return { success: false, error: `Could not read the project before saving it: ${read.error}` }
+    }
+
     return await writeEnvelope(
       files.projectPath,
-      envelopeFromWriteProjectFiles(files),
+      mergeEnvelopeOverExisting(read.files, envelopeFromWriteProjectFiles(files)),
       files.deletions.filter((path) => path.length > 0),
     )
   } catch (error) {

@@ -149,6 +149,39 @@ export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProj
   return env
 }
 
+/** Every key this envelope models. Anything else on the wire is a file we do not manage. */
+const MODELLED_KEYS = [
+  'project.json',
+  'library.json',
+  'plcopen-pending-import.xml',
+  'devices',
+  'pous',
+  'datatypes',
+  'servers',
+  'build',
+] as const
+
+/**
+ * Lay a freshly generated envelope over the one the server holds.
+ *
+ * The save endpoint deletes by omission, so a payload built only from the store drops
+ * every file the envelope does not model — `README.md` above all, which has its own
+ * endpoint and never appears here. Modelled containers are replaced wholesale, because
+ * the store is authoritative for them; anything else is carried through untouched.
+ */
+export function mergeEnvelopeOverExisting(
+  existing: IncomingApiProjectFiles,
+  generated: ApiProjectFiles,
+): ApiProjectFiles {
+  const carried: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(existing)) {
+    if (!MODELLED_KEYS.some((modelled) => modelled === key)) carried[key] = value
+  }
+
+  return { ...carried, ...generated }
+}
+
 /** Envelope -> the shape a project reader hands back. Inverse of `envelopeFromWriteProjectFiles`. */
 export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFiles) {
   const pouFiles = []

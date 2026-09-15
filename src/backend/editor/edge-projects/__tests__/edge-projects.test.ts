@@ -340,38 +340,76 @@ describe('saveCloudProject', () => {
     deletions: [],
   }
 
+  /** The read the save now performs first, so the POST is always the second call. */
+  const serverHas = (extra: Record<string, unknown> = {}) =>
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, ...extra } }))
+
   it('posts the whole envelope for the project', async () => {
+    serverHas()
     request.mockResolvedValueOnce({ status: 200, body: '{}' })
 
     await expect(saveCloudProject(files)).resolves.toEqual({ success: true })
-    expect(request.mock.calls[0][0]).toBe('/projects/p1/files/save')
+    expect(request.mock.calls[1][0]).toBe('/projects/p1/files/save')
+  })
+
+  it('keeps a file the envelope does not model', async () => {
+    // The save endpoint deletes by omission and `README.md` has its own endpoint, so it
+    // is never in the generated envelope: building the payload from the store alone
+    // erased it on every full save — closing a dirty project, the pre-build flush, the
+    // assistant's autosave.
+    serverHas({ 'README.md': '# Irrigation\n' })
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudProject(files)
+
+    expect(sentBody(1).files['README.md']).toBe('# Irrigation\n')
+  })
+
+  it('still lets the store win for everything the envelope does model', async () => {
+    serverHas({ pous: { programs: { 'main.st': 'stale', 'gone.st': 'deleted elsewhere' } } })
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudProject(files)
+
+    // The whole container is replaced, so a POU removed in the editor does not come back.
+    expect(sentBody(1).files.pous).toEqual({ programs: { 'main.st': 'x := TRUE;' } })
   })
 
   it('omits deletions when there are none, and sends them when there are', async () => {
+    serverHas()
     request.mockResolvedValueOnce({ status: 200, body: '{}' })
     await saveCloudProject(files)
-    expect(sentBody(0).deletions).toBeUndefined()
+    expect(sentBody(1).deletions).toBeUndefined()
 
+    serverHas()
     request.mockResolvedValueOnce({ status: 200, body: '{}' })
     await saveCloudProject({ ...files, deletions: ['pous/programs/old.st', ''] })
 
     // The empty entry is dropped: an empty path would ask the backend to delete the
     // project root.
-    expect(sentBody(1).deletions).toEqual(['pous/programs/old.st'])
+    expect(sentBody(3).deletions).toEqual(['pous/programs/old.st'])
   })
 
   it('reports a refusal rather than claiming success', async () => {
+    serverHas()
     request.mockResolvedValueOnce({ status: 403, body: '{}' })
 
     await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false })
   })
 
+  it('does not write at all when the project could not be read first', async () => {
+    request.mockResolvedValueOnce({ status: 500, body: '{}' })
+
+    await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false })
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
   it('reports no session', async () => {
     request.mockResolvedValueOnce(null)
 
-    await expect(saveCloudProject(files)).resolves.toEqual({
+    await expect(saveCloudProject(files)).resolves.toMatchObject({
       success: false,
-      error: 'Not signed in to Autonomy Edge.',
+      error: expect.stringContaining('Not signed in to Autonomy Edge.'),
     })
   })
 
