@@ -77,7 +77,34 @@ Design notes that outlive the skeleton:
  *  Off by default so a MINIMAL library behaves exactly as before. Worth
  *  18,992 bytes of arena when on. */
 #ifndef OPCUA_NS0_FROM_FLASH
-#define OPCUA_NS0_FROM_FLASH false
+#define OPCUA_NS0_FROM_FLASH true
+#endif
+
+/** Bytes carried from the socket into open62541 per read.
+ *
+ *  NOT the protocol's 8192 floor -- that is what the server must accept, and
+ *  it is advertised through tcpBufSize below. open62541 accumulates a message
+ *  spanning several reads into its own SecureChannel buffer, so this only has
+ *  to make a read worthwhile. Typical OPC-UA requests are a few hundred bytes;
+ *  a resident 8 KB pays constantly for the rare large one. */
+#ifndef OPCUA_RECV_BUFFER
+#define OPCUA_RECV_BUFFER 1024u
+#endif
+
+/** Max chunk length, both directions. Advertised in the Ack, and the size of
+ *  the buffer allocated for every response.
+ *
+ *  8192 is the Part 6 6.7.1 floor and it is NOT adjustable, however tempting
+ *  it looks: it is the single largest allocation the server makes, and
+ *  lowering it was measured returning ERR 0x80020000 to a conformant Hello.
+ *  open62541 enforces the floor itself in ua_securechannel.c, so a smaller
+ *  value does not produce a smaller server -- it produces one no client can
+ *  connect to. Left configurable only so the number has a name. */
+#ifndef OPCUA_CHUNK_SIZE
+#define OPCUA_CHUNK_SIZE 8192u
+#endif
+#ifndef OPCUA_SEND_BUFFER
+#define OPCUA_SEND_BUFFER 2048u
 #endif
 
 // The library configuration and this flag have to agree, and the failure when
@@ -152,8 +179,13 @@ bool apply_and_verify_limits(UA_ServerConfig* config)
     // open62541 exposes one value, not a pair, which is the same reason
     // UA_ServerConfig_setMinimalCustomBuffer ignores its sendBufferSize
     // argument. 8192 is the protocol floor (Part 6 6.7.1) and also the
-    // ceiling we want: every session costs two of these.
-    config->tcpBufSize = 8192;
+    // ceiling we want: every response allocates one of these.
+    //
+    // Do not lower OPCUA_CHUNK_SIZE below 8192. Measured: the handshake then
+    // fails with ERR 0x80020000, because open62541 enforces the Part 6 6.7.1
+    // floor internally rather than merely advertising it. A smaller value
+    // buys no memory, it just makes the server unreachable.
+    config->tcpBufSize = OPCUA_CHUNK_SIZE;
 
     // Bound the receive-assembly path. BOTH of these default to 0, which
     // means UNBOUNDED: open62541 queues intermediate chunks and copies them
@@ -186,7 +218,7 @@ bool apply_and_verify_limits(UA_ServerConfig* config)
     config->maxNodesPerBrowse    = OPCUA_MAX_NODES_PER_BROWSE;
     config->maxReferencesPerNode = OPCUA_MAX_REFERENCES_PER_NODE;
 
-    return config->tcpBufSize == 8192
+    return config->tcpBufSize == OPCUA_CHUNK_SIZE
         && config->tcpMaxMsgSize == 8192
         && config->tcpMaxChunks == 1
         && config->maxSessions == OPCUA_MAX_SESSIONS
@@ -224,7 +256,7 @@ void opcua_init()
     UA_Arduino_setArena(g_opcua_arena, sizeof(g_opcua_arena));
 
     // Size the transport from the same settings, for the same reason.
-    UA_Arduino_configureTcp(BM_NET_OPCUA_SLOTS, 8192);
+    UA_Arduino_configureTcp(BM_NET_OPCUA_SLOTS, OPCUA_RECV_BUFFER);
 
     // The two things Arduino's abstract `Client` cannot answer, supplied by
     // the seam that does know: whether a write would block, and when a client
@@ -253,7 +285,8 @@ void opcua_init()
 
     // The minimal config installs the EventLoop and the TCP ConnectionManager
     // through the factories the library supplies (the _POSIX-named forwarders).
-    if (UA_ServerConfig_setMinimalCustomBuffer(&bootConfig, OPCUA_PORT, nullptr, 8192, 8192)
+    if (UA_ServerConfig_setMinimalCustomBuffer(&bootConfig, OPCUA_PORT, nullptr,
+                                               OPCUA_CHUNK_SIZE, OPCUA_CHUNK_SIZE)
         != UA_STATUSCODE_GOOD)
     {
         OPCUA_LOG("[ua] setMinimalCustomBuffer FAILED");

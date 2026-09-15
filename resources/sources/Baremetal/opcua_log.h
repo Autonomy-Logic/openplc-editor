@@ -18,7 +18,7 @@ holds a socket, and it prints internals no production device should publish.
 #include "opcua_config.h"
 
 #ifndef OPCUA_DEBUG_LOG
-#define OPCUA_DEBUG_LOG 0
+#define OPCUA_DEBUG_LOG 1
 #endif
 
 #if OPCUA_ENABLED && OPCUA_DEBUG_LOG
