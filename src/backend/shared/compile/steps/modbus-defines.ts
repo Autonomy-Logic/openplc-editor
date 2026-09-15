@@ -74,6 +74,17 @@ export interface VppModbusScreenState {
     gateway?: string
     subnet?: string
     dns?: string
+    /** Which SPI Ethernet controller is wired to the board, for the boards that
+     *  have no MAC of their own and take a module. "wiznet" is the W5100 /
+     *  W5200 / W5500 family, which the Arduino `Ethernet` library tells apart
+     *  by itself at begin() -- so this picks the LIBRARY, not the chip.
+     *  "enc28j60" is Microchip's, a different part with a different driver
+     *  (`EthernetENC`, API-compatible). Absent means wiznet. */
+    eth_driver?: 'wiznet' | 'enc28j60'
+    /** Chip-select pin for that module. The Ethernet libraries default to pin
+     *  10, which is the Uno shield's wiring and wrong almost everywhere else
+     *  -- the Pico's SPI0 CS is 17. Absent leaves the library default. */
+    eth_cs_pin?: string | number
   }
 }
 
@@ -359,6 +370,13 @@ export function generateModbusDefines(
       lines.push('#define MBTCP_WIFI')
     } else {
       lines.push('#define MBTCP_ETHERNET')
+      // Which driver, and where its chip select is. Both matter only for a
+      // board that takes an SPI module: a part with its own MAC (ESP32 RMII,
+      // the LOGO!, Portenta) never reaches this branch's generic include.
+      if (net.eth_driver === 'enc28j60') lines.push('#define MBTCP_ETH_ENC28J60')
+      const cs = net.eth_cs_pin
+      const csNum = typeof cs === 'number' ? cs : cs ? Number(cs) : NaN
+      if (Number.isInteger(csNum) && csNum >= 0) lines.push(`#define MBTCP_ETH_CS ${csNum}`)
     }
     lines.push(`#define MBTCP_PORT ${server?.port ?? BAREMETAL_DEFAULT_TCP_PORT}`)
     lines.push('#define MBTCP')

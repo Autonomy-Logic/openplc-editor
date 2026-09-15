@@ -38,7 +38,15 @@ back — no knowledge of the function-code set.
     #define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN     // DEFAULT VALUE YOU CAN OMIT IT
     #include <ETH.h>
     #include <WiFi.h>
+#elif defined(MBTCP_ETH_ENC28J60)
+    // Microchip ENC28J60. A different part with its own driver, not a WIZnet
+    // variant: EthernetENC is API-compatible down to the class names, so
+    // nothing below this include changes.
+    #include <EthernetENC.h>
 #else
+    // WIZnet W5100 / W5200 / W5500. One include for all three -- the library
+    // probes the chip in begin() and configures itself, so the VPP's driver
+    // selector picks the LIBRARY, not the chip.
     #include <Ethernet.h>
 #endif
 #endif

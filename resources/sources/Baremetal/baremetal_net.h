@@ -71,10 +71,16 @@ configured by the Modbus TCP layer from the project's network screen.
     typedef EthernetClient bm_client_impl_t;
 
 #elif defined(MBTCP_ETHERNET)
-    // Generic WIZnet-style SPI Ethernet shield. Reached only by targets that
-    // genuinely use one, because every chip with its own MAC is named above.
+    // Generic SPI Ethernet module. Reached only by targets that genuinely use
+    // one, because every chip with its own MAC is named above. Which driver
+    // comes from the project's Network screen via MBTCP_ETH_ENC28J60; the class
+    // names are identical either way, so only the include differs.
     #include <SPI.h>
-    #include <Ethernet.h>
+    #if defined(MBTCP_ETH_ENC28J60)
+        #include <EthernetENC.h>
+    #else
+        #include <Ethernet.h>
+    #endif
     typedef EthernetServer bm_server_impl_t;
     typedef EthernetClient bm_client_impl_t;
 
