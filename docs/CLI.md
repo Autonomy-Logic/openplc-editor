@@ -203,6 +203,24 @@ Machine-readable when stdout is not a terminal, human-readable when it is;
 | 8    | timeout                                                                                |
 | 70   | internal — a bug in the CLI                                                            |
 
+## Naming
+
+Every identifier — a POU, variable, data type, enumeration value, task or
+instance — must start with a letter or underscore, hold only letters, digits and
+underscores, and avoid the literals and the reserved words. `apply` refuses one
+that does not.
+
+```sh
+openplc-cli keywords              # the rules, and every reserved word
+openplc-cli keywords --names-only # just the words, for a script
+```
+
+It publishes the list `apply` checks against rather than a copy, so the two
+cannot drift. Worth reading before authoring a spec: a collision is refused
+outright, but a word missing from the list is worse — `TYPE MODE_T : (OFF, ON)`
+once compiled into a generated file that would not parse, reporting
+`Expected Identifier, found ON` against code nobody wrote.
+
 ## Protocols
 
 A project's `servers` and `remoteDevices` are part of the `apply` spec, and

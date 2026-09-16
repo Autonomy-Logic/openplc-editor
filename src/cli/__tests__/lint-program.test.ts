@@ -259,3 +259,50 @@ END_FUNCTION`
     expect(findings[0].pou).toBe('Latch')
   })
 })
+
+describe('a program instantiated more than once', () => {
+  // What `create` then `apply` leaves behind: the scaffold's task0/instance0
+  // stays, the spec adds its own, and the program runs twice per scan with two
+  // separate sets of variables. Nothing said so until this rule.
+  const configuration = (instances: string) => `
+    PROGRAM main
+      VAR n : INT; END_VAR
+      n := n + 1;
+    END_PROGRAM
+    CONFIGURATION Config0
+      RESOURCE Res0 ON PLC
+        TASK task0(INTERVAL := T#20ms,PRIORITY := 1);
+        TASK fast(INTERVAL := T#20ms,PRIORITY := 1);
+${instances}
+      END_RESOURCE
+    END_CONFIGURATION
+  `
+
+  const rules = (st: string) =>
+    lintProgram({ st, pous: [], systemLibraries: [], globals: [] }).filter(
+      (finding) => finding.rule === 'program-instantiated-twice',
+    )
+
+  it('warns, naming both instances and their tasks', () => {
+    const found = rules(
+      configuration('        PROGRAM instance0 WITH task0 : main;\n        PROGRAM inst0 WITH fast : main;'),
+    )
+    expect(found).toHaveLength(1)
+    expect(found[0].severity).toBe('warning')
+    expect(found[0].message).toContain('instance0 on task0')
+    expect(found[0].message).toContain('inst0 on fast')
+  })
+
+  it('says nothing about a program instantiated once', () => {
+    expect(rules(configuration('        PROGRAM inst0 WITH fast : main;'))).toEqual([])
+  })
+
+  it('warns rather than errors, because two instances is legal IEC', () => {
+    // The same program on a fast task and a slow one is a real pattern; the
+    // rule reports it, it does not refuse it.
+    const found = rules(
+      configuration('        PROGRAM quick WITH fast : main;\n        PROGRAM slow WITH task0 : main;'),
+    )
+    expect(found[0].severity).toBe('warning')
+  })
+})

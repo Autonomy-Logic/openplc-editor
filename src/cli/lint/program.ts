@@ -182,8 +182,42 @@ function unconditionalAssignments(statements: string): Map<string, number> {
   return counts
 }
 
-export function lintProgram(input: LintInput): LintFinding[] {
+/**
+ * A program instantiated more than once runs more than once per scan.
+ *
+ * Legal, and occasionally what you want -- the same program on a fast task and
+ * a slow one. It is also what `create` followed by `apply` produces by
+ * accident: the scaffold leaves `task0`/`instance0` behind, a spec adds its own
+ * task and instance, and the program quietly runs twice with two separate sets
+ * of variables. Counters step by two, outputs are driven twice, and nothing
+ * says so. `--prune` removes the scaffold pair; naming the scaffold's task in
+ * the spec reuses it.
+ */
+function lintProgramInstances(st: string): LintFinding[] {
+  const byProgram = new Map<string, string[]>()
+  for (const match of stripComments(st).matchAll(/\bPROGRAM\s+(\w+)\s+WITH\s+(\w+)\s*:\s*(\w+)\s*;/gi)) {
+    const program = match[3].toUpperCase()
+    byProgram.set(program, [...(byProgram.get(program) ?? []), `${match[1]} on ${match[2]}`])
+  }
+
   const findings: LintFinding[] = []
+  for (const [program, instances] of byProgram) {
+    if (instances.length < 2) continue
+    findings.push({
+      severity: 'warning',
+      pou: null,
+      rule: 'program-instantiated-twice',
+      message:
+        `Program "${program}" is instantiated ${instances.length} times (${instances.join(', ')}), so it runs ` +
+        'that many times per scan, each with its own variables. Remove the one you did not mean to add, ' +
+        'or apply with --prune.',
+    })
+  }
+  return findings
+}
+
+export function lintProgram(input: LintInput): LintFinding[] {
+  const findings: LintFinding[] = [...lintProgramInstances(input.st)]
   const bodies = splitPous(stripComments(input.st))
 
   for (const body of bodies) {

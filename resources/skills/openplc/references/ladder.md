@@ -83,6 +83,17 @@ By default power goes in the block's **first boolean input** and out its **first
 boolean output** — `IN` and `Q` on a timer. That is what drives it, and it is how
 the same rung is drawn by hand.
 
+A block from an INSTALLED LIBRARY takes power on `EN` and gives it back on
+`ENO` instead, because that is what the generated call carries. So naming its
+own pins is not optional: leave a pin out and it is simply never written.
+
+```
+din0(EN := AlwaysOn);          not DI01
+dout0(EN := AlwaysOn, DO01 := Out01);   DO01 only because it is named
+```
+
+Name every pin you mean on a library block.
+
 ```json
 {
   "logic": { "contact": { "variable": "Run", "variant": "default" } },

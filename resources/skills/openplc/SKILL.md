@@ -48,6 +48,7 @@ generated ST and reports them:
 | `no-io-referenced`               | error    | No POU references any global bound to an IEC address — the program reads no inputs and drives no outputs.                       |
 | `block-outputs-unread`           | warning  | Nothing reads any output of the block; its result goes nowhere.                                                                 |
 | `located-global-unreferenced`    | warning  | A global is bound to an address but no POU uses it.                                                                             |
+| `program-instantiated-twice`     | warning  | A program runs once per instance. `create` leaves a scaffold task and instance; a spec adding its own gives two.                |
 
 `--lint` also checks the protocol configuration, which has the same problem in a
 different place — all of these save, upload and half-exist:
@@ -238,3 +239,18 @@ Exit codes: `0` ok, `2` usage, `3` not found, `4` compile or spec failed,
 - `references/native.md` — Python and C/C++ POUs
 - `references/debug.md` — sessions, reading and forcing variables
 - `references/protocols.md` — servers, remote devices, EtherCAT, and what each `enabled` does
+
+## Naming
+
+Every identifier — a POU, variable, data type, enumeration value, task or
+instance — must pass the same gate, and `apply` refuses one that does not:
+
+```sh
+openplc-cli keywords              # the rules, and every reserved word
+openplc-cli keywords --names-only # just the words
+```
+
+Check a name against that list before writing it into a spec. A collision is
+refused outright; the expensive case is a near-miss the list once missed —
+`TYPE MODE_T : (OFF, ON)` compiled into a generated file that would not parse,
+reporting `Expected Identifier, found ON` against code nobody wrote.

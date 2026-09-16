@@ -99,3 +99,45 @@ describe('a name another element already owns', () => {
     expect(globalsIn().filter((variable) => variable.name === 'Repeated')).toHaveLength(1)
   })
 })
+
+describe('a variable that is a function-block instance', () => {
+  // `derived` is an FB INSTANCE; a structure or enumeration is
+  // `user-data-type`. Confusing the two used to produce
+  // `t0 AT %QX0.0 : TON := SOMETHING;`, which apply reported as a success and
+  // the compiler could not parse. It also made apply disagree with itself: the
+  // create path kept both fields and the update path silently dropped them, so
+  // applying one spec twice gave two different projects.
+  const instanceSpec = (extra: Record<string, unknown>) => ({
+    pous: [
+      {
+        name: 'main',
+        kind: 'program' as const,
+        language: 'st' as const,
+        variables: [
+          { name: 't0', class: 'local' as const, type: { definition: 'derived' as const, value: 'TON' }, ...extra },
+        ],
+        body: { text: 't0(IN := TRUE, PT := T#1s);\n' },
+      },
+    ],
+  })
+
+  it('refuses an initial value on it', async () => {
+    const result = await apply(instanceSpec({ initialValue: 'SOMETHING' }) as Partial<ApplySpec>)
+    expect(result.errors.some((error) => error.includes('cannot take an initial value'))).toBe(true)
+  })
+
+  it('refuses a location on it', async () => {
+    const result = await apply(instanceSpec({ location: '%QX0.0' }) as Partial<ApplySpec>)
+    expect(result.errors.some((error) => error.includes('cannot be located'))).toBe(true)
+  })
+
+  it('points at user-data-type, which is the usual mistake', async () => {
+    const result = await apply(instanceSpec({ initialValue: 'SOMETHING' }) as Partial<ApplySpec>)
+    expect(result.errors.join(' ')).toContain('user-data-type')
+  })
+
+  it('accepts the instance on its own', async () => {
+    const result = await apply(instanceSpec({}) as Partial<ApplySpec>)
+    expect(result.errors.filter((error) => error.includes('t0'))).toEqual([])
+  })
+})

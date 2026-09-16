@@ -40,6 +40,7 @@ import { runDevices } from './commands/devices'
 import { runEsi } from './commands/esi'
 import { runInstallCli } from './commands/install-cli'
 import { runInstallSkill } from './commands/install-skill'
+import { runKeywords } from './commands/keywords'
 import { runRuntime } from './commands/runtime'
 import { runSkill } from './commands/skill'
 import { runDaemonFromStdin } from './daemon-entry'
@@ -105,6 +106,7 @@ Usage
   openplc-cli devices [--timeout <ms>]
   openplc-cli runtime info --host <address>                 (version and capabilities; no login)
   openplc-cli skill   [--list] [--name <skill>]            (the agent skill this build ships)
+  openplc-cli keywords [--names-only]                       (names an identifier may not take)
   openplc-cli install-skill [--scope project|user] [--path <dir>]
   openplc-cli describe <project> [--libraries] [--pou <name>]
   openplc-cli apply   <spec.json>|- --project <dir> [--dry-run] [--prune]
@@ -237,6 +239,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runDescribe(args, reporter)).exitCode
     case 'skill':
       return runSkill(args, reporter).exitCode
+    case 'keywords':
+      return runKeywords(args, reporter).exitCode
     case 'install-skill':
       return runInstallSkill(args, reporter).exitCode
     case 'check':

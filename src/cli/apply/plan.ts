@@ -523,9 +523,47 @@ function applyPersistentStorage(spec: ApplySpec, changes: PlannedChange[]): void
   })
 }
 
+/**
+ * A function-block instance cannot carry an address or an initial value.
+ *
+ * The editor enforces this on its own edit path -- `updateVariableValidation`
+ * clears both for a `derived` variable -- but nothing enforced it on create, so
+ * a spec could ask for `t0 : TON` at `%QX0.0` with an initial value, `apply`
+ * would report success, and the emitted ST was
+ * `t0 AT %QX0.0 : TON := SOMETHING;`, which does not compile.
+ *
+ * It also made `apply` disagree with itself: the first run kept the fields, a
+ * second run took the update path and silently dropped them, so re-applying one
+ * spec produced two different projects.
+ *
+ * `derived` is an FB INSTANCE. A structure or enumeration is `user-data-type`
+ * and keeps both fields -- confusing the two is what surfaces here.
+ */
+function checkVariableShape(pou: string, wanted: SpecVariable): string[] {
+  if (wanted.type.definition !== 'derived') return []
+  const problems: string[] = []
+  const where = `variable "${pou}.${wanted.name}" is an instance of ${wanted.type.value}`
+  if (wanted.initialValue !== undefined && wanted.initialValue !== null && wanted.initialValue !== '') {
+    problems.push(
+      `${where}, so it cannot take an initial value. Drop it, or declare the variable ` +
+        `"user-data-type" if ${wanted.type.value} is a structure or an enumeration.`,
+    )
+  }
+  if (wanted.location !== undefined && wanted.location !== '') {
+    problems.push(`${where}, so it cannot be located at ${wanted.location}. Drop the location.`)
+  }
+  return problems
+}
+
 function applyVariables(spec: ApplySpec, changes: PlannedChange[], errors: string[]): void {
   for (const pou of spec.pous ?? []) {
     for (const wanted of pou.variables ?? []) {
+      const shape = checkVariableShape(pou.name, wanted)
+      if (shape.length > 0) {
+        errors.push(...shape)
+        continue
+      }
+
       const state: Store = openPLCStoreBase.getState()
       const target = state.project.data.pous.find((entry) => entry.name === pou.name)
       if (!target) continue
