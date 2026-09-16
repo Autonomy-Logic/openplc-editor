@@ -12,7 +12,7 @@ import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../util
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
-import { restampFlowLibraryVariants } from '../../../utils/PLC/restamp-library-variants'
+import { restampFlowBlockVariants } from '../../../utils/PLC/restamp-block-variants'
 import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
@@ -1005,10 +1005,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // canvas.
       const pous = data.projectData.pous
 
-      // Re-stamp placed library-block variant types before the flows enter the store, so existing projects pick up
-      // library type changes.
+      // Refresh placed block variant types before the flows enter the store, so
+      // existing projects pick up library type changes (e.g. ADR: ULINT ->
+      // __XWORD) and user-POU pin changes alike. A no-op when nothing is stale.
       const systemLibraries = getState().libraries.system
-      const userPouNames = pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
+      const userPous = pous.filter((pou) => pou.pouType !== 'program')
+      const userPouNames = userPous.map((pou) => pou.name.toUpperCase())
       let restampedCount = 0
       // Blocks still on the old two-sided VAR_IN_OUT pin are counted, never converted: the fix belongs to the
       // block's update badge, and only project-owned blocks can show one.
@@ -1019,7 +1021,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         for (const node of nodes ?? []) {
           if (!hasLegacyInOutOutputHandle(node as Parameters<typeof hasLegacyInOutOutputHandle>[0])) continue
           const name = (node as { data?: { variant?: { name?: string } } }).data?.variant?.name
-          if (name !== undefined && userPouNames.includes(name)) convertibleInOutPous.add(pouName)
+          if (name !== undefined && userPouNames.includes(name.toUpperCase())) convertibleInOutPous.add(pouName)
           else if (name !== undefined) libraryInOutBlocks.add(name)
         }
       }
@@ -1029,13 +1031,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           // The loaded project data is frozen, so clone before re-stamping
           // (which mutates variant types in place) and hand the store the copy.
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
-          restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
+          restampedCount += restampFlowBlockVariants([bodyValue], systemLibraries, userPous)
           for (const rung of bodyValue.rungs ?? []) scanLegacyInOut(rung.nodes, pou.name)
           getState().ladderFlowActions.addLadderFlow({ ...bodyValue, name: pou.name })
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
-          restampedCount += restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames)
+          restampedCount += restampFlowBlockVariants([bodyValue], systemLibraries, userPous)
           scanLegacyInOut(bodyValue.rung?.nodes, pou.name)
           getState().fbdFlowActions.addFBDFlow({ ...bodyValue, name: pou.name })
         }
@@ -1044,7 +1046,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (restampedCount > 0) {
         getState().consoleActions.addLog({
           level: 'info',
-          message: `Refreshed ${restampedCount} library block pin type(s) from the current library definitions.`,
+          message: `Refreshed ${restampedCount} block pin type(s) from the current definitions.`,
         })
       }
 
