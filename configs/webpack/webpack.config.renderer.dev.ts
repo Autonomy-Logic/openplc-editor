@@ -181,7 +181,13 @@ const configuration: webpack.Configuration = {
       debug: true,
     }),
 
-    new ReactRefreshWebpackPlugin(),
+    // Refresh, but no error overlay of its own. Its listeners register ahead of ours
+    // and never read `defaultPrevented`, so Monaco's routine cancellation rejection —
+    // disposing an inline-completion session with a request in flight — filled the
+    // screen with a "Canceled" crash. Compile errors still surface through
+    // `devServer.client.overlay`, which is also where this repo already said runtime
+    // errors should not raise one.
+    new ReactRefreshWebpackPlugin({ overlay: false }),
 
     new HtmlWebpackPlugin({
       filename: 'index.html',

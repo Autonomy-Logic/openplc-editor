@@ -77,4 +77,44 @@ describe('installMonacoCancellationGuard', () => {
     expect(event.defaultPrevented).toBe(false)
     uninstall()
   })
+
+  // The dev overlay listens on `window` too and never reads `defaultPrevented`,
+  // so preventing the default is not enough to keep its crash screen shut.
+  describe('a listener registered after the guard', () => {
+    it('never sees a cancellation rejection', () => {
+      const uninstall = installMonacoCancellationGuard()
+      const overlay = jest.fn()
+      window.addEventListener('unhandledrejection', overlay)
+
+      window.dispatchEvent(rejectionEvent(canceled()))
+
+      expect(overlay).not.toHaveBeenCalled()
+      window.removeEventListener('unhandledrejection', overlay)
+      uninstall()
+    })
+
+    it('never sees a cancellation error', () => {
+      const uninstall = installMonacoCancellationGuard()
+      const overlay = jest.fn()
+      window.addEventListener('error', overlay)
+
+      window.dispatchEvent(new ErrorEvent('error', { error: canceled(), cancelable: true }))
+
+      expect(overlay).not.toHaveBeenCalled()
+      window.removeEventListener('error', overlay)
+      uninstall()
+    })
+
+    it('still sees a real failure', () => {
+      const uninstall = installMonacoCancellationGuard()
+      const overlay = jest.fn()
+      window.addEventListener('error', overlay)
+
+      window.dispatchEvent(new ErrorEvent('error', { error: new Error('worker died'), cancelable: true }))
+
+      expect(overlay).toHaveBeenCalledTimes(1)
+      window.removeEventListener('error', overlay)
+      uninstall()
+    })
+  })
 })
