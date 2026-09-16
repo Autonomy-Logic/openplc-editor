@@ -54,6 +54,8 @@ export type SelectedDevice = {
   orchestratorAgentId: string
   deviceId: string
   deviceName: string
+  /** Whether this vPLC holds the Device's backplane I/O. Absent means the host did not say, not `false`. */
+  backplaneAccess?: boolean
 }
 
 export type StoredCredentials = {

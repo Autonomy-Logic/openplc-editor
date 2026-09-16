@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { evaluateVppBackplaneGate } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -95,6 +96,11 @@ const Board = memo(function () {
   const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  // The vPLC the board list is being offered for. Null on every target that is
+  // not an orchestrator device, which the gate reads as "do not gate".
+  const selectedDevice = useOpenPLCStore(
+    (state): RuntimeConnection['selectedDevice'] => state.runtimeConnection.selectedDevice,
+  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -628,17 +634,37 @@ const Board = memo(function () {
                       {boards.map(({ board, data }) => {
                         const showVersion = !isSimulatorTarget(data) && data.coreVersion
                         const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
+                        // The RULE lives in `evaluateVppBackplaneGate`, shared with
+                        // the deploy pre-check, so the list and the build refuse the
+                        // same boards with the same words. A refused board stays
+                        // listed and carries its explanation — hiding it would read
+                        // as "this package is not installed".
+                        const gate = evaluateVppBackplaneGate({
+                          isVppBoard: data.vpp !== undefined,
+                          backplaneAccess: selectedDevice?.backplaneAccess,
+                        })
+                        const refusal = gate.kind === 'refuse' ? gate.reason : null
                         return (
                           <SelectItem
                             key={board}
+                            disabled={refusal !== null}
                             className={cn(
                               'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
                               'flex w-full cursor-pointer items-center px-2 py-[7px] pl-5 outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                              refusal !== null &&
+                                'cursor-not-allowed opacity-60 hover:bg-transparent dark:hover:bg-transparent',
                             )}
                             value={formattedBoard}
                           >
-                            <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                              {formattedBoard}
+                            <span className='flex flex-col gap-0.5'>
+                              <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                {formattedBoard}
+                              </span>
+                              {refusal !== null && (
+                                <span className='font-caption text-[10px] leading-snug text-neutral-500 dark:text-neutral-400'>
+                                  {refusal}
+                                </span>
+                              )}
                             </span>
                           </SelectItem>
                         )

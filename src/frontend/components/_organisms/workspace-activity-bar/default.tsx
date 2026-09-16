@@ -1,4 +1,5 @@
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
+import { evaluateVppBackplaneGate } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -230,6 +231,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // visible from the first line, even if the console was collapsed or the
       // user had scrolled up. One-shot — it won't fight a later manual scroll.
       requestConsoleFollow()
+
+      // A board that comes from a vendor package drives the local backplane I/O,
+      // and only one vPLC per Device may do that. The RULE is
+      // `evaluateVppBackplaneGate`, the same one the board picker consults, so the
+      // list and the build refuse the same boards in the same words.
+      //
+      // First of the pre-flight checks, ahead of the save and the PLC gate below:
+      // this is a refusal, not a request, so there is nothing to consent to and
+      // no reason to stop a running plant for a build that cannot happen. It is
+      // also the only control there is — the runtime does not enforce this, and a
+      // serial-only driver would come up silently wrong instead of failing at HAL
+      // init.
+      {
+        const state = useOpenPLCStore.getState()
+        const boardInfo = state.deviceAvailableOptions.availableBoards.get(
+          state.deviceDefinitions.configuration.deviceBoard,
+        )
+        const gate = evaluateVppBackplaneGate({
+          isVppBoard: boardInfo?.vpp !== undefined,
+          backplaneAccess: state.runtimeConnection.selectedDevice?.backplaneAccess,
+        })
+        if (gate.kind === 'refuse') {
+          addLog({ level: 'error', message: gate.reason })
+          return
+        }
+      }
 
       // Always save the full project before building. The compile
       // pipeline reads source from disk (project.json, devices/*.json,
