@@ -60,17 +60,29 @@ configured by the Modbus TCP layer from the project's network screen.
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
 
-#elif defined(BOARD_PICOW)
+#elif defined(BOARD_PICOW) && defined(MBTCP_WIFI)
+    // Route-qualified: BOARD_PICOW names the CYW43 WiFi, and a Pico W with an
+    // SPI Ethernet module must fall through to the MBETH_SPI branch below
+    // rather than be handed a WiFiServer for a chip it is not talking to.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
 
-#elif defined(BOARD_PORTENTA)
+#elif defined(BOARD_PORTENTA) && defined(MBTCP_WIFI)
+    // Same rule for the WiFi-shape boards. On mbed, WiFiS3 and the esp32 core
+    // alike this name resolves to that core's own WiFiServer.
+    #include <WiFi.h>
+    typedef WiFiServer bm_server_impl_t;
+    typedef WiFiClient bm_client_impl_t;
+
+#elif defined(MBETH_MBED_LWIP)
+    // mbed lwIP MAC (Portenta, Giga, Portenta Machine Control). No <SPI.h>:
+    // there is no module on the bus.
     #include <Ethernet.h>
     typedef EthernetServer bm_server_impl_t;
     typedef EthernetClient bm_client_impl_t;
 
-#elif defined(MBTCP_ETHERNET)
+#elif defined(MBETH_SPI)
     // Generic SPI Ethernet module. Reached only by targets that genuinely use
     // one, because every chip with its own MAC is named above. Which driver
     // comes from the project's Network screen via MBTCP_ETH_ENC28J60; the class

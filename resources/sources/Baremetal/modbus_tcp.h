@@ -72,7 +72,7 @@ back — no knowledge of the function-code set.
     extern EthernetServer mb_server;
 #endif
     extern uint8_t mb_mbap[MBAP_SIZE];
-#ifdef BOARD_PORTENTA
+#if defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
     extern EthernetClient mb_serverClients[MAX_SRV_CLIENTS];
 #endif
 #endif

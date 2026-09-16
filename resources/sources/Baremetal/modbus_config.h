@@ -52,4 +52,36 @@ it must reach a TU through exactly one path: this header.
     #define MB_EDITOR_SLAVE DEBUG_SLAVE
 #endif
 
+// ---------------------------------------------------------------------------
+// Ethernet route: which stack carries it.
+//
+// `BOARD_*` names the board's WIFI API -- that is the axis it was introduced
+// for, and it is why the Arduino Uno R4 WiFi and the Nano ESP32 both declare
+// BOARD_PORTENTA: neither is a Portenta, but both reach WiFi through the same
+// call shape. The Ethernet route is a SEPARATE axis and was being read off the
+// same define, so a board whose WiFi happens to look like a Portenta's was also
+// told its Ethernet is a Portenta's -- an mbed lwIP MAC rather than the SPI
+// module it actually takes.
+//
+// So the two are split. MBETH_* says what carries Ethernet and nothing about
+// WiFi; a VPP states it with `-DMBETH_SPI` in its HAL flags when the default
+// below would guess wrong for that board.
+//
+// This is the CHEAP half of the fix: the WiFi axis keeps using BOARD_*, and
+// `WiFi.config()`'s argument order is still chosen by it -- which is still
+// wrong for WiFiS3 and the esp32 core (both differ from mbed's). That needs a
+// board on the bench to verify against and is deliberately not attempted here.
+// ---------------------------------------------------------------------------
+#if defined(MBTCP_ETHERNET) && !defined(MBETH_SPI) && !defined(MBETH_MBED_LWIP)
+#  if defined(BOARD_LOGO8) || defined(BOARD_ESP32)
+     // On-chip MAC. Named branches own these; neither MBETH_* applies.
+#  elif defined(BOARD_PORTENTA)
+     // Default preserved: a real Portenta / Giga / Portenta Machine Control has
+     // an mbed lwIP MAC. A board that only borrows the WiFi shape overrides it.
+#    define MBETH_MBED_LWIP
+#  else
+#    define MBETH_SPI
+#  endif
+#endif
+
 #endif

@@ -21,7 +21,11 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
     EthernetServer mb_server(MBTCP_PORT);
 #endif
     uint8_t mb_mbap[MBAP_SIZE];
-#ifdef BOARD_PORTENTA
+// The Ethernet route's client table. The multi-client block in handle_tcp()
+// is entered for PORTENTA and PICOW alike, so both need the array; declaring it
+// for only one of them is why a Pico W with an Ethernet module failed to
+// compile at modbus_tcp.cpp:137 with 'mb_serverClients' was not declared.
+#if defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
     EthernetClient mb_serverClients[MAX_SRV_CLIENTS];
 #endif
 #endif
