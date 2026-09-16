@@ -45,7 +45,6 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
     refresh: refreshAccount,
     signOut: signOutOfAccount,
   } = useEdgeAccount(caps.hasEdgeAccount, edgeAccount)
-  /** Whether the user asked for the sign-in dialog, on a build that does not force it. */
   const [signInDialogOpen, setSignInDialogOpen] = useState(false)
   const editor = useOpenPLCStore(useCallback((s) => s.editor, []))
   const { closeProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
@@ -159,9 +158,9 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
         )}
       </div>
 
-      {/* Gated on signed-out rather than !user, so a slow /auth/me never flashes a sign-in prompt
-          at someone already signed in. `open` follows requiresEdgeAccount: forced open where an
-          account is required (web), opened on request otherwise (desktop, which works offline). */}
+      {/* Gated on signed-out rather than !user, so a slow /auth/me never flashes a prompt at
+          someone already signed in. `open` follows requiresEdgeAccount: forced open on web,
+          opened on request on desktop, which works offline. */}
       {caps.hasEdgeAccount && edgeAccount && accountStatus === 'signed-out' && (
         <EdgeSignInModal
           open={caps.requiresEdgeAccount || signInDialogOpen}

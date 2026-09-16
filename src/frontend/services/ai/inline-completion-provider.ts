@@ -1,4 +1,3 @@
-/** Monaco InlineCompletionsProvider powered by the AI backend. */
 import type * as monaco from 'monaco-editor'
 
 import type { AICompleteParams, AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
@@ -129,9 +128,7 @@ type CachedCompletion = {
   item: monaco.languages.InlineCompletion
 }
 
-/** The suggestion currently shown, used as the basis for type-through. */
 type ActiveSuggestion = {
-  /** Full suggested text (the original insertText). */
   text: string
   /** Where the ghost text begins (= the cursor when the suggestion was produced). */
   anchorLineNumber: number
@@ -145,15 +142,11 @@ type ShownCompletion = {
   shownAt: number
 }
 
-/** Outcome of comparing what the user has typed against the active suggestion. */
+/** `none` also covers the cursor leaving the suggestion's line; `match` carries the shrunk ghost text. */
 type TypeThroughResult =
-  /** No active suggestion to type through, or the cursor moved off its line. */
   | { kind: 'none' }
-  /** Typed text matches the suggestion — keep it, render `item` (shrunk ghost text). */
   | { kind: 'match'; item: monaco.languages.InlineCompletion; matchedChars: number; completionLength: number }
-  /** Typed text equals the whole suggestion — it has been fully consumed. */
   | { kind: 'consumed' }
-  /** Typed text diverges from the suggestion — invalidate and re-request. */
   | { kind: 'diverged' }
 
 export class AIInlineCompletionProvider implements monaco.languages.InlineCompletionsProvider {
@@ -247,7 +240,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     const prefixForHash = model.getValue().substring(Math.max(0, offset - 200), offset)
     const cacheKey = buildCacheKey(model.uri.toString(), offset, hashString(prefixForHash))
 
-    // 1. Type-through: shrink the ghost text instead of re-requesting.
     const typeThrough = this.tryTypeThrough(model, position)
     if (typeThrough.kind === 'match') {
       if (!this.typeThroughTracked) {
@@ -267,18 +259,15 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       return emptyResult
     }
 
-    // 2. Cache lookup.
     const cached = this.cache.get(cacheKey)
     if (cached) {
       this.trackShown(model, position, cached.item.insertText as string, 0, 'cache')
       return { items: [cached.item] }
     }
 
-    // 3. Debounce every network request, cold and divergent alike.
     const elapsed = await abortableDelay(AIInlineCompletionProvider.REQUEST_DEBOUNCE_MS, token)
     if (!elapsed || token.isCancellationRequested) return emptyResult
 
-    // 4. Cancel any in-flight request from a superseded call.
     if (this.activeAbortController) {
       this.activeAbortController.abort()
     }
@@ -349,7 +338,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
 
       completion = AIInlineCompletionProvider.stripMarkdownFences(completion)
 
-      // `reason` separates "no tokens at all" from "stripped to nothing" for the dashboard.
       if (!completion.trim()) {
         this.aiPort.sendTelemetry('completion_empty', {
           language: this.language,
@@ -449,7 +437,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     this.signedOutHoldMs = AIInlineCompletionProvider.SIGNED_OUT_HOLD_MS
   }
 
-  /** Forget the active suggestion so type-through stops comparing against it. */
   private clearActiveSuggestion(): void {
     this.lastResult = null
     this.typeThroughTracked = false
@@ -479,7 +466,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     })
   }
 
-  /** Report accept/dismiss of the last shown completion; ignores ones visible under MIN_SHOWN_MS. */
   private trackAcceptOrDismiss(): void {
     if (!this.lastShown) return
 
@@ -551,7 +537,6 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     return { kind: 'match', item, matchedChars: typed.length, completionLength: original.length }
   }
 
-  /** Estimate a maxTokens cap from cursor context. */
   private static estimateMaxTokens(
     textBeforeCursor: string,
     position: monaco.Position,
@@ -562,17 +547,14 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       .substring(position.column - 1)
       .trim()
 
-    // Mid-line: short expression.
     if (textAfterCursor.length > 0) return 64
 
     // After assignment, comma or open paren: single expression.
     if (/(:=|,|\()\s*$/.test(textBeforeCursor)) return 96
 
-    // New line or block start: allow multi-line.
     return 256
   }
 
-  /** Strip `<COMPLETION>` tags, markdown fences and leading blank lines from a raw completion. */
   private static stripMarkdownFences(text: string): string {
     let result = text.replace(/^\s*<COMPLETION>/, '').replace(/<\/COMPLETION>\s*$/, '')
 

@@ -160,10 +160,8 @@ interface ChannelUnavailable {
 }
 
 /**
- * What the licensing flow needs from whichever channel carries it. The identity read is
- * EITHER `getDeviceId` (baremetal) OR `getAnchor` (runtime-v4), never both — the XOR only
- * enforces that at the type level; `isLicenseChannel` narrows a live channel with
- * `typeof` at runtime, so a rename there can silently break licensing (see device-license.handler.test.ts).
+ * The identity read is EITHER `getDeviceId` (baremetal) OR `getAnchor` (runtime-v4), never
+ * both. `isLicenseChannel` narrows with runtime `typeof`, so renaming either silently breaks licensing.
  */
 type LicenseChannel = LicenseReadWritable &
   (
@@ -210,7 +208,6 @@ interface Md5VerifyReply {
   error?: string
 }
 
-/** A live AI stream: what cancels the request and where its tokens are going. */
 interface AiStream {
   cancel: () => void
   sender: WebContents
@@ -238,15 +235,13 @@ const AI_TELEMETRY_EVENTS = [
   'upgrade_cta_clicked',
 ] as const satisfies readonly AITelemetryEventName[]
 
-/** The telemetry event the renderer named, when this build knows it. */
 function toAiTelemetryEvent(value: unknown): AITelemetryEventName | undefined {
   return AI_TELEMETRY_EVENTS.find((name) => name === value)
 }
 
-/** Where a project retrieved from a device is unpacked; shared by the writer and the reader that recognizes it. */
 const retrievedProjectsRoot = (): string => join(app.getPath('userData'), 'retrieved-projects')
 
-/** True for the scratch root (inclusive) or anything inside it; uses `relative` rather than `startsWith` so a same-prefixed sibling isn't caught. */
+/** True for the scratch root (inclusive) or anything inside it; `relative` rather than `startsWith`, so a same-prefixed sibling isn't caught. */
 const isRetrievedProjectPath = (projectPath: string): boolean => {
   const rel = relative(retrievedProjectsRoot(), projectPath)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
@@ -262,9 +257,8 @@ class MainProcessBridge implements MainIpcModule {
   compilerModule
   hardwareModule
   private registeredHandleChannels: string[] = []
-  // Talking to a baremetal device: ONE session, owned by `deviceSession`, whatever media
-  // it runs over. Nothing else here opens a Modbus client (see device-link-manager.ts).
-  // The runtime-v4 WebSocket is not a device link — a different protocol — and keeps its own client/session.
+  // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
+  // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
   private readonly deviceSession = new DeviceSessionManager({
     verify: (client, candidate, context) => this.verifyDeviceCandidate(client, candidate, context),
     probe: (client) => this.probeDeviceLink(client),
@@ -275,9 +269,8 @@ class MainProcessBridge implements MainIpcModule {
   /** Classification of the candidate the held link came from. */
   private deviceLinkProbe: DeviceProbeOutcome | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
-  // Extracted to `backend/editor/runtime` so the headless CLI shares it rather than
-  // carrying its own copy. The token-refresh listener is registered in the constructor
-  // only, not here — `this.tokens` is `runtimeApi.tokens`, so a second registration would double-fire `runtime:token-refreshed`.
+  // The token-refresh listener is registered in the constructor only: `this.tokens` is
+  // `runtimeApi.tokens`, so a second registration would double-fire `runtime:token-refreshed`.
   private runtimeApi = new RuntimeApiClient()
 
   // The runtime bootloader, on its own port/session — separate from runtimeApi since the two services share a credential database, not a token.
@@ -573,8 +566,6 @@ class MainProcessBridge implements MainIpcModule {
     devices?: DiscoveredRuntime[]
     error?: string
   }> => {
-    // The scan lives in `backend/editor/hardware/discover-runtimes` so the headless CLI
-    // runs exactly this code, rather than a second copy that could drift.
     const senderWebContents = event.sender
     const result = await discoverRuntimes({
       durationMs: opts?.durationMs,
@@ -812,7 +803,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('catalog:list', this.handleCatalogList)
-    // ----- Edge account (optional sign-in) -----
     // All of it runs in the main process: the renderer is not on Edge's origin, so
     // it can neither inherit a shared-domain cookie nor make the request itself.
     this.registerHandle('edge-account:fetch-user', this.handleEdgeFetchUser)
@@ -820,15 +810,12 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-account:sign-in', this.handleEdgeSignIn)
     this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
     this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
-    // ----- Edge projects (the cloud half of the start screen) -----
     this.registerHandle('edge-projects:list-recent', this.handleEdgeProjectsListRecent)
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
-    // ----- Publishing a local project to Edge -----
     this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
     this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
-    // ----- Edge version control (branches, commits, changes, stashes) -----
     this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
     this.registerHandle('edge-vc:create-branch', this.handleEdgeVcCreateBranch)
     this.registerHandle('edge-vc:delete-branch', this.handleEdgeVcDeleteBranch)
@@ -847,7 +834,6 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-vc:drop-stash', this.handleEdgeVcDropStash)
     this.registerHandle('edge-vc:branch-diff-with-base', this.handleEdgeVcBranchDiffWithBase)
     this.registerHandle('edge-vc:merge-branches', this.handleEdgeVcMergeBranches)
-    // ----- Edge AI (chat, inline completion, billing surface, conversations) -----
     // stream-start/stream-abort are a pair: stream-start answers with an id, and events arrive under it on edge-ai:event/end/error.
     this.registerHandle('edge-ai:entitlements', this.handleEdgeAiEntitlements)
     this.registerHandle('edge-ai:usage', this.handleEdgeAiUsage)
@@ -1080,7 +1066,6 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /** Drops every Recent entry under the retrieval scratch root, in one read and at most one write. */
   private forgetRetrievedProjectsInHistory = async (): Promise<void> => {
     const historyPath = this.projectService.getHistoryProjectsFilePath()
     const history = await this.projectService.readProjectHistory(historyPath)
@@ -1246,12 +1231,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Loads every bundled .stlib archive, from alongside the strucpp compiler binaries
-   * under `<resources>/strucpp/libs/`, in alphabetical order for a deterministic tree.
-   * Errors propagate to the renderer rather than silently dropping libraries.
+   * Loads bundled .stlib archives from `<resources>/strucpp/libs/`, alphabetically for a
+   * deterministic tree. Errors propagate rather than silently dropping libraries.
    */
-  // Library manager handlers — system-wide IEC 61131-3 library pool (bundled strucpp
-  // libs + user-installed .stlib / CODESYS imports), identified by the strucpp manifest `name`.
   handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
@@ -1310,11 +1292,9 @@ class MainProcessBridge implements MainIpcModule {
 
   handleEdgeSignOut = (_event: IpcMainInvokeEvent): Promise<void> => signOutOfEdge()
 
-  /** Whether a session on this machine survives a restart — see `session-store`. */
   handleEdgeIsSessionPersistent = (_event: IpcMainInvokeEvent): Promise<boolean> =>
     Promise.resolve(isEncryptionAvailable())
 
-  // ===================== EDGE PROJECTS =====================
   // The cloud round trip. Reads and writes go through the same session the account
   // handlers use, so a revoked token is renewed once rather than per call site.
 
@@ -1367,19 +1347,14 @@ class MainProcessBridge implements MainIpcModule {
     return saveCloudFile(filePath, content)
   }
 
-  // -------------------------------------------------------------------------
-  // Edge version control
-  // -------------------------------------------------------------------------
-  // Every handler validates before it builds a URL, since a non-string id would be
-  // interpolated as `undefined` into it. Optional arguments are normalised rather than
-  // forwarded: `undefined` arriving as `null` is the difference between "commit everything" and "commit no files".
+  // Validate before building a URL: a non-string id interpolates as `undefined`. And `undefined`
+  // arriving as `null` is the difference between "commit everything" and "commit no files".
 
   /** Non-empty string, or nothing. */
   private static vcString(value: unknown): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined
   }
 
-  /** Narrows an IPC argument to something indexable, without asserting. */
   private static vcRecord(value: unknown): Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
       ? Object.fromEntries(Object.entries(value))
@@ -1697,14 +1672,6 @@ class MainProcessBridge implements MainIpcModule {
     return id && stashRef ? dropStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
   }
 
-  // -------------------------------------------------------------------------
-  // Edge AI
-  // -------------------------------------------------------------------------
-  // Every argument is narrowed before becoming an HTTP request, plus chat/completion
-  // stream: `stream-start` opens the request and answers with an id; events arrive
-  // tagged with it on `edge-ai:event`/`end`/`error`. Frames stay structured (never
-  // flattened, or a `tool_use` frame disappears) and `EdgeAiFailure` crosses whole.
-
   /**
    * The live streams, by id — the only thing holding an open upstream request, so
    * every way a stream can end (finish, fail, abort, window closing) must remove its entry.
@@ -1912,7 +1879,6 @@ class MainProcessBridge implements MainIpcModule {
     stream.sender.send(channel, { streamId, ...payload })
   }
 
-  /** Forget a stream that has already finished. */
   private forgetAiStream(streamId: string) {
     this.aiStreams.delete(streamId)
   }
@@ -1921,11 +1887,9 @@ class MainProcessBridge implements MainIpcModule {
   private readonly watchedAiSenders = new WeakSet<WebContents>()
 
   /**
-   * Hooks the three ways a renderer stops being able to read its streams, once per
-   * renderer. `destroyed` alone misses a reload (Ctrl+R, dev-server hot reload), which
-   * kills the JS context without destroying `WebContents` — Edge would then commit the
-   * credit charge for an answer nobody reads. `did-start-navigation` (same-document
-   * navigations skipped) and `render-process-gone` cover that and a renderer crash.
+   * `destroyed` alone misses a reload, which kills the JS context without destroying
+   * `WebContents` — Edge would still charge for an answer nobody reads, so navigation
+   * and process-gone are hooked too.
    */
   private watchAiSender(sender: WebContents) {
     if (this.watchedAiSenders.has(sender)) {
@@ -1945,7 +1909,6 @@ class MainProcessBridge implements MainIpcModule {
     })
   }
 
-  /** Cancel every live stream a renderer was reading. */
   private abortAiStreamsFor(sender: WebContents) {
     for (const [streamId, stream] of this.aiStreams) {
       if (stream.sender === sender) {
@@ -2096,9 +2059,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Resolves project-enabled library names to parsed `.stlib` archives (bundled libs
-   * always included); missing-but-enabled names come back for the caller to surface as
-   * a pre-compile error. Feeds both the program build and the library build so the verify pass can't drift from the actual compile.
+   * Resolves enabled library names to parsed `.stlib` archives (bundled libs always
+   * included); missing names come back for the caller to surface. Feeds both builds, so
+   * verify can't drift from the actual compile.
    */
   loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
     this.libraryManagerModule.loadEnabledArchives(enabledNames)
@@ -2298,9 +2261,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * FC 0x4b run/stop for a baremetal target. Command only — state is read from the
-   * status poll (FC 0x46). Goes over the one held device link, whatever transport it
-   * runs over; must never open a second client; an Arduino Modbus TCP server serves one client at a time.
+   * FC 0x4b run/stop for a baremetal target. Command only — state is read from the status
+   * poll (FC 0x46). Over the one held device link; never a second client, since an Arduino
+   * Modbus TCP server serves one at a time.
    */
   handleDebuggerPlcControl = async (_event: IpcMainInvokeEvent, action: 'run' | 'stop'): Promise<PlcControlResult> => {
     this.traceDeviceLink(`run/stop: ${action} requested`)
@@ -2428,9 +2391,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Starts a debug session against a target. For a Modbus target there's nothing to
-   * open: it runs over the one held device link (the OS won't lock a serial port
-   * twice, and a TCP Arduino serves one client); runtime v4 keeps its own WebSocket.
+   * For a Modbus target there is nothing to open: it runs over the one held device link (the OS
+   * won't lock a serial port twice, and a TCP Arduino serves one client); runtime v4 keeps its own
+   * WebSocket.
    */
   handleDebuggerConnect = async (_event: IpcMainInvokeEvent): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -2487,7 +2450,6 @@ class MainProcessBridge implements MainIpcModule {
     this.mainWindow?.webContents?.send('device:link-log', message)
   }
 
-  /** Turns resolved channel configs into things the link manager can try; delegates to `debug-channel-factory`. */
   private toDeviceLinkCandidates = (
     configs: DebugConnectionConfig[],
     opts: { probeBaudRates?: boolean } = {},
@@ -2534,7 +2496,6 @@ class MainProcessBridge implements MainIpcModule {
     }
     return Promise.resolve({ success: true })
   }
-  /** Turns a resolved channel config into an openable debug channel; delegates to `debug-channel-factory`, shared with the headless CLI. */
   private toDebugCandidate = (config: DebugConnectionConfig): DeviceDebugCandidate | null =>
     toDebugCandidate(config, this.debugChannelDeps)
 
@@ -2589,9 +2550,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Per-tick liveness read, and the one place baremetal run/stop state is polled.
-   * Prefers the status read (FC 0x46) over the device id (0x48), since status also
-   * carries run/stop state and the mode-switch position, with no extra traffic.
+   * Per-tick liveness read, and the one place baremetal run/stop state is polled. Prefers
+   * the status read (FC 0x46) over the device id (0x48): status also carries run/stop and
+   * the mode-switch position, at no extra cost.
    */
   private async probeDeviceLink(client: DeviceModbusTransport): Promise<boolean> {
     const descriptor = this.deviceSession.getLink()?.descriptor ?? ''
@@ -2622,9 +2583,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * The channel for this operation family, or a reason there isn't one. Every device
-   * command funnels through here so "not connected"/"reconnecting" read the same
-   * everywhere; `debug` operations take the debug channel, which for a shared session is the control channel.
+   * The channel for this operation family, or why there isn't one — every device command funnels
+   * through here so "not connected"/"reconnecting" read the same everywhere. A shared session's
+   * debug channel IS its control channel.
    */
   private requireControl(what: string): { client: DeviceModbusTransport } | ChannelUnavailable {
     const client = this.deviceClient()
@@ -2634,9 +2595,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * The debug channel, opening it if this session's debug medium is its own. Every
-   * caller passes a distinct `what` (the holder name), and a holder acquired here must
-   * be released or the channel can never close — per-command callers go through `withDebugChannel`, which releases in a `finally`.
+   * The debug channel, opening it if this session's debug medium is its own. A holder
+   * acquired here MUST be released or the channel never closes — per-command callers
+   * use `withDebugChannel`, which releases in a `finally`.
    */
   private async requireDebug(holder: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
     // `holder` may carry a per-call uniqueness suffix (`what#seq`); the trace
@@ -2717,9 +2678,9 @@ class MainProcessBridge implements MainIpcModule {
   private static readonly DEVICE_NOT_CONNECTED = 'not connected to the target'
 
   /**
-   * Opens and holds the link to a baremetal device. `candidates` is the ordered list
-   * the renderer resolved from the board's debug spec; tries them in order and keeps
-   * the first that both opens and answers, classified per candidate in `verifyDeviceCandidate`.
+   * Opens and holds the link to a baremetal device. `candidates` is the ordered list the
+   * renderer resolved from the board's debug spec; keeps the first that both opens and
+   * answers, classified in `verifyDeviceCandidate`.
    */
   handleDeviceConnect = async (
     _event: IpcMainInvokeEvent,
@@ -2774,17 +2735,16 @@ class MainProcessBridge implements MainIpcModule {
   // control channel's frame mutex; runtime v4 rides its own debug WebSocket instead.
 
   /**
-   * True while a compound licensing sequence runs over the held client. The transports
-   * only serialise individual frames, which isn't enough for `refreshLicense`'s
-   * read-HTTP-write-read — two running at once could interleave a read and write of the same license.
+   * True while a compound licensing sequence runs over the held client. The transports only
+   * serialise individual frames, not `refreshLicense`'s read-HTTP-write-read: two at once
+   * could interleave a read and a write.
    */
   private deviceLicenseSequenceInFlight = false
 
   /**
-   * Reads this board's licensing identity over the held link, tagged with which kind of
-   * value the channel answered: baremetal answers a pre-derived id, runtime-v4 answers
-   * the raw anchor. Read fresh on every call, never cached at connect, since a board
-   * swapped on the same serial path would otherwise inherit the previous one's identity.
+   * The licensing identity, tagged with which kind of value the channel answered. Read
+   * fresh every call, never cached at connect: a board swapped on the same serial path
+   * would inherit the previous one's identity.
    */
   private async readLicenseIdentity(
     client: LicenseChannel,

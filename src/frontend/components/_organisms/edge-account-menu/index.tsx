@@ -6,19 +6,14 @@ import type { EdgeUser } from '../../../../middleware/shared/ports/edge-account-
 import { cn } from '../../../utils/cn'
 import { EdgeAvatar } from '../../_atoms/edge-avatar'
 
-/** The signed-in user's menu, after Edge's user-dropdown pattern. Sign out ends the session both apps share. */
 interface EdgeAccountMenuProps {
   user: EdgeUser
-  /** e.g. `Pro Plan`; omitted from the card when null. */
   planCaption?: string | null
   onSignOut: () => void
-  /** Origin of the Edge SPA. Passed in: the mirrored desktop editor has no such environment. */
+  /** Origin of the Edge SPA. A prop, since the mirrored desktop editor has no such environment. */
   edgeBaseUrl: string
-  /** Size/shape for the trigger avatar; the start screen's text menu needs it to match 20px icons. */
   avatarClassName?: string
-  /** Rendered inside the trigger after the avatar, so the name beside it is a click target too. */
   label?: ReactNode
-  /** Trigger geometry, for a caller that needs it to match a row of other controls. */
   triggerClassName?: string
   /** Defaults to `right`: in the ~48px activity bar a menu dropping down is clipped on short viewports. */
   side?: 'right' | 'bottom'

@@ -10,9 +10,6 @@ import { logger } from '../services'
 /** Matches the web build's axios timeout. */
 const VC_TIMEOUT_MS = 30_000
 
-// Result shape
-
-/** Failure taxonomy; `unreachable` means nothing was learned and must not read as a denial. */
 export type EdgeVcFailure = VersionControlFailure
 
 export type EdgeVcResult<T> = VersionControlResult<T>
@@ -21,28 +18,23 @@ export type EdgeVcResult<T> = VersionControlResult<T>
 const edgeEnvelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) =>
   z.object({ statusCode: z.number().optional(), data: data.optional() })
 
-/** A `message` field as Nest's exception filter writes it. */
+/** Nest's exception filter writes `message` as a string, or an array for validation errors. */
 const FailureBodySchema = z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() })
 
 /** Server caption; `.catch('')` because the operation already happened by the time the body is read. */
 const CaptionSchema = z.string().catch('')
 
-/** A counter the server may omit. Absent reads as zero rather than as a failure. */
 const CountSchema = z.number().catch(0)
 
-/** The 409 body shared by the carry rejection and the merge refusal; every field is optional. */
+/** Shared by the carry rejection and the merge refusal; every field is optional. */
 const ConflictBodySchema = z.object({
   conflictedFiles: z.array(z.string()).nullish(),
   message: z.string().nullish(),
 })
 
-/**
- * Edge's exception filter answers `{ timestamp, path, method, statusCode, error: <nest body> }`,
- * so the reason sits one level down; a few routes answer the bare body.
- */
+/** Edge's exception filter nests the Nest body under `error`; a few routes answer it bare. */
 const WrappedErrorSchema = z.object({ error: z.record(z.unknown()) })
 
-/** The Nest body of a failure: from inside the exception filter's envelope when there is one, bare otherwise. */
 function unwrapErrorBody(body: string): unknown {
   const parsed = parseJsonBody(body)
   const wrapped = WrappedErrorSchema.safeParse(parsed)
@@ -50,14 +42,13 @@ function unwrapErrorBody(body: string): unknown {
   return wrapped.success ? wrapped.data.error : parsed
 }
 
-/** Whatever of {@link ConflictBodySchema} the 409 body carried; a body carrying none of it is still a conflict. */
+/** A 409 body carrying none of these fields is still a conflict. */
 function conflictFieldsFrom(body: string): z.infer<typeof ConflictBodySchema> {
   const parsed = ConflictBodySchema.safeParse(unwrapErrorBody(body))
 
   return parsed.success ? parsed.data : {}
 }
 
-/** Nest puts the reason in `message`, as a string or an array of strings. */
 function messageFromBody(body: string, status: number): string {
   const parsed = FailureBodySchema.safeParse(unwrapErrorBody(body))
   const raw = parsed.success ? parsed.data.message : undefined
@@ -73,7 +64,7 @@ function messageFromBody(body: string, status: number): string {
   return `Autonomy Edge answered ${status}.`
 }
 
-/** One authenticated call; only routes that can conflict pass `on409`, so any other 409 stays an HTTP failure. */
+/** Only routes that can conflict pass `on409`, so any other 409 stays an HTTP failure. */
 async function call<Schema extends z.ZodTypeAny>(
   target: Route,
   schema: Schema,
@@ -105,15 +96,14 @@ async function call<Schema extends z.ZodTypeAny>(
   const { status, body } = response
 
   if (status === 401 || status === 403) {
-    // 401 survived a renewal attempt inside `edgeAuthedRequest`, so it is a real
-    // authorization failure. 403 is a project the account may read but not write.
+    // A 401 survived a renewal inside `edgeAuthedRequest`, so it is real. A 403 is a
+    // project the account may read but not write.
     return status === 401
       ? { ok: false, failure: { kind: 'signed-out' } }
       : { ok: false, failure: { kind: 'http', status, message: messageFromBody(body, status) } }
   }
 
   if (status === 409 && on409) {
-    // The route was given a handler because a 409 on it means one thing; the body only fills in the detail.
     return { ok: false, failure: on409(body) }
   }
 
@@ -124,7 +114,8 @@ async function call<Schema extends z.ZodTypeAny>(
   const envelope = edgeEnvelopeOf(schema).safeParse(parseJsonBody(body))
 
   if (!envelope.success || envelope.data.data === undefined) {
-    // Log the failing field: "unreadable response" alone cannot tell a changed server from a too-strict schema.
+    // Log the failing field: "unreadable response" alone cannot tell a changed server
+    // from a too-strict schema.
     logger.warn(
       `Unreadable ${path} response: ${
         envelope.success
@@ -142,7 +133,6 @@ async function call<Schema extends z.ZodTypeAny>(
   return { ok: true, data: envelope.data.data }
 }
 
-/** For the routes whose answer the caller ignores (delete, discard, drop). */
 async function callVoid(
   target: Route,
   init: { method?: 'GET' | 'POST' | 'DELETE'; json?: unknown } = {},
@@ -159,15 +149,14 @@ async function callVoid(
 }
 
 /**
- * The carry rejection: a 409 on the switch route IS the conflict. Edge rethrows it as a plain
- * `ConflictException`, which carries no `hasConflicts` flag, so the status is the whole signal;
- * the files are read from the body when it happens to list them.
+ * Edge rethrows the carry rejection as a plain `ConflictException` with no `hasConflicts`
+ * flag, so the 409 itself is the whole signal; the files are read if the body lists them.
  */
 function carryConflict(body: string): EdgeVcFailure {
   return { kind: 'carry-conflict', conflictedFiles: conflictFieldsFrom(body).conflictedFiles ?? [] }
 }
 
-/** The merge refusal; same reasoning as the carry rejection, plus the server's caption when it sent one. */
+/** Same reasoning as the carry rejection, plus the server's caption when it sent one. */
 function mergeConflict(body: string): EdgeVcFailure {
   const { conflictedFiles, message } = conflictFieldsFrom(body)
 
@@ -182,8 +171,6 @@ function mergeConflict(body: string): EdgeVcFailure {
 function stashConflict(): EdgeVcFailure {
   return { kind: 'stash-conflict' }
 }
-
-// Paths
 
 class InvalidRouteSegmentError extends Error {
   constructor(readonly segment: string) {
@@ -203,7 +190,7 @@ export function segment(value: string): string {
 
 type Route = { ok: true; path: string } | { ok: false; message: string }
 
-/** A route template whose every interpolated value is passed through {@link segment}. */
+/** Every interpolated value goes through {@link segment}. */
 function route(strings: TemplateStringsArray, ...values: string[]): Route {
   try {
     return {
@@ -222,14 +209,12 @@ function route(strings: TemplateStringsArray, ...values: string[]): Route {
   }
 }
 
-/** Append a query string, when there is one. `URLSearchParams` does its own encoding. */
+/** `URLSearchParams` does its own encoding, so the query does not go through {@link segment}. */
 function withQuery(base: Route, params: URLSearchParams): Route {
   const query = params.toString()
 
   return base.ok && query ? { ok: true, path: `${base.path}?${query}` } : base
 }
-
-// Branches
 
 export function listBranches(projectId: string) {
   return call(route`/projects/${projectId}/branches`, z.object({ branches: z.array(z.unknown()) }))
@@ -263,8 +248,6 @@ export function previewSwitchCarry(projectId: string, targetBranch: string) {
     z.object({ conflicts: z.array(z.string()) }),
   )
 }
-
-// Commits
 
 export function listCommits(projectId: string, options: { limit?: number; offset?: number; branch?: string } = {}) {
   const params = new URLSearchParams()
@@ -312,8 +295,6 @@ export function restoreCommit(projectId: string, hash: string, branch?: string) 
   )
 }
 
-// Working tree
-
 export function getChanges(projectId: string, includeContent?: boolean) {
   // No `branch` param: the backend's whitelist rejects unknown query params with a 400.
   const search = new URLSearchParams()
@@ -334,8 +315,6 @@ export function discardChanges(projectId: string, files?: string[]) {
 
   return callVoid(route`/projects/${projectId}/discard-changes`, { method: 'POST', json })
 }
-
-// Stashes
 
 export function listStashes(projectId: string) {
   return call(route`/projects/${projectId}/stashes`, z.object({ stashes: z.array(z.unknown()) }))
@@ -371,8 +350,6 @@ export function popStash(projectId: string, ref: string) {
 export function dropStash(projectId: string, ref: string) {
   return callVoid(route`/projects/${projectId}/stashes/drop`, { method: 'POST', json: { ref } })
 }
-
-// Merging
 
 export function getBranchDiffWithBase(projectId: string, source: string, target: string) {
   const params = new URLSearchParams({ source, target })

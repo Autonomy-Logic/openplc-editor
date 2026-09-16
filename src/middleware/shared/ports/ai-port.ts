@@ -1,5 +1,3 @@
-/** AIPort — contract for AI-assisted coding features (inline completions, chat, credits, telemetry). */
-
 import type { AIChatContentBlock, AIEntitlements, AIFeatureConfig, AIUsage, BillingErrorPayload } from './types'
 
 /** Language identifiers supported by AI completion. */
@@ -18,15 +16,13 @@ export interface AICompleteParams {
   maxTokens?: number
 }
 
-/** A tool the model may call, as the API describes one. */
 export interface AIToolDefinition {
   name: string
   description: string
   input_schema: Record<string, unknown>
 }
 
-/** One turn of the conversation; `content` is a string for prose, or blocks once tools are
- * involved (the model's `tool_use` and the caller's `tool_result`). */
+/** `content` is a string for prose, or blocks once tools are involved (`tool_use`, `tool_result`). */
 export interface AIChatMessageParam {
   role: 'user' | 'assistant'
   content: string | AIChatContentBlock[]
@@ -38,12 +34,11 @@ export interface AIChatParams {
   pouContext?: string
   language?: AIChatLanguage
   model?: 'haiku' | 'sonnet'
-  /** Offered to the model. Absent means it has no way to act on the project. */
+  /** Absent means the model has no way to act on the project. */
   tools?: AIToolDefinition[]
   /** Append to this conversation. Absent with `projectId` present starts one. */
   conversationId?: string
-  /** Whose project this is about; with no `conversationId` the backend creates one and
-   * announces the id via a `conversation_started` frame. */
+  /** With no `conversationId` the backend creates one, announced in a `conversation_started` frame. */
   projectId?: string
 }
 
@@ -58,15 +53,13 @@ export interface AICreditStatus {
   current_period_end: string | null
 }
 
-/** One frame of the model's answer; the wire contract shared by `streamChat`'s flattened
- * text and the agentic loop's `tool_use` handling. */
+/** The wire frames behind both `streamChat`'s flattened text and the agentic loop's `tool_use` handling. */
 export type AISSEEvent =
   | { type: 'content_block_delta'; delta: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'message_stop'; stopReason?: string }
   | { type: 'error'; error: string }
-  /** First frame when `/ai/chat` implicitly creates a conversation; the caller captures
-   * the id for subsequent turns. */
+  /** First frame when the backend implicitly creates a conversation; capture the id for later turns. */
   | { type: 'conversation_started'; conversationId: string; conversationTitle: string }
 
 /** Telemetry event names. */
@@ -86,10 +79,9 @@ export type AITelemetryEventName =
   | 'conversation_deleted'
   /** Fired when `AcuExhaustionModal` opens. Data: `{ source: 'usage_limit'|'subscription', planSlug, remaining }`. */
   | 'acu_exhausted'
-  /** Fired when the user clicks the upgrade/reactivate CTA in the exhaustion modal. */
   | 'upgrade_cta_clicked'
 
-/** A refusal from the AI transport, thrown as one class by both platforms so shared code can use `instanceof`. */
+/** Thrown as one class by both platforms, so shared code can use `instanceof`. */
 export class AIRequestError extends Error {
   constructor(
     message: string,
@@ -102,7 +94,6 @@ export class AIRequestError extends Error {
   }
 }
 
-/** A stored conversation, as a list needs to show it. */
 export interface AIConversationSummary {
   id: string
   title: string
@@ -110,7 +101,6 @@ export interface AIConversationSummary {
   projectId?: string | null
 }
 
-/** A stored conversation with its transcript. */
 export interface AIConversationDetail extends AIConversationSummary {
   messages: Array<{
     id: string
@@ -119,25 +109,20 @@ export interface AIConversationDetail extends AIConversationSummary {
     content: unknown
     /** ISO 8601; the transcript is ordered by this. */
     createdAt: string
-    /** Persisted rating feedback, when the user left one. */
     rating?: 'up' | 'down' | null
   }>
 }
 
 export interface AIPort extends AIFeatureConfig {
-  /** Stream an inline code completion; yields tokens, handles SSE parsing internally. */
   streamCompletion(params: AICompleteParams, signal?: AbortSignal): AsyncGenerator<string, void, unknown>
 
-  /** Stream a chat response; yields tokens, handles SSE parsing internally. */
   streamChat(params: AIChatParams, signal?: AbortSignal): AsyncGenerator<string, void, unknown>
 
   /** Unflattened chat stream the agentic loop consumes; adapters implement this and derive `streamChat` from it. */
   streamChatEvents(params: AIChatParams, signal?: AbortSignal): AsyncGenerator<AISSEEvent, void, unknown>
 
-  /** Fetch the user's resolved entitlements (plan limits, ACU cap, feature flags) from `GET /me/entitlements`. */
   fetchEntitlements(signal?: AbortSignal): Promise<AIEntitlements>
 
-  /** Fetch the user's current usage (resource counters + ACU consumption) from `GET /me/usage`. */
   fetchUsage(signal?: AbortSignal): Promise<AIUsage>
 
   /**
@@ -146,13 +131,13 @@ export interface AIPort extends AIFeatureConfig {
    */
   fetchCredits(signal?: AbortSignal): Promise<AICreditStatus>
 
-  /** Send a telemetry event (fire-and-forget). */
+  /** Fire-and-forget: failures are never surfaced to the caller. */
   sendTelemetry(event: AITelemetryEventName, data: Record<string, unknown>): void
 
-  /** Warm the model's prompt cache once per session; fire-and-forget, optional for a platform with no warm endpoint. */
+  /** Once per session, fire-and-forget; optional for a platform with no warm endpoint. */
   warmCache?(): void
 
-  /** Stored conversations, when the platform has them; a build with no store still chats but hides the history list. */
+  /** A build with no conversation store still chats, but hides the history list. */
   conversations?: {
     list(options?: { projectId?: string; limit?: number; offset?: number }): Promise<AIConversationSummary[]>
     get(id: string): Promise<AIConversationDetail>

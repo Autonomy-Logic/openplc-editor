@@ -4,10 +4,7 @@ import type { AIConversationSummary } from '../../../../middleware/shared/ports/
 import { useAI } from '../../../../middleware/shared/providers'
 import { trackConversationDeleted } from '../telemetry'
 
-/**
- * Hard-delete a conversation. Optimistic: the row leaves the list cache
- * immediately and is put back if the call fails.
- */
+/** Optimistic: the row leaves the list cache at once, and is put back if the call fails. */
 export function useDeleteConversation(projectId: string | null | undefined) {
   const ai = useAI()
   const conversations = ai?.conversations

@@ -39,7 +39,6 @@ type monacoEditorProps = {
   path: string
   name: string
   language: 'il' | 'st' | 'python' | 'cpp'
-  /** Whether this is the active (visible) tab; gates side effects so hidden editors don't do wasted work. */
   isActive?: boolean
 }
 
@@ -386,12 +385,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
   }, [isDebuggerVisible])
 
-  // Applies programmatic cursor jumps (e.g. a compile-error click) to an already-mounted
-  // editor; the onMount path only covers the initial position. Safe from feedback loops —
-  // the editor's own cursor moves are never written back to `editor.cursorPosition`.
+  // Applies a programmatic cursor jump (e.g. a compile-error click) to a mounted editor;
+  // onMount only covers the initial position. The editor's own cursor moves are never
+  // written back to `editor.cursorPosition`, so there is no feedback loop.
   useEffect(() => {
     if (!editorMounted) return
-    // Multi-mount: only the active tab should apply an incoming cursor jump to itself.
     if (!isActive) return
     const ed = editorRef.current
     const monacoInst = monacoRef.current
@@ -657,9 +655,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         })
         const { anchor } = splitExpression(memberChainBefore(lineBeforeCursor))
         if (anchor !== '') {
-          // Read the store at query time instead of closing over pous/dataTypes/libraries:
-          // those come from an unselected useOpenPLCStore() and change every keystroke, so
-          // naming them as deps would re-register this provider (and signature-help) on every keystroke.
+          // Read the store at query time rather than closing over pous/dataTypes/libraries:
+          // they come from an unselected useOpenPLCStore() and change every keystroke, so as
+          // deps they would re-register this provider (and signature-help) that often.
           const {
             project: {
               data: { pous: currentPous, dataTypes: currentDataTypes },
@@ -726,7 +724,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!aiState.hasConsented) return
     if (!aiState.preferences.inlineCompletionsEnabled) return
 
-    // The provider is shared (frontend/services/ai) and reaches the platform only through the port.
     if (!aiPort) return
 
     const registration = registerAIInlineCompletions(aiPort, {
@@ -1127,8 +1124,6 @@ void loop()
     updatePou({ name, content: { language, value } })
   }
 
-  // AI ghost text and the LSP suggest widget coexist: Enter/arrows accept the LSP dropdown,
-  // Tab commits the AI suggestion (see `installAiLspCoexistenceKeybindings`).
   const inlineCompletionsActive =
     capabilities.hasAIAssistant &&
     aiState.isEnabled &&
@@ -1141,7 +1136,7 @@ void loop()
     readOnly: isDebuggerVisible,
     // Forces Monaco's classic textarea input instead of EditContext: Safari's support is
     // immature and its Tab keydown never reaches Monaco's keybinding service, silently
-    // breaking Tab-accept of AI suggestions (also keeps `isInputDOMNode` recognising it).
+    // breaking Tab-accept of AI suggestions.
     editContext: false,
     // Locks indentation to 4 spaces across all languages; without `detectIndentation: false`
     // Monaco can settle on 2 spaces for a Python body that mixes indent widths.
@@ -1172,15 +1167,14 @@ void loop()
     }),
   }
 
-  // Keeps the coexistence Tab overrides in sync with AI state without remounting the editor;
-  // `editorInstanceId` re-asserts it after a remount (belt-and-braces with the mount handler).
+  // Syncs the coexistence Tab overrides without remounting the editor; `editorInstanceId`
+  // re-asserts them after a remount.
   useEffect(() => {
     coexistenceRef.current?.setActive(inlineCompletionsActive)
   }, [inlineCompletionsActive, editorInstanceId])
 
   // Monaco only auto-triggers inline completions on content change, so a late/superseded
-  // result can be silently dropped with nothing re-requesting. Re-triggers once after 2s of
-  // idle (AI on, no ghost text visible) so a settled cursor still eventually gets a suggestion.
+  // result can be dropped with nothing re-requesting it. Re-trigger once after 2s idle.
   useEffect(() => {
     if (!inlineCompletionsActive) return
     const editor = editorRef.current

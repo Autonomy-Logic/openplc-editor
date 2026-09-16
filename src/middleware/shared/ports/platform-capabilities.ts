@@ -10,9 +10,9 @@ export interface PlatformCapabilities {
   /** True if the app requires user authentication to access the workspace. */
   hasAuthentication: boolean
 
-  /** True if the Edge account UI (profile menu, sign-in gate) belongs in this build. Distinct from `hasAuthentication`: autonomy-node is authenticated via its own API, not Edge's, so gate on this flag alone. */
+  /** Whether the Edge account UI belongs in this build. Distinct from `hasAuthentication`: autonomy-node authenticates against its own API, not Edge's. */
   hasEdgeAccount: boolean
-  /** Whether the build is UNUSABLE without an Edge account — forces the sign-in dialog open. Distinct from `hasEdgeAccount`: the editor works offline on local projects and only needs one for cloud projects. */
+  /** The build is UNUSABLE without an Edge account, so the sign-in dialog is forced open. The editor is not: it works offline on local projects. */
   requiresEdgeAccount: boolean
 
   /** True if the app can detect local serial/communication ports. */
@@ -38,7 +38,7 @@ export interface PlatformCapabilities {
 
   /** True if the app supports version control (branches, commits, change tracking). */
   hasVersionControl: boolean
-  /** Whether this build can show the branch merge screen. Kept separate from `hasVersionControl`: a build can have one without the other. */
+  /** Separate from `hasVersionControl`: a build can have one without the other. */
   hasBranchMerge: boolean
 
   /** True if the app supports the "About" dialog. */
@@ -47,7 +47,7 @@ export interface PlatformCapabilities {
   /** True if the app has a Python LSP (language server protocol) for code completion. */
   hasPythonLSP: boolean
 
-  /** True if the app hosts the STruC++ language server for `.st` editors. While false, ST Monaco editors fall back to plain text with no autocomplete or diagnostics. */
+  /** While false, ST Monaco editors fall back to plain text — no autocomplete, no diagnostics. */
   hasStLSP: boolean
 
   /** True if the app supports undo/redo history tracking. */
@@ -62,7 +62,6 @@ export interface PlatformCapabilities {
   /** True if the runtime connection goes through an orchestrator/agent proxy. */
   hasProxiedRuntimeConnection: boolean
 
-  /** True if the app can upload compiled programs directly to the runtime. */
   hasDirectProgramUpload: boolean
 
   /** True if the app supports installing/managing VPP board packages. */
@@ -71,7 +70,7 @@ export interface PlatformCapabilities {
   /** True if the app supports EtherCAT device configuration and ESI repository. */
   hasEthercat: boolean
 
-  /** Polling interval (ms) for the debugger's HTTP fallback transport. Deployment-tunable: e.g. autonomy-node has no WebRTC relay and wants a different rate. */
+  /** Polling interval in milliseconds for the debugger's HTTP fallback transport. */
   debugRelayPollIntervalMs: number
 
   /** True when running in a development build (Vite DEV / webpack development mode). */
@@ -125,7 +124,6 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasVersionControl: true,
   hasBranchMerge: true,
   hasAboutDialog: true,
-  // Pyright's worker loads eagerly at module-evaluation time; lazy-loading is a possible follow-up.
   hasPythonLSP: true,
   // Web only compiles to Runtime v4 (matiec/iec2c is Electron-only), so the LSP is always right here.
   hasStLSP: true,

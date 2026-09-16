@@ -9,12 +9,12 @@ const TYPE_SUFFIX = '_TYPE'
 
 const DECL_INDENT = '  '
 
-/** Name of the struct type backing a list. The one home of this suffix rule — every emitter imports it from here to avoid a silent instance/type name mismatch. */
+/** The one home of this suffix rule: every emitter imports it, or an instance/type name mismatch goes silent. */
 export function globalVariableListTypeName(listName: string): string {
   return `${listName}${TYPE_SUFFIX}`
 }
 
-/** True when `text` contains `<listName>.`; pass `referenceSearchText(pou)`, not `JSON.stringify(pou)` (see below). */
+/** Pass `referenceSearchText(pou)`, not `JSON.stringify(pou)` — see below. */
 export function globalVariableListIsReferencedIn(listName: string, text: string): boolean {
   return new RegExp(`(^|[^\\w.])${escapeForRegExp(listName)}\\s*\\.`, 'i').test(text)
 }
@@ -64,7 +64,6 @@ export function serializeGlobalVariableListToText(list: PLCGlobalVariableList): 
   return `VAR_GLOBAL${qualifier}\n${lines.join('\n')}\nEND_VAR\n`
 }
 
-/** The `TYPE…END_TYPE` block declaring one struct per list, for the compiler. Returns `''` when there are none. */
 export function serializeGlobalVariableListsToTypes(lists: PLCGlobalVariableList[]): string {
   const blocks = lists
     .filter((list) => list.variables.length > 0)
@@ -76,7 +75,7 @@ export function serializeGlobalVariableListsToTypes(lists: PLCGlobalVariableList
   return `TYPE\n${blocks.join('\n')}\nEND_TYPE\n`
 }
 
-/** The `VAR_GLOBAL` block declaring one instance per list. A list with no members yields no instance — an empty STRUCT is not a legal type. */
+/** A list with no members yields no instance — an empty STRUCT is not a legal type. */
 export function serializeGlobalVariableListInstances(lists: PLCGlobalVariableList[]): string {
   const lines = lists
     .filter((list) => list.variables.length > 0)
@@ -85,7 +84,7 @@ export function serializeGlobalVariableListInstances(lists: PLCGlobalVariableLis
   return `VAR_GLOBAL\n${lines.join('\n')}\nEND_VAR\n`
 }
 
-/** The `VAR_EXTERNAL` block a POU needs to reach the lists it references; only referenced lists are declared. */
+/** Only the lists the body actually references are declared. */
 export function globalVariableListExternals(lists: PLCGlobalVariableList[], body: string): string {
   const referenced = lists.filter(
     (list) => list.variables.length > 0 && globalVariableListIsReferencedIn(list.name, body),

@@ -1,6 +1,5 @@
 import { useOpenPLCStore } from '../../../../store'
 
-/** Human label for the badge, preferring the resolved plan slug over the legacy tier flag. */
 function tierLabel(planSlug: string | null, tier: 'free' | 'pro'): string {
   if (planSlug && planSlug.length > 0) {
     return planSlug.charAt(0).toUpperCase() + planSlug.slice(1)
@@ -8,10 +7,8 @@ function tierLabel(planSlug: string | null, tier: 'free' | 'pro'): string {
   return tier === 'pro' ? 'Pro' : 'Free'
 }
 
-/** Plans that map to the free tier (no paid entitlement). */
 const FREE_PLAN_SLUGS = new Set<string>(['community', 'education'])
 
-/** Small pill next to the "AI Chat" title showing the user's current subscription tier. */
 export const AITierBadge = () => {
   const { planSlug, tier } = useOpenPLCStore.useAi()
   const label = tierLabel(planSlug, tier)

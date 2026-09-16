@@ -1,7 +1,6 @@
 /**
- * Where the desktop editor keeps its Edge session between runs. Only the refresh token
- * is persisted (the access token is short-lived and always re-mintable); when
- * `safeStorage` can't encrypt, the session is kept in memory only rather than writing plaintext.
+ * Only the refresh token is persisted; the access token is always re-mintable. When
+ * `safeStorage` cannot encrypt, the session stays in memory rather than hitting disk.
  */
 
 import { safeStorage } from 'electron'
@@ -12,9 +11,8 @@ import { store } from '../../../main/modules/store'
 let inMemoryRefreshToken: string | null = null
 
 /**
- * Whether the OS can encrypt; probed lazily since `safeStorage` is only meaningful once
- * the app is ready. On Linux without a keyring, `isEncryptionAvailable()` can answer
- * true while the backend is `basic_text` (a hardcoded key) — treated as no encryption.
+ * Probed lazily: `safeStorage` is only meaningful once the app is ready. On Linux without
+ * a keyring it answers true while the backend is `basic_text`, a hardcoded key.
  */
 function canEncrypt(): boolean {
   try {
@@ -30,8 +28,8 @@ function canEncrypt(): boolean {
 }
 
 /**
- * Persists the refresh token, encrypted when the OS allows it. Returns whether it was
- * actually written, since a silent failure would leave a stale token that signs the user out on the next launch.
+ * Reports whether the token was actually written: a silent failure would leave a stale
+ * one on disk that signs the user out on the next launch.
  */
 export function saveRefreshToken(token: string): { persisted: boolean } {
   inMemoryRefreshToken = token
@@ -55,10 +53,7 @@ export function saveRefreshToken(token: string): { persisted: boolean } {
   }
 }
 
-/**
- * Drops what is on disk, keeping the in-memory copy — used when a rotation couldn't be
- * persisted, so disk doesn't keep a token the server already retired.
- */
+/** Drops what is on disk, keeping the in-memory copy, so disk never holds a token the server already retired. */
 function forgetStoredSession(): void {
   try {
     store.delete('edge_session')
@@ -67,7 +62,6 @@ function forgetStoredSession(): void {
   }
 }
 
-/** The stored refresh token, or null when there is nothing usable. */
 export function readRefreshToken(): string | null {
   if (inMemoryRefreshToken) {
     return inMemoryRefreshToken
@@ -76,8 +70,7 @@ export function readRefreshToken(): string | null {
   const encrypted = store.get('edge_session')?.refreshToken
 
   if (!encrypted || !canEncrypt()) {
-    // Either nothing was stored, or it was written on a machine that could encrypt
-    // and is being read on one that cannot. The bytes are not recoverable.
+    // Nothing stored, or written where encryption worked and read where it does not.
     return null
   }
 
@@ -87,24 +80,21 @@ export function readRefreshToken(): string | null {
 
     return token
   } catch {
-    // Undecryptable: a different OS user, a reset keychain, a corrupted value. Drop
-    // it rather than retrying on every request for the rest of the run.
+    // Undecryptable (another OS user, a reset keychain): dropped rather than retried on
+    // every request for the rest of the run.
     clearRefreshToken()
 
     return null
   }
 }
 
-/**
- * Forgets the session, in memory and on disk — called on sign-out and when a renewal is
- * refused, since a revoked token left in place makes every launch look like an outage.
- */
+/** Also called when a renewal is refused: a revoked token left in place makes every launch look like an outage. */
 export function clearRefreshToken(): void {
   inMemoryRefreshToken = null
   forgetStoredSession()
 }
 
-/** Whether a session on this machine survives a restart. Surfaced to the UI. */
+/** Whether a session on this machine survives a restart. */
 export function isEncryptionAvailable(): boolean {
   return canEncrypt()
 }

@@ -1,7 +1,3 @@
-/**
- * What the assistant shows in place of an answer while there is no Edge session.
- */
-
 interface AIChatSignInNoticeProps {
   reason: 'expired' | 'signed-out'
   /** Absent where the sign-in dialog opens by itself, so the notice offers no second one. */

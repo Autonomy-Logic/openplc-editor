@@ -1,7 +1,6 @@
 /**
- * Editor VersionControlPort adapter — Autonomy Edge, over IPC. IPC structure-clones thrown
- * errors, so their prototypes (and `instanceof` checks in the UI) don't survive the crossing;
- * `unwrap` below rebuilds the typed errors from plain data the main process reports instead.
+ * IPC structure-clones thrown errors, so their prototypes (and `instanceof` checks in the UI)
+ * don't survive the crossing; `unwrap` rebuilds the typed errors from the plain data reported.
  */
 
 import { computeGraphicalDiff as computeGraphicalDiffImpl } from '../../../backend/shared/utils/graphical-diff'
@@ -22,11 +21,10 @@ import {
   VersionControlResultSchema,
 } from '../../shared/ports/version-control-port'
 
-// Turns a reported failure back into the error the UI expects (or hands back the data). The two
-// conflict kinds have real recovery flows keyed off their class; everything else becomes a plain `Error`.
+// The two conflict kinds have recovery flows keyed off their class; everything else becomes a plain `Error`.
 function unwrap<T>(result: VersionControlResult<T>): T {
-  // Validated first: `result` crossed IPC and its declared type checks nothing at runtime, so an
-  // unreadable answer would otherwise raise or fall through the exhaustive branch below.
+  // Validated first: after crossing IPC the declared type checks nothing at runtime, and an
+  // unreadable answer would fall through the exhaustive branch below.
   const envelope = VersionControlResultSchema.safeParse(result)
 
   if (!envelope.success) {
@@ -61,9 +59,8 @@ function unwrap<T>(result: VersionControlResult<T>): T {
   }
 }
 
-// Binds one IPC channel, guarding against a main process that predates it (a partial rebuild or
-// mismatched update can leave the channel missing) — fails as an ordinary reportable error instead
-// of an unhandled rejection that takes down the whole workspace.
+// Guards against a main process that predates the channel (partial rebuild, mismatched update):
+// an ordinary reportable error instead of an unhandled rejection that takes down the workspace.
 function channel<A extends unknown[], T>(
   fn: ((...args: A) => Promise<VersionControlResult<T>>) | undefined,
   name: string,
@@ -80,8 +77,6 @@ function channel<A extends unknown[], T>(
 export function createEditorVersionControlAdapter(): VersionControlPort {
   const { bridge } = window
 
-  // Bound once, at construction: the channel set cannot change while the app runs, so
-  // the guard above is paid once per channel rather than on every call.
   const listBranches = channel(bridge.edgeVcListBranches, 'edge-vc:list-branches')
   const createBranch = channel(bridge.edgeVcCreateBranch, 'edge-vc:create-branch')
   const deleteBranch = channel(bridge.edgeVcDeleteBranch, 'edge-vc:delete-branch')
@@ -157,8 +152,8 @@ export function createEditorVersionControlAdapter(): VersionControlPort {
       resolutions?: Record<string, string>
     }): Promise<MergeResult> => merge(params),
 
-    // Stays in the renderer: pure, synchronous computation over content the caller already holds;
-    // a shared module keeps desktop and web producing the same diff from the same bytes.
+    // Stays in the renderer: pure and synchronous, and the shared module keeps desktop and web
+    // producing the same diff from the same bytes.
     computeGraphicalDiff: (originalContent: string, currentContent: string, filePath: string): GraphicalDiffResult =>
       computeGraphicalDiffImpl(originalContent, currentContent, filePath),
   }

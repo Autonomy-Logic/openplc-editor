@@ -37,9 +37,9 @@ import { getDefaultSchemaValues } from './default-zod-schema-values'
 type FallbackPou = PLCPou & { variablesText?: string }
 
 /**
- * Thrown when a POU's body is unrecoverable (unparsable JSON), as opposed to merely having
- * malformed variable declarations — an empty substitute body must never be used here, since it
- * would look like a legitimately empty diagram and let the next save overwrite the real one.
+ * Thrown when a POU's body is unrecoverable (unparsable JSON), not merely malformed variable
+ * declarations: an empty substitute body would look like a legitimately empty diagram and let
+ * the next save overwrite the real one.
  */
 export class UnrecoverablePouError extends Error {
   constructor(
@@ -142,9 +142,8 @@ function getBaseNameFromPath(relativePath: string): string {
 const iecIdentifierRegex = /^[A-Za-z_]\w*$/
 
 /**
- * Folds the legacy inline `project.json` data type list in behind `datatypes/*.dt` files: a
- * `.dt` file always wins for the type it declares (even an unparsed one); anything left only
- * in the inline list is appended, so a half-migrated project keeps every type.
+ * A `datatypes/*.dt` file wins for the type it declares, even an unparsed one; types left only
+ * in the legacy inline `project.json` list are appended, so a half-migrated project keeps all.
  */
 function mergeDataTypes(
   fromFiles: PLCDataType[],
@@ -227,8 +226,6 @@ function createFallbackPou(content: string, language: string, pouType: string, p
         )
       }
     } catch (bodyErr) {
-      // Unrecoverable (see `UnrecoverablePouError`): an empty substitute body would look like a
-      // legitimately empty diagram and let the next save overwrite the real one.
       throw new UnrecoverablePouError(
         bodyErr instanceof Error ? bodyErr.message : String(bodyErr),
         `${pouName}${language === 'ld' ? '.ld' : '.fbd'}`,
@@ -269,9 +266,9 @@ function createFallbackPou(content: string, language: string, pouType: string, p
 
 /** Parses a single POU file; returns null if unrecognized, falls back to `createFallbackPou` on parse failure. */
 /**
- * Migrates variables from the legacy two-field (`location` + `alias`) model to the single-field
- * model: an alias-bound variable's alias name is folded into `location`; producer channels (pins,
- * VPP, Modbus, EtherCAT) keep `alias` alone. Idempotent — already-migrated projects pass through unchanged.
+ * Legacy two-field (`location` + `alias`) variables to the single-field model: an alias-bound
+ * variable's alias name is folded into `location`. Producer channels keep `alias` alone.
+ * Idempotent.
  */
 function foldLegacyVariableAliases(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(foldLegacyVariableAliases)
@@ -415,7 +412,6 @@ function deduplicatePouFiles(pouFiles: RawProjectFile[]): RawProjectFile[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Parses raw project files into `ParsedProjectData`.
  * @param pouFiles - Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json)
  * @param dataTypeFiles - When present, wins over the legacy `project.json` `data.dataTypes` field
  */
@@ -433,7 +429,6 @@ export function parseProjectFiles(
   const warnings: string[] = []
   const fatalErrors: string[] = []
 
-  // Parse and Zod-validate project.json.
   let project: { meta?: { name?: string; type?: string }; data?: Record<string, unknown> }
   try {
     const raw = projectJson ? foldLegacyVariableAliases(JSON.parse(projectJson)) : null
@@ -485,8 +480,6 @@ export function parseProjectFiles(
     deviceConfiguration = getDefaultSchemaValues(deviceConfigurationSchema) as DeviceConfiguration
   }
 
-  // The on-disk schema is a union of the canonical per-board `Record<string, DevicePin[]>` and
-  // the legacy flat `DevicePin[]`; `setDeviceDefinitions` accepts both.
   let devicePinMapping: DevicePin[] | Record<string, DevicePin[]> | undefined
   try {
     const raw = pinMapping ? (JSON.parse(pinMapping) as unknown) : null
@@ -523,7 +516,6 @@ export function parseProjectFiles(
     }
   }
 
-  // Parse server configs with Zod validation.
   const servers: PLCServer[] = []
   for (const file of serverFiles) {
     try {
@@ -540,7 +532,6 @@ export function parseProjectFiles(
     }
   }
 
-  // Parse remote device configs with Zod validation.
   const remoteDevices: PLCRemoteDevice[] = []
   for (const file of remoteDeviceFiles) {
     try {
@@ -557,8 +548,7 @@ export function parseProjectFiles(
     }
   }
 
-  // Parses `datatypes/<Name>.dt` files directly (not via `parsePouFile`, which assumes a POU
-  // path). A name mismatch or parse failure preserves the raw file for save to write back verbatim.
+  // A name mismatch or parse failure preserves the raw file so save can write it back verbatim.
   const dataTypesFromFiles: PLCDataType[] = []
   const unparsedDataTypeFiles: RawProjectFile[] = []
   for (const file of dataTypeFiles) {
@@ -581,7 +571,6 @@ export function parseProjectFiles(
       resource: { tasks: [], instances: [], globalVariables: [] },
     }) as ParsedProjectData['projectData']['configurations']
 
-  // Defensive guard: PLCProjectSchema already guarantees `resource` is present.
   /* istanbul ignore if -- defensive: PLCProjectSchema requires resource, so this is unreachable */
   if (!configuration.resource) {
     configuration.resource = { tasks: [], instances: [], globalVariables: [] }
@@ -609,7 +598,6 @@ export function parseProjectFiles(
   return {
     meta,
     projectData: {
-      // See `mergeDataTypes`: a `.dt` file always wins; anything only in the legacy list rides along.
       dataTypes: mergeDataTypes(dataTypesFromFiles, legacyDataTypes, dataTypeFiles),
       // Assembled field-by-field: anything not named here is dropped on load regardless of
       // how well the schema validates it.
@@ -618,11 +606,7 @@ export function parseProjectFiles(
       configurations: configuration,
       servers: servers.length > 0 ? servers : ((data.servers as PLCServer[]) ?? []),
       remoteDevices: remoteDevices.length > 0 ? remoteDevices : ((data.remoteDevices as PLCRemoteDevice[]) ?? []),
-      // Legacy projects with no `libraries` field load as `[]`; bundled/canonical libs are
-      // always-on regardless, so the project still compiles.
       libraries: (data.libraries as ParsedProjectData['projectData']['libraries']) ?? [],
-      // Library projects' `library.json` bytes, threaded through like POU file contents; empty
-      // string when missing on disk (the manifest editor seeds a template before first save).
       ...(metaType === 'plc-library' ? { libraryManifest } : {}),
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
     },

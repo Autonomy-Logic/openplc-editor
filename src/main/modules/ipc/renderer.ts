@@ -106,9 +106,7 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
-  // The build's verdict (from `runCompilePipeline`'s reduced exit code, not error-log presence). A
-  // bridge refactor that reconstructs this message field-by-field must keep forwarding it, or
-  // `compileProgramFlow` silently falls back to its `hasError` heuristic.
+  // The build's verdict, from the pipeline's exit code rather than error-log presence. It must keep being forwarded, or `compileProgramFlow` silently falls back to its `hasError` heuristic.
   success?: boolean
   /** Final structured outcome of a library build; set only on `compileLibrary`'s close-port message. */
   libraryBuildResult?: import('@root/middleware/shared/ports/types').CompileLibraryResult
@@ -231,7 +229,6 @@ const rendererProcessBridge = {
       error?: string
     }>
   }> => ipcRenderer.invoke('catalog:install-many', libraries),
-  // ----- Edge account (optional sign-in, autonomy-edge) -----
   // Every call crosses to the main process because the desktop holds its own session:
   // the renderer is not on Edge's origin, so it can neither inherit the shared-domain
   // cookie the web editor uses nor issue the request itself.
@@ -241,7 +238,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-account:sign-in', { email, password }),
   edgeAccountSignOut: (): Promise<void> => ipcRenderer.invoke('edge-account:sign-out'),
   edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
-  // ----- Edge projects -----
   edgeProjectsListRecent: (limit: number): Promise<CloudProjectsResult> =>
     ipcRenderer.invoke('edge-projects:list-recent', limit),
   edgeProjectsRead: (projectId: string): Promise<RawProjectFiles> =>
@@ -250,14 +246,10 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-projects:save-project', files),
   edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('edge-projects:save-file', filePath, content),
-  // ----- Publishing a local project to Edge -----
   edgeUploadListFolders: (): Promise<CloudFoldersResult> => ipcRenderer.invoke('edge-upload:list-folders'),
   edgeUploadProject: (params: UploadProjectParams): Promise<UploadProjectResult> =>
     ipcRenderer.invoke('edge-upload:project', params),
-  // ----- Edge version control -----
-  // One channel per operation, matching how `edge-account:*` and `edge-projects:*` are
-  // laid out. `EdgeVcResult` rather than a thrown error because a typed error class does
-  // not survive IPC: the adapter rebuilds the real error on the other side.
+  // A result union rather than a thrown error: a typed error class does not survive IPC, so the adapter rebuilds the real error on the other side.
   edgeVcListBranches: (projectId: string): Promise<VersionControlResult<{ branches: Branch[] }>> =>
     ipcRenderer.invoke('edge-vc:list-branches', projectId),
   edgeVcCreateBranch: (projectId: string, name: string): Promise<VersionControlResult<{ branch: Branch }>> =>
@@ -333,9 +325,6 @@ const rendererProcessBridge = {
     commitMessage?: string
     resolutions?: Record<string, string>
   }): Promise<VersionControlResult<MergeResult>> => ipcRenderer.invoke('edge-vc:merge-branches', params),
-  // ----- Edge AI -----
-  // Every AI request crosses to the main process, which holds the session (same as account/VC).
-  // Warm and telemetry answer the same `EdgeAiResult` union as the rest so callers handle one shape.
   edgeAiFetchEntitlements: (): EdgeAiReply<typeof fetchAiEntitlements> => ipcRenderer.invoke('edge-ai:entitlements'),
   edgeAiFetchUsage: (): EdgeAiReply<typeof fetchAiUsage> => ipcRenderer.invoke('edge-ai:usage'),
   edgeAiFetchCredits: (): EdgeAiReply<typeof fetchAiCredits> => ipcRenderer.invoke('edge-ai:credits'),
@@ -359,7 +348,6 @@ const rendererProcessBridge = {
   edgeAiDeleteConversation: (conversationId: string): EdgeAiReply<typeof deleteConversation> =>
     ipcRenderer.invoke('edge-ai:conversations-delete', conversationId),
 
-  // ----- Edge AI streaming -----
   // `invoke` is request/response, so a streamed answer is a handshake: this call opens the request
   // and returns the id every event below carries — the only way to abort it or tell concurrent answers apart.
   edgeAiStreamStart: (request: {
@@ -382,8 +370,7 @@ const rendererProcessBridge = {
     ipcRenderer.on('edge-ai:end', listener)
     return () => ipcRenderer.removeListener('edge-ai:end', listener)
   },
-  // The stream failed. `failure` is the same union the non-streaming channels answer with, so the
-  // sign-in prompt, offline notice and ACU exhaustion modal are chosen from one discriminant.
+  // `failure` is the same union the non-streaming channels answer with, so the sign-in prompt, offline notice and ACU-exhaustion modal come from one discriminant.
   onEdgeAiStreamError: (callback: (payload: { streamId: string; failure: EdgeAiFailure }) => void): (() => void) => {
     const listener = (_event: unknown, payload: { streamId: string; failure: EdgeAiFailure }) => callback(payload)
     ipcRenderer.on('edge-ai:error', listener)
@@ -469,8 +456,6 @@ const rendererProcessBridge = {
     )
   },
 
-  // Builds the open Library Project into a `.stlib` archive. Same MessageChannel pattern as
-  // `runCompileProgram`; callback receives a stream of log messages and a final `libraryBuildResult`.
   runCompileLibrary: (compileArgs: CompileLibraryIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])

@@ -5,7 +5,6 @@ import type { AIChatContentBlock } from '../../../../middleware/shared/ports/typ
 import { useAI } from '../../../../middleware/shared/providers'
 import { toChatMessageContent } from './conversation-content'
 
-/** One stored turn, with its content already narrowed to what the store holds. */
 export type ConversationMessage = {
   id: string
   role: 'user' | 'assistant'
@@ -14,7 +13,6 @@ export type ConversationMessage = {
   createdAt: string
 }
 
-/** A stored conversation and its whole transcript. */
 export type ConversationDetail = {
   id: string
   title: string
@@ -39,7 +37,7 @@ function toConversationDetail(detail: AIConversationDetail): ConversationDetail 
   }
 }
 
-/** Loads a conversation's full transcript, with each message's opaque content narrowed at this boundary. */
+/** Each message's opaque content is narrowed at this boundary. */
 export function useConversation(id: string | null | undefined) {
   const conversations = useAI()?.conversations
 

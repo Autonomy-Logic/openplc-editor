@@ -55,19 +55,17 @@ function deleteElement(
     state.editorActions.clearEditor()
   }
 
-  // A delete is queued in `pendingDeletions`; flag the workspace dirty directly since the file entry is already gone.
+  // The file entry is already gone, so flag the workspace dirty directly.
   state.workspaceActions.setEditingState('unsaved')
 
   return { ok: true as const }
 }
 
-/** Reject element names that aren't valid IEC 61131-3 identifiers before they reach the file-path / parser layer. */
 function validateElementName(name: string): { ok: true } | { ok: false; message: string } {
   const [legal, reason] = isLegalIdentifier(name)
   return legal ? { ok: true } : { ok: false, message: `'${name}' ${reason}` }
 }
 
-/** Post-propagation bookkeeping for a confirmed data type rename: flags touched files dirty and regenerates stale code buffers. */
 function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeReferenceImpactAnalysis): void {
   const dirtyFiles = new Set<string>()
   const affectedPous = new Set<string>()
@@ -107,7 +105,7 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
   }
 }
 
-/** Give a duplicated remote device its own identity: fresh `id`s, no `alias`, and no `iecLocation` (address pool re-allocates it). */
+/** Fresh `id`s, no `alias` and no `iecLocation` — the address pool re-allocates those for the copy. */
 function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, slaveNameTaken: NameTaken): PLCRemoteDevice {
   const next: PLCRemoteDevice = { ...device }
 
@@ -174,7 +172,7 @@ function renameElement(
   state.fileActions.updateFile({ name: oldName, newName })
   state.tabsActions.updateTabName(oldName, newName)
 
-  // Rekey the per-language graphical-flow slices; without this a renamed LD/FBD POU renders an empty canvas and loses its body on save.
+  // Without rekeying the flow slices, a renamed LD/FBD POU renders an empty canvas and loses its body on save.
   state.ladderFlowActions.renameLadderFlow(oldName, newName)
   state.fbdFlowActions.renameFBDFlow(oldName, newName)
 
@@ -211,7 +209,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
-      // Seed the graphical-flow slice for new LD/FBD POUs; without it the editor renders an empty canvas since it reads from this slice, not the body.
+      // The editor reads the flow slice, not the body, so an unseeded LD/FBD POU renders an empty canvas.
       if (language === 'ld') {
         state.ladderFlowActions.addLadderFlow(pouDto.data.body.value as LadderFlowType)
       } else if (language === 'fbd') {
@@ -297,7 +295,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
-      // Seed the graphical-flow slice for the duplicate; the shallow-copied body still has `sourceName`, so override it to the new POU's name.
+      // The shallow-copied body still carries `sourceName`, so override it to the new POU's name.
       if (language === 'ld') {
         state.ladderFlowActions.addLadderFlow({
           ...(pouDto.data.body.value as LadderFlowType),
@@ -314,7 +312,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       state.editorActions.addModel(editorModel)
       state.fileActions.addFile({ name: newName, type: sourcePou.pouType, filePath: newName, isNew: true })
 
-      // Register the copy as a user library, as the create path does, or it exists in the project but can't be placed/completed.
+      // Without the user-library entry the copy exists in the project but can't be placed or completed.
       if (sourcePou.pouType !== 'program') {
         state.libraryActions.addLibrary(newName, sourcePou.pouType)
       }
@@ -327,7 +325,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   globalVariableListActions: {
-    /** Create a list and open it, as every other element on the + button does. */
     create: (name) => {
       const state = getState()
       // Collision before validation, matching `datatypeActions` above: the more
@@ -378,8 +375,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!reconcile.ok) return { ok: false, message: reconcile.message }
 
       if (newName !== oldName) {
-        // Land any debounced graphical write-back BEFORE the scan, since a pending one leaves `pou.body.value` stale.
-        // Refuse if the write-back fails validation, as undo/redo already do, rather than rename against a stale body.
+        // Land any debounced graphical write-back BEFORE the scan: a pending one leaves `pou.body.value` stale.
         const staleFlows = flushFlowWriteBacks(getState)
         if (staleFlows.length > 0) {
           return {
@@ -435,7 +431,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const reconcile = state.projectActions.reconcileGlobalVariableListText(sourceName)
       if (!reconcile.ok) return { ok: false, message: reconcile.message }
 
-      // Clones the whole record rather than create-then-patch each field, so no field (e.g. `documentation`) is silently dropped.
+      // Clones the whole record rather than create-then-patch, so no field (e.g. `documentation`) is silently dropped.
       const created = getState().projectActions.duplicateGlobalVariableList(sourceName, newName)
       /* istanbul ignore next -- defensive: the collision gate above already ran */
       if (!created.ok) return { ok: false, message: created.message }
@@ -770,7 +766,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
       state.editorActions.removeModel(deviceName)
       state.tabsActions.removeTab(deviceName)
-      // Drop the file-slice entry so it doesn't linger when the child is removed directly or via a bus cascade.
       state.fileActions.removeFile({ name: deviceName })
 
       const currentEditor = state.editor
@@ -925,7 +920,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
       getState().versionControlActions.clearVersionControlState()
-      // Drop the active conversation pointer + its loaded messages so the chat doesn't bleed across project switches.
       getState().aiActions.clearConversation()
     },
 
@@ -943,10 +937,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // `canEdit === false` gates only backend writes (save/commit/branch); in-memory editing, simulation, and compilation stay on.
       getState().workspaceActions.setCanEdit(data.canEdit !== false)
 
-      // An unrecoverable POU stops the open here: the workspace opens EMPTY and read-only (`canEdit: false`) so a save
-      // can never overwrite the on-disk file with a blank diagram. Recoverable failures stay in `warnings` instead.
+      // An unrecoverable POU opens the workspace EMPTY and read-only, so a save can never overwrite the on-disk
+      // file with a blank diagram. Recoverable failures stay in `warnings` instead.
       if (data.fatalErrors?.length) {
-        // Open the workspace, empty; `setProject` setting `meta.path` is the only thing that moves the desktop build off the start screen.
+        // `setProject` setting `meta.path` is the only thing that moves the desktop build off the start screen.
         getState().projectActions.setProject({
           meta: data.meta,
           data: {
@@ -987,7 +981,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Raw .dt files that failed to parse — stashed so saves echo
       // them back verbatim; always set so a reopen clears stale ones.
       getState().projectActions.setUnparsedDataTypeFiles(data.unparsedDataTypeFiles ?? [])
-      // The bytes as loaded, for the save flow to echo back for untouched files; always reset so a reopen doesn't inherit the old map.
+      // The bytes as loaded, echoed back for untouched files; always reset, so a reopen doesn't inherit the map.
       getState().versionControlActions.setRawLoadedContent(data.rawLoadedFiles ?? {})
       // A pre-DOPE-385 project owes a migration to `datatypes/*.dt`. Always set,
       // so reopening a project that has since migrated clears the flag.
@@ -1007,16 +1001,17 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         return [{ name, content: file.content, derivation: guessDatatypeDerivation(file.content) }]
       })
 
-      // Add ladder and FBD flows for graphical POUs, always keyed under `pou.name` rather than the flow's own embedded
-      // `name` field — a drift between the two (from a since-fixed rename bug) would render an empty canvas.
+      // Key flows under `pou.name`, not the flow's own embedded `name`: a drift between the two renders an empty
+      // canvas.
       const pous = data.projectData.pous
 
-      // Refresh placed library-block variant types before the flows enter the store, so existing projects pick up library type changes.
+      // Re-stamp placed library-block variant types before the flows enter the store, so existing projects pick up
+      // library type changes.
       const systemLibraries = getState().libraries.system
       const userPouNames = pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
       let restampedCount = 0
-      // POUs with a block still on the old two-sided VAR_IN_OUT pin: counted, never converted, since the fix belongs to the
-      // block's update badge. Split by project-owned vs library-provided, since only project-owned blocks can show a badge.
+      // Blocks still on the old two-sided VAR_IN_OUT pin are counted, never converted: the fix belongs to the
+      // block's update badge, and only project-owned blocks can show one.
       const convertibleInOutPous = new Set<string>()
       const libraryInOutBlocks = new Set<string>()
 
@@ -1082,14 +1077,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       })
 
-      // Hydrate the library slice's project view from `project.libraries`; bundled/canonical libs are always-on and don't appear here.
+      // Bundled/canonical libs are always-on and don't appear in `project.libraries`.
       const projectLibraryRefs = (data.projectData.libraries ?? []).map((ref) => ({
         name: ref.name,
         version: ref.version,
       }))
       getState().libraryActions.setProjectLibraries(projectLibraryRefs)
 
-      // Surface the missing-libraries modal for unresolvable references; project load itself is non-blocking.
       if (getState().missingLibraries.length > 0) {
         getState().modalActions.openModal('missing-libraries')
       }
@@ -1236,7 +1230,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (remoteDevices) {
         remoteDevices.forEach((d) => {
           files[d.name] = { type: 'remote-device', filePath: d.name, saved: true }
-          // Register file entries for EtherCAT slaves, keyed by slave.name to match the rest of the file registry, tabs, and editor models.
+          // Keyed by slave.name, to match the rest of the file registry, tabs and editor models.
           if (d.protocol === 'ethercat' && d.ethercatConfig?.devices) {
             for (const slave of d.ethercatConfig.devices) {
               files[slave.name] = { type: 'ethercat-device', filePath: d.name, saved: true }
@@ -1248,7 +1242,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
 
-      // Open the default tab for the project type: the manifest for library projects (no main POU to fall back to), else `main`.
       if (data.meta.type === 'plc-library') {
         const tabToBeCreated: TabsProps = {
           name: LIBRARY_MANIFEST_TAB_NAME,
@@ -1265,7 +1258,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           type: 'library-manifest',
         })
       } else {
-        // Auto-open a program POU on load so the user lands on an editable tab; prefer "main" but fall back since it can be renamed/deleted.
+        // Prefer "main", but fall back: it can be renamed or deleted.
         const programPou =
           pous.find((p) => p.name === 'main' && p.pouType === 'program') ?? pous.find((p) => p.pouType === 'program')
         if (programPou) {
@@ -1296,8 +1289,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             model.variable = { display: 'code', code: pouWithText.variablesText }
           }
           getState().editorActions.addModel(model)
-          // The auto-open block above may have already added/activated a table-mode model for this POU, so `addModel`/`setEditor`
-          // can't deliver the raw text to it; `updateModelVariablesForName` updates whichever object actually holds the POU.
+          // The auto-open block above may already hold a table-mode model for this POU, which `addModel`/`setEditor`
+          // can't reach; this updates whichever object actually holds it.
           getState().editorActions.updateModelVariablesForName(pou.name, {
             display: 'code',
             code: pouWithText.variablesText,
@@ -1305,7 +1298,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       })
 
-      // Same for a GVL whose declaration didn't parse when last saved: open its tab on the preserved text, not a re-serialization.
+      // A GVL whose declaration didn't parse opens on the preserved text, not a re-serialization.
       ;(data.projectData.globalVariableLists ?? []).forEach((list) => {
         if (list.text === undefined) return
         getState().tabsActions.updateTabs({
@@ -1329,7 +1322,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().editorActions.updateModelStructureForName(name, { display: 'code', code: content })
       })
 
-      // Reset all graphical flow updated flags at the very end of project open, since load-time syncs set them as a side effect.
+      // Last, since the load-time syncs above set the updated flags as a side effect.
       for (const flow of getState().ladderFlows) {
         getState().ladderFlowActions.setFlowUpdated({ editorName: flow.name, updated: false })
       }

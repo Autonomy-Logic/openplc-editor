@@ -9,7 +9,6 @@ import { AutonomyLogo } from '../../_atoms/autonomy-logo'
 import { ProviderIcon } from '../../_atoms/provider-icons'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
-// Mirrors Edge's own sign-in screen and copy verbatim (same account, same trust signal).
 // Not the same as RuntimeLoginModal (PLC runtime login).
 // Provider buttons are links, not handlers: a provider refuses to be framed or fetched.
 const signInSchema = z.object({
@@ -24,9 +23,7 @@ interface EdgeSignInModalProps {
   /** Requests a close, on a build where this dialog is dismissible (absent where an account is required). */
   onOpenChange?: (open: boolean) => void
   onSignedIn: () => void
-  /** Platform's Edge account port; passed in since this surface is mirrored into a build with no web adapter. */
   account: EdgeAccountPort
-  /** Why the user is being asked to sign in; each reason gets its own greeting (see REASON_COPY). */
   reason?: 'expired' | 'expired-reloaded' | 'sign-in-required' | 'oauth-failed' | 'signed-out'
 }
 
@@ -93,7 +90,6 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
 
   // Password recovery only exists as an Edge email flow, so this hands off rather than reimplementing it.
   const forgotPasswordUrl = new URL('/forgot-password', account.frontendBaseUrl).toString()
-  // Registration is an Edge flow end to end (verification, plan selection, onboarding); same reasoning.
   const signUpUrl = new URL('/signup', account.frontendBaseUrl).toString()
 
   const onSubmit = async (values: SignInValues) => {

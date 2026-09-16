@@ -1,6 +1,5 @@
 import type { AIChatContentBlock, ChatMessage } from '../../../../../middleware/shared/ports/types'
 
-/** A `tool_use` block paired with its later `tool_result`; `pending` until the result arrives. */
 export type ToolCall = {
   id: string
   name: string
@@ -9,7 +8,6 @@ export type ToolCall = {
   resultContent?: string
 }
 
-/** One conversational turn; consecutive assistant messages collapse into a single turn. */
 export type ChatTurn =
   | { kind: 'user'; message: ChatMessage }
   | {

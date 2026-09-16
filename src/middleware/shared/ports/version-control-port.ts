@@ -1,5 +1,3 @@
-/** VersionControlPort abstracts version control (branches, commits, change tracking); the editor adapter is a no-op. */
-
 import { z } from 'zod'
 
 export interface Branch {
@@ -37,9 +35,9 @@ export interface CommitInfo {
 export interface PendingChange {
   path: string
   status: 'added' | 'modified' | 'deleted'
-  /** HEAD content; present only with `includeContent`. Empty string for added files. */
+  /** HEAD content; only with `includeContent`. Empty string for added files. */
   before?: string
-  /** Working-tree content; present only with `includeContent`. Empty string for deleted files. */
+  /** Working-tree content; only with `includeContent`. Empty string for deleted files. */
   after?: string
 }
 
@@ -68,7 +66,6 @@ export class StashConflictError extends Error {
 
 export type SwitchBranchStrategy = 'discard' | 'carry'
 
-/** A file as it stands in one branch's snapshot. */
 export interface BranchDiffFile {
   path: string
   content: string
@@ -86,14 +83,13 @@ export interface BranchCommitInfo {
   parentHash: string | null
 }
 
-/** One side of a three-way comparison: the branch, its tip commit, and its files. */
 export interface BranchSnapshot {
   branch: string
   commit: BranchCommitInfo
   files: BranchDiffFile[]
 }
 
-/** The three-way view a merge is decided from; `base` may be null when the branches share no history. */
+/** `base` is null when the two branches share no history. */
 export interface BranchDiffWithBase {
   source: BranchSnapshot
   target: BranchSnapshot
@@ -108,7 +104,7 @@ export interface MergeResult {
   targetBranch: string
 }
 
-/** Raised when the merge cannot proceed without a decision per conflicting file (server 409, even on an incomplete resolution set). */
+/** Raised on a server 409: every conflicting file needs a decision, and an incomplete resolution set counts as none. */
 export class MergeConflictError extends Error {
   readonly conflictedFiles: string[]
 
@@ -128,10 +124,9 @@ export type VersionControlFailure =
   | { kind: 'merge-conflict'; conflictedFiles: string[]; message: string }
   | { kind: 'http'; status: number; message: string }
 
-/** A version-control outcome in transportable form. See {@link VersionControlFailure}. */
 export type VersionControlResult<T> = { ok: true; data: T } | { ok: false; failure: VersionControlFailure }
 
-/** Runtime check for the same outcome, since results arriving over IPC establish nothing at the type level. */
+/** Runtime check: a result arriving over IPC establishes nothing at the type level. */
 export const VersionControlFailureSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('signed-out') }),
   z.object({ kind: z.literal('unreachable'), message: z.string() }),
@@ -147,7 +142,7 @@ export const VersionControlResultSchema = z.union([
   z.object({ ok: z.literal(false), failure: VersionControlFailureSchema }),
 ])
 
-/** Thrown by `switchBranch` with `strategy: 'carry'` when the server detects blocking conflicts; server state is left unchanged. */
+/** Thrown by `switchBranch` with `strategy: 'carry'` on blocking conflicts; server state is left unchanged. */
 export class SwitchBranchCarryConflictError extends Error {
   readonly conflictedFiles: string[]
 
@@ -165,10 +160,10 @@ export interface ListCommitsOptions {
 }
 
 export interface VersionControlPort {
-  /** Three-way comparison between two branches, with predicted conflicts. Optional; gated by `capabilities.hasBranchMerge`. */
+  /** Optional; gated by `capabilities.hasBranchMerge`. */
   getBranchDiffWithBase?(projectId: string, source: string, target: string): Promise<BranchDiffWithBase>
 
-  /** Merge `sourceBranch` into `targetBranch`. Supply every conflicting file in `resolutions`, or the call rejects with {@link MergeConflictError}. */
+  /** Supply every conflicting file in `resolutions`, or the call rejects with {@link MergeConflictError}. */
   mergeBranches?(params: {
     projectId: string
     sourceBranch: string
@@ -185,14 +180,14 @@ export interface VersionControlPort {
   /** Delete a branch by ID. */
   deleteBranch(projectId: string, branchId: string): Promise<void>
 
-  /** Switch branches (server-side checkout). `strategy` 'discard' (default) wipes uncommitted edits; 'carry' transports them, rejecting with `SwitchBranchCarryConflictError` on conflict. */
+  /** Server-side checkout. `strategy` 'discard' (default) wipes uncommitted edits; 'carry' transports them, rejecting with `SwitchBranchCarryConflictError` on conflict. */
   switchBranch(
     projectId: string,
     branchName: string,
     strategy?: SwitchBranchStrategy,
   ): Promise<{ message: string; branch: string }>
 
-  /** Predict whether carrying uncommitted edits to `targetBranch` would conflict. Read-only. */
+  /** Read-only prediction; changes nothing on the server. */
   previewSwitchCarry(projectId: string, targetBranch: string): Promise<{ conflicts: string[] }>
 
   /** List commits with optional pagination. */
@@ -214,7 +209,7 @@ export interface VersionControlPort {
   /** Restore the project to a previous commit state. */
   restoreCommit(projectId: string, hash: string, branch?: string): Promise<{ message: string; restoredCommit: Commit }>
 
-  /** Get pending changes. `includeContent` adds `before`/`after` content so the caller can render a diff without further requests. */
+  /** `includeContent` fills `before`/`after` so a diff can be rendered without further requests. */
   getChanges(
     projectId: string,
     branch?: string,
@@ -227,7 +222,7 @@ export interface VersionControlPort {
   /** List the project's stashes (most recent first). */
   listStashes(projectId: string): Promise<{ stashes: Stash[] }>
 
-  /** Stash pending changes, reverting the working tree to the last commit. */
+  /** Reverts the working tree to the last commit. */
   createStash(projectId: string, message?: string, files?: string[]): Promise<{ stash: Stash }>
 
   /** Re-apply a stash onto the working tree, keeping it on the stack. Throws {@link StashConflictError} on conflict. */

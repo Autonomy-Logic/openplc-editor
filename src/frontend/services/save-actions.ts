@@ -1,5 +1,3 @@
-/** Shared save actions for the OpenPLC editor; all path → content production funnels through `iterateProjectFiles`. */
-
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type {
   ProjectPort,
@@ -51,10 +49,9 @@ type ProjectFileSpec = {
 function buildProjectJsonContent(state: StoreState): string {
   const { project } = state
   const debugVariables = collectDebugVariables(project.data.configurations.resource.globalVariables, project.data.pous)
-  // Alphabetical order keeps diffs stable; bundled/canonical strucpp libs are always-on and omitted here.
+  // Alphabetical order keeps diffs stable.
   const libraries = [...(project.data.libraries ?? [])].sort((a, b) => a.name.localeCompare(b.name))
-  // Preserve the project type on disk: a re-saved library must round-trip as `plc-library`,
-  // not silently downgrade to `plc-project`.
+  // A re-saved library must round-trip as `plc-library`, not silently downgrade to `plc-project`.
   const metaType: 'plc-project' | 'plc-library' = project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
   return JSON.stringify(
     {
@@ -95,7 +92,6 @@ function buildDataTypeSpec(dt: PLCDataType): ProjectFileSpec {
   }
 }
 
-/** Yield every file the save flow uploads, in deterministic order, with canonical serialized content. */
 function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
   const { project, deviceDefinitions } = state
   const isLibrary = project.meta.type === 'plc-library'
@@ -150,7 +146,6 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     category: 'project-json',
   }
 
-  // library.json mirrors project.data.libraryManifest — the same source the manifest editor uses.
   if (isLibrary && typeof project.data.libraryManifest === 'string') {
     yield {
       path: 'library.json',
@@ -160,7 +155,6 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
   }
 }
 
-/** Resolve the canonical specs for a named file; only `device` returns multiple (config + pin-mapping). */
 function serializeProjectFile(
   fileName: string,
   file: { type: string | null; filePath: string },
@@ -233,7 +227,6 @@ function serializeProjectFile(
   return [{ path: 'project.json', content: buildProjectJsonContent(state), category: 'project-json' }]
 }
 
-/** Fold every Global Variable List's pending code-view buffer into the project; a parse failure is preserved verbatim. */
 export function flushGlobalVariableListDrafts(): void {
   const state = openPLCStoreBase.getState()
   for (const list of state.project.data.globalVariableLists ?? []) {
@@ -241,7 +234,6 @@ export function flushGlobalVariableListDrafts(): void {
   }
 }
 
-/** Pure-serialize every project file (no raw fallback), for the sync-point snapshot and the version-control diff preview. */
 export function buildAllProjectFileContentsPure(): Record<string, string> {
   flushGlobalVariableListDrafts()
   const state = openPLCStoreBase.getState()
@@ -262,10 +254,10 @@ export function buildAllProjectFileContents(): Record<string, string> {
   return result
 }
 
-/** Why a save is happening. A `user` save on an ephemeral (device-retrieved) project is refused; `pre-build` is exempt. */
+/** A `user` save on an ephemeral (device-retrieved) project is refused; `pre-build` is exempt. */
 export type SaveReason = 'user' | 'pre-build'
 
-/** Whether the resume-queue makes sense: false when there's no account surface to sign back into. */
+/** With no account surface to sign back into, a queued save could never fire. */
 function endedSessionCanBeRestored(capabilities: PlatformCapabilities): boolean {
   return capabilities.hasEdgeAccount
 }
@@ -277,7 +269,6 @@ const ENDED_SESSION_NO_RETURN = {
     'Editing sessions are temporary and this one has run out, so nothing further can be saved from this tab. Open the project again from the application you came from to carry on.',
 } as const
 
-/** Refuse a user-initiated save on a project with no chosen location (e.g. retrieved from a device); the flush is exempt. */
 function refusedForHavingNoLocation(reason: SaveReason): boolean {
   if (!openPLCStoreBase.getState().workspace.isEphemeralProject || reason !== 'user') return false
   toast({
@@ -288,12 +279,14 @@ function refusedForHavingNoLocation(reason: SaveReason): boolean {
   return true
 }
 
-/** Whether a failed write means the session is gone. */
+/**
+ * A cloud write fails two ways: `signed-out` means the session died — queue the save to finish after sign-in;
+ * `unreachable` means Edge is down — offer Save As so a local copy survives.
+ */
 function writeFailedForSignedOut(result: SaveResult): boolean {
   return result.reason === 'signed-out' || isSaveBlockedByEndedSession()
 }
 
-/** Fall back to Save As when Autonomy Edge is unreachable and there's a local filesystem to write to. */
 function canFallBackToSaveAs(result: SaveResult, capabilities: PlatformCapabilities): boolean {
   return result.reason === 'unreachable' && capabilities.hasLocalFilesystem
 }
@@ -313,14 +306,11 @@ export async function executeSaveProject(
   capabilities: PlatformCapabilities,
   reason: SaveReason = 'user',
 ): Promise<{ success: boolean }> {
-  // Flush pending debounced flow write-backs first; a flow that fails validation stays stale
-  // and must not be reported as saved.
+  // Flush debounced flow write-backs first; a flow that fails validation stays stale and must not count as saved.
   const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
   // Same for GVLs, which commit on blur only — Ctrl+S with focus still in Monaco never fires one.
   flushGlobalVariableListDrafts()
   const state = openPLCStoreBase.getState()
-  // Every save path funnels through this gate; skip the doomed write and warn when the viewer
-  // lacks write permission.
   if (!state.workspace.canEdit) {
     notifyNoWritePermission('save changes to')
     return { success: false }
@@ -343,15 +333,13 @@ export async function executeSaveProject(
   }
 
   try {
-    // Group every spec by category to build the platform's category-shaped write payload
-    // without duplicating serialization logic.
     const pouFiles: RawProjectFile[] = []
     const serverFiles: RawProjectFile[] = []
     const remoteDeviceFiles: RawProjectFile[] = []
     const dataTypeFiles: RawProjectFile[] = []
     let projectJson = ''
-    // undefined here means the iterator didn't yield it; the backend skips writes for
-    // undefined instead of truncating the on-disk copy to an empty string.
+    // undefined means the iterator didn't yield it: the backend skips the write instead of truncating the on-disk
+    // copy to an empty string.
     let deviceConfig: string | undefined
     let pinMapping: string | undefined
     let libraryManifest: string | undefined
@@ -386,9 +374,8 @@ export async function executeSaveProject(
       }
     }
 
-    // A path this save writes must never also be in deletions (a create → delete → create cycle
-    // would list it in both). Desktop applies deletions after writes, so this guards a real
-    // data-loss bug; compared case-insensitively for macOS/Windows case-only renames.
+    // A path this save writes must never also be in deletions: desktop applies deletions after writes, so this
+    // guards real data loss. Compared case-insensitively for macOS/Windows case-only renames.
     const writtenPaths = new Set(
       [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) => f.relativePath.toLowerCase()),
     )
@@ -409,8 +396,7 @@ export async function executeSaveProject(
 
     const res = await projectPort.saveProject(files)
     if (res.success) {
-      // Tell version-control exactly which paths/content were just sent, so it can diff
-      // against baseline (handles modify→save→revert without a round trip to /changes).
+      // Tell version-control what was just sent, so it can diff against baseline without a round trip to /changes.
       const savedRecords = [
         { path: 'project.json', content: projectJson },
         ...(deviceConfig !== undefined ? [{ path: 'devices/configuration.json', content: deviceConfig }] : []),
@@ -434,8 +420,7 @@ export async function executeSaveProject(
       setAllToSaved()
       markAllSaved(staleFlows)
 
-      // A stale flow keeps `updated` set and its file dirty; skip it here so the in-memory
-      // edit isn't stranded with no way back to disk.
+      // A stale flow keeps `updated` set and its file dirty, so the in-memory edit isn't stranded with no way back.
       for (const flow of state.ladderFlows) {
         state.ladderFlowActions.clearSelections({ editorName: flow.name })
         if (isStale.has(flow.name)) continue
@@ -465,8 +450,6 @@ export async function executeSaveProject(
         })
       }
     } else if (writeFailedForSignedOut(res)) {
-      // A dead session isn't a save error; queue the save so signing in finishes it instead
-      // of surfacing a raw 401.
       setEditingState('unsaved')
 
       if (!endedSessionCanBeRestored(capabilities)) {
@@ -491,8 +474,7 @@ export async function executeSaveProject(
         variant: 'fail',
       })
     }
-    // A stale flow means the edit never reached disk, so callers gating on this save
-    // (build, close-project) must not proceed.
+    // A stale flow means the edit never reached disk, so callers gating on this save must not proceed.
     return { success: res.success && staleFlows.length === 0 }
   } catch {
     setEditingState('unsaved')
@@ -505,7 +487,6 @@ export async function executeSaveProject(
   }
 }
 
-/** Basename of a project-relative path, minus its extension; splits on both separators since paths may use either. */
 function getBaseNameFromRelativePath(relativePath: string): string {
   return (
     relativePath
@@ -515,7 +496,7 @@ function getBaseNameFromRelativePath(relativePath: string): string {
   )
 }
 
-/** One-time migration off legacy inline `dataTypes` onto `datatypes/*.dt`; writes `project.json` last so a failure is a no-op. */
+/** Writes `project.json` last, so a failure partway leaves the legacy inline `dataTypes` still authoritative. */
 async function migrateDataTypesToFiles(
   projectPath: string,
   projectPort: ProjectPort,
@@ -538,13 +519,11 @@ async function migrateDataTypesToFiles(
   return { ...res, written }
 }
 
-/** Core single-file save logic shared by Ctrl+S and direct callers; POUs serialize to IEC text, others to JSON. */
 export async function executeSaveFile(
   fileName: string,
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  // Same pending write-back flush as executeSaveProject, scoped to this file.
   const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
   // A GVL rides inside project.json, which this path rewrites, so its buffer is folded in too.
   flushGlobalVariableListDrafts()
@@ -577,11 +556,10 @@ export async function executeSaveFile(
     return { success: false }
   }
 
-  /** A failure from the write itself, not from this function, so only a real write failure triggers the session-expiry path. */
+  /** Only a failure from the write itself may trigger the session-expiry path. */
   const failedWrite = async (result: SaveResult): Promise<{ success: boolean }> => {
     setEditingState('unsaved')
 
-    // An expired session isn't a file error; queue the save so signing in completes it.
     if (writeFailedForSignedOut(result)) {
       if (!endedSessionCanBeRestored(capabilities)) {
         toast({ ...ENDED_SESSION_NO_RETURN, variant: 'fail' })
@@ -618,7 +596,7 @@ export async function executeSaveFile(
     // Same canonical serializer the full-project save uses; `device` returns two specs
     // (configuration + pin-mapping).
     const specs = serializeProjectFile(fileName, file, state)
-    // Paths reported to version-control; a .dt migration below replaces this with its own set.
+    // Reported to version-control; the .dt migration below replaces this with its own set.
     let recordedSpecs: ProjectFileSpec[] = specs
     if (specs.length === 0) {
       // Some categories (e.g. ethercat-device) don't map to a single lookup — fall through below.
@@ -663,18 +641,13 @@ export async function executeSaveFile(
       )
       if (!res.success) return failedWrite(res)
     } else if (file.type === 'library-manager') {
-      // Surgical save: swap only data.libraries into project.json so unrelated unsaved
-      // edits in other tabs aren't persisted.
+      // Swap only data.libraries into project.json, so unrelated unsaved edits in other tabs aren't persisted.
       const res = await saveLibraryManagerOnly(projectPath, projectPort, state)
       if (!res.success) return failedWrite(res)
     } else if (file.type === 'vendor-screen') {
-      // Surgical save: swap only this screen's owned vendorScreenData keys into
-      // devices/configuration.json.
       const res = await saveVendorScreenOnly(projectPath, projectPort, state, fileName)
       if (!res.success) return failedWrite(res)
     } else if (file.type === 'library-manifest') {
-      // Partial-write shortcut for the manifest tab — same content the full-project
-      // save's iterator yields.
       const spec = specs[0]
       if (!spec) return fail('Save failed')
       const res = await projectPort.saveFile(joinPath(projectPath, 'library.json'), spec.content)
@@ -682,8 +655,7 @@ export async function executeSaveFile(
     } else if (file.type === 'data-type') {
       const spec = specs[0]
       if (!spec) {
-        // An unparsed .dt has a tab but no entry in project.data.dataTypes; say so instead
-        // of a misleading "not found".
+        // An unparsed .dt has a tab but no entry in project.data.dataTypes.
         const unreadable = state.unparsedDataTypeFiles.some(
           (f) => getBaseNameFromRelativePath(f.relativePath).toLowerCase() === fileName.toLowerCase(),
         )
@@ -693,12 +665,11 @@ export async function executeSaveFile(
             : `Data type "${fileName}" not found.`,
         )
       }
-      // First .dt save migrates the whole set in one go — writing just this one would leave
-      // project.json's inline list and the new file disagreeing.
+      // The first .dt save migrates the whole set: writing just this one would leave project.json's inline list
+      // and the new file disagreeing.
       if (state.dataTypesNeedMigration) {
         const migration = await migrateDataTypesToFiles(projectPath, projectPort, state)
-        // Report every migrated file even on failure, or version-control's changedPaths
-        // would still list them dirty.
+        // Report every migrated file even on failure, or version-control's changedPaths still lists them dirty.
         recordedSpecs = migration.written
         if (!migration.success) return failedWrite(migration)
         state.projectActions.setDataTypesNeedMigration(false)
@@ -721,8 +692,8 @@ export async function executeSaveFile(
       })
     }
 
-    // Refresh cleanState too for tabs that dirty-check against a snapshot (library-manager,
-    // vendor-screen), or the next render re-marks them unsaved.
+    // Tabs that dirty-check against a snapshot need cleanState refreshed too, or the next render re-marks them
+    // unsaved.
     if (file.type === 'library-manager') {
       const refs = state.project.data.libraries ?? []
       const cleanState = JSON.stringify(
@@ -741,8 +712,7 @@ export async function executeSaveFile(
     }
     markSaved(fileName)
 
-    // Clear selections (avoids spurious dirty on reopen from a deselection click) and
-    // reset updated flags.
+    // Clearing selections avoids a spurious dirty state on reopen from a deselection click.
     const ladderFlow = state.ladderFlows.find((f) => f.name === fileName)
     if (ladderFlow) {
       state.ladderFlowActions.clearSelections({ editorName: fileName })
@@ -770,7 +740,6 @@ export async function executeSaveFile(
   }
 }
 
-/** Save the active file (Ctrl+S); resolves the active editor name and delegates to executeSaveFile. */
 export async function executeSaveActiveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
@@ -783,7 +752,6 @@ export async function executeSaveActiveFile(
   return executeSaveFile(name, projectPort, capabilities)
 }
 
-/** Reload a POU from disk, discarding in-memory edits, via the same parse/restore/reclassify cycle as project open. */
 export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
   const pou = state.project.data.pous.find((p) => p.name === pouName)
@@ -852,7 +820,6 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
   }
 }
 
-/** Reload a data type from its `.dt` file; a name mismatch fails the reload rather than silently rekeying it. */
 export async function reloadDataTypeFromDisk(name: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
   const dt = state.project.data.dataTypes.find((d) => d.name === name)
@@ -874,7 +841,6 @@ export async function reloadDataTypeFromDisk(name: string, projectPort: ProjectP
   }
 }
 
-/** Surgical save for the Library Manager tab: swaps only `data.libraries` into `project.json`, preserving everything else. */
 async function saveLibraryManagerOnly(
   projectPath: string,
   projectPort: ProjectPort,
@@ -888,8 +854,6 @@ async function saveLibraryManagerOnly(
 
   const read = await projectPort.readFileContent(fullPath)
   if (!read.success || typeof read.content !== 'string') {
-    // No existing file — fall back to the canonical full-project write (unreachable in
-    // practice, but keeps the fallback honest).
     return projectPort.saveFile(fullPath, buildProjectJsonContent(state))
   }
 
@@ -913,7 +877,6 @@ async function saveLibraryManagerOnly(
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
 }
 
-/** Resolve the vendorScreenData keys this screen tab owns; empty when the screen/board is no longer available. */
 function vendorScreenOwnedKeysFor(state: ReturnType<typeof openPLCStoreBase.getState>, screenName: string): string[] {
   const boardId = state.deviceDefinitions.configuration.deviceBoard
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
@@ -932,7 +895,6 @@ function serializeVendorScreenSlice(state: ReturnType<typeof openPLCStoreBase.ge
   return JSON.stringify(slice)
 }
 
-/** Surgical save for a Vendor Screen tab: swaps only this screen's owned keys into `devices/configuration.json`. */
 async function saveVendorScreenOnly(
   projectPath: string,
   projectPort: ProjectPort,
@@ -942,7 +904,7 @@ async function saveVendorScreenOnly(
   const fullPath = joinPath(projectPath, 'devices/configuration.json')
   const ownedKeys = vendorScreenOwnedKeysFor(state, screenName)
   if (ownedKeys.length === 0) {
-    // No keys to write (screen/board no longer available) — treat as success so the tab still closes.
+    // Nothing to write — treat as success so the tab still closes.
     return { success: true }
   }
 
@@ -975,9 +937,8 @@ async function saveVendorScreenOnly(
   }
   onDisk.vendorScreenData = diskVendor
 
-  // Keep the active board's per-board bucket in sync with the flat view we just patched —
-  // otherwise a later load restores a stale bucket over these keys (the archive is
-  // authoritative on load).
+  // Keep the active board's per-board bucket in sync with the flat view: the archive is authoritative on load, so a
+  // stale bucket would be restored over these keys.
   const boardId = state.deviceDefinitions.configuration.deviceBoard
   const diskByBoard =
     onDisk.vendorScreenDataByBoard && typeof onDisk.vendorScreenDataByBoard === 'object'
@@ -989,7 +950,6 @@ async function saveVendorScreenOnly(
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
 }
 
-/** "Don't save" revert for the Library Project's manifest tab: restores from the file-slice `cleanState` snapshot. */
 function reloadLibraryManifestFromCleanState(fileName: string): { success: boolean } {
   const state = openPLCStoreBase.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
@@ -1000,7 +960,6 @@ function reloadLibraryManifestFromCleanState(fileName: string): { success: boole
   return { success: true }
 }
 
-/** Reload a vendor-screen tab from its `cleanState` snapshot via the device slice's bulk setter, so others stay untouched. */
 function reloadVendorScreenFromCleanState(fileName: string): { success: boolean } {
   const state = openPLCStoreBase.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
@@ -1010,8 +969,8 @@ function reloadVendorScreenFromCleanState(fileName: string): { success: boolean 
     const parsed = JSON.parse(cleanState) as unknown
     if (typeof parsed !== 'object' || parsed === null) return { success: false }
     const snapshot = parsed as Record<string, unknown>
-    // Owned keys can change since the tab opened (board switch); union cleanState's own keys
-    // with the current definition's so both stale and current fields are covered.
+    // Owned keys can change since the tab opened (board switch); union both sets so stale and current fields are
+    // covered.
     const definitionKeys = vendorScreenOwnedKeysFor(state, fileName)
     const ownedKeys = Array.from(new Set([...Object.keys(snapshot), ...definitionKeys]))
     state.deviceActions.restoreVendorScreenSlice(ownedKeys, snapshot)
@@ -1021,7 +980,6 @@ function reloadVendorScreenFromCleanState(fileName: string): { success: boolean 
   }
 }
 
-/** Revert the Library Manager tab from its `cleanState` snapshot; library mutations write with no staging otherwise. */
 function reloadLibraryManagerFromCleanState(fileName: string): { success: boolean } {
   const state = openPLCStoreBase.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
@@ -1030,8 +988,7 @@ function reloadLibraryManagerFromCleanState(fileName: string): { success: boolea
   try {
     const parsed = JSON.parse(cleanState) as unknown
     if (!Array.isArray(parsed)) return { success: false }
-    // Defensive shape check — refuse rather than corrupt the library list if a future
-    // migration changes cleanState's format.
+    // Refuse rather than corrupt the library list if cleanState's format ever changes.
     const refs: { name: string; version: string }[] = []
     for (const r of parsed) {
       if (
@@ -1050,7 +1007,6 @@ function reloadLibraryManagerFromCleanState(fileName: string): { success: boolea
   }
 }
 
-/** Generic "discard in-memory changes for this file" dispatcher, so callers don't need to know every revertable type. */
 export async function reloadFileFromDisk(fileName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
   const state = openPLCStoreBase.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
@@ -1070,7 +1026,5 @@ export async function reloadFileFromDisk(fileName: string, projectPort: ProjectP
   if (file.type === 'data-type') {
     return reloadDataTypeFromDisk(fileName, projectPort)
   }
-  // Everything else routes through the POU-specific reload; add new revertible types as a
-  // branch above instead.
   return reloadPouFromDisk(fileName, projectPort)
 }

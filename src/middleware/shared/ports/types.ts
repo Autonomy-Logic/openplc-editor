@@ -1,5 +1,3 @@
-/** Shared, platform-agnostic domain types used by port interfaces. */
-
 import type { ConfiguredEtherCATDevice } from './esi-types'
 
 /** Default `T` is `unknown`, not `void`: TS 5.5+ collapses `{ success: true } & void` to `never`. */
@@ -19,7 +17,7 @@ export type VariableClass = 'input' | 'output' | 'inOut' | 'external' | 'local' 
 
 export type VariableTypeDefinition = 'base-type' | 'user-data-type' | 'array' | 'derived'
 
-/** The IEC block qualifier a variable is declared under (the **Flags** column); absent means plain `VAR`. */
+/** The **Flags** column; absent means plain `VAR`. */
 export type VariableFlag = 'constant' | 'retain'
 
 export interface PLCVariableType {
@@ -65,13 +63,13 @@ export interface PLCStructureVariable {
   documentation?: string
 }
 
-/** A Global Variable List, compiled as a STRUCT type plus one global instance (see `serializeGlobalVariableListsToTypes`). */
+/** Compiled as a STRUCT type plus one global instance of it. */
 export interface PLCGlobalVariableList {
   name: string
   variables: PLCVariable[]
   /** Uppercased `VAR_GLOBAL` qualifier text (`'CONSTANT'`, `'RETAIN PERSISTENT'`, …). */
   qualifier?: string
-  /** The declaration as the user last left it, kept ONLY while it does not parse (same contract as a POU's `variablesText`). */
+  /** Kept ONLY while the declaration does not parse (same contract as a POU's `variablesText`). */
   text?: string
   documentation?: string
 }
@@ -417,7 +415,7 @@ export interface PLCRemoteDevice {
 export interface PLCProjectLibraryRef {
   /** Strucpp manifest identifier; project ↔ system pool joins go through this field. */
   name: string
-  /** Informational on load (name-only match against the pool today). */
+  /** Informational: the pool is matched on name alone today. */
   version: string
 }
 
@@ -437,7 +435,7 @@ export interface PLCProjectData {
   remoteDevices?: PLCRemoteDevice[]
   /** Opt-in libraries; bundled/canonical strucpp libraries are always-on and don't appear here. */
   libraries?: PLCProjectLibraryRef[]
-  /** Raw bytes of the library project's `library.json` manifest. Loaded from disk on open, never embedded in `project.json`. */
+  /** Read from `library.json` on open; never embedded in `project.json`. */
   libraryManifest?: string
   debugVariables?: {
     global?: string[]
@@ -459,7 +457,7 @@ export function isLibraryProject(meta: { type: 'plc-project' | 'plc-library' } |
   return meta?.type === 'plc-library'
 }
 
-/** True when a project identifier names a project held on Autonomy Edge rather than a file on this machine. */
+/** True when the identifier names a project on Autonomy Edge rather than a file on this machine. */
 export function isRemoteProjectPath(identifier: string): boolean {
   if (identifier.length === 0) {
     return false
@@ -474,7 +472,6 @@ export function isRemoteProjectPath(identifier: string): boolean {
 
 /** Per-project-type capability matrix. Independent of `useCapabilities()`, which gates by host platform. */
 export interface ProjectCapabilities {
-  /** Show the Programs branch and the create-element modal's program option. */
   hasPrograms: boolean
   /** Show the Resource entry in the project tree. */
   hasResource: boolean
@@ -486,11 +483,11 @@ export interface ProjectCapabilities {
   hasRemoteDevices: boolean
   /** Show VPP vendor screens for the current board. */
   hasVendorScreens: boolean
-  /** Show the standard Compile / Run on Simulator / Upload / Start-Stop / Debug affordances. */
+  /** Compile / Run on Simulator / Upload / Start-Stop / Debug. */
   hasProgramBuild: boolean
   /** Show the Library-specific build button (produces `.stlib`). */
   hasLibraryBuild: boolean
-  /** Show the Library-specific debug button (harness program exercising every block). Distinct from `hasProgramBuild`. */
+  /** Harness program exercising every block — its own button, not `hasProgramBuild`'s. */
   hasLibraryDebug: boolean
   /** Show the version-control affordance. */
   hasVersionControl: boolean
@@ -498,7 +495,6 @@ export interface ProjectCapabilities {
   hasDebugger: boolean
   /** Show the runtime-connection status and Start/Stop controls. */
   hasRuntimeControls: boolean
-  /** Show the library manifest tab (the JSON-on-disk Monaco editor that controls .stlib build output). */
   hasLibraryManifest: boolean
 }
 
@@ -541,12 +537,11 @@ export function projectCapabilities(
 
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
 
-/** Re-export of the canonical capability shape; authoritative definition lives in `middleware/shared/utils/target-capabilities`. */
 import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capabilities'
 
 export type { DebuggerTransport, TargetCapabilities }
 
-/** VPP-declared FQBN sub-option (e.g. Nano `cpu=atmega328old`); shared shape across the four sites that reference it. */
+/** VPP-declared FQBN sub-option, e.g. Nano `cpu=atmega328old`. */
 export interface PlatformOptionValue {
   id: string
   label: string
@@ -583,7 +578,7 @@ export interface BoardInfo {
   /** When absent, the resolver in backend/shared infers capabilities from the legacy `compiler` field. */
   capabilities?: Partial<TargetCapabilities>
   vpp?: VppMetadata
-  /** Mirrors the VPP manifest's `target.platformOptions`, surfaced flat so device-screen UI need not reach into `vpp`. */
+  /** The VPP manifest's `target.platformOptions`, flattened so device-screen UI need not reach into `vpp`. */
   platformOptions?: PlatformOption[]
   /** Hardware serial ports this board exposes. Absent → the editor assumes a single `Serial`. */
   serialPorts?: string[]
@@ -603,13 +598,11 @@ export interface VppModuleDefinition {
   /** True for an always-present part of the device hardware (e.g. Arduino Opta's built-in I/O). Auto-placed and locked in slot 1. */
   fixed?: boolean
   image?: string
-  /** One-line prose displayed in the per-slot detail pane. */
   description?: string
-  /** Key/value pairs rendered as a spec list in the per-slot detail pane. */
   specs?: Record<string, string>
-  /** Path to this module's configuration screen. Prefer `configScreenDefinition`, the parsed result. */
+  /** Prefer `configScreenDefinition`, the parsed result. */
   configScreen?: string
-  /** Parsed config-screen JSON, populated when `configScreen` resolves to a valid file. */
+  /** Populated only when `configScreen` resolves to a valid file. */
   configScreenDefinition?: unknown
   io: {
     digitalInputs: number
@@ -629,17 +622,16 @@ export interface VppModuleDefinition {
   addressMapping?: unknown
 }
 
-/** Screens the runtime itself provides, which a VPP may replace. A closed union: a name that isn't a native screen is a typo. */
+/** Screens the runtime provides and a VPP may replace. Closed union: an unlisted name is a typo. */
 export type NativeScreenId = 'persistent-storage'
 
 export interface VppMetadata {
   packageId: string
-  /** From the manifest's `package.vendor.name`; groups boards under a vendor heading in the device dropdown. */
+  /** From the manifest's `package.vendor.name`; groups boards under a heading in the device dropdown. */
   vendor: string
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
-  /** Native screens this device replaces; see `PackageManifest.devices[].hidesNativeScreens`. */
   hidesNativeScreens?: NativeScreenId[]
   moduleSystem: {
     enabled: boolean
@@ -676,7 +668,7 @@ export interface PackageManifest {
       platform?: string
       core?: string
       boardManagerUrl?: string
-      /** User-selectable FQBN sub-options for arduino-cli targets, appended to `platform` at compile/upload time. */
+      /** Appended to `platform` at compile/upload time. arduino-cli targets only. */
       platformOptions?: PlatformOption[]
       /** Exact core version a prebuilt arduino-hal was compiled against; the precompiled .a is ABI-locked to it. */
       coreVersion?: string
@@ -685,7 +677,7 @@ export interface PackageManifest {
     hal: {
       type: string
       pluginType?: string
-      /** "source" (default): pluginEntry is compiled on the runtime. "prebuilt": pluginEntry holds precompiled .o objects plus a link-only Makefile. */
+      /** "source" (default): `pluginEntry` is compiled on the runtime. "prebuilt": it holds .o objects plus a link-only Makefile. */
       provisioning?: string
       pluginEntry?: string
       configTemplate?: string
@@ -693,9 +685,9 @@ export interface PackageManifest {
       source?: string
       /** Prebuilt arduino-hal library directory, linked via --library alongside `hal.source`. */
       precompiledLibrary?: string
-      /** On-device license-storage backend. PRESENCE is the signal: it resolves `TargetCapabilities.licenseStore` and drives the backend into the build. Absent → board answers `LIC_UNSUPPORTED`. */
+      /** PRESENCE is the signal: it resolves `TargetCapabilities.licenseStore` and drives the backend into the build. Absent → board answers `LIC_UNSUPPORTED`. */
       licenseStore?: string | string[]
-      /** Per-VPP signing key id. Informational in the editor — the real trust root is the public key compiled into the VPP, not this string. */
+      /** Informational: the real trust root is the public key compiled into the VPP, not this id. */
       licenseKeyId?: string
       compilerFlags?: {
         c_flags?: string[]
@@ -716,7 +708,7 @@ export interface PackageManifest {
       }
     }
     screens?: Record<string, string>
-    /** Native runtime-v4 screens this device REPLACES; hiding one turns off the native feature so only the vendor's driver handles it. */
+    /** Hiding a native screen turns the native feature off, so only the vendor's driver handles it. */
     hidesNativeScreens?: NativeScreenId[]
     /** Hardware serial ports this device exposes (e.g. `['Serial', 'Serial1']`).
      *  Surfaced onto `BoardInfo.serialPorts` and consumed by VPP screen
@@ -725,11 +717,11 @@ export interface PackageManifest {
     /** Name of the default serial port (usually the USB CDC port). Surfaced onto
      *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
     defaultSerial?: string
-    /** TCP carriers this device can bring up, surfaced onto `BoardInfo.networkInterfaces`. Declared only to REMOVE a carrier the firmware can't serve. */
+    /** Surfaced onto `BoardInfo.networkInterfaces`. Declared only to REMOVE a carrier the firmware can't serve. */
     networkInterfaces?: string[]
-    /** Declarative debug-channel resolver spec, consumed by `backend/shared/hardware/debug-spec.ts`; absence means none declared. */
+    /** Absence means no debug channel is declared. */
     debug?: import('./debug-spec-types').DebugSpec
-    /** Optional target capability overrides for this device, merged over the preset the editor derives from the target type. */
+    /** Merged over the preset the editor derives from the target type. */
     capabilities?: Partial<TargetCapabilities>
     moduleSystem?: {
       enabled: boolean
@@ -800,11 +792,9 @@ export interface IoMappingEntry {
   dataType: string
   iecAddress: string
   alias: string
-  /** The `fieldId` that selected this channel's current mode, when resolved from `perChannelChoices`. Absent for static channels. */
+  /** The three `mode*` fields are absent for static channels; they come from `perChannelChoices`. */
   modeFieldId?: string
-  /** Available mode keys for the per-row selector. Absent for static channels. */
   modeOptions?: string[]
-  /** Currently-selected mode key. Absent for static channels. */
   modeValue?: string
 }
 
@@ -812,13 +802,13 @@ export interface VendorIoMapping {
   entries: IoMappingEntry[]
 }
 
-/** A serial port offered in the communication-port picker; deliberately NOT a pre-composed display string. */
+/** Deliberately NOT a pre-composed display string. */
 export interface CommunicationPort {
-  /** OS-canonical port identifier and the value actually opened (`COM5`, `/dev/ttyUSB0`, `/dev/cu.usbmodem*`). */
+  /** OS-canonical identifier, and the value actually opened (`COM5`, `/dev/ttyUSB0`). */
   address: string
-  /** Board name identified by arduino-cli from the connected core's VID/PID. Absent when no core matched. */
+  /** From arduino-cli, via the connected core's VID/PID. Absent when no core matched. */
   boardName?: string
-  /** Manufacturer/vendor string from `serialport`. The fallback descriptor when arduino-cli identified no board. */
+  /** From `serialport` — the fallback descriptor when arduino-cli identified no board. */
   manufacturer?: string
 }
 
@@ -833,22 +823,22 @@ export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
-  /** User-supplied label participating in the alias registry. Used to be `name` — legacy projects auto-upgrade on load. */
+  /** Participates in the alias registry. Used to be `name`; legacy projects auto-upgrade on load. */
   alias?: string
 }
 
-/** Bounds on the retain store's commit period, mirroring the runtime's own (`webserver/retain_config.py`). */
+/** Mirrors the runtime's own bounds (`webserver/retain_config.py`). */
 export const RETAIN_MIN_FLUSH_SECONDS = 1
 export const RETAIN_MAX_FLUSH_SECONDS = 3600
 export const DEFAULT_RETAIN_FLUSH_SECONDS = 5
 
-/** Persistent storage (RETAIN) for the runtime's built-in file store, delivered as `retain.conf` inside the program upload. */
+/** Delivered as `retain.conf` inside the program upload. */
 export interface PersistentStorageSettings {
-  /** Off by default; leaving it off means the upload carries no `retain.conf`, keeping the device store switched off. */
+  /** Off by default; off means the upload carries no `retain.conf`, so the device store stays off. */
   enabled: boolean
   /** Absolute path on the DEVICE. Empty means "use the runtime's default". */
   path: string
-  /** How often the store commits, in seconds. The runtime rejects a value outside its accepted range at install time. */
+  /** Commit period in seconds. The runtime rejects an out-of-range value at install time. */
   flushSeconds: number
 }
 
@@ -870,7 +860,7 @@ export interface DeviceConfiguration {
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'
 
-/** Per-task scan/cycle/latency stats from the runtime; `name` falls back to `plc-task-<idx>` when the .so doesn't expose one. */
+/** `name` falls back to `plc-task-<idx>` when the .so doesn't expose one. */
 export interface TaskTimingStats {
   name: string
   scan_count: number
@@ -886,7 +876,6 @@ export interface TaskTimingStats {
   overruns: number
 }
 
-/** Plugin-contributed stat field (e.g. EtherCAT cycle counters), grouped under the plugin's `label` by the editor. */
 export interface PluginStatsField {
   label: string
   value: string | number | boolean
@@ -898,7 +887,6 @@ export interface PluginStatsPayload {
   fields: PluginStatsField[]
 }
 
-/** Container for runtime timing stats; one entry per IEC task plus an optional map of plugin-contributed stats. */
 export interface TimingStats {
   tasks: TaskTimingStats[]
   plugin_stats?: Record<string, PluginStatsPayload>
@@ -1013,10 +1001,10 @@ export interface DebugCompileResult {
   error?: string
 }
 
-/** Result of building a `.stlib` from a Library Project. Deliberately no verification field — running a library is its own action, via the debug harness. */
+/** Deliberately carries no verification field: running a library is its own action, via the debug harness. */
 export interface CompileLibraryResult {
   success: boolean
-  /** Absolute path to the produced `<libname>.stlib`. Only set on success. */
+  /** Absolute path, set only on success. */
   stlibPath?: string
   /** Manifest name extracted from `library.json`. */
   libraryName?: string
@@ -1063,7 +1051,7 @@ export function isV3Logs(logs: PlcLogs): logs is string {
   return typeof logs === 'string'
 }
 
-/** A run of log text sharing one SGR-colour style. `className` is a Tailwind class string, absent when unstyled. */
+/** One SGR-colour run. `className` is a Tailwind class string, absent when unstyled. */
 export interface LogSegment {
   text: string
   className?: string
@@ -1100,7 +1088,7 @@ export interface RecentProject {
   createdAt: string
 }
 
-/** Platform-provided configuration for the AI feature, resolved by the composition root. */
+/** Resolved by the composition root, not read from the store. */
 export interface AIFeatureConfig {
   /** Whether the AI feature is enabled on this platform */
   isFeatureEnabled: boolean
@@ -1112,7 +1100,7 @@ export interface AIFeatureConfig {
 
 export type ChatMessageRole = 'user' | 'assistant'
 
-/** Anthropic-compatible content block. Plain user text is normalized to `[{ type: 'text', text: '...' }]` so readers don't branch on string vs array. */
+/** Plain user text is normalized to `[{ type: 'text', text: '…' }]`, so readers never branch on string vs array. */
 export type AIChatContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
@@ -1126,11 +1114,11 @@ export type AIChatContentBlock =
 export type ChatMessage = {
   id: string
   role: ChatMessageRole
-  /** Plain string for legacy text-only turns; block array for restored conversations (so `tool_use`/`tool_result` survive a reload). */
+  /** String for legacy text-only turns; blocks for restored ones, so `tool_use`/`tool_result` survive a reload. */
   content: string | AIChatContentBlock[]
   timestamp: number
   rating?: 'up' | 'down'
-  /** Set when loaded from the backend as part of a persisted conversation; absent for in-progress local-only turns. */
+  /** Absent for in-progress, local-only turns. */
   conversationId?: string
 }
 
@@ -1142,7 +1130,7 @@ export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'paused' |
 /** Plan level slug (standard < plus < premium). */
 export type PlanLevelSlug = 'standard' | 'plus' | 'premium'
 
-/** Feature flags resolved from the active plan level. Open-ended map: backend may emit additional booleans as features land. */
+/** Open-ended: the backend may emit further booleans as features land. */
 export type PlanFeatures = {
   hasAiEngineer?: boolean
   hasAiChat?: boolean
@@ -1213,7 +1201,7 @@ export interface AIUsage {
   }
 }
 
-/** Structured billing/limit payload from `/ai/chat` and `/ai/complete`, thrown by autonomy-edge's `CreditGuard`. */
+/** Thrown by autonomy-edge's `CreditGuard` from `/ai/chat` and `/ai/complete`. */
 export type BillingErrorPayload = {
   /** `subscription_past_due` is a lapsed payment method: the plan is still there, the card is not. */
   code: 'insufficient_acu' | 'subscription_inactive' | 'rate_limit_exceeded' | 'subscription_past_due'
@@ -1228,11 +1216,10 @@ export type BillingErrorPayload = {
   subscriptionStatus?: SubscriptionStatus
   /** Optional deep-link to the autonomy-edge billing portal. */
   reactivateUrl?: string
-  /** Set when `code === 'rate_limit_exceeded'`; ISO-8601 reset time, `null` if the backend couldn't compute it. */
+  /** `rate_limit_exceeded` only: ISO-8601 reset time, `null` if the backend couldn't compute it. */
   resetsAt?: string | null
 }
 
-/** FBD rung data — nodes + edges for one Function Block Diagram rung. */
 export type FBDRungState = {
   comment: string
   selectedNodes: import('@xyflow/react').Node[]
@@ -1240,7 +1227,7 @@ export type FBDRungState = {
   edges: import('@xyflow/react').Edge[]
 }
 
-/** A branch of elements connected to a specific block handle; defined here so `RungLadderState` can reference it across layers. */
+/** Lives here, not in the ladder slice, so `RungLadderState` can reference it across layers. */
 export type HandleBranch = {
   /** The block node ID this branch connects to */
   blockId: string
@@ -1252,7 +1239,6 @@ export type HandleBranch = {
   nodeIds: string[]
 }
 
-/** Ladder rung data — nodes + edges + layout for one Ladder rung. */
 export type RungLadderState = {
   id: string
   comment: string

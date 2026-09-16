@@ -5,7 +5,7 @@ import { useAI } from '../../../../middleware/shared/providers'
 
 export type { AIConversationSummary as ConversationSummary }
 
-/** Lists the caller's recent conversations for a project; disabled when the platform has no conversation store. */
+/** Disabled when the platform has no conversation store. */
 export function useConversations(projectId: string | null | undefined) {
   const conversations = useAI()?.conversations
 

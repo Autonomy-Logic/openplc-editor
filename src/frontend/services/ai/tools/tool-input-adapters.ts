@@ -133,7 +133,7 @@ export type CreateDatatypeInput = {
   initialValue?: string
 }
 
-/** Builds the PLCDataType payload from a create_datatype tool input; null if required fields are missing. */
+/** Null when required fields are missing. */
 export function buildDatatypeFromCreateInput(input: CreateDatatypeInput): PLCDataType | null {
   if (input.derivation === 'structure') {
     if (!input.fields || input.fields.length === 0) return null

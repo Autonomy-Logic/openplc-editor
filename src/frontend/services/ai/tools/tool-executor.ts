@@ -22,10 +22,7 @@ import {
   type UpdateVariableInput,
 } from './tool-input-adapters'
 
-/**
- * Strip VAR blocks and POU wrapper keywords from a code body.
- * Claude sometimes includes these despite instructions not to.
- */
+/** Claude sometimes emits VAR blocks and POU wrapper keywords despite instructions not to. */
 function sanitizePouBody(code: string): string {
   let body = code
   body = body.replace(/^\s*(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w+.*$/gim, '')
@@ -39,15 +36,13 @@ function sanitizePouBody(code: string): string {
   return body
 }
 
-/** Result of executing a tool */
 export type ToolResult = {
   success: boolean
   message: string
 }
 
-/** Platform-supplied capabilities a tool may need; passed in because the desktop and web reach the ST transpiler by different routes. */
+/** Passed in because desktop and web reach the ST transpiler by different routes. */
 export type ToolExecutionOptions = {
-  /** Project → whole-program ST, for tools that must read a diagram. */
   transpileProject?: ProjectStTranspiler
 }
 
@@ -65,8 +60,7 @@ const PROJECT_MUTATING_TOOLS = new Set([
 ])
 
 /**
- * Execute an AI tool call against the Zustand store.
- * Never throws — all errors are returned as ToolResult with success: false.
+ * Never throws — every error comes back as a failed ToolResult.
  * Async because a datatype rename can await the reference-impact modal.
  */
 export async function executeTool(
@@ -143,7 +137,7 @@ function executeCreatePou(input: CreatePouInput): ToolResult {
 
   const state = openPLCStoreBase.getState()
 
-  // A "main" POU is auto-created in every project; redirect a (re)create with a body to update_pou_body instead.
+  // A "main" POU is auto-created in every project, so a (re)create carrying a body redirects to update_pou_body.
   if (createProps.name.toLowerCase() === 'main') {
     const existingMain = state.project.data.pous.find((p) => p.name.toLowerCase() === 'main')
     if (existingMain) {
@@ -345,8 +339,7 @@ function executeUpdateVariable(input: UpdateVariableInput): ToolResult {
   }
   if (input.initialValue !== undefined) updateData.initialValue = input.initialValue
 
-  // The slice's `variableId` param is matched against `v.name` (see project/utils.ts);
-  // variables created via the UI don't get an `id` field, so we pass the name directly.
+  // The slice matches `variableId` against `v.name`, and a variable created via the UI has no `id` field.
   const result = state.projectActions.updateVariable({
     scope: isGlobal ? 'global' : 'local',
     associatedPou: input.pouName ?? undefined,
@@ -396,8 +389,7 @@ function executeDeleteVariable(input: DeleteVariableInput): ToolResult {
     return { success: false, message: `Variable "${input.variableName}" not found in ${scope}.` }
   }
 
-  // Use variableName (name-lookup branch) rather than variableId — variables created
-  // via the UI don't get an `id`, and the slice's variableId param is also name-matched.
+  // A variable created via the UI has no `id`, so delete by name.
   const deleteResult = state.projectActions.deleteVariable({
     scope: isGlobal ? 'global' : 'local',
     associatedPou: input.pouName ?? undefined,
@@ -455,14 +447,12 @@ function executeCreateDatatype(input: CreateDatatypeInput): ToolResult {
     return { success: false, message: 'Invalid data type definition.' }
   }
 
-  // Step 1 — create the skeleton (adds editor model, tab, file, and project entry)
   const createResult = state.datatypeActions.create({ name: input.name, derivation: input.derivation })
   if (!createResult.ok) {
     return { success: false, message: createResult.message ?? `Failed to create data type "${input.name}"` }
   }
 
-  // Step 2 — replace the skeleton with the full data (fields/values/dimensions that the
-  // skeleton-builder doesn't populate).
+  // The skeleton builder doesn't populate fields/values/dimensions.
   openPLCStoreBase.getState().projectActions.updateDatatype(input.name, fullData)
 
   let detail = ''
@@ -484,8 +474,7 @@ async function executeUpdateDatatype(input: UpdateDatatypeInput): Promise<ToolRe
     return { success: false, message: `Data type "${input.name}" not found.` }
   }
 
-  // Derivation cannot be changed after creation — it would require recreating the data type.
-  // The tool only accepts fields for the existing derivation; everything else is ignored.
+  // Derivation cannot change after creation, so only fields for the existing one are accepted.
   const derivation = existing.derivation
 
   if (derivation === 'structure' && input.fields) {
@@ -505,16 +494,14 @@ async function executeUpdateDatatype(input: UpdateDatatypeInput): Promise<ToolRe
     if (state.project.data.pous.find((p) => p.name === input.newName)) {
       return { success: false, message: `A POU named "${input.newName}" already exists.` }
     }
-    // Awaits the reference-impact modal when the type is referenced; the
-    // user's cancel surfaces as a failed tool result.
+    // Awaits the reference-impact modal when the type is referenced; a cancel surfaces as a failed tool result.
     const renameResult = await state.datatypeActions.rename(input.name, input.newName)
     if (!renameResult.ok) {
       return { success: false, message: renameResult.message ?? `Failed to rename "${input.name}"` }
     }
   }
 
-  // Build the new PLCDataType — preserve existing content for sections the caller didn't
-  // provide, so partial updates don't wipe fields the AI didn't mean to touch.
+  // Preserve sections the caller didn't provide, so a partial update doesn't wipe fields.
   let newData: PLCDataType
   if (derivation === 'structure') {
     const variable: PLCStructureVariable[] = input.fields
@@ -571,8 +558,7 @@ function executeDeleteDatatype(input: DeleteDatatypeInput): ToolResult {
     return { success: false, message: `Data type "${input.name}" not found.` }
   }
 
-  // datatypeActions.delete cleans the project slice AND tab/editor/file slices in one call,
-  // same pattern executeDeletePou uses.
+  // datatypeActions.delete cleans the tab/editor/file slices too, not just the project slice.
   state.datatypeActions.delete(input.name)
 
   return { success: true, message: `Deleted data type "${input.name}"` }
@@ -627,10 +613,9 @@ function executeReadProjectState(): ToolResult {
   return { success: true, message: lines.join('\n') }
 }
 
-/** Input for the `read_pou_body` tool. */
 export type ReadPouBodyInput = { name?: string }
 
-/** Return one POU's body verbatim; graphical POUs return the transpiled ST equivalent since their body is node coordinates. */
+/** A graphical POU's body is node coordinates, so it comes back as the transpiled ST equivalent. */
 async function executeReadPouBody(input: ReadPouBodyInput, options: ToolExecutionOptions): Promise<ToolResult> {
   const requested = input?.name
   if (typeof requested !== 'string' || requested.trim() === '') {

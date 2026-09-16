@@ -10,14 +10,12 @@ import { useEdgeAccount } from '../../../../hooks/use-edge-account'
 const SIGN_IN_STATUS = 401
 
 export interface AssistantAccess {
-  /** The panel should show the sign-in state instead of talking to the model. */
   needsSignIn: boolean
   /** The account is known good (or the build has none), so reads that need a session may run. */
   ready: boolean
   reason: 'expired' | 'signed-out'
   /** Record a refused request. True when it was a sign-in refusal and the gate now shows. */
   noteRefusal: (status: number | undefined) => boolean
-  /** A sign-in completed from this panel. */
   signedIn: () => void
 }
 

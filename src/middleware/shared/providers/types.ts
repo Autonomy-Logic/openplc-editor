@@ -1,5 +1,3 @@
-/** Aggregate of all port interfaces + platform capabilities; the shape provided by PlatformContext. */
-
 import type { AcceleratorPort } from '../ports/accelerator-port'
 import type { AIPort } from '../ports/ai-port'
 import type { CompilerPort } from '../ports/compiler-port'

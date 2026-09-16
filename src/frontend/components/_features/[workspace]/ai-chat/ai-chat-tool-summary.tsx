@@ -44,7 +44,6 @@ const GROUP_ORDER: GroupKey[] = [
   'read_project_state',
 ]
 
-/** Pulls the user-meaningful target name and detail out of a tool's input payload. */
 function describeToolCall(name: string, input: unknown): { target: string; detail: string | null } {
   const i = (input ?? {}) as Record<string, unknown>
   const s = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined)

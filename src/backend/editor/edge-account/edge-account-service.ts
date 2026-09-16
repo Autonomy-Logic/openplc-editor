@@ -116,7 +116,6 @@ async function renewNow(): Promise<boolean> {
   return adoptTokens(parseJsonBodyAs(response.body, RefreshResponseSchema)?.data ?? {})
 }
 
-/** Renew, sharing one in-flight attempt across every concurrent caller. */
 function renew(): Promise<boolean> {
   renewal ??= renewNow().finally(() => {
     renewal = null
@@ -125,7 +124,6 @@ function renew(): Promise<boolean> {
   return renewal
 }
 
-/** A usable access token, renewing when the held one is missing or close to expiry. */
 async function usableAccessToken(): Promise<string | null> {
   if (accessToken && Date.now() < accessTokenExpiresAtMs - RENEW_MARGIN_MS) {
     return accessToken
@@ -134,7 +132,7 @@ async function usableAccessToken(): Promise<string | null> {
   return (await renew()) ? accessToken : null
 }
 
-/** A request carrying the session, retried once after a 401. Null means no session; rejects when unreachable. */
+/** Retried once after a 401. Null means no session; rejects when unreachable. */
 export async function edgeAuthedRequest(
   path: string,
   init: {
@@ -172,9 +170,7 @@ export async function edgeAccessToken({ forceRenewal = false } = {}): Promise<st
   return (await renew()) ? accessToken : null
 }
 
-// Public surface, one function per IPC handler
-
-/** Who is signed in. `unknown` means the question could not be asked; never read it as `no-session`. */
+/** `unknown` means the question could not be asked; never read it as `no-session`. */
 export async function fetchUser(): Promise<EdgeUserRead> {
   try {
     const response = await edgeAuthedRequest('/auth/me')
@@ -183,7 +179,7 @@ export async function fetchUser(): Promise<EdgeUserRead> {
       return { status: 'no-session' }
     }
 
-    // Only 401/403 mean "nobody is signed in"; any other non-2xx is the server failing to answer.
+    // Only 401/403 mean "nobody is signed in"; another non-2xx is the server failing.
     if (response.status === 401 || response.status === 403) {
       return { status: 'no-session' }
     }
@@ -200,7 +196,7 @@ export async function fetchUser(): Promise<EdgeUserRead> {
   }
 }
 
-/** The caption under the account name, e.g. `Pro Plan`; null for every non-answer (404 means no plan). */
+/** Null for every non-answer; a 404 means no plan. */
 export async function fetchPlanCaption(): Promise<string | null> {
   try {
     const response = await edgeAuthedRequest('/me/subscription')
@@ -218,7 +214,6 @@ export async function fetchPlanCaption(): Promise<string | null> {
   }
 }
 
-/** Sign in with an email and password. */
 export async function signIn(email: string, password: string): Promise<EdgeSignInOutcome> {
   try {
     const response = await edgeRequest('/auth/signin', { method: 'POST', json: { email, password } })
@@ -248,7 +243,6 @@ export async function signIn(email: string, password: string): Promise<EdgeSignI
   }
 }
 
-/** Adopts a token pair harvested from a provider flow. */
 export async function adoptProviderTokens(pair: TokenPair): Promise<EdgeSignInOutcome> {
   if (!adoptTokens(pair)) {
     return { status: 'failed' }
@@ -268,7 +262,7 @@ async function completeSignIn(known: EdgeUser | undefined): Promise<EdgeSignInOu
     return { status: 'signed-in', user: read.user }
   }
 
-  // Only a definitive "no session" throws the tokens away; `unknown` keeps them for the next read.
+  // Only a definitive "no session" throws the tokens away; `unknown` keeps them.
   if (read.status === 'no-session') {
     forgetSession()
   }
@@ -276,7 +270,7 @@ async function completeSignIn(known: EdgeUser | undefined): Promise<EdgeSignInOu
   return { status: 'failed' }
 }
 
-/** Ends the session. Local state is cleared before the request, so sign-out works offline. */
+/** Local state is cleared before the request, so sign-out works offline. */
 export async function signOut(): Promise<void> {
   const stored = readRefreshToken()
 
@@ -293,7 +287,6 @@ export async function signOut(): Promise<void> {
   }
 }
 
-/** Whether a session on this machine survives a restart. */
 export { isEncryptionAvailable } from './session-store'
 
 /** Test seam: drop in-memory state without touching what is on disk. */

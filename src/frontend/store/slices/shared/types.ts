@@ -171,9 +171,8 @@ export type OpenProjectResponseData = {
   /** Warnings from parsing (e.g. dropped files that failed validation).
    *  Recoverable: the project opens normally and these surface in the Console. */
   warnings?: string[]
-  /** POUs that failed to parse entirely. Non-empty means the project opens EMPTY and
-   *  read-only with these on the Console, never with partial content — a blank canvas
-   *  would look legitimate and the first save would overwrite the user's real diagram. */
+  /** Non-empty opens the project EMPTY and read-only: partial content would look legitimate, and the first save
+   *  would overwrite the user's real diagram. */
   fatalErrors?: string[]
   /** `datatypes/*.dt` files that failed to parse on load, preserved
    *  raw so the save flow echoes them back verbatim. */
@@ -181,11 +180,9 @@ export type OpenProjectResponseData = {
   /** True when the project still carries its data types inline in
    *  `project.json` with no `datatypes/*.dt` on disk and still owes a migration. */
   dataTypesNeedMigration?: boolean
-  /** Every file's bytes as the reader handed them over, keyed by relative path; echoed back verbatim for unedited files. */
+  /** Keyed by relative path; echoed back verbatim for unedited files. */
   rawLoadedFiles?: Record<string, string>
-  /** Edit permission flag forwarded from `ProjectResponse.data.canEdit`. `false` puts the
-   *  workspace in read-only mode; absent means desktop/dev-local, which have no remote
-   *  permission concept and stay unrestricted. */
+  /** `false` puts the workspace in read-only mode; absent means desktop/dev-local, which stay unrestricted. */
   canEdit?: boolean
 }
 
@@ -196,22 +193,17 @@ export type SharedWorkspaceActions = {
   closeFile: (name: string) => { success: boolean }
   /** Remove a tab and select the next one. Does NOT check save state. */
   forceCloseFile: (name: string) => { success: boolean }
-  /** Close project: checks save state, shows save-changes modal if unsaved, or clears all
-   *  state if saved. Returns `{ pendingConfirmation: true }` when the modal was opened, so
-   *  the caller can defer post-close work (e.g. host navigation) until it resolves. */
+  /** `{ pendingConfirmation: true }` means the modal was opened, so the caller can defer post-close work
+   *  (e.g. host navigation) until it resolves. */
   closeProject: () => { pendingConfirmation: boolean }
-  /** Whether closing the project right now would lose work — the same rule `closeProject`
-   *  applies, exposed for a caller that must REPLACE the project (e.g. retrieving from a
-   *  device) rather than merely close it, so both stay in step with one rule. */
+  /** The same rule `closeProject` applies, exposed for a caller that REPLACES the project rather than
+   *  closing it, so both stay in step. */
   hasUnsavedChanges: () => boolean
   /** Reset all slice state for project close. */
   clearStatesOnCloseProject: () => void
-  /** Populate store with project data returned from a ProjectPort open call.
-   *  Sets project state, device config, files, libraries, flows, and opens main POU tab. */
   handleOpenProjectResponse: (data: OpenProjectResponseData) => void
-  /** Load a project retrieved from a device — the shared tail of both platforms' retrieve
-   *  adapters (only the archive source differs): load the parsed project and mark it as
-   *  having no location the user chose. */
+  /** Shared tail of both platforms' retrieve adapters: load the project, and mark it as having no location
+   *  the user chose. */
   openRetrievedProject: (data: OpenProjectResponseData) => void
 }
 

@@ -220,7 +220,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       window.dispatchEvent(new CustomEvent('ai-reject-all-hunks', { detail: { pouName } }))
     }
 
-    // Restore every POU-dependent slice atomically so nothing references a deleted POU.
     openPLCStoreBase.setState((state) => ({
       ...state,
       project: { ...state.project, data: structuredClone(cp.projectData) },
@@ -280,7 +279,6 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       // Sending re-engages auto-follow wherever the user had scrolled to.
       followTail()
 
-      // Snapshot every POU-dependent slice so Undo can restore them atomically.
       const snapshotState = openPLCStoreBase.getState()
       projectCheckpointRef.current = {
         projectData: structuredClone(snapshotState.project.data),

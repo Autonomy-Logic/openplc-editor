@@ -28,7 +28,6 @@ function getLanguageFromPath(path: string): string {
   }
 }
 
-/** Builds the initial resolution content with git-style conflict markers. */
 function buildInitialResolution(
   _filePath: string,
   sourceContent: string,
@@ -55,7 +54,6 @@ type TextConflictResolverProps = {
   baseContent: string | null
   sourceBranch: string
   targetBranch: string
-  /** The current resolution content (controlled). */
   resolution: string | undefined
   isResolved: boolean
   isDark: boolean
@@ -89,7 +87,6 @@ export function TextConflictResolver({
     [filePath, sourceContent, targetContent, baseContent, sourceBranch, targetBranch],
   )
 
-  // Initialize the resolution if not set yet
   useEffect(() => {
     if (resolution === undefined) {
       onChange(initialResolution)

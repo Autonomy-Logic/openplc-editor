@@ -83,20 +83,16 @@ void packageUpdateNotifier.prime()
 // `monaco/python-lsp/initPythonLSP` when Monaco mounts.
 setPythonLspWorkerUrl(pyrightWorkerUrl)
 
-// Seed the AI slice from the platform config before the first render, so the chat
-// entry point and the inline-completion provider see the real consent state instead of
-// the store's conservative default and then flipping a frame later.
+// Seed before the first render so the chat entry point and inline completions see the real
+// consent state instead of the store's conservative default flipping a frame later.
 if (editorPorts.ai) {
   const { setAIEnabled, setAIConsented } = openPLCStoreBase.getState().aiActions
   setAIEnabled(editorPorts.ai.isFeatureEnabled)
   setAIConsented(editorPorts.ai.hasUserConsented)
 }
 
-// The save flow asks this before every write whether the session it would write with
-// has already ended, and queues the save for replay after sign-in if so. The web wires
-// it here in its own composition root; the desktop never did, so `save-actions` took
-// the raw-401 branch on every expired session and nothing was ever queued — the user
-// signed back in to find their save had simply not happened. Same call, same place.
+// Wires the expired-session check the save flow runs before every write; without it
+// `save-actions` takes the raw-401 branch and the save is never queued for replay.
 if (editorPorts.edgeAccount) {
   configureSaveResume(editorPorts.edgeAccount.session)
 }
@@ -153,10 +149,8 @@ const AiBillingNotice = () => {
     if (ai) trackUpgradeCtaClicked(ai, { source: 'modal' })
   }, [ai])
 
-  // Fired once per modal-open. The ref dedupes re-renders of the same payload — a
-  // parallel entitlements refresh updates `planSlug` and would otherwise count the same
-  // block twice. `code + message` is identity enough: the user has to dismiss before the
-  // next 402 can land a new payload.
+  // Dedupes re-renders of the same payload: a parallel entitlements refresh updates
+  // `planSlug` and would otherwise count the same block twice.
   const lastTrackedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!ai) return
@@ -185,8 +179,6 @@ const AiBillingNotice = () => {
     <AcuExhaustionModal
       billingError={billingError}
       onDismiss={dismiss}
-      // Deep-links to Edge's `Profile -> Usage` page, where ACU is topped up and a
-      // lapsed subscription is reactivated.
       upgradeUrl={`${getEdgeWebUrl()}/profile/settings?tab=usage`}
       onUpgradeClick={onUpgradeClick}
     />
@@ -225,8 +217,7 @@ export default function App() {
   return (
     <PlatformProvider ports={editorPorts}>
       <AiBillingNotice />
-      {/* The workspace screen reads the panel out of this context; without the provider
-          `useChatPanel()` answers null and the chat button opens nothing. */}
+      {/* Without this provider `useChatPanel()` answers null and the chat button opens nothing. */}
       <ExtensionPanelProvider panels={{ ChatPanel: EditorChatPanel }}>
         <AppLayout>{path === '' ? <StartScreen /> : <WorkspaceScreen />}</AppLayout>
       </ExtensionPanelProvider>

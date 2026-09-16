@@ -35,7 +35,6 @@ const PRODUCTION_EDGE_WEB_URL = 'https://edge.autonomylogic.com'
  */
 const EDGE_WEB_URL = process.env.OPENPLC_EDGE_WEB_URL || PRODUCTION_EDGE_WEB_URL
 
-/** The Edge SPA origin, honouring the same override everywhere. */
 export function getEdgeWebUrl(): string {
   return EDGE_WEB_URL
 }

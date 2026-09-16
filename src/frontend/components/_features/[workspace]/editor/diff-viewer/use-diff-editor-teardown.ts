@@ -1,5 +1,5 @@
-// Tears a Monaco diff editor down widget-first, then models — `@monaco-editor/react` (4.7) does the
-// reverse and Monaco throws an uncaught error. Pair with `keepCurrentOriginalModel` /
+// Tears a Monaco diff editor down widget-first, then models: `@monaco-editor/react` 4.7
+// does the reverse and Monaco throws. Pair with `keepCurrentOriginalModel` /
 // `keepCurrentModifiedModel` on the editor and with `useDiffModelPaths()` below.
 
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -36,9 +36,9 @@ export function useDiffEditorTeardown() {
   return editorRef
 }
 
-// A model URI pair unique to one mounted editor (else every diff editor shares one model pair)
-// and stable for its lifetime (a changing path resurrects a stale model). `useId`'s punctuation
-// is stripped since a colon inside `inmemory://…`'s authority reads as a port.
+// A model URI pair unique to one mounted editor (else diff editors share a pair) and
+// stable for its lifetime (a changing path resurrects a stale model). `useId` punctuation
+// is stripped: a colon in `inmemory://…`'s authority reads as a port.
 export function useDiffModelPaths(): { original: string; modified: string } {
   const id = useId().replace(/[^a-zA-Z0-9]/g, '')
 

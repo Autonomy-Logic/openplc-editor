@@ -11,13 +11,10 @@ import {
 type Props = {
   projectId: string | null | undefined
   currentConversationId: string | null
-  /** Called with the conversation id the user picked to load. */
   onSelect: (id: string) => void
-  /** Called when the user picks "+ New chat". */
   onNewChat: () => void
 }
 
-/** Format an ISO timestamp as a short relative time (e.g. "5m ago", "Apr 30"). */
 function formatRelative(iso: string): string {
   const date = new Date(iso)
   const diffMs = Date.now() - date.getTime()

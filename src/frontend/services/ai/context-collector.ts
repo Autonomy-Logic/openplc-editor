@@ -3,9 +3,7 @@ import type { openPLCStoreBase } from '../../store'
 
 type StoreState = ReturnType<typeof openPLCStoreBase.getState>
 
-/** Options for `collectFullProjectContext`. */
 export type CollectFullProjectContextOptions = {
-  /** Formatting dialect for comments and variable blocks. */
   language?: AICompletionLanguage
   /** POU name -> transpiled ST, for POUs whose stored body is a flow graph. */
   graphicalSt?: ReadonlyMap<string, string>
@@ -16,7 +14,6 @@ export function isGraphicalLanguage(language: string): boolean {
   return language === 'ld' || language === 'fbd' || language === 'sfc'
 }
 
-/** Collects project-level context for AI completion requests, truncated to the token budget. */
 export function collectProjectContext(
   state: StoreState,
   currentPouName: string,
@@ -88,7 +85,7 @@ export function collectProjectContext(
   return sections.join('\n\n')
 }
 
-/** Collects full project context for AI chat; graphical POUs use transpiled ST, or a `read_pou_body` pointer when unavailable. */
+/** Graphical POUs use transpiled ST, or a `read_pou_body` pointer when that is unavailable. */
 export function collectFullProjectContext(
   state: StoreState,
   activeEditorPouName: string | null,
@@ -152,7 +149,6 @@ export function collectFullProjectContext(
   return sections.join('\n\n')
 }
 
-/** Groups variables into IEC 61131-3 VAR_INPUT/VAR_OUTPUT/VAR_IN_OUT/... sections. */
 export function formatIecVariables(variables: VarLike[]): string {
   const sectionMap: Record<string, string> = {
     input: 'VAR_INPUT',
@@ -175,7 +171,6 @@ export function formatIecVariables(variables: VarLike[]): string {
     .join('\n')
 }
 
-/** Extract the textual body of a POU (ST, IL, Python, C++) if available */
 function getTextualBody(pou: { body: { language: string; value: unknown } }): string | null {
   const { language, value } = pou.body
   if (
@@ -199,7 +194,6 @@ type DataTypeLike = {
   baseType?: { value: string }
 }
 
-/** Format variables as Python-style type-hinted comments. */
 export function formatPythonVariables(variables: VarLike[]): string {
   const sectionMap: Record<string, string> = {
     input: 'Inputs',
@@ -222,7 +216,6 @@ export function formatPythonVariables(variables: VarLike[]): string {
     .join('\n')
 }
 
-/** Format variables as C++ style comments */
 function formatCppVariables(variables: VarLike[]): string {
   const sectionMap: Record<string, string> = {
     input: 'Inputs',
@@ -245,7 +238,6 @@ function formatCppVariables(variables: VarLike[]): string {
     .join('\n')
 }
 
-/** Language-specific formatters for project context */
 type ContextFormatter = {
   comment: (text: string) => string
   vars: (variables: VarLike[]) => string

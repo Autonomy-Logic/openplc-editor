@@ -1,5 +1,3 @@
-/** The Edge account as the frontend may see it. Optional on `PlatformPorts`: gate on `capabilities.hasEdgeAccount`. */
-
 import { z } from 'zod'
 
 /** Mirrors Edge's `UserProfile`, narrowed to what the account UI renders. */
@@ -72,7 +70,7 @@ export interface EdgeSessionState {
   onExpired(listener: () => void): () => void
   /** Fires when a session that HAD died works again. Returns an unsubscribe function. */
   onRestored(listener: () => void): () => void
-  /** Announce that the session works again. No-op unless something was announced dead, so safe on any healthy read. */
+  /** No-op unless something was announced dead, so safe on any healthy read. */
   markRestored(): void
 }
 

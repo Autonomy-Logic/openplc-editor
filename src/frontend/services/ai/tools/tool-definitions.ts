@@ -260,7 +260,6 @@ export const readProjectStateTool: AIToolDefinition = {
   },
 }
 
-/** Read one POU's body verbatim; graphical POUs return their transpiled ST equivalent instead of raw node coordinates. */
 const readPouBodyTool: AIToolDefinition = {
   name: 'read_pou_body',
   description:
@@ -277,7 +276,6 @@ const readPouBodyTool: AIToolDefinition = {
   },
 }
 
-/** All available tools for the AI chat */
 export const AI_TOOLS: AIToolDefinition[] = [
   createPouTool,
   updatePouBodyTool,
@@ -292,7 +290,7 @@ export const AI_TOOLS: AIToolDefinition[] = [
   readPouBodyTool,
 ]
 
-/** Tool names that mutate project state. Used to gate the diff-review UI and the per-turn status list. */
+/** Gates the diff-review UI and the per-turn status list. */
 export const MUTATING_TOOL_NAMES = new Set<string>([
   'create_pou',
   'update_pou_body',
@@ -309,10 +307,10 @@ export function isMutatingTool(toolName: string): boolean {
   return MUTATING_TOOL_NAMES.has(toolName)
 }
 
-/** Mutating tools whose result produces a reviewable diff in the editor (a `pendingDiffs` entry). */
+/** Their result produces a `pendingDiffs` entry the editor can review per hunk. */
 export const DIFF_PRODUCING_TOOL_NAMES = new Set<string>(['create_pou', 'update_pou_body'])
 
-/** A mutating tool that does NOT surface per-hunk diff controls; used to decide whether the Keep/Undo bar can hide. */
+/** A mutating tool with no per-hunk diff controls; decides whether the Keep/Undo bar can hide. */
 export function isNonDiffMutatingTool(toolName: string): boolean {
   return MUTATING_TOOL_NAMES.has(toolName) && !DIFF_PRODUCING_TOOL_NAMES.has(toolName)
 }

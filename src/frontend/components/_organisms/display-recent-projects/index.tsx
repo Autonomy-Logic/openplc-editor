@@ -12,7 +12,6 @@ import { UploadToCloudModal } from '../../_features/[start]/upload-to-cloud'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
   searchNameFilterValue: string
-  /** A local project was published to Autonomy Edge; reported up since the start screen owns both lists. */
   onProjectUploaded?: () => void
 }
 
@@ -32,7 +31,6 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
   const { status: accountStatus } = useEdgeAccount(caps.hasEdgeAccount, edgeAccount)
   const canPublish = accountStatus === 'signed-in' && project.uploadProjectToCloud !== undefined
 
-  /** The project whose upload dialog is open, if any. */
   const [projectToUpload, setProjectToUpload] = useState<{ name: string; path: string } | null>(null)
 
   const [recentProjects, setRecentProjects] = useState(recent)

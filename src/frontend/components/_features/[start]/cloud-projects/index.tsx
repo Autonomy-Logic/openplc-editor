@@ -17,7 +17,6 @@ import { toast } from '../../[app]/toast/use-toast'
 const RECENT_LIMIT = 5
 
 export type StartCloudProjectsProps = {
-  /** Same filter box the local list uses, so one search covers both sections. */
   searchNameFilterValue: string
   /** Bumped to force a re-read; a counter keeps it an ordinary effect dependency. */
   revision?: number

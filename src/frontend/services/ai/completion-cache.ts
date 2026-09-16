@@ -11,19 +11,19 @@ export class CompletionCache<V> {
     const value = this.cache.get(key)
     if (value === undefined) return undefined
 
-    // Move to end (most recently used)
+    // Move to end: most recently used.
     this.cache.delete(key)
     this.cache.set(key, value)
     return value
   }
 
   set(key: string, value: V): void {
-    // If key exists, delete so it moves to end
+    // Delete first, so a re-set key moves to the end.
     if (this.cache.has(key)) {
       this.cache.delete(key)
     }
 
-    // Evict least recently used if at capacity
+    // The first key is the least recently used.
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value
       /* v8 ignore next 3 -- Map with size >= maxSize always has a first key */
@@ -48,7 +48,6 @@ export class CompletionCache<V> {
   }
 }
 
-/** Cache key from file URI, cursor offset and prefix hash. */
 export function buildCacheKey(fileUri: string, offset: number, prefixHash: string): string {
   return `${fileUri}:${offset}:${prefixHash}`
 }

@@ -95,7 +95,7 @@ export const editorPorts: PlatformPorts = {
   capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
 }
 
-// Reads the same localStorage key the shared consent modal writes; unreadable reads as "not accepted".
+// Same localStorage key the shared consent modal writes; unreadable reads as "not accepted".
 function hasAiConsent(): boolean {
   try {
     return localStorage.getItem('ai-consent-v1') === 'accepted'
@@ -104,7 +104,7 @@ function hasAiConsent(): boolean {
   }
 }
 
-// Defaults to on (matches the store default) so a first run or unreadable value never silently disables the feature.
+// Defaults to on (like the store) so a first run or unreadable value never silently disables the feature.
 function readInlineCompletionsPreference(): boolean {
   try {
     const raw = localStorage.getItem('ai-preferences-v1')

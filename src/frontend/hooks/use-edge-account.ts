@@ -7,7 +7,7 @@ import type {
   EdgeUserRead,
 } from '../../middleware/shared/ports/edge-account-port'
 
-/** Who is signed in, according to the Edge API. Holds no token: the shared cookie session is the truth. */
+/** Holds no token: the shared cookie session is the truth. */
 export type EdgeAccountStatus = 'loading' | 'signed-in' | 'signed-out'
 
 export interface UseEdgeAccountResult {
@@ -141,8 +141,8 @@ export function useEdgeAccount(enabled: boolean, account?: EdgeAccountPort): Use
     })
   }, [active, account, refresh])
 
-  // The OAuth flow finishes in another tab; regaining focus is the only signal,
-  // and the only way the sign-in gate closes afterwards.
+  // The OAuth flow finishes in another tab: regaining focus is the only signal, and the only way the sign-in
+  // gate closes afterwards.
   useEffect(() => {
     if (!active || status !== 'signed-out') {
       return

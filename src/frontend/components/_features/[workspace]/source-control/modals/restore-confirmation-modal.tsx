@@ -7,7 +7,7 @@ type RestoreConfirmationModalProps = {
   commitMessage: string
   onConfirm: () => void
   onCancel: () => void
-  /** Why the last attempt failed, when one did. Shown here since the modal stays open on failure. */
+  /** Shown inside the modal, which stays open on a failed attempt. */
   error?: string | null
 }
 

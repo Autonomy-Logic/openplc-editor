@@ -10,7 +10,6 @@ const DEFAULT_EDGE_API_URL = 'https://api.autonomylogic.com'
 
 const REQUEST_TIMEOUT_MS = 15_000
 
-/** The Edge API origin, honouring `OPENPLC_EDGE_API_URL`. */
 export function getEdgeApiBaseUrl(): string {
   const fromEnv = process.env.OPENPLC_EDGE_API_URL?.trim()
 
@@ -44,17 +43,15 @@ export interface EdgeHttpResponse {
 
 export interface EdgeRequestInit {
   method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'
-  /** Serialised and sent as `application/json`. */
   json?: unknown
   /** Pre-encoded body with its own content type. Mutually exclusive with `json`; `json` wins. */
   raw?: { body: Buffer; contentType: string }
-  /** Bearer token, for the routes that need one. */
   accessToken?: string | null
-  /** Overrides the default timeout. */
   timeoutMs?: number
 }
 
-// Shared by the buffered and streaming paths so the guard, Content-Length and bearer header cannot drift.
+// Shared by the buffered and streaming paths so the guard, Content-Length and bearer
+// header cannot drift.
 function prepareRequest(
   path: string,
   init: EdgeRequestInit,
@@ -73,7 +70,8 @@ function prepareRequest(
   }
 
   if (payload !== undefined) {
-    // Content-Length is the byte length: a non-ASCII password makes it differ from the string length.
+    // Content-Length is the byte length: a non-ASCII password makes it differ from the
+    // string length.
     headers['Content-Type'] = json !== undefined ? 'application/json' : (init.raw?.contentType ?? 'application/json')
     headers['Content-Length'] = String(payload.length)
   }
@@ -95,7 +93,6 @@ function prepareRequest(
   }
 }
 
-/** One request to the Edge API; resolves for every HTTP answer, rejects only when there was none. */
 export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<EdgeHttpResponse> {
   return new Promise((resolve, reject) => {
     const { url, options, payload } = prepareRequest(path, init, 'application/json')
@@ -127,14 +124,13 @@ export function edgeRequest(path: string, init: EdgeRequestInit = {}): Promise<E
   })
 }
 
-// Streaming
-
-// Idle budget, not a total one: `setTimeout` arms the socket, which is quiet only while nothing arrives.
+// Idle budget, not a total one: `setTimeout` arms the socket, which is quiet only while
+// nothing arrives.
 const STREAM_IDLE_TIMEOUT_MS = 60_000
 
 const MAX_ERROR_BODY_CHARS = 64 * 1024
 
-/** A streamed request that was refused; the body travels with the status (a 402 carries the billing payload). */
+/** The body travels with the status: a 402 carries the billing payload. */
 export class EdgeStreamHttpError extends Error {
   constructor(
     readonly status: number,
@@ -145,11 +141,11 @@ export class EdgeStreamHttpError extends Error {
   }
 }
 
-/** Where a streamed body is delivered. Exactly one of `onEnd`/`onError` fires, once; nothing fires after `cancel`. */
+/** Exactly one of `onEnd`/`onError` fires, once; nothing fires after `cancel`. */
 export interface EdgeStreamSink {
   /** Chunk boundaries are whatever the network produced; framing is the caller's job. */
   onChunk(text: string): void
-  /** The HTTP status, once the headers are in and before any chunk. */
+  /** Delivered once the headers are in, before any chunk. */
   onStatus(status: number): void
   onEnd(): void
   onError(error: Error): void
@@ -160,7 +156,7 @@ export interface EdgeStreamHandle {
   cancel(): void
 }
 
-/** One request whose body is consumed as it arrives. A non-2xx is buffered into `onError`; nothing throws. */
+/** A non-2xx is buffered into `onError`; nothing throws. */
 export function edgeStreamRequest(path: string, init: EdgeRequestInit, sink: EdgeStreamSink): EdgeStreamHandle {
   let closed = false
   let abort = (): void => {
@@ -189,7 +185,8 @@ export function edgeStreamRequest(path: string, init: EdgeRequestInit, sink: Edg
 
       const status = res.statusCode ?? 0
 
-      // setEncoding, not a per-chunk toString: a multi-byte char split across TCP segments would garble.
+      // setEncoding, not a per-chunk toString: a multi-byte char split across TCP
+      // segments would garble.
       res.setEncoding('utf-8')
       sink.onStatus(status)
 
@@ -245,7 +242,7 @@ export function edgeStreamRequest(path: string, init: EdgeRequestInit, sink: Edg
   }
 }
 
-/** Parses a JSON body, null on failure. Returns `unknown` on purpose; use `parseJsonBodyAs` for a typed value. */
+/** `unknown` on purpose; use `parseJsonBodyAs` for a typed value. */
 export function parseJsonBody(body: string): unknown {
   try {
     return JSON.parse(body)
@@ -254,9 +251,9 @@ export function parseJsonBody(body: string): unknown {
   }
 }
 
-/** Parses a JSON body and validates it against a schema; null for either failure. */
 export function parseJsonBodyAs<Output>(body: string, schema: z.ZodType<Output, z.ZodTypeDef, unknown>): Output | null {
-  // Parameterised on the output type, not the schema: `z.ZodTypeAny` makes `safeParse` return `any`.
+  // Parameterised on the output type, not the schema: `z.ZodTypeAny` makes `safeParse`
+  // return `any`.
   const parsed = schema.safeParse(parseJsonBody(body))
 
   return parsed.success ? parsed.data : null

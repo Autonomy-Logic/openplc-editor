@@ -1,7 +1,6 @@
 /**
- * `EdgeAccountPort` for the desktop editor — every call crosses to the main process, which owns
- * the tokens, renewal and encrypted storage; the renderer derives its session state machine from
- * the fetch outcomes this adapter returns, since it never observes a renewal directly.
+ * The main process owns the tokens, renewal and storage, and the renderer never observes a renewal:
+ * the session state machine below is derived entirely from the fetch outcomes these calls return.
  */
 
 import type {
@@ -14,44 +13,37 @@ import type {
 import { EdgeSignInOutcomeSchema, EdgeUserReadSchema } from '../../shared/ports/edge-account-port'
 import { getEdgeWebUrl } from './system-adapter'
 
-/** The providers Edge offers, in the order its own sign-in screen lists them. */
+/** In the order Edge's own sign-in screen lists them. */
 const EDGE_OAUTH_PROVIDERS = [
   { id: 'google', label: 'Google' },
   { id: 'microsoft', label: 'Microsoft' },
   { id: 'apple', label: 'Apple' },
 ] as const
 
-// ---------------------------------------------------------------------------
-// Session state
-// ---------------------------------------------------------------------------
-
-/** True once a session has been observed to be gone for good. */
 let expired = false
 
-// True while no session has been seen on this run. Kept apart from `expired`: telling someone who
-// never signed in that "your session expired" is a false claim, and it distinguishes sign-out from expiry.
+// Kept apart from `expired`: telling someone who never signed in that "your session expired" is a
+// false claim.
 let absent = true
 
 const expiryListeners = new Set<() => void>()
 const restoredListeners = new Set<() => void>()
 
-// Snapshotted before iterating: a listener may resubscribe while being notified, and iterating a
-// `Set` that grows during `for..of` would turn that re-registration into an unbounded loop.
+// Snapshotted before iterating: a listener may resubscribe while being notified, and a `Set` that
+// grows during `for..of` would turn that into an unbounded loop.
 function notify(listeners: Set<() => void>): void {
   for (const listener of [...listeners]) {
     listener()
   }
 }
 
-/** Record that the session is gone, and whether there was one to lose. */
 function markGone(neverHadOne: boolean): void {
   const wasAlive = !expired
 
   expired = true
   absent = neverHadOne
 
-  // Only announce a transition. Firing on every failed read would replay the expiry
-  // handler on each poll.
+  // Only announce the transition: firing on every failed read replays the expiry handler each poll.
   if (wasAlive) {
     notify(expiryListeners)
   }
@@ -73,8 +65,8 @@ const session: EdgeSessionState = {
     return () => restoredListeners.delete(listener)
   },
 
-  // `absent` clears unconditionally (else a later expiry would be misworded as "never signed
-  // in"); only the listener announcement is conditional on the dead-to-alive transition.
+  // `absent` clears unconditionally, else a later expiry reads as "never signed in"; only the
+  // announcement is conditional on the dead-to-alive transition.
   markRestored() {
     const wasDead = expired
 
@@ -87,20 +79,16 @@ const session: EdgeSessionState = {
   },
 }
 
-// ---------------------------------------------------------------------------
-// Port
-// ---------------------------------------------------------------------------
-
 export const editorEdgeAccountPort: EdgeAccountPort = {
   get frontendBaseUrl() {
-    // A getter, not a captured value: the URL comes from a build-time override, resolved after module load.
+    // A getter, not a captured value: the build-time override resolves after module load.
     return getEdgeWebUrl()
   },
 
   oauthProviders: EDGE_OAUTH_PROVIDERS,
 
-  // The desktop never follows this URL: the dialog opens it as a target='_blank' link that the
-  // main process intercepts and reopens in its own window (main.ts -> oauth-window.ts), matching on path only.
+  // The desktop never follows this URL: the dialog opens it as a target='_blank' link the main
+  // process intercepts and reopens in its own window, matching on path only.
   oauthUrl(provider: EdgeOAuthProviderId, returnTo: string): string {
     return `${getEdgeWebUrl()}/auth/${provider}?${new URLSearchParams({ state: returnTo }).toString()}`
   },
@@ -109,8 +97,8 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
     let read: EdgeUserRead
 
     try {
-      // Validated at runtime, not just typed: the bridge's declared type checks nothing, and a
-      // drifted build's response would otherwise drive the session state machine off garbage.
+      // Validated at runtime: the bridge's declared type checks nothing, and a drifted build would
+      // otherwise drive the session state machine off garbage.
       const parsed = EdgeUserReadSchema.safeParse(await window.bridge.edgeAccountFetchUser())
 
       if (!parsed.success) {
@@ -119,7 +107,7 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
 
       read = parsed.data
     } catch {
-      // A thrown IPC call tells us nothing about the session — same standing as a network failure.
+      // A thrown IPC call says nothing about the session — same standing as a network failure.
       return { status: 'unknown' }
     }
 
@@ -133,14 +121,12 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
       markGone(absent)
     }
 
-    // `unknown` deliberately changes nothing: a request that never reached the server
-    // is not evidence that the session ended.
+    // `unknown` changes nothing: a request that never reached the server is not evidence of an end.
     return read
   },
 
   fetchPlanCaption(): Promise<string | null> {
-    // A caption is decoration beside the account name; a failure must not take the
-    // menu down with it.
+    // Decoration beside the account name: a failure must not take the menu down with it.
     return window.bridge.edgeAccountFetchPlanCaption().catch(() => null)
   },
 
@@ -161,8 +147,8 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
     }
 
     if (outcome.status === 'signed-in') {
-      // Announced here rather than left for the next read to discover, so a save that
-      // died with the old session can run itself again immediately.
+      // Announced here rather than at the next read, so a save that died with the old session can
+      // replay itself immediately.
       session.markRestored()
     }
 
@@ -173,12 +159,10 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
     try {
       await window.bridge.edgeAccountSignOut()
     } catch {
-      // The local session ends regardless: someone who asked to sign out must end up
-      // signed out even if the request never landed.
+      // The local session ends regardless: an asked-for sign-out must hold even if it never landed.
     }
 
-    // Absent, not expired: this was a deliberate departure, and wording it as an
-    // expiry would tell the user something untrue about their session.
+    // Absent, not expired: a deliberate departure worded as an expiry tells the user something untrue.
     expired = true
     absent = true
     notify(expiryListeners)
@@ -187,8 +171,8 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
   session,
 }
 
-// Whether a session on this machine survives a restart. False on a Linux box with no keyring
-// (refresh token deliberately not written to disk) — worth surfacing since it's otherwise surprising.
+// Whether a session survives a restart. False on a Linux box with no keyring, where the refresh
+// token is deliberately not written to disk.
 export function isSessionPersistent(): Promise<boolean> {
   return window.bridge.edgeAccountIsSessionPersistent().catch(() => false)
 }

@@ -9,14 +9,13 @@ import { edgeAccessToken, edgeAuthedRequest } from '../edge-account/edge-account
 import type { EdgeStreamHandle } from '../edge-account/edge-http'
 import { EdgeStreamHttpError, edgeStreamRequest, parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
 
-/** Serialisable failure. `unreachable` means no answer at all and must never be shown as a denial. */
+/** `unreachable` means no answer at all, and must never be shown to the user as a denial. */
 export type EdgeAiFailure =
   | { kind: 'signed-out'; message: string }
   | { kind: 'unreachable'; message: string }
   | { kind: 'billing'; status: number; message: string; billing: BillingErrorPayload }
   | { kind: 'http'; status: number; message: string }
 
-/** No session, phrased once so every route says the same thing. */
 const SIGNED_OUT: EdgeAiFailure = { kind: 'signed-out', message: 'Sign in to Autonomy Edge to use the assistant.' }
 
 export type EdgeAiResult<T> = { ok: true; data: T } | { ok: false; failure: EdgeAiFailure }
@@ -25,7 +24,7 @@ export type EdgeAiResult<T> = { ok: true; data: T } | { ok: false; failure: Edge
 const edgeEnvelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) =>
   z.object({ statusCode: z.number().optional(), data: data.optional() })
 
-/** A `message` field as Nest's exception filter writes it. */
+/** Nest's exception filter writes `message` as a string, or an array for validation errors. */
 const FailureBodySchema = z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() })
 
 const SubscriptionStatusSchema = z.enum(['trialing', 'active', 'past_due', 'paused', 'canceled', 'expired'])
@@ -123,7 +122,6 @@ const ConversationDetailSchema = z.object({
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>
 
-/** Readable reason from a failure body; Edge's exception filter nests the Nest body under `error`. */
 function messageFromBody(body: string, status: number): string {
   const root = parseJsonBody(body)
   const wrapped = WrappedFailureSchema.safeParse(root)
@@ -154,7 +152,7 @@ const BillingPayloadSchema = z.object({
   resetsAt: z.string().nullable().optional().catch(undefined),
 })
 
-/** Edge's `GlobalExceptionFilter` nests the thrown body under `error`; the bare shape is what tests send. */
+/** Edge's `GlobalExceptionFilter` nests the thrown body under `error`; the bare shape also occurs. */
 const WrappedFailureSchema = z.object({ error: z.record(z.unknown()) })
 
 function parseBillingPayload(body: string): BillingErrorPayload | null {
@@ -189,7 +187,6 @@ function failureFromStatus(status: number, body: string): EdgeAiFailure {
   return { kind: 'http', status, message: messageFromBody(body, status) }
 }
 
-/** One authenticated call, with the failure taxonomy applied. */
 async function call<Schema extends z.ZodTypeAny>(
   path: string,
   schema: Schema,
@@ -220,7 +217,6 @@ async function call<Schema extends z.ZodTypeAny>(
   const envelope = parseJsonBodyAs(body, edgeEnvelopeOf(schema))
 
   if (!envelope || envelope.data === undefined) {
-    // A 2xx whose body we cannot read is not a success we can hand to the UI.
     return {
       ok: false,
       failure: { kind: 'http', status, message: 'Autonomy Edge returned an unreadable response.' },
@@ -230,7 +226,6 @@ async function call<Schema extends z.ZodTypeAny>(
   return { ok: true, data: envelope.data }
 }
 
-/** For the routes whose answer the caller ignores. */
 async function callVoid(
   path: string,
   init: { method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'; json?: unknown } = {},
@@ -289,18 +284,15 @@ function toWireEvent(event: AiSseEvent): AISSEEvent {
 export interface AiStreamSink {
   /** One structured frame, in order. `tool_use` must survive: flattening to text is the adapter's job. */
   onEvent(event: AISSEEvent): void
-  /** Upstream HTTP status, once, before any delta. Diagnostic only. */
   onStatus?(status: number): void
   onEnd(): void
   onFailure(failure: EdgeAiFailure): void
 }
 
 export interface AiStreamHandle {
-  /** Abandon the answer. See {@link EdgeStreamHandle.cancel} for why the socket goes. */
   cancel(): void
 }
 
-/** What one attempt at a stream ended up being. */
 type StreamOutcome = { kind: 'done' } | { kind: 'failed'; failure: EdgeAiFailure } | { kind: 'unauthorized' }
 
 /** `[DONE]` is Edge's sentinel and not JSON, so it is matched before parsing. */
@@ -382,7 +374,7 @@ function applyEvent(event: AiSseEvent, sink: AiStreamSink): StreamOutcome | null
   }
 }
 
-/** Idle budget for an AI answer. Generous, because the model's pace is not a failure. */
+/** Idle budget: the model's own pace is not a failure. */
 const AI_STREAM_IDLE_TIMEOUT_MS = 120_000
 
 /** One attempt on one token. Never rejects; `adopt` hands the transport out early so a cancel reaches the socket. */
@@ -523,7 +515,6 @@ function startStream(path: string, body: unknown, sink: AiStreamSink): AiStreamH
     },
   }
 
-  // Every callback is gated once here rather than at each call site.
   const guarded: AiStreamSink = {
     onEvent: (event) => {
       if (!state.cancelled) sink.onEvent(event)
@@ -551,24 +542,18 @@ function startStream(path: string, body: unknown, sink: AiStreamSink): AiStreamH
   }
 }
 
-// Public surface — one function per IPC handler
-
-/** Stream a chat answer. `body` is the request the shared UI built; it is not read here. */
 export function streamAiChat(body: unknown, sink: AiStreamSink): AiStreamHandle {
   return startStream('/ai/chat', body, sink)
 }
 
-/** Stream an inline completion. */
 export function streamAiCompletion(body: unknown, sink: AiStreamSink): AiStreamHandle {
   return startStream('/ai/complete', body, sink)
 }
 
-/** The plan's resolved limits, ACU cap and feature flags. */
 export function fetchAiEntitlements(): Promise<EdgeAiResult<AIEntitlements>> {
   return call('/me/entitlements', AiEntitlementsSchema)
 }
 
-/** What the account has spent against those entitlements. */
 export function fetchAiUsage(): Promise<EdgeAiResult<AIUsage>> {
   return call('/me/usage', AiUsageSchema)
 }
@@ -578,17 +563,15 @@ export function fetchAiCredits(): Promise<EdgeAiResult<AICreditStatus>> {
   return call('/ai/credits', AiCreditStatusSchema)
 }
 
-/** Record something the user did. Never rejects. */
 export function sendAiTelemetry(event: AITelemetryEventName, data: Record<string, unknown>): Promise<void> {
   return beacon('/ai/telemetry', { event, data })
 }
 
-/** Populate the prompt cache before the first request; the route skips the credit guard. */
+/** Populates the prompt cache; this route skips the credit guard. */
 export function warmAi(): Promise<void> {
   return beacon('/ai/warm')
 }
 
-/** The account's conversations for a project, newest first. */
 export function listConversations(
   options: { projectId?: string; limit?: number; offset?: number } = {},
 ): Promise<EdgeAiResult<{ conversations: ConversationSummary[] }>> {
@@ -606,17 +589,14 @@ export function listConversations(
   )
 }
 
-/** One conversation with its full transcript, ordered by turn. */
 export function getConversation(id: string): Promise<EdgeAiResult<{ conversation: ConversationDetail }>> {
   return call(`/ai/conversations/${encodeURIComponent(id)}`, z.object({ conversation: ConversationDetailSchema }))
 }
 
-/** Reserve an empty conversation before the first message. */
 export function createConversation(body: unknown): Promise<EdgeAiResult<{ conversation: ConversationDetail }>> {
   return call('/ai/conversations', z.object({ conversation: ConversationDetailSchema }), { method: 'POST', json: body })
 }
 
-/** Retitle a conversation. PATCH, matching the route the web build calls. */
 export function renameConversation(
   id: string,
   body: unknown,
@@ -628,7 +608,6 @@ export function renameConversation(
   )
 }
 
-/** Hard-delete a conversation and its messages. Answers 204 with no body. */
 export function deleteConversation(id: string): Promise<EdgeAiResult<null>> {
   return callVoid(`/ai/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }

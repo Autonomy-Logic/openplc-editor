@@ -5,7 +5,6 @@ import { executeTool, type ToolResult } from './tools'
 import type { BillingErrorPayload } from './types'
 import type { AIChatContentBlock, AIChatMessage, AIChatRequest, AIToolDefinition } from './types'
 
-/** Events emitted by the agentic loop to the UI */
 export type AgenticEvent =
   | { type: 'text_delta'; text: string }
   | { type: 'tool_call_start'; toolId: string; toolName: string }
@@ -20,7 +19,6 @@ export type AgenticEvent =
   /** `billing` is populated from a parsed 402 payload so the exhaustion modal can pop. */
   | { type: 'error'; error: string; billing?: BillingErrorPayload; status?: number }
 
-/** Everything the loop needs beyond the transport and the request itself. */
 export type AgenticLoopOptions = {
   /** Cancels the in-flight turn and stops the loop between iterations. */
   signal?: AbortSignal

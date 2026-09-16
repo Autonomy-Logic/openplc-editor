@@ -1,7 +1,6 @@
 /**
- * One commit, file by file, with the diff for whichever file is selected.
- * Platform-free: takes `onBack`/`onRestored` instead of navigating, so editor and web
- * share this screen. Uses `h-full w-full` (not `h-screen`) since the viewport is the host's.
+ * Platform-free: takes `onBack`/`onRestored` instead of navigating, so editor and web share
+ * this screen. Uses `h-full w-full` (not `h-screen`) since the viewport is the host's.
  */
 
 import { ArrowLeft, File, Folder, FolderOpen, RotateCcw, Search } from 'lucide-react'
@@ -157,9 +156,7 @@ function FileTreeItem({
 export type CommitHistoryViewProps = {
   projectId: string
   commitHash: string
-  /** Pre-selected file, so clicking one in the panel lands on its diff. */
   initialFile?: string
-  /** Leave the screen. The host decides what that means. */
   onBack: () => void
   /** A restore landed; the caller must reload the project since this view can't. */
   onRestored: () => void
@@ -273,7 +270,6 @@ export function CommitHistoryView({ projectId, commitHash, initialFile, onBack, 
   const selectedOriginal = parentFileMap.get(selectedFile ?? '') ?? ''
   const selectedStatus = filesWithStatus.find((f) => f.path === selectedFile)?.status
 
-  // Auto-expand folders on first load
   useEffect(() => {
     if (filesWithStatus.length > 0 && expandedFolders.size === 0) {
       const allFolders = new Set<string>()

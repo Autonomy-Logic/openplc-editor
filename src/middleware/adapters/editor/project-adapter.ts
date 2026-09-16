@@ -231,14 +231,12 @@ const UNREADABLE_PROJECT_FILES: RawProjectFiles = {
   },
 }
 
-/** Validate a raw-files answer from either reader, or refuse it as unreadable. */
 function readRawProjectFiles(answer: unknown): RawProjectFiles {
   const parsed = RawProjectFilesSchema.safeParse(answer)
 
   return parsed.success ? parsed.data : UNREADABLE_PROJECT_FILES
 }
 
-/** The envelope a cloud write answers with. */
 const CloudWriteAnswerSchema = z.object({ success: z.boolean(), error: z.string().optional() })
 
 // The account read on failure also marks the session gone for every consumer, which restores the sign-in control.
@@ -257,7 +255,6 @@ async function classifyCloudWrite(answer: unknown, account: EdgeAccountPort): Pr
   return { ...result, reason: read.status === 'no-session' ? 'signed-out' : 'unreachable' }
 }
 
-/** Whether an identifier names a project on Autonomy Edge rather than one on disk. */
 export const isCloudProjectId = isRemoteProjectPath
 
 // Preload and renderer bundles can skew: a missing channel must answer a failure, not throw "is not a function".
@@ -285,19 +282,17 @@ async function readCloudProjectFiles(projectId: string): Promise<RawProjectFiles
   )
 }
 
-/** What a cloud write answers when the channel it needs is not in this build. */
 const NO_CLOUD_WRITE_CHANNEL = {
   success: false,
   error: 'This build of the editor cannot save cloud projects.',
 } as const
 
-/** What a cloud write answers when the IPC call itself rejected. */
 const cloudWriteFailure = (error: unknown): SaveResult => ({
   success: false,
   error: error instanceof Error ? error.message : 'The save could not be sent to Autonomy Edge.',
 })
 
-/** `account` is what a failed cloud write asks whether a session still exists. */
+/** A failed cloud write asks `account` whether a session still exists. */
 export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdgeAccountPort): ProjectPort {
   return {
     async createProject(params: CreateProjectParams): Promise<ProjectResponse> {
@@ -481,7 +476,6 @@ export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdge
       return window.bridge.pathPicker()
     },
 
-    /** Where a local project can be published. */
     async listCloudFolders(): Promise<CloudFoldersResult> {
       if (typeof window.bridge.edgeUploadListFolders !== 'function') {
         return { status: 'unreachable' }

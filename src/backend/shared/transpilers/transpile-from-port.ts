@@ -1,7 +1,4 @@
-/**
- * Projects the renderer's port-shape `PLCProjectData` into the JSON transpiler's minimal IR.
- * The companion adapter for the main process's IPC-payload shape is `st-transpiler/from-schema.ts`.
- */
+/** Port-shape `PLCProjectData` -> the transpiler IR. The companion adapter for the main process's IPC-payload shape is `st-transpiler/from-schema.ts`. */
 
 import {
   globalVariableListIsReferencedIn,
@@ -35,8 +32,6 @@ import type {
 import type { RFFbdBody } from './st-transpiler/walker/fbd'
 import type { RFBody, RFEdge, RFNode, RFRung } from './st-transpiler/walker/types'
 
-/* ─────────────────────────── public entry ───────────────────────────────── */
-
 export function fromPortShape(data: PLCProjectData): TranspileProject {
   const resource = data.configurations?.resource
   // A Global Variable List has no IEC equivalent: compiled as a STRUCT type, one global
@@ -54,8 +49,6 @@ export function fromPortShape(data: PLCProjectData): TranspileProject {
     },
   }
 }
-
-/* ──────────────────── global variable lists (GVLs) ──────────────────────── */
 
 /** The struct backing a list. Member addresses are dropped: a struct member cannot be bound to I/O. */
 function globalListStruct(list: PLCGlobalVariableList): TranspileDataType {
@@ -97,8 +90,6 @@ function withGlobalListExternals(pou: TranspilePou, lists: PLCGlobalVariableList
   return { ...pou, interface: { ...pou.interface, variables: [...pou.interface.variables, ...externals] } }
 }
 
-/* ─────────────────────────── projections ────────────────────────────────── */
-
 function projectPou(pou: PLCPou): TranspilePou {
   const variables = (pou.interface?.variables ?? []).map(projectVariable)
   return {
@@ -130,8 +121,6 @@ function projectBody(body: PLCBody): TranspileBody {
       return { language: 'st', value: String(body.value ?? '') }
   }
 }
-
-/* ─── React Flow body projection ─────────────────────────────────── */
 
 // A graphical body is `unknown` on the port; every field is read through a guard.
 

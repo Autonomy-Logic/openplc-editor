@@ -24,7 +24,6 @@ async function isProjectRoot(directory: string): Promise<boolean> {
   }
 }
 
-/** A project without this is not a project the importer can read. */
 const PROJECT_MANIFEST = 'project.json'
 
 /** Loose on purpose: a folder that cannot be understood is one destination missing, not a failure. */
@@ -36,22 +35,17 @@ const ImportErrorSchema = z.object({
   error: z.object({ message: z.union([z.string(), z.array(z.string())]).nullish() }).nullish(),
 })
 
-/** The id of the project that was just created, when the server names one. */
 const ImportCreatedSchema = z.object({
   data: z.object({ project: z.object({ id: z.string().nullish() }).nullish() }).nullish(),
 })
 
-/** Zipping and uploading a whole project is not a request with a user tapping their foot. */
+/** Zipping and uploading a whole project is not a request anyone waits on. */
 const UPLOAD_TIMEOUT_MS = 300_000
 
-/** Listing folders is. */
 const LIST_TIMEOUT_MS = 30_000
-
-// Folders
 
 export interface CloudFolder {
   id: string
-  /** Already display-ready: see `labelFor`. */
   name: string
   /** Nesting level, so a flat list can still read as a tree. */
   depth: number
@@ -62,7 +56,7 @@ export type CloudFoldersResult =
   | { status: 'signed-out' }
   | { status: 'unreachable' }
 
-/** The shape `GET /folders?includeHierarchy=true` returns, narrowed to what is used. */
+/** `GET /folders?includeHierarchy=true`, narrowed to what is used. */
 interface RawFolder {
   id?: unknown
   name?: unknown
@@ -84,7 +78,7 @@ function labelFor(folder: RawFolder): string {
   return typeof folder.name === 'string' && folder.name.length > 0 ? folder.name : 'Untitled folder'
 }
 
-/** Only `root` and `directory` are destinations: a `project` folder is a project, and trashed folders are dropped. */
+/** Only `root` and `directory` are destinations; a `project` folder is a project. */
 function flattenFolders(nodes: unknown, depth = 0): CloudFolder[] {
   if (!Array.isArray(nodes) || depth > MAX_DEPTH) {
     return []
@@ -102,7 +96,7 @@ function flattenFolders(nodes: unknown, depth = 0): CloudFolder[] {
     }
 
     if (node.type !== 'root' && node.type !== 'directory') {
-      // Not a destination — but a project folder can still contain directories, so keep
+      // Not a destination, but a project folder can still contain directories, so keep
       // walking rather than pruning the branch.
       out.push(...flattenFolders(node.children, depth + 1))
       continue
@@ -141,8 +135,6 @@ export async function listCloudFolders(): Promise<CloudFoldersResult> {
   return { status: 'ok', folders: flattenFolders(payload?.data?.folders) }
 }
 
-// Archiving
-
 interface CollectedFile {
   /** Forward-slash separated, relative to the project directory. */
   relativePath: string
@@ -172,7 +164,7 @@ async function collectFiles(
   prefix: string,
   depth: number,
   collected: CollectedFile[],
-  /** Bytes accepted so far, shared across the recursion so the total is enforced as it grows. */
+  /** Shared across the recursion, so the total is enforced as it grows. */
   budget: { bytes: number },
 ): Promise<UploadFailure | null> {
   if (depth > MAX_DEPTH) {
@@ -189,7 +181,8 @@ async function collectFiles(
 
   for (const entry of entries) {
     const absolute = path.join(directory, entry.name)
-    // Forward slashes always: `path.join` emits backslashes on Windows, which the server reads as filename characters.
+    // Forward slashes always: `path.join` emits backslashes on Windows, which the server
+    // reads as filename characters.
     const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name
 
     if (entry.isDirectory()) {
@@ -252,8 +245,8 @@ async function collectFiles(
     }
 
     collected.push({ relativePath, contents })
-    // From the bytes actually read, not the stat: a file that grew between the two
-    // must not let the total drift past the ceiling.
+    // From the bytes actually read, not the stat: a file that grew between the two must
+    // not let the total drift past the ceiling.
     budget.bytes += contents.length
 
     if (budget.bytes > MAX_TOTAL_BYTES) {
@@ -264,7 +257,7 @@ async function collectFiles(
   return null
 }
 
-/** Build the archive the importer expects: project files at the root, `project.json` among them. */
+/** The importer expects project files at the archive root, `project.json` among them. */
 export async function buildProjectArchive(
   projectPath: string,
 ): Promise<{ ok: true; zip: Buffer; fileCount: number } | { ok: false; failure: UploadFailure }> {
@@ -297,19 +290,16 @@ export async function buildProjectArchive(
   }
 }
 
-// Upload
-
 /** Strips CR/LF and quotes so a filename cannot forge a header or break the disposition. */
 function headerSafe(value: string): string {
   return value.replace(/[\r\n"]/g, '')
 }
 
-/** The project directory's own name: user-controlled text on its way into a header. */
+/** The directory's own name: user-controlled text on its way into a header. */
 export function zipNameFor(projectPath: string): string {
   return `${path.basename(projectPath) || 'project'}.zip`
 }
 
-/** Exported so the injection test can drive the boundary: Windows forbids CR, LF and quotes in on-disk names. */
 export function fileDispositionHeader(boundary: string, filename: string): string {
   return (
     `--${boundary}\r\n` +
@@ -318,7 +308,6 @@ export function fileDispositionHeader(boundary: string, filename: string): strin
   )
 }
 
-/** One text field of a multipart form. */
 function textPart(boundary: string, name: string, value: string): Buffer {
   return Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${headerSafe(name)}"\r\n\r\n${value}\r\n`)
 }
@@ -352,7 +341,8 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
 
   parts.push(Buffer.from(fileDispositionHeader(boundary, zipName)), archive.zip, Buffer.from(`\r\n--${boundary}--\r\n`))
 
-  // `Buffer.concat` is typed over `Uint8Array`; a view over the same memory avoids a copy and an assertion.
+  // `Buffer.concat` is typed over `Uint8Array`; a view over the same memory avoids both
+  // a copy and an assertion.
   const body = Buffer.concat(parts.map((part) => new Uint8Array(part.buffer, part.byteOffset, part.byteLength)))
 
   let response: { status: number; body: string } | null
@@ -364,7 +354,8 @@ export async function uploadProjectToCloud(params: UploadProjectParams): Promise
       timeoutMs: UPLOAD_TIMEOUT_MS,
     })
   } catch (error) {
-    // No answer to a non-idempotent POST: the project MAY exist, so say "unreachable", not "failed".
+    // No answer to a non-idempotent POST: the project MAY exist, so "unreachable", not
+    // "failed".
     return {
       status: 'failed',
       failure: { reason: 'unreachable', message: error instanceof Error ? error.message : 'No answer' },

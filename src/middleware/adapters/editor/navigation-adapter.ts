@@ -9,7 +9,6 @@ import { useOpenPLCStore } from '../../../frontend/store'
 import type { NavigationPort, NavigationSearch } from '../../shared/ports/navigation-port'
 import { buildNavigationUrl } from '../../shared/ports/navigation-port'
 
-/** The routed screens the desktop renders in place rather than navigating to. */
 const HISTORY_PATH = '/history'
 const MERGE_PATH = '/merge'
 
@@ -32,7 +31,7 @@ export function createEditorNavigationAdapter(): NavigationPort {
     return true
   }
 
-  // Same params the `/merge` route declares; `target` is legitimately absent (screen falls back to the default branch).
+  // Same params the `/merge` route declares; `target` may legitimately be absent.
   const openMerge = (search?: NavigationSearch): boolean => {
     const sourceBranch = search?.source
 
@@ -55,7 +54,6 @@ export function createEditorNavigationAdapter(): NavigationPort {
         return
       }
 
-      // Refused, not reloaded: assigning `location.href` restarts the renderer and closes the open project.
       refuse(path)
     },
 
@@ -70,7 +68,6 @@ export function createEditorNavigationAdapter(): NavigationPort {
 
       // http(s) only: a `file:` or `javascript:` path must never reach `window.open`.
       if (/^https?:/i.test(path)) {
-        // `noopener,noreferrer` keeps the opened page from holding a `window.opener` into the renderer.
         window.open(buildNavigationUrl(path, search), '_blank', 'noopener,noreferrer')
 
         return
@@ -80,9 +77,7 @@ export function createEditorNavigationAdapter(): NavigationPort {
     },
 
     exitToHost(): void {
-      // The editor has no host to return to — the start screen appears automatically
-      // once `clearStatesOnCloseProject` has reset project state, so this is
-      // intentionally a no-op.
+      // No host to return to: the start screen reappears once project state is cleared.
     },
   }
 }

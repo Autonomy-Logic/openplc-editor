@@ -4,9 +4,7 @@ type AIChatInputProps = {
   onSend: (message: string) => void
   onCancel: () => void
   isLoading: boolean
-  /** No AI transport on this platform — the composer is inert and says so. */
   disabled?: boolean
-  /** Why the composer is disabled, shown as its placeholder. */
   disabledReason?: string
 }
 

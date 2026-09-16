@@ -1,10 +1,7 @@
 /**
- * Editor `AIPort` adapter — Autonomy Edge's AI routes, over IPC. Transport only: the prompt,
- * model, credits and conversation store all live on Edge. IPC structure-clones failures, so
- * `errorFromFailure` rebuilds `AIRequestError` (with `billing` intact) from the plain data.
- *
- * `registerInlineCompletions` is not on this port: Monaco calls `registerAIInlineCompletions`
- * from `frontend/services/ai` directly.
+ * Transport only: prompt, model, credits and conversation store all live on Edge. IPC
+ * structure-clones failures, so `errorFromFailure` rebuilds `AIRequestError` (with `billing`
+ * intact) from the plain data.
  */
 
 import { z } from 'zod'
@@ -20,12 +17,8 @@ import type {
 } from '../../shared/ports/ai-port'
 import { AIRequestError } from '../../shared/ports/ai-port'
 
-// ---------------------------------------------------------------------------
-// Envelope validation
-// ---------------------------------------------------------------------------
-
-// Strict about `code`/`message` (the modal's copy depends on them); forgiving about the rest, so
-// an unexpected shape costs one number rather than the whole refusal explanation.
+// Strict about `code`/`message` — the modal's copy depends on them — and forgiving about the rest,
+// so an unexpected shape costs one number rather than the whole refusal explanation.
 const BillingErrorPayloadSchema = z.object({
   code: z.enum(['insufficient_acu', 'subscription_inactive', 'rate_limit_exceeded', 'subscription_past_due']),
   message: z.string(),
@@ -51,12 +44,12 @@ const AiFailureSchema = z.discriminatedUnion('kind', [
 
 type AiFailure = z.infer<typeof AiFailureSchema>
 
-// Only the discriminant is checked; the main process already validated the payload against the
-// route's own schema, and an unchecked `result.ok` on a `null` answer would throw from inside the adapter.
+// Only the discriminant: the main process already validated the payload, but an unchecked
+// `result.ok` on a `null` answer would throw from inside the adapter.
 const AiEnvelopeSchema = z.object({ ok: z.boolean() })
 
-// One frame of a streamed answer. A frame that fails here means the two bundles disagree about
-// the wire; it is dropped rather than thrown, so one missing frame doesn't cost the whole answer.
+// A frame that fails here means the two bundles disagree about the wire; it is dropped rather than
+// thrown, so one bad frame doesn't cost the whole answer.
 const AiSseEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('content_block_delta'), delta: z.string() }),
   z.object({ type: z.literal('tool_use'), id: z.string(), name: z.string(), input: z.unknown() }),
@@ -68,7 +61,7 @@ const AiSseEventSchema = z.discriminatedUnion('type', [
 type ParsedSseEvent = z.infer<typeof AiSseEventSchema>
 
 // Rebuilt field by field, not passed through: zod infers `input: z.unknown()` as optional, while
-// the contract says the key is always present. The exhaustive switch also catches an unmapped frame at compile time.
+// the contract says the key is always present.
 function toWireEvent(event: ParsedSseEvent): AISSEEvent {
   switch (event.type) {
     case 'content_block_delta':
@@ -88,15 +81,12 @@ function toWireEvent(event: ParsedSseEvent): AISSEEvent {
   }
 }
 
-/** The answer this build cannot read at all — neither a success nor a failure it knows. */
 function unreadableAnswer(): AIRequestError {
   return new AIRequestError('Autonomy Edge returned an answer this build of the editor cannot read.', 0)
 }
 
-// Rebuilds the port's error class from a reported failure (see file header). `status` and
-// `billing` cross un-flattened — `billing` from the validated copy, so a field the schema
-// couldn't parse reaches the modal as absent rather than garbage. `retryAfter` stays undefined:
-// a 429's reset time lives in `billing.resetsAt` instead.
+// `billing` comes from the validated copy, so a field the schema could not parse reaches the modal
+// absent rather than garbage. `retryAfter` stays undefined: a 429's reset lives in `billing.resetsAt`.
 function errorFromFailure(reported: unknown): AIRequestError {
   const parsed = AiFailureSchema.safeParse(reported)
 
@@ -108,12 +98,11 @@ function errorFromFailure(reported: unknown): AIRequestError {
 
   switch (failure.kind) {
     case 'signed-out':
-      // 401, so a caller that branches on status reads it as an authentication problem
-      // rather than as a refusal on cost.
+      // 401, so a caller branching on status reads authentication, not a refusal on cost.
       return new AIRequestError(failure.message, 401)
     case 'unreachable':
-      // Status 0: the server never answered, so NOTHING was learned. Reporting this as
-      // a denial would tell someone their credits ran out when their wifi dropped.
+      // Status 0: the server never answered, so nothing was learned. Reporting a denial would tell
+      // someone their credits ran out when their wifi dropped.
       return new AIRequestError(failure.message, 0)
     case 'billing':
       return new AIRequestError(failure.message, failure.status, undefined, failure.billing)
@@ -122,8 +111,8 @@ function errorFromFailure(reported: unknown): AIRequestError {
   }
 }
 
-// Validates an answer and hands back its payload, or throws the error the UI branches on. The
-// bridge's declared type checks nothing at runtime, so the envelope is parsed before `result.ok` is read.
+// The bridge's declared type checks nothing at runtime, so the envelope is parsed before
+// `result.ok` is read.
 function unwrap<T>(result: { ok: true; data: T } | { ok: false; failure: unknown }): T {
   if (!AiEnvelopeSchema.safeParse(result).success) {
     throw unreadableAnswer()
@@ -151,7 +140,7 @@ function channel<A extends unknown[], T>(
   }
 }
 
-/** What an aborted read rejects with — the same name the fetch-based web transport uses. */
+/** The same error name the fetch-based web transport rejects with. */
 function abortError(): Error {
   return new DOMException('The request was aborted.', 'AbortError')
 }
@@ -178,10 +167,6 @@ function abortable<T>(read: () => Promise<T>, signal?: AbortSignal): Promise<T> 
   })
 }
 
-// ---------------------------------------------------------------------------
-// Streaming
-// ---------------------------------------------------------------------------
-
 // One queue, not three: order between event/end/failure is the contract — an `end` that overtook
 // a `tool_use` would stop the agentic loop before it learned it had work to do.
 type StreamFrame =
@@ -189,20 +174,16 @@ type StreamFrame =
   | { streamId: string; kind: 'end' }
   | { streamId: string; kind: 'failure'; failure: unknown }
 
-/** Conversation and completion requests both cross as a plain object body. */
 type StreamBody = Record<string, unknown>
 
 const STREAM_CHANNELS_MISSING =
   'The assistant is unavailable in this build of the editor (the edge-ai stream channels are missing).'
 
-/** The id the pushed frames are tagged with, or the error explaining why there is none. */
 const StreamStartSchema = z.object({ streamId: z.string().min(1) })
 
 /**
- * Turns the pushed `edge-ai:*` channels into an async iterator. Listeners attach before the
- * request opens (a fast stream can put frames on the wire before the id returns); frames that
- * land while the consumer is busy are queued, not dropped; every exit path — return, throw, or an
- * abandoned `for await` — unsubscribes and aborts upstream so the server stops billing unread tokens.
+ * Listeners attach before the request opens: a fast stream can emit frames before the id returns.
+ * Every exit path aborts upstream, since the server bills unread tokens until the socket goes.
  */
 async function* streamFrames(
   kind: 'chat' | 'completion',
@@ -211,9 +192,8 @@ async function* streamFrames(
 ): AsyncGenerator<AISSEEvent, void, unknown> {
   const { bridge } = window
 
-  // All four are checked together, before anything is subscribed. Checking them one at a
-  // time would leave a listener attached when the second one turned out to be missing,
-  // and a listener nothing can ever remove outlives every stream that follows.
+  // All four together, before anything is subscribed: checking them one at a time can leave a
+  // listener attached that nothing can remove, outliving every stream that follows.
   if (
     typeof bridge.edgeAiStreamStart !== 'function' ||
     typeof bridge.onEdgeAiStreamEvent !== 'function' ||
@@ -226,7 +206,6 @@ async function* streamFrames(
   const queue: StreamFrame[] = []
   let wake: (() => void) | null = null
 
-  // Hands the waiting consumer whatever just landed; a busy consumer finds it in the queue.
   const push = (frame: StreamFrame): void => {
     queue.push(frame)
 
@@ -249,8 +228,8 @@ async function* streamFrames(
   // would narrow an inline read before the loop and believe it can never be true again.
   const isAborted = (): boolean => signal?.aborted === true
 
-  // Fire-and-forget: the caller already stopped listening, so a rejected abort has nowhere to be
-  // reported. Safe on any exit path since aborting an already-ended stream is a no-op.
+  // Fire-and-forget: the caller stopped listening, so a rejected abort has nowhere to be reported.
+  // Safe on any exit path, since aborting an already-ended stream is a no-op.
   const abortUpstream = (): void => {
     if (streamId === null || finished) {
       return
@@ -280,8 +259,7 @@ async function* streamFrames(
 
   try {
     if (isAborted()) {
-      // Asked to stop before the request was made: the cheapest correct answer is not
-      // to make it. Nothing has been opened, so there is nothing to abort.
+      // Stopped before the request was made: nothing is open, so there is nothing to abort.
       return
     }
 
@@ -295,16 +273,15 @@ async function* streamFrames(
     streamId = parsed.data.streamId
 
     if (isAborted()) {
-      // The abort landed while the request was being opened, when there was no id to
-      // cancel with. There is one now.
+      // The abort landed while the request was opening, when there was no id to cancel with.
       abortUpstream()
 
       return
     }
 
     while (true) {
-      // Checked before the queue rather than only when it empties: a caller that pressed
-      // stop is not waiting to be handed the frames that were already in flight.
+      // Before the queue, not only when it empties: a caller that pressed stop is not waiting for
+      // the frames already in flight.
       if (isAborted()) {
         return
       }
@@ -339,8 +316,7 @@ async function* streamFrames(
 
       const event = AiSseEventSchema.safeParse(frame.event)
 
-      // A shape mismatch on a known type means the two bundles disagree about the wire; skipped
-      // rather than thrown, so a stale renderer degrades to a shorter answer instead of a broken stream.
+      // Skipped, not thrown: a stale renderer degrades to a shorter answer, not a broken stream.
       if (!event.success) {
         continue
       }
@@ -348,8 +324,8 @@ async function* streamFrames(
       const wire = toWireEvent(event.data)
 
       if (wire.type === 'error') {
-        // Thrown, not yielded, matching the web transport: the agentic loop has no branch for an
-        // `error` event. Status 0 — the request succeeded, the model failed mid-generation.
+        // Thrown, not yielded, as on web: the agentic loop has no branch for an `error` event.
+        // Status 0 — the request succeeded, the model failed mid-generation.
         finished = true
 
         throw new AIRequestError(wire.error, 0)
@@ -358,8 +334,7 @@ async function* streamFrames(
       yield wire
 
       if (wire.type === 'message_stop') {
-        // The answer is complete. The main process has already cancelled the socket on
-        // its side, so returning here is an ordinary end rather than an abort.
+        // The main process already closed the socket, so this is an ordinary end, not an abort.
         finished = true
 
         return
@@ -372,17 +347,12 @@ async function* streamFrames(
       off()
     }
 
-    // Reached on throw, on a clean return, and on the caller breaking its `for await`; only the
-    // unfinished cases actually send anything, since the server keeps billing tokens until the socket goes.
+    // Reached on throw, on a clean return, and on a caller breaking its `for await`; only the
+    // unfinished cases send anything.
     abortUpstream()
   }
 }
 
-// ---------------------------------------------------------------------------
-// Conversations
-// ---------------------------------------------------------------------------
-
-/** A stored conversation as the backend returns it, narrowed to what the port promises. */
 const StoredConversationSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -393,7 +363,7 @@ const StoredConversationSchema = z.object({
       z.object({
         id: z.string(),
         role: z.enum(['user', 'assistant']),
-        // Opaque on the way through, as the port declares it: content shape is the wire's business.
+        // Opaque on the way through, as the port declares it.
         content: z.unknown(),
         createdAt: z.string(),
         rating: z.enum(['up', 'down']).nullish(),
@@ -413,7 +383,6 @@ const ConversationListSchema = z.object({ conversations: z.array(ConversationSum
 const ConversationOneSchema = z.object({ conversation: StoredConversationSchema })
 const ConversationRenamedSchema = z.object({ conversation: z.object({ id: z.string(), title: z.string() }) })
 
-/** Parse a payload the main process already answered `ok` for, or say it is unreadable. */
 function readPayload<T>(schema: z.ZodType<T>, payload: unknown): T {
   const parsed = schema.safeParse(payload)
 
@@ -436,8 +405,8 @@ function toSummary(conversation: z.infer<typeof ConversationSummarySchema>): AIC
 function toDetail(conversation: z.infer<typeof StoredConversationSchema>): AIConversationDetail {
   return {
     ...toSummary(conversation),
-    // Absent transcript = empty one (`create` returns a conversation with nothing in it yet).
-    // Each turn is rebuilt field by field for the same optional-key reason as `toWireEvent`.
+    // An absent transcript is an empty one: `create` answers a conversation with nothing in it yet.
+    // Rebuilt field by field for the same optional-key reason as `toWireEvent`.
     messages: (conversation.messages ?? []).map((message) => ({
       id: message.id,
       role: message.role,
@@ -447,10 +416,6 @@ function toDetail(conversation: z.infer<typeof StoredConversationSchema>): AICon
     })),
   }
 }
-
-// ---------------------------------------------------------------------------
-// Port
-// ---------------------------------------------------------------------------
 
 export interface EditorAIAdapterConfig {
   isFeatureEnabled: boolean
@@ -498,8 +463,7 @@ export function createEditorAIAdapter(config: EditorAIAdapterConfig): AIPort {
 
     streamChatEvents: chatEvents,
 
-    // The three read routes hand back what the main process already validated against
-    // the route's schema; `unwrap` has checked the envelope it came in.
+    // The main process already validated these payloads against the route's schema.
     fetchEntitlements: (signal?: AbortSignal) => abortable(() => fetchEntitlements(), signal),
 
     fetchUsage: (signal?: AbortSignal) => abortable(() => fetchUsage(), signal),
@@ -517,7 +481,7 @@ export function createEditorAIAdapter(config: EditorAIAdapterConfig): AIPort {
       })
     },
 
-    // Never throws and is never awaited, as the port requires: a cold cache just costs a slower first completion.
+    // Never throws and is never awaited, as the port requires.
     warmCache(): void {
       if (typeof bridge.edgeAiWarm !== 'function') {
         return

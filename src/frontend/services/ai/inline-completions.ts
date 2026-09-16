@@ -1,5 +1,3 @@
-/** Wiring that turns the AI port into ghost text in a Monaco editor; talks to the platform only through the port. */
-
 import type * as monaco from 'monaco-editor'
 
 import type { AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
@@ -15,7 +13,7 @@ export function __resetInlineCompletionsForTests(): void {
 }
 let didWireImeListeners = false
 
-/** Attach IME composition listeners to every Monaco editor (existing and future), once per session. */
+/** Existing and future Monaco editors both, once per session. */
 function wireImeCompositionListeners(m: typeof monaco): void {
   if (didWireImeListeners) return
   didWireImeListeners = true
@@ -29,7 +27,7 @@ function wireImeCompositionListeners(m: typeof monaco): void {
   m.editor.onDidCreateEditor(attach)
 }
 
-/** Register AI inline completions for one POU's editor; returns a disposable to call when the POU or language changes. */
+/** Dispose when the POU or the language changes. */
 export function registerAIInlineCompletions(
   ai: AIPort,
   params: {

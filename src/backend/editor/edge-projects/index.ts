@@ -1,8 +1,6 @@
 /**
- * The user's Autonomy Edge projects: list, read, and write, all through
- * `edgeAuthedRequest` for renewal/retry. The wire format lives in
- * `backend/shared/project/api-envelope`, shared with openplc-web. Saving is
- * read-modify-write since the backend deletes by omission.
+ * The wire format lives in `backend/shared/project/api-envelope`, shared with
+ * openplc-web. Saving is read-modify-write because the backend deletes by omission.
  */
 
 import { z } from 'zod'
@@ -28,10 +26,7 @@ import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
 
-/**
- * A row in the recents list, left deliberately loose: fields are `unknown` since the
- * narrowing below decides whether a row (e.g. one missing an id) is usable at all.
- */
+/** Fields stay `unknown`: the narrowing below decides whether a row is usable at all. */
 const ApiProjectRowSchema = z
   .object({
     id: z.unknown(),
@@ -56,7 +51,6 @@ const ProjectDetailsSchema = envelopeOf(
   }),
 )
 
-/** The field-level reasons a response could not be read, in one line. */
 function describeIssues(error: z.ZodError): string {
   return error.issues.map((issue) => `${issue.path.join('.') || '(root)'} ${issue.message}`).join('; ')
 }
@@ -64,10 +58,8 @@ function describeIssues(error: z.ZodError): string {
 const UNREADABLE_PROJECT = 'Autonomy Edge returned a project this editor cannot read'
 
 /**
- * The most recently changed projects on the account. Ordered by the server
- * (`updatedAt desc`), since sorting a truncated page locally would be wrong. Reports
- * which kind of nothing it found — no session, empty, or unreachable — since the start
- * screen has a different message for each.
+ * Ordered by the server, since sorting a truncated page locally would be wrong. Which
+ * kind of nothing it found is reported, as the start screen words each one differently.
  */
 export async function listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
   const query = new URLSearchParams({ limit: String(limit), sortBy: 'updatedAt', sortOrder: 'desc' })
@@ -77,12 +69,11 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
   try {
     response = await edgeAuthedRequest(`/projects?${query.toString()}`)
   } catch {
-    // Never reached the server. Saying "signed out" here would tell someone who is
-    // signed in and merely offline to go and sign in again.
+    // Never reached the server: "signed out" would tell someone merely offline to sign
+    // in again.
     return { status: 'unreachable' }
   }
 
-  // No token could be obtained, or the server refused one.
   if (!response || response.status === 401 || response.status === 403) {
     return { status: 'signed-out' }
   }
@@ -98,8 +89,8 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
     return { status: 'ok', projects: [] }
   }
 
-  // Narrowed field by field rather than cast: this is a remote payload, and a row
-  // missing an id would otherwise become a list entry that cannot be opened.
+  // Narrowed field by field, not cast: a row missing an id would otherwise become a
+  // list entry that cannot be opened.
   const projects = rows.flatMap((row) => {
     if (typeof row?.id !== 'string' || typeof row.name !== 'string' || typeof row.updatedAt !== 'string') {
       return []
@@ -119,15 +110,13 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
 }
 
 /**
- * `/details` for a project, with the build id the endpoint expects. Omitting
- * `uncached_version` is read as a stale cached bundle and answered with a synthetic
- * "hard refresh" project instead of the real one.
+ * Omitting `uncached_version` is read as a stale cached bundle, and answered with a
+ * synthetic "hard refresh" project instead of the real one.
  */
 function detailsPath(projectId: string): string {
   return `/projects/${encodeURIComponent(projectId)}/details?uncached_version=${encodeURIComponent(APP_VERSION)}`
 }
 
-/** The current envelope, or why it could not be read. */
 async function readEnvelope(
   projectId: string,
 ): Promise<{ ok: true; files: IncomingApiProjectFiles } | { ok: false; error: string }> {
@@ -144,7 +133,7 @@ async function readEnvelope(
   const parsed = ProjectFilesSchema.safeParse(parseJsonBody(response.body))
 
   if (!parsed.success) {
-    // Reported with the field, never swallowed into an empty container — a save that followed would delete everything.
+    // Never swallowed into an empty container: a save that followed would delete everything.
     return { ok: false, error: `${UNREADABLE_PROJECT}: ${describeIssues(parsed.error)}.` }
   }
 
@@ -153,11 +142,6 @@ async function readEnvelope(
   return files ? { ok: true, files } : { ok: false, error: 'Autonomy Edge returned no files.' }
 }
 
-/**
- * Read a cloud project into the same shape the filesystem reader returns. `canEdit`
- * rides along from the server's capabilities so a read-only share doesn't offer a save that will be refused.
- */
-/** The raw-content map the save flow consults, keyed the same way the web adapter does. */
 function rawLoadedFilesFrom(raw: {
   projectJson: string
   deviceConfig: string
@@ -233,14 +217,14 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       data: {
         ...raw,
         canEdit: payload?.capabilities?.canEdit ?? undefined,
-        // The bytes exactly as the API sent them, keyed by path — echoed back for files
-        // the user didn't edit instead of re-serialized, so an untouched file's bytes don't drift.
+        // The bytes exactly as the API sent them: echoed back for files the user didn't
+        // edit rather than re-serialized, so an untouched file's bytes don't drift.
         rawLoadedFiles: rawLoadedFilesFrom(raw),
       },
     }
   } catch (error) {
-    // Never reached the server. Said plainly, because "you are offline" and "this project
-    // is broken" call for completely different things from the user.
+    // Never reached the server: "you are offline" and "this project is broken" call for
+    // completely different things from the user.
     return {
       success: false,
       error: {
@@ -251,7 +235,7 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
   }
 }
 
-/** Persist a full envelope. `deletions` is omitted when empty, as the API expects. */
+/** `deletions` is omitted when empty, as the API expects. */
 async function writeEnvelope(
   projectId: string,
   files: IncomingApiProjectFiles,
@@ -273,11 +257,10 @@ async function writeEnvelope(
   return { success: true }
 }
 
-/** Save a whole cloud project. */
 export async function saveCloudProject(files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> {
   try {
-    // Read first: the save endpoint deletes by omission, and the generated envelope holds
-    // only what this editor models, so a file it does not know about would be erased.
+    // Read first: the endpoint deletes by omission, and the generated envelope holds only
+    // what this editor models, so a file it does not know about would be erased.
     const read = await readEnvelope(files.projectPath)
 
     if (!read.ok) {
@@ -294,10 +277,7 @@ export async function saveCloudProject(files: WriteProjectFiles): Promise<{ succ
   }
 }
 
-/**
- * Save one file inside a cloud project. `filePath` is `projectId/relative/path`, the
- * same contract the web adapter uses, so the shared save flow doesn't need to know which platform it's on.
- */
+/** `filePath` is `projectId/relative/path`, the same contract the web adapter uses. */
 export async function saveCloudFile(filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> {
   try {
     const separator = filePath.indexOf('/')
@@ -309,8 +289,8 @@ export async function saveCloudFile(filePath: string, content: unknown): Promise
     const projectId = filePath.slice(0, separator)
     const relativePath = filePath.slice(separator + 1)
 
-    // Read-modify-write, and the read is mandatory: the backend deletes by omission, so
-    // sending only this file would wipe every other one.
+    // The read is mandatory: the backend deletes by omission, so sending only this file
+    // would wipe every other one.
     const read = await readEnvelope(projectId)
 
     if (!read.ok) {
@@ -322,7 +302,8 @@ export async function saveCloudFile(filePath: string, content: unknown): Promise
 
     setInEnvelope(envelope, relativePath, text)
 
-    // `setInEnvelope` is a no-op for a path outside its allowlist; verify it landed rather than reporting success for an edit that was never persisted.
+    // `setInEnvelope` is a no-op outside its allowlist; without this check an edit that
+    // was never persisted would be reported as saved.
     if (getInEnvelope(envelope, relativePath) !== text) {
       return { success: false, error: `Autonomy Edge has no slot for ${relativePath}.` }
     }

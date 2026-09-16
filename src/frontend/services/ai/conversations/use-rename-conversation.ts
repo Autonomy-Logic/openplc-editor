@@ -4,10 +4,7 @@ import type { AIConversationSummary } from '../../../../middleware/shared/ports/
 import { useAI } from '../../../../middleware/shared/providers'
 import { trackConversationRenamed } from '../telemetry'
 
-/**
- * Rename a conversation. Optimistic: the list cache is patched in place so the
- * new title shows up immediately, and rolled back if the call fails.
- */
+/** Optimistic: the list cache is patched in place, and rolled back if the call fails. */
 export function useRenameConversation(projectId: string | null | undefined) {
   const ai = useAI()
   const conversations = ai?.conversations

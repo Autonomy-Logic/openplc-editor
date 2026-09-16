@@ -5,7 +5,7 @@ import { fromPortShape } from '../../../backend/shared/transpilers/transpile-fro
 import type { PLCProjectData } from '../../shared/ports/types'
 
 // Matches `ProjectStTranspiler` structurally: an adapter may not import `frontend/services`.
-/** Editor `ProjectStTranspiler`; never throws, a failed transpile answers `null`. */
+/** Never throws; a failed transpile answers `null`. */
 export function transpileProjectStInProcess(projectData: PLCProjectData): Promise<string | null> {
   try {
     const result = transpileToSt(fromPortShape(projectData))

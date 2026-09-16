@@ -5,11 +5,8 @@ import type { AICompletionLanguage } from '../../../middleware/shared/ports/ai-p
 import { openPLCStoreBase } from '../../store'
 import { collectProjectContext, formatIecVariables, formatPythonVariables } from './context-collector'
 
-/** Maximum characters to extract before cursor for FIM prefix */
 const MAX_PREFIX_CHARS = 3000
-/** Maximum characters to extract after cursor for FIM suffix */
 const MAX_SUFFIX_CHARS = 1000
-/** Token budget for project context in inline completions */
 const PROJECT_CONTEXT_TOKEN_BUDGET = 3000
 
 export type FIMContext = {
@@ -19,29 +16,23 @@ export type FIMContext = {
   language: AICompletionLanguage
 }
 
-/** Map POU type to its IEC 61131-3 opening keyword */
 const POU_TYPE_KEYWORDS: Record<string, string> = {
   program: 'PROGRAM',
   function: 'FUNCTION',
   'function-block': 'FUNCTION_BLOCK',
 }
 
-/** Map POU type to its IEC 61131-3 closing keyword */
 const POU_END_KEYWORDS: Record<string, string> = {
   program: 'END_PROGRAM',
   function: 'END_FUNCTION',
   'function-block': 'END_FUNCTION_BLOCK',
 }
 
-/** Single-entry cache for project context */
 let contextCache: {
   pouName: string
   language: string
-  /** Reference to the pous array — if it changes, cache is stale */
   pousRef: unknown
-  /** Reference to the dataTypes array */
   dataTypesRef: unknown
-  /** Reference to the globalVariables array */
   globalVarsRef: unknown
   result: string
 } | null = null
@@ -75,7 +66,6 @@ function buildSyntheticHeader(pouName: string, language: string): string {
   return ''
 }
 
-/** Builds Fill-in-the-Middle context from a Monaco editor model and cursor position. */
 export function buildFIMContext(
   model: monaco.editor.ITextModel,
   position: monaco.Position,
@@ -91,9 +81,8 @@ export function buildFIMContext(
   const prefix = header + fullText.substring(Math.max(0, offset - maxCodePrefix), offset)
   let suffix = fullText.substring(offset, Math.min(fullText.length, offset + MAX_SUFFIX_CHARS))
 
-  // Boundary keyword goes a blank line below the cursor (`\n\n…`), never jammed against it
-  // (`\n…`) — flush against the cursor, the model reads the span as already-closed and
-  // returns an empty completion.
+  // The boundary keyword goes a blank line below the cursor (`\n\n…`): jammed against it, the model reads the
+  // span as already-closed and returns an empty completion.
   if (suffix.trim().length === 0) {
     if (language === 'st' || language === 'il') {
       const state = openPLCStoreBase.getState()
@@ -114,7 +103,7 @@ export function buildFIMContext(
   return { prefix, suffix, projectContext, language }
 }
 
-// Gets project context with single-entry caching, invalidated on POU/language change or a Zustand state reference change.
+// Single-entry cache, invalidated on a POU/language change or a Zustand state reference change.
 function getCachedProjectContext(pouName: string, language: AICompletionLanguage): string {
   const state = openPLCStoreBase.getState()
   const pousRef = state.project.data.pous

@@ -4,9 +4,8 @@ import { type RefObject, useCallback, useEffect, useRef } from 'react'
 export const STICK_THRESHOLD_PX = 4
 
 export interface StickToBottomHandle {
-  /** Attach to the scrolling element. */
   containerRef: RefObject<HTMLDivElement>
-  /** Attach to the element that grows inside the scroller. A callback ref, since it mounts late. */
+  /** Attach to the element that grows inside the scroller; a callback ref since it mounts late. */
   contentRef: (node: HTMLDivElement | null) => void
   /** Pin to the tail if auto-follow is currently engaged. */
   pin: () => void
@@ -17,9 +16,9 @@ export interface StickToBottomHandle {
 }
 
 /**
- * VSCode-console-style sticky bottom for a streaming transcript. Follow state is decided by user
- * gesture (detach happens synchronously in the gesture handlers), not by geometry sampled from
- * async `scroll` events, which lag behind streamed content and would cause false detaches.
+ * Sticky bottom for a streaming transcript. Follow state comes from user gestures, which
+ * detach synchronously, not from async `scroll` geometry that lags streamed content and
+ * would cause false detaches.
  */
 export function useStickToBottom(active: boolean): StickToBottomHandle {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -51,8 +50,7 @@ export function useStickToBottom(active: boolean): StickToBottomHandle {
 
   const isFollowing = useCallback(() => followingRef.current, [])
 
-  // Gesture + scroll listeners. The container element is stable across
-  // renders, so this binds once.
+  // The container element is stable across renders, so these listeners bind once.
   useEffect(() => {
     const container = containerRef.current
     if (!container) return

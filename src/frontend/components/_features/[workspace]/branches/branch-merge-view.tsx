@@ -1,7 +1,6 @@
 /**
- * Merges one branch into another, file by file, with a per-file conflict resolver.
  * Platform-free: talks only to the version-control port and takes `onBack`/`onMerged`
- * instead of navigating, so editor and web can render the same screen.
+ * instead of navigating, so editor and web can render the same merge screen.
  */
 
 import { DiffEditor } from '@monaco-editor/react'
@@ -210,11 +209,9 @@ function FileTreeItem({
 
 export type BranchMergeViewProps = {
   projectId: string
-  /** The branch being merged in. */
   sourceBranch: string
   /** Where it lands. Omitted when opened from the branch you are on — the default branch then wins. */
   targetParam?: string
-  /** Leave without merging. */
   onBack: () => void
   /** The merge landed; the caller must reload the project since this view can't. */
   onMerged: () => void
@@ -234,7 +231,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
   const [showMergeOptionsModal, setShowMergeOptionsModal] = useState(false)
   const [postMergeError, setPostMergeError] = useState<string | null>(null)
 
-  // Per-file resolution content (path → user-edited resolved content).
   // A path present here AND in `resolvedFiles` means the user marked it as resolved.
   const [resolutions, setResolutions] = useState<Record<string, string>>({})
   const [resolvedFiles, setResolvedFiles] = useState<Set<string>>(new Set())
@@ -307,7 +303,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
 
   const conflictedPaths = useMemo(() => new Set(data?.conflicts ?? []), [data?.conflicts])
 
-  // Initialize commit message with default template once branch names are known
   useEffect(() => {
     if (commitMessage === '' && sourceBranch && targetBranch) {
       setCommitMessage(`Merge branch '${sourceBranch}' into ${targetBranch}`)
@@ -320,7 +315,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
   const sourceLooksLikeDefault = sourceBranch === 'main' || sourceBranch === 'master'
   const canDeleteSource = !!sourceBranchEntry && !sourceBranchIsDefault && !sourceLooksLikeDefault
 
-  // Theme handling — this page can load standalone without DisplayMenu
+  // This view can load standalone without DisplayMenu, so it syncs the theme itself.
   const themePort = useTheme()
   const isDark = themePort.getCurrentTheme() === 'dark'
   useEffect(() => {
@@ -383,7 +378,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
 
   const selected = filesWithStatus.find((f) => f.path === selectedFile)
 
-  // Auto-expand all folders once on first render of changed files
   useEffect(() => {
     if (changedFiles.length > 0 && expandedFolders.size === 0) {
       const allFolders = new Set<string>()
@@ -398,7 +392,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changedFiles.length])
 
-  // Auto-select first changed file
   useEffect(() => {
     if (!selectedFile && changedFiles.length > 0) {
       setSelectedFile(changedFiles[0].path)
@@ -425,7 +418,6 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
     setPostMergeError(null)
     setShowMergeOptionsModal(false)
 
-    // Only send files the user actually marked resolved.
     const resolutionsToSend: Record<string, string> = {}
     for (const path of resolvedFiles) {
       if (path in resolutions) resolutionsToSend[path] = resolutions[path]

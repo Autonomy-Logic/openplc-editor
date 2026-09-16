@@ -1,14 +1,7 @@
-/**
- * Graphical diff utilities: parses IEC 61131-3 source files with embedded JSON flow data and
- * computes semantic diffs between two versions. Backend-only — frontend uses VersionControlPort.
- */
+/** Semantic diff of graphical POU bodies, whose flow data is JSON embedded after `END_VAR`. Backend-only — the frontend goes through VersionControlPort. */
 
 import type { Edge, Node } from '@xyflow/react'
 import { z } from 'zod'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type DiffStatus = 'added' | 'removed' | 'modified' | 'unchanged'
 
@@ -17,7 +10,7 @@ export type FlowData = {
   id?: string
   nodes: Node[]
   edges: Edge[]
-  /** Saved viewport dimensions `[width, height]` — matches the ladder editor default `[1530, 200]`. */
+  /** `[width, height]`; the ladder editor default is `[1530, 200]`. */
   reactFlowViewport?: [number, number]
 }
 
@@ -55,7 +48,7 @@ export type GraphicalDiffResult = {
   isLadder: boolean
 }
 
-// Node types that should never show diff highlighting (structural/auxiliary)
+// Never diff-highlighted: structural / auxiliary nodes.
 const STRUCTURAL_NODE_TYPES = new Set([
   'powerRail',
   'parallel',
@@ -65,17 +58,10 @@ const STRUCTURAL_NODE_TYPES = new Set([
   'variable',
 ])
 
-// ---------------------------------------------------------------------------
-// Flow data extraction
-// ---------------------------------------------------------------------------
-
-/** The two graphical languages this module knows how to read a body for. */
 type GraphicalLanguage = 'ld' | 'fbd'
 
-/**
- * `Node`/`Edge` from @xyflow/react carry more than a body on disk must fill in, so only
- * `id` (and `source`/`target` for edges) is validated; everything else is read defensively.
- */
+// `Node`/`Edge` from @xyflow/react carry more than a body on disk must fill in, so only `id`
+// (and `source`/`target` for edges) is validated; everything else is read defensively.
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
 const NodeSchema = z.custom<Node>((value) => isRecord(value) && typeof value.id === 'string')
@@ -110,10 +96,6 @@ const LadderBodySchema = z.object({ rungs: z.array(RawFlowSchema) })
 
 const FbdBodySchema = z.object({ rung: RawFlowSchema })
 
-/**
- * Which graphical language a path is, or null for anything else. Narrowed rather than
- * asserted, so a non-`ld`/`fbd` extension types correctly instead of lying as `'ld' | 'fbd'`.
- */
 function graphicalLanguageOf(filePath: string): GraphicalLanguage | null {
   const ext = filePath.split('.').pop()?.toLowerCase()
 
@@ -155,10 +137,6 @@ function extractFlowData(content: string, ext: GraphicalLanguage | null): FlowDa
   }
 }
 
-// ---------------------------------------------------------------------------
-// Variable parsing
-// ---------------------------------------------------------------------------
-
 function extractVariables(content: string): ParsedVariable[] {
   const variables: ParsedVariable[] = []
   const varBlockRegex = /(VAR(?:_INPUT|_OUTPUT|_IN_OUT|_EXTERNAL|_GLOBAL|_TEMP)?)\s*\n([\s\S]*?)END_VAR/g
@@ -180,10 +158,6 @@ function extractVariables(content: string): ParsedVariable[] {
   }
   return variables
 }
-
-// ---------------------------------------------------------------------------
-// Variable diffing
-// ---------------------------------------------------------------------------
 
 function computeVariableDiff(originalContent: string, currentContent: string): VarDiffEntry[] {
   const origVars = extractVariables(originalContent)
@@ -220,10 +194,6 @@ function computeVariableDiff(originalContent: string, currentContent: string): V
 
   return entries
 }
-
-// ---------------------------------------------------------------------------
-// Rung alignment
-// ---------------------------------------------------------------------------
 
 function pairRungsByIndex(original: FlowData[], current: FlowData[]): RungPair[] {
   const pairs: RungPair[] = []
@@ -289,10 +259,6 @@ function alignRungs(originalFlows: FlowData[] | null, currentFlows: FlowData[] |
   return pairs
 }
 
-// ---------------------------------------------------------------------------
-// Semantic node matching
-// ---------------------------------------------------------------------------
-
 function getSemanticKey(node: Node): string {
   const type = node.type ?? ''
   const varName = (node.data?.variable as { name?: string })?.name ?? ''
@@ -357,8 +323,8 @@ function matchNodePools(
 
 /**
  * Matching is scoped to paired rungs: a global pass could let an element consume a same-keyed
- * element in another rung, painting untouched rungs as changed. The one cross-rung pass left is
- * a safety net for failed rung alignment, not move detection — elements can't change rungs.
+ * one in another rung, painting untouched rungs as changed. The cross-rung pass is a safety
+ * net for failed alignment, not move detection.
  */
 function computeNodeDiffMap(rungPairs: RungPair[]): {
   original: Map<string, DiffStatus>
@@ -417,10 +383,6 @@ function computeNodeDiffMap(rungPairs: RungPair[]): {
 
   return { original, current }
 }
-
-// ---------------------------------------------------------------------------
-// Semantic edge matching
-// ---------------------------------------------------------------------------
 
 function getEdgeSemanticKey(edge: Edge, nodeKeyMap: Map<string, string>): string {
   const srcKey = nodeKeyMap.get(edge.source) ?? edge.source
@@ -485,10 +447,6 @@ function computeEdgeDiffMaps(
   return { original, current }
 }
 
-// ---------------------------------------------------------------------------
-// Rung height computation
-// ---------------------------------------------------------------------------
-
 /**
  * A geometry field off the wire, or the fallback. `??` alone isn't enough: a dimension that
  * arrived as a string would pass through and concatenate instead of adding in `calcRungHeight`.
@@ -520,10 +478,6 @@ function calcRungWidth(nodes: Node[]): number {
   return maxX + 40
 }
 
-// ---------------------------------------------------------------------------
-// Public API: compute full graphical diff
-// ---------------------------------------------------------------------------
-
 export function computeGraphicalDiff(
   originalContent: string,
   currentContent: string,
@@ -547,8 +501,6 @@ export function computeGraphicalDiff(
     const orig = rungPairs[i].original
     const curr = rungPairs[i].current
 
-    // Per-side dimensions (content bounds). Each side uses its own so the
-    // smaller side doesn't get padded to match the larger one.
     const originalHeight = orig ? calcRungHeight(orig.nodes) : 80
     const currentHeight = curr ? calcRungHeight(curr.nodes) : 80
     const originalWidth = orig ? calcRungWidth(orig.nodes) : isLadder ? 0 : 400

@@ -1,5 +1,3 @@
-/** Abstracts project lifecycle operations (create, open, save, POU management): editor delegates over IPC, web via project-api.ts. */
-
 import type * as PdfJsLib from 'pdfjs-dist'
 import { z } from 'zod'
 
@@ -20,41 +18,40 @@ export interface ProjectResponse {
     meta: ProjectMeta
     projectData: PLCProjectData
     deviceConfiguration?: DeviceConfiguration
-    /** Pin mappings from `devices/pin-mapping.json`; the legacy flat-array shape is still accepted and auto-migrated on next save. */
+    /** The legacy flat-array shape is still accepted, and auto-migrated on the next save. */
     devicePinMapping?: DevicePin[] | Record<string, DevicePin[]>
-    /** Non-fatal parsing warnings surfaced in the in-app Console. */
+    /** Non-fatal parse warnings, surfaced in the in-app Console. */
     warnings?: string[]
-    /** POUs that failed to parse entirely; non-empty forces the project open empty and read-only so a save can't overwrite the real content. */
+    /** Non-empty forces the project open empty and read-only, so a save can't overwrite the real content. */
     fatalErrors?: string[]
-    /** `datatypes/*.dt` files that failed to parse, preserved raw so the save flow echoes them back verbatim. */
+    /** Kept raw so the save flow echoes unparseable `.dt` files back verbatim. */
     unparsedDataTypeFiles?: RawProjectFile[]
-    /** Raw file contents by path, captured pre-parse, so the save flow can re-upload unedited files byte-identical. */
+    /** Captured pre-parse, so the save flow can re-upload unedited files byte-identical. */
     rawLoadedFiles?: Record<string, string>
-    /** Whether the user may persist changes; gates only backend writes, not local editing/simulation. Absent means `true`. */
+    /** Gates backend writes only, not local editing/simulation. Absent means `true`. */
     canEdit?: boolean
-    /** Resolved project README; `null` means none exists. Absent means this adapter doesn't expose READMEs. */
+    /** `null` means none exists; absent means this adapter doesn't expose READMEs. */
     readme?: string | null
-    /** Set when this response came from converting a pending PLCopen import rather than a normal project.json; caller should save immediately to clear the marker. */
+    /** Converted from a pending PLCopen import; the caller must save immediately to clear the marker. */
     wasPendingPlcopenImport?: boolean
   }
   error?: {
     title: string
     description: string
-    /** HTTP status when known — distinguishes a permission denial (403) from a load failure. */
+    /** HTTP status when known — a 403 is a permission denial, not a load failure. */
     status?: number
   }
 }
 
-/** Pre-serialized project files for writing to disk; mirrors the read-side RawProjectFiles shape but for writing. */
 export interface WriteProjectFiles {
   projectPath: string
   /** Pre-serialized project.json content */
   projectJson: string
-  /** Pre-serialized devices/configuration.json; undefined for project types that don't own this file (skips the write, doesn't truncate). */
+  /** Undefined for project types that don't own this file: skips the write rather than truncating it. */
   deviceConfig?: string
-  /** Pre-serialized devices/pin-mapping.json; same optional semantics as `deviceConfig`. */
+  /** Same optional semantics as `deviceConfig`. */
   pinMapping?: string
-  /** Pre-serialized library.json for library projects; undefined skips the write rather than truncating the on-disk copy. */
+  /** Same optional semantics as `deviceConfig`. */
   libraryManifest?: string
   /** POU files with pre-serialized IEC text content */
   pouFiles: RawProjectFile[]
@@ -62,7 +59,7 @@ export interface WriteProjectFiles {
   serverFiles: RawProjectFile[]
   /** Remote device config files with pre-serialized JSON content */
   remoteDeviceFiles: RawProjectFile[]
-  /** Data type files (`datatypes/<Name>.dt`) with pre-serialized ST `TYPE…END_TYPE` content, one declaration per file. */
+  /** `datatypes/<Name>.dt`, one ST `TYPE…END_TYPE` declaration per file. */
   dataTypeFiles: RawProjectFile[]
   /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
   deletions: string[]
@@ -73,7 +70,7 @@ const RawProjectFileSchema = z.object({
   content: z.string(),
 }) satisfies z.ZodType<RawProjectFile>
 
-/** Runtime check for `WriteProjectFiles` at IPC boundaries — a TypeScript annotation on an IPC argument checks nothing. */
+/** Runtime check: a TypeScript annotation on an IPC argument checks nothing. */
 export const WriteProjectFilesSchema = z.object({
   projectPath: z.string().min(1),
   projectJson: z.string(),
@@ -87,7 +84,7 @@ export const WriteProjectFilesSchema = z.object({
   deletions: z.array(z.string()),
 }) satisfies z.ZodType<WriteProjectFiles>
 
-/** Why a write failed, when known: `signed-out` (401/403/no session) or `unreachable` (no answer or 5xx). Absent otherwise. */
+/** `signed-out` is 401/403/no session; `unreachable` is no answer or a 5xx. Absent when the cause is unknown. */
 export type SaveFailureReason = 'signed-out' | 'unreachable'
 
 export interface SaveResult {
@@ -131,7 +128,7 @@ export interface RawProjectFiles {
     deviceConfig: string
     /** Raw content of devices/pin-mapping.json */
     pinMapping: string
-    /** Raw content of `library.json` for library projects; empty string for PLC projects or a missing manifest (the editor seeds a template on first save). */
+    /** Empty string for PLC projects or a missing manifest (the editor seeds a template on first save). */
     libraryManifest: string
     /** Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json) */
     pouFiles: RawProjectFile[]
@@ -139,45 +136,42 @@ export interface RawProjectFiles {
     serverFiles: RawProjectFile[]
     /** Raw remote device config files from devices/remote/ */
     remoteDeviceFiles: RawProjectFile[]
-    /** Raw data type files from datatypes/ (`.dt`, one ST `TYPE…END_TYPE` declaration each). Empty on projects that predate the format. */
+    /** One ST `TYPE…END_TYPE` declaration each. Empty on projects that predate the format. */
     dataTypeFiles: RawProjectFile[]
     /** See {@link ProjectResponse.data.canEdit}. */
     canEdit?: boolean
     /** See {@link ProjectResponse.data.readme}. */
     readme?: string | null
-    /** Raw PLCopen XML when the project directory is a bare pending-import marker instead of a normal project; undefined otherwise. */
+    /** Set only when the directory is a bare pending-import marker instead of a normal project. */
     pendingPlcopenSource?: string
-    /** File bytes exactly as the source handed them over, keyed by relative path; lets the save flow re-upload unedited files unchanged instead of re-serializing them. */
+    /** Bytes exactly as the source handed them over, so unedited files re-upload unchanged. */
     rawLoadedFiles?: Record<string, string>
   }
-  /** HTTP status when known, so a 403 forwarded by `openProjectByPath` isn't lost. See `ProjectResponse['error']`. */
+  /** HTTP status when known, so a 403 forwarded by `openProjectByPath` isn't lost. */
   error?: { title: string; description: string; status?: number }
 }
 
 /** Distinguishes signed-out, no-projects-yet, and unreachable — states an empty list can't tell apart. */
 export type CloudProjectsResult =
   | { status: 'ok'; projects: CloudProjectSummary[] }
-  /** The server answered, and there is no usable session. */
   | { status: 'signed-out' }
-  /** The question could not be asked — offline, DNS, a dropped connection. */
   | { status: 'unreachable' }
-  /** This build has no channel for cloud projects at all. */
+  /** This build has no channel for cloud projects at all — distinct from `unreachable`. */
   | { status: 'unavailable' }
 
-/** A project on the user's Autonomy Edge account, as a list needs to show it. */
 export interface CloudProjectSummary {
   id: string
   name: string
-  /** IEC language slug, e.g. `st` / `ld`. Absent on projects that never set one. */
+  /** IEC language slug, e.g. `st`. Absent on projects that never set one. */
   language?: string | null
   /** ISO timestamp of the last change, which is what "recent" is ordered by. */
   updatedAt: string
 }
 
-/** A destination the user can publish into. Flattened, with `depth` to read as a tree. */
+/** Flattened, with `depth` to read back as a tree. */
 export interface CloudFolder {
   id: string
-  /** Display-ready. The account's root folder is named after the user id on the wire. */
+  /** Display-ready: the account's root folder arrives named after the user id. */
   name: string
   depth: number
 }
@@ -187,7 +181,6 @@ export type CloudFoldersResult =
   | { status: 'signed-out' }
   | { status: 'unreachable' }
 
-/** Why publishing failed — each reason implies a different next step for the user. */
 export type UploadProjectFailure =
   | { reason: 'no-manifest' }
   | { reason: 'empty' }
@@ -204,7 +197,7 @@ export type UploadProjectResult =
   | { status: 'ok'; projectId: string | null; uploadedFiles: number }
   | { status: 'failed'; failure: UploadProjectFailure }
 
-/** Runtime check for `CloudProjectsResult`; an unrecognised shape must map to the case that claims the least. */
+/** Runtime check; an unrecognised shape must map to the case that claims the least. */
 export const CloudProjectsResultSchema = z.union([
   z.object({
     status: z.literal('ok'),
@@ -260,7 +253,7 @@ export interface UploadProjectParams {
 }
 
 export interface ProjectPort {
-  /** Folders on Autonomy Edge to publish into; optional — only a platform with local projects and Edge access has this. */
+  /** Optional — only a platform with both local projects and Edge access has this. */
   listCloudFolders?(): Promise<CloudFoldersResult>
 
   /** Archives a local project and imports it into Edge; optional for the same reason as `listCloudFolders`. */
@@ -269,7 +262,6 @@ export interface ProjectPort {
   /** Create a new project. */
   createProject(params: CreateProjectParams): Promise<ProjectResponse>
 
-  /** Opens a project via platform file picker (native dialog on editor; file input or project list on web). */
   openProject(): Promise<ProjectResponse>
 
   /** Open a project by its path or identifier. */
@@ -278,7 +270,6 @@ export interface ProjectPort {
   /** Save the entire project. All files are pre-serialized by the frontend. */
   saveProject(files: WriteProjectFiles): Promise<SaveResult>
 
-  /** Saves a single file (writes to disk on editor; updates in-memory state and/or syncs to backend on web). */
   saveFile(filePath: string, content: unknown): Promise<SaveResult>
 
   /** Create a new POU file. */
@@ -290,34 +281,31 @@ export interface ProjectPort {
   /** Rename a POU file. */
   renamePou(params: RenamePouParams): Promise<{ success: boolean; data?: unknown; error?: string }>
 
-  /** Renames the project. Web calls Edge's canonical rename endpoint and echoes the resolved name back; editor no-ops since `project.json`'s `meta.name` is already canonical. */
+  /** Returns the name the backend resolved, which may differ from `newName`. */
   renameProject(projectId: string, newName: string): Promise<{ success: boolean; name?: string; error?: string }>
 
-  /** Picks a filesystem path for project location (native directory picker on editor; may return a pre-configured path on web). */
   pickPath(): Promise<{ success: boolean; path?: string; error?: { title: string; description: string } }>
 
   /** Get list of recently opened projects. */
   getRecentProjects(): Promise<RecentProject[]>
 
-  /** Most recently changed cloud projects, server-ordered; optional (only the desktop editor shows cloud alongside local). Discriminated result so signed-out/empty/offline read differently to the user. */
+  /** Server-ordered. Discriminated so signed-out, empty and offline read differently to the user. */
   listRecentCloudProjects?(limit: number): Promise<CloudProjectsResult>
 
-  /** Drops a project from the recent-projects list without touching disk; re-opening it by path later re-adds it. */
+  /** Touches the recent list only, not disk; re-opening the project by path re-adds it. */
   removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
 
-  /** Records `projectPath` in the recent-projects list; optional. Save As is the one flow that needs this call explicitly, since it produces a location without a read. */
+  /** Save As is the one flow that needs this explicitly, since it produces a location without a read. */
   trackRecentProject?(projectPath: string): Promise<{ success: boolean; error?: string }>
 
-  /** Recursively deletes a project directory and its recent-list entry. Implementations must confirm the directory contains a top-level `project.json` before deleting, to refuse arbitrary paths. */
+  /** Recursive. Implementations must confirm a top-level `project.json` first, to refuse arbitrary paths. */
   deleteProject(projectPath: string): Promise<{ success: boolean; error?: string }>
 
-  /** Reads a file's content by path (local filesystem via IPC on editor; in-memory state or API on web). */
   readFileContent(filePath: string): Promise<{ success: boolean; content?: string; error?: string }>
 
-  /** Reads all raw project files without parsing; the frontend parses the returned content strings. */
+  /** No parsing: the frontend parses the returned content strings. */
   readProjectFiles(projectPath: string): Promise<RawProjectFiles>
 
-  /** Starts watching a file for external changes (fs.watch on editor; no-op on web). */
   watchFile?(filePath: string): Promise<{ success: boolean; error?: string }>
 
   /** Stop watching a file. */
@@ -326,13 +314,12 @@ export interface ProjectPort {
   /** Stop watching all files. */
   unwatchAll?(): Promise<{ success: boolean }>
 
-  /** Subscribes to external file-change events; never fires on web. */
   onFileExternalChange?(callback: (filePath: string) => void): Unsubscribe
 
-  /** Fetches the project README; `null` means none exists. Optional — editor has no remote README concept. */
+  /** `null` means no README exists. */
   getReadme?(projectId: string): Promise<string | null>
 
-  /** Saves the README; `content === null` deletes it, an empty string keeps the file present but empty. Optional — editor doesn't support README editing yet. */
+  /** `content === null` deletes the README; an empty string keeps the file present but empty. */
   saveReadme?(
     projectId: string,
     content: string | null,
@@ -346,21 +333,19 @@ export interface ProjectPort {
     error?: string
   }>
 
-  /** Picks a PLCopen XML file to import (native open-file dialog on editor; hidden file input on web). */
   pickPlcopenImportFile(): Promise<{ success: boolean; content?: string; error?: string }>
 
-  /** Persists generated PLCopen XML for the user (native save dialog on editor; browser download on web). */
   exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }>
 
-  /** Persists a rendered PDF (native save dialog on editor; browser download on web); `canceled` distinguishes a dismissed dialog from a write failure. */
+  /** `canceled` distinguishes a dismissed save dialog from a write failure. */
   exportPdfFile(
     defaultFileName: string,
     bytes: Uint8Array,
   ): Promise<{ success: boolean; canceled?: boolean; error?: string }>
 
-  /** Renders a print/export-to-PDF request to bytes via the shared engine; web runs it in a Worker, editor runs it on the main thread because `import.meta.url` workers don't compile under its CommonJS tsconfig. Rejects on failure. */
+  /** Rejects on failure. Editor renders on the main thread: `import.meta.url` workers don't compile under its CommonJS tsconfig. */
   renderPdf(request: PrintRequest): Promise<Uint8Array>
 
-  /** Configures pdf.js before opening a document (idempotent); editor runs it in-process via `globalThis.pdfjsWorker` because Electron's CSP blocks a blob Worker and its V8 lacks the `toHex()` pdf.js's worker code needs. */
+  /** Idempotent. Editor configures pdf.js in-process: Electron's CSP blocks a blob Worker, and its V8 lacks the `toHex()` the worker code needs. */
   preparePdfPreviewWorker(pdfjsLib: typeof PdfJsLib): Promise<void>
 }

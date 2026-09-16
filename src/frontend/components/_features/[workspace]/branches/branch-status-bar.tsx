@@ -232,7 +232,6 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         onClose={() => setShowSwitcher(false)}
         onSelect={handleSelect}
         onDelete={handleDelete}
-        // Only passed when there is a merge screen to reach.
         onMerge={caps.hasBranchMerge ? handleMerge : undefined}
       />
 

@@ -29,7 +29,7 @@ function toContentBlock(value: unknown): AIChatContentBlock | null {
   return null
 }
 
-/** Narrows a message's opaque content to what the store accepts; unrecognised content becomes an empty string. */
+/** Unrecognised content becomes an empty string. */
 export function toChatMessageContent(value: unknown): string | AIChatContentBlock[] {
   if (typeof value === 'string') return value
   if (!Array.isArray(value)) return ''

@@ -59,7 +59,6 @@ function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Extracts a single POU's ST from the full program_st output. */
 export function extractPouST(programSt: string, pouName: string, pouType: string): string {
   const keyword = pouType === 'function-block' ? 'FUNCTION_BLOCK' : pouType === 'function' ? 'FUNCTION' : 'PROGRAM'
   const endKeyword = `END_${keyword}`
@@ -70,7 +69,6 @@ export function extractPouST(programSt: string, pouName: string, pouType: string
   return match ? match[1].trim() : ''
 }
 
-/** Generates layout metadata for a Ladder Diagram from its XYFlow state. */
 export function generateLadderLayoutMetadata(ladderFlow: LadderFlowType): string {
   if (!ladderFlow.rungs.length) return '(* Empty ladder diagram *)'
 
@@ -123,7 +121,6 @@ function describeRung(rung: RungLadderState, rungNumber: number): string {
   return `(* Rung ${rungNumber} [id=${rung.id}]: ${elementCount} elements${comment}${parallelNote}\n${elements.join('\n')} *)`
 }
 
-/** Generates layout metadata for a Function Block Diagram from its XYFlow state. */
 export function generateFBDLayoutMetadata(fbdFlow: FBDFlowType): string {
   const { nodes, edges } = fbdFlow.rung
   if (!nodes.length) return '(* Empty FBD diagram *)'
@@ -181,7 +178,6 @@ export function generateFBDLayoutMetadata(fbdFlow: FBDFlowType): string {
   )
 }
 
-/** Builds the full graphical context string for AI chat. */
 export function generateGraphicalContext(
   pouName: string,
   pouType: string,

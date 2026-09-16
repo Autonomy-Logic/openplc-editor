@@ -1,11 +1,8 @@
-/** The Edge API project envelope and its path <-> slot mapping. Shared by both builds. */
-
 import { z } from 'zod'
 
 import type { WriteProjectFiles } from '../../../middleware/shared/ports/project-port'
 import { iterateWriteProjectFiles } from './iterate-write-project-files'
 
-/** Shape the Edge API uses for project file payloads. */
 export interface ApiProjectFiles {
   'project.json': string
   /** Library projects only. */
@@ -34,10 +31,7 @@ const DevicesSchema = z
   .object({ remote: FileMapSchema.optional(), servers: FileMapSchema.optional() })
   .catchall(z.string())
 
-/**
- * Wire schema for an incoming envelope. Nothing is defaulted: a malformed container must
- * fail the parse, not become an empty one the next save would persist.
- */
+/** Nothing is defaulted: a malformed container must fail the parse, not become an empty one the next save would persist. */
 export const ApiProjectFilesSchema = z.object({
   'project.json': z.string().optional(),
   'library.json': z.string().optional(),
@@ -50,7 +44,7 @@ export const ApiProjectFilesSchema = z.object({
   // A field renamed on the interface without being renamed here fails on this line.
 }) satisfies z.ZodType<IncomingApiProjectFiles, z.ZodTypeDef, unknown>
 
-/** Look up a file by project-relative path; `undefined` for both a missing file and an unknown path. */
+/** `undefined` for both a missing file and an unknown path. */
 export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string): string | undefined {
   if (relativePath === 'project.json') return env['project.json']
   if (relativePath === 'library.json') return env['library.json']
@@ -77,10 +71,7 @@ export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string
   return undefined
 }
 
-/**
- * Write `content` into the slot for `relativePath`, mutating `env`. Creates every container,
- * including the top-level ones: a never-saved project arrives as `files: {}`. Unknown paths are a no-op.
- */
+/** Mutates `env`, creating every container: a never-saved project arrives as `files: {}`. Unknown paths are a no-op. */
 export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string, content: string): void {
   if (relativePath === 'project.json') {
     env['project.json'] = content
@@ -133,10 +124,8 @@ export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string
     env.build[parts[1]] = content
     return
   }
-  // Unknown path: silently ignored.
 }
 
-/** Build a fresh envelope from a flat `WriteProjectFiles`. */
 export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProjectFiles {
   const env: ApiProjectFiles = {
     'project.json': '',
@@ -162,12 +151,9 @@ const MODELLED_KEYS = [
 ] as const
 
 /**
- * Lay a freshly generated envelope over the one the server holds.
- *
- * The save endpoint deletes by omission, so a payload built only from the store drops
- * every file the envelope does not model — `README.md` above all, which has its own
- * endpoint and never appears here. Modelled containers are replaced wholesale, because
- * the store is authoritative for them; anything else is carried through untouched.
+ * The save endpoint deletes by omission, so a payload built only from the store would drop
+ * every file this envelope does not model — `README.md` above all. Modelled containers are
+ * replaced wholesale; the rest is carried through.
  */
 export function mergeEnvelopeOverExisting(
   existing: IncomingApiProjectFiles,
@@ -182,7 +168,7 @@ export function mergeEnvelopeOverExisting(
   return { ...carried, ...generated }
 }
 
-/** Envelope -> the shape a project reader hands back. Inverse of `envelopeFromWriteProjectFiles`. */
+/** Inverse of `envelopeFromWriteProjectFiles`. */
 export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFiles) {
   const pouFiles = []
   for (const [category, categoryFiles] of Object.entries(files.pous ?? {})) {

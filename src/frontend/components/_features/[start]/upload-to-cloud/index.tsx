@@ -1,5 +1,3 @@
-/** Publishing a project from this machine to Autonomy Edge, archiving it here instead of asking the user to zip it. */
-
 import { CloudUpload, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -11,15 +9,11 @@ import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
 export type UploadToCloudModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Absolute path of the project on this machine. */
   projectPath: string
-  /** Its local name, offered as the default. */
   projectName: string
-  /** Published successfully — the caller decides what to refresh. */
   onUploaded: (projectId: string | null) => void
 }
 
-/** What to say for each way this can fail. One sentence, and something to do about it. */
 function describeFailure(failure: UploadProjectFailure): string {
   switch (failure.reason) {
     case 'no-manifest':
@@ -51,7 +45,6 @@ function describeFailure(failure: UploadProjectFailure): string {
   }
 }
 
-/** The branch drawn to the left of a folder's name, matching Edge's own import dialog. */
 function folderConnector(depth: number): string {
   return depth === 0 ? '' : `${'    '.repeat(depth - 1)}└── `
 }

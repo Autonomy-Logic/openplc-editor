@@ -29,10 +29,7 @@ function stripEmptyText(blocks: AIChatContentBlock[]): AIChatContentBlock[] {
   return blocks.filter((b) => !isEmptyText(b))
 }
 
-/**
- * Client-side mirror of the backend repair: makes a message list valid for the Anthropic Messages API
- * by synthesizing `tool_result`s for unanswered `tool_use`s and dropping orphan results/empty text.
- */
+/** Client-side mirror of the backend repair that makes a message list valid for the Anthropic Messages API. */
 export function repairToolUseSequence(messages: AIChatMessage[]): AIChatMessage[] {
   const out: AIChatMessage[] = []
   let i = 0
@@ -58,7 +55,6 @@ export function repairToolUseSequence(messages: AIChatMessage[]): AIChatMessage[
           continue
         }
 
-        // No user turn follows the tool_use — insert a synthetic one.
         out.push({ role: 'user', content: toolUseIds.map(makeToolResult) })
         i += 1
         continue
