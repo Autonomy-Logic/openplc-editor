@@ -10,7 +10,7 @@ import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import { cn } from '../../../../utils/cn'
 import { getErrorMessage } from '../../../../utils/get-error-message'
 import { serializeDataTypeToText } from '../../../../utils/PLC/data-type-serializer'
-import { parseDataTypeFromText } from '../../../../utils/PLC/data-type-text-parser'
+import { parseDataTypeFromText, rewriteDeclaredTypeName } from '../../../../utils/PLC/data-type-text-parser'
 import { InputWithRef } from '../../../_atoms/input'
 import { ArrayDataType } from '../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../_molecules/data-types/enumerated'
@@ -21,6 +21,10 @@ import { toast } from '../../[app]/toast/use-toast'
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string
 }
+
+// `name` is the type the commit left behind — the new one when the buffer
+// renamed it, so the caller can address the model it now lives under.
+type CommitOutcome = { committed: boolean; name: string }
 
 const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const {
@@ -69,7 +73,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const lastRejectedCodeRef = useRef<string | null>(null)
   const lastMirroredCodeRef = useRef(editorCode)
   const isParsingRef = useRef(false)
-  const commitCodeRef = useRef<() => boolean>(() => false)
+  const commitCodeRef = useRef<() => Promise<CommitOutcome>>(() => Promise.resolve({ committed: false, name: '' }))
 
   useEffect(() => {
     const dataType = dataTypes.find((candidate) => candidate.name === dataTypeName)
@@ -118,37 +122,81 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     setParseError(parseDataTypeFromText(editorCode, dataTypeName).error ?? null)
   }, [display, editorContent, editorCode, dataTypeName])
 
-  const commitCode = (): boolean => {
-    const { dataType, error } = parseDataTypeFromText(editorCode, dataTypeName)
-    if (!dataType) {
-      const message = error ?? 'Unexpected syntax error.'
-      setParseError(message)
-      toast({ title: 'Syntax error', description: message, variant: 'fail' })
-      return false
-    }
+  const rejectBuffer = (message: string): boolean => {
+    setParseError(message)
+    lastRejectedCodeRef.current = editorCode
+    toast({ title: 'Syntax error', description: message, variant: 'fail' })
+    return false
+  }
 
+  // Everything a commit does once the text has parsed.
+  const commitParsedDataType = (dataType: PLCDataType): boolean => {
     captureAndPush(dataTypeName)
 
     if (editorContent) {
       updateDatatype(dataTypeName, dataType)
     } else {
       const result = createDatatype({ data: dataType })
-      if (!result.ok) {
-        const message = result.message ?? 'Could not create the data type.'
-        setParseError(message)
-        toast({ title: 'Syntax error', description: message, variant: 'fail' })
-        return false
-      }
+      if (!result.ok) return rejectBuffer(result.message ?? 'Could not create the data type.')
       if (rawFile) removeUnparsedDataTypeFile(rawFile.relativePath)
     }
 
     handleFileAndWorkspaceSavedState(dataTypeName)
+    lastParsedCodeRef.current = editorCode
+    lastRejectedCodeRef.current = null
     setParseError(null)
     return true
   }
 
+  const commitCode = (): boolean => {
+    const { dataType, error } = parseDataTypeFromText(editorCode, dataTypeName)
+    if (!dataType) return rejectBuffer(error ?? 'Unexpected syntax error.')
+    return commitParsedDataType(dataType)
+  }
+
+  // Put the old name back without touching the rest of the user's text, and
+  // write it to the model directly: `rename` reconciles the stored buffer
+  // synchronously, a render before React state would reach it.
+  const restoreBufferName = (parsed: PLCDataType) => {
+    const restored =
+      rewriteDeclaredTypeName(editorCode, dataTypeName) ?? serializeDataTypeToText({ ...parsed, name: dataTypeName })
+    lastMirroredCodeRef.current = restored
+    lastParsedCodeRef.current = restored
+    lastRejectedCodeRef.current = null
+    updateModelStructureForName(dataTypeName, { display: 'code', code: restored })
+    setEditorCode(restored)
+  }
+
+  // A name edited in the buffer is a rename intent, not a parse error — but an
+  // unparsed file has no type to rename, and a case-only difference is
+  // normalized rather than renamed, because the name gates refuse a case-only
+  // self-rename and routing one through the rename could only ever fail.
+  const isRenameIntent = (parsed: PLCDataType): boolean =>
+    editorContent !== undefined && parsed.name.toLowerCase() !== dataTypeName.toLowerCase()
+
+  const commitCodeWithRename = async (): Promise<CommitOutcome> => {
+    const { dataType, error } = parseDataTypeFromText(editorCode)
+    if (!dataType) return { committed: rejectBuffer(error ?? 'Unexpected syntax error.'), name: dataTypeName }
+    if (!isRenameIntent(dataType)) return { committed: commitCode(), name: dataTypeName }
+
+    // The body lands under the old name first, so a refused rename still keeps
+    // the edit and leaves the buffer committable.
+    if (!commitParsedDataType({ ...dataType, name: dataTypeName })) return { committed: false, name: dataTypeName }
+    restoreBufferName(dataType)
+
+    try {
+      const result = await rename(dataTypeName, dataType.name)
+      if (result.ok) return { committed: true, name: dataType.name }
+      // A declined impact modal is a user choice, not a failure.
+      if (!result.cancelled) toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
+    } catch (error) {
+      toast({ title: 'Rename failed', description: getErrorMessage(error), variant: 'fail' })
+    }
+    return { committed: true, name: dataTypeName }
+  }
+
   useEffect(() => {
-    commitCodeRef.current = commitCode
+    commitCodeRef.current = commitCodeWithRename
   })
 
   // Stable reference, or the child's cursor-jump effect re-fires every
@@ -177,21 +225,19 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   useEffect(() => {
     if (display !== 'code') return
 
-    // Clicking away raises mousedown then focusout, and the commit is
-    // synchronous, so `isParsingRef` is clear by the second one. Both
-    // watermarks make the pair one attempt whatever its outcome.
+    // Clicking away raises mousedown then focusout, and the watermarks the
+    // commit itself sets make the pair one attempt whatever its outcome. The
+    // flag outlives the await: an impact modal sits outside the container, so
+    // its own buttons would otherwise re-enter through mousedown.
     const tryCommit = () => {
       if (isParsingRef.current) return
       if (editorCode === lastParsedCodeRef.current) return
       if (editorCode === lastRejectedCodeRef.current) return
       isParsingRef.current = true
-      if (commitCodeRef.current()) {
-        lastParsedCodeRef.current = editorCode
-        lastRejectedCodeRef.current = null
-      } else {
-        lastRejectedCodeRef.current = editorCode
+      const release = () => {
+        isParsingRef.current = false
       }
-      isParsingRef.current = false
+      void commitCodeRef.current().then(release, release)
     }
 
     const onDocMouseDown = (e: MouseEvent) => {
@@ -219,8 +265,30 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     if (display === value) return
-    if (display === 'code' && !commitCode()) return
-    updateModelStructureForName(dataTypeName, { display: value, code: value === 'code' ? editorCode : undefined })
+    if (display !== 'code') {
+      updateModelStructureForName(dataTypeName, { display: value, code: editorCode })
+      return
+    }
+    if (isParsingRef.current) return
+
+    // Only a rename has to wait for the store; keep the plain switch instant.
+    const parsed = parseDataTypeFromText(editorCode).dataType
+    if (!parsed || !isRenameIntent(parsed)) {
+      if (commitCode()) updateModelStructureForName(dataTypeName, { display: value, code: undefined })
+      return
+    }
+
+    isParsingRef.current = true
+    void commitCodeWithRename().then(
+      ({ committed, name }) => {
+        isParsingRef.current = false
+        // A rename rekeyed the model, so the switch belongs to the new name.
+        if (committed) updateModelStructureForName(name, { display: value, code: undefined })
+      },
+      () => {
+        isParsingRef.current = false
+      },
+    )
   }
 
   const handleStartEditing = () => {
