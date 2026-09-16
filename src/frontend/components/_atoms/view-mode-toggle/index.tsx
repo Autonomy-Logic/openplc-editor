@@ -23,6 +23,7 @@ const ViewModeToggle = ({
 }: ViewModeToggleProps) => {
   return (
     <div
+      role='group'
       aria-label={containerLabel}
       className={cn('flex h-fit w-fit items-center justify-center rounded-md', className)}
     >
@@ -31,7 +32,7 @@ const ViewModeToggle = ({
         aria-label={tableLabel}
         aria-pressed={display === 'table'}
         onClick={() => onDisplayChange('table')}
-        className='flex rounded-l-md hover:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand'
+        className='flex rounded-l-md hover:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1'
       >
         <TableIcon
           size='md'
@@ -48,7 +49,7 @@ const ViewModeToggle = ({
         aria-label={codeLabel}
         aria-pressed={display === 'code'}
         onClick={() => onDisplayChange('code')}
-        className='flex rounded-r-md hover:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand'
+        className='flex rounded-r-md hover:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1'
       >
         <CodeIcon
           size='md'

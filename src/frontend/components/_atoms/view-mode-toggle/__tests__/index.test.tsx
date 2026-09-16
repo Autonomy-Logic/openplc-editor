@@ -29,6 +29,15 @@ describe('ViewModeToggle', () => {
     expect(code.getAttribute('aria-pressed')).toBe('false')
   })
 
+  // A bare <div> maps to role `generic`, whose name-from-author is
+  // prohibited, so the container label only reaches assistive tech
+  // because of the explicit role.
+  it('names the pair as a group', () => {
+    renderToggle('table')
+
+    expect(screen.getByRole('group', { name: 'Variables visualization switch container' })).toBeTruthy()
+  })
+
   it('reaches both views by Tab, in reading order', async () => {
     const user = userEvent.setup()
     const { table, code } = renderToggle('table')
