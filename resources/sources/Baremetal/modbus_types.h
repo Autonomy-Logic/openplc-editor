@@ -27,10 +27,31 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define COILS           0
 #define INPUTSTATUS     1
 
+// Widest single value the debug READ path can put on the wire. The numbers live
+// on the C-ABI surface (arduino_runtime_glue.h), which is where strucpp's
+// constants are mirrored for callers that cannot include its C++17 headers, and
+// a static_assert there holds them to the real ones.
+#include "arduino_runtime_glue.h"
+// Bytes the DEBUG_GET response spends before its first value.
+#define MB_DEBUG_GET_HEADER    11
+
+// The frame has to hold that header plus the widest value the target can
+// actually produce, or that value can never be read at all -- it is skipped in
+// silence, and the read returns nothing.
+//
+// The small AVRs are sized for a STRING and not a WSTRING on purpose. An
+// `IECWStringVar<254>` is ~1020 bytes of SRAM by itself (value + forced copy),
+// which does not fit an ATmega168's 1024 bytes and is half an ATmega328P's
+// 2048, so a WSTRING cannot exist on those parts whatever the frame is. Paying
+// 2 x 136 bytes of buffer for a variable that cannot be declared would take
+// RAM from programs that CAN run there. A STRING is reachable, so they get it.
+//
+// Everything else is 32-bit with 32 KB of SRAM upwards, where fitting a WSTRING
+// costs 8 bytes per buffer.
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)
-    #define MAX_MB_FRAME 128
+    #define MAX_MB_FRAME (MB_DEBUG_GET_HEADER + OPENPLC_DEBUG_STRING_WIRE + 6)   /* 144 */
 #else
-    #define MAX_MB_FRAME 256
+    #define MAX_MB_FRAME (MB_DEBUG_GET_HEADER + OPENPLC_DEBUG_WSTRING_WIRE + 8)  /* 272 */
 #endif
 #define MAX_SRV_CLIENTS 3 //how many clients should be able to connect to TCP server at the same time
 #define MBAP_SIZE       6

@@ -149,6 +149,17 @@ uint8_t  openplc_debug_write(uint8_t arr, uint16_t elem, const uint8_t* bytes, u
 // boundary can interpret what openplc_debug_set / _write return without
 // including the C++ runtime header. arduino_runtime_glue.cpp static_asserts
 // these against the real constants. Note that success is 0x7E and not zero.
+// Bytes a STRING / WSTRING occupies on the debug wire: 1 length byte plus the
+// padded payload (126 characters, doubled for UTF-16 code units). Here for the
+// same reason as the STATUS_* macros below -- the Modbus side sizes its frame
+// from these and cannot include debug_dispatch.hpp -- and held to
+// strucpp::debug::DEBUG_*_WIDTH by a static_assert in arduino_runtime_glue.cpp.
+//
+// A frame too small for the widest of these does not fail: it SKIPS the value,
+// silently, which is how a WSTRING read came back empty rather than refused.
+#define OPENPLC_DEBUG_STRING_WIRE   127
+#define OPENPLC_DEBUG_WSTRING_WIRE  253
+
 #define OPENPLC_DEBUG_STATUS_OK             0x7E
 #define OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS  0x81
 #define OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE 0x82

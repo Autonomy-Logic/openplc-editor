@@ -701,3 +701,13 @@ static_assert(OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS == strucpp::debug::STATUS_OUT_O
               "OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS drifted from strucpp::debug::STATUS_OUT_OF_BOUNDS");
 static_assert(OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE == strucpp::debug::STATUS_DATA_TOO_LARGE,
               "OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE drifted from strucpp::debug::STATUS_DATA_TOO_LARGE");
+
+// Same reasoning for the string wire widths. `modbus_types.h` sizes the Modbus
+// frame from them -- a frame that cannot hold the widest value skips it in
+// silence, which is how a WSTRING read came back empty rather than failing --
+// and that header is plain C++ and cannot include debug_dispatch.hpp. This is
+// again the one place that sees both.
+static_assert(OPENPLC_DEBUG_STRING_WIRE == strucpp::debug::DEBUG_STRING_WIDTH,
+              "OPENPLC_DEBUG_STRING_WIRE drifted from strucpp::debug::DEBUG_STRING_WIDTH");
+static_assert(OPENPLC_DEBUG_WSTRING_WIRE == strucpp::debug::DEBUG_WSTRING_WIDTH,
+              "OPENPLC_DEBUG_WSTRING_WIRE drifted from strucpp::debug::DEBUG_WSTRING_WIDTH");
