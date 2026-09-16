@@ -2,11 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
-import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
 import { newGlobalNameCollision } from '../../../store/slices/shared/name-collision'
@@ -18,6 +16,7 @@ import {
 } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import TableActions from '../../_atoms/table-actions'
+import { ViewModeToggle } from '../../_atoms/view-mode-toggle'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { GlobalVariablesTable } from '../../_molecules/global-variables-table'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
@@ -442,34 +441,14 @@ const GlobalVariablesEditor = () => {
           )}
         </div>
 
-        <div
-          aria-label='Variables visualization switch container'
-          className={cn('flex h-fit w-fit flex-1 items-center justify-center rounded-md', {
-            'absolute right-0': editorVariables.display === 'code',
-          })}
-        >
-          <TableIcon
-            aria-label='Variables table visualization'
-            onClick={() => handleVisualizationTypeChange('table')}
-            size='md'
-            currentVisible={editorVariables.display === 'table'}
-            className={cn(
-              editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-
-          <CodeIcon
-            aria-label='Variables code visualization'
-            onClick={() => handleVisualizationTypeChange('code')}
-            size='md'
-            currentVisible={editorVariables.display === 'code'}
-            className={cn(
-              editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-        </div>
+        <ViewModeToggle
+          display={editorVariables.display}
+          onDisplayChange={handleVisualizationTypeChange}
+          containerLabel='Variables visualization switch container'
+          tableLabel='Variables table visualization'
+          codeLabel='Variables code visualization'
+          className={cn('flex-1', { 'absolute right-0': editorVariables.display === 'code' })}
+        />
       </div>
       {editorVariables.display === 'table' && (
         <div aria-label='Variables editor table container' className='' style={{ scrollbarGutter: 'stable' }}>
