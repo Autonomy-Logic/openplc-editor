@@ -83,7 +83,25 @@ function FormLayout({ section }: FormLayoutProps) {
 
   const updateField = (id: string, value: string | number | boolean) => {
     if (persistenceKey === null) return
-    setVendorScreenData(persistenceKey, { ...storedValues, [id]: value })
+    // A `default` the user can see has to be a `default` the build gets.
+    // Above, defaults fill `values` for rendering, but only what someone
+    // actually typed was ever stored -- so a project that switched the
+    // network on without opening the Interface dropdown compiled with no
+    // carrier at all, and a Pico showing "17" for its chip select compiled
+    // against the library's pin 10. Seed every default that is visible after
+    // this edit and has nothing stored yet. Scoped to an edit the user is
+    // already making in this section, so nothing is written behind their
+    // back, and evaluated against the post-edit values so flipping a
+    // section's switch on seeds the fields it reveals.
+    const next = { ...values, [id]: value }
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.id === id || field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, next)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    setVendorScreenData(persistenceKey, { ...storedValues, ...seeded, [id]: value })
   }
 
   return (

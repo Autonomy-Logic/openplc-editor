@@ -976,6 +976,7 @@ async function runCompilePipelineInner(
     // "is the server on the default port" test always compared against `Serial`
     // too. Harmless only for as long as every package declares `Serial`.
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
+    ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
   })
 

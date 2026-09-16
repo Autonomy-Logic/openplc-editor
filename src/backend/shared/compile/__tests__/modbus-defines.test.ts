@@ -211,6 +211,34 @@ describe('generateModbusDefines', () => {
       )
     })
 
+    it('falls back to the only carrier the board declares, not to Ethernet', () => {
+      // A project that switched the network on without opening the Interface
+      // dropdown used to compile MBTCP_ETHERNET regardless of the board, which
+      // on a Wi-Fi-only ESP32 is ETH.begin() against a PHY that is not there:
+      // it compiles, links, and never gets an address.
+      const out = generateModbusDefines({ network: { enabled: true } }, 'Serial', tcpServer, ['Wi-Fi'])
+      expect(out).toContain('#define MBTCP_WIFI')
+      expect(out).not.toContain('MBTCP_ETHERNET')
+    })
+
+    it('keeps Ethernet for a board that declares both carriers', () => {
+      // Two answers means the board has not answered; Ethernet stays the
+      // historical default rather than a coin toss.
+      expect(
+        generateModbusDefines({ network: { enabled: true } }, 'Serial', tcpServer, ['Ethernet', 'Wi-Fi']),
+      ).toContain('#define MBTCP_ETHERNET')
+    })
+
+    it('lets an explicit choice beat the board declaration', () => {
+      const out = generateModbusDefines(
+        { network: { enabled: true, interface: 'Ethernet' as const } },
+        'Serial',
+        tcpServer,
+        ['Wi-Fi'],
+      )
+      expect(out).toContain('#define MBTCP_ETHERNET')
+    })
+
     it('passes an already-formatted MAC or IP through untouched', () => {
       // Escape hatch for shapes the formatter would mangle.
       const state = { network: { enabled: true, mac_address: '0xAA,0xBB,0xCC,0xDD,0xEE,0xFF', ip_address: 'DHCP' } }

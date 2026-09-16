@@ -257,6 +257,22 @@ const TCP_DEFAULTS = {
   tcp_interface: 'Ethernet' as const,
 }
 
+/**
+ * Which carrier to compile when the project never stated one.
+ *
+ * Ethernet is the historical answer and stays the answer for a board that can
+ * do both -- but it is the wrong one for a board that has no Ethernet at all,
+ * where it emitted `MBTCP_ETHERNET` into a Wi-Fi-only firmware: on an ESP32
+ * that is `ETH.begin()` against a PHY the board does not have, which compiles,
+ * links, and never gets an address. A board that declares exactly one carrier
+ * has already answered the question, so use its answer.
+ */
+function resolveTcpInterface(stated: string | undefined, declared: string[] | undefined): string {
+  if (stated) return stated
+  if (declared && declared.length === 1) return declared[0]
+  return TCP_DEFAULTS.tcp_interface
+}
+
 /** The IANA Modbus port, and what the firmware listened on unconditionally
  *  before the port became the server's to state. */
 const BAREMETAL_DEFAULT_TCP_PORT = 502
@@ -279,6 +295,9 @@ export function generateModbusDefines(
   state: VppModbusScreenState,
   defaultSerial: string = 'Serial',
   server?: ModbusServerCompileConfig,
+  /** The board's `networkInterfaces`, so an unstated carrier can fall back to
+   *  the one the board actually has rather than to Ethernet. */
+  networkInterfaces?: string[],
 ): string {
   const net = state.network ?? {}
 
@@ -349,7 +368,7 @@ export function generateModbusDefines(
     // value is signalled by a single-byte `0` so the `< 4` check fires and the
     // runtime falls back to the DHCP/NULL path.
     const mac = net.mac_address
-    const ifaceSel = net.interface ?? TCP_DEFAULTS.tcp_interface
+    const ifaceSel = resolveTcpInterface(net.interface, networkInterfaces)
     const dhcpOn = net.enable_dhcp === true
     const ip = net.ip_address
     const dns = net.dns
