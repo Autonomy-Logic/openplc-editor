@@ -32,6 +32,25 @@ describe('a Modbus TCP server', () => {
     expect(ok({ name: 'Plant', protocol: 'modbus-tcp', enabled: true }).modbusSlaveConfig?.enabled).toBe(true)
   })
 
+  it('carries the authored transports through, so the baremetal emitter can see the server', () => {
+    const server = ok({ name: 'Plant', protocol: 'modbus-tcp', modbus: { transports: ['rtu'] } })
+    expect(server.modbusSlaveConfig?.transports).toEqual(['rtu'])
+  })
+
+  it('carries the RTU wiring through', () => {
+    const server = ok({
+      name: 'Plant',
+      protocol: 'modbus-tcp',
+      modbus: { transports: ['rtu'], slaveId: 7, serialPort: '/dev/ttyUSB0', baudRate: 19200, parity: 'E' },
+    })
+    expect(server.modbusSlaveConfig).toMatchObject({
+      slaveId: 7,
+      serialPort: '/dev/ttyUSB0',
+      baudRate: 19200,
+      parity: 'E',
+    })
+  })
+
   it('keeps the sibling defaults when the spec overrides one field', () => {
     const server = ok({ name: 'Plant', protocol: 'modbus-tcp', modbus: { port: 1502 } })
     expect(server.modbusSlaveConfig?.port).toBe(1502)

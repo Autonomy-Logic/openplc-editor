@@ -218,6 +218,37 @@ Structured Text is generated in-process by the TS transpiler
 legacy `xml2st` binary path has been retired. `XmlGenerator` is kept only for
 the "Export Project as XML" feature.
 
+**The Modbus block of `defines.h` has two sources**, split along the ownership
+boundary (`src/backend/shared/compile/steps/modbus-defines.ts`):
+
+- the project's Modbus `PLCServer` says **what is served** — the transports,
+  the slave id, the TCP port, and the speed of a UART of its own. On every
+  target, baremetal included.
+- the board's VPP screens say **what it is served over** — the default UART's
+  speed, the RS-485 pin, the network. `serial` and `network` sections.
+
+The default UART's speed is the one thing on that line the server does not own,
+because it is the editor's own link and a UART has one speed. `resolveServerBaud`
+in `middleware/shared/utils/modbus-server-profile/baud.ts` decides between the
+two, and the SCREEN calls it as well — a hook cannot import `backend/shared`, and
+two copies of that chain is how a screen ends up disagreeing with the firmware.
+
+A firmware build serves exactly one slave (`modbus.slaveid` is a single global),
+so `selectModbusServer` refuses a build with more than one enabled server and
+names them. The editor still allows several, because a project moves between
+targets.
+
+The editor's own link is deliberately NOT derived from the server. `DEBUG_BAUD`
+comes from `screens.serial.baud_rate` — that UART's speed is the package's to
+state — and `DEBUG_SLAVE` is the constant 1, so a project with no Modbus server
+still debugs and changing a server's slave id is not an access event.
+
+On the default UART the firmware answers **both** ids and routes by function
+code: `0x41`-`0x4B` on the editor's, everything on the server's. So a server
+sharing that port keeps whatever id the user picked, and `MBSERIAL_SLAVE` is the
+server's on every port. A board flashed before 4.4.0 may answer the editor on
+another id; Connect tries 1 first and the project's legacy id after.
+
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 ### Debugging
@@ -232,18 +263,26 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs
 - **Framework:** Jest + jsdom
 - **Test files:** `*.test.ts(x)`, `*.spec.ts(x)`, or `__tests__/` directories
 - **E2E:** Playwright (`/e2e`), Chromium only
-- **Coverage thresholds** — per-directory aggregates, not 100%. Branches are not
-  enforced anywhere. From `jest.config.json`, as functions/lines/statements:
-  - `src/frontend/store/slices/` — 98 / 98 / 97
-  - `src/frontend/utils/` — 97 / 95 / 95
-  - `src/backend/shared/` — 76 / 77 / 75
-  - `src/middleware/adapters/editor/` — 87 / 85 / 85
-  - `src/cli/` is **not collected at all**, so it faces no threshold
+- **Coverage thresholds** — per-directory, enforced by `jest.config.json`. Read
+  the config for the current numbers rather than trusting this table:
+
+  | Directory | statements | lines | functions | branches |
+  |---|---|---|---|---|
+  | `src/frontend/store/slices/` | 97 | 98 | 98 | 0 |
+  | `src/frontend/utils/` | 95 | 95 | 97 | 0 |
+  | `src/backend/shared/` | 75 | 77 | 76 | 0 |
+  | `src/middleware/shared/` | 78 | 76 | 89 | 88 |
+  | `src/middleware/adapters/editor/` | 85 | 85 | 87 | 0 |
+  | `src/frontend/hooks/` | 35 | 35 | 30 | 30 |
+
+  `src/cli/` is not collected at all, so it faces no threshold.
+
+  They are floors for the directory as a whole, not a per-file rule, so a new
+  file is not obliged to reach 100% on its own — but it must not drag the
+  directory below the floor.
 - **Mocks:** `configs/mocks/` for file stubs; `identity-obj-proxy` for CSS modules
 
-The thresholds are aggregates over the whole directory, so an untested new file
-drags its bucket below the line and fails the run. Add tests alongside new code
-in those directories.
+When adding new code to a covered directory, add tests with it: the directory has to stay above its floor, and an untested file is what pushes it under.
 
 ## Code Style
 
@@ -334,7 +373,7 @@ on its `main` push. (Ideally `package.json.version` should be derived from
 1. Create `types.ts`, `slice.ts`, `index.ts` in `src/frontend/store/slices/<name>/`
 2. Add the slice type to `RootState` union in `src/frontend/store/index.ts`
 3. Spread the slice creator in `createOpenPLCStore()`
-4. Add tests to keep the directory's coverage bucket above its threshold
+4. Add tests with it, so the directory stays above its coverage floor
 
 ### When adding a new POU language or type:
 1. Update project parser (`src/backend/shared/utils/parse-project-files.ts`)

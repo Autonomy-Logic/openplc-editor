@@ -36,6 +36,13 @@ export function describeProtocols(
   }
 }
 
+/** Emit only the keys the server actually carries, so a TCP-only server round-trips without RTU noise. */
+function pickDefined<T extends object, K extends keyof T>(source: T, keys: readonly K[]): Partial<Pick<T, K>> {
+  const out: Partial<Pick<T, K>> = {}
+  for (const key of keys) if (source[key] !== undefined) out[key] = source[key]
+  return out
+}
+
 function describeServer(server: PLCServer): Record<string, unknown> {
   const out: Record<string, unknown> = { name: server.name, protocol: server.protocol }
 
@@ -44,8 +51,10 @@ function describeServer(server: PLCServer): Record<string, unknown> {
     if (!config) return out
     out.enabled = config.enabled
     out.modbus = {
+      ...(config.transports ? { transports: config.transports } : {}),
       networkInterface: config.networkInterface,
       port: config.port,
+      ...pickDefined(config, ['slaveId', 'serialPort', 'baudRate', 'parity', 'stopBits', 'dataBits']),
       ...(config.bufferMapping ? { bufferMapping: config.bufferMapping } : {}),
     }
     return out

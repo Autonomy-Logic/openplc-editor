@@ -71,14 +71,19 @@ export function toDeviceLinkCandidates(
   // TCP address is a better next try than a rate nobody asked for.
   const speculative: DeviceLinkCandidate[] = []
 
-  const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
+  const build = (
+    config: DebugConnectionConfig,
+    baudRate: number | undefined,
+    isGuess: boolean,
+    slaveId: number | undefined = config.connectionParams.slaveId,
+  ): void => {
     const kind = modbusTransportKind(config.connectionType)
     if (kind === null) return
     const params = {
       connectionType: config.connectionType,
       port: config.connectionParams.port,
       baudRate,
-      slaveId: config.connectionParams.slaveId,
+      slaveId,
       host: config.connectionParams.ipAddress,
     }
     // Only the simulator needs an in-process serial port; building one for a real

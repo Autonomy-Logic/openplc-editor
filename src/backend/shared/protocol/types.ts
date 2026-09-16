@@ -50,8 +50,17 @@ export type SpecServerProtocol = 'modbus-tcp' | 's7comm' | 'opcua'
 export type SpecRemoteDeviceProtocol = 'modbus-tcp' | 'ethercat'
 
 export interface SpecModbusSlave {
+  /** One server, one or both transports. Omitted, the board decides. */
+  transports?: ModbusTransportType[]
   networkInterface?: string
   port?: number
+  /** RTU wiring; ignored on a TCP-only server. */
+  slaveId?: number
+  serialPort?: string
+  baudRate?: number
+  parity?: ModbusParity
+  stopBits?: number
+  dataBits?: number
   bufferMapping?: ModbusSlaveBufferMapping
 }
 

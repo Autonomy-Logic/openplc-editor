@@ -362,9 +362,25 @@ const modbusBufferMappingSchema = z
 
 const modbusSlaveSpecSchema = z
   .object({
+    /**
+     * What the server answers on. One server, one or both transports -- RTU and
+     * TCP are not two servers. Omitted, the board decides: a microcontroller
+     * gets RTU and a Runtime v4 target TCP.
+     */
+    transports: z
+      .array(z.enum(['tcp', 'rtu']))
+      .min(1)
+      .optional(),
     /** The address the runtime binds to; `0.0.0.0` is every interface. */
     networkInterface: z.string().optional(),
     port: z.number().int().min(1).max(65535).optional(),
+    /** RTU addressing. 0 is broadcast and 248-255 reserved, so neither is allowed. */
+    slaveId: z.number().int().min(1).max(247).optional(),
+    serialPort: z.string().optional(),
+    baudRate: z.number().int().positive().optional(),
+    parity: z.enum(['N', 'E', 'O']).optional(),
+    stopBits: z.number().int().min(1).max(2).optional(),
+    dataBits: z.number().int().min(7).max(8).optional(),
     bufferMapping: modbusBufferMappingSchema.optional(),
   })
   .strict()

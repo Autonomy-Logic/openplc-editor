@@ -243,6 +243,7 @@ function renameElement(
 const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (setState, getState) => ({
   undoRedo: {},
   pendingDatatypeRename: null,
+  pendingDatatypeDelete: null,
 
   pouActions: {
     create: ({ type, name, language }) => {
@@ -574,7 +575,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     deleteRequest: (name) => {
-      getState().modalActions.openModal('confirm-delete-element', { name, elementType: 'datatype' })
+      const state = getState()
+      if (state.pendingDatatypeDelete || state.pendingDatatypeRename) return
+      const impact = findAllReferencesToDataType(
+        name,
+        state.project.data.pous,
+        state.project.data.configurations.resource.globalVariables,
+        state.project.data.dataTypes,
+        state.project.data.globalVariableLists ?? [],
+      )
+      if (impact.totalReferences > 0) {
+        setState({ pendingDatatypeDelete: { name, impact } })
+        return
+      }
+      state.modalActions.openModal('confirm-delete-element', { name, elementType: 'datatype' })
     },
 
     delete: (name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteDatatype(n)),
@@ -609,8 +623,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         if (impact.totalReferences > 0) {
           // Overwriting a pending request would drop its resolver and strand
           // the first caller's await forever (e.g. Enter + blur double-fire).
-          if (getState().pendingDatatypeRename) {
-            return { ok: false, message: 'Another data type rename is awaiting confirmation' }
+          if (getState().pendingDatatypeRename || getState().pendingDatatypeDelete) {
+            return { ok: false, message: 'Another data type change is awaiting confirmation' }
           }
           const confirmed = await new Promise<boolean>((resolve) => {
             setState({ pendingDatatypeRename: { oldName, newName, impact, resolve } })
@@ -637,6 +651,13 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!pending) return
       setState({ pendingDatatypeRename: null })
       pending.resolve(confirmed)
+    },
+
+    respondToPendingDelete: (confirmed) => {
+      const pending = getState().pendingDatatypeDelete
+      if (!pending) return
+      setState({ pendingDatatypeDelete: null })
+      if (confirmed) getState().datatypeActions.delete(pending.name)
     },
 
     duplicate: (sourceName, newName) => {
@@ -998,6 +1019,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
 
     clearStatesOnCloseProject: () => {
+      // A confirmation parked against the closing project must not answer for the next
+      // one, and a dropped rename resolver would strand its caller's await forever.
+      const pendingRename = getState().pendingDatatypeRename
+      setState({ pendingDatatypeRename: null, pendingDatatypeDelete: null })
+      pendingRename?.resolve(false)
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()

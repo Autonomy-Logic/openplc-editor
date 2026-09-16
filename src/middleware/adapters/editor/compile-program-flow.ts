@@ -72,8 +72,9 @@ export type CompileProgramIpcArgs = [
 ]
 
 /**
- * What the flow needs from its platform. Three calls, deliberately: anything
- * more and the flow would be describing a platform rather than a build.
+ * What the flow needs from its platform. Kept to the few calls a build cannot
+ * be assembled without — anything more and the flow would be describing a
+ * platform rather than a build.
  */
 export interface CompileProgramTransport {
   /** Board catalogue — hals.json entries plus installed VPP packages. */
@@ -90,6 +91,16 @@ export interface CompileProgramTransport {
    * back to whether anything was logged at error level.
    */
   runCompileProgram: (compileArgs: CompileProgramIpcArgs, onMessage: (data: Record<string, unknown>) => void) => void
+  /**
+   * A one-line notice when a newer, editor-compatible version of the board's
+   * VPP package exists, or `null`.
+   *
+   * Answered from a catalogue the platform already holds, never from the
+   * network: a build must not wait on a request, so a session that never
+   * reached the CDN simply says nothing. Optional because a transport can have
+   * no catalogue at all — the CLI has none.
+   */
+  findPackageUpdateNotice?: (packageId: string) => Promise<string | null>
 }
 
 /**
@@ -117,19 +128,28 @@ export type PrepareProjectResult = { ok: true; prepared: PreparedProject } | { o
  * preprocessing — everything `compileProgramFlow` does before it builds the IPC
  * argument tuple.
  *
- * Needs only two of the transport's three calls; `runCompileProgram` is not
- * reached, which is what lets a non-building caller pass a transport with no
- * runtime behind it.
+ * `runCompileProgram` is not reached, which is what lets a non-building caller
+ * pass a transport with no runtime behind it. The package notice is optional
+ * on the transport, so a caller without a catalogue simply gets none.
  */
 export async function prepareProjectForCompile(
   args: Pick<CompileProgramArgs, 'projectData' | 'boardTarget' | 'isSimulator'>,
-  transport: Pick<CompileProgramTransport, 'getAvailableBoards' | 'loadAllLibraries'>,
+  transport: Pick<CompileProgramTransport, 'getAvailableBoards' | 'loadAllLibraries' | 'findPackageUpdateNotice'>,
   onProgress: (event: CompileProgressEvent) => void,
 ): Promise<PrepareProjectResult> {
   const boards = await transport.getAvailableBoards()
   const boardInfo = boards.get(args.boardTarget)
   const boardCore = boardInfo?.core ?? null
   const isSimulator = args.isSimulator ?? boardInfo?.compiler === 'simulator'
+
+  // Advisory, and deliberately before the build's own output: a user who only
+  // reads the tail of a failed build still sees it above the failure. It never
+  // gates the build -- the point is that a wrong-looking board has a newer
+  // package to try, not that this one is unusable.
+  if (boardInfo?.vpp && transport.findPackageUpdateNotice) {
+    const notice = await transport.findPackageUpdateNotice(boardInfo.vpp.packageId)
+    if (notice) onProgress({ stage: 'st', message: notice, level: 'warning' })
+  }
 
   // `pythonFunctionBlocks` has always described the contract (v3 / v4 run them,
   // the Simulator stubs them, arduino-cli targets reject them); until now

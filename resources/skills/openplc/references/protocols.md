@@ -57,6 +57,7 @@ editor seeds. A whole Modbus server is two lines:
   "protocol": "modbus-tcp",
   "enabled": true,
   "modbus": {
+    "transports": ["tcp"],
     "networkInterface": "0.0.0.0",
     "port": 502,
     "bufferMapping": { "coils": { "qxBits": 256 }, "holdingRegisters": { "qwCount": 64 } }
@@ -66,6 +67,16 @@ editor seeds. A whole Modbus server is two lines:
 
 `bufferMapping` is a window onto the PLC's own image, and every count it omits
 takes the runtime default.
+
+`transports` is what the server answers on — `tcp`, `rtu`, or both. RTU and TCP
+together are ONE server with two transports, never two servers. Omit it and the
+board decides: a microcontroller gets `rtu`, a Runtime v4 target `tcp`. Declare
+it when you want the other one, because a microcontroller build drops a server
+whose transport its board cannot carry.
+
+For `rtu`, `slaveId` (1-247) is the only addressing there is, and `serialPort`,
+`baudRate`, `parity`, `stopBits` and `dataBits` are the wiring. All are ignored
+on a TCP-only server.
 
 **Within each Modbus block the configured IEC segments are laid out
 sequentially from address 0 of that block**, sized in that block's addressable

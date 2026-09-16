@@ -90,14 +90,18 @@ beforeEach(() => {
 })
 
 describe('loadProject library hydration', () => {
-  it('sets the system libraries before opening the project', async () => {
+  it('sets the system libraries before opening the project, and the boards on both sides of it', async () => {
     await loadProject('/tmp/p')
 
+    // The boards land twice on purpose: once so the project opens against a
+    // resolved target, and once after so the migrations that read project
+    // state get to run.
     expect(calls).toEqual([
       'setAvailableOptions',
       'setSystemLibraries',
       'setBundledLibraryNames',
       'handleOpenProjectResponse',
+      'setAvailableOptions',
     ])
   })
 

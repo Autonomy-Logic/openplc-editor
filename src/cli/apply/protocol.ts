@@ -18,6 +18,7 @@ import type { NormalizedRemoteDevice } from '@root/backend/shared/protocol/norma
 import { normalizeRemoteDeviceSpec } from '@root/backend/shared/protocol/normalize-remote-device-spec'
 import { normalizeServerSpec } from '@root/backend/shared/protocol/normalize-server-spec'
 import { openPLCStoreBase } from '@root/frontend/store'
+import { seedTransports } from '@root/frontend/store/slices/project/slice'
 import type { ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
 import type { PLCRemoteDevice, PLCServer } from '@root/middleware/shared/ports/types'
 
@@ -44,9 +45,15 @@ export function applyServers(spec: ApplySpec, changes: PlannedChange[], errors: 
     return
   }
 
+  // A Modbus server that declares no transport is dropped by the baremetal
+  // emitter, and `createServer` only seeds one when the whole config is absent
+  // -- which it never is here. So make the same board-driven choice the store
+  // makes, and let the spec override it.
+  const transports = seedTransports(state())
+
   const normalized: PLCServer[] = []
   for (const server of spec.servers) {
-    const result = normalizeServerSpec(server)
+    const result = normalizeServerSpec(withSeededTransports(server, transports))
     if (!result.ok) {
       errors.push(...result.errors)
       continue
@@ -69,6 +76,11 @@ export function applyServers(spec: ApplySpec, changes: PlannedChange[], errors: 
     }
     changes.push({ kind: 'server', action: had ? 'update' : 'create', name: server.name })
   }
+}
+
+function withSeededTransports(server: SpecServer, transports: ('rtu' | 'tcp')[]): SpecServer {
+  if (server.protocol !== 'modbus-tcp' || server.modbus?.transports) return server
+  return { ...server, modbus: { ...server.modbus, transports } }
 }
 
 /**
