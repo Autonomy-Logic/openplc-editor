@@ -183,13 +183,23 @@ bool build_refs(UA_NodeHead* h, const char* name)
 {
     UA_NodeReferenceKind* kinds =
         (UA_NodeReferenceKind*)UA_calloc(2, sizeof(UA_NodeReferenceKind));
-    UA_ReferenceTarget* targets =
-        (UA_ReferenceTarget*)UA_calloc(2, sizeof(UA_ReferenceTarget));
+    // One allocation PER KIND, not one shared array carved in two. open62541
+    // may append to a kind's target array with UA_realloc, and realloc is only
+    // defined on the start of a block -- handing kinds[1] an interior pointer
+    // into a shared allocation was undefined behaviour waiting on whether the
+    // SDK happened to take that path. It does take it: opcua_nodes_populate()
+    // asks the server to add the inverse Organizes reference, and only the
+    // duplicate rejection stops the append today.
+    UA_ReferenceTarget* type_target =
+        (UA_ReferenceTarget*)UA_calloc(1, sizeof(UA_ReferenceTarget));
+    UA_ReferenceTarget* organizes_target =
+        (UA_ReferenceTarget*)UA_calloc(1, sizeof(UA_ReferenceTarget));
     UA_LocalizedTextListEntry* dn =
         (UA_LocalizedTextListEntry*)UA_calloc(1, sizeof(UA_LocalizedTextListEntry));
-    if (kinds == nullptr || targets == nullptr || dn == nullptr)
+    if (kinds == nullptr || type_target == nullptr ||
+        organizes_target == nullptr || dn == nullptr)
     {
-        UA_free(kinds); UA_free(targets); UA_free(dn);
+        UA_free(kinds); UA_free(type_target); UA_free(organizes_target); UA_free(dn);
         return false;
     }
 
@@ -202,18 +212,18 @@ bool build_refs(UA_NodeHead* h, const char* name)
     // The two target ids are namespace-zero constants shared by every node.
     // Safe where sharing the reference ARRAY is not: open62541 grows the array
     // with UA_realloc, but never writes through a target id.
-    targets[0].targetId       = UA_NodePointer_fromNodeId(&g_id_basedatavariabletype);
-    targets[0].targetNameHash = 0;
-    targets[1].targetId       = UA_NodePointer_fromNodeId(&g_id_objectsfolder);
-    targets[1].targetNameHash = 0;
+    type_target->targetId       = UA_NodePointer_fromNodeId(&g_id_basedatavariabletype);
+    type_target->targetNameHash = 0;
+    organizes_target->targetId       = UA_NodePointer_fromNodeId(&g_id_objectsfolder);
+    organizes_target->targetNameHash = 0;
 
-    kinds[0].targets.array      = &targets[0];
+    kinds[0].targets.array      = type_target;
     kinds[0].targetsSize        = 1;
     kinds[0].hasRefTree         = false;
     kinds[0].referenceTypeIndex = UA_REFERENCETYPEINDEX_HASTYPEDEFINITION;
     kinds[0].isInverse          = false;
 
-    kinds[1].targets.array      = &targets[1];
+    kinds[1].targets.array      = organizes_target;
     kinds[1].targetsSize        = 1;
     kinds[1].hasRefTree         = false;
     kinds[1].referenceTypeIndex = UA_REFERENCETYPEINDEX_ORGANIZES;
@@ -297,13 +307,17 @@ void opcua_nodes_dematerialise(UA_VariableNode* node)
 {
     if (node == nullptr || node->head.references == nullptr)
         return;
-    // Free in the shape build_refs() allocated, and only if the array still
-    // looks like ours. If open62541 grew it, it used UA_realloc on our own
-    // allocation, so freeing the array is correct; the per-target NodeIds must
-    // not be freed twice.
+    // Free in the shape build_refs() allocated: one block per kind. Freeing
+    // only kinds[0] leaked the Organizes block whenever the SDK had grown it
+    // into a new allocation -- and "the materialised copy is discarded anyway"
+    // is a property of today's flash nodestore, not a contract to rely on.
+    // The per-target NodeIds are shared statics and must not be freed.
     UA_NodeReferenceKind* kinds = node->head.references;
-    if (kinds[0].targets.array != nullptr)
-        UA_free(kinds[0].targets.array);   // the target ids are shared statics
+    for (size_t i = 0; i < 2; i++)
+    {
+        if (!kinds[i].hasRefTree && kinds[i].targets.array != nullptr)
+            UA_free(kinds[i].targets.array);
+    }
     UA_free(kinds);
     UA_free(node->head.displayName);
     node->head.displayName    = nullptr;

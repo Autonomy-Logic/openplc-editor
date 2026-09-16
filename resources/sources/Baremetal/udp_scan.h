@@ -14,6 +14,13 @@
 #ifndef UDP_SCAN_H
 #define UDP_SCAN_H
 
+/* Longest device name the discovery reply can carry.
+ *
+ * reply[] is 192 bytes; the fixed JSON is 126 with the MAC rendered, and the
+ * name appears TWICE (hostname and device), so the two copies share the
+ * remaining 66 -- 33 each, one byte of which is the terminator. */
+#define UDP_SCAN_NAME_MAX 32
+
 #include <Ethernet.h>
 #include <EthernetUdp.h>
 #include <IPAddress.h>
@@ -63,6 +70,21 @@ static inline void udp_scan_poll(void)
     const char *dev = OPLC_DEVICE_NAME;
     if (dev == 0 || dev[0] == 0) dev = "OpenPLC device";
 
+    /* Bound the NAME, not the frame. snprintf() returns the length it WOULD
+     * have written, so using it as the write length reads past reply[] as soon
+     * as the JSON does not fit -- and the name is interpolated twice, so the
+     * budget is halved. Truncating the frame instead would keep the read in
+     * bounds but put malformed JSON on the wire, which the editor's scanner
+     * drops: the device would simply stop appearing, for a reason nothing
+     * reports. Cropping the name keeps the reply well-formed at any length. */
+    char devbuf[UDP_SCAN_NAME_MAX + 1];
+    {
+        size_t i = 0;
+        while (i < UDP_SCAN_NAME_MAX && dev[i] != 0) { devbuf[i] = dev[i]; i++; }
+        devbuf[i] = 0;
+        dev = devbuf;
+    }
+
     /* Reply as an OpenPLC advertisement so the editor's existing scan lists us;
      * the editor takes the device IP from our UDP source address. */
     char reply[192];
@@ -75,7 +97,10 @@ static inline void udp_scan_poll(void)
         "\"api_port\":502}",
         dev, dev,
         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    if (len <= 0) return;
+    /* Belt and braces: the name is bounded above, so this cannot fire today.
+     * It is here so a later field added to the JSON cannot reintroduce the
+     * overread silently. */
+    if (len <= 0 || (size_t)len >= sizeof(reply)) return;
 
     _udp_scan.beginPacket(rip, rport);
     _udp_scan.write((const uint8_t *)reply, (size_t)len);

@@ -87,7 +87,14 @@ bool mb_pdu_skips_crc(uint8_t fc)
 // to the second but not the first.
 bool mb_pdu_is_editor_fc(uint8_t fc)
 {
-    return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_PLC_SET_STATE;
+    // The whole debug range, 0x41..0x4D. Reboot-to-bootloader (0x4C) and
+    // lock-state (0x4D) are part of the editor's package like every other code
+    // here, so they get the same treatment on both sides of the id split: they
+    // must be answerable on the editor's private id, and they must be REFUSED
+    // on the Modbus server's public one. Leaving them out of the range did both
+    // wrongs at once -- unreachable where they belong, reachable where they do
+    // not -- which is why this ends at GET_LOCK_STATE and not at PLC_SET_STATE.
+    return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_GET_LOCK_STATE;
 }
 
 void process_mbpacket()

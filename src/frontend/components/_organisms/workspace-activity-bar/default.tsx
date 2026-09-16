@@ -455,11 +455,25 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(newIp)
           }
         }
-        // Reconnect the Ethernet link we dropped for this upload. On success wait
-        // for the bootloader window + app boot before dialing the (new) IP; on a
-        // failed build the device never rebooted, so reconnect to it immediately.
+        // The device rebooted into the new firmware, so the link we come back to
+        // is a different one -- wait out the bootloader window and the app boot
+        // before `finally` dials it. Only on success: a build that failed never
+        // reached the device.
+        if (ethWasConnected && result.success) {
+          await new Promise((resolve) => setTimeout(resolve, 6000))
+        }
+      } catch (err: unknown) {
+        addLog({ level: 'error', message: `Build error: ${getErrorMessage(err)}` })
+      } finally {
+        // Restore the Ethernet link this handler dropped for the upload, in the
+        // same block that clears the compiling flag -- the teardown happens
+        // before the `try`, so putting the restore inside it meant a throw from
+        // compileProgram (an IPC failure, an adapter throw -- not a
+        // `{ success: false }` return) left the debugger disconnected for good,
+        // with only "Build error: ..." in the console and nothing to say the
+        // connection was gone. Guarded on its own flag, so it is a no-op when
+        // there was nothing to restore.
         if (ethWasConnected) {
-          if (result.success) await new Promise((resolve) => setTimeout(resolve, 6000))
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
           const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
@@ -474,9 +488,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           }
         }
-      } catch (err: unknown) {
-        addLog({ level: 'error', message: `Build error: ${getErrorMessage(err)}` })
-      } finally {
         setIsCompiling(false)
       }
     },

@@ -48,13 +48,6 @@ pool on demand. All dynamic allocation goes through one static arena.
 #define OPCUA_SCAN_BUDGET_US 1000u
 #endif
 
-/** Serve namespace zero from the library's const flash table. Only valid against
- *  a library built with UA_NS0=NONE, which expects an external nodestore to have
- *  namespace zero pre-loaded. Saves ~19 KB of arena. */
-#ifndef OPCUA_NS0_FROM_FLASH
-#define OPCUA_NS0_FROM_FLASH true
-#endif
-
 /** Bytes carried from the socket into open62541 per read. Not the protocol's
  *  8192 floor -- that is advertised through tcpBufSize below. open62541
  *  accumulates a multi-read message into its own SecureChannel buffer. */
@@ -75,14 +68,20 @@ pool on demand. All dynamic allocation goes through one static arena.
 #define OPCUA_SEND_BUFFER 2048u
 #endif
 
-// The library configuration and this flag have to agree, and the failure when
-// they do not is silent: a NONE library with the flag off serves an empty
-// address space. Catch it here instead.
-#if !defined(UA_NAMESPACE_ZERO_MINIMAL) && !OPCUA_NS0_FROM_FLASH
-#error "open62541 was built with UA_NAMESPACE_ZERO=NONE but OPCUA_NS0_FROM_FLASH is off: nothing would provide namespace zero."
-#endif
-#if defined(UA_NAMESPACE_ZERO_MINIMAL) && OPCUA_NS0_FROM_FLASH
-#error "OPCUA_NS0_FROM_FLASH needs a library built with UA_NS0=NONE; a MINIMAL library builds namespace zero in RAM and ships no flash table."
+// Namespace zero is served from the library's const flash table, always. That
+// needs a library built UA_NS0=NONE, which ships the table and expects an
+// external nodestore to provide ns0; a MINIMAL build instead constructs ns0 in
+// RAM (~19 KB of arena) and ships no table, so the two are not interchangeable
+// and the failure is silent -- an empty address space, or a server that starts
+// and browses nothing.
+//
+// This was a toggle while the flash path was being brought up. It is not one
+// any more: there is no configuration in which building ns0 into RAM on a part
+// with this much arena pressure is the right answer. The library installs from
+// a git URL with no pinned ref, so the assumption is asserted loudly rather
+// than defaulted quietly.
+#if defined(UA_NAMESPACE_ZERO_MINIMAL)
+#error "OPC-UA on baremetal needs open62541 built with UA_NS0=NONE: a MINIMAL library builds namespace zero in RAM and ships no flash table for the nodestore to serve."
 #endif
 
 namespace {
@@ -237,18 +236,20 @@ void opcua_init()
     src.namespaceIndex = 0;
     src.context        = nullptr;
 
-    // Drop the default ziptree when namespace zero comes from flash: it would
-    // hold nothing while costing 2,640 bytes of arena.
+    // Drop the default ziptree unconditionally: with namespace zero served from
+    // flash it would hold nothing while costing 2,640 bytes of arena. It is the
+    // `inner` store the flash nodestore would have chained to for ns0, and
+    // there is nothing left for it to answer.
     UA_Nodestore* inner = bootConfig.nodestore;
-    if (OPCUA_NS0_FROM_FLASH && inner != nullptr && inner->free != nullptr)
+    if (inner != nullptr && inner->free != nullptr)
     {
         inner->free(inner);
-        inner = nullptr;
     }
+    inner = nullptr;
     UA_Nodestore* flash = UA_Nodestore_newFlash(&src, inner,
                                                 bootConfig.logging,
                                                 OPCUA_NODE_POOL_SLOTS,
-                                                OPCUA_NS0_FROM_FLASH);
+                                                true);
     if (flash == nullptr)
     {
         OPCUA_LOG("[ua] flash nodestore FAILED");

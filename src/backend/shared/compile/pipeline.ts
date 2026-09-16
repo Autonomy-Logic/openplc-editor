@@ -238,6 +238,12 @@ export interface RunCompilePipelineArgs {
    *  fall back to its legacy `devices/configuration.json` disk
    *  read.  Ignored entirely on simulator + runtime-v3/v4 branches. */
   communicationPort?: string
+  /** Device IP for a board whose VPP declares `uploadMethod: "ethernet"` — the
+   *  ethernet counterpart of `communicationPort`, and handled the same way: the
+   *  caller's value (the CLI's `--host`, the store's in the GUI) is preferred
+   *  by the adapter over the project file's persisted `runtimeIpAddress`, which
+   *  lags whatever the user just asked for. Absent on every serial board. */
+  runtimeIpAddress?: string
   /** Optional cache hook for the strucpp debug-map.json bytes — the
    *  debugger reads these out of memory to map debug variable
    *  addresses without re-reading the file.  Called once per
@@ -408,6 +414,7 @@ async function runCompilePipelineInner(
     arduinoCliParallel,
     deviceContext,
     communicationPort,
+    runtimeIpAddress,
     cacheDebugData,
     vppModbusState,
     persistentStorage,
@@ -1144,6 +1151,12 @@ async function runCompilePipelineInner(
       // Upload transport declared by the board's VPP target. Default "serial";
       // "ethernet" makes the editor pass the device IP as --port.
       uploadMethod: boardEntry.uploadMethod,
+      // The address the caller asked for -- `openplc-cli --host`, or the
+      // store's value in the GUI. The adapter prefers it over the project
+      // file's persisted `runtimeIpAddress`, which is how a serial port has
+      // always worked and is what makes `--host` mean anything: it reached the
+      // pipeline all along and stopped here.
+      ...(runtimeIpAddress ? { ipAddress: runtimeIpAddress } : {}),
     },
     makePlatformLog(emit, 'upload'),
   )

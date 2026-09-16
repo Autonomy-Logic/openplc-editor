@@ -502,6 +502,11 @@ export function createEditorCompilerPlatformPort(
           compilationPath: context.compilationPath,
           communicationPort: args.port || undefined,
           uploadMethod: args.uploadMethod,
+          // Declared on UploadArduinoBoardArgs since the ethernet-upload work
+          // landed, populated only now: without it an ethernet build ignored
+          // the address the caller gave and used whatever the project file
+          // remembered.
+          ipAddress: args.ipAddress,
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')

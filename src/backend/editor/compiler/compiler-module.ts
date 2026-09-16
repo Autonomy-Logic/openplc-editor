@@ -1980,6 +1980,7 @@ class CompilerModule {
     compilationPath,
     communicationPort,
     uploadMethod,
+    ipAddress,
     handleOutputData,
   }: {
     projectPath: string
@@ -2001,12 +2002,23 @@ class CompilerModule {
      * `{upload.port.address}`.
      */
     uploadMethod?: 'serial' | 'ethernet'
+    /**
+     * Device IP for an ethernet upload, from whoever asked for the build — the
+     * CLI's `--host`, or the store's current value in the GUI. Preferred over
+     * the disk-persisted `runtimeIpAddress` for the same reason
+     * `communicationPort` is preferred for serial: it is what the caller just
+     * said, and the project file may say something else or nothing at all.
+     */
+    ipAddress?: string
     handleOutputData: HandleOutputDataCallback
   }) {
     const isEthernet = uploadMethod === 'ethernet'
-    // For serial, `--port` is the serial device (from the picker, else disk).
-    // For ethernet, `--port` is the device IP (from persisted runtimeIpAddress).
-    let port = isEthernet ? undefined : communicationPort
+    // `--port` is the serial device for serial, the device IP for ethernet, and
+    // in both cases the caller's value wins over the project file's. `--host`
+    // used to be validated by the CLI and then dropped here, so an ethernet
+    // upload flashed whatever address the project happened to remember while
+    // reporting the one the user asked for.
+    let port = isEthernet ? ipAddress : communicationPort
     if (!port) {
       const devicesDirectoryPath = join(projectPath, 'devices')
       const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
@@ -3346,6 +3358,9 @@ class CompilerModule {
         arduinoCliParallel: true,
         deviceContext,
         communicationPort: communicationPort ?? undefined,
+        // Ethernet's counterpart to communicationPort. The CLI already put
+        // `--host` here; nothing carried it the last hop to the upload.
+        runtimeIpAddress: runtimeIpAddress ?? undefined,
         ...(vppModbusState ? { vppModbusState } : {}),
         ...(persistentStorage ? { persistentStorage } : {}),
         targetHidesPersistentStorage,
