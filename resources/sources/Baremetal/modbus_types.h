@@ -36,20 +36,14 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define MB_DEBUG_GET_HEADER    11
 
 // The frame has to hold that header plus the widest value the target can
-// actually produce, or that value can never be read at all -- it is skipped in
-// silence, and the read returns nothing.
+// produce, or that value can never be read at all -- it is skipped in silence,
+// and the read returns nothing.
 //
-// The small AVRs are sized for a STRING and not a WSTRING on purpose. An
-// `IECWStringVar<254>` is ~1020 bytes of SRAM by itself (value + forced copy),
-// which does not fit an ATmega168's 1024 bytes and is half an ATmega328P's
-// 2048, so a WSTRING cannot exist on those parts whatever the frame is. Paying
-// 2 x 136 bytes of buffer for a variable that cannot be declared would take
-// RAM from programs that CAN run there. A STRING is reachable, so they get it.
-//
-// Everything else is 32-bit with 32 KB of SRAM upwards, where fitting a WSTRING
-// costs 8 bytes per buffer.
+// The small AVRs keep the 128 they have always had. An `IECWStringVar<254>` is
+// ~1020 bytes of SRAM on its own, more than an ATmega168 has in total, so a
+// WSTRING cannot be declared on those parts and there is nothing here to fix.
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)
-    #define MAX_MB_FRAME (MB_DEBUG_GET_HEADER + OPENPLC_DEBUG_STRING_WIRE + 6)   /* 144 */
+    #define MAX_MB_FRAME 128
 #else
     #define MAX_MB_FRAME (MB_DEBUG_GET_HEADER + OPENPLC_DEBUG_WSTRING_WIRE + 8)  /* 272 */
 #endif
