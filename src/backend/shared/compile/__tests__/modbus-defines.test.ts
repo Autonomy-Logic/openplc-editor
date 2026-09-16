@@ -32,9 +32,22 @@ describe('DEBUG_SLAVE', () => {
 })
 
 describe('generateModbusDefines', () => {
-  it('emits nothing without a server, because nothing else states what is served', () => {
+  it('emits nothing without a server AND without a network', () => {
     expect(generateModbusDefines({})).toBe('')
-    expect(generateModbusDefines({ serial: { baud_rate: '19200' }, network: { enabled: true } })).toBe('')
+  })
+
+  it('brings the link up with no server at all, but serves no Modbus over it', () => {
+    // The network is not Modbus's to gate. It carries the debugger, the
+    // ethernet upload, discovery, OPC-UA and S7Comm, and a project may want all
+    // of those with no Modbus server anywhere. This used to emit '' -- which on
+    // a board reached only over Ethernet produced a device that booted and
+    // could never be spoken to again.
+    const out = generateModbusDefines({ serial: { baud_rate: '19200' }, network: { enabled: true } })
+    expect(out).toContain('#define OPLC_NET_ENABLED')
+    expect(out).toContain('#define MBTCP_ETHERNET')
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('#define MBTCP\n')
+    expect(out).not.toContain('#define MBSERIAL')
   })
 
   it('emits nothing for a server that exists but is switched off', () => {
@@ -323,7 +336,14 @@ describe('a server the user deleted', () => {
       serial: { baud_rate: '19200', enable_rs485_en_pin: true, rs485_en_pin: '17' },
       network: { enabled: true, wifi_ssid: 'planta' },
     }
-    expect(generateModbusDefines(leftovers, 'Serial', server)).toBe('')
+    const out = generateModbusDefines(leftovers, 'Serial', server)
+    // No Modbus, in any of its forms...
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('#define MBSERIAL')
+    expect(out).not.toContain('#define MBTCP_PORT')
+    // ...but the network the project still asks for stays up. Deleting a Modbus
+    // server is not a request to take the board off the network.
+    expect(out).toContain('#define OPLC_NET_ENABLED')
   })
 })
 

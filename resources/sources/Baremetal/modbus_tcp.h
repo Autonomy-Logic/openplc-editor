@@ -65,7 +65,7 @@ back — no knowledge of the function-code set.
 #endif
 #endif
 
-#ifdef MBTCP_ETHERNET
+#if defined(MBTCP_ETHERNET) && defined(MB_TCP_ACTIVE)
 #ifdef BOARD_ESP32
     extern WiFiServer mb_server;
 #else
@@ -77,7 +77,7 @@ back — no knowledge of the function-code set.
 #endif
 #endif
 
-#ifdef MBTCP_WIFI
+#if defined(MBTCP_WIFI) && defined(MB_TCP_ACTIVE)
     extern WiFiServer mb_server;
     extern uint8_t mb_mbap[MBAP_SIZE];
 #if defined(BOARD_ESP8266) || defined(BOARD_ESP32) || defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
@@ -85,8 +85,18 @@ back — no knowledge of the function-code set.
 #endif
 #endif
 
-#ifdef MBTCP
+// The link bring-up follows the NETWORK, not Modbus: setup() calls it whenever
+// the project enabled the Network screen, with or without a Modbus server.
+#if defined(OPLC_NET_ENABLED)
 void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *gateway, uint8_t *subnet);
+#endif
+
+// The listener and its service loop follow MB_TCP_ACTIVE, so the debugger keeps
+// its transport on a board where the network is the only way in.
+#ifdef MB_TCP_ACTIVE
+/** Start the TCP listener: Modbus TCP when the project serves it, and the
+ *  debugger's transport regardless on a board with no accessible UART. */
+void mbtcp_server_begin(void);
 void handle_tcp();
 #endif
 

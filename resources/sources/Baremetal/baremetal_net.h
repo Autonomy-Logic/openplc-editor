@@ -8,8 +8,10 @@ protocol servers contain no board macros. An unrecognised target is a hard
 compile failures and silent runtime faults.
 
 Each protocol declares its own `Listener` with its own port but they share one
-slot pool. This seam does not bring the interface up: the network is already
-configured by the Modbus TCP layer from the project's network screen.
+slot pool. This seam does not bring the interface up: setup() does that from the
+project's network screen, gated on OPLC_NET_ENABLED, before any protocol here
+starts listening. It used to be the Modbus TCP layer's job, which made a network
+without a Modbus server impossible.
 */
 
 #ifndef BAREMETAL_NET_H

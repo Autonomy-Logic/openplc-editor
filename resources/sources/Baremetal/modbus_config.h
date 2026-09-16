@@ -26,6 +26,19 @@ it must reach a TU through exactly one path: this header.
     #define MB_SERIAL_ACTIVE
 #endif
 
+// The same rule for the network. TCP transport is active when Modbus TCP is
+// served (MBTCP) OR the always-on debugger needs the link because that is the
+// only way in (OPLC_NET_ENABLED + DEBUGGER_ENABLED).
+//
+// Without this the debugger's reachability was a side effect of someone having
+// added a Modbus server: on a board with no accessible UART -- the LOGO! -- a
+// project that served no Modbus produced firmware with nothing listening, so
+// the editor could neither debug it nor upload to it again. The debugger is not
+// Modbus, and it should not need Modbus's permission to answer.
+#if defined(MBTCP) || (defined(OPLC_NET_ENABLED) && defined(DEBUGGER_ENABLED))
+    #define MB_TCP_ACTIVE
+#endif
+
 // Default serial config for the always-on debugger. `defines.h` normally emits
 // DEBUG_IFACE / DEBUG_BAUD / DEBUG_SLAVE explicitly (from the Serial and Modbus
 // RTU screens); these `#ifndef` defaults cover anything it left unset — they are

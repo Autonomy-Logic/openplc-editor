@@ -987,6 +987,27 @@ async function runCompilePipelineInner(
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
   })
 
+  // A board reached only over Ethernet must never be handed an image with no
+  // network. The firmware brings the link up on OPLC_NET_ENABLED, so its
+  // absence here is the difference between a device that can be reflashed and
+  // one that boots fine and is gone: no debugger, no upload, no discovery, and
+  // nothing on the wire to say why. This was a warning ("Modbus TCP ... was
+  // left out of the build") and the build continued -- which is how a LOGO! got
+  // bricked from a project whose only fault was having no Modbus server.
+  //
+  // Refusing is safe precisely BECAUSE it is recoverable: the user turns the
+  // Network screen on and builds again. Shipping the image is the unrecoverable
+  // direction.
+  if (boardEntry.uploadMethod === 'ethernet' && !definesH.includes('#define OPLC_NET_ENABLED')) {
+    return bailError(
+      emit,
+      'validate',
+      'This board is programmed over Ethernet, so a build with the network disabled could never be ' +
+        'reached again — not by the debugger, the uploader, or Search. Enable the Network screen for ' +
+        'this device and build again.',
+    )
+  }
+
   // VPP config header — emitted only for arduino-cli targets whose
   // capabilities flip `vppIo: true` (Arduino Opta + future P1AM).
   // The header carries every field the user filled on the device's

@@ -252,40 +252,8 @@ void setup()
             modbus.slaveid = DEBUG_SLAVE;
         #endif
 
-        #ifdef MBTCP
-            uint8_t mac[] = { MBTCP_MAC };
-            uint8_t ip[] = { MBTCP_IP };
-            uint8_t dns[] = { MBTCP_DNS };
-            uint8_t gateway[] = { MBTCP_GATEWAY };
-            uint8_t subnet[] = { MBTCP_SUBNET };
-
-            if (sizeof(ip)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
-            else if (sizeof(dns)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
-            else if (sizeof(gateway)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
-            else if (sizeof(subnet)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
-            else
-                mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
-        #endif
-
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
-
-        // OPC-UA listens on top of the interface Modbus just configured, so it
-        // has to come after mbconfig_*_iface() and must not re-init the link
-        // itself (see baremetal_net.h). No-op when OPC-UA is disabled.
-        #if OPCUA_ENABLED
-            opcua_log_begin();
-            opcua_init();
-        #endif
-        // S7Comm, same contract: the interface is already up, this only opens
-        // port 102.
-        #if S7COMM_ENABLED
-            s7comm_init();
-        #endif
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
@@ -296,6 +264,54 @@ void setup()
         mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
         modbus.slaveid = DEBUG_SLAVE;
     #endif
+
+    // ---- The network, on its own switch ----------------------------------
+    //
+    // Everything below is gated on the NETWORK being enabled, not on Modbus
+    // being served. The link carries the debugger, the ethernet upload,
+    // discovery, OPC-UA and S7Comm; Modbus TCP is one tenant among several and
+    // was never the right thing to hang the interface off. A project with no
+    // Modbus server used to compile a firmware that never called
+    // mbconfig_*_iface(), which on a board reached only over Ethernet is a
+    // device that boots and can never be reached again.
+#if defined(OPLC_NET_ENABLED)
+    {
+        uint8_t mac[] = { MBTCP_MAC };
+        uint8_t ip[] = { MBTCP_IP };
+        uint8_t dns[] = { MBTCP_DNS };
+        uint8_t gateway[] = { MBTCP_GATEWAY };
+        uint8_t subnet[] = { MBTCP_SUBNET };
+
+        // Five byte arrays, `sizeof(arr) < 4` as a compile-time DHCP-vs-static
+        // selector: an unset value is emitted as a single `0` byte.
+        if (sizeof(ip)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
+        else if (sizeof(dns)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
+        else if (sizeof(gateway)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
+        else if (sizeof(subnet)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
+        else
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
+    }
+
+    // The TCP listener: Modbus TCP when the project serves it, and the
+    // debugger's transport regardless, on a board reached only this way.
+    #ifdef MB_TCP_ACTIVE
+        mbtcp_server_begin();
+    #endif
+
+    // OPC-UA and S7Comm listen on the interface brought up above, and must not
+    // re-init the link themselves (see baremetal_net.h). No-ops when disabled.
+    #if OPCUA_ENABLED
+        opcua_log_begin();
+        opcua_init();
+    #endif
+    #if S7COMM_ENABLED
+        s7comm_init();
+    #endif
+#endif  // OPLC_NET_ENABLED
 
 #if defined(SUPPORTS_UDP_SCAN)
     // Network is up now; start answering editor discovery probes.

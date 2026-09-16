@@ -318,8 +318,20 @@ export function generateModbusDefines(
   // trade one silent failure for another. A pre-split project has no `network`
   // section whatsoever and keeps building exactly as it did.
   const tcpOn = served.includes('tcp') && net.enabled !== false
+  // The network is its own thing, and on an ethernet board it is the thing that
+  // matters most: it carries the debugger, the upload, OPC-UA and S7Comm, none
+  // of which are Modbus. Gating the interface on a Modbus SERVER meant a
+  // project with no server built firmware that never called
+  // mbconfig_*_iface() -- which on a board reached only over Ethernet is a
+  // device that boots fine and can never be spoken to again.
+  //
+  // `=== true` rather than `!== false`, unlike `tcpOn`: a board with no Network
+  // screen at all has no `network` state, and treating absence as "on" would
+  // emit a carrier for an Uno. Enabling the section is an explicit act and it
+  // persists an explicit `true`.
+  const netOn = net.enabled === true
 
-  if (!rtuOn && !tcpOn) return ''
+  if (!rtuOn && !tcpOn && !netOn) return ''
 
   const lines: string[] = []
   lines.push('//Comms Configuration')
@@ -358,7 +370,9 @@ export function generateModbusDefines(
     lines.push('#define MBSERIAL')
   }
 
-  if (tcpOn) {
+  // The link itself: emitted whenever the network is up, whether or not Modbus
+  // is the thing being served over it.
+  if (netOn || tcpOn) {
     // Network config comes from the `network` section the package ships.
     //
     // MBTCP_MAC / MBTCP_IP / MBTCP_DNS / MBTCP_GATEWAY / MBTCP_SUBNET are
@@ -397,13 +411,23 @@ export function generateModbusDefines(
       const csNum = typeof cs === 'number' ? cs : cs ? Number(cs) : NaN
       if (Number.isInteger(csNum) && csNum >= 0) lines.push(`#define MBTCP_ETH_CS ${csNum}`)
     }
-    lines.push(`#define MBTCP_PORT ${server?.port ?? BAREMETAL_DEFAULT_TCP_PORT}`)
-    lines.push('#define MBTCP')
+    // The link is up: bring up the interface, run the discovery responder, and
+    // let OPC-UA and S7Comm listen on it. Independent of Modbus, which is why
+    // it is emitted here and not beside MBTCP.
+    lines.push('#define OPLC_NET_ENABLED')
+    // ...and THIS is Modbus's: the TCP listener, and the port it answers on.
+    if (tcpOn) {
+      lines.push(`#define MBTCP_PORT ${server?.port ?? BAREMETAL_DEFAULT_TCP_PORT}`)
+      lines.push('#define MBTCP')
+    }
   }
 
-  // `MODBUS_ENABLED` gates everything Modbus in ModbusSlave.cpp. Emit
-  // once regardless of which transports are active.
-  lines.push('#define MODBUS_ENABLED')
+  // `MODBUS_ENABLED` gates everything Modbus in ModbusSlave.cpp -- the register
+  // file, the operation buffers, the slave. A network-only build has none of
+  // it, so this is emitted for a served transport and not for a live link.
+  if (rtuOn || tcpOn) {
+    lines.push('#define MODBUS_ENABLED')
+  }
 
   return lines.join('\n') + '\n'
 }

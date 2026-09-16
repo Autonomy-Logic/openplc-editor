@@ -13,7 +13,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
     #define MBTCP_PORT 502
 #endif
 
-#ifdef MBTCP_ETHERNET
+#if defined(MBTCP_ETHERNET) && defined(MB_TCP_ACTIVE)
 #ifdef BOARD_ESP32
     WiFiServer mb_server(MBTCP_PORT);
 	WiFiClient mb_serverClients[MAX_SRV_CLIENTS];
@@ -30,7 +30,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #endif
 #endif
 
-#ifdef MBTCP_WIFI
+#if defined(MBTCP_WIFI) && defined(MB_TCP_ACTIVE)
     WiFiServer mb_server(MBTCP_PORT);
     uint8_t mb_mbap[MBAP_SIZE];
 #if defined(BOARD_ESP8266) || defined(BOARD_ESP32) || defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
@@ -38,7 +38,11 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #endif
 #endif
 
-#ifdef MBTCP
+// Bringing the link up is the NETWORK's job, not the Modbus server's. It used
+// to live under MBTCP, so a project that enabled the network without serving
+// Modbus TCP compiled a firmware that never configured the interface -- fine on
+// a USB board, fatal on one reached only over Ethernet.
+#if defined(OPLC_NET_ENABLED)
 void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *gateway, uint8_t *subnet)
 {
     #ifdef MBTCP_ETHERNET
@@ -85,7 +89,6 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
                 uint8_t secondaryDNS[] = {8, 8, 8, 8};
                 WiFi.config(IPAddress(ip), IPAddress(gateway), IPAddress(subnet), IPAddress(dns), IPAddress(secondaryDNS));
             }
-            mb_server.setNoDelay(true);
         #elif defined(BOARD_PORTENTA)
             if (ip != NULL && subnet != NULL && gateway != NULL)
             {
@@ -114,8 +117,20 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
         }
     #endif
 
-    mb_server.begin();
+}
 
+#endif  // OPLC_NET_ENABLED
+
+#ifdef MB_TCP_ACTIVE
+/** Start listening for Modbus TCP. Separate from the link bring-up above
+ *  because a board can have a network without serving Modbus over it -- the
+ *  debugger, the ethernet upload, OPC-UA and S7Comm all use the same link. */
+void mbtcp_server_begin(void)
+{
+    #if defined(MBTCP_WIFI) && (defined(BOARD_ESP8266) || defined(BOARD_ESP32))
+        mb_server.setNoDelay(true);
+    #endif
+    mb_server.begin();
 }
 
 void handle_tcp()

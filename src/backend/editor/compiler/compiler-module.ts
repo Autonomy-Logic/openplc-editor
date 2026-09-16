@@ -3216,16 +3216,25 @@ class CompilerModule {
         }
       } catch {
         // No configuration.json: leave state undefined. For ethernet boards the
-        // mandate below still forces Modbus TCP on; for serial boards the shared
-        // pipeline skips the Modbus block entirely.
+        // mandate below still forces the NETWORK on; for serial boards the
+        // shared pipeline skips the whole comms block.
       }
 
-      // Modbus TCP is mandatory on ethernet-upload boards and cannot be turned
-      // off: it is the device's only comms path, it is how the debugger connects
-      // and how the upload flow reboots the device, and MODBUS_ENABLED is what
-      // makes the firmware allocate its I/O buffers -- without it Baremetal.ino
-      // skips mapEmptyBuffers() and the HAL dereferences NULL input pointers on
-      // the first scan. Force it on, preserving only the IP the user set.
+      // The NETWORK is mandatory on an ethernet-upload board and cannot be
+      // turned off: it is the device's only comms path, it carries the
+      // debugger, and it is how the upload flow reaches the device at all.
+      //
+      // This used to force Modbus TCP, justified by "MODBUS_ENABLED is what
+      // allocates the I/O buffers -- without it the HAL dereferences NULL input
+      // pointers". That reasoning was wrong twice over: every VPP HAL guards its
+      // located pointers before dereferencing, and the runtime glue binds the
+      // program's own storage regardless of Modbus. What actually broke was the
+      // link -- `mbconfig_*_iface()` lived inside `#ifdef MODBUS_ENABLED`, so a
+      // project with no Modbus server produced a firmware that never brought
+      // the interface up, on the one class of board where that means it can
+      // never be reached again.
+      //
+      // So the mandate is the network, and Modbus is left to the project.
       if (uploadsOverEthernet) {
         const ip = vppModbusState?.network?.ip_address || configuredIp || '192.168.2.4'
         // Ethernet is static-only on these boards: the bootloader's recovery
