@@ -16,6 +16,7 @@ vi.mock('@root/frontend/components/_features/[app]/toast/use-toast', () => ({
 
 import type { PLCDataType, PLCVariable } from '@root/middleware/shared/ports/types'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { serializeDataTypeToText } from '@root/frontend/utils/PLC/data-type-serializer'
 
 import { DataTypeEditor } from '../index'
 
@@ -39,6 +40,12 @@ const getBuffer = (name: string) => {
   const model = getState().editors.find((editor) => editor.meta.name === name)
   if (model?.type !== 'plc-datatype' || model.structure.display !== 'code') return undefined
   return model.structure.code
+}
+
+/** A commit re-canonicalises the buffer, so the expectation is the serializer's text, not the typed one. */
+const canonicalOf = (name: string) => {
+  const dataType = getState().project.data.dataTypes.find((candidate) => candidate.name === name)
+  return dataType ? serializeDataTypeToText(dataType) : undefined
 }
 
 const typeInto = (text: string) => {
@@ -119,7 +126,7 @@ describe('DataTypeEditor rename from the code view', () => {
       getState().datatypeActions.respondToPendingRename(false)
     })
 
-    expect(getBuffer('Motor')).toBe(declaration('Motor', editedBody))
+    expect(getBuffer('Motor')).toBe(canonicalOf('Motor'))
     expect(getState().project.data.dataTypes[0]).toMatchObject({ name: 'Motor' })
     expect(fieldNames(getState().project.data.dataTypes[0])).toEqual(['Speed', 'Torque'])
     // A declined modal is a choice, not a failure.
@@ -137,7 +144,7 @@ describe('DataTypeEditor rename from the code view', () => {
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Rename failed', description: 'Data type name already exists' }),
     )
-    expect(getBuffer('Motor')).toBe(declaration('Motor', editedBody))
+    expect(getBuffer('Motor')).toBe(canonicalOf('Motor'))
     expect(getState().project.data.dataTypes.map((dataType) => dataType.name)).toEqual(['Motor', 'Pump'])
     expect(fieldNames(getState().project.data.dataTypes[0])).toEqual(['Speed', 'Torque'])
   })

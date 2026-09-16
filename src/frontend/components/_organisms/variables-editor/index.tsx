@@ -294,16 +294,10 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
 
       isParsingRef.current = true
 
-      void commitCodeRef
-        .current()
-        .then((ok) => {
-          if (ok) {
-            lastParsedCodeRef.current = editorCode
-          }
-        })
-        .finally(() => {
-          isParsingRef.current = false
-        })
+      // `commitCode` owns the watermark — setting it here would pin pre-commit text and re-commit a no-op.
+      void commitCodeRef.current().finally(() => {
+        isParsingRef.current = false
+      })
     }
 
     const onDocMouseDown = (e: MouseEvent) => {
@@ -969,6 +963,11 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       if (freshPou && 'variablesText' in freshPou) {
         clearPouVariablesText(editor.meta.name)
       }
+
+      // A buffer keeping the typed form drifts from the canonical LSP document and loses its colours.
+      const canonical = generateIecVariablesToString(freshVariables)
+      setEditorCode(canonical)
+      lastParsedCodeRef.current = canonical
 
       return true
     } catch (err) {
