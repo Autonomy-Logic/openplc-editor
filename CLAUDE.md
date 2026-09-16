@@ -231,6 +231,11 @@ openplc-web), shared with the board list so both refuse in the same words.
 `evaluatePreBuildPlcGate` beside it is the older gate that asks to stop a running
 PLC, and runs after this one.
 
+`handleMd5Verification` in the same file asks the gate a second time. An MD5
+mismatch inside a debug session offers to upload the current project and compiles
+with `compileOnly: false` itself — the one upload that does not go through
+`handleBuild` — so the refusal lands ahead of that offer rather than after it.
+
 A target that reports no flag is not gated, and in the editor that is permanent:
 `EDITOR_CAPABILITIES.hasOrchestratorDevices` is `false` and
 `createEditorOrchestratorAdapter` lists no orchestrators, so nothing ever reaches

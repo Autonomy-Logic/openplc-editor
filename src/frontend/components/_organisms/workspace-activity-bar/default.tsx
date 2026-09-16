@@ -874,6 +874,31 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           level: 'warning',
           message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
+
+        // Second upload path, and the only one that does not go through
+        // `handleBuild`: from here the branch compiles with `compileOnly: false`,
+        // which uploads. So it asks `evaluateVppBackplaneGate` the same question
+        // the build does, and gets the refusal in the same words.
+        //
+        // Ahead of the dialog rather than after it: a refusal is not something to
+        // consent to, and offering an upload we would then decline is worse than
+        // not offering it. Everything before this point is verification, which the
+        // gate has no opinion about — the debug transport is already down and
+        // `isDebuggerProcessing` is released exactly as the declined-upload branch
+        // below releases it, so the session ends the way "No" ends it.
+        {
+          const state = useOpenPLCStore.getState()
+          const gate = evaluateVppBackplaneGate({
+            isVppBoard: state.deviceAvailableOptions.availableBoards.get(boardTarget)?.vpp !== undefined,
+            backplaneAccess: state.runtimeConnection.selectedDevice?.backplaneAccess,
+          })
+          if (gate.kind === 'refuse') {
+            consoleActions.addLog({ level: 'error', message: gate.reason })
+            setIsDebuggerProcessing(false)
+            return
+          }
+        }
+
         const response = await showDeviceDialog(
           'warning',
           'Program Mismatch',
