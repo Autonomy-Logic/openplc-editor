@@ -22,6 +22,7 @@ import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modu
 import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-window'
 import { HardwareModule } from '../backend/editor/hardware'
+import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
@@ -440,6 +441,12 @@ app
   .whenReady()
   .then(() => {
     void createMainWindow()
+    // Last session's cloud builds. The cloud is the source of truth for those
+    // projects, so nothing here survives a restart; best-effort, since a scratch
+    // directory that will not delete is no reason to refuse to start.
+    void clearCloudBuildRoot().catch((error: unknown) =>
+      logger.warn('Could not clear the cloud build scratch directory: ' + getErrorMessage(error)),
+    )
     // Put `openplc-cli` on PATH, once. After the window, so a slow filesystem
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.

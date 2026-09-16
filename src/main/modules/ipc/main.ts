@@ -51,6 +51,7 @@ import {
 } from '@root/backend/editor/edge-version-control'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
+import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
 import {
   materializeRetrievedProject,
@@ -2219,8 +2220,15 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       // STruC++ writes debug-map.json alongside generated_debug.cpp.
-      // Consumed by the renderer via parseDebugMap.
-      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      // Consumed by the renderer via parseDebugMap. Resolved through the build
+      // workspace so a cloud project reads the scratch copy the build wrote.
+      const debugMapPath = path.resolve(
+        resolveBuildWorkspace(projectPath),
+        'build',
+        boardTarget,
+        'src',
+        'debug-map.json',
+      )
       const content = await fs.readFile(debugMapPath, 'utf-8')
       return { success: true, content }
     } catch (error) {
@@ -2348,7 +2356,13 @@ class MainProcessBridge implements MainIpcModule {
       // STruC++ writes the MD5 into debug-map.json alongside the pointer
       // tables. It's the single source of truth the editor and the target
       // agree on (target exposes the same value via FC 0x45).
-      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      const debugMapPath = path.resolve(
+        resolveBuildWorkspace(projectPath),
+        'build',
+        boardTarget,
+        'src',
+        'debug-map.json',
+      )
       const raw = await fs.readFile(debugMapPath, 'utf-8')
       const parsed = JSON.parse(raw) as { md5?: unknown }
 
