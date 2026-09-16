@@ -295,9 +295,10 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       isParsingRef.current = true
 
       // `commitCode` owns the watermark — setting it here would pin pre-commit text and re-commit a no-op.
-      void commitCodeRef.current().finally(() => {
+      const release = () => {
         isParsingRef.current = false
-      })
+      }
+      void commitCodeRef.current().then(release, release)
     }
 
     const onDocMouseDown = (e: MouseEvent) => {
