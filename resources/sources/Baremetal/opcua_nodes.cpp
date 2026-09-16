@@ -37,8 +37,15 @@ namespace {
  *  mismatch hands the encoder the wrong byte width.
  *
  *  TIME / DATE / TOD / DT have no OPC-UA scalar of the same width, so they are
- *  exposed as the integers they already are on the wire. STRING / WSTRING are
- *  not exposed: handle_read returns 0 for them. */
+ *  exposed as the integers they already are on the wire.
+ *
+ *  STRING / WSTRING are absent for a different reason than the comment here
+ *  used to give: strucpp reads them perfectly well (`read_string` /
+ *  `read_wstring`, 127 and 253 bytes on the wire), and the debugger shows a
+ *  STRING today. What is missing is the UA mapping and a value path wide
+ *  enough for them -- `read_node` reads into an 8-byte buffer. Until that
+ *  lands, `typeTagFor` must not hand out tags 19/20, or the node ships to
+ *  flash and is silently unbrowsable. */
 const UA_UInt32 kTagToUaType[] = {
     UA_TYPES_BOOLEAN,  // TAG_BOOL
     UA_TYPES_SBYTE,    // TAG_SINT

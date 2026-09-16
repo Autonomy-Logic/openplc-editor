@@ -166,10 +166,24 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
     {
         uint16_t varSize = openplc_debug_size(arr, elem);
         // Bounds check — stop packing if this one won't fit.
+        //
+        // NOTE: two cases are conflated here, and they cannot be separated
+        // without a wire change. A leaf that cannot fit an EMPTY frame can
+        // never be sent (a WSTRING needs 11+253 against a 256-byte ceiling,
+        // because the READ path pads strings to their full width), so breaking
+        // starves every later variable in the range as well.
+        //
+        // Skipping it instead was tried and is WORSE: the response is
+        // positional, so omitting one leaf shifts every following value into
+        // the wrong slot. The decoder's bounds check turns most of those into a
+        // dropped batch, but a large enough payload would let it decode one
+        // variable's bytes AS another and display a confidently wrong value.
+        // Absent beats wrong, so this stays until the framing itself can say
+        // "skipped" -- see the compact-string work (DOPE-645).
         if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
         if (varSize == 0) {
-            // Entry has no readable bytes (string stub / out-of-bounds)
-            // — skip gracefully to keep the scan progressing.
+            // No readable bytes for this entry (out of bounds). Skip gracefully
+            // to keep the scan progressing.
             lastElemIdx = elem;
             continue;
         }
