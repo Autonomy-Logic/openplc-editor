@@ -9,7 +9,7 @@ import { useOrchestrator, useRuntime } from '../../../../../../../middleware/sha
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-import { useOpenPLCStore } from '../../../../../../store'
+import { openPLCStoreBase, useOpenPLCStore } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
@@ -71,6 +71,18 @@ const BackplaneBadge = () => (
   </span>
 )
 
+function refreshSelection(selection: SelectedDevice | null, orchestrators: OrchestratorInfo[]): SelectedDevice | null {
+  if (!selection) return null
+  const device = orchestrators
+    .find((item) => item.id === selection.orchestratorId)
+    ?.devices.find((item) => item.id === selection.deviceId)
+  if (!device || device.backplaneAccess === selection.backplaneAccess) return selection
+  const updated = { ...selection }
+  if (device.backplaneAccess === undefined) delete updated.backplaneAccess
+  else updated.backplaneAccess = device.backplaneAccess
+  return updated
+}
+
 const OrchestratorsList = () => {
   const orchestratorPort = useOrchestrator()
   const runtimePort = useRuntime()
@@ -120,6 +132,12 @@ const OrchestratorsList = () => {
     try {
       const result = await orchestratorPort.listOrchestrators()
       setOrchestrators(result)
+      const state = openPLCStoreBase.getState()
+      const current = state.runtimeConnection.selectedDevice
+      const refreshed = refreshSelection(current, result)
+      if (refreshed !== current) state.deviceActions.setSelectedDevice(refreshed)
+      setSelectedDevice((selection) => refreshSelection(selection, result))
+      setPendingDeviceSwitch((selection) => refreshSelection(selection, result))
       setError(null)
     } catch (error) {
       console.error('[Orchestrators] Fetch failed', error)

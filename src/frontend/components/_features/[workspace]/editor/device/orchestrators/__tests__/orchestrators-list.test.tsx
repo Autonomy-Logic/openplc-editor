@@ -4,7 +4,7 @@ import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabil
 import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
 import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { OrchestratorsList } from '../orchestrators-list'
 
@@ -30,7 +30,7 @@ const ORCHESTRATOR: OrchestratorInfo = {
   ],
 }
 
-function renderPicker() {
+function renderPicker(listOrchestrators = () => Promise.resolve([ORCHESTRATOR])) {
   const ports: PlatformPorts = {
     compiler: stubPort(),
     runtime: stubPort<RuntimePort>({ getUsersInfo: () => Promise.resolve({ hasUsers: true }) }),
@@ -38,7 +38,7 @@ function renderPicker() {
     simulator: stubPort(),
     project: stubPort(),
     device: stubPort(),
-    orchestrator: { listOrchestrators: () => Promise.resolve([ORCHESTRATOR]) },
+    orchestrator: { listOrchestrators },
     system: stubPort(),
     window: stubPort(),
     accelerator: stubPort(),
@@ -104,6 +104,22 @@ describe('OrchestratorsList', () => {
     const badges = await screen.findAllByText('Backplane I/O')
     expect(badges).toHaveLength(1)
     expect(badges[0].closest('div')?.textContent).toContain('Line A')
+  })
+
+  it.each([true, false, undefined])('refreshes a connected permission to %s', async (backplaneAccess) => {
+    let current = ORCHESTRATOR
+    renderPicker(() => Promise.resolve([current]))
+    await selectDevice(backplaneAccess === true ? 'Line B' : 'Line A')
+    await connect()
+    act(() => openPLCStoreBase.getState().deviceActions.setRuntimeConnectionStatus('connected'))
+    current = { ...ORCHESTRATOR, devices: ORCHESTRATOR.devices.map((device) => ({ ...device, backplaneAccess })) }
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    await waitFor(() =>
+      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess),
+    )
+    if (backplaneAccess === undefined) {
+      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).not.toHaveProperty('backplaneAccess')
+    }
   })
 
   it('still refuses to select an inactive device', async () => {
