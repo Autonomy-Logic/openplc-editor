@@ -181,10 +181,15 @@ function describeRung(
         | undefined
       if (variableData?.block?.id !== block.id) continue
       const side = variableData.block.variableType?.class
-      if (side !== 'input' && side !== 'output') continue
+      // An in-out belongs with the inputs, which is where `apply` reads it
+      // from (it accepts both classes there). Skipping it here dropped the
+      // wiring on a round trip, and an in-out left unassigned is a compile
+      // error rather than a silent default -- so the project stopped building.
+      const isInput = side === 'input' || side === 'inOut'
+      if (!isInput && side !== 'output') continue
       const pin = variableData.block.handleId
       const name = variableData.variable?.name
-      if (pin && name) (side === 'input' ? inputs : outputs)[pin] = name
+      if (pin && name) (isInput ? inputs : outputs)[pin] = name
     }
 
     // Only worth stating when it is on: `apply` defaults it off, and the editor
