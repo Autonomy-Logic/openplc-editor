@@ -68,6 +68,7 @@ describe('screens that sit under no branch', () => {
     ['plc-vendor-screen', 'Modbus Setup'],
     ['plc-package-manager', 'Package Manager'],
     ['plc-library-manager', 'Library Manager'],
+    ['plc-diagnostics', 'I/O Image Diagnostics'],
   ])('trails %s as Project > screen', (type, name) => {
     expect(trail({ type, meta: { name, screenName: name } })).toEqual(['Irrigation Controller', name])
   })

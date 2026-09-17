@@ -1,8 +1,9 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
-import { useTheme } from '../../../../../middleware/shared/providers'
+import { useCapabilities, useTheme } from '../../../../../middleware/shared/providers'
 import { i18n } from '../../../../locales/i18n'
+import { DIAGNOSTICS_TAB_NAME, openDiagnosticsTab } from '../../../../services/io-diagnostics/open-tab'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
 
@@ -21,6 +22,7 @@ export const DisplayMenu = () => {
   const {
     workspaceActions: { setSystemConfigs, toggleCollapse },
   } = useOpenPLCStore()
+  const capabilities = useCapabilities()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
@@ -110,6 +112,15 @@ export const DisplayMenu = () => {
               </span>
             </MenuPrimitive.Item>
           </div>
+          {capabilities.isDevMode && (
+            <>
+              <MenuPrimitive.Separator className={SEPARATOR} />
+              <MenuPrimitive.Item className={ITEM} onClick={openDiagnosticsTab}>
+                <span>{DIAGNOSTICS_TAB_NAME}</span>
+                <span className={ACCELERATOR}>{'dev'}</span>
+              </MenuPrimitive.Item>
+            </>
+          )}
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
     </MenuPrimitive.Menu>

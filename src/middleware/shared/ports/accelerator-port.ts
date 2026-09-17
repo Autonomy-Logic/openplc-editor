@@ -67,6 +67,12 @@ export interface AcceleratorPort {
   onSwitchPerspective(callback: () => void): Unsubscribe
   onAbout(callback: () => void): Unsubscribe
 
+  /** Developer I/O image diagnostics, from the desktop's NATIVE menu — the one
+   *  a framed window shows, where the React menu bar is not on screen.
+   *  Optional because a platform without a native menu simply has no such
+   *  event; web reaches the same tab from the menu bar it always renders. */
+  onOpenDiagnostics?(callback: () => void): Unsubscribe
+
   // --- App lifecycle ---
   onQuitApp(callback: () => void): Unsubscribe
 }

@@ -240,6 +240,7 @@ const Breadcrumbs = () => {
     switch (editor.type) {
       case 'plc-vendor-screen':
       case 'plc-package-manager':
+      case 'plc-diagnostics':
         return ConfigIcon
       case 'plc-library-manager':
         return LibraryIcon

@@ -19,6 +19,7 @@ import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
+import { DiagnosticsEditor } from '../components/_features/[workspace]/editor/diagnostics'
 import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
@@ -595,6 +596,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
                         {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
+                        {editor['type'] === 'plc-diagnostics' && <DiagnosticsEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}

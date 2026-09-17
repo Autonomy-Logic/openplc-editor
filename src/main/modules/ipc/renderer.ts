@@ -154,6 +154,8 @@ const rendererProcessBridge = {
   pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
+  openDiagnosticsAccelerator: (callback: IpcRendererCallbacks) =>
+    subscribe('workspace:open-diagnostics-accelerator', callback),
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
