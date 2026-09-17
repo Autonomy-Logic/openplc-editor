@@ -24,7 +24,7 @@ function baseInput(overrides: Partial<ComposeRuntimeV4BundleInput> = {}): Compos
       modbusMaster: null,
       s7Comm: null,
       opcUa: null,
-      ethercat: '{"masters":[]}',
+      ethercat: null,
     },
     ...overrides,
   }
@@ -77,14 +77,29 @@ describe('composeRuntimeV4Bundle', () => {
     expect(files['c_blocks_code.cpp']).toBe('// code for MyBlock\n')
   })
 
-  it('omits each conf/*.json that is null (project does not use that protocol)', () => {
-    const files = composeRuntimeV4Bundle(baseInput())
-    expect('conf/modbus_slave.json' in files).toBe(false)
-    expect('conf/modbus_master.json' in files).toBe(false)
-    expect('conf/s7comm.json' in files).toBe(false)
-    expect('conf/opcua.json' in files).toBe(false)
-    // ethercat is always emitted (always non-null on input).
+  /**
+   * The runtime decides which plugins to load from which `conf/*.json`
+   * files are present, so this key set IS the enable state.  Assert the
+   * whole set, not individual keys: an extra file switches a plugin on.
+   */
+  const confKeys = (files: Record<string, string>) =>
+    Object.keys(files)
+      .filter((p) => p.startsWith('conf/'))
+      .sort()
+
+  it('writes no conf/*.json when the project uses no protocol', () => {
+    expect(confKeys(composeRuntimeV4Bundle(baseInput()))).toEqual([])
+  })
+
+  it('writes only ethercat.json when the project has EtherCAT devices', () => {
+    const files = composeRuntimeV4Bundle(baseInput({ confs: { ...baseInput().confs, ethercat: '{"masters":[]}' } }))
+    expect(confKeys(files)).toEqual(['conf/ethercat.json'])
     expect(files['conf/ethercat.json']).toBe('{"masters":[]}')
+  })
+
+  it('writes only modbus_slave.json when a Modbus server is enabled', () => {
+    const files = composeRuntimeV4Bundle(baseInput({ confs: { ...baseInput().confs, modbusSlave: '{"slaves":[]}' } }))
+    expect(confKeys(files)).toEqual(['conf/modbus_slave.json'])
   })
 
   it('writes each conf/*.json that is provided', () => {
@@ -104,6 +119,13 @@ describe('composeRuntimeV4Bundle', () => {
     expect(files['conf/s7comm.json']).toBe('{"servers":[]}')
     expect(files['conf/opcua.json']).toBe('{"endpoints":[]}')
     expect(files['conf/ethercat.json']).toBe('{"masters":[]}')
+    expect(confKeys(files)).toEqual([
+      'conf/ethercat.json',
+      'conf/modbus_master.json',
+      'conf/modbus_slave.json',
+      'conf/opcua.json',
+      'conf/s7comm.json',
+    ])
   })
 
   it('produces the file set runtime compile.sh check_required_files asserts', () => {

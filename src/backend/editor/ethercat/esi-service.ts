@@ -4,7 +4,11 @@ import { basename, dirname, join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
 import { parseESILight } from '../../shared/ethercat/esi-parser-main'
-import { fileOrDirectoryExists } from '../utils'
+// Straight from the module, not the `../utils` barrel: the barrel re-exports
+// `path-picker`, which imports `electron`. The CLI reaches this service, and a
+// CI runner installing with `--ignore-scripts` has no Electron binary — the
+// import alone fails there, taking every test that touches `apply` with it.
+import { fileOrDirectoryExists } from '../utils/file-or-directory-exists'
 
 /**
  * ESI Repository Index stored in devices/esi/repository.json

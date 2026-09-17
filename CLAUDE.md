@@ -263,16 +263,19 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs
 - **Framework:** Jest + jsdom
 - **Test files:** `*.test.ts(x)`, `*.spec.ts(x)`, or `__tests__/` directories
 - **E2E:** Playwright (`/e2e`), Chromium only
-- **Coverage thresholds** — per-directory and aggregate, enforced by
-  `jest.config.json`. Branch coverage is not gated anywhere (`branches: 0`);
-  read the config for the current numbers rather than trusting this table:
+- **Coverage thresholds** — per-directory, enforced by `jest.config.json`. Read
+  the config for the current numbers rather than trusting this table:
 
-  | Directory | statements | lines | functions |
-  |---|---|---|---|
-  | `src/frontend/store/slices/` | 97 | 98 | 98 |
-  | `src/frontend/utils/` | 95 | 95 | 97 |
-  | `src/backend/shared/` | 75 | 77 | 76 |
-  | `src/middleware/adapters/editor/` | 85 | 85 | 87 |
+  | Directory | statements | lines | functions | branches |
+  |---|---|---|---|---|
+  | `src/frontend/store/slices/` | 97 | 98 | 98 | 0 |
+  | `src/frontend/utils/` | 95 | 95 | 97 | 0 |
+  | `src/backend/shared/` | 75 | 77 | 76 | 0 |
+  | `src/middleware/shared/` | 78 | 76 | 89 | 88 |
+  | `src/middleware/adapters/editor/` | 85 | 85 | 87 | 0 |
+  | `src/frontend/hooks/` | 35 | 35 | 30 | 30 |
+
+  `src/cli/` is not collected at all, so it faces no threshold.
 
   They are floors for the directory as a whole, not a per-file rule, so a new
   file is not obliged to reach 100% on its own — but it must not drag the
