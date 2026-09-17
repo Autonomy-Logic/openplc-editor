@@ -320,6 +320,23 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
 
   lines.push('// ---- Users ----')
   const passwordUsers = users.filter((user) => user.type === 'password' && user.username && user.password_hash)
+  // Whether anonymous is allowed is the PROJECT's answer, carried on the
+  // security profiles, and until now it never reached the firmware at all —
+  // `opcua_auth.cpp` inferred it from `OPCUA_USER_COUNT == 0`. That inference
+  // is wrong in both directions: a profile offering Anonymous AND Username with
+  // users declared had anonymous silently refused, and a Username-only profile
+  // with no users yet had the server silently opened to anonymous.
+  const allowAnonymous = (resolved.runtime.config.server.security_profiles ?? []).some(
+    (sp) => sp.enabled !== false && (sp.auth_methods ?? []).includes('Anonymous'),
+  )
+  // The role an anonymous session carries, matching what Runtime v4 does
+  // (`user_manager.py`): with no users configured the server is single-tenant
+  // and anonymous gets the highest role, because there is no privilege model to
+  // enforce; once an administrator has declared even one user, anonymous drops
+  // to read-only rather than bypassing the model they just opted into.
+  const anonymousRole = passwordUsers.length === 0 ? 2 : 0 // 2=engineer, 0=viewer
+  lines.push(`#define OPCUA_ALLOW_ANONYMOUS ${allowAnonymous ? 1 : 0}`)
+  lines.push(`#define OPCUA_ANONYMOUS_ROLE ${anonymousRole} // 0=viewer 1=operator 2=engineer`)
   lines.push(`#define OPCUA_USER_COUNT ${passwordUsers.length}`)
   if (passwordUsers.length === 0) {
     lines.push('static const opcua_user_t OPCUA_USERS[1] = { { "", "", 0 } }; // unused')

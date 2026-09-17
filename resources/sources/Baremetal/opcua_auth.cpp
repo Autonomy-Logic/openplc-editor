@@ -277,6 +277,30 @@ uint32_t opcua_auth_last_us(void) { return g_last_us; }
 
 namespace {
 
+/** What THIS session may do to THIS node.
+ *
+ *  `sessionContext` is the role login_cb stored; `nodeContext` is the
+ *  `opcua_node_t*` materialisation registered. A session with no context is
+ *  treated as viewer -- the least privilege we have a name for -- rather than
+ *  as unrestricted. */
+UA_Byte user_access_level_cb(UA_Server* server, UA_AccessControl* ac,
+                             const UA_NodeId* sessionId, void* sessionContext,
+                             const UA_NodeId* nodeId, void* nodeContext)
+{
+    (void)server; (void)ac; (void)sessionId; (void)nodeId;
+    const opcua_node_t* row = static_cast<const opcua_node_t*>(nodeContext);
+    if (row == nullptr)
+        return 0;   // not one of ours: expose nothing rather than everything
+
+    const uint8_t role = (uint8_t)(uintptr_t)sessionContext;
+    const uint8_t perms = opcua_perm_for_role(row->perms, role);
+
+    UA_Byte level = 0;
+    if (perms & OPCUA_PERM_READ)  level |= UA_ACCESSLEVELMASK_READ;
+    if (perms & OPCUA_PERM_WRITE) level |= UA_ACCESSLEVELMASK_WRITE;
+    return level;
+}
+
 /** open62541 hands us the username and the cleartext password (it has already
  *  undone whatever the token's security policy applied), which is the only point
  *  in the system where the password exists in the clear. It is not copied or
@@ -289,12 +313,31 @@ UA_StatusCode login_cb(const UA_String* userName, const UA_ByteString* password,
     if (userName == nullptr || password == nullptr)
         return UA_STATUSCODE_BADUSERACCESSDENIED;
 
-    // An anonymous token reaches this callback too, with an empty username,
-    // because the default access control consults the callback for every token
-    // type. Reaching here empty already means anonymous is permitted:
-    // allowAnonymous is false whenever users are declared.
+    // An anonymous token reaches this callback too: this fork's
+    // activateSession_default calls the login callback for the Anonymous branch
+    // as well, with both strings empty.
+    //
+    // Both empty is that anonymous call, and it is accepted only if the project
+    // actually offers Anonymous. An empty username with a NON-empty password is
+    // something else entirely -- a UserName token any client can send, which
+    // the library does not pre-reject (it refuses only empty-name-AND-empty-
+    // password) and which used to be answered GOOD here. That handed out a full
+    // session with no password check and no role, on a server with users
+    // configured. It is a UserName token with no user, so it is refused.
     if (userName->length == 0)
+    {
+        if (password->length != 0)
+            return UA_STATUSCODE_BADUSERACCESSDENIED;
+#if OPCUA_ALLOW_ANONYMOUS
+        // Anonymous carries a role like every other session, so the permission
+        // check downstream has something to decide with.
+        if (sessionContext != nullptr)
+            *sessionContext = (void*)(uintptr_t)OPCUA_ANONYMOUS_ROLE;
         return UA_STATUSCODE_GOOD;
+#else
+        return UA_STATUSCODE_BADUSERACCESSDENIED;
+#endif
+    }
 
 #if OPCUA_USER_COUNT > 0
     for (uint16_t i = 0; i < OPCUA_USER_COUNT; i++)
@@ -325,9 +368,10 @@ UA_StatusCode opcua_auth_install(UA_ServerConfig* config)
     if (config == nullptr)
         return UA_STATUSCODE_BADINVALIDARGUMENT;
 
-    // With users declared, anonymous is off: declaring users and still accepting
-    // anonymous would make them decorative.
-    const UA_Boolean allow_anonymous = (OPCUA_USER_COUNT == 0);
+    // From the project's security profiles, not inferred from the user count.
+    // "No users declared" and "anonymous is offered" are different statements,
+    // and treating them as one silently overrode the profile in both directions.
+    const UA_Boolean allow_anonymous = (OPCUA_ALLOW_ANONYMOUS != 0);
 
     // One placeholder login entry, and it is not optional.
     //
@@ -351,6 +395,20 @@ UA_StatusCode opcua_auth_install(UA_ServerConfig* config)
     const UA_StatusCode rc = UA_AccessControl_defaultWithLoginCallback(
         config, allow_anonymous, nullptr,
         (OPCUA_USER_COUNT > 0) ? 1 : 0, &placeholder, login_cb, nullptr);
+
+    // Per-session permissions. The role is collected at login and, until now,
+    // discarded: `read_node`/`write_node` void their sessionContext and a node
+    // is advertised writable if ANY role may write it, so every session got the
+    // most permissive answer in the table.
+    //
+    // UserAccessLevel is the per-session counterpart of the static AccessLevel
+    // attribute -- the node says what it CAN do, the session says what THIS
+    // caller may do -- which is exactly the split the packed permission byte
+    // was built for. open62541 consults it on both the read and the write path,
+    // and hands back the sessionContext (our role) and the nodeContext (the
+    // row), so the decision needs no lookup.
+    if (rc == UA_STATUSCODE_GOOD)
+        config->accessControl.getUserAccessLevel = user_access_level_cb;
     OPCUA_LOG("[auth] access control: %u user(s), anonymous %s, rc=0x%08lx",
               (unsigned)OPCUA_USER_COUNT, allow_anonymous ? "allowed" : "refused",
               (unsigned long)rc);
