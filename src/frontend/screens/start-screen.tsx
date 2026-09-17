@@ -4,7 +4,6 @@ import { useCapabilities, useDevice, useProject, useSystem, useWindow } from '..
 import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
-import { VideoIcon } from '../assets/icons/interface/Video'
 import { StartAccountSection } from '../components/_features/[start]/account'
 import { StartCloudProjects } from '../components/_features/[start]/cloud-projects'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
@@ -105,9 +104,6 @@ const StartScreen = () => {
             </MenuItem>
             <MenuItem ghosted onClick={handleOpenProject}>
               <FolderIcon /> Open
-            </MenuItem>
-            <MenuItem ghosted>
-              <VideoIcon /> Tutorials
             </MenuItem>
             {/* Above the divider with the actions; the account is not on the way out. */}
             <StartAccountSection />
