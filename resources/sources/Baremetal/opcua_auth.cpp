@@ -282,7 +282,12 @@ namespace {
  *  `sessionContext` is the role login_cb stored; `nodeContext` is the
  *  `opcua_node_t*` materialisation registered. A session with no context is
  *  treated as viewer -- the least privilege we have a name for -- rather than
- *  as unrestricted. */
+ *  as unrestricted.
+ *
+ *  This is the per-session HALF of the decision, not the whole of it: the caller
+ *  masks whatever comes back with the node's own AccessLevel attribute. So the
+ *  answer for a node this table does not own is 0xFF (defer to the node), never
+ *  0 (refuse it outright). */
 UA_Byte user_access_level_cb(UA_Server* server, UA_AccessControl* ac,
                              const UA_NodeId* sessionId, void* sessionContext,
                              const UA_NodeId* nodeId, void* nodeContext)
@@ -290,7 +295,22 @@ UA_Byte user_access_level_cb(UA_Server* server, UA_AccessControl* ac,
     (void)server; (void)ac; (void)sessionId; (void)nodeId;
     const opcua_node_t* row = static_cast<const opcua_node_t*>(nodeContext);
     if (row == nullptr)
-        return 0;   // not one of ours: expose nothing rather than everything
+    {
+        // Not one of our rows -- every namespace-zero node, which carries no
+        // context. 0xFF is what the library's own default returns, and it does
+        // NOT mean "expose everything": the caller computes
+        //
+        //     node->accessLevel & getUserAccessLevel(...)
+        //
+        // so the node's own AccessLevel attribute is still the gate, and ns0
+        // variables are read-only by that attribute. Returning 0 here instead
+        // ANDed all of namespace zero down to no access, which refused
+        // Server_ServerStatus_State with BadUserAccessDenied -- the node nearly
+        // every OPC-UA client's connection watchdog polls. The visible symptom
+        // was the session dying about a second after connect, whatever it was
+        // or was not doing.
+        return 0xFF;
+    }
 
     const uint8_t role = (uint8_t)(uintptr_t)sessionContext;
     const uint8_t perms = opcua_perm_for_role(row->perms, role);
