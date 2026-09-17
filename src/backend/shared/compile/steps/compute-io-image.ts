@@ -330,7 +330,7 @@ function markBacked(backed: Map<string, Set<number>>, prefix: string, from: numb
  * default, never a crash. Here the harmless default is no VPP channels, which
  * simply sizes those areas from the other producers.
  */
-function vppEntries(vendorScreenData: Record<string, unknown> | undefined): PoolVppIoInput {
+export function vppEntries(vendorScreenData: Record<string, unknown> | undefined): PoolVppIoInput {
   const mapping = vendorScreenData?.['io-mapping']
   if (typeof mapping !== 'object' || mapping === null) return { entries: [] }
 
@@ -602,7 +602,7 @@ function s7commExposure(
  * places IEC allows a location, and the two the editor's own validation
  * permits.
  */
-function* locatedVariables(
+export function* locatedVariables(
   projectData: PLCProjectData,
 ): Generator<{ scope: string; name: string; location: string; slotCount: number }> {
   for (const pou of projectData.pous) {

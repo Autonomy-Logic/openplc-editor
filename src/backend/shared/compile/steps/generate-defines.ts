@@ -104,7 +104,7 @@ function firmwareCount(prefix: string, slots: number): number {
  * would silently hand the area back to the header's fallback — the opposite of
  * what a project with nothing in that area asked for (FR21, BR12, BR10).
  */
-function generateProcessImageDefines(sizes: IoImageSizes | undefined): string {
+export function generateProcessImageDefines(sizes: IoImageSizes | undefined): string {
   if (!sizes) return ''
 
   let block = '//Process image\n'

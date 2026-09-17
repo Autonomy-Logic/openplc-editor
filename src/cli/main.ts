@@ -34,6 +34,7 @@ import { buildProject, runBuild } from './commands/build'
 import { runCreate } from './commands/create'
 import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
+import { runInspect } from './commands/inspect'
 import { runInstallCli } from './commands/install-cli'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
@@ -68,7 +69,7 @@ const BOOLEAN_FLAGS = [
   'all',
 ] as const
 
-const COMMANDS_WITH_SUBCOMMANDS = ['debug'] as const
+const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'inspect'] as const
 
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
@@ -79,6 +80,8 @@ Usage
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
+  openplc-cli inspect image <project> [--target <board>] [--verbose]
+                            (I/O image sizes, producers and located vars — no build)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
@@ -195,6 +198,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runDevices(args, reporter)).exitCode
     case 'install-cli':
       return (await runInstallCli(args, reporter)).exitCode
+    case 'inspect':
+      return (await runInspect(args, reporter)).exitCode
     case 'compile':
       return (await runBuild(args, reporter, { withUpload: false })).exitCode
     case 'upload':
