@@ -20,6 +20,7 @@
  * importFromFile`) can run unchanged.
  */
 
+import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
 import { parseInstalledPackageManifest } from '../../shared/ports/package-manifest-schema'
 import type { PackagePort } from '../../shared/ports/package-port'
 import type {
@@ -100,6 +101,10 @@ export function createEditorPackageAdapter(): PackagePort {
       const raw = await window.bridge.getPackageManifest(packageId)
       if (raw === null || raw === undefined) return null
       return parseInstalledPackageManifest(raw)
+    },
+
+    getPackagePin(packageId: string): Promise<VppPackagePin | null> {
+      return window.bridge.getPackagePin(packageId)
     },
 
     async listRemoteCatalog(): Promise<RemoteCatalog> {

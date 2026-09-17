@@ -18,11 +18,30 @@ export interface FieldOptionSource {
   optionsRef?: string
 }
 
-/** Walk a dotted path (`a.b.c`) into a context object; undefined on any miss. */
+/** Segments that would reach the prototype chain instead of real data. */
+const FORBIDDEN_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
+
+/** Depth a single `optionsRef` may traverse. */
+const MAX_OPTIONS_REF_DEPTH = 8
+
+/**
+ * Walk a dotted path (`a.b.c`) into a context object; undefined on any miss.
+ *
+ * `optionsRef` comes from a vendor package, so it is untrusted: a path through
+ * `constructor` or `__proto__` would walk off the data and into the prototype
+ * chain, and whatever it found there would be offered to the user as options
+ * and then written into the generated plugin config. Own properties only, and
+ * a bounded number of them.
+ */
 function lookupPath(path: string, context: Record<string, unknown>): unknown {
+  const parts = path.split('.')
+  if (parts.length > MAX_OPTIONS_REF_DEPTH) return undefined
+
   let cursor: unknown = context
-  for (const part of path.split('.')) {
+  for (const part of parts) {
+    if (FORBIDDEN_PATH_SEGMENTS.has(part)) return undefined
     if (cursor === null || cursor === undefined || typeof cursor !== 'object') return undefined
+    if (!Object.prototype.hasOwnProperty.call(cursor, part)) return undefined
     cursor = (cursor as Record<string, unknown>)[part]
   }
   return cursor

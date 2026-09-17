@@ -173,10 +173,9 @@ import {
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
 import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
-import {
-  buildModuleConfigEntries,
-  generateVendorPluginConfig,
-} from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
+import { buildVppPluginFiles } from '@root/backend/shared/utils/vpp/build-vpp-plugin-files'
+import type { VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import { buildModuleConfigEntries } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog } from 'electron'
@@ -2212,275 +2211,186 @@ class CompilerModule {
 
       handleOutputData(`Detected VPP runtime-v4 board: ${boardTarget}`, 'info')
 
-      // --- Step 1: Generate plugin config file ---
-      const configTemplateRelPath = matchingDevice.hal?.configTemplate
-      let pluginName = 'vendor_plugin'
+      // Read the project's vendor screen values. Absent means a project that
+      // has not been configured yet, which is not an error.
+      let vendorScreenData: Record<string, unknown> = {}
+      let recordedPin: VppPackagePin | undefined
+      try {
+        const deviceConfigRaw = await readFile(join(normalizedProjectPath, 'devices', 'configuration.json'), 'utf-8')
+        const deviceConfig = JSON.parse(deviceConfigRaw) as {
+          vendorScreenData?: Record<string, unknown>
+          vppPackagePinsByBoard?: Record<string, VppPackagePin>
+        }
+        vendorScreenData = deviceConfig.vendorScreenData ?? {}
+        // Absent on every project written before pinning existed, which warns
+        // about nothing — the comparison is skipped, not failed.
+        recordedPin = deviceConfig.vppPackagePinsByBoard?.[boardTarget]
+      } catch {
+        // Device configuration may not exist yet — use empty vendor data.
+      }
 
+      // The GPIO pin table for pin-mapping boards. Two on-disk shapes exist
+      // (per `pinMappingFileSchema`): the per-board dict written by current
+      // saves, and the legacy flat array. Both are read — handling only the
+      // array meant new projects fed the packager no pins at all.
+      let devicePins: DevicePin[] = []
+      try {
+        const parsedPins: unknown = JSON.parse(
+          await readFile(join(normalizedProjectPath, 'devices', 'pin-mapping.json'), 'utf-8'),
+        )
+        if (Array.isArray(parsedPins)) {
+          devicePins = parsedPins as DevicePin[]
+        } else if (parsedPins && typeof parsedPins === 'object') {
+          devicePins = (parsedPins as Record<string, DevicePin[]>)[boardTarget] ?? []
+        }
+      } catch {
+        // No pin-mapping file — leave empty.
+      }
+
+      // Pre-load each module's configScreen so the shared builder stays pure.
+      const rawModules = matchingDevice.moduleSystem?.modules ?? []
+      const modules = await Promise.all(
+        rawModules.map(async (m) => {
+          const rel = (m as { configScreen?: string }).configScreen
+          if (!rel) return m
+          try {
+            const screenPath = join(matchingPackagePath, rel)
+            assertPathContained(matchingPackagePath, screenPath, 'module configScreen')
+            return { ...m, configScreenDefinition: JSON.parse(await readFile(screenPath, 'utf-8')) as unknown }
+          } catch (err) {
+            handleOutputData(`Failed to load configScreen ${rel} for module ${m.id}: ${getErrorMessage(err)}`, 'error')
+            return m
+          }
+        }),
+      )
+
+      // Read only what the builder needs out of the package: the config
+      // template and the plugin subtree. Both paths come from the manifest, so
+      // both are contained before anything is read — an entry like `../../etc`
+      // would otherwise pull arbitrary host files into the upload.
+      const packageFiles = new Map<string, Uint8Array>()
+      const readPackageFile = async (rel: string): Promise<void> => {
+        const absolute = join(matchingPackagePath, rel)
+        assertPathContained(matchingPackagePath, absolute, 'VPP package file')
+        packageFiles.set(rel, Uint8Array.from(await readFile(absolute)))
+      }
+
+      const configTemplateRelPath = matchingDevice.hal?.configTemplate
       if (configTemplateRelPath) {
-        const configTemplatePath = join(matchingPackagePath, configTemplateRelPath)
-        let configTemplate: Record<string, unknown> | null = null
         try {
-          const templateRaw = await readFile(configTemplatePath, 'utf-8')
-          configTemplate = JSON.parse(templateRaw) as Record<string, unknown>
+          await readPackageFile(configTemplateRelPath)
         } catch (err) {
           handleOutputData(
             `Failed to read VPP config template at ${configTemplateRelPath}: ${getErrorMessage(err)}`,
             'error',
           )
         }
-
-        if (configTemplate) {
-          // Read vendor screen data from the project's device configuration
-          const deviceConfigPath = join(normalizedProjectPath, 'devices', 'configuration.json')
-          let vendorScreenData: Record<string, unknown> = {}
-          try {
-            const deviceConfigRaw = await readFile(deviceConfigPath, 'utf-8')
-            const deviceConfig = JSON.parse(deviceConfigRaw) as { vendorScreenData?: Record<string, unknown> }
-            vendorScreenData = deviceConfig.vendorScreenData ?? {}
-          } catch {
-            // Device configuration may not exist yet — use empty vendor data
-          }
-
-          // Read the GPIO pin-mapping for pin-based boards (capabilities.
-          // pinMapping). The generator turns these into the plugin config's
-          // pins[] array. Module-based boards have no pins, so this stays
-          // empty and no pins[] key is emitted.
-          //
-          // Like the main compile path above, this file has two on-disk
-          // shapes (per `pinMappingFileSchema`): per-board dict
-          // `{ [boardName]: DevicePin[] }` for post-refactor projects,
-          // and the legacy flat `DevicePin[]` for older saves. Handle
-          // both — pre-refactor we only handled the array branch, which
-          // meant new projects fed the VPP packager no pins at all.
-          let devicePins: DevicePin[] = []
-          try {
-            const pinMappingPath = join(normalizedProjectPath, 'devices', 'pin-mapping.json')
-            const pinMappingRaw = await readFile(pinMappingPath, 'utf-8')
-            const parsedPins: unknown = JSON.parse(pinMappingRaw)
-            if (Array.isArray(parsedPins)) {
-              devicePins = parsedPins as DevicePin[]
-            } else if (parsedPins && typeof parsedPins === 'object') {
-              const dict = parsedPins as Record<string, DevicePin[]>
-              devicePins = dict[boardTarget] ?? []
-            }
-          } catch {
-            // No pin-mapping file — leave empty.
-          }
-
-          // Pre-load each module's configScreen JSON so the (pure)
-          // generator can encode per-slot configuration bytes without
-          // touching the filesystem.
-          const rawModules = matchingDevice.moduleSystem?.modules ?? []
-          const modules = await Promise.all(
-            rawModules.map(async (m) => {
-              let configScreenDefinition: unknown
-              const rel = (m as { configScreen?: string }).configScreen
-              if (rel) {
-                try {
-                  const screenPath = join(matchingPackagePath, rel)
-                  const raw = await readFile(screenPath, 'utf-8')
-                  configScreenDefinition = JSON.parse(raw)
-                } catch (err) {
-                  handleOutputData(
-                    `Failed to load configScreen ${rel} for module ${m.id}: ${getErrorMessage(err)}`,
-                    'error',
-                  )
-                }
-              }
-              return { ...m, configScreenDefinition }
-            }),
-          )
-          const finalConfig = generateVendorPluginConfig(configTemplate, vendorScreenData, modules, devicePins)
-
-          // configTemplate is supplied by the package author through
-          // their .vpp manifest. Without validation, plugin_name like
-          // "../../../etc/cron.d/runme" would be join-ed into a path
-          // outside confFolderPath and the editor would write user-
-          // controlled JSON to an arbitrary location.
-          const rawPluginName = (configTemplate.plugin_name as string | undefined) ?? 'vendor_plugin'
-          validatePathId(rawPluginName, 'configTemplate.plugin_name')
-          pluginName = rawPluginName
-          const confFolderPath = join(sourceTargetFolderPath, 'conf')
-          await mkdir(confFolderPath, { recursive: true })
-          const configFilePath = join(confFolderPath, `${pluginName}.json`)
-          assertPathContained(confFolderPath, configFilePath, 'plugin config path')
-          await writeFile(configFilePath, JSON.stringify(finalConfig, null, 2), 'utf-8')
-          handleOutputData(`Generated conf/${pluginName}.json for VPP plugin`, 'info')
-
-          // Generate vpp_plugins.conf so the runtime knows exactly which
-          // VPP plugin to load and where its compiled .so and config live.
-          // Format matches plugins.conf: name,path,enabled,type,config_path,venv_path
-          // The paths are the deterministic locations that compile.sh and the
-          // runtime's apply_vpp_plugin_conf() agree on.
-          const vppPluginsConfContent = `${pluginName},./build/vpp/lib${pluginName}_plugin.so,1,1,./build/vpp/${pluginName}.json,\n`
-          const vppPluginsConfPath = join(sourceTargetFolderPath, 'vpp_plugins.conf')
-          await writeFile(vppPluginsConfPath, vppPluginsConfContent, 'utf-8')
-          handleOutputData('Generated vpp_plugins.conf', 'info')
-        }
-      } else {
-        handleOutputData('VPP board has no HAL configTemplate, skipping plugin config generation', 'info')
       }
 
-      // --- Step 2: Copy plugin payload + generate checksum ---
       const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
-      if (!pluginEntryRelPath) {
-        handleOutputData('VPP board has no HAL pluginEntry, skipping plugin source upload', 'info')
-        return
-      }
-
-      // Resolve the plugin directory. In "source" mode (default) pluginEntry is
-      // the entry source file, so the dir is its parent. In "prebuilt" mode
-      // (provisioning === 'prebuilt') pluginEntry is the directory itself,
-      // holding the precompiled .o objects plus the link-only Makefile.
-      // pluginEntryRelPath is supplied by the package manifest; without
-      // containment, an entry like `../../../etc` would resolve outside
-      // matchingPackagePath and the recursive-copy below would slurp
-      // arbitrary host files into the build's vpp_plugin directory.
-      const isPrebuilt = matchingDevice.hal?.provisioning === 'prebuilt'
-      const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath : path.dirname(pluginEntryRelPath)
-      const pluginSourceDir = join(matchingPackagePath, pluginDirRelPath)
-      try {
-        assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
-      } catch (err) {
-        handleOutputData(`Invalid VPP pluginEntry: ${getErrorMessage(err)}`, 'error')
-        return
-      }
-      let pluginSourceStat
-      try {
-        pluginSourceStat = await stat(pluginSourceDir)
-      } catch (err) {
-        handleOutputData(
-          `VPP plugin source directory not found at ${pluginEntryRelPath}: ${getErrorMessage(err)}`,
-          'error',
-        )
-        return
-      }
-
-      if (!pluginSourceStat.isDirectory()) {
-        handleOutputData(`VPP plugin source path is not a directory: ${pluginEntryRelPath}`, 'error')
-        return
-      }
-
-      const destPluginDir = join(sourceTargetFolderPath, 'vpp_plugin')
-      // Clean up any previous vpp_plugin directory from a prior build
-      try {
-        await fs.rm(destPluginDir, { recursive: true, force: true })
-      } catch {
-        // Ignore — may not exist yet
-      }
-
-      // Copy the plugin source, excluding files that are only useful in the editor
-      // (config_template.json is already turned into conf/<plugin>.json, and
-      // requirements.txt is for Python-style plugins that don't apply here).
-      // Symlinks are rejected unconditionally:
-      //   - they aren't useful inside a .vpp (the format ships a flat tree),
-      //   - a self-referential or parent-pointing symlink would make this
-      //     recursion unbounded, hanging the build,
-      //   - and a symlink to outside matchingPackagePath would let a
-      //     malicious package exfiltrate host files into the upload.
-      const EXCLUDE_FILES = new Set(['config_template.json', 'requirements.txt'])
-      const copiedFiles: string[] = []
-      const collectAndCopy = async (sourceDir: string, destDir: string, relPath: string = ''): Promise<void> => {
-        const entries = await readdir(sourceDir, { withFileTypes: true })
-        for (const entry of entries) {
-          if (EXCLUDE_FILES.has(entry.name)) continue
-          if (entry.isSymbolicLink()) {
-            handleOutputData(
-              `Skipping symlink in VPP plugin source: ${relPath ? `${relPath}/` : ''}${entry.name}`,
-              'info',
-            )
-            continue
+      if (pluginEntryRelPath) {
+        const isPrebuilt = matchingDevice.hal?.provisioning === 'prebuilt'
+        const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath : path.dirname(pluginEntryRelPath)
+        const pluginSourceDir = join(matchingPackagePath, pluginDirRelPath)
+        try {
+          assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
+          const stat = await fs.stat(pluginSourceDir)
+          if (!stat.isDirectory()) {
+            handleOutputData(`VPP plugin source path is not a directory: ${pluginEntryRelPath}`, 'error')
+            return
           }
-          const sourcePath = join(sourceDir, entry.name)
-          const destPath = join(destDir, entry.name)
-          const relFilePath = relPath ? `${relPath}/${entry.name}` : entry.name
-          if (entry.isDirectory()) {
-            await mkdir(destPath, { recursive: true })
-            await collectAndCopy(sourcePath, destPath, relFilePath)
-          } else if (entry.isFile()) {
-            await mkdir(destDir, { recursive: true })
-            const content = await readFile(sourcePath)
-            await writeFile(destPath, content as unknown as Uint8Array)
-            copiedFiles.push(relFilePath)
+        } catch (err) {
+          handleOutputData(
+            `VPP plugin source directory not found at ${pluginEntryRelPath}: ${getErrorMessage(err)}`,
+            'error',
+          )
+          return
+        }
+
+        // Symlinks are refused rather than followed: they are not useful inside
+        // a `.vpp` (the format ships a flat tree), a self-referential one would
+        // make this walk unbounded, and one pointing outside the package would
+        // exfiltrate host files into the upload.
+        const collect = async (dir: string, rel: string): Promise<void> => {
+          for (const entry of await readdir(dir, { withFileTypes: true })) {
+            const childRel = rel ? `${rel}/${entry.name}` : entry.name
+            if (entry.isSymbolicLink()) {
+              handleOutputData(`Skipping symlink in VPP plugin source: ${childRel}`, 'info')
+              continue
+            }
+            if (entry.isDirectory()) {
+              await collect(join(dir, entry.name), childRel)
+            } else if (entry.isFile()) {
+              await readPackageFile(`${pluginDirRelPath.split(path.sep).join('/')}/${childRel}`)
+            }
           }
         }
+        await collect(pluginSourceDir, '')
       }
 
-      await mkdir(destPluginDir, { recursive: true })
-      await collectAndCopy(pluginSourceDir, destPluginDir)
-
-      if (copiedFiles.length === 0) {
-        handleOutputData('VPP plugin source directory contained no files to copy', 'info')
-        return
-      }
-
-      // The generated trusted-keys unit joins the link set AND the checksum:
-      // a key rotation with unchanged plugin source must still change the
-      // checksum, or the runtime's compile.sh would skip the rebuild and the
-      // device would keep validating blobs against the previous table.
-      if (trustedKeysC !== null) {
-        await writeFile(join(destPluginDir, 'trusted_keys.c'), trustedKeysC, 'utf-8')
-        copiedFiles.push('trusted_keys.c')
-      }
-
-      // Compute SHA-256 over all copied files (sorted for determinism)
-      // Format: "<sha256> <relative-path>\n" per file, then a final SHA-256 of that list
-      copiedFiles.sort()
-      const hash = createHash('sha256')
-      for (const relFile of copiedFiles) {
-        const fileContent = await readFile(join(destPluginDir, relFile))
-        const fileHash = createHash('sha256')
-          .update(fileContent as unknown as Uint8Array)
-          .digest('hex')
-        hash.update(`${fileHash}  ${relFile}\n`)
-      }
-      const combinedHash = hash.digest('hex')
-      await writeFile(join(destPluginDir, 'checksum.sha256'), combinedHash + '\n', 'utf-8')
-
-      // The package signature, forwarded so the runtime can verify what it is
-      // about to compile.
-      //
-      // `vpp_plugin/` is the only content in an upload that the runtime builds
-      // with a Makefile that came from the upload itself, so the runtime
-      // requires it to be signed by a trusted key. It cannot re-derive the
-      // signature: the plugin tree it receives is a SUBSET of the package
-      // (config_template.json and requirements.txt are dropped above, and
-      // trusted_keys.c / checksum.sha256 are generated here), so only the
-      // original package's detached signature can attest to it.
-      //
-      // `pluginDir` tells the runtime which signed subtree to compare the
-      // upload against — the same relative path this function copied from.
-      //
-      // Without this the runtime refuses every VPP upload with "vpp_signature
-      // .json is missing or unreadable". The contract was written on the
-      // runtime side (webserver/vpp_package_signature.py, whose comment names
-      // this very function as its author) and never implemented here, so no
-      // VPP could be uploaded to a runtime that enforces it.
-      const packageSignaturePath = join(matchingPackagePath, 'signature.json')
+      let packageSignature: unknown = null
       try {
-        const signatureRaw = await readFile(packageSignaturePath, 'utf-8')
-        await writeFile(
-          join(sourceTargetFolderPath, 'vpp_signature.json'),
-          `${JSON.stringify({ package: JSON.parse(signatureRaw), pluginDir: pluginDirRelPath.split(path.sep).join('/') }, null, 2)}\n`,
-          'utf-8',
-        )
-      } catch (err) {
-        // Non-fatal HERE, and refused THERE. An unsigned package is a normal
-        // thing to have during vendor development (`build.ts --unsigned`), and
-        // failing the local build would make that workflow impossible. The
-        // runtime is the boundary that matters, and it rejects the upload with
-        // a message naming the fix — which is better than this build guessing
-        // whether the target enforces signatures.
-        handleOutputData(
-          `VPP package has no usable signature.json (${getErrorMessage(err)}); a runtime that requires signed plugins will refuse this upload`,
-          'warning',
-        )
+        packageSignature = JSON.parse(await readFile(join(matchingPackagePath, 'signature.json'), 'utf-8'))
+      } catch {
+        // Left null — the builder warns, and the runtime is the boundary that
+        // refuses. An unsigned package is normal during vendor development
+        // (`build.ts --unsigned`), and failing the local build would make that
+        // workflow impossible.
+        packageSignature = null
       }
 
-      handleOutputData(
-        `Copied ${copiedFiles.length} VPP plugin ${isPrebuilt ? 'prebuilt' : 'source'} file(s) to vpp_plugin/ (checksum: ${combinedHash.slice(0, 12)}...)`,
-        'info',
-      )
+      // Everything the bundle contains is decided by the shared builder, which
+      // openplc-web's `packageVppPlugin` also calls. Two writers for one format
+      // is how the desktop and the browser drift; this is the one writer.
+      const built = await buildVppPluginFiles({
+        device: matchingDevice,
+        packageFiles,
+        packageSignature,
+        vendorScreenData,
+        devicePins: devicePins as unknown as Array<Record<string, unknown>>,
+        modules,
+        trustedKeysC,
+        // The pin comparison is advisory: it produces a warning, never a
+        // bundle. An unsigned or unreadable package has no identity to pin to,
+        // and that must not be the reason a build stops packaging its driver.
+        pin: {
+          ...(recordedPin !== undefined && { recorded: recordedPin }),
+          installed: readInstalledPin(match.pkg.packageId),
+        },
+        sha256Hex: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+      })
+
+      for (const warning of built.warnings) handleOutputData(warning, 'info')
+      for (const message of built.errors) handleOutputData(message, 'error')
+      if (built.errors.length > 0) {
+        throw new Error(built.errors[0])
+      }
+
+      // A previous build's tree must not survive into this one: a file the
+      // package no longer ships would otherwise still be compiled on the PLC.
+      if (Object.keys(built.files).some((name) => name.startsWith('vpp_plugin/'))) {
+        await fs.rm(join(sourceTargetFolderPath, 'vpp_plugin'), { recursive: true, force: true })
+      }
+
+      for (const [relPath, bytes] of Object.entries(built.files)) {
+        const destination = join(sourceTargetFolderPath, ...relPath.split('/'))
+        assertPathContained(sourceTargetFolderPath, destination, 'VPP bundle path')
+        await mkdir(path.dirname(destination), { recursive: true })
+        await writeFile(destination, bytes)
+      }
+
+      if (built.pluginName) {
+        handleOutputData(`Generated conf/${built.pluginName}.json for VPP plugin`, 'info')
+        handleOutputData('Generated vpp_plugins.conf', 'info')
+      }
+      if (built.pluginFiles.length > 0) {
+        const checksum = new TextDecoder().decode(built.files['vpp_plugin/checksum.sha256'] ?? new Uint8Array()).trim()
+        handleOutputData(
+          `Copied ${built.pluginFiles.length} VPP plugin ${built.provisioning} file(s) to vpp_plugin/ ` +
+            `(checksum: ${checksum.slice(0, 12)}...)`,
+          'info',
+        )
+      }
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
@@ -3549,3 +3459,18 @@ class CompilerModule {
   }
 }
 export { CompilerModule }
+
+/**
+ * The installed package's pinnable identity, or null when it has none.
+ *
+ * Separated from the packaging path so a package store that cannot answer —
+ * unsigned package, unreadable signature — costs a missing warning rather than
+ * a missing driver in the upload.
+ */
+function readInstalledPin(packageId: string): VppPackagePin | null {
+  try {
+    return new PackageManagerModule().getPackagePin?.(packageId) ?? null
+  } catch {
+    return null
+  }
+}

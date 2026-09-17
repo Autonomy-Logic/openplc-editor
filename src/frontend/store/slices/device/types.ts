@@ -1,3 +1,4 @@
+import type { VppPackagePin } from '../../../../backend/shared/types/PLC/devices/configuration'
 import type { DeviceLicenseReport } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
 import type {
@@ -54,6 +55,8 @@ export type SelectedDevice = {
   orchestratorAgentId: string
   deviceId: string
   deviceName: string
+  /** Whether this vPLC holds the Device's backplane I/O. Absent means the host did not say, not `false`. */
+  backplaneAccess?: boolean
 }
 
 export type StoredCredentials = {
@@ -308,6 +311,8 @@ export type DeviceActions = {
    * re-sending the other two.
    */
   setPersistentStorage: (patch: Partial<PersistentStorageSettings>) => void
+  /** Record (or clear, with `null`) the VPP package a board was authored against. */
+  setVppPackagePin: (board: string, pin: VppPackagePin | null) => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by

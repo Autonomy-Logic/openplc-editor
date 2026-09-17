@@ -1,12 +1,16 @@
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { OrchestratorInfo } from '../../../../../../../middleware/shared/ports/orchestrator-port'
+import type {
+  OrchestratorDevice,
+  OrchestratorInfo,
+} from '../../../../../../../middleware/shared/ports/orchestrator-port'
 import { useOrchestrator, useRuntime } from '../../../../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-import { useOpenPLCStore } from '../../../../../../store'
+import { openPLCStoreBase, useOpenPLCStore } from '../../../../../../store'
+import type { SelectedDevice } from '../../../../../../store/slices/device'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
@@ -60,6 +64,25 @@ const StatusBadge = ({ status }: { status: string | null }) => {
   )
 }
 
+/** Marks the one vPLC that drives the Device's local backplane I/O. */
+const BackplaneBadge = () => (
+  <span className='inline-flex items-center rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'>
+    Backplane I/O
+  </span>
+)
+
+function refreshSelection(selection: SelectedDevice | null, orchestrators: OrchestratorInfo[]): SelectedDevice | null {
+  if (!selection) return null
+  const device = orchestrators
+    .find((item) => item.id === selection.orchestratorId)
+    ?.devices.find((item) => item.id === selection.deviceId)
+  if (!device || device.backplaneAccess === selection.backplaneAccess) return selection
+  const updated = { ...selection }
+  if (device.backplaneAccess === undefined) delete updated.backplaneAccess
+  else updated.backplaneAccess = device.backplaneAccess
+  return updated
+}
+
 const OrchestratorsList = () => {
   const orchestratorPort = useOrchestrator()
   const runtimePort = useRuntime()
@@ -68,12 +91,7 @@ const OrchestratorsList = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedOrchestrators, setExpandedOrchestrators] = useState<Set<string>>(new Set())
-  const [selectedDevice, setSelectedDevice] = useState<{
-    orchestratorId: string
-    orchestratorAgentId: string
-    deviceId: string
-    deviceName: string
-  } | null>(null)
+  const [selectedDevice, setSelectedDevice] = useState<SelectedDevice | null>(null)
 
   // Track whether the simulator is selected
   const isSimulatorSelected = useOpenPLCStore((state) => {
@@ -90,12 +108,7 @@ const OrchestratorsList = () => {
 
   // State for device switch confirmation modal
   const [showSwitchConfirmModal, setShowSwitchConfirmModal] = useState(false)
-  const [pendingDeviceSwitch, setPendingDeviceSwitch] = useState<{
-    orchestratorId: string
-    orchestratorAgentId: string
-    deviceId: string
-    deviceName: string
-  } | null>(null)
+  const [pendingDeviceSwitch, setPendingDeviceSwitch] = useState<SelectedDevice | null>(null)
 
   // Note: WebRTC connection lifecycle is managed by WebRTCManager at the app level.
   // This allows the connection to persist across tab switches.
@@ -119,6 +132,12 @@ const OrchestratorsList = () => {
     try {
       const result = await orchestratorPort.listOrchestrators()
       setOrchestrators(result)
+      const state = openPLCStoreBase.getState()
+      const current = state.runtimeConnection.selectedDevice
+      const refreshed = refreshSelection(current, result)
+      if (refreshed !== current) state.deviceActions.setSelectedDevice(refreshed)
+      setSelectedDevice((selection) => refreshSelection(selection, result))
+      setPendingDeviceSwitch((selection) => refreshSelection(selection, result))
       setError(null)
     } catch (error) {
       console.error('[Orchestrators] Fetch failed', error)
@@ -136,12 +155,8 @@ const OrchestratorsList = () => {
   // This ensures the UI shows the connected device when reopening the orchestrators screen
   useEffect(() => {
     if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
-      setSelectedDevice({
-        orchestratorId: runtimeConnection.selectedDevice.orchestratorId,
-        orchestratorAgentId: runtimeConnection.selectedDevice.orchestratorAgentId,
-        deviceId: runtimeConnection.selectedDevice.deviceId,
-        deviceName: runtimeConnection.selectedDevice.deviceName,
-      })
+      // Copied whole: a hand-listed field copy is what dropped `backplaneAccess` here.
+      setSelectedDevice(runtimeConnection.selectedDevice)
     }
   }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice])
 
@@ -175,24 +190,33 @@ const OrchestratorsList = () => {
   }, [])
 
   const handleDeviceSelect = useCallback(
-    (orchestratorId: string, orchestratorAgentId: string, deviceId: string, deviceName: string, isActive: boolean) => {
+    (orchestratorId: string, orchestratorAgentId: string, device: OrchestratorDevice) => {
       // Prevent selection of inactive devices
-      if (!isActive) {
+      if (device.active === false) {
         return
+      }
+
+      const selection: SelectedDevice = {
+        orchestratorId,
+        orchestratorAgentId,
+        deviceId: device.id,
+        deviceName: device.name,
+        // Absent stays absent: a host that predates the field must not read as one that said no.
+        ...(typeof device.backplaneAccess === 'boolean' ? { backplaneAccess: device.backplaneAccess } : {}),
       }
 
       // If already connected to a different device, show confirmation modal
       if (
         runtimeConnection.connectionStatus === 'connected' &&
         runtimeConnection.selectedDevice &&
-        runtimeConnection.selectedDevice.deviceId !== deviceId
+        runtimeConnection.selectedDevice.deviceId !== device.id
       ) {
-        setPendingDeviceSwitch({ orchestratorId, orchestratorAgentId, deviceId, deviceName })
+        setPendingDeviceSwitch(selection)
         setShowSwitchConfirmModal(true)
         return
       }
 
-      setSelectedDevice({ orchestratorId, orchestratorAgentId, deviceId, deviceName })
+      setSelectedDevice(selection)
       setConnectionError(null)
     },
     [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice],
@@ -207,12 +231,7 @@ const OrchestratorsList = () => {
 
     try {
       // Store the selected device in the store
-      deviceActions.setSelectedDevice({
-        orchestratorId: selectedDevice.orchestratorId,
-        orchestratorAgentId: selectedDevice.orchestratorAgentId,
-        deviceId: selectedDevice.deviceId,
-        deviceName: selectedDevice.deviceName,
-      })
+      deviceActions.setSelectedDevice(selectedDevice)
 
       // Set device context so the runtime adapter knows which device to target
       runtimePort.setDeviceContext?.({
@@ -460,19 +479,12 @@ const OrchestratorsList = () => {
                                     'cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800',
                                   isHighlighted && 'cursor-pointer bg-neutral-100 dark:bg-neutral-800',
                                 )}
-                                onClick={() =>
-                                  handleDeviceSelect(
-                                    orchestrator.id,
-                                    orchestrator.agentId,
-                                    device.id,
-                                    device.name,
-                                    device.active !== false,
-                                  )
-                                }
+                                onClick={() => handleDeviceSelect(orchestrator.id, orchestrator.agentId, device)}
                               >
                                 <span className='flex-1 text-sm text-neutral-800 dark:text-neutral-200'>
                                   {device.name}
                                 </span>
+                                {device.backplaneAccess === true && <BackplaneBadge />}
                                 <StatusBadge status={device.status} />
                                 {isConnected && (
                                   <span className='text-xs font-medium text-green-600 dark:text-green-400'>

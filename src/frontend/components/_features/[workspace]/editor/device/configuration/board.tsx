@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import { useCapabilities, useDevice, usePackages, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { evaluateVppBackplaneGate } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -29,6 +31,7 @@ import { PinMappingTable } from './components/pin-mapping-table'
 const Board = memo(function () {
   const capabilities = useCapabilities()
   const device = useDevice()
+  const packages = usePackages()
   const runtime = useRuntime()
 
   const {
@@ -92,12 +95,22 @@ const Board = memo(function () {
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const clearDeviceLicense = useOpenPLCStore((state) => state.deviceActions.clearDeviceLicense)
+  const setVppPackagePin = useOpenPLCStore((state) => state.deviceActions.setVppPackagePin)
+  const recordedPins = useOpenPLCStore(
+    (state): Record<string, VppPackagePin> | undefined => state.deviceDefinitions.configuration.vppPackagePinsByBoard,
+  )
   const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
+  // The vPLC the board list is being offered for. Null on every target that is
+  // not an orchestrator device, which the gate reads as "do not gate".
+  const selectedDevice = useOpenPLCStore(
+    (state): RuntimeConnection['selectedDevice'] => state.runtimeConnection.selectedDevice,
+  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
+  const [pinDrift, setPinDrift] = useState<string | null>(null)
   const [formattedBoardState, setFormattedBoardState] = useState('')
   const [showPythonWarning, setShowPythonWarning] = useState(false)
   // Human-readable label of the function-block kind(s) the target can't
@@ -243,6 +256,35 @@ const Board = memo(function () {
     }
     void fetchPreviewImage()
   }, [deviceBoard, device, availableBoards])
+
+  // Pin the vendor package the moment a VPP board is selected, and compare it
+  // with what is installed whenever the board or the package set changes. The
+  // pin is what lets the editor say the package moved underneath a program
+  // that was laid out against the old one — a mismatch the device would
+  // otherwise only show as wrong I/O.
+  const vppPackageId = availableBoards.get(deviceBoard)?.vpp?.packageId
+  useEffect(() => {
+    if (!packages || !vppPackageId) {
+      setPinDrift(null)
+      return
+    }
+    let cancelled = false
+    void packages.getPackagePin(vppPackageId).then((installed) => {
+      if (cancelled) return
+      const recorded = recordedPins?.[deviceBoard]
+      // First time on this board: record what it is being authored against
+      // rather than warning about a pin that was never taken.
+      if (!recorded && installed) {
+        setVppPackagePin(deviceBoard, installed)
+        setPinDrift(null)
+        return
+      }
+      setPinDrift(describeVppPinDrift(recorded, installed))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [deviceBoard, vppPackageId, packages, recordedPins, setVppPackagePin])
 
   const refreshCommunicationPorts = useCallback(
     async (e: React.MouseEvent) => {
@@ -628,17 +670,37 @@ const Board = memo(function () {
                       {boards.map(({ board, data }) => {
                         const showVersion = !isSimulatorTarget(data) && data.coreVersion
                         const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
+                        // The RULE lives in `evaluateVppBackplaneGate`, shared with
+                        // the deploy pre-check, so the list and the build refuse the
+                        // same boards with the same words. A refused board stays
+                        // listed and carries its explanation — hiding it would read
+                        // as "this package is not installed".
+                        const gate = evaluateVppBackplaneGate({
+                          isVppBoard: data.vpp !== undefined,
+                          backplaneAccess: selectedDevice?.backplaneAccess,
+                        })
+                        const refusal = gate.kind === 'refuse' ? gate.reason : null
                         return (
                           <SelectItem
                             key={board}
+                            disabled={refusal !== null}
                             className={cn(
                               'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
                               'flex w-full cursor-pointer items-center px-2 py-[7px] pl-5 outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                              refusal !== null &&
+                                'cursor-not-allowed opacity-60 hover:bg-transparent dark:hover:bg-transparent',
                             )}
                             value={formattedBoard}
                           >
-                            <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                              {formattedBoard}
+                            <span className='flex flex-col gap-0.5'>
+                              <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                {formattedBoard}
+                              </span>
+                              {refusal !== null && (
+                                <span className='font-caption text-[10px] leading-snug text-neutral-500 dark:text-neutral-400'>
+                                  {refusal}
+                                </span>
+                              )}
                             </span>
                           </SelectItem>
                         )
@@ -837,6 +899,14 @@ const Board = memo(function () {
           </div>
         </div>
       </div>
+      {pinDrift && (
+        <div
+          data-testid='vpp-pin-drift'
+          className='mt-3 rounded-md border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400'
+        >
+          {pinDrift}
+        </div>
+      )}
       {(() => {
         // Only draw the divider when there's actually content below it, which
         // now means the pin mapping table and nothing else. Pin mapping renders

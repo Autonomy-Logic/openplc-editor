@@ -5,7 +5,15 @@ import type { ModuleSystem, ScreenSection } from './index'
 import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
-import { UnsupportedLayout } from './layouts/unsupported-layout'
+
+/**
+ * The layouts this renderer knows how to draw. A vendor package is untrusted
+ * input, so dispatch is an allowlist rather than a switch with a default: a
+ * section whose layout is not here renders NOTHING — no chrome, no title, no
+ * placeholder — and therefore persists nothing, because a layout the editor
+ * cannot draw is one whose field semantics it also cannot honour.
+ */
+const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form'])
 
 type SectionRendererProps = {
   section: ScreenSection
@@ -14,6 +22,8 @@ type SectionRendererProps = {
 
 function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
   const [collapsed, setCollapsed] = useState(section.collapsed ?? false)
+
+  if (!SUPPORTED_LAYOUTS.has(section.layout)) return null
 
   const renderLayout = () => {
     switch (section.layout) {
@@ -24,7 +34,7 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
       case 'form':
         return <FormLayout section={section} />
       default:
-        return <UnsupportedLayout layoutType={section.layout} />
+        return null
     }
   }
 

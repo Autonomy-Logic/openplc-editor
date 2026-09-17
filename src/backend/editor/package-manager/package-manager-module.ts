@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { app } from 'electron'
 import extract from 'extract-zip'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
@@ -12,6 +13,8 @@ import {
 import type { VppDeviceMatch } from '../../shared/hardware/find-vpp-device'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { validatePathId } from '../../shared/utils/path-safety'
+import type { VppPackagePin } from '../../shared/types/PLC/devices/configuration'
+import { canonicalize, SIGNATURE_FILENAME } from '../../shared/utils/vpp/package-verification-core'
 import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { logger } from '../services/logger-service'
@@ -270,6 +273,38 @@ class PackageManagerModule {
       packageId,
       ...info,
     }))
+  }
+
+  /**
+   * The installed package's pinnable identity, read from its own
+   * `signature.json`.
+   *
+   * `contentHash` is `"sha256:" + sha256(canonical(payload))` — the same value
+   * openplc-web derives from the verified archive, so a project pinned on one
+   * platform compares correctly on the other. Returns null when the package is
+   * absent or unsigned: an unsigned package has no identity to pin to.
+   */
+  getPackagePin(packageId: string): VppPackagePin | null {
+    try {
+      validatePathId(packageId, 'packageId')
+      const registry = this.readRegistry()
+      const info = registry.packages[packageId]
+      if (!info) return null
+
+      const signaturePath = join(info.path, SIGNATURE_FILENAME)
+      assertPathContained(info.path, signaturePath, 'package signature path')
+      const parsed: unknown = JSON.parse(readFileSync(signaturePath, 'utf-8'))
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+      const { signature: _detached, ...payload } = parsed as Record<string, unknown>
+
+      return {
+        packageId,
+        version: info.version,
+        contentHash: `sha256:${createHash('sha256').update(canonicalize(payload), 'utf-8').digest('hex')}`,
+      }
+    } catch {
+      return null
+    }
   }
 
   uninstall(packageId: string): { success: boolean; error?: string } {
