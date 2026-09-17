@@ -3262,6 +3262,29 @@ class CompilerModule {
       // never be reached again.
       //
       // So the mandate is the network, and Modbus is left to the project.
+      //
+      // But a mandate is not a licence to overrule the user silently. Turning
+      // the Network section OFF on a board whose only access path is Ethernet
+      // is the same class of mistake as disabling serial on a Mega, and it gets
+      // the same answer: refuse, and say why. Forcing it back on built a
+      // firmware that contradicted the project -- byte-identical defines to the
+      // enabled case -- so the screen said one thing and the device did
+      // another, and the user only found out by noticing the board was still
+      // reachable.
+      if (uploadsOverEthernet) {
+        if (vppModbusState?.network?.enabled === false) {
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message:
+              `The Network section is turned off for "${boardTarget}", but Ethernet is this board's ` +
+              'only access path: it carries the debugger and it is how an upload reaches the device ' +
+              'at all. Turn the Network section back on, or pick a target that has another way in. ' +
+              'This build will not quietly re-enable it for you.',
+          })
+          _mainProcessPort.close()
+          return
+        }
+      }
       if (uploadsOverEthernet) {
         // No default address, ever. Inventing one produced firmware pointing at
         // a device the user never named, on the ONE class of board where a
