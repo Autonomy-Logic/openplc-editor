@@ -176,32 +176,31 @@ describe('generateOpcUaHeaderContent', () => {
     expect(dropped).toEqual([{ path: 'weird', reason: 'has an unrecognised datatype "NOT_A_TYPE"' }])
   })
 
-  it('drops STRING and WSTRING, which the firmware has no UA mapping for yet', () => {
-    // kTagToUaType[] in opcua_nodes.cpp stops at TAG_DT, and materialise_nodes
-    // skips any row past it. Emitting the row anyway made the variable vanish
-    // from the address space with nothing said; dropping it here names it.
+  it('emits STRING and WSTRING, which the runtime now serves', () => {
+    // STRING maps to UA_TYPES_STRING and WSTRING to UA_TYPES_BYTESTRING in
+    // kTagToUaType[]; read_node serves both in place through handle_ptr.
     const { nodes, dropped } = collectOpcUaNodes(
       makeResolved({
         variables: [
           { browse_name: 'msg', datatype: 'STRING', arr: 0, elem: 0, permissions: RW },
           { browse_name: 'wmsg', datatype: 'WSTRING', arr: 0, elem: 1, permissions: RW },
-          { browse_name: 'ok', datatype: 'INT', arr: 0, elem: 2, permissions: RW },
         ] as never[],
       }),
       PROFILE,
     )
 
-    expect(nodes.map((n) => n.browseName)).toEqual(['ok'])
-    expect(dropped.map((d) => d.path)).toEqual(['msg', 'wmsg'])
-    expect(dropped[0].reason).toContain('STRING')
-    expect(dropped[0].reason).toContain('DOPE-645')
+    expect(dropped).toEqual([])
+    expect(nodes.map((n) => [n.browseName, n.tag])).toEqual([
+      ['msg', 19],
+      ['wmsg', 20],
+    ])
   })
 
   it('reports every dropped leaf through the warn sink', () => {
     const warnings: string[] = []
     generateOpcUaHeaderContent({
       resolved: makeResolved({
-        variables: [{ browse_name: 'msg', datatype: 'STRING', arr: 0, elem: 0, permissions: RW }] as never[],
+        variables: [{ browse_name: 'msg', datatype: 'NOT_A_TYPE', arr: 0, elem: 0, permissions: RW }] as never[],
       }),
       profile: PROFILE,
       buildEpochSeconds: 0,

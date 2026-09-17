@@ -107,24 +107,22 @@ const packPermissions = (permissions: RuntimeVariablePermissions): number => {
 }
 
 /**
- * Tags the firmware has no OPC-UA mapping for yet.
+ * Tags the firmware has no OPC-UA mapping for.
  *
- * `kTagToUaType[]` in `opcua_nodes.cpp` stops at TAG_DT (18), and every use of
- * it is guarded by `row->tag >= kTagCount`. So a STRING or WSTRING node is not
- * a memory hazard -- it is worse than that in practice: the row ships to flash,
- * `materialise_nodes` skips it, and the node is simply absent from the address
- * space with nothing said anywhere. Dropping it here instead makes it a build
- * warning naming the variable.
+ * `kTagToUaType[]` in `opcua_nodes.cpp` is indexed by tag, and every index into
+ * it is guarded by `tag >= kTagCount`. So an unmapped tag is not a memory
+ * hazard -- it is worse than that in practice: the row ships to flash,
+ * `opcua_nodes_materialise` skips it, and the node is simply absent from the
+ * address space with nothing said. Refusing it here makes it a build warning
+ * naming the variable instead.
  *
- * Lifting this needs strucpp's pointer accessor (`type_ops[].ptr`, on
- * `feat/debug-table-live-pointer-accessor`) so `read_node` can hand out the
- * string in place rather than through its 8-byte scalar buffer. Tracked in
- * DOPE-645.
+ * Empty today: STRING and WSTRING were the only entries, and the runtime now
+ * serves both (STRING as a UA String, WSTRING as a UA ByteString of UTF-16LE
+ * code units). Kept, rather than deleted, because it is the seam that keeps
+ * `TYPE_TAGS` and `kTagToUaType[]` honest -- a tag added on this side before
+ * the firmware side is a warning, not a vanished variable.
  */
-const UNEXPOSABLE_TAGS = new Map<number, string>([
-  [TYPE_TAGS.STRING, 'STRING'],
-  [TYPE_TAGS.WSTRING, 'WSTRING'],
-])
+const UNEXPOSABLE_TAGS = new Map<number, string>()
 
 /** Why a leaf did not make it into the table. */
 export interface DroppedNode {

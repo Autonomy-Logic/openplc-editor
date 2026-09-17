@@ -39,20 +39,18 @@ namespace {
  *  TIME / DATE / TOD / DT have no OPC-UA scalar of the same width, so they are
  *  exposed as the integers they already are on the wire.
  *
- *  STRING / WSTRING (tags 19 / 20) are absent for a different reason than the
- *  comment here used to give: strucpp reads them perfectly well (`read_string` /
- *  `read_wstring`, 127 and 253 bytes on the wire), and the debugger shows a
- *  STRING today. What is missing is the UA mapping and a value path wide enough
- *  for them -- `read_node` reads into an 8-byte buffer.
+ *  STRING is a UA String. WSTRING is a UA ByteString carrying UTF-16LE code
+ *  units: transcoding to UTF-8 would need a scratch buffer the size of the
+ *  string and would stop the value being served in place, so the client is given
+ *  the bytes and the encoding is documented on the node's description.
  *
- *  This table ending at TAG_DT is therefore load-bearing in BOTH directions.
- *  Every index into it is guarded by `tag >= kTagCount`, so an out-of-range tag
- *  is not a memory hazard; what it is instead is invisible, because
- *  `materialise_nodes` skips the row and the variable is simply missing from
- *  the address space. The generator (`generate-opcua-header.ts`) holds up the
- *  other end and refuses to emit tags 19 / 20 at all, turning that silence into
- *  a build warning naming the variable. Widen one end and the other must move
- *  with it -- see DOPE-645. */
+ *  This table and the generator's `TYPE_TAGS` must stay the same length. Every
+ *  index here is guarded by `tag >= kTagCount`, so an out-of-range tag is not a
+ *  memory hazard; what it is instead is INVISIBLE -- `opcua_nodes_materialise`
+ *  skips the row and the variable is simply missing from the address space with
+ *  nothing said. The generator holds the other end up by refusing to emit a tag
+ *  it has no mapping for, turning that silence into a build warning naming the
+ *  variable. Widen one end and the other must move with it. */
 const UA_UInt32 kTagToUaType[] = {
     UA_TYPES_BOOLEAN,  // TAG_BOOL
     UA_TYPES_SBYTE,    // TAG_SINT
@@ -73,8 +71,45 @@ const UA_UInt32 kTagToUaType[] = {
     UA_TYPES_INT64,    // TAG_DATE
     UA_TYPES_INT64,    // TAG_TOD
     UA_TYPES_INT64,    // TAG_DT
+    UA_TYPES_STRING,     // TAG_STRING
+    UA_TYPES_BYTESTRING, // TAG_WSTRING  (UTF-16LE code units, not UTF-8)
 };
 constexpr uint8_t kTagCount = sizeof(kTagToUaType) / sizeof(kTagToUaType[0]);
+
+/** TypeTag values whose UA type is a {length, data} header rather than a scalar.
+ *  Kept as an explicit check on the tag, not a comparison against `kTagCount`,
+ *  so adding a further scalar type after them cannot quietly turn them back into
+ *  scalars. */
+inline bool is_string_tag(uint8_t tag)
+{
+    return tag == OPCUA_TAG_STRING || tag == OPCUA_TAG_WSTRING;
+}
+
+/** Headers for string values being returned by the read in progress.
+ *
+ *  A UA String and a UA ByteString are the same {length, data} struct, so one
+ *  pool serves both. The variant points at the header, the header points at live
+ *  PLC storage, and neither is copied -- so the header has to outlive the
+ *  callback exactly as the characters do.
+ *
+ *  Sized to the largest batch the server will accept, because `Service_Read`
+ *  fills every `UA_DataValue` in a request before encoding any of them: with
+ *  fewer slots, two strings in one request would both end up pointing at
+ *  whichever was read last. Round-robin rather than per-request reset so the
+ *  pool needs no hook into the service's lifecycle; correctness only needs
+ *  OPCUA_MAX_NODES_PER_READ distinct slots to be live at once.
+ *
+ *  Cheap: 8 bytes a slot on a 32-bit target, so 20 slots is 160 bytes of .bss
+ *  against the arena allocation per value that this removes. */
+UA_String g_string_headers[OPCUA_MAX_NODES_PER_READ];
+uint8_t   g_string_header_next = 0;
+
+UA_String* next_string_header()
+{
+    UA_String* hdr = &g_string_headers[g_string_header_next];
+    g_string_header_next = (uint8_t)((g_string_header_next + 1) % OPCUA_MAX_NODES_PER_READ);
+    return hdr;
+}
 
 /** The row a node's callbacks belong to. open62541 hands back the nodeContext
  *  we registered, so the callbacks stay free of any lookup. */
@@ -97,13 +132,45 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
     if (row == nullptr || row->tag >= kTagCount)
         return UA_STATUSCODE_BADINTERNALERROR;
 
-    // 8 bytes covers every scalar in the table above.
-    uint8_t buf[8] = {0};
-    const uint16_t n = openplc_debug_read(row->arr, row->elem, buf);
-    if (n == 0)
-        return UA_STATUSCODE_BADNODATA;   // out of bounds in the debug table
+    // Address the value in place instead of copying it out. `setScalarCopy`
+    // allocated from the ~19 KB arena on every value of every read; this makes a
+    // read allocation-free, which is what lets strings be served at all -- a
+    // 253-byte WSTRING would not have fitted the old `uint8_t buf[8]`.
+    uint16_t len = 0;
+    const void* src = openplc_debug_ptr(row->arr, row->elem, &len);
+    // A null pointer means the coordinates are out of bounds. A ZERO LENGTH does
+    // not: an empty STRING is a perfectly good value, and rejecting it here made
+    // every unset string read back as BadNoData.
+    if (src == nullptr)
+        return UA_STATUSCODE_BADNODATA;
 
-    UA_Variant_setScalarCopy(&value->value, buf, &UA_TYPES[kTagToUaType[row->tag]]);
+    // SAFETY: `src` points into live PLC storage and stays valid only until this
+    // callback yields to the scan. That holds here because `scheduler()` is a
+    // cooperative single-threaded super-loop: OPC-UA is serviced in the tail of
+    // the cycle and the PLC program cannot run underneath it, so the value
+    // cannot move between here and the encoder. IF OPC-UA EVER GETS ITS OWN
+    // TASK OR THREAD, THIS MUST GO BACK TO COPYING. The same reasoning is why
+    // strucpp does not export `handle_ptr` to Runtime v4, where the scan does
+    // run in its own thread.
+    const void* payload = src;
+    if (is_string_tag(row->tag))
+    {
+        // A UA String/ByteString is a {length, data} header, and the variant
+        // points at the HEADER, so the header must outlive this call too. The
+        // Read service fills every result before encoding any of them, so one
+        // static header would make every string in a batch alias the last one:
+        // hence a slot per node the server will accept in one request.
+        UA_String* hdr = next_string_header();
+        hdr->length = len;
+        hdr->data   = (UA_Byte*)src;   // not copied, not freed -- see NODELETE
+        payload = hdr;
+    }
+
+    UA_Variant_setScalar(&value->value, (void*)payload, &UA_TYPES[kTagToUaType[row->tag]]);
+    // Nothing here is owned by the variant: neither the value, nor a string's
+    // header, nor its characters. Without NODELETE the server would free flash
+    // or live PLC storage on cleanup.
+    value->value.storageType = UA_VARIANT_DATA_NODELETE;
     value->hasValue = true;
     if (includeSourceTimeStamp)
     {
@@ -142,11 +209,41 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
     }
 
     const uint16_t width = openplc_debug_size(row->arr, row->elem);
-    if (width == 0 || width > 8)
+    if (width == 0)
         return UA_STATUSCODE_BADNOTWRITABLE;
 
-    const uint8_t status = openplc_debug_write(
-        row->arr, row->elem, static_cast<const uint8_t*>(value->value.data), width);
+    uint8_t status;
+    if (is_string_tag(row->tag))
+    {
+        // The write path wants strucpp's wire form -- one length byte in CODE
+        // UNITS followed by the payload -- which is not what the client sent, so
+        // this is the one place a copy is unavoidable. Small and on the stack:
+        // the cap is 126 code units, 253 bytes for a WSTRING.
+        const UA_String* in = static_cast<const UA_String*>(value->value.data);
+        const bool wide = (row->tag == OPCUA_TAG_WSTRING);
+        // A WSTRING arrives as UTF-16LE bytes, so an odd length is not a short
+        // string, it is a malformed one.
+        if (wide && (in->length % 2) != 0)
+            return UA_STATUSCODE_BADTYPEMISMATCH;
+
+        size_t units = wide ? in->length / 2 : in->length;
+        if (units > OPENPLC_DEBUG_STRING_CAP)
+            units = OPENPLC_DEBUG_STRING_CAP;   // truncate rather than refuse
+        const size_t payload = wide ? units * 2 : units;
+
+        uint8_t wire[1 + OPENPLC_DEBUG_STRING_CAP * 2];
+        wire[0] = (uint8_t)units;
+        if (payload > 0 && in->data != nullptr)
+            memcpy(&wire[1], in->data, payload);
+        status = openplc_debug_write(row->arr, row->elem, wire, (uint16_t)(1 + payload));
+    }
+    else
+    {
+        if (width > 8)
+            return UA_STATUSCODE_BADNOTWRITABLE;
+        status = openplc_debug_write(
+            row->arr, row->elem, static_cast<const uint8_t*>(value->value.data), width);
+    }
     OPCUA_LOG("[ua] write %s arr=%u elem=%u w=%u status=0x%02x",
               row->browse_name, (unsigned)row->arr, (unsigned)row->elem,
               (unsigned)width, (unsigned)status);

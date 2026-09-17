@@ -145,6 +145,29 @@ uint8_t  openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing, const ui
 // forces, and a forced variable is one the PLC program can never move again.
 uint8_t  openplc_debug_write(uint8_t arr, uint16_t elem, const uint8_t* bytes, uint16_t len);
 
+// Address a leaf's value IN PLACE instead of copying it out. Returns a pointer
+// into live PLC storage and writes the value's CURRENT length (not its padded
+// wire width) to *out_len; returns NULL and sets *out_len to 0 out of bounds.
+//
+// Force-aware: it yields the forced value while a force is active, the same one
+// openplc_debug_read() would copy. A located variable is written by the program
+// straight into its raw storage, so this deliberately does not hand out that raw
+// pointer.
+//
+// THE POINTER IS ONLY VALID UNTIL THE CALLER YIELDS TO THE SCAN. That is the
+// whole contract, and it is what makes this safe on a cooperative super-loop and
+// unsafe anywhere else: the value can move the moment the PLC program runs
+// again. A caller that can be preempted by the scan must use
+// openplc_debug_read() and own the copy. This is why the underlying
+// strucpp::debug::handle_ptr is not part of the Linux C exports.
+//
+// For STRING / WSTRING the pointer addresses the characters themselves, with no
+// length prefix and no padding. *out_len is in BYTES for both, so a WSTRING
+// reports 2 * its code-unit count and the caller can treat the region as opaque
+// bytes without knowing the width. Both are capped at 126 code units, the same
+// DEBUG_STRING_CAP the wire format uses.
+const void* openplc_debug_ptr(uint8_t arr, uint16_t elem, uint16_t* out_len);
+
 // strucpp::debug::STATUS_* as plain macros, so a caller on this side of the
 // boundary can interpret what openplc_debug_set / _write return without
 // including the C++ runtime header. arduino_runtime_glue.cpp static_asserts
@@ -159,6 +182,13 @@ uint8_t  openplc_debug_write(uint8_t arr, uint16_t elem, const uint8_t* bytes, u
 // silently, which is how a WSTRING read came back empty rather than refused.
 #define OPENPLC_DEBUG_STRING_WIRE   127
 #define OPENPLC_DEBUG_WSTRING_WIRE  253
+
+// Characters (STRING) or UTF-16 code units (WSTRING) a value can hold on the
+// wire -- the payload of the two widths above, without their length byte. A
+// caller building a write buffer sizes it from this; a longer value is
+// truncated, never refused. Also held to strucpp's DEBUG_STRING_CAP by a
+// static_assert in arduino_runtime_glue.cpp.
+#define OPENPLC_DEBUG_STRING_CAP    126
 
 #define OPENPLC_DEBUG_STATUS_OK             0x7E
 #define OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS  0x81

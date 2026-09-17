@@ -39,11 +39,29 @@ static inline bool opcua_can_write(uint8_t packed, uint8_t role)
     return (opcua_perm_for_role(packed, role) & OPCUA_PERM_WRITE) != 0;
 }
 
+// `strucpp::debug::TypeTag` values that need naming on this side of the C
+// boundary. Only the two string tags do: every other tag is handled positionally
+// through `kTagToUaType[]`, but these two decide whether a value is a scalar or a
+// {length, data} header, which is a branch and not a table lookup.
+//
+// Duplicated from the C++ `debug_table.hpp` rather than included, because this
+// header is reached from plain-C translation units. `arduino_runtime_glue.cpp`
+// sees both and static_asserts them equal, so the duplication cannot drift
+// silently.
+#define OPCUA_TAG_STRING   19
+#define OPCUA_TAG_WSTRING  20
+
 // One addressable leaf. `arr` / `elem` are the strucpp debug-table coordinates,
 // so reading a node is `handle_read(arr, elem, dest)` against a table the
 // compiler already emitted. `tag` is a `strucpp::debug::TypeTag`, duplicated
-// here rather than including the C++ `debug_table.hpp`; the generator asserts
-// the same table.
+// here rather than including the C++ `debug_table.hpp`.
+//
+// Three places agree on that numbering and nothing but review keeps two of them
+// honest: this header, `kTagToUaType[]` in opcua_nodes.cpp, and `TYPE_TAGS` in
+// the editor's generate-opcua-header.ts. The firmware end is guarded -- an
+// unknown tag is skipped, not misread -- and the generator refuses to emit a tag
+// it has no mapping for, so a disagreement costs a build warning rather than a
+// wrong value.
 typedef struct
 {
     uint16_t    node_id;      // numeric NodeId in the server's namespace
