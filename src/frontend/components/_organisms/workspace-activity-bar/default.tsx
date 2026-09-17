@@ -983,11 +983,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // ---------------------------------------------------------------------------
 
   const handleDebuggerClick = useCallback(async () => {
-    // Simulator targets debug through the Start Simulator button
-    // (compile + load firmware + connect), so the Debugger button
-    // is hidden for them at the JSX level — but guard here too in
-    // case the gate ever flips.
-    if (isSimulatorBoard) return
+    // The simulator guard has MOVED, not gone: it now sits after the
+    // offer-to-start below. Standing here it made the Debugger button a dead
+    // end on a simulator target -- the answer to "I want to debug" was a
+    // disabled button and a tooltip naming a different one. What follows the
+    // offer is the device path (debug compile, MD5 verify, channel connect),
+    // which means nothing for an emulator, so the simulator still stops short
+    // of it.
 
     const { workspace, project, deviceDefinitions: devDefs, consoleActions } = useOpenPLCStore.getState()
 
@@ -1102,6 +1104,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         } else {
           void deviceConnect.connect()
         }
+        return
+      }
+
+      // A RUNNING simulator already carries its debug session: Start attaches it
+      // as the firmware event lands (`simulatorRun.launch({ attachDebugger })`),
+      // and there is no attach-to-an-already-running path to call here. The
+      // button's remaining job for it is the toggle-off handled at the top, so
+      // stop before the device path -- a debug compile, an MD5 verify against
+      // flashed firmware and a channel connect all describe hardware, not an
+      // emulator.
+      if (isSimulatorBoard) {
+        setIsDebuggerProcessing(false)
         return
       }
 
@@ -1235,12 +1249,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
             </PlayButton>
           </TooltipSidebarWrapperButton>
-          <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
+          {/* Enabled for the simulator too. It used to be disabled with a "Use
+              Start to debug" tooltip, which made the button a dead end: the
+              answer to "I want to debug" was a tooltip telling you to press a
+              different button. The handler now offers to START the simulator,
+              the same way it offers to connect a device, so the one control
+              means the same thing on every target. */}
+          <TooltipSidebarWrapperButton tooltipContent='Debugger'>
             <DebuggerButton
               onClick={() => void handleDebuggerClick()}
-              disabled={isDebuggerProcessing || isSimulatorBoard}
+              disabled={isDebuggerProcessing}
               isActive={isDebuggerVisible}
-              className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
+              className={cn(isDebuggerProcessing && disabledButtonClass)}
             />
           </TooltipSidebarWrapperButton>
         </>
