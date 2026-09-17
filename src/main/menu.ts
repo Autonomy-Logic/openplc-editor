@@ -182,20 +182,22 @@ export default class MenuBuilder {
     this.mainWindow.webContents.on('context-menu', this.handleDevelopmentContextMenu)
   }
 
-  /** Theme order for the Display ▸ Change Theme cycle: Light → Dark → 90's. */
-  private static readonly THEME_ORDER = ['light', 'dark', 'nineties'] as const
+  /** Theme order for the Display ▸ Change Theme cycle: Light → Dark → 90's → SquareTeal. */
+  private static readonly THEME_ORDER = ['light', 'dark', 'nineties', 'squareteal'] as const
 
   /** Current persisted theme, falling back to the OS preference. */
-  private currentTheme(): 'light' | 'dark' | 'nineties' {
+  private currentTheme(): 'light' | 'dark' | 'nineties' | 'squareteal' {
     const stored = store.get('theme')
-    if (stored === 'dark' || stored === 'light' || stored === 'nineties') return stored
+    if (stored === 'dark' || stored === 'light' || stored === 'nineties' || stored === 'squareteal') return stored
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
   }
 
   /** Sublabel shown next to the Change Theme menu item. */
   private themeSublabel(): string {
     const t = this.currentTheme()
-    return t === 'nineties' ? "90's" : t === 'dark' ? 'Dark' : 'Light'
+    if (t === 'nineties') return "90's"
+    if (t === 'squareteal') return 'SquareTeal'
+    return t === 'dark' ? 'Dark' : 'Light'
   }
 
   updateAppTheme() {
