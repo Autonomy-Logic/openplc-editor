@@ -94,8 +94,14 @@ describe('resolveModbusServerProfile', () => {
       expect(profile.segments).toEqual(['QW', 'MW', 'MD', 'ML', 'QX', 'IX', 'IW'])
     })
 
-    it('keeps buffers and bind address out of the user hands, but not the port', () => {
-      expect(profile.configurableBuffers).toBe(false)
+    it('keeps the bind address out of the user hands, but not the port or the buffers', () => {
+      // BUFFERS ARE THE USER'S ON BARE METAL NOW (DOPE-615). They were not
+      // while `openplc.h` fixed the MAX_* constants at compile time: a number
+      // typed here could only disagree with the firmware. The macros are now
+      // emitted from what the project contains, so what the server is asked to
+      // expose is one of the inputs that decides them.
+      expect(profile.configurableBuffers).toBe(true)
+      // One network interface on a microcontroller; nothing to bind to.
       expect(profile.configurableBindAddress).toBe(false)
       // The firmware reads MBTCP_PORT and only falls back to 502 when nothing
       // defines it, so the port is the project's to set.

@@ -167,12 +167,19 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     return {
       transports,
       segments: BAREMETAL_SEGMENTS,
-      // Fixed at compile time by the MCU's MAX_* constants in `openplc.h`,
-      // which also dimension the IEC pointer arrays and are aliased into the
-      // Modbus banks by mapEmptyBuffers(). They are an I/O-image property
-      // rather than a Modbus setting, so both sizing them and reporting them
-      // belong to DOPE-615, which derives the image from the project.
-      configurableBuffers: false,
+      // CONFIGURABLE ON BARE METAL TOO, as of DOPE-615.
+      //
+      // This read `false` while the MCU's `MAX_*` constants in `openplc.h` were
+      // fixed at compile time: the firmware dimensioned the IEC pointer arrays
+      // and aliased them into the Modbus banks, so a number typed here could
+      // only disagree with the board. The comment here said as much, and said
+      // that sizing and reporting them belonged to this task.
+      //
+      // They do now. The macros are emitted from what the project contains, so
+      // what the server is asked to expose is one of the inputs that decides
+      // them (FR04) rather than a request the firmware would ignore. Refusing
+      // the field would now be the editor withholding a control that works.
+      configurableBuffers: true,
       // The firmware reads `MBTCP_PORT` and falls back to 502 only when nothing
       // defines it (`modbus_tcp.cpp:12`), so the port IS the project's. It was
       // hard-coded in three places before this demand, and the screen still said
