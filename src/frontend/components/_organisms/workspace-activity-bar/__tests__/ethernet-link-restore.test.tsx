@@ -92,6 +92,12 @@ jest.mock('../../../../services/device-link-resolution', () => ({
 }))
 
 jest.mock('../../../../services/save-actions', () => ({ executeSaveProject: jest.fn(async () => true) }))
+// The debugger's offer-to-connect reaches these; this suite is about the
+// Ethernet restore, so they are stubbed rather than exercised.
+jest.mock('../../../../hooks/use-device-connect', () => ({ useDeviceConnect: () => ({ connect: jest.fn() }) }))
+jest.mock('../../../../hooks/use-runtime-connect', () => ({
+  useRuntimeConnect: () => ({ connect: jest.fn(), toggle: jest.fn() }),
+}))
 jest.mock('../../../../hooks/useDebugSession', () => ({ useDebugSession: () => ({ debugTreesRef: { current: {} } }) }))
 jest.mock('../../../../hooks/useDebugPolling', () => ({ useDebugPolling: () => undefined }))
 jest.mock('../../../../hooks/use-simulator-debug-run', () => ({ useSimulatorDebugRun: () => ({ launch: jest.fn() }) }))

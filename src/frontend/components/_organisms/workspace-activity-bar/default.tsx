@@ -15,6 +15,8 @@ import {
   useSimulator,
 } from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
+import { useDeviceConnect } from '../../../hooks/use-device-connect'
+import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
 import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
@@ -97,6 +99,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
+
+  // The two CONNECT actions, both shared with the device Configuration screen so
+  // the debugger's offer runs exactly what the Connect button runs.
+  const deviceConnect = useDeviceConnect(currentBoardInfo)
+  const runtimeConnect = useRuntimeConnect()
+
+  // Web reaches a device through the Orchestrators screen, which SELECTS one;
+  // until it has, there is nothing to connect to. Desktop addresses the device
+  // directly and always has a target once a board is chosen, so this is false
+  // there -- the same predicate, answered differently by the platform rather
+  // than a branch on which platform it is.
+  const needsDeviceSelection = useOpenPLCStore(
+    (state) => capabilities.hasOrchestratorDevices && state.runtimeConnection.selectedDevice === null,
+  )
 
   const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
 
@@ -1025,18 +1041,67 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: `[connection] debug session requested for ${boardTarget}; session is "${sessionStatus}"`,
       })
 
-      // Connect first. Starting a debug session must never establish the connection
-      // itself: connecting is the user's explicit action and reports what it found.
+      // No session yet: OFFER to establish one rather than sending the user away.
+      // Telling someone the debugger needs a connection and leaving them to go
+      // find the button is a worse answer than asking "shall I?" -- the editor
+      // knows the target and already owns every action needed to reach it.
+      //
+      // One flow for desktop and web. The only genuine difference is WHICH
+      // action connects, and that is a property of the target, not of the
+      // platform: the simulator starts, an orchestrator-reached device and a
+      // locally-addressed one both connect. A runtime's connect raises its login
+      // modal, so this is deliberately a modal opening a modal.
       if (sessionStatus !== 'connected') {
-        await showDeviceDialog(
-          'warning',
-          'Connection Required',
-          isRuntime
-            ? 'Connect to the runtime first. The debugger runs over that connection, so it must be established before a debug session can start.'
-            : 'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
-          ['OK'],
+        // Nothing selected to connect TO. On web that is a real state (the
+        // Orchestrators screen picks the device); on desktop the UI makes it
+        // unreachable, and it is handled identically anyway rather than
+        // branching on platform.
+        if (!isSimulatorBoard && needsDeviceSelection) {
+          await showDeviceDialog(
+            'warning',
+            'No Device Selected',
+            'Select a device to connect to before starting the debugger. The debugger runs over the ' +
+              'device connection, so there has to be a device for it to run over.',
+            ['OK'],
+          )
+          setIsDebuggerProcessing(false)
+          return
+        }
+
+        const offer = await showDeviceDialog(
+          'question',
+          isSimulatorBoard ? 'Simulator Not Running' : 'Not Connected',
+          isSimulatorBoard
+            ? 'The debugger runs against the running simulator. Would you like to start the simulator now?'
+            : isRuntime
+              ? 'The debugger runs over the runtime connection. Would you like to connect to the runtime now?'
+              : 'The debugger runs over the device connection. Would you like to connect to the device now?',
+          ['Yes', 'No'],
         )
+        if (offer !== 0) {
+          addLog({ level: 'info', message: 'Debugger session cancelled.' })
+          setIsDebuggerProcessing(false)
+          return
+        }
+
         setIsDebuggerProcessing(false)
+        if (isSimulatorBoard) {
+          // Same action as the sidebar's Start: it builds, launches the emulator
+          // and — via `pendingSimulatorDebugRef` — attaches the debugger once the
+          // firmware event lands, so the session continues on its own.
+          pendingSimulatorDebugRef.current = true
+          void handleSimulatorControl()
+          return
+        }
+        // Connect, then let the user press Debug again. Connecting is not a
+        // single await for a runtime (its login is a modal the user still has to
+        // fill in), so chaining the session onto it here would either race the
+        // login or need this handler to sit waiting on a status change.
+        if (isRuntime) {
+          void runtimeConnect.connect()
+        } else {
+          void deviceConnect.connect()
+        }
         return
       }
 
