@@ -2026,9 +2026,19 @@ class CompilerModule {
         const { communicationPort: persistedPort, runtimeIpAddress } =
           await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
         port = isEthernet ? runtimeIpAddress : persistedPort
-      } catch {
-        // No devices/configuration.json yet: drop into the "no port specified"
-        // branch below for a clear user message.
+      } catch (error) {
+        // Same rule as the build path: an unreadable file is treated as absent
+        // (drop into the "no port specified" branch below for a clear user
+        // message), but a MALFORMED one says so first — otherwise the user is
+        // told "no port specified" while a port is sitting in the file they
+        // just broke.
+        if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+          handleOutputData?.(
+            `Warning: could not read ${devicesConfigurationFilePath}: ` +
+              `${error instanceof Error ? error.message : String(error)}. ` +
+              'Continuing as if the file were absent.\n',
+          )
+        }
       }
     }
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
@@ -3214,10 +3224,27 @@ class CompilerModule {
           serial: vendorScreenData['serial'] as VppModbusScreenState['serial'],
           network: vendorScreenData['network'] as VppModbusScreenState['network'],
         }
-      } catch {
-        // No configuration.json: leave state undefined. For ethernet boards the
-        // mandate below still forces the NETWORK on; for serial boards the
-        // shared pipeline skips the whole comms block.
+      } catch (error) {
+        // Treat an unreadable configuration.json as ABSENT, never as fatal: a
+        // project must still open and build with a corrupt device file, the
+        // same way a malformed POU degrades rather than taking the workspace
+        // down with it.
+        //
+        // What must NOT happen is doing that silently. A missing file is a
+        // project that was never configured; a malformed one is settings the
+        // user believes are in effect. Only the second is worth saying out
+        // loud, so ENOENT stays quiet and anything else reaches the console.
+        if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+          _mainProcessPort.postMessage({
+            logLevel: 'warning',
+            message:
+              `Could not read ${devicesConfigurationFilePath}: ` +
+              `${error instanceof Error ? error.message : String(error)}. ` +
+              'Continuing as if the file were absent — any device settings it held are being ignored.',
+          })
+        }
+        // For ethernet boards the mandate below still forces the NETWORK on;
+        // for serial boards the shared pipeline skips the whole comms block.
       }
 
       // The NETWORK is mandatory on an ethernet-upload board and cannot be
@@ -3236,7 +3263,23 @@ class CompilerModule {
       //
       // So the mandate is the network, and Modbus is left to the project.
       if (uploadsOverEthernet) {
-        const ip = vppModbusState?.network?.ip_address || configuredIp || '192.168.2.4'
+        // No default address, ever. Inventing one produced firmware pointing at
+        // a device the user never named, on the ONE class of board where a
+        // wrong address means it cannot be reached again -- and the build said
+        // it succeeded. An ethernet-upload board with no IP has no usable
+        // firmware to emit, so this refuses rather than guesses.
+        const ip = vppModbusState?.network?.ip_address || configuredIp
+        if (!ip) {
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message:
+              `No IP address for "${boardTarget}". Set one on the device's Network screen — an ` +
+              'ethernet-upload board reaches the editor over the network and has no other way in, ' +
+              'so this build refuses to invent an address for it.',
+          })
+          _mainProcessPort.close()
+          return
+        }
         // Ethernet is static-only on these boards: the bootloader's recovery
         // stack has no DHCP client. Seed a full static config so the firmware
         // never falls back to the Arduino stack's byte-order-buggy subnet
