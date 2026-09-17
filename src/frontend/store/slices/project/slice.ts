@@ -126,11 +126,32 @@ const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
   },
 }
 
-function initializeServerProtocolConfig(serverData: PLCServer): PLCServer {
+/**
+ * What a new Modbus server answers on, decided by the target it is created for.
+ *
+ * A microcontroller gets RTU: nearly every VPP board has a UART and most have no
+ * network at all, so RTU is the transport that is almost always there. A Runtime
+ * v4 target gets TCP, which is the only one it serves.
+ *
+ * Seeding `['tcp']` everywhere is what made a board with no network carrier
+ * compile `MBTCP` into a firmware with no stack the moment the user switched the
+ * server on -- the screen offered only RTU while the store still said TCP. The
+ * build narrows transports to what the board can carry regardless, so this is
+ * the choice that keeps the common case from ever reaching that narrowing.
+ */
+function seedTransports(live: ProjectSliceRoot): ('rtu' | 'tcp')[] {
+  return resolveBoardInfo(live)?.compiler === 'arduino-cli' ? ['rtu'] : ['tcp']
+}
+
+function initializeServerProtocolConfig(serverData: PLCServer, transports: ('rtu' | 'tcp')[]): PLCServer {
   if (serverData.protocol === 'modbus-tcp' && !serverData.modbusSlaveConfig) {
     return {
       ...serverData,
-      modbusSlaveConfig: { enabled: false, networkInterface: '0.0.0.0', port: 502 },
+      // `transports` has to be a real array from the start. `selectModbusServer`
+      // only considers a server that declares one, so seeding nothing made a
+      // newly created server invisible to the build while the screen, defaulting
+      // the same field, said it was serving.
+      modbusSlaveConfig: { enabled: false, transports, networkInterface: '0.0.0.0', port: 502 },
     }
   }
   if (serverData.protocol === 's7comm' && !serverData.s7commSlaveConfig) {
@@ -1701,7 +1722,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.servers) slice.project.data.servers = []
-          slice.project.data.servers.push(initializeServerProtocolConfig(dto.data))
+          slice.project.data.servers.push(initializeServerProtocolConfig(dto.data, seedTransports(getState())))
         }),
       )
       return ok()
@@ -1740,8 +1761,15 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           const server = slice.project.data.servers?.find((s) => s.name === name)
           if (!server?.modbusSlaveConfig) return
           if (config.enabled !== undefined) server.modbusSlaveConfig.enabled = config.enabled
+          if (config.transports !== undefined) server.modbusSlaveConfig.transports = config.transports
           if (config.networkInterface !== undefined) server.modbusSlaveConfig.networkInterface = config.networkInterface
           if (config.port !== undefined) server.modbusSlaveConfig.port = config.port
+          if (config.slaveId !== undefined) server.modbusSlaveConfig.slaveId = config.slaveId
+          if (config.serialPort !== undefined) server.modbusSlaveConfig.serialPort = config.serialPort
+          if (config.baudRate !== undefined) server.modbusSlaveConfig.baudRate = config.baudRate
+          if (config.parity !== undefined) server.modbusSlaveConfig.parity = config.parity
+          if (config.stopBits !== undefined) server.modbusSlaveConfig.stopBits = config.stopBits
+          if (config.dataBits !== undefined) server.modbusSlaveConfig.dataBits = config.dataBits
           if (config.bufferMapping) {
             const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
             server.modbusSlaveConfig.bufferMapping = {

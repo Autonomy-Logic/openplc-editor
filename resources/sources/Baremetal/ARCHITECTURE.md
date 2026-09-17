@@ -79,6 +79,14 @@ composite gates in `modbus_config.h`:
    `mb_pdu_request_len()` how many bytes the frame should be (derived per FC).
 3. Unless the FC is a debug FC (`mb_pdu_skips_crc()`), validate the CRC with
    `modbus_crc::calcCrc()`.
+
+   Step 2 accepts **two** slave ids on this port: the Modbus server's, and
+   `MB_EDITOR_SLAVE` for the editor's own link. A frame that matched only the
+   editor's id must carry an editor function code (`mb_pdu_is_editor_fc()`,
+   `0x41`-`0x4B`) or it is dropped in silence — the channel is private, and an
+   exception would tell a bus scanner the address is live. When the two ids are
+   equal, which is the default, the server's branch matches first and this costs
+   nothing.
 4. `process_mbpacket()` dispatches: operation FC → `modbus_registers`; debug FC →
    `modbus_debug`. The response is built back into `mb_frame`.
 5. `handle_serial_port` appends the CRC and writes to the serial port.
@@ -92,9 +100,12 @@ header (no CRC) instead of RTU framing.
 ## Invariants
 
 1. **Transports do not know the function-code set.** They ask `modbus_pdu`
-   (`mb_pdu_request_len` + `mb_pdu_skips_crc`). Adding a function code touches
-   only `modbus_debug` (the handler) and `modbus_pdu` (dispatch + shape) — never
-   the transports.
+   (`mb_pdu_request_len`, `mb_pdu_skips_crc`, `mb_pdu_is_editor_fc`). Adding a
+   function code touches only `modbus_debug` (the handler) and `modbus_pdu`
+   (dispatch + shape) — never the transports. The three predicates answer
+   different questions and are not interchangeable: `mb_pdu_skips_crc` excludes
+   `0x4B`, which does carry a CRC, so using it as "is this the editor" would make
+   run/stop unreachable on the editor's id.
 2. **`mb_frame` is the one seam.** Every transport fills it, calls
    `process_mbpacket()`, and reads the response back out. Single-threaded
    cooperative scheduling means the transports time-slice within a scan; there
@@ -112,15 +123,28 @@ header (no CRC) instead of RTU framing.
 
 That is the whole surface. `modbus_serial.*` and `modbus_tcp.*` are untouched.
 
-## Known constraint — single-serial + TCP
+## Serial and TCP in the same build
 
-`mb_frame` is shared between `handle_tcp()` and the single-serial assembly path.
-In **single-serial** builds `mb_frame` doubles as the RX-assembly buffer and
-holds a partial RTU/debug frame **across scan cycles**; since `mbtask()` runs
-`handle_tcp()` first, an incoming TCP request can clobber that partial frame.
-The framing logic resyncs, but the in-flight transaction is lost → intermittent
-glitches under concurrent TCP load. Dual-serial + TCP is safe (dedicated RX
-buffers; `mb_frame` only transient). The original design assumed a single Modbus
-operation transport per board; the editor allowing RTU + TCP together violates
-that. Fix is planned separately (dedicated single-serial RX buffer scoped to
-`MBSERIAL && MBTCP`).
+`mb_frame` is the shared process/TX buffer, and it is NOT an assembly buffer for
+any port that has to survive a scan cycle alongside TCP.
+
+The single-serial path used to assemble into `mb_frame` directly. That is only
+safe while nothing else writes it between cycles, and TCP does: `mbtask()` runs
+`handle_tcp()` first, so an incoming request overwrote a partial serial frame
+while `mb_rx_len` still described it. The framing logic resynced a byte at a
+time and the in-flight transaction was lost — intermittent, and worst under the
+concurrent TCP load a working installation produces.
+
+Every path now has its own RX assembly buffer wherever it can be raced:
+
+| Build | Serial assembly | `mb_frame` |
+|---|---|---|
+| single-serial, no TCP | `mb_frame` in place | assembly + process + TX |
+| single-serial + TCP (`MBTCP`) | `mb_rx_single` | process + TX only |
+| dual-serial (`MBSERIAL_ON_SECONDARY`) | `mb_rx_dbg`, `mb_rx_rtu` | process + TX only |
+
+The extra buffer costs `MAX_MB_FRAME` bytes (128 on ATmega328P/32U4, 256
+elsewhere) and is compiled only where TCP is present, so a board without it
+keeps its original footprint. The condition is `MBTCP` rather than
+`MBSERIAL && MBTCP` because the always-on debugger assembles through the same
+path and was losing frames the same way in a TCP-only Modbus build.

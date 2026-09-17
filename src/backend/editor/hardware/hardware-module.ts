@@ -245,6 +245,7 @@ class HardwareModule {
         draft.set(board, {
           compiler: boardData.compiler,
           core: boardData.core,
+          ...(boardData.platform ? { platform: boardData.platform } : {}),
           preview: boardData.preview,
           specs: boardData.specs,
           coreVersion: coreVersion ?? undefined,
@@ -348,6 +349,7 @@ class HardwareModule {
           boards.set(device.name, {
             compiler,
             core: device.target.core ?? '',
+            ...(device.target.platform ? { platform: device.target.platform } : {}),
             preview: device.preview,
             specs: device.specs ?? {},
             pins: {
@@ -385,6 +387,7 @@ class HardwareModule {
             },
             ...(device.serialPorts ? { serialPorts: device.serialPorts } : {}),
             ...(device.defaultSerial ? { defaultSerial: device.defaultSerial } : {}),
+            ...(device.networkInterfaces ? { networkInterfaces: device.networkInterfaces } : {}),
             ...(device.debug ? { debug: device.debug } : {}),
           })
         }

@@ -63,6 +63,19 @@ export interface TargetCapabilities {
    * --------------------------------------------------------------- */
 
   modbusTcpServer: boolean
+
+  /** The target can serve Modbus as an RTU slave over one of its hardware
+   *  UARTs. Only the baremetal firmware does: `ModbusSlave.cpp` compiles a
+   *  serial transport under `MBSERIAL`, while the Runtime v4 slave plugin is
+   *  a TCP listener with no serial path at all.
+   *
+   *  Separate from `modbusTcpServer` rather than folded into it because the
+   *  unified server screen offers a transport selector, and "which transports"
+   *  is exactly the question it asks the target. A board reporting both gets
+   *  the selector; a board reporting one gets that one, with no control to
+   *  choose from a set of one. */
+  modbusRtuServer: boolean
+
   opcuaServer: boolean
   s7Server: boolean
 

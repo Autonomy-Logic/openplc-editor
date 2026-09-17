@@ -81,14 +81,28 @@ const segmentDefault = (
 ): number => (imageSizes ? (imageSizes[prefix] ?? 0) : fallback)
 
 /**
- * Generates the Modbus Slave plugin configuration JSON from the project's servers.
- * Returns null if there are no enabled Modbus TCP servers configured.
+ * The Modbus slave plugin's configuration, from the project's servers, or `null`
+ * when nothing is to be served.
+ *
+ * A DISABLED server produces nothing. The runtime has no switch of its own: the
+ * plugin comes up if and only if `conf/modbus_slave.json` is in the bundle
+ * (`composeRuntimeV4Bundle` skips the file for a `null` here), so "not in the
+ * configuration" is the only way to express "off". Until now this read the first
+ * server carrying a `modbusSlaveConfig` and ignored `enabled` entirely, which
+ * made the screen's master switch do nothing at all on Runtime v4 while it
+ * worked on baremetal -- and, with several servers in a project, could hand the
+ * runtime a disabled one while an enabled one sat behind it in the list.
+ *
+ * The file the plugin reads describes ONE slave, so one is what this emits. A
+ * project may legitimately carry several; the first enabled one wins. Serving
+ * several at once would be a change to the plugin's file format, not to this
+ * function.
  *
  * @param servers - Array of PLCServer from the project data
  * @param imageSizes - Slots per IEC prefix for this project, from `computeIoImage`.
  *   Supplies the counts for any segment the user did not configure, so this file
  *   and `image.conf` cannot disagree about what exists.
- * @returns The Modbus Slave configuration as a JSON string, or null if no servers are configured
+ * @returns The Modbus Slave configuration as a JSON string, or null
  */
 export const generateModbusSlaveConfig = (
   servers: PLCServer[] | undefined,
@@ -98,7 +112,9 @@ export const generateModbusSlaveConfig = (
     return null
   }
 
-  const modbusServer = servers.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig)
+  const modbusServer = servers.find(
+    (server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig && server.modbusSlaveConfig.enabled,
+  )
 
   if (!modbusServer || !modbusServer.modbusSlaveConfig) {
     return null

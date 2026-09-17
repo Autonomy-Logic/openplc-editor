@@ -28,6 +28,7 @@ import type {
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
+import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
 import {
   resolveAddressProducerCapabilities,
   resolveTargetCapabilities,
@@ -65,6 +66,7 @@ import { generateDefinesContent } from './steps/generate-defines'
 import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
+import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
 // ---------------------------------------------------------------------------
@@ -125,6 +127,14 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  install fires only when that board is selected.  Boards that
    *  don't need a specific library never download it. */
   extra_libraries?: string[]
+  /** Names of the device's configuration screens, and the physical transport it
+   *  exposes. Forwarded from the VPP manifest so the pipeline can resolve the
+   *  SAME Modbus profile the screen resolves — what the board can serve over is
+   *  the board's to state, and the emitter had no access to it. */
+  vppScreenNames?: string[]
+  serialPorts?: string[]
+  defaultSerial?: string
+  networkInterfaces?: string[]
   /** Prebuilt arduino-hal (provisioning="prebuilt"): the precompiled Arduino
    *  library dir, linked via a 2nd `--library`. Present only for arduino
    *  prebuilt boards (the `source` HAL still compiles as the integration layer).
@@ -552,6 +562,77 @@ async function runCompilePipelineInner(
     }
     return bailError(emit, 'validate', 'Compilation aborted: name all variable blocks and try again.')
   }
+
+  // ---------------------------------------------------------------------
+  // A firmware build serves exactly one Modbus slave: `modbus.slaveid` is a
+  // single global and `init_mbregs` is called once. The editor lets a project
+  // carry several on purpose, because a project moves between targets, so the
+  // refusal lands here rather than at creation — and it names them, because
+  // "only one server is allowed" leaves the user to guess which to turn off.
+  // ---------------------------------------------------------------------
+  const modbusSelection = selectModbusServer(processedData.servers as never)
+  // Only a target that actually builds this firmware can be in conflict. The
+  // simulator and the openplc-compiler runtimes never read the selection, so
+  // refusing their build over two enabled servers would block work on a project
+  // that is merely passing through -- which is the same "a project moves
+  // between targets" reasoning that put the refusal here instead of at creation.
+  const targetServesOneSlave = !isRuntimeV4 && !isSimulator && boardRuntime !== 'openplc-compiler'
+  if (targetServesOneSlave && modbusSelection.conflict) {
+    return bailError(
+      emit,
+      'validate',
+      `Compilation aborted: this target serves one Modbus server, and ${modbusSelection.conflict.join(', ')} are all enabled. Turn off all but one.`,
+    )
+  }
+
+  // ---------------------------------------------------------------------
+  // What the project asks to serve, narrowed to what the board can carry.
+  //
+  // The transports are the project's, the carriers are the board's, and until
+  // now only the SCREEN intersected them: `resolveModbusServerProfile` gated the
+  // UI while the emitter took `server.transports` at face value. So a server
+  // seeded `['tcp']` on a board that ships no Network screen compiled `MBTCP`
+  // and `MBTCP_ETHERNET` into a firmware with no stack -- `ETH.begin()` that
+  // never links -- and no `MBSERIAL` either, leaving the board answering
+  // nothing on either transport while the screen said it was not serving yet.
+  //
+  // Same resolver as the screen, on purpose. Two derivations of this answer is
+  // exactly how the two came to disagree.
+  // ---------------------------------------------------------------------
+  const modbusProfile = resolveModbusServerProfile({
+    compiler: boardEntry.compiler,
+    ...(boardEntry.platform ? { platform: boardEntry.platform } : {}),
+    ...(boardEntry.capabilities ? { capabilities: boardEntry.capabilities } : {}),
+    ...(boardEntry.vppScreenNames
+      ? { vpp: { screens: Object.fromEntries(boardEntry.vppScreenNames.map((name) => [name, true])) } }
+      : {}),
+    ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
+    ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
+    ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
+  })
+
+  // Same gate as the conflict refusal above, and for the same reason: only a
+  // target that builds THIS firmware reads these macros. Runtime v4 serves from
+  // `conf/modbus_slave.json` and the simulator from a fixed block, so narrowing
+  // there would warn about a transport neither of them was going to read --
+  // noise on a project that is merely passing through another target.
+  const modbusServer = !targetServesOneSlave
+    ? modbusSelection.server
+    : narrowModbusTransports(modbusSelection.server, modbusProfile.transports, (dropped) => {
+        // Named, not silent. A dropped transport is the difference between the
+        // firmware the user asked for and the one they get, and on a board with no
+        // console there is nowhere else for them to find out.
+        for (const transport of dropped) {
+          emit({
+            stage: 'validate',
+            level: 'warning',
+            message:
+              transport === 'tcp'
+                ? 'Modbus TCP was requested, but this board declares no network carrier. It was left out of the build.'
+                : 'Modbus RTU was requested, but this board declares no serial transport for it. It was left out of the build.',
+          })
+        }
+      })
 
   // ---------------------------------------------------------------------
   // Step 1: Transpile the project IR straight to Structured Text via
@@ -985,6 +1066,11 @@ async function runCompilePipelineInner(
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
+    ...(modbusServer !== undefined ? { modbusServer } : {}),
+    // Never passed before this, so `DEBUG_IFACE` was always `Serial` and the
+    // "is the server on the default port" test always compared against `Serial`
+    // too. Harmless only for as long as every package declares `Serial`.
+    ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
     // Only for a target we actually size. Runtime v3 and the simulator keep
     // openplc.h's own fallbacks, so their defines.h is unchanged.
