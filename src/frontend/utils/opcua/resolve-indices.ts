@@ -65,6 +65,51 @@ const lookup = (path: string, pathToAddr: Map<string, DebugLeafInfo>): LeafAddre
 }
 
 /**
+ * The `pouName` an OPC-UA node carries when it addresses a CONFIGURATION
+ * VAR_GLOBAL rather than a program's own storage. The variable picker stamps
+ * it on every global it offers — including a VAR_EXTERNAL reference listed
+ * under the POU that declares it — so this string is the node model's whole
+ * record of scope, and the one place that decides what it means.
+ */
+export const GLOBAL_SCOPE_POU = 'GVL'
+
+/**
+ * Is this node addressed in the global scope?
+ *
+ * Case-insensitive on both names. It used to read
+ * `pouName === 'GVL' || pouName === 'CONFIG' || pouName.toUpperCase() === 'GVL'`,
+ * which accepted `gvl` but not `config` for no reason anyone intended.
+ */
+export const isGlobalScopePou = (pouName: string): boolean => {
+  const normalised = pouName.toUpperCase()
+  return normalised === GLOBAL_SCOPE_POU || normalised === 'CONFIG'
+}
+
+/**
+ * A program-scoped path that missed, retried in the global scope.
+ *
+ * `INSTANCE0.<path>` absent from the debug map while the bare `<path>` resolves
+ * means one thing: the POU named it VAR_EXTERNAL, so it never had storage of
+ * its own and the address belongs to the CONFIGURATION global. That cannot be a
+ * mis-binding — a variable a program really owns is always in the map under its
+ * instance, so this branch is unreachable for one.
+ *
+ * Only address spaces saved BEFORE the picker started attributing VAR_EXTERNAL
+ * to the global scope need it; new ones arrive with `pouName` already
+ * `GLOBAL_SCOPE_POU`. Without it those configs fail the build outright —
+ * "Cannot resolve OPC-UA variable address … Expected debug path:
+ * INSTANCE0.TEST_GLOBAL" — with no way to fix them but to re-pick the variable.
+ */
+const lookupAsGlobal = (
+  pouName: string,
+  variablePath: string,
+  pathToAddr: Map<string, DebugLeafInfo>,
+): LeafAddress | null => {
+  if (isGlobalScopePou(pouName)) return null // the global path was already the first try
+  return lookup(buildGlobalDebugPath(variablePath), pathToAddr)
+}
+
+/**
  * Build the full STruC++ debug path for a node — handling the
  * GVL/CONFIG (global) vs instance-prefixed cases. Returns null if
  * the program POU doesn't have an instance in Resources (the user
@@ -75,7 +120,7 @@ const pathForNode = (
   variablePath: string,
   instances: PLCInstanceInfo[],
 ): { path: string } | { error: OpcUaConfigError } => {
-  if (pouName === 'GVL' || pouName === 'CONFIG' || pouName.toUpperCase() === 'GVL') {
+  if (isGlobalScopePou(pouName)) {
     return { path: buildGlobalDebugPath(variablePath) }
   }
   const instanceName = findInstanceName(pouName, toInstanceMapping(instances))
@@ -107,6 +152,9 @@ export const resolveVariableAddress = (
 
   const addr = lookup(result.path, pathToAddr)
   if (addr) return addr
+
+  const asGlobal = lookupAsGlobal(node.pouName, node.variablePath, pathToAddr)
+  if (asGlobal) return asGlobal
 
   throw new OpcUaConfigError(
     `${node.pouName}:${node.variablePath}`,
@@ -164,11 +212,10 @@ const resolveFieldRecursively = (
   // Leaf field. datatype/size come from the compiler's debug map (the
   // canonical source), not the stored field.datatype — the runtime
   // encodes/decodes this leaf by exactly these.
-  const debugPath =
-    pouName === 'GVL' || pouName === 'CONFIG'
-      ? buildGlobalDebugPath(fullFieldPath)
-      : buildDebugPath(instanceName!, fullFieldPath)
-  const addr = lookup(debugPath, pathToAddr)
+  const debugPath = isGlobalScopePou(pouName)
+    ? buildGlobalDebugPath(fullFieldPath)
+    : buildDebugPath(instanceName!, fullFieldPath)
+  const addr = lookup(debugPath, pathToAddr) ?? lookupAsGlobal(pouName, fullFieldPath, pathToAddr)
   if (!addr) {
     droppedPaths.push(`${pouName}:${fullFieldPath}`)
     return null
@@ -211,7 +258,7 @@ export const resolveStructureAddresses = (
   }
 
   let instanceName: string | null = null
-  if (node.pouName !== 'GVL' && node.pouName !== 'CONFIG') {
+  if (!isGlobalScopePou(node.pouName)) {
     instanceName = findInstanceName(node.pouName, toInstanceMapping(instances))
     if (!instanceName) {
       throw new OpcUaConfigError(

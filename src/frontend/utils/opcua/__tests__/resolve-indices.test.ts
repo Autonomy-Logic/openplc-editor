@@ -507,3 +507,74 @@ describe('resolveArrayElementFields', () => {
     )
   })
 })
+
+// A VAR_EXTERNAL is a reference to a CONFIGURATION VAR_GLOBAL, so STruC++ emits
+// it under its bare name and never under the referencing instance. The picker
+// now stamps `GVL` on those, but address spaces saved before that carry the
+// declaring program's name and must still resolve.
+describe('VAR_EXTERNAL / global scope', () => {
+  const instances = [inst('INSTANCE0', 'MAIN')]
+
+  it('resolves a global picked under the GVL group', () => {
+    const addr = resolveVariableAddress(
+      makeNode({ pouName: 'GVL', variablePath: 'TEST_GLOBAL' }),
+      pmap(['TEST_GLOBAL', 0, 7, 'DINT', 4]),
+      instances,
+    )
+    expect(addr).toEqual({ arr: 0, elem: 7, type: 'DINT', size: 4 })
+  })
+
+  it('resolves CONFIG as the global scope too (it used to be case-sensitive)', () => {
+    const addr = resolveVariableAddress(
+      makeNode({ pouName: 'config', variablePath: 'TEST_GLOBAL' }),
+      pmap(['TEST_GLOBAL', 0, 7, 'DINT', 4]),
+      instances,
+    )
+    expect(addr).toEqual({ arr: 0, elem: 7, type: 'DINT', size: 4 })
+  })
+
+  it('falls back to the global path for a config saved with the program as pouName', () => {
+    // INSTANCE0.TEST_GLOBAL is deliberately absent — that is what a
+    // VAR_EXTERNAL looks like in a debug map, and what used to abort the build.
+    const addr = resolveVariableAddress(
+      makeNode({ pouName: 'MAIN', variablePath: 'TEST_GLOBAL' }),
+      pmap(['TEST_GLOBAL', 0, 7, 'DINT', 4]),
+      instances,
+    )
+    expect(addr).toEqual({ arr: 0, elem: 7, type: 'DINT', size: 4 })
+  })
+
+  it('prefers the program-scoped address when the POU owns a variable of that name', () => {
+    const addr = resolveVariableAddress(
+      makeNode({ pouName: 'MAIN', variablePath: 'SHADOWED' }),
+      pmap(['INSTANCE0.SHADOWED', 1, 2, 'INT', 2], ['SHADOWED', 9, 9, 'DINT', 4]),
+      instances,
+    )
+    expect(addr).toEqual({ arr: 1, elem: 2, type: 'INT', size: 2 })
+  })
+
+  it('still throws when the name is in neither scope', () => {
+    expect(() =>
+      resolveVariableAddress(
+        makeNode({ pouName: 'MAIN', variablePath: 'GONE' }),
+        pmap(['INSTANCE0.STILL_HERE', 1, 2]),
+        instances,
+      ),
+    ).toThrow(OpcUaConfigError)
+  })
+
+  it('falls back for a field of a global struct saved under the program', () => {
+    const resolved = resolveStructureAddresses(
+      makeNode({
+        pouName: 'MAIN',
+        variablePath: 'GLOBAL_STRUCT',
+        nodeType: 'structure',
+        fields: [makeField({ fieldPath: 'FIELD1' })],
+      }),
+      pmap(['GLOBAL_STRUCT.FIELD1', 3, 4, 'REAL', 4]),
+      instances,
+    )
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toMatchObject({ name: 'FIELD1', arr: 3, elem: 4, datatype: 'REAL' })
+  })
+})

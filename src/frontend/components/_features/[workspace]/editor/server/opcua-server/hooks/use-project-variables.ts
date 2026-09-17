@@ -11,6 +11,8 @@ import type { SystemLibrary } from '@root/middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '@root/middleware/shared/ports/types'
 import { useMemo } from 'react'
 
+import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
+
 /**
  * Type for array data extracted from PLCVariable array type.
  * This is the shape of the 'data' property when type.definition === 'array'.
@@ -401,7 +403,27 @@ const buildProgramNode = (
   }
 
   const children = (pou.interface?.variables ?? [])
-    .map((v) => buildVariableNodeFromPLC(v, pou.name, dataTypes, pous, systemLibraries))
+    .map((v) =>
+      // A VAR_EXTERNAL is a REFERENCE to a CONFIGURATION VAR_GLOBAL, never
+      // storage of its own: STruC++ emits the global under its bare name, so
+      // its address is the same from every POU that names it. Attributing it to
+      // the declaring program produced `INSTANCE0.<name>`, which is in no debug
+      // map, and the build died with "Cannot resolve OPC-UA variable address"
+      // on a variable the picker itself had offered.
+      //
+      // The debugger has always decided this from the variable CLASS
+      // (`buildVariableDebugPath(variable.class === 'external', …)` and the
+      // `Config0:<name>` composite key); the picker now agrees, so the two
+      // can't drift again. It also means ticking the variable here and under
+      // GVL is one node, not two — the same dedup the debugger does.
+      buildVariableNodeFromPLC(
+        v,
+        v.class === 'external' ? GLOBAL_SCOPE_POU : pou.name,
+        dataTypes,
+        pous,
+        systemLibraries,
+      ),
+    )
     .filter((node): node is VariableTreeNode => node !== null)
 
   return {
@@ -425,14 +447,16 @@ const buildGlobalVariablesNode = (
   systemLibraries: SystemLibrary[],
 ): VariableTreeNode => {
   const children = globalVariables
-    .map((v) => buildVariableNodeFromPLC({ ...v, class: 'global' }, 'GVL', dataTypes, pous, systemLibraries))
+    .map((v) =>
+      buildVariableNodeFromPLC({ ...v, class: 'global' }, GLOBAL_SCOPE_POU, dataTypes, pous, systemLibraries),
+    )
     .filter((node): node is VariableTreeNode => node !== null)
 
   return {
     id: 'global-variables',
     name: 'GVL (Global Variables)',
     type: 'global',
-    pouName: 'GVL',
+    pouName: GLOBAL_SCOPE_POU,
     variablePath: '',
     isSelectable: false,
     children,
