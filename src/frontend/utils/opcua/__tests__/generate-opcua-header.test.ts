@@ -159,7 +159,7 @@ describe('generateOpcUaHeaderContent', () => {
     )
 
     expect(nodes).toHaveLength(4)
-    expect(dropped).toEqual([{ path: 'big[4..5]', reason: 'exceeds the target\'s maxArrayLength of 4' }])
+    expect(dropped).toEqual([{ path: 'big[4..5]', reason: "exceeds the target's maxArrayLength of 4" }])
   })
 
   it('drops a node with an unrecognised datatype rather than guessing a tag', () => {
@@ -230,7 +230,11 @@ describe('generateOpcUaHeaderContent', () => {
     expect(nodes).toHaveLength(700)
     expect(dropped).toEqual([])
 
-    const header = generateOpcUaHeaderContent({ resolved: makeResolved({ variables: many }), profile: PROFILE, buildEpochSeconds: 0 })
+    const header = generateOpcUaHeaderContent({
+      resolved: makeResolved({ variables: many }),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+    })
     expect(header).toContain('#define OPCUA_NODE_COUNT 700')
     expect(header).not.toContain('#define OPCUA_MAX_NODES ')
   })
