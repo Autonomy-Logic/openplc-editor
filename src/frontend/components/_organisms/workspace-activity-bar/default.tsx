@@ -114,6 +114,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     (state) => capabilities.hasOrchestratorDevices && state.runtimeConnection.selectedDevice === null,
   )
 
+  // The device the user has CHOSEN, which is not the same as one they have
+  // connected to. Named in the offer below so a mis-click in the Orchestrators
+  // list is visible before it becomes a connection to the wrong machine.
+  const selectedDeviceName = useOpenPLCStore((state) => state.runtimeConnection.selectedDevice?.deviceName ?? null)
+
+  // A chosen device outranks the board target. The board only becomes a runtime
+  // one when a connection is established, so between picking a device and
+  // connecting to it the target still reads as the simulator -- which had the
+  // debugger offering to start the simulator for someone who had just selected
+  // a Runtime v4 device.
+  const offerSimulatorStart = isSimulatorBoard && selectedDeviceName === null
+
   const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
 
   // Run/stop travels over the session's control channel, so the button is live
@@ -1027,7 +1039,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // debug session can start — a device by Connect, a runtime by logging in, the
       // simulator by pressing Start — so the only question left is whether that
       // session exists. Which medium it uses is the connection manager's to know.
-      const isRuntime = isOpenPLCRuntimeTarget(boardInfo)
+      // A device chosen in the Orchestrators list IS a Runtime v4 target -- that
+      // is the only thing an orchestrator serves -- and it counts as one before
+      // the board target catches up. The board only turns into a runtime board
+      // once a connection is established, so deriving this from the board alone
+      // sent a selected-but-unconnected device down the SERIAL connect path and
+      // answered "Could not reach the device on simulator".
+      const isRuntime =
+        isOpenPLCRuntimeTarget(boardInfo) || (capabilities.hasOrchestratorDevices && selectedDeviceName !== null)
 
       // A session the manager holds (a device or the simulator) also OWNS the debug
       // channel, so the session ending ends the debug session — see the drop handler
@@ -1058,7 +1077,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // Orchestrators screen picks the device); on desktop the UI makes it
         // unreachable, and it is handled identically anyway rather than
         // branching on platform.
-        if (!isSimulatorBoard && needsDeviceSelection) {
+        if (!offerSimulatorStart && needsDeviceSelection) {
           await showDeviceDialog(
             'warning',
             'No Device Selected',
@@ -1070,14 +1089,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
+        // Name the target. "Would you like to connect?" with no name is how a
+        // mis-selection turns into a session on someone else's machine.
+        const targetName =
+          selectedDeviceName ??
+          deviceDefinitions.configuration.runtimeIpAddress ??
+          deviceDefinitions.configuration.communicationPort ??
+          boardTarget
         const offer = await showDeviceDialog(
           'question',
-          isSimulatorBoard ? 'Simulator Not Running' : 'Not Connected',
-          isSimulatorBoard
+          offerSimulatorStart ? 'Simulator Not Running' : 'Not Connected',
+          offerSimulatorStart
             ? 'The debugger runs against the running simulator. Would you like to start the simulator now?'
             : isRuntime
-              ? 'The debugger runs over the runtime connection. Would you like to connect to the runtime now?'
-              : 'The debugger runs over the device connection. Would you like to connect to the device now?',
+              ? `The debugger runs over the runtime connection. Would you like to connect to "${targetName}" now?`
+              : `The debugger runs over the device connection. Would you like to connect to "${targetName}" now?`,
           ['Yes', 'No'],
         )
         if (offer !== 0) {
@@ -1087,7 +1113,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
 
         setIsDebuggerProcessing(false)
-        if (isSimulatorBoard) {
+        if (offerSimulatorStart) {
           // Same action as the sidebar's Start: it builds, launches the emulator
           // and — via `pendingSimulatorDebugRef` — attaches the debugger once the
           // firmware event lands, so the session continues on its own.

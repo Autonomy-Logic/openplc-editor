@@ -66,6 +66,22 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
     setRuntimeConnectionStatus('connecting')
 
     try {
+      // Web reaches the runtime THROUGH an orchestrator agent, so the adapter
+      // has to be told which device every later call is about. The Orchestrators
+      // screen does this inside its own Connect; extracting the connect without
+      // it left `getUsersInfo` addressed at nothing, which failed silently --
+      // status went to 'error' and no login modal ever appeared.
+      //
+      // Desktop carries no selected device and talks to `runtimeIpAddress`
+      // directly, so this is a no-op there.
+      const selected = useOpenPLCStore.getState().runtimeConnection.selectedDevice
+      if (selected) {
+        runtime.setDeviceContext?.({
+          agentId: selected.orchestratorAgentId,
+          deviceId: selected.deviceId,
+        })
+      }
+
       const result = await runtime.getUsersInfo()
 
       if (result.error) {
