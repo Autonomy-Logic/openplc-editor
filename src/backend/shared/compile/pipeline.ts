@@ -637,7 +637,7 @@ async function runCompilePipelineInner(
       // before anything consumes `servers`. This is the point that knows both
       // the project and the target, and the storage format is a device property.
       // See ./opcua-credentials.ts.
-      const opcuaCredentialServers = materialiseOpcUaCredentials(
+      const opcuaCredentialServers = await materialiseOpcUaCredentials(
         processedData.servers,
         targetCapabilities.opcua,
         (message) => emit({ stage: 'confs', message, level: 'warning' }),
@@ -1028,7 +1028,7 @@ async function runCompilePipelineInner(
     try {
       // Same derivation as the Runtime v4 branch: the credential this device
       // stores is this device's property, and here is where the target is known.
-      const opcuaCredentialServers = materialiseOpcUaCredentials(
+      const opcuaCredentialServers = await materialiseOpcUaCredentials(
         processedData.servers,
         targetCapabilities.opcua,
         (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),

@@ -11,14 +11,51 @@
  * already dispatches on.
  */
 
-import { pbkdf2Sync, randomBytes } from 'node:crypto'
-
 import type { OpcUaTargetProfile } from '../../../middleware/shared/utils/target-capabilities/types'
 
 /** Salt and digest lengths, matching what the editor emitted historically and
  *  what Runtime v4's `_pbkdf2_hash_password` produces. */
 const SALT_BYTES = 16
 const KEY_BYTES = 32
+
+/**
+ * WebCrypto, not `node:crypto`.
+ *
+ * This module is on the shared compile surface, so openplc-web bundles it and
+ * EVALUATES it in the browser. A top-level `import { pbkdf2Sync } from
+ * 'node:crypto'` therefore took the whole web app down at boot -- Vite
+ * externalises the module and touching any member throws, before a single
+ * component rendered.
+ *
+ * A lazy import would only have moved that failure: the derivation runs inside
+ * the `isRuntimeV4` branch of the pipeline, and reaching a Runtime v4 device
+ * through the orchestrator is precisely what web is FOR, so the browser really
+ * does have to derive credentials.
+ *
+ * `globalThis.crypto.subtle` is the one PBKDF2 both platforms already have --
+ * native in the browser and in Node since 15 -- which keeps a single
+ * implementation rather than a platform port, and keeps it native: at the
+ * default 600_000 iterations a pure-JS fallback would block the UI thread for
+ * seconds. The cost is that deriving is now async, since `subtle` has no
+ * synchronous form.
+ */
+function webcrypto(): Crypto {
+  const c = globalThis.crypto
+  if (!c?.subtle) {
+    throw new Error(
+      'WebCrypto is unavailable, so OPC-UA credentials cannot be derived. ' +
+        'This needs a secure context in the browser (https or localhost) and Node 15 or newer.',
+    )
+  }
+  return c
+}
+
+/** Base64 without `Buffer`, which the browser does not have. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
 
 type UserLike = {
   type?: string
@@ -29,10 +66,12 @@ type UserLike = {
 
 /** `pbkdf2:sha256:<iterations>$<salt-b64>$<hash-b64>`, byte-for-byte the format
  *  Runtime v4 produces and consumes. */
-function pbkdf2Credential(password: string, iterations: number): string {
-  const salt = randomBytes(SALT_BYTES)
-  const hash = pbkdf2Sync(password, new Uint8Array(salt), iterations, KEY_BYTES, 'sha256')
-  return `pbkdf2:sha256:${iterations}$${salt.toString('base64')}$${hash.toString('base64')}`
+async function pbkdf2Credential(password: string, iterations: number): Promise<string> {
+  const crypto = webcrypto()
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits'])
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, KEY_BYTES * 8)
+  return `pbkdf2:sha256:${iterations}$${toBase64(salt)}$${toBase64(new Uint8Array(bits))}`
 }
 
 /** `plain:<password>`, tagged so the runtime never has to guess and a
@@ -47,18 +86,18 @@ function plainCredential(password: string): string {
  * Returns `null` when there is nothing to derive (a certificate user, or a
  * password user with neither a password nor a legacy hash).
  */
-export function deriveOpcUaCredential(
+export async function deriveOpcUaCredential(
   user: UserLike,
   profile: Pick<OpcUaTargetProfile, 'passwordScheme' | 'kdfIterations'> | undefined,
   warn?: (message: string) => void,
-): string | null {
+): Promise<string | null> {
   if (user.type !== 'password') return null
 
   const scheme = profile?.passwordScheme ?? 'pbkdf2-sha256'
   const iterations = profile?.kdfIterations ?? 600_000
 
   if (typeof user.password === 'string' && user.password.length > 0) {
-    return scheme === 'plain' ? plainCredential(user.password) : pbkdf2Credential(user.password, iterations)
+    return scheme === 'plain' ? plainCredential(user.password) : await pbkdf2Credential(user.password, iterations)
   }
 
   // No password to derive from: an older project that only kept the hash. Pass
@@ -85,26 +124,30 @@ export function deriveOpcUaCredential(
  * stores, ready for both Runtime v4's `opcua_config.json` and the baremetal
  * `OPCUA_USERS[]` table. The project's plaintext is never mutated.
  */
-export function materialiseOpcUaCredentials<T>(
+export async function materialiseOpcUaCredentials<T>(
   servers: T,
   profile: Pick<OpcUaTargetProfile, 'passwordScheme' | 'kdfIterations'> | undefined,
   warn?: (message: string) => void,
-): T {
+): Promise<T> {
   if (!Array.isArray(servers)) return servers
 
-  return servers.map((server: unknown) => {
-    const s = server as { protocol?: string; opcuaServerConfig?: { users?: UserLike[] } }
-    if (s?.protocol !== 'opcua' || !Array.isArray(s.opcuaServerConfig?.users)) return server
+  return (await Promise.all(
+    servers.map(async (server: unknown) => {
+      const s = server as { protocol?: string; opcuaServerConfig?: { users?: UserLike[] } }
+      if (s?.protocol !== 'opcua' || !Array.isArray(s.opcuaServerConfig?.users)) return server
 
-    return {
-      ...s,
-      opcuaServerConfig: {
-        ...s.opcuaServerConfig,
-        users: s.opcuaServerConfig.users.map((user) => ({
-          ...user,
-          passwordHash: deriveOpcUaCredential(user, profile, warn),
-        })),
-      },
-    }
-  }) as unknown as T
+      return {
+        ...s,
+        opcuaServerConfig: {
+          ...s.opcuaServerConfig,
+          users: await Promise.all(
+            s.opcuaServerConfig.users.map(async (user) => ({
+              ...user,
+              passwordHash: await deriveOpcUaCredential(user, profile, warn),
+            })),
+          ),
+        },
+      }
+    }),
+  )) as unknown as T
 }
