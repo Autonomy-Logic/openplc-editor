@@ -736,7 +736,7 @@ const Board = memo(function () {
                   type='text'
                   value={runtimeIpAddress}
                   onChange={(e) => setRuntimeIpAddress(e.target.value)}
-                  placeholder='192.168.2.4'
+                  placeholder='192.168.0.2'
                   className='flex h-[30px] min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                 />
                 <button
