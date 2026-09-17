@@ -45,7 +45,6 @@ import {
 } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
-import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { clampIOGroupLength } from '../../../utils/modbus/io-group'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
@@ -1771,12 +1770,34 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (config.stopBits !== undefined) server.modbusSlaveConfig.stopBits = config.stopBits
           if (config.dataBits !== undefined) server.modbusSlaveConfig.dataBits = config.dataBits
           if (config.bufferMapping) {
-            const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
+            /* MERGE OVER WHAT IS STORED, NEVER OVER THE DEFAULTS.
+             *
+             * This used to start from DEFAULT_BUFFER_MAPPING when the server
+             * had no mapping yet, so editing ONE field persisted all eight --
+             * the other seven silently materialised at the old fixed sizes
+             * (8192 bits, 1024 registers). A project that had never asked for
+             * an exposure then carried a full one, and `compute-io-image`
+             * reads a persisted count as a request: the image came back to the
+             * constant this task exists to remove, and BR10 ("the image may
+             * end up smaller, and that is one of the main gains") could never
+             * hold for such a project.
+             *
+             * Absent stays absent. It means "expose whatever the image turns
+             * out to be", which is also what FR16 asks of the server. */
+            const base = server.modbusSlaveConfig.bufferMapping ?? {}
+            const patch = config.bufferMapping
             server.modbusSlaveConfig.bufferMapping = {
-              holdingRegisters: { ...base.holdingRegisters, ...config.bufferMapping.holdingRegisters },
-              coils: { ...base.coils, ...config.bufferMapping.coils },
-              discreteInputs: { ...base.discreteInputs, ...config.bufferMapping.discreteInputs },
-              inputRegisters: { ...base.inputRegisters, ...config.bufferMapping.inputRegisters },
+              ...base,
+              ...(base.holdingRegisters || patch.holdingRegisters
+                ? { holdingRegisters: { ...base.holdingRegisters, ...patch.holdingRegisters } }
+                : {}),
+              ...(base.coils || patch.coils ? { coils: { ...base.coils, ...patch.coils } } : {}),
+              ...(base.discreteInputs || patch.discreteInputs
+                ? { discreteInputs: { ...base.discreteInputs, ...patch.discreteInputs } }
+                : {}),
+              ...(base.inputRegisters || patch.inputRegisters
+                ? { inputRegisters: { ...base.inputRegisters, ...patch.inputRegisters } }
+                : {}),
             }
           }
         }),
