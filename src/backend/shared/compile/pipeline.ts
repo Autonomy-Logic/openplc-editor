@@ -1047,6 +1047,7 @@ async function runCompilePipelineInner(
         resolved: resolvedOpcUa,
         profile: targetCapabilities.opcua,
         buildEpochSeconds: Math.floor(Date.now() / 1000),
+        warn: (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
       })
     } catch (error) {
       return bailError(

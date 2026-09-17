@@ -46,7 +46,6 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
  */
 export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
   arenaBytes: 32 * 1024,
-  maxNodes: 256,
   maxSessions: 1,
   nodePoolSlots: 8,
   maxNodesPerRead: 20,

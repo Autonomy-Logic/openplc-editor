@@ -49,11 +49,6 @@ export interface OpcUaTargetProfile {
    *  program's heap. */
   arenaBytes: number
 
-  /** Ceiling on nodes in the generated address space, enforced by the editor
-   *  before the build. A flash budget, not a RAM one: the address space is
-   *  served from `const` tables and materialised into `nodePoolSlots` on demand. */
-  maxNodes: number
-
   /** Concurrent OPC-UA sessions. 16 KB of protocol-mandated buffers each —
    *  the dominant RAM term. Default 1. */
   maxSessions: number

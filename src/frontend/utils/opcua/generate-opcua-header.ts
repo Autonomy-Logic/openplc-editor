@@ -76,6 +76,11 @@ export interface GenerateOpcUaHeaderInput {
    *  decades. Injected rather than read from the clock so the generator stays
    *  pure and its output reproducible. */
   buildEpochSeconds: number
+  /** Build-log sink for leaves that could not be exposed. Optional so the
+   *  generator stays callable from a test with no plumbing, but the compile
+   *  pipeline always passes one: a dropped variable is silent otherwise, and
+   *  "my variable is missing in UaExpert" is the symptom that reaches us. */
+  warn?: (message: string) => void
 }
 
 /** A single emitted leaf, ready to become one `OPCUA_NODES[]` row. */
@@ -102,16 +107,45 @@ const packPermissions = (permissions: RuntimeVariablePermissions): number => {
 }
 
 /**
- * Resolve a datatype string to its `TypeTag`.
+ * Tags the firmware has no OPC-UA mapping for yet.
  *
- * Returns `null` for anything unrecognised, and the caller drops the node rather
- * than substituting a default: a wrong tag would hand the encoder the wrong
+ * `kTagToUaType[]` in `opcua_nodes.cpp` stops at TAG_DT (18), and every use of
+ * it is guarded by `row->tag >= kTagCount`. So a STRING or WSTRING node is not
+ * a memory hazard -- it is worse than that in practice: the row ships to flash,
+ * `materialise_nodes` skips it, and the node is simply absent from the address
+ * space with nothing said anywhere. Dropping it here instead makes it a build
+ * warning naming the variable.
+ *
+ * Lifting this needs strucpp's pointer accessor (`type_ops[].ptr`, on
+ * `feat/debug-table-live-pointer-accessor`) so `read_node` can hand out the
+ * string in place rather than through its 8-byte scalar buffer. Tracked in
+ * DOPE-645.
+ */
+const UNEXPOSABLE_TAGS = new Map<number, string>([
+  [TYPE_TAGS.STRING, 'STRING'],
+  [TYPE_TAGS.WSTRING, 'WSTRING'],
+])
+
+/** Why a leaf did not make it into the table. */
+export interface DroppedNode {
+  path: string
+  reason: string
+}
+
+/**
+ * Resolve a datatype string to a `TypeTag`, or say why it cannot be exposed.
+ *
+ * Never substitutes a default: a wrong tag would hand the encoder the wrong
  * number of bytes, whereas a dropped node is visible in the build log.
  */
-const typeTagFor = (datatype: string | null | undefined): number | null => {
-  if (!datatype) return null
+const resolveTag = (datatype: string | null | undefined): { tag: number } | { reason: string } => {
+  if (!datatype) return { reason: 'has no declared datatype' }
   const tag = TYPE_TAGS[datatype.toUpperCase()]
-  return tag === undefined ? null : tag
+  if (tag === undefined) return { reason: `has an unrecognised datatype "${datatype}"` }
+  const unexposable = UNEXPOSABLE_TAGS.get(tag)
+  if (unexposable !== undefined)
+    return { reason: `is a ${unexposable}, which the runtime cannot serve over OPC-UA yet (DOPE-645)` }
+  return { tag }
 }
 
 /** C string literal — escapes what can legally appear in a browse name. */
@@ -127,7 +161,7 @@ const flattenFields = (
   fields: RuntimeStructureField[],
   prefix: string,
   out: EmittedNode[],
-  dropped: string[],
+  dropped: DroppedNode[],
   nextId: () => number,
 ): void => {
   for (const field of fields) {
@@ -136,15 +170,19 @@ const flattenFields = (
       flattenFields(field.fields, path, out, dropped, nextId)
       continue
     }
-    const tag = typeTagFor(field.datatype)
-    if (tag === null || field.arr === null || field.elem === null) {
-      dropped.push(path)
+    const resolved = resolveTag(field.datatype)
+    if ('reason' in resolved) {
+      dropped.push({ path, reason: resolved.reason })
+      continue
+    }
+    if (field.arr === null || field.elem === null) {
+      dropped.push({ path, reason: 'has no address in the debug table' })
       continue
     }
     out.push({
       nodeId: nextId(),
       browseName: path,
-      tag,
+      tag: resolved.tag,
       arr: field.arr,
       elem: field.elem,
       perms: packPermissions(field.permissions),
@@ -159,24 +197,24 @@ const flattenFields = (
 export const collectOpcUaNodes = (
   resolved: ResolvedOpcUaConfig,
   profile: OpcUaTargetProfile,
-): { nodes: EmittedNode[]; dropped: string[]; overflowed: number } => {
+): { nodes: EmittedNode[]; dropped: DroppedNode[] } => {
   const nodes: EmittedNode[] = []
-  const dropped: string[] = []
+  const dropped: DroppedNode[] = []
   let id = 0
   const nextId = () => ++id
 
   const space = resolved.runtime.config.address_space
 
   for (const variable of space.variables) {
-    const tag = typeTagFor(variable.datatype)
-    if (tag === null) {
-      dropped.push(variable.browse_name)
+    const resolvedTag = resolveTag(variable.datatype)
+    if ('reason' in resolvedTag) {
+      dropped.push({ path: variable.browse_name, reason: resolvedTag.reason })
       continue
     }
     nodes.push({
       nodeId: nextId(),
       browseName: variable.browse_name,
-      tag,
+      tag: resolvedTag.tag,
       arr: variable.arr,
       elem: variable.elem,
       perms: packPermissions(variable.permissions),
@@ -192,20 +230,23 @@ export const collectOpcUaNodes = (
   // single oversized array is reported as such.
   for (const array of space.arrays) {
     const length = Math.min(array.length, profile.maxArrayLength)
-    const tag = typeTagFor(array.datatype)
-    if (tag === null) {
-      dropped.push(array.browse_name)
+    const resolvedTag = resolveTag(array.datatype)
+    if ('reason' in resolvedTag) {
+      dropped.push({ path: array.browse_name, reason: resolvedTag.reason })
       continue
     }
     if (array.length > profile.maxArrayLength) {
-      dropped.push(`${array.browse_name}[${profile.maxArrayLength}..${array.length - 1}] (exceeds maxArrayLength)`)
+      dropped.push({
+        path: `${array.browse_name}[${profile.maxArrayLength}..${array.length - 1}]`,
+        reason: `exceeds the target's maxArrayLength of ${profile.maxArrayLength}`,
+      })
     }
     const perms = packPermissions(array.permissions)
     for (let index = 0; index < length; index++) {
       nodes.push({
         nodeId: nextId(),
         browseName: `${array.browse_name}[${index}]`,
-        tag,
+        tag: resolvedTag.tag,
         arr: array.arr,
         elem: array.elem + index,
         perms,
@@ -213,11 +254,14 @@ export const collectOpcUaNodes = (
     }
   }
 
-  // Truncate to the declared ceiling rather than emitting a table the arena
-  // cannot serve. The caller turns `overflowed` into a build warning; this is
-  // the backstop for a project that arrives from elsewhere.
-  const overflowed = Math.max(0, nodes.length - profile.maxNodes)
-  return { nodes: nodes.slice(0, profile.maxNodes), dropped, overflowed }
+  // No ceiling on the table size. The nodes live in `const` flash tables, and
+  // what costs RAM is how many are materialised at once -- bounded by
+  // `nodePoolSlots` and the per-request operation limits, both of which the
+  // device enforces on its own. The `maxNodes` cap truncated the table silently
+  // from the caller's point of view (`overflowed` had no production consumer),
+  // so a project that grew past it lost its tail of variables with no diagnostic
+  // and nothing on the device ever read `OPCUA_MAX_NODES`.
+  return { nodes, dropped }
 }
 
 const SECURITY_LEVELS = { none: 0, sign: 1, 'sign-and-encrypt': 2 } as const
@@ -230,6 +274,7 @@ const SECURITY_LEVELS = { none: 0, sign: 1, 'sign-and-encrypt': 2 } as const
  */
 export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): string => {
   const { resolved, profile, buildEpochSeconds } = input
+  const warn = input.warn ?? (() => undefined)
   const lines: string[] = []
 
   lines.push('// opcua_config.h — auto-generated, do not edit by hand.')
@@ -250,7 +295,8 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
     return `${lines.join('\n')}\n`
   }
 
-  const { nodes } = collectOpcUaNodes(resolved, profile)
+  const { nodes, dropped } = collectOpcUaNodes(resolved, profile)
+  for (const drop of dropped) warn(`OPC-UA: ${drop.path} ${drop.reason}; it was left out of the address space.`)
   const server = resolved.server
   const users = resolved.runtime.config.users
 
@@ -276,7 +322,6 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
   lines.push('')
   lines.push('// ---- Declared by the VPP: memory and protocol limits ----')
   lines.push(`#define OPCUA_ARENA_SIZE ${profile.arenaBytes}u`)
-  lines.push(`#define OPCUA_MAX_NODES ${profile.maxNodes}`)
   lines.push(`#define OPCUA_MAX_SESSIONS ${profile.maxSessions}`)
   lines.push(`#define OPCUA_NODE_POOL_SLOTS ${profile.nodePoolSlots}`)
   lines.push(`#define OPCUA_MAX_NODES_PER_READ ${profile.maxNodesPerRead}`)

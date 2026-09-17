@@ -39,13 +39,20 @@ namespace {
  *  TIME / DATE / TOD / DT have no OPC-UA scalar of the same width, so they are
  *  exposed as the integers they already are on the wire.
  *
- *  STRING / WSTRING are absent for a different reason than the comment here
- *  used to give: strucpp reads them perfectly well (`read_string` /
+ *  STRING / WSTRING (tags 19 / 20) are absent for a different reason than the
+ *  comment here used to give: strucpp reads them perfectly well (`read_string` /
  *  `read_wstring`, 127 and 253 bytes on the wire), and the debugger shows a
- *  STRING today. What is missing is the UA mapping and a value path wide
- *  enough for them -- `read_node` reads into an 8-byte buffer. Until that
- *  lands, `typeTagFor` must not hand out tags 19/20, or the node ships to
- *  flash and is silently unbrowsable. */
+ *  STRING today. What is missing is the UA mapping and a value path wide enough
+ *  for them -- `read_node` reads into an 8-byte buffer.
+ *
+ *  This table ending at TAG_DT is therefore load-bearing in BOTH directions.
+ *  Every index into it is guarded by `tag >= kTagCount`, so an out-of-range tag
+ *  is not a memory hazard; what it is instead is invisible, because
+ *  `materialise_nodes` skips the row and the variable is simply missing from
+ *  the address space. The generator (`generate-opcua-header.ts`) holds up the
+ *  other end and refuses to emit tags 19 / 20 at all, turning that silence into
+ *  a build warning naming the variable. Widen one end and the other must move
+ *  with it -- see DOPE-645. */
 const UA_UInt32 kTagToUaType[] = {
     UA_TYPES_BOOLEAN,  // TAG_BOOL
     UA_TYPES_SBYTE,    // TAG_SINT
@@ -94,7 +101,7 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
     uint8_t buf[8] = {0};
     const uint16_t n = openplc_debug_read(row->arr, row->elem, buf);
     if (n == 0)
-        return UA_STATUSCODE_BADNODATA;   // out of bounds, or a string stub
+        return UA_STATUSCODE_BADNODATA;   // out of bounds in the debug table
 
     UA_Variant_setScalarCopy(&value->value, buf, &UA_TYPES[kTagToUaType[row->tag]]);
     value->hasValue = true;

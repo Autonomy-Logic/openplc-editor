@@ -6,7 +6,6 @@ import type { ResolvedOpcUaConfig } from '../generate-opcua-config'
 
 const PROFILE: OpcUaTargetProfile = {
   arenaBytes: 32768,
-  maxNodes: 64,
   maxSessions: 1,
   nodePoolSlots: 8,
   maxNodesPerRead: 20,
@@ -160,7 +159,7 @@ describe('generateOpcUaHeaderContent', () => {
     )
 
     expect(nodes).toHaveLength(4)
-    expect(dropped).toEqual(['big[4..5] (exceeds maxArrayLength)'])
+    expect(dropped).toEqual([{ path: 'big[4..5]', reason: 'exceeds the target\'s maxArrayLength of 4' }])
   })
 
   it('drops a node with an unrecognised datatype rather than guessing a tag', () => {
@@ -174,11 +173,51 @@ describe('generateOpcUaHeaderContent', () => {
     )
 
     expect(nodes).toEqual([])
-    expect(dropped).toEqual(['weird'])
+    expect(dropped).toEqual([{ path: 'weird', reason: 'has an unrecognised datatype "NOT_A_TYPE"' }])
   })
 
-  it('truncates the table at maxNodes and reports the overflow', () => {
-    const many = Array.from({ length: 70 }, (_, i) => ({
+  it('drops STRING and WSTRING, which the firmware has no UA mapping for yet', () => {
+    // kTagToUaType[] in opcua_nodes.cpp stops at TAG_DT, and materialise_nodes
+    // skips any row past it. Emitting the row anyway made the variable vanish
+    // from the address space with nothing said; dropping it here names it.
+    const { nodes, dropped } = collectOpcUaNodes(
+      makeResolved({
+        variables: [
+          { browse_name: 'msg', datatype: 'STRING', arr: 0, elem: 0, permissions: RW },
+          { browse_name: 'wmsg', datatype: 'WSTRING', arr: 0, elem: 1, permissions: RW },
+          { browse_name: 'ok', datatype: 'INT', arr: 0, elem: 2, permissions: RW },
+        ] as never[],
+      }),
+      PROFILE,
+    )
+
+    expect(nodes.map((n) => n.browseName)).toEqual(['ok'])
+    expect(dropped.map((d) => d.path)).toEqual(['msg', 'wmsg'])
+    expect(dropped[0].reason).toContain('STRING')
+    expect(dropped[0].reason).toContain('DOPE-645')
+  })
+
+  it('reports every dropped leaf through the warn sink', () => {
+    const warnings: string[] = []
+    generateOpcUaHeaderContent({
+      resolved: makeResolved({
+        variables: [{ browse_name: 'msg', datatype: 'STRING', arr: 0, elem: 0, permissions: RW }] as never[],
+      }),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+      warn: (message) => warnings.push(message),
+    })
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('msg')
+    expect(warnings[0]).toContain('left out of the address space')
+  })
+
+  it('emits every node, with no ceiling on the table size', () => {
+    // The old `maxNodes` cap silently truncated the tail: `overflowed` was
+    // returned but no production caller read it, and nothing on the device read
+    // `OPCUA_MAX_NODES` either. Flash tables cost no RAM until materialised.
+    const many = Array.from({ length: 700 }, (_, i) => ({
       browse_name: `v${i}`,
       datatype: 'BOOL',
       arr: 0,
@@ -186,10 +225,14 @@ describe('generateOpcUaHeaderContent', () => {
       permissions: RW,
     })) as never[]
 
-    const { nodes, overflowed } = collectOpcUaNodes(makeResolved({ variables: many }), PROFILE)
+    const { nodes, dropped } = collectOpcUaNodes(makeResolved({ variables: many }), PROFILE)
 
-    expect(nodes).toHaveLength(PROFILE.maxNodes)
-    expect(overflowed).toBe(70 - PROFILE.maxNodes)
+    expect(nodes).toHaveLength(700)
+    expect(dropped).toEqual([])
+
+    const header = generateOpcUaHeaderContent({ resolved: makeResolved({ variables: many }), profile: PROFILE, buildEpochSeconds: 0 })
+    expect(header).toContain('#define OPCUA_NODE_COUNT 700')
+    expect(header).not.toContain('#define OPCUA_MAX_NODES ')
   })
 
   it('emits only password users, with their role index', () => {
