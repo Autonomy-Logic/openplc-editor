@@ -6,7 +6,7 @@
  * existing install — the only fix was deleting the file by hand. This brings
  * a stale file up to date in place.
  *
- * Two rules, and deliberately only two:
+ * Three rules, and deliberately only three:
  *
  * - **Add missing board-manager URLs.** Never remove one: users add their own
  *   vendor indexes here, and VPP-declared indexes arrive at compile time.
@@ -14,6 +14,10 @@
  *   bytes appearing in the console. The console now renders SGR colour
  *   itself, so the suppression is obsolete; leaving it behind would silently
  *   keep colour off on every machine that has ever launched an older build.
+ * - **Add the `directories` we own, per key, when the user has none.** Without
+ *   them arduino-cli installs into the Arduino IDE's directories. An existing
+ *   value is left alone: it is the user's choice, and it is where their cores
+ *   already are.
  *
  * Everything else is left exactly as the user left it, comments and ordering
  * included — hence the `Document` API for the existing file rather than a
@@ -38,6 +42,21 @@ function shippedBoardManagerUrls(shipped: string): string[] {
 
   const urls = boardManager.additional_urls
   return Array.isArray(urls) ? urls.filter((url): url is string => typeof url === 'string') : []
+}
+
+/** Directory keys the shipped template declares, e.g. `data` and `user`. */
+function shippedDirectories(shipped: string): Record<string, string> {
+  const parsed: unknown = parse(shipped)
+  if (!isRecord(parsed)) return {}
+
+  const directories = parsed.directories
+  if (!isRecord(directories)) return {}
+
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(directories)) {
+    if (typeof value === 'string') out[key] = value
+  }
+  return out
 }
 
 /**
@@ -86,6 +105,21 @@ export function reconcileArduinoCliConfig(existing: string, shipped: string): st
 
     // Don't leave an empty `output:` behind once its only key is gone.
     if (output.items.length === 0) doc.delete('output')
+  }
+
+  // 3. Point the tool at directories the editor owns, per key and only when the
+  //    user has none of their own. An existing value is never replaced: it is
+  //    either a deliberate choice, or the place that user's cores are already
+  //    installed under, and moving it silently would orphan them.
+  const directories = doc.get('directories')
+  if (directories === undefined || directories === null || isMap(directories)) {
+    for (const [key, value] of Object.entries(shippedDirectories(shipped))) {
+      const current = isMap(directories) ? directories.get(key) : undefined
+      if (current === undefined || current === null) {
+        doc.setIn(['directories', key], value)
+        changed = true
+      }
+    }
   }
 
   return changed ? String(doc) : null

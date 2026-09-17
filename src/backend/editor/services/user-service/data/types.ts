@@ -1,3 +1,35 @@
+import { join } from 'node:path'
+
+/**
+ * Quote a filesystem path for YAML.
+ *
+ * Single quotes rather than double: a Windows path is full of backslashes, and
+ * YAML's double-quoted style would read them as escapes.
+ */
+function yamlPath(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+/**
+ * The `arduino-cli.yaml` the editor ships, rooted at a directory it owns.
+ *
+ * `directories` is why this is composed at runtime instead of being a constant:
+ * left unset, arduino-cli defaults to `~/.arduino15` (`AppData/Local/Arduino15`,
+ * `~/Library/Arduino15`) and to the user's sketchbook — which are the Arduino
+ * IDE's own directories, not ours. Every core and library the editor installs
+ * would otherwise land in the middle of whatever the user has set up there, and
+ * a pinned core version would change the version their IDE builds against.
+ *
+ * `directories.downloads` is deliberately left out: arduino-cli defaults it to
+ * `{directories.data}/staging`, so it follows along on its own.
+ */
+export function buildArduinoCliConfig(root: string): string {
+  return `directories:
+  data: ${yamlPath(join(root, 'data'))}
+  user: ${yamlPath(join(root, 'user'))}
+${ARDUINO_DATA.trimStart()}`
+}
+
 export const ARDUINO_DATA = `
 board_manager:
   additional_urls:
