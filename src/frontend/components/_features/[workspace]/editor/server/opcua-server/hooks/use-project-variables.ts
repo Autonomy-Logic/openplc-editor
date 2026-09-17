@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/frontend/store'
+import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
 import {
   findFunctionBlockVariables,
   findStructureVariables,
@@ -10,8 +11,6 @@ import {
 import type { SystemLibrary } from '@root/middleware/shared/ports/library-types'
 import type { PLCDataType, PLCPou, PLCVariable } from '@root/middleware/shared/ports/types'
 import { useMemo } from 'react'
-
-import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
 
 /**
  * Type for array data extracted from PLCVariable array type.
@@ -447,9 +446,7 @@ const buildGlobalVariablesNode = (
   systemLibraries: SystemLibrary[],
 ): VariableTreeNode => {
   const children = globalVariables
-    .map((v) =>
-      buildVariableNodeFromPLC({ ...v, class: 'global' }, GLOBAL_SCOPE_POU, dataTypes, pous, systemLibraries),
-    )
+    .map((v) => buildVariableNodeFromPLC({ ...v, class: 'global' }, GLOBAL_SCOPE_POU, dataTypes, pous, systemLibraries))
     .filter((node): node is VariableTreeNode => node !== null)
 
   return {

@@ -1,8 +1,7 @@
 import { useOpenPLCStore } from '@root/frontend/store'
+import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
-
-import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
 
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
@@ -84,9 +83,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
       const nodeKey = `${node.pouName}-${node.variablePath}`
       if (selectedVariableIds.has(nodeKey)) {
         // Deselect - remove from config if it exists
-        const existingNode = config.addressSpace.nodes.find(
-          (n) => treeIdForNode(n, projectVariables) === nodeKey,
-        )
+        const existingNode = config.addressSpace.nodes.find((n) => treeIdForNode(n, projectVariables) === nodeKey)
         if (existingNode) {
           removeOpcUaNode(serverName, existingNode.id)
           onConfigChange()
