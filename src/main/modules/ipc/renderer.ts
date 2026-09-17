@@ -414,6 +414,10 @@ const rendererProcessBridge = {
   uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('packages:uninstall', packageId),
   getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
+  getPackagePin: (
+    packageId: string,
+  ): Promise<{ packageId: string; version: string; contentHash: string } | null> =>
+    ipcRenderer.invoke('packages:get-pin', packageId),
   verifyInstalledPackageSignatures: (): Promise<string[]> => ipcRenderer.invoke('packages:verify-signatures'),
   onOpenPackageManager: (callback: () => void) => {
     const listener = () => callback()
@@ -643,6 +647,11 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; logs?: string | RuntimeLogEntry[]; error?: string }> =>
     ipcRenderer.invoke('runtime:get-logs', ipAddress, minId),
   runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
+  runtimeSendPluginCommand: (
+    ipAddress: string,
+    args: { plugin: string; command: string; params?: Record<string, unknown> },
+  ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('runtime:send-plugin-command', ipAddress, args),
   runtimeGetSerialPorts: (
     ipAddress: string,
   ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> =>

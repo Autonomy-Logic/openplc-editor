@@ -12,6 +12,7 @@
  *   - window.bridge.getPackageManifest()
  */
 
+import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
 import type { ImportResult, InstalledPackage, PackageManifest, RemoteCatalog, Result, Unsubscribe } from './types'
 
 export interface PackagePort {
@@ -36,6 +37,17 @@ export interface PackagePort {
    * Get the full manifest of an installed package.
    */
   getManifest(packageId: string): Promise<PackageManifest | null>
+
+  /**
+   * The installed package's pinnable identity — `packageId@version` plus the
+   * `contentHash` of its signed payload — or null when it is not installed.
+   *
+   * A project records this when a VPP board is selected, so the editor can say
+   * at authoring and again before an upload that the package has moved since
+   * the program was written against it. The hash is the part that matters: a
+   * republished package keeps its version string.
+   */
+  getPackagePin(packageId: string): Promise<VppPackagePin | null>
 
   /**
    * Fetch the remote VPP catalog from the OpenPLC CDN.

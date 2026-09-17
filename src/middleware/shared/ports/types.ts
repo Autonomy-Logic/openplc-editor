@@ -7,6 +7,7 @@
  * implement the ports that use them.
  */
 
+import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
 import type { ConfiguredEtherCATDevice } from './esi-types'
 
 // ---------------------------------------------------------------------------
@@ -1163,6 +1164,18 @@ export interface DeviceConfiguration {
    * this field existed.
    */
   selectedPlatformOptions?: Record<string, string>
+  /**
+   * Which vendor package each VPP board was authored against —
+   * `packageId@version` plus the `contentHash` of the signed payload.
+   *
+   * Recorded when a VPP board is selected, and compared against what is
+   * installed at authoring and again before an upload: a package that moved
+   * underneath a program would otherwise only show up as wrong I/O on the
+   * device. Per-board for the same reason `vendorScreenDataByBoard` is, and
+   * optional for back-compat with every project saved before pinning existed —
+   * absent simply means there is nothing to compare.
+   */
+  vppPackagePinsByBoard?: Record<string, VppPackagePin>
 }
 
 // ---------------------------------------------------------------------------

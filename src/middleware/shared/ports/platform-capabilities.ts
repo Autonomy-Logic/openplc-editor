@@ -207,7 +207,7 @@ export const WEB_CAPABILITIES: PlatformCapabilities = {
   hasAIAssistant: true,
   hasProxiedRuntimeConnection: true,
   hasDirectProgramUpload: true,
-  hasPackageManager: false,
+  hasPackageManager: true,
   hasEthercat: false,
   debugRelayPollIntervalMs: 1000,
   isDevMode: false,

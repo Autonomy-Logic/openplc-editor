@@ -717,6 +717,40 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    /**
+     * Record which vendor package the board was authored against.
+     *
+     * Per board, like the vendor-screen buckets: a pin belongs to the target
+     * it was authored for. Writing the same pin twice is a no-op so the
+     * board picker can call it on every render without marking the project
+     * dirty and prompting to save a file that did not change.
+     */
+    setVppPackagePin: (board, pin): void => {
+      const existing = getState().deviceDefinitions.configuration.vppPackagePinsByBoard?.[board]
+      if (pin === null) {
+        if (!existing) return
+      } else if (
+        existing &&
+        existing.packageId === pin.packageId &&
+        existing.version === pin.version &&
+        existing.contentHash === pin.contentHash
+      ) {
+        return
+      }
+
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          const pins = deviceDefinitions.configuration.vppPackagePinsByBoard ?? {}
+          if (pin === null) {
+            delete pins[board]
+          } else {
+            pins[board] = pin
+          }
+          deviceDefinitions.configuration.vppPackagePinsByBoard = pins
+        }),
+      )
+    },
     setVendorScreenData: (persistenceKey, data): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
