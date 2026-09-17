@@ -9,10 +9,11 @@
 import { act, render, screen, within } from '@testing-library/react'
 
 // The panel refuses to paint outside a dev build, so every case below has to
-// say which build it is standing in.
-let isDevMode = true
+// say which build it is standing in. `mock`-prefixed because the factory closes
+// over it and both runners' hoisting rules key off that prefix.
+let mockIsDevMode = true
 jest.mock('@root/middleware/shared/providers', () => ({
-  useCapabilities: () => ({ isDevMode }),
+  useCapabilities: () => ({ isDevMode: mockIsDevMode }),
 }))
 
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -40,12 +41,12 @@ const seedProgram = (variables: PLCVariable[]) => {
 
 describe('DiagnosticsEditor', () => {
   beforeEach(() => {
-    isDevMode = true
+    mockIsDevMode = true
     getState().sharedWorkspaceActions.clearStatesOnCloseProject()
   })
 
   it('paints nothing in a production build, whoever renders it', () => {
-    isDevMode = false
+    mockIsDevMode = false
     seedProgram([located('scratch', '%MW4')])
 
     const { container } = render(<DiagnosticsEditor />)

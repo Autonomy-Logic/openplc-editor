@@ -9,9 +9,11 @@
 
 import { fireEvent, render, screen } from '@testing-library/react'
 
-let isDevMode = true
+// `mock`-prefixed because the factory closes over it and both runners' hoisting
+// rules key off that prefix.
+let mockIsDevMode = true
 jest.mock('@root/middleware/shared/providers', () => ({
-  useCapabilities: () => ({ isDevMode }),
+  useCapabilities: () => ({ isDevMode: mockIsDevMode }),
   useTheme: () => ({
     getCurrentTheme: () => 'light',
     onThemeChanged: () => () => undefined,
@@ -36,14 +38,14 @@ const openMenu = () => {
 
 describe('Display menu — developer entry', () => {
   it('offers the diagnostics tab in a dev build', () => {
-    isDevMode = true
+    mockIsDevMode = true
     openMenu()
 
     expect(screen.queryByText('I/O Image Diagnostics')).not.toBeNull()
   })
 
   it('opens the menu it is asserting on, so the negative below means something', () => {
-    isDevMode = false
+    mockIsDevMode = false
     openMenu()
 
     // A guard on the guard: if the menu never opened, "the item is absent"
@@ -52,7 +54,7 @@ describe('Display menu — developer entry', () => {
   })
 
   it('does not offer it in a production build', () => {
-    isDevMode = false
+    mockIsDevMode = false
     openMenu()
 
     expect(screen.queryByText('I/O Image Diagnostics')).toBeNull()
