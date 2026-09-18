@@ -29,9 +29,6 @@ export interface ParseDataTypeResult {
 
 const identifierRegex = /^[A-Za-z_]\w*$/
 
-// The declared name always opens the first body line, whatever the derivation.
-const declaredNameRegex = /^(\s*)\w+(?=\s*:)/
-
 const structStartRegex = /^(?<name>\w+)\s*:\s*STRUCT$/i
 
 const structEndRegex = /^END_STRUCT\s*;$/i
@@ -167,28 +164,4 @@ export function parseDataTypeFromText(content: string, expectedName?: string): P
     result.dataType.name = expectedName
   }
   return result
-}
-
-/**
- * Swap the declared name in a `.dt` buffer, leaving every other character
- * — indentation, blank lines, comments — exactly as the user typed it.
- *
- * Returns `null` when no declaration line is recognizable, so callers can
- * fall back to re-serializing the type.
- */
-export function rewriteDeclaredTypeName(content: string, newName: string): string | null {
-  // Capturing split keeps each terminator, so a CRLF buffer stays CRLF.
-  const parts = content.split(/(\r?\n)/)
-  const typeIndex = parts.findIndex((part, index) => index % 2 === 0 && /^TYPE$/i.test(part.trim()))
-  if (typeIndex === -1) return null
-
-  for (let index = typeIndex + 2; index < parts.length; index += 2) {
-    const line = parts[index]
-    if (line.trim() === '') continue
-    const match = declaredNameRegex.exec(line)
-    if (!match) return null
-    parts[index] = `${match[1]}${newName}${line.slice(match[0].length)}`
-    return parts.join('')
-  }
-  return null
 }
