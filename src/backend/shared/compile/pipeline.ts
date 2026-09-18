@@ -1023,8 +1023,25 @@ async function runCompilePipelineInner(
   // branch hands to `generateRuntimeConfs`, so a variable resolves to one
   // `(arr, elem)` pair whichever runtime is built. A project with no enabled
   // server still gets a disabled header, because the runtime includes it always.
+  // The in-process simulator runs USER LOGIC ONLY. It has no Ethernet and no
+  // serial peripheral, so no server it could be handed is reachable — the same
+  // reason Python function blocks are dropped for it.
+  //
+  // It still declares `opcuaServer` / `s7Server` / `modbusTcpServer` in
+  // hals.json, and that is deliberate: those flags keep the server options
+  // offered in the UI so a project authored for Runtime v4 is not stripped of
+  // its configuration while someone simulates it. They answer "may the UI
+  // offer a server?", never "can this firmware host one?".
+  //
+  // Modbus was already excluded this way. OPC-UA and S7 were not, and OPC-UA
+  // failed loudly: `opcua_config.h` came out with `OPCUA_ENABLED 1`, which put
+  // `#include <open62541.h>` in front of a compiler whose library set has no
+  // such header, so every simulator build of a project with an enabled OPC-UA
+  // server died at the preprocessor.
+  const targetHostsServers = !targetCapabilities.isInProcessSimulator
+
   let opcuaConfigH: string | undefined
-  if (targetCapabilities.opcuaServer && targetCapabilities.opcua) {
+  if (targetCapabilities.opcuaServer && targetCapabilities.opcua && targetHostsServers) {
     try {
       // Same derivation as the Runtime v4 branch: the credential this device
       // stores is this device's property, and here is where the target is known.
@@ -1062,7 +1079,7 @@ async function runCompilePipelineInner(
   // `s7Server: true`. A project with no enabled S7 server still gets a disabled
   // header rather than none, because the runtime includes it unconditionally.
   let s7commConfigH: string | undefined
-  if (targetCapabilities.s7Server && targetCapabilities.s7) {
+  if (targetCapabilities.s7Server && targetCapabilities.s7 && targetHostsServers) {
     try {
       const s7Server = (processedData.servers ?? []).find(
         (server: { protocol?: string; s7commSlaveConfig?: unknown }) =>
