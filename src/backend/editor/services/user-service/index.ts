@@ -2,6 +2,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
 import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
+import { homedir } from 'os'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
@@ -188,9 +189,32 @@ class UserService {
    * settings in this file, and clobbering it would silently discard them.
    * See `reconcileArduinoCliConfig` for the (deliberately narrow) rules.
    */
+  /**
+   * The sketchbook libraries folder arduino-cli would have used by default, and
+   * which the Arduino IDE uses too. Read-only for us: it is where a user's own
+   * libraries live, so that a C++ block can still call the display driver or the
+   * W5500 stack they installed through the IDE.
+   *
+   * Platform split is arduino-cli's own: `{HOME}/Arduino` on Linux,
+   * `{HOME}/Documents/Arduino` on macOS, `{DOCUMENTS}/Arduino` on Windows, where
+   * Documents can be redirected and only Electron knows where to.
+   *
+   * A sketchbook the user moved in the IDE's preferences, or an IDE confined by
+   * snap or flatpak, is not found here. Making that configurable is its own
+   * piece of work; the default covers a stock install.
+   */
+  static defaultUserLibrariesPath(): string {
+    const sketchbook =
+      process.platform === 'linux' ? join(homedir(), 'Arduino') : join(app.getPath('documents'), 'Arduino')
+    return join(sketchbook, 'libraries')
+  }
+
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
-    const shipped = buildArduinoCliConfig(join(app.getPath('userData'), 'arduino'))
+    const shipped = buildArduinoCliConfig(
+      join(app.getPath('userData'), 'arduino'),
+      UserService.defaultUserLibrariesPath(),
+    )
 
     try {
       await writeFile(pathToArduinoCliConfig, shipped, { flag: 'wx' })
