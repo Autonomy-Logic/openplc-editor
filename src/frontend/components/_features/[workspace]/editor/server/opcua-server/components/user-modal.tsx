@@ -112,12 +112,20 @@ export const UserModal = ({
 
   const passwordError = useMemo<string | null>(() => {
     if (authType !== 'password') return null
-    // Editing path: an empty password means "keep existing" — not an error.
-    if (isEditing && !password) return null
+    // Editing path: an empty password means "keep existing" — but only when
+    // there IS one to keep. Editing a CERTIFICATE user and switching it to
+    // Password left the exemption standing over a user that had no password and
+    // no hash, and that state is not inert: `deriveOpcUaCredential` returns null
+    // for it, `generate-opcua-header` filters the user out on `password_hash`,
+    // and if it was the last password user `OPCUA_ANONYMOUS_ROLE` flips to
+    // engineer — so a blank field silently traded every credential on the server
+    // for anonymous write access.
+    const hasStoredCredential = Boolean(existingUser?.password) || Boolean(existingUser?.passwordHash)
+    if (isEditing && !password && hasStoredCredential) return null
     if (!password) return 'Password is required'
     if (password.length < 4) return 'Password must be at least 4 characters'
     return null
-  }, [authType, password, isEditing])
+  }, [authType, password, isEditing, existingUser])
 
   const certificateError = useMemo<string | null>(() => {
     if (authType !== 'certificate') return null

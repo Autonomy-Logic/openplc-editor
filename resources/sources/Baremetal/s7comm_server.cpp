@@ -302,17 +302,18 @@ const S7SrvIdentity g_identity = {
     "6ES7 315-2EH14-0AB0",
 };
 
-/** A client asked to start or stop the PLC. Routed through the same request the
- *  Modbus debugger's run/stop uses, so the two cannot disagree; refused when the
- *  physical mode switch reads STOP. */
-bool on_control(void* ctx, bool run)
-{
-    (void)ctx;
-    const uint8_t result = runtime_request_plc_state(run ? PLC_STATE_RUNNING
-                                                         : PLC_STATE_STOPPED);
-    OPCUA_LOG("[s7] control %s -> %u", run ? "START" : "STOP", (unsigned)result);
-    return result == PLC_CTRL_OK;
-}
+/* No control handler is registered, deliberately — see s7comm_init().
+ *
+ * Classic S7 carries no authentication of any kind, so binding run/stop to it
+ * means anyone who can reach port 102 can stop the machine. The Settimino fork
+ * already refuses control when no handler is set ("No handler means no ... The
+ * host opts in"), and this host does not opt in.
+ *
+ * Losing nothing that matters: SZL identity is what a client needs to talk to
+ * the server at all, and it stays. Run/stop remains available where it is
+ * gated — the Modbus debug channel on the editor's own unit id, and the
+ * device's physical mode switch.
+ */
 
 /** Keep the published status in step with the runtime's own. Polled, because the
  *  PLC can stop for reasons no S7 client asked for. */
@@ -505,8 +506,11 @@ void s7comm_init(void)
     g_server.setWriteEnabled(S7COMM_WRITE_ENABLED != 0);
 
 #if S7COMM_SZL_ENABLED
+    // Identity and CPU status only. setControlHandler() is deliberately NOT
+    // called: SZL is what a client needs in order to talk, CPU control is a
+    // separate decision, and classic S7 authenticates nobody. Leaving the
+    // handler null makes the library refuse every start/stop request.
     g_server.setIdentity(&g_identity);
-    g_server.setControlHandler(on_control);
     refresh_cpu_status();
 #endif
 

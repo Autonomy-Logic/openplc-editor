@@ -257,3 +257,74 @@ describe('generateOpcUaHeaderContent', () => {
     expect(header).toContain('{ "eng", "pbkdf2:sha256:100000$s$h", 2 },')
   })
 })
+
+// makeResolved seeds users:[] and no security_profiles; these tests set both
+// through the same `runtime.config` path the generator reads.
+const withUsersAndProfiles = (
+  users: Array<{ type: string; username?: string; password_hash?: string | null; role?: string }>,
+  authMethods: string[],
+): ResolvedOpcUaConfig => {
+  const r = makeResolved({})
+  ;(r as unknown as { runtime: { config: { users: unknown } } }).runtime.config.users = users
+  ;(r as unknown as { runtime: { config: { server: { security_profiles: unknown } } } }).runtime.config.server = {
+    security_profiles: [{ name: 'p', enabled: true, auth_methods: authMethods }],
+  }
+  return r
+}
+
+describe('generateOpcUaHeaderContent — credentials and anonymous role', () => {
+  it('no longer emits OPCUA_KDF_ITERATIONS (the count travels in the hash string)', () => {
+    const header = generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles([{ type: 'password', username: 'a', password_hash: 'pbkdf2:x' }], ['Username']),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+    })
+    expect(header).not.toContain('OPCUA_KDF_ITERATIONS')
+  })
+
+  it('warns and drops a password user that carries no credential', () => {
+    const warnings: string[] = []
+    const header = generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles(
+        [
+          { type: 'password', username: 'good', password_hash: 'pbkdf2:x', role: 'engineer' },
+          { type: 'password', username: 'blank', password_hash: null },
+        ],
+        ['Username'],
+      ),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+      warn: (m) => warnings.push(m),
+    })
+    expect(header).toContain('#define OPCUA_USER_COUNT 1')
+    expect(warnings.some((w) => w.includes('blank') && w.includes('no password'))).toBe(true)
+  })
+
+  it('warns hard when dropping the last password user hands anonymous the engineer role', () => {
+    const warnings: string[] = []
+    const header = generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles(
+        [{ type: 'password', username: 'blank', password_hash: null }],
+        ['Anonymous', 'Username'],
+      ),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+      warn: (m) => warnings.push(m),
+    })
+    // No surviving password user, anonymous allowed -> role engineer (2).
+    expect(header).toContain('#define OPCUA_ALLOW_ANONYMOUS 1')
+    expect(header).toContain('#define OPCUA_ANONYMOUS_ROLE 2')
+    expect(warnings.some((w) => w.includes('ENGINEER') && w.includes('anonymous'))).toBe(true)
+  })
+
+  it('does not warn about anonymous when no password users were declared at all', () => {
+    const warnings: string[] = []
+    generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles([], ['Anonymous']),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+      warn: (m) => warnings.push(m),
+    })
+    expect(warnings.some((w) => w.includes('ENGINEER'))).toBe(false)
+  })
+})

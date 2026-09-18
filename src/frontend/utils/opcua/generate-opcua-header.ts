@@ -332,7 +332,15 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
   lines.push(`#define OPCUA_SECURITY ${SECURITY_LEVELS[profile.security]} // 0=None 1=Sign 2=SignAndEncrypt`)
   lines.push(`#define OPCUA_CERTIFICATES ${profile.certificates ? 1 : 0}`)
   lines.push(`#define OPCUA_SUBSCRIPTIONS ${profile.subscriptions ? 1 : 0}`)
-  lines.push(`#define OPCUA_KDF_ITERATIONS ${profile.kdfIterations}u`)
+  // OPCUA_KDF_ITERATIONS is deliberately NOT emitted. `profile.kdfIterations`
+  // is a BUILD-side number — it says how many rounds `deriveOpcUaCredential`
+  // should spend when it derives the hash that goes into OPCUA_USERS[]. The
+  // count then travels inside the hash string itself
+  // (`pbkdf2:sha256:<iterations>$salt$hash`), which is what both verifiers read:
+  // `opcua_auth.cpp` parses it out of the stored string, and Runtime v4's
+  // `user_manager.py` does the same. Nothing ever read the define, and emitting
+  // it invited the reading that it configures the device — it does not, and it
+  // disagreed with the firmware's own OPCUA_KDF_MAX_ITERATIONS ceiling.
   lines.push(`#define OPCUA_HAS_HW_SHA256 ${profile.hw.sha256 ? 1 : 0}`)
   lines.push(`#define OPCUA_HAS_HW_AES ${profile.hw.aes ? 1 : 0}`)
   lines.push(`#define OPCUA_HAS_HW_PK ${profile.hw.pk ? 1 : 0}`)
@@ -363,6 +371,19 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
 
   lines.push('// ---- Users ----')
   const passwordUsers = users.filter((user) => user.type === 'password' && user.username && user.password_hash)
+
+  // A password user that carries no credential is DROPPED here, and dropping
+  // the last one flips `anonymousRole` to engineer below. That has to be loud:
+  // silently trading every credential on the server for anonymous write access
+  // is the opposite of what the person who configured those users asked for.
+  for (const user of users) {
+    if (user.type === 'password' && !user.password_hash) {
+      warn?.(
+        `OPC-UA user "${user.username || '(unnamed)'}" has no password and is NOT being exposed on ` +
+          `the device. Set a password for it, or remove it.`,
+      )
+    }
+  }
   // Whether anonymous is allowed is the PROJECT's answer, carried on the
   // security profiles, and until now it never reached the firmware at all —
   // `opcua_auth.cpp` inferred it from `OPCUA_USER_COUNT == 0`. That inference
@@ -378,6 +399,18 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
   // enforce; once an administrator has declared even one user, anonymous drops
   // to read-only rather than bypassing the model they just opted into.
   const anonymousRole = passwordUsers.length === 0 ? 2 : 0 // 2=engineer, 0=viewer
+
+  // "No users configured" and "every configured user was dropped" are different
+  // statements, and only the first one justifies handing anonymous the engineer
+  // role. If the project declared password users and none survived, the server
+  // would come up open to anyone with full write — say so rather than ship it.
+  if (allowAnonymous && anonymousRole === 2 && users.some((u) => u.type === 'password')) {
+    warn?.(
+      'OPC-UA: every password user was dropped for want of a credential, so anonymous access ' +
+        'is being granted the ENGINEER role (full write) on this device. Give the users passwords, ' +
+        'or turn Anonymous off on the security profile.',
+    )
+  }
   lines.push(`#define OPCUA_ALLOW_ANONYMOUS ${allowAnonymous ? 1 : 0}`)
   lines.push(`#define OPCUA_ANONYMOUS_ROLE ${anonymousRole} // 0=viewer 1=operator 2=engineer`)
   lines.push(`#define OPCUA_USER_COUNT ${passwordUsers.length}`)

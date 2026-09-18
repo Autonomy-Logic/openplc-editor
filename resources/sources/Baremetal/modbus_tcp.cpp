@@ -3,6 +3,8 @@ modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
+#include <string.h>       // memset -- wiping a discarded frame
+
 #include "modbus_tcp.h"
 #include "modbus_pdu.h"   // process_mbpacket
 
@@ -300,7 +302,21 @@ void handle_tcp()
                 }
 
                 //Safety check - discard packages that lie about their size
-                if (i != mb_frame_len) return;
+                if (i != mb_frame_len)
+                {
+                    // Wipe what the liar wrote. The bytes are already in
+                    // mb_frame, and process_mbpacket() dispatches on the buffer
+                    // rather than on the read length, so leaving them let a
+                    // SHORT follow-up frame execute on this frame's operands —
+                    // which is how a rejected frame carrying the 0x4C magic
+                    // could arm a later bare reboot request. There is a
+                    // per-FC length guard in process_mbpacket() now too; this
+                    // is the other half, so no stale operand survives the
+                    // request that carried it.
+                    memset(mb_frame, 0, i);
+                    mb_frame_len = 0;
+                    return;
+                }
 
                 //Process packet and write back
                 process_mbpacket();

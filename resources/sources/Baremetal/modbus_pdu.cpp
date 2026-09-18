@@ -100,6 +100,35 @@ bool mb_pdu_is_editor_fc(uint8_t fc)
 void process_mbpacket()
 {
     uint8_t fcode  = mb_frame[1];
+
+    // Every case below indexes mb_frame[2..] for its operands, and until now
+    // none of them consulted mb_frame_len. Over RTU that was covered, because
+    // the framer will not hand over a frame whose length disagrees with
+    // mb_pdu_request_len(). Over TCP it was not: modbus_tcp.cpp reads the
+    // payload into mb_frame and only THEN discards a request that lied about
+    // its size, so the bytes of a rejected frame stayed in the buffer and the
+    // next, shorter frame dispatched on them.
+    //
+    // That defeated the 0x4C magic. Send an MBAP declaring 100 bytes with 6
+    // that end in the magic (dropped, but mb_frame[2..5] now hold it), then an
+    // MBAP declaring 2 with [unit][4C]: rebootToBootloader(&mb_frame[2]) read
+    // the stale four and matched. plcSetState() and debugSetTrace() took stale
+    // operands the same way.
+    //
+    // mb_pdu_request_len() already knows each FC's shape; it returns the RTU
+    // frame length, which is this PDU plus the two CRC bytes TCP does not
+    // carry. A frame shorter than its own function code requires is malformed
+    // on any transport, so refuse it here rather than at one caller.
+    {
+        const int32_t rtu_len = mb_pdu_request_len(mb_frame, (uint16_t)(mb_frame_len + 2));
+        if (rtu_len > 0 && (int32_t)mb_frame_len < rtu_len - 2)
+        {
+            mb_frame[1] = fcode | 0x80;
+            mb_frame[2] = MB_EX_ILLEGAL_VALUE;
+            mb_frame_len = 3;
+            return;
+        }
+    }
 #ifdef MODBUS_ENABLED
     // Standard Modbus fields — only used by the operation FCs, which are
     // compiled out in debug-only builds (so guard to avoid unused-var warnings).
