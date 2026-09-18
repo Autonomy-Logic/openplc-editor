@@ -1215,8 +1215,10 @@ class MainProcessBridge implements MainIpcModule {
   handleGetSystemInfo = () => {
     const appStore = this.store as unknown as { get: (key: string) => unknown }
     const savedTheme = appStore.get('theme')
-    if (savedTheme === 'dark' || savedTheme === 'light') {
-      nativeTheme.themeSource = savedTheme
+    if (savedTheme === 'dark') {
+      nativeTheme.themeSource = 'dark'
+    } else if (savedTheme === 'light' || savedTheme === 'nineties' || savedTheme === 'squareteal') {
+      nativeTheme.themeSource = 'light'
     }
 
     const isWindowMaximized = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.isMaximized() : false
@@ -2894,20 +2896,20 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== EVENT HANDLERS =====================
   mainIpcEventHandlers = {
-    handleUpdateTheme: (_event: unknown, theme?: 'light' | 'dark' | 'nineties') => {
+    handleUpdateTheme: (_event: unknown, theme?: 'light' | 'dark' | 'nineties' | 'squareteal') => {
       const newTheme = theme ?? (nativeTheme.shouldUseDarkColors ? 'light' : 'dark')
-      // nativeTheme only models light/dark; the 90's skin is UI-only and rides
-      // on a light base (mirrors MenuBuilder.updateAppTheme). The store keeps
-      // the full preference — it is the desktop's durable source of truth,
-      // analogous to the edge backend's user preference on the web app.
+      // nativeTheme only models light/dark; the 90's and SquareTeal skins are UI-only
+      // and ride on a light base (mirrors MenuBuilder.updateAppTheme). The
+      // store keeps the full preference — it is the desktop's durable source of
+      // truth, analogous to the edge backend's user preference on the web app.
       nativeTheme.themeSource = newTheme === 'dark' ? 'dark' : 'light'
       const appStore = this.store as unknown as { set: (key: string, value: string) => void }
       appStore.set('theme', newTheme)
     },
-    handleGetTheme: (): 'light' | 'dark' | 'nineties' | null => {
+    handleGetTheme: (): 'light' | 'dark' | 'nineties' | 'squareteal' | null => {
       const appStore = this.store as unknown as { get: (key: string) => unknown }
       const stored = appStore.get('theme')
-      return stored === 'light' || stored === 'dark' || stored === 'nineties' ? stored : null
+      return stored === 'light' || stored === 'dark' || stored === 'nineties' || stored === 'squareteal' ? stored : null
     },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
   }

@@ -8,7 +8,7 @@ function flushPromises() {
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function mockBridge(storedTheme: 'light' | 'dark' | 'nineties' | null = null) {
+function mockBridge(storedTheme: 'light' | 'dark' | 'nineties' | 'squareteal' | null = null) {
   window.bridge = {
     winHandleUpdateTheme: jest.fn(),
     // System store (electron-store on the main process) — the desktop's
@@ -23,7 +23,7 @@ function mockBridge(storedTheme: 'light' | 'dark' | 'nineties' | null = null) {
 beforeEach(() => {
   themeChangeHandler = null
   localStorage.clear()
-  document.documentElement.classList.remove('dark', 'light', 'nineties')
+  document.documentElement.classList.remove('dark', 'light', 'nineties', 'squareteal')
 
   // Default: matchMedia says dark mode
   Object.defineProperty(window, 'matchMedia', {
@@ -86,6 +86,17 @@ describe('setTheme', () => {
     // the full preference in its store.
     expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledWith('nineties')
   })
+
+  it('applies SquareTeal as a light-based theme and persists it', () => {
+    adapter.setTheme('squareteal')
+
+    expect(adapter.getCurrentTheme()).toBe('squareteal')
+    expect(localStorage.getItem('theme')).toBe('squareteal')
+    expect(document.documentElement.classList.contains('squareteal')).toBe(true)
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(document.documentElement.style.colorScheme).toBe('light')
+    expect(window.bridge.winHandleUpdateTheme).toHaveBeenCalledWith('squareteal')
+  })
 })
 
 describe('toggleTheme', () => {
@@ -119,6 +130,18 @@ describe('system store boot reconcile', () => {
     expect(localStorage.getItem('theme')).toBe('nineties')
     expect(document.documentElement.classList.contains('nineties')).toBe(true)
     // The value came FROM the store — no echo IPC.
+    expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
+  })
+
+  it('restores SquareTeal from the system store', async () => {
+    mockBridge('squareteal')
+
+    adapter = createEditorThemeAdapter()
+    await flushPromises()
+
+    expect(adapter.getCurrentTheme()).toBe('squareteal')
+    expect(localStorage.getItem('theme')).toBe('squareteal')
+    expect(document.documentElement.classList.contains('squareteal')).toBe(true)
     expect(window.bridge.winHandleUpdateTheme).not.toHaveBeenCalled()
   })
 
@@ -195,6 +218,17 @@ describe('main process theme events', () => {
     themeChangeHandler!({})
 
     expect(adapter.getCurrentTheme()).toBe('nineties')
+    expect(cb).not.toHaveBeenCalled()
+  })
+
+  it('does not flip off SquareTeal on a payload-less event', () => {
+    const cb = jest.fn()
+    adapter.setTheme('squareteal')
+    adapter.onThemeChanged(cb)
+
+    themeChangeHandler!({})
+
+    expect(adapter.getCurrentTheme()).toBe('squareteal')
     expect(cb).not.toHaveBeenCalled()
   })
 })

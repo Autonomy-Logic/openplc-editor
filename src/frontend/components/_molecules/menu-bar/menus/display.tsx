@@ -11,11 +11,16 @@ interface FullscreenElement extends HTMLElement {
   msRequestFullscreen?: () => Promise<void>
 }
 
-type ThemeChoice = 'light' | 'dark' | 'nineties'
+type ThemeChoice = 'light' | 'dark' | 'nineties' | 'squareteal'
 
-// Cycle order for the Display ▸ Theme menu: Light → Dark → 90's → Light.
-const THEME_ORDER: readonly ThemeChoice[] = ['light', 'dark', 'nineties']
-const THEME_LABEL: Record<ThemeChoice, string> = { light: 'light', dark: 'dark', nineties: "90's" }
+// Cycle order for the Display ▸ Theme menu: Light → Dark → 90's → SquareTeal → Light.
+const THEME_ORDER: readonly ThemeChoice[] = ['light', 'dark', 'nineties', 'squareteal']
+const THEME_LABEL: Record<ThemeChoice, string> = {
+  light: 'light',
+  dark: 'dark',
+  nineties: "90's",
+  squareteal: 'SquareTeal',
+}
 
 export const DisplayMenu = () => {
   const {

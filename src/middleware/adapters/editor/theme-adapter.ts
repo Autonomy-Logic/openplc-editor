@@ -23,8 +23,8 @@
  *   Renderer → winGetTheme() → main returns the stored preference
  *   Main (native menu) → handleUpdateTheme() → renderer applies + notifies
  *
- * 'nineties' is a UI-only retro skin: it has no OS-level counterpart, so
- * it rides on a light nativeTheme and is light-based for Monaco purposes.
+ * The 'nineties' and 'squareteal' variants are UI-only skins: they have no
+ * OS-level counterparts, so they ride on a light nativeTheme.
  */
 
 import type { ThemePort, ThemeVariant } from '../../shared/ports/theme-port'
@@ -40,14 +40,14 @@ function getSystemThemePreference(): ThemeVariant {
 
 function readExplicitPreference(): ThemeVariant | null {
   const stored = localStorage.getItem(STORAGE_KEY)
-  return stored === 'dark' || stored === 'light' || stored === 'nineties' ? stored : null
+  return stored === 'dark' || stored === 'light' || stored === 'nineties' || stored === 'squareteal' ? stored : null
 }
 
 function applyThemeToDOM(theme: ThemeVariant): void {
   const root = document.documentElement
-  // Mutually-exclusive theme classes — clear all three, then set the active
-  // one. 'nineties' is a light-based retro skin, so it never carries 'dark'.
-  root.classList.remove('dark', 'light', 'nineties')
+  // Mutually-exclusive theme classes — clear all four, then set the active
+  // one. 'nineties' and 'squareteal' are light-based skins, so they never carry 'dark'.
+  root.classList.remove('dark', 'light', 'nineties', 'squareteal')
   root.classList.add(theme)
   root.style.colorScheme = theme === 'dark' ? 'dark' : 'light'
 }
@@ -84,7 +84,7 @@ export function createEditorThemeAdapter(): ThemePort {
   void window.bridge
     .winGetTheme?.()
     .then((stored) => {
-      if (stored === 'light' || stored === 'dark' || stored === 'nineties') {
+      if (stored === 'light' || stored === 'dark' || stored === 'nineties' || stored === 'squareteal') {
         // The value came FROM the store — apply locally without echoing IPC.
         applyExplicitTheme(stored)
       } else if (explicitPreference) {
@@ -96,7 +96,7 @@ export function createEditorThemeAdapter(): ThemePort {
   // Theme events from the main process (native menu picks, OS changes).
   window.bridge.handleUpdateTheme((_event: unknown, ...args: unknown[]) => {
     const theme = args[0]
-    if (theme === 'light' || theme === 'dark' || theme === 'nineties') {
+    if (theme === 'light' || theme === 'dark' || theme === 'nineties' || theme === 'squareteal') {
       // Explicit pick from the native menu — main already updated
       // nativeTheme + its store, so only mirror it locally (no echo IPC).
       applyExplicitTheme(theme)
@@ -104,8 +104,8 @@ export function createEditorThemeAdapter(): ThemePort {
     }
 
     // No payload = an OS-level light/dark flip; don't flip off the retro
-    // skin, and don't persist — it is not an explicit user choice.
-    if (currentTheme === 'nineties') return
+    // or SquareTeal skins, and don't persist — it is not an explicit user choice.
+    if (currentTheme === 'nineties' || currentTheme === 'squareteal') return
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark'
     applyThemeToDOM(currentTheme)
     notifyListeners()
@@ -118,7 +118,7 @@ export function createEditorThemeAdapter(): ThemePort {
 
     setTheme(theme: ThemeVariant): void {
       applyExplicitTheme(theme)
-      // Persist every theme (including 'nineties') to the system store —
+      // Persist every theme (including UI-only variants) to the system store —
       // the main process maps it onto nativeTheme as needed. Passing the
       // theme explicitly makes the IPC idempotent (no toggle semantics),
       // so the display menu's own bridge push is harmless.
