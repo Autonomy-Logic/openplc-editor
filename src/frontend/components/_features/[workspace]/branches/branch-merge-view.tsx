@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { GraphicalDiffViewer, isGraphicalFile } from '../editor/diff-viewer'
 import { useDiffEditorTeardown, useDiffModelPaths } from '../editor/diff-viewer/use-diff-editor-teardown'
+import { ensureOpenplcThemes } from '../editor/monaco/theme-utils'
 import { TextConflictResolver } from './merge-text-conflict-resolver'
 
 type FileStatus = 'A' | 'M' | 'D' | 'U' | 'C' | 'R'
@@ -831,7 +832,8 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
                           original={formatContentForDisplay(selected.path, selected.targetContent)}
                           modified={formatContentForDisplay(selected.path, selected.sourceContent)}
                           language={getLanguageFromPath(selected.path)}
-                          theme={isDark ? 'vs-dark' : 'vs'}
+                          theme={isDark ? 'openplc-dark' : 'openplc-light'}
+                          beforeMount={ensureOpenplcThemes}
                           originalModelPath={diffModelPaths.original}
                           modifiedModelPath={diffModelPaths.modified}
                           keepCurrentOriginalModel

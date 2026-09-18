@@ -756,6 +756,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     applyThemeNow(monacoInstance, shouldUseDarkMode)
   }, [shouldUseDarkMode])
 
+  // `setTheme` is global to every Monaco on the page, so one editor mounting with a
+  // different theme silently restyles this one. Re-assert ours when this editor is
+  // shown again: without it the only way back was toggling dark mode by hand.
+  useEffect(() => {
+    if (!isActive) return
+    const monacoInstance = monacoRef.current
+    if (!monacoInstance) return
+    applyThemeNow(monacoInstance, shouldUseDarkMode)
+  }, [isActive, shouldUseDarkMode])
+
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,

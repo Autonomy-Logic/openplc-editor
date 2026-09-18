@@ -5,6 +5,7 @@ import { ArrowLeftRight, Check, Minus } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 
 import { useDiffEditorTeardown, useDiffModelPaths } from '../editor/diff-viewer/use-diff-editor-teardown'
+import { ensureOpenplcThemes } from '../editor/monaco/theme-utils'
 
 const CONFLICT_MARKER_RE = /^(<<<<<<<|=======|>>>>>>>)/m
 
@@ -172,7 +173,8 @@ export function TextConflictResolver({
                 original={sourceContent}
                 modified={targetContent}
                 language={language}
-                theme={isDark ? 'vs-dark' : 'vs'}
+                theme={isDark ? 'openplc-dark' : 'openplc-light'}
+                beforeMount={ensureOpenplcThemes}
                 originalModelPath={diffModelPaths.original}
                 modifiedModelPath={diffModelPaths.modified}
                 keepCurrentOriginalModel
@@ -215,7 +217,8 @@ export function TextConflictResolver({
                 value={currentValue}
                 onChange={(v) => onChange(v ?? '')}
                 language={language}
-                theme={isDark ? 'vs-dark' : 'vs'}
+                theme={isDark ? 'openplc-dark' : 'openplc-light'}
+                beforeMount={ensureOpenplcThemes}
                 options={{
                   readOnly: isResolved,
                   minimap: { enabled: false },

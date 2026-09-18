@@ -15,6 +15,8 @@ import { FileDiffView, getLanguageFromPath } from '../file-diff-view'
 import { useDiffEditorTeardown, useDiffModelPaths } from '../use-diff-editor-teardown'
 
 const events: string[] = []
+/** Every theme the diff editor applies, in order. */
+const themesApplied: string[] = []
 
 type FakeModel = {
   uri: { toString(): string }
@@ -121,7 +123,10 @@ function fakeMonaco() {
         diffEditors.push(editor)
         return editor
       },
-      setTheme: () => undefined,
+      setTheme: (name: string) => {
+        themesApplied.push(name)
+      },
+      defineTheme: () => {},
       setModelLanguage: (model: FakeModel, language: string) => {
         model.language = language
       },
@@ -189,6 +194,29 @@ beforeEach(() => {
   events.length = 0
   monaco.models.clear()
   monaco.diffEditors.length = 0
+  themesApplied.length = 0
+})
+
+/**
+ * `setTheme` is global to every Monaco on the page: a diff mounting with a built-in
+ * theme restyled the POU editor behind it and left its ST highlighting dead until the
+ * user toggled dark mode by hand.
+ */
+describe('the theme it drives', () => {
+  it('never applies a built-in theme, which would restyle every other editor', async () => {
+    renderDiff()
+    await mounted(1)
+
+    expect(themesApplied).not.toContain('vs')
+    expect(themesApplied).not.toContain('vs-dark')
+  })
+
+  it("applies the app's own theme", async () => {
+    renderDiff()
+    await mounted(1)
+
+    expect(themesApplied).toContain('openplc-light')
+  })
 })
 
 describe('tearing the diff down', () => {
