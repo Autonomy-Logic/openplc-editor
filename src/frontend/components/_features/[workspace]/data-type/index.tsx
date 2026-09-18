@@ -7,7 +7,7 @@ import { useOpenPLCStore } from '../../../../store'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
 import { getErrorMessage } from '../../../../utils/get-error-message'
 import { serializeDataTypeToText } from '../../../../utils/PLC/data-type-serializer'
-import { parseDataTypeFromText, rewriteDeclaredTypeName } from '../../../../utils/PLC/data-type-text-parser'
+import { parseDataTypeFromText } from '../../../../utils/PLC/data-type-text-parser'
 import { InputWithRef } from '../../../_atoms/input'
 import { ViewModeToggle } from '../../../_atoms/view-mode-toggle'
 import { ArrayDataType } from '../../../_molecules/data-types/array'
@@ -140,7 +140,11 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     }
 
     handleFileAndWorkspaceSavedState(dataTypeName)
-    lastParsedCodeRef.current = editorCode
+    // A buffer keeping the typed form drifts from the canonical LSP document and loses its colours.
+    const canonical = serializeDataTypeToText(dataType)
+    setEditorCode(canonical)
+    lastParsedCodeRef.current = canonical
+    lastMirroredCodeRef.current = canonical
     lastRejectedCodeRef.current = null
     setParseError(null)
     return true
@@ -152,12 +156,9 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     return commitParsedDataType(dataType)
   }
 
-  // Put the old name back without touching the rest of the user's text, and
-  // write it to the model directly: `rename` reconciles the stored buffer
-  // synchronously, a render before React state would reach it.
+  // Write to the model directly: `rename` reconciles the stored buffer a render before React state lands.
   const restoreBufferName = (parsed: PLCDataType) => {
-    const restored =
-      rewriteDeclaredTypeName(editorCode, dataTypeName) ?? serializeDataTypeToText({ ...parsed, name: dataTypeName })
+    const restored = serializeDataTypeToText({ ...parsed, name: dataTypeName })
     lastMirroredCodeRef.current = restored
     lastParsedCodeRef.current = restored
     lastRejectedCodeRef.current = null
