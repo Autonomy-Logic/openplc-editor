@@ -36,9 +36,6 @@ describe('createVersionControlSlice', () => {
     expect(vc().selectedCommitHash).toBeNull()
   })
 
-  // ---------------------------------------------------------------------------
-  // headContent (source-control diff HEAD snapshot)
-  // ---------------------------------------------------------------------------
   describe('setHeadContent', () => {
     it('stores a copy of the provided snapshot', () => {
       const snapshot = { 'pous/programs/Main.st': 'PROGRAM Main\nEND_PROGRAM' }
@@ -52,6 +49,21 @@ describe('createVersionControlSlice', () => {
       actions().setHeadContent({ 'a.st': 'x' })
       actions().setHeadContent(null)
       expect(vc().headContent).toBeNull()
+    })
+  })
+
+  describe('setRawLoadedContent', () => {
+    it('stores a copy of the loaded bytes', () => {
+      const loaded = { 'project.json': '{}', 'pous/programs/Main.st': 'PROGRAM Main\nEND_PROGRAM' }
+      actions().setRawLoadedContent(loaded)
+      expect(vc().rawLoadedContent).toEqual(loaded)
+      expect(vc().rawLoadedContent).not.toBe(loaded)
+    })
+
+    it('replaces the map wholesale, so a reopen never inherits the previous project', () => {
+      actions().setRawLoadedContent({ 'a.st': 'old' })
+      actions().setRawLoadedContent({})
+      expect(vc().rawLoadedContent).toEqual({})
     })
   })
 
@@ -204,5 +216,56 @@ describe('createVersionControlSlice', () => {
     expect(vc().activePanel).toBe('explorer')
     expect(vc().headContent).toBeNull()
     expect(vc().pendingChangesCount).toBe(0)
+  })
+
+  // Desktop-only overlay screens (no router); opening copies the descriptor since the
+  // caller (a click handler) is free to mutate its argument afterwards.
+  describe('the overlay screens', () => {
+    it('opens the history view on a commit, with or without a file', () => {
+      actions().openHistoryView({ commitHash: 'abc1234' })
+      expect(vc().historyView).toEqual({ commitHash: 'abc1234' })
+
+      actions().openHistoryView({ commitHash: 'def5678', file: 'pous/functions/Scale.st' })
+      expect(vc().historyView).toEqual({ commitHash: 'def5678', file: 'pous/functions/Scale.st' })
+    })
+
+    it("copies the history descriptor instead of holding the caller's object", () => {
+      const view = { commitHash: 'abc1234' }
+      actions().openHistoryView(view)
+      view.commitHash = 'rewritten'
+      expect(vc().historyView).toEqual({ commitHash: 'abc1234' })
+    })
+
+    it('closes the history view', () => {
+      actions().openHistoryView({ commitHash: 'abc1234' })
+      actions().closeHistoryView()
+      expect(vc().historyView).toBeNull()
+    })
+
+    it('opens the merge view on a source branch, with or without a target', () => {
+      actions().openMergeView({ sourceBranch: 'feature/pumps' })
+      expect(vc().mergeView).toEqual({ sourceBranch: 'feature/pumps' })
+
+      actions().openMergeView({ sourceBranch: 'feature/pumps', targetBranch: 'main' })
+      expect(vc().mergeView).toEqual({ sourceBranch: 'feature/pumps', targetBranch: 'main' })
+    })
+
+    it("copies the merge descriptor instead of holding the caller's object", () => {
+      const view = { sourceBranch: 'feature/pumps' }
+      actions().openMergeView(view)
+      view.sourceBranch = 'rewritten'
+      expect(vc().mergeView).toEqual({ sourceBranch: 'feature/pumps' })
+    })
+
+    it('closes the merge view', () => {
+      actions().openMergeView({ sourceBranch: 'feature/pumps' })
+      actions().closeMergeView()
+      expect(vc().mergeView).toBeNull()
+    })
+
+    it('starts with both overlays closed', () => {
+      expect(vc().historyView).toBeNull()
+      expect(vc().mergeView).toBeNull()
+    })
   })
 })

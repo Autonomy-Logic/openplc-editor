@@ -6,8 +6,9 @@ import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
-import { useAI, useCapabilities, useProject } from '../../../../../../middleware/shared/providers'
+import { useAI, useCapabilities, useEdgeAccountPort, useProject } from '../../../../../../middleware/shared/providers'
 import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
+import { registerAIInlineCompletions } from '../../../../../services/ai/inline-completions'
 import { getCppMemberCompletions, projectTypeNamePredicate } from '../../../../../services/cpp-scope'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
 import { pouUri, splitExpression } from '../../../../../services/st-lsp'
@@ -38,15 +39,6 @@ type monacoEditorProps = {
   path: string
   name: string
   language: 'il' | 'st' | 'python' | 'cpp'
-  /**
-   * Whether this editor is the active (visible) tab.  Multi-mount
-   * keeps every open POU's MonacoEditor alive simultaneously; this
-   * flag gates user-visible side effects (debug badges, search
-   * reveal, animation loops) so background editors don't waste work
-   * decorating or animating their hidden DOM.  Defaults to `true`
-   * for safety — pre-refactor callers that don't pass it keep the
-   * old behaviour.
-   */
   isActive?: boolean
 }
 
@@ -67,10 +59,6 @@ type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOption
 type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
 }
-
-// ---------------------------------------------------------------------------
-// Comment stripping (for debug variable position scanning)
-// ---------------------------------------------------------------------------
 
 type BlockCommentState = false | 'paren' | 'slash'
 
@@ -115,15 +103,7 @@ function stripLineComments(line: string, state: BlockCommentState): { stripped: 
   return { stripped: chars.join(''), state: s }
 }
 
-// ---------------------------------------------------------------------------
-// Module-level flag for initial theme application
-// ---------------------------------------------------------------------------
-
 let didApplyInitialTheme = false
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
   const { language, path, name, isActive = true } = props
@@ -137,6 +117,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const capabilities = useCapabilities()
   const aiPort = useAI()
+  const edgeAccount = useEdgeAccountPort()
   const projectPort = useProject()
 
   const {
@@ -176,12 +157,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   // Create a unique Monaco path for editor (prevents model caching across projects)
   const uniqueMonacoPath = capabilities.hasLocalFilesystem && projectPath ? `${projectPath}${path}` : path
 
-  // ST POUs use the STruC++ LSP — Monaco's model URI must match the
-  // URI the LSP service opens documents under (`inmemory://pou/<name>.st`),
-  // otherwise completion/hover/definition queries arrive with a URI
-  // the worker doesn't know and silently return empty.  Other languages
-  // keep the project-scoped filesystem path so model caching still
-  // isolates between projects.
+  // ST POUs must use the STruC++ LSP's document URI (`inmemory://pou/<name>.st`), or
+  // completion/hover/definition queries arrive with a URI the worker doesn't know.
   const editorModelPath = language === 'st' ? pouUri(name) : uniqueMonacoPath
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
@@ -193,13 +170,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   })
   const watchedFilePathRef = useRef<string | null>(null)
 
-  /**
-   * Bumped every time @monaco-editor/react re-mounts the underlying editor
-   * (happens on tab switch in web, because `<PrimitiveEditor key={path} />`).
-   * Used as a render-effect dep so the diff-review UI re-attaches to the fresh
-   * editor instance. Without this, the render effect runs before the new
-   * editor's onMount fires and silently no-ops on a disposed editor instance.
-   */
+  /** Bumped on every editor remount so the diff-review effect re-attaches to the fresh instance. */
   const [editorInstanceId, setEditorInstanceId] = useState(0)
 
   const [templatesInjected, setTemplatesInjected] = useState<Set<string>>(new Set())
@@ -222,14 +193,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [name, language, pous])
 
-  // Render/clear diff review decorations when the store's pending entry for this POU
-  // changes, or when the editor instance remounts on tab switch.
-  //
-  // Why `editorInstanceId` is a dep: in the web build, <PrimitiveEditor key={path}>
-  // remounts on tab switch. The new editor's onMount fires AFTER this effect first runs
-  // with the new `name`, so the effect would otherwise see a stale/disposed editor ref.
-  // The counter bumps inside handleEditorDidMount, triggering this effect to re-run
-  // once the new editor is actually ready.
+  // editorInstanceId is a dep because <PrimitiveEditor key={path}> remounts on tab switch
+  // (web build); its onMount fires after this effect first runs, so this re-runs once ready.
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
@@ -266,7 +231,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const keptIds = new Set(current.hunks.filter((h) => h.id !== hunkId).map((h) => h.id))
       const newBody = applyAcceptedHunks(current.oldBody, current.newBody, current.hunks, keptIds)
 
-      // Update editor model with rebuilt body
       const model = editor.getModel()
       if (model) {
         isSyncingModelRef.current = true
@@ -276,10 +240,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       }
       setLocalText(newBody)
 
-      // Propagate to project slice
       state.projectActions.updatePou({ name, content: { language, value: newBody } })
 
-      // Recompute hunks for remaining pending changes, against the new body.
       const freshHunks = computeHunks(current.oldBody, newBody)
       if (freshHunks.length === 0) {
         clearPendingDiff(name)
@@ -304,9 +266,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     updatePendingDiffAcceptedHunks,
   ])
 
-  // Global search-and-replace targets exactly the visible editor —
-  // every multi-mounted MonacoEditor subscribes to `searchQuery`, but
-  // only the active tab should reveal a match.
+  // Every multi-mounted MonacoEditor subscribes to `searchQuery`, but only the active tab reveals a match.
   useEffect(() => {
     if (!isActive) return
     if (editorRef.current && searchQuery) {
@@ -314,12 +274,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [searchQuery, sensitiveCase, regularExpression, isActive])
 
-  // Monaco's layout is measured at mount time and on container resize.
-  // When a hidden editor (`display: none`) becomes the active tab and
-  // gets shown again, the dimensions it captured while hidden are stale
-  // (often zero), so the editor renders with zero height until something
-  // resizes the container.  Re-measuring on every `isActive` flip avoids
-  // that initial blank frame.
+  // A hidden editor (`display: none`) captures stale (often zero) layout dimensions;
+  // re-measure on every `isActive` flip to avoid a blank frame when it becomes visible.
   useEffect(() => {
     if (!isActive) return
     editorRef.current?.layout()
@@ -335,13 +291,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou])
 
-  // Keep the Python LSP's per-POU preamble (IEC variables → Pyright
-  // globals) in sync with the variables table.  Re-pushes the
-  // augmented document to Pyright whenever a variable is added /
-  // renamed / type-changed / deleted so the LSP stops complaining
-  // about names it just learned (or starts complaining about names
-  // the user just removed).  Gated on hasPythonLSP because the web
-  // build before its Pyright wire-up shouldn't pay the cost.
+  // Keeps the Python LSP's per-POU preamble (IEC variables -> Pyright globals) in sync with
+  // the variables table, so Pyright doesn't flag names just added/renamed/removed.
   useEffect(() => {
     if (!capabilities.hasPythonLSP) return
     if (language !== 'python') return
@@ -362,9 +313,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [name, language])
 
-  // -----------------------------------------------------------------------
-  // File watching for external changes (editor-only, gated by hasFileWatcher)
-  // -----------------------------------------------------------------------
   useEffect(() => {
     if (!capabilities.hasFileWatcher) return
 
@@ -421,9 +369,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [pou?.pouType, name, language, capabilities.hasFileWatcher])
 
-  // Track when @monaco-editor/react switches models (tab changes with keepCurrentModel).
-  // onMount only fires once on initial mount, so we use onDidChangeModel to detect when the
-  // model has actually switched, then bump modelVersion to trigger debugVarPositions recomputation.
+  // onMount only fires once, so onDidChangeModel detects later model switches (tab changes
+  // with keepCurrentModel) and bumps modelVersion to trigger debugVarPositions recomputation.
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
@@ -438,54 +385,26 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current?.updateOptions({ readOnly: isDebuggerVisible })
   }, [isDebuggerVisible])
 
-  // Apply programmatic cursor jumps (e.g. clicking a compile error in
-  // the console) to an already-mounted editor.  The onMount path
-  // handles the initial position; without this effect, navigating to
-  // an error in the POU that's currently active would silently no-op
-  // because the editor instance is already up.
-  //
-  // The user's own cursor movements don't feed back here — the
-  // editor's onCursorPositionChanged event isn't wired to update
-  // `editor.cursorPosition` (that only happens on tab switch via the
-  // subscribeToTabSwitch above), so applying the prop value is safe
-  // and won't loop.  The position-equality guard avoids redundant
-  // reveal animations when the prop happens to match where the
-  // editor already is.
+  // Applies a programmatic cursor jump (e.g. a compile-error click) to a mounted editor;
+  // onMount only covers the initial position. The editor's own cursor moves are never
+  // written back to `editor.cursorPosition`, so there is no feedback loop.
   useEffect(() => {
     if (!editorMounted) return
-    // Multi-mount: every open POU's MonacoEditor subscribes to
-    // `state.editor.cursorPosition`, but the jump is only meaningful
-    // for the visible editor — when state.editor swaps to a different
-    // POU during Go to Definition / compile-error click, hidden
-    // editors must NOT also apply that POU's cursor onto themselves.
     if (!isActive) return
     const ed = editorRef.current
     const monacoInst = monacoRef.current
     const target = editor.cursorPosition
     if (!ed || !monacoInst || !target) return
-    // Cursor jumps tagged for the variables panel belong to the
-    // variables-code-editor, not the body.  Ignore them here so a
-    // Go-to-definition redirect that lands on a VAR declaration
-    // doesn't also re-highlight a line in the body.
+    // Jumps targeting the variables panel belong to the variables-code-editor, not the body.
     if (target.target === 'variables') return
     const current = ed.getPosition()
     if (current && current.lineNumber === target.lineNumber && current.column === target.column) {
       return
     }
-    // Select the entire target line so the user gets visible feedback
-    // (the same shape Search uses via `moveToMatch`).  The cursor
-    // lands at the start of the line as a side effect of `setSelection`,
-    // which is good enough for the click-to-error UX — when strucpp
-    // doesn't carry an end-column we'd rather show "this whole line
-    // is the problem" than land an invisible caret somewhere mid-line.
+    // Select the whole line for visible feedback; lands at line start when strucpp gives no end-column.
     const model = ed.getModel()
-    // Clamp to the model's valid line range.  `getLineMaxColumn` and
-    // `Range` both throw `BugIndicatingError: Illegal value for
-    // lineNumber` when lineNumber < 1 or > getLineCount(), and a
-    // compile-error click for a POU whose Monaco model is empty
-    // (freshly opened tab) or whose body line count is smaller than
-    // strucpp's reported line would otherwise propagate that throw
-    // through React's commit phase and unmount the editor.
+    // Clamp to the model's valid line range — Monaco throws for a line outside it, e.g. a
+    // freshly opened tab or a stale compiler line number for the current body.
     const safeLine = model ? Math.max(1, Math.min(model.getLineCount(), target.lineNumber)) : target.lineNumber
     if (model && safeLine !== target.lineNumber) {
       console.warn(
@@ -498,10 +417,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     ed.revealRangeInCenter(range)
     ed.focus()
   }, [editor.cursorPosition, editorMounted, isActive])
-
-  // -----------------------------------------------------------------------
-  // Debug variable inline values (editor-only debugger feature)
-  // -----------------------------------------------------------------------
 
   const fbInstanceContext = useMemo(() => {
     if (!pou || pou.pouType !== 'function-block') return null
@@ -520,11 +435,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [debugBoolValues, debugNonBoolValues])
 
   const debugVarPositions = useMemo(() => {
-    // Inline debug badges are an active-tab-only affordance.  Without
-    // this guard, every multi-mounted MonacoEditor would re-scan its
-    // model for debug-variable occurrences on every poll cycle, then
-    // try to apply decorations to a hidden editor that the user can't
-    // see.  Wasted CPU during debug, especially with many open tabs.
+    // Active-tab-only: avoids every hidden multi-mounted editor re-scanning and decorating on each poll.
     if (!isActive) return null
     if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
       return null
@@ -532,10 +443,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const model = editorRef.current.getModel()
     if (!model) return null
 
-    // Guard: ensure the model matches the current POU. During tab switches the memo may
-    // fire before @monaco-editor/react has swapped the model, so we'd scan the wrong file.
-    // ST models live under `inmemory://pou/<name>.st` (the LSP scheme); other languages
-    // keep their project-scoped filesystem URI.
+    // Guard against a stale model during tab switches, before @monaco-editor/react swaps it.
     const expectedUri = language === 'st' ? editorModelPath : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
     if (model.uri.toString() !== expectedUri) return null
 
@@ -602,10 +510,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => collection.clear()
   }, [debugVarPositions, debugBoolValues, debugNonBoolValues])
 
-  // -----------------------------------------------------------------------
-  // Completion callbacks
-  // -----------------------------------------------------------------------
-
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
       const suggestions = tableVariablesCompletion({
@@ -657,16 +561,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return { suggestions: uniqueSuggestions, labels }
   }, [])
 
-  // -----------------------------------------------------------------------
-  // IL completion provider
-  //
-  // ST is intentionally absent — the strucpp LSP worker (booted
-  // from src/App.tsx) registers its own completion provider for
-  // language id `st` and supersedes everything this useEffect used
-  // to do.  IL keeps the hand-written keyword + variable + library
-  // path because strucpp's LSP doesn't cover IL syntax; the trivial
-  // mnemonic-completion is enough for what little IL gets written.
-  // -----------------------------------------------------------------------
+  // ST is intentionally absent here — strucpp's own LSP supersedes this. IL keeps this
+  // hand-written completion because strucpp's LSP doesn't cover IL syntax.
   useEffect(() => {
     if (language !== 'il') return
 
@@ -692,10 +588,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     })
     return () => disposable.dispose()
   }, [pouVariables, globalVariables, sliceLibraries, language])
-
-  // -----------------------------------------------------------------------
-  // C/C++ completion provider
-  // -----------------------------------------------------------------------
 
   const parseCppVariables = (code: string, range: monaco.IRange): monaco.languages.CompletionItem[] => {
     const variables = new Set<string>()
@@ -753,10 +645,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           endColumn: word.endColumn,
         }
 
-        // Member access is answered on its own: after a `.` the only valid
-        // completions are that expression's members, so offering the standard
-        // library, snippets and every in-scope name alongside them would bury
-        // the answer under a hundred irrelevant entries.
+        // After a `.` the only valid completions are that expression's members; offering
+        // the standard library, snippets, and every in-scope name too would bury the answer.
         const lineBeforeCursor = model.getValueInRange({
           startLineNumber: position.lineNumber,
           startColumn: 1,
@@ -765,15 +655,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         })
         const { anchor } = splitExpression(memberChainBefore(lineBeforeCursor))
         if (anchor !== '') {
-          // Read the store at query time rather than closing over `pous` /
-          // `dataTypes` / `libraries`. Those are destructured from an
-          // unselected `useOpenPLCStore()`, and `updatePou` runs on every
-          // keystroke with no debounce, so immer hands back a fresh `pous`
-          // array per character. Naming them as deps below would dispose and
-          // re-register this provider — and the signature-help provider with
-          // it — on every keystroke, including the `.` that opens the member
-          // list while the query is still in flight. The predicate is rebuilt
-          // per query by design, so reading here is the same answer for free.
+          // Read the store at query time rather than closing over pous/dataTypes/libraries:
+          // they come from an unselected useOpenPLCStore() and change every keystroke, so as
+          // deps they would re-register this provider (and signature-help) that often.
           const {
             project: {
               data: { pous: currentPous, dataTypes: currentDataTypes },
@@ -791,17 +675,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
                 label: member.label,
                 insertText: member.label,
                 kind: monaco.languages.CompletionItemKind.Field,
-                // The IEC name is worth showing: it is what the variables
-                // table and every other language call this member, and it is
-                // not always recoverable from the C++ spelling.
+                // The IEC name isn't always recoverable from the C++ spelling, so show it too.
                 detail: member.type ? `${member.type} — ${member.iecName}` : member.iecName,
                 range,
               })),
             }
           }
-          // No members resolved (LSP not ready, or not a composite type):
-          // fall through rather than assert an empty list, which would look
-          // like "this expression has nothing" instead of "ask again later".
+          // No members resolved (LSP not ready, or not a composite type): fall through
+          // rather than assert an empty list, which would read as "nothing here".
         }
 
         const stdLibSuggestions = cppStandardLibraryCompletion({ range }).suggestions
@@ -835,10 +716,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [language, deviceBoard, pouVariables, name])
 
-  // -----------------------------------------------------------------------
-  // AI inline completion provider (gated by hasAIAssistant)
-  // -----------------------------------------------------------------------
-
   const aiState = useOpenPLCStore().ai
 
   useEffect(() => {
@@ -847,12 +724,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!aiState.hasConsented) return
     if (!aiState.preferences.inlineCompletionsEnabled) return
 
-    if (!aiPort?.registerInlineCompletions) return
+    if (!aiPort) return
 
-    const registration = aiPort.registerInlineCompletions({
+    const registration = registerAIInlineCompletions(aiPort, {
       monacoInstance: monaco,
       pouName: name,
       language,
+      session: edgeAccount?.session,
     })
 
     return () => registration.dispose()
@@ -864,11 +742,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     aiState.preferences.inlineCompletionsEnabled,
     capabilities.hasAIAssistant,
     aiPort,
+    edgeAccount,
   ])
-
-  // -----------------------------------------------------------------------
-  // Theme management
-  // -----------------------------------------------------------------------
 
   function handleEditorBeforeMount(monacoInstance: typeof monaco) {
     monacoRef.current = monacoInstance
@@ -881,9 +756,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     applyThemeNow(monacoInstance, shouldUseDarkMode)
   }, [shouldUseDarkMode])
 
-  // -----------------------------------------------------------------------
-  // Editor mount
-  // -----------------------------------------------------------------------
+  // `setTheme` is global to every Monaco on the page, so one editor mounting with a
+  // different theme silently restyles this one. Re-assert ours when this editor is
+  // shown again: without it the only way back was toggling dark mode by hand.
+  useEffect(() => {
+    if (!isActive) return
+    const monacoInstance = monacoRef.current
+    if (!monacoInstance) return
+    applyThemeNow(monacoInstance, shouldUseDarkMode)
+  }, [isActive, shouldUseDarkMode])
 
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
@@ -892,14 +773,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorRef.current = editorInstance
     monacoRef.current = monacoInstance
     setEditorMounted(true)
-    // Bump every mount (including remounts on tab switch) so the diff-review effect
-    // re-runs against the fresh editor instance. `editorMounted` only ever flips
-    // false→true once, so it won't re-trigger on remount.
+    // Bump on every mount (incl. remounts on tab switch) so diff-review re-attaches;
+    // `editorMounted` only ever flips false->true once, so it won't re-trigger on remount.
     setEditorInstanceId((id) => id + 1)
 
     if (!editorInstance || !monacoInstance) return
 
-    // Sync cached Monaco model with the store value.
     const model = editorInstance.getModel()
     if (model) {
       const storePou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === name)
@@ -922,7 +801,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       openPLCStoreBase.getState().editorActions.setMonacoFocused(false)
     })
 
-    // Apply theme
     const isDark = openPLCStoreBase.getState().workspace.systemConfigs.shouldUseDarkMode
     if (!didApplyInitialTheme) {
       applyThemeNow(monacoInstance, isDark)
@@ -931,7 +809,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       applyThemeNow(monacoInstance, isDark)
     }
 
-    // Check for external file changes on mount (editor-only)
     if (capabilities.hasFileWatcher) {
       void (async () => {
         const isSaved = openPLCStoreBase.getState().fileActions.getSavedState({ name })
@@ -974,11 +851,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
 
     if (editor.cursorPosition && editor.cursorPosition.target !== 'variables') {
-      // Apply a pending programmatic cursor jump (e.g. a Go to
-      // Definition or compile-error click that fired before this
-      // editor's mount completed).  The reactive useEffect above
-      // handles subsequent jumps on the already-mounted editor.
-      // Same clamp as the reactive path — see the comment there.
+      // Applies a cursor jump that fired before mount completed; the reactive effect above
+      // handles subsequent jumps. Same clamp as there.
       const monacoInst = monacoInstance
       const model = editorInstance.getModel()
       const targetLine = editor.cursorPosition.lineNumber
@@ -994,26 +868,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       editorInstance.revealRangeInCenter(range)
     }
 
-    // Python LSP (gated)
     if (capabilities.hasPythonLSP && language === 'python' && pou) {
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
-      // Hand the LSP the POU's variables-table state so it can build
-      // the preamble of module-level globals the compiler injects at
-      // build time.  Without this, Pyright flags every IEC input/
-      // output reference as "undefined" (see `python-lsp/index.ts`).
+      // Hands the LSP the POU's variables so Pyright doesn't flag every IEC I/O reference as undefined.
       initPythonLSP(monacoInstance)
         .then(() =>
           setupPythonLSPForEditor(editorInstance, {
             pouName: name,
             variables: pou.interface?.variables ?? [],
-            // The structures and enumerations the interface can name, so Pyright
-            // resolves `m.speed` to the same shape the runtime will build.
             dataTypes,
           }),
         )
         .catch((err: unknown) => console.warn('[Python LSP]', err instanceof Error ? err.message : err))
     } else if (language === 'python' && pou) {
-      // Web: no LSP but still inject template
       injectPythonTemplateIfNeeded(editorInstance, pou, name)
     }
 
@@ -1021,7 +888,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       injectCppTemplateIfNeeded(editorInstance, pou, name)
     }
 
-    // Keyboard shortcuts: Ctrl+S (save active file), Ctrl+Shift+S (save entire project)
     editorInstance.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
       if (openPLCStoreBase.getState().workspace.editingState !== 'save-request') {
         void executeSaveActiveFile(projectPort, capabilities)
@@ -1037,7 +903,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     )
 
-    // AI Chat toggle (gated)
     if (capabilities.hasAIAssistant) {
       editorInstance.addCommand(
         monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyL,
@@ -1048,13 +913,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       )
     }
 
-    // Tab/Enter split so AI ghost text and the LSP dropdown can coexist. The
-    // overrides are gated on a context key we drive from `inlineCompletionsActive`
-    // (see the effect below), so they're inert while AI is off.
+    // Tab/Enter split so AI ghost text and the LSP dropdown can coexist; gated inert while AI
+    // is off via a context key driven from `inlineCompletionsActive` (see the effect below).
     coexistenceRef.current = installAiLspCoexistenceKeybindings(editorInstance, monacoInstance)
     coexistenceRef.current.setActive(inlineCompletionsActive)
 
-    // Manual trigger suggest
     const handleKeyUp = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes('MAC')
       const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey
@@ -1065,7 +928,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
     window.addEventListener('keyup', handleKeyUp)
 
-    // AI chat insert-at-cursor event (gated)
     const handleInsertAtCursor = capabilities.hasAIAssistant
       ? (e: Event) => {
           const code = (e as CustomEvent<string>).detail
@@ -1092,11 +954,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       window.addEventListener('ai-insert-at-cursor', handleInsertAtCursor)
     }
 
-    // Listen for AI tool updates. This handler's only job is to sync the editor
-    // model for the POU currently displayed here — the pending-diff entry is
-    // written to the store by tool-executor so it's available even for POUs
-    // that have no editor mounted. When the user switches to such a POU, the
-    // render effect below reads pendingDiffs[name] and attaches the overlay.
+    // Syncs this editor's model for the POU it displays; tool-executor writes pendingDiffs
+    // even for unmounted POUs, and the render effect below attaches the overlay on switch-to.
     const handlePouUpdated = (e: Event) => {
       const { pouName: targetPou, body } = (e as CustomEvent<{ pouName: string; body: string; oldBody?: string }>)
         .detail
@@ -1113,9 +972,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
     window.addEventListener('ai-pou-updated', handlePouUpdated)
 
-    // Listen for global accept/reject from chat panel. These fire on the chat's
-    // Keep/Undo All buttons and clear per-POU entries; the chat panel itself
-    // also calls clearAllPendingDiffs() to cover POUs that aren't currently active.
+    // Fire on the chat panel's Keep/Undo All buttons; the panel also calls
+    // clearAllPendingDiffs() to cover POUs that aren't currently active.
     const handleAcceptAllHunks = (e: Event) => {
       const { pouName: targetPou } = (e as CustomEvent<{ pouName: string }>).detail
       clearPendingDiff(targetPou)
@@ -1140,10 +998,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     editorInstance.focus()
   }
-
-  // -----------------------------------------------------------------------
-  // Template injection
-  // -----------------------------------------------------------------------
 
   function injectPythonTemplateIfNeeded(
     editorInst: monaco.editor.IStandaloneCodeEditor,
@@ -1248,10 +1102,6 @@ void loop()
     }
   }
 
-  // -----------------------------------------------------------------------
-  // Helpers
-  // -----------------------------------------------------------------------
-
   function moveToMatch(
     editorInst: monaco.editor.IStandaloneCodeEditor | null,
     query: string,
@@ -1277,24 +1127,13 @@ void loop()
 
     setLocalText(value)
     if (isSyncingModelRef.current) return
-    // During debug the editor is read-only — any onChange event is a false positive
-    // from Monaco's internal state management (e.g. model sync), not a user edit.
+    // During debug the editor is read-only; any onChange here is a false positive from
+    // Monaco's internal sync, not a user edit.
     if (isDebuggerVisible) return
     handleFileAndWorkspaceSavedState(name)
     updatePou({ name, content: { language, value } })
   }
 
-  // -----------------------------------------------------------------------
-  // Editor options
-  // -----------------------------------------------------------------------
-
-  // AI inline completions and the STruC++ LSP suggest widget COEXIST: the
-  // LSP dropdown still auto-opens (fast, deterministic, great for variables and
-  // struct members) while the AI ghost text renders alongside it. Acceptance is
-  // split by key — Enter/arrows accept the LSP dropdown, Tab commits the AI
-  // suggestion (see `installAiLspCoexistenceKeybindings`). `suppressSuggestions`
-  // is therefore false so the dropdown is NOT hidden while ghost text shows.
-  // Ctrl+Space still triggers the suggest widget manually in both modes.
   const inlineCompletionsActive =
     capabilities.hasAIAssistant &&
     aiState.isEnabled &&
@@ -1305,93 +1144,47 @@ void loop()
     minimap: { enabled: false },
     dropIntoEditor: { enabled: true },
     readOnly: isDebuggerVisible,
-    // Force Monaco's classic hidden-<textarea> input instead of the newer
-    // EditContext-API surface (a plain `<div class="native-edit-context">`).
-    // Monaco 0.54 enables EditContext by default wherever the browser exposes
-    // the API, but WebKit/Safari's EditContext support is immature: the Tab
-    // `keydown` on that surface never reaches Monaco's keybinding service, so
-    // Tab-accept of AI inline suggestions silently no-ops on Safari (mouse
-    // "Accept" works because it's a direct widget action). The textarea path is
-    // mature and consistent across Chrome/Safari, restoring Tab-accept. (It also
-    // makes the surface a real input element that @xyflow's `isInputDOMNode`
-    // recognises — see the `.nokey` workaround note in the render below.)
+    // Forces Monaco's classic textarea input instead of EditContext: Safari's support is
+    // immature and its Tab keydown never reaches Monaco's keybinding service, silently
+    // breaking Tab-accept of AI suggestions.
     editContext: false,
-    // Lock indentation to 4 spaces across every language Monaco
-    // hosts (ST / IL / Python / C++).  Without this Monaco's
-    // `detectIndentation` heuristic kicks in on the existing model
-    // content and can settle on 2 spaces for Python POUs whose
-    // bodies happen to mix indent widths — surprising users who
-    // expect consistent 4-space behaviour across all editor
-    // surfaces.  `detectIndentation: false` disables that
-    // heuristic; `tabSize` + `insertSpaces` set the canonical
-    // width and ban literal tab characters.
+    // Locks indentation to 4 spaces across all languages; without `detectIndentation: false`
+    // Monaco can settle on 2 spaces for a Python body that mixes indent widths.
     tabSize: 4,
     insertSpaces: true,
     detectIndentation: false,
-    // Let the LSP dropdown auto-open in both modes — even with AI on, we want
-    // the fast LSP completions visible (the user accepts them with Enter/arrows).
+    // Let the LSP dropdown auto-open in both modes; the user accepts it with Enter/arrows.
     quickSuggestions: undefined,
-    // Pinned for cross-platform consistency with the variables-code-editor.
-    // Monaco's default is platform-dependent (12 on macOS, 14 elsewhere) —
-    // without this both surfaces would mismatch on Linux/Windows even
-    // if Mac happens to look right by accident.
+    // Pinned for cross-platform parity with the variables-code-editor; Monaco's default
+    // font size is platform-dependent (12 on macOS, 14 elsewhere).
     fontSize: 12,
-    // Monaco's standalone themes default `semanticHighlighting=false`,
-    // so without this flag the STruC++ LSP's semantic-tokens response
-    // is silently dropped — `isSemanticColoringEnabled()` short-circuits
-    // before the provider's result is ever consumed.  Forcing it on
-    // unblocks variable/function/parameter/type coloring on ST POUs.
+    // Monaco's standalone themes default this to false, silently dropping the STruC++ LSP's
+    // semantic-tokens response; forcing it on unblocks ST variable/type coloring.
     'semanticHighlighting.enabled': true,
-    // Hover / suggest / signature-help / parameter-hints widgets
-    // normally render absolutely-positioned inside Monaco's own
-    // `.overflowingContentWidgets` container.  In this editor the
-    // Monaco panel sits below the variables table, and that table
-    // visually clips any hover anchored on the first few lines —
-    // Monaco's own "flip direction" logic can't see past its own
-    // bounds.  `fixedOverflowWidgets` re-parents those overlays to
-    // `document.body` with `position: fixed`, so they escape both
-    // the editor container and the variables table above it.
+    // The variables table above this panel clips hover/suggest overlays anchored on the first
+    // few lines; `fixedOverflowWidgets` re-parents them to `document.body` so they escape it.
     fixedOverflowWidgets: true,
     ...(inlineCompletionsActive && {
       inlineSuggest: {
         enabled: true,
-        // Keep the LSP dropdown visible alongside the AI ghost text instead of
-        // suppressing it — coexistence is the whole point here.
+        // Keep the LSP dropdown visible alongside the AI ghost text — coexistence is the point.
         suppressSuggestions: false,
-        // Render the AI ghost text EVEN WHILE the LSP suggest widget is open
-        // with a highlighted item. Monaco defaults `showOnSuggestConflict` to
-        // 'never', which hides the ghost the instant the dropdown auto-selects
-        // an entry (which it does on almost every keystroke) — so the ghost
-        // that Tab is meant to accept would flicker away exactly when the user
-        // reaches for it. 'always' keeps both surfaces visible; acceptance stays
-        // split by key (Enter/arrows commit the LSP item, Tab commits the AI
-        // ghost — see `installAiLspCoexistenceKeybindings`). `experimental` is
-        // not yet in Monaco's public `IInlineSuggestOptions` type but is read at
-        // runtime (editorOptions.js), hence the cast.
+        // 'always' keeps the AI ghost visible even while the LSP dropdown auto-selects an
+        // entry, which Monaco's default ('never') would hide right when Tab is reached for.
+        // `experimental` isn't in the public type but is read at runtime, hence the cast.
         experimental: { showOnSuggestConflict: 'always' },
       } as monacoEditorOptionsType['inlineSuggest'],
     }),
   }
 
-  // Keep the coexistence Tab overrides in sync with AI state so toggling AI on/off
-  // takes effect without remounting the editor. `editorInstanceId` re-asserts it
-  // after a remount (the mount handler also sets it, this is belt-and-braces).
+  // Syncs the coexistence Tab overrides without remounting the editor; `editorInstanceId`
+  // re-asserts them after a remount.
   useEffect(() => {
     coexistenceRef.current?.setActive(inlineCompletionsActive)
   }, [inlineCompletionsActive, editorInstanceId])
 
-  // AI inline-completion idle re-trigger.
-  //
-  // Monaco only auto-triggers inline completions on a content change and renders
-  // just the latest call's result, so a request can complete without ever
-  // painting (a late/superseded result is silently dropped) — after which
-  // nothing re-requests until the next keystroke, and the suggestion appears to
-  // "give up". This re-arms it: once the user has been idle for 2s with AI on and
-  // no ghost text currently visible, we explicitly re-trigger inline suggest so
-  // the editor always eventually offers something for a settled cursor. The 2s
-  // window keeps this from firing needless requests during active editing; it
-  // fires at most once per idle period (triggering does not change content, so
-  // the timer is not re-armed by its own action).
+  // Monaco only auto-triggers inline completions on content change, so a late/superseded
+  // result can be dropped with nothing re-requesting it. Re-trigger once after 2s idle.
   useEffect(() => {
     if (!inlineCompletionsActive) return
     const editor = editorRef.current
@@ -1419,10 +1212,6 @@ void loop()
       changeDisposable.dispose()
     }
   }, [inlineCompletionsActive, editorInstanceId])
-
-  // -----------------------------------------------------------------------
-  // Drag-and-drop
-  // -----------------------------------------------------------------------
 
   const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {
     ev.preventDefault()
@@ -1485,7 +1274,6 @@ void loop()
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
 
-    // Push snapshot for undo support
     const currentPou = pous.find((p) => p.name === editor.meta.name)
     if (!currentPou) return
 
@@ -1541,32 +1329,9 @@ void loop()
     setNewName('')
   }
 
-  // -----------------------------------------------------------------------
-  // Render
-  // -----------------------------------------------------------------------
-
   return (
     <>
-      {/* `nokey` opts every keystroke inside this Monaco editor out of
-       *  @xyflow/react's global window-level `keydown` listener
-       *  (`downHandler` in @xyflow_react.js — tracks Space as a
-       *  pan-modifier for the diagram canvas and `preventDefault`s
-       *  it).  xyflow's `isInputDOMNode` guard bails out for
-       *  `<input>` / `<textarea>` / `[contenteditable]` targets, but
-       *  Monaco's new EditContext-API surface renders as a plain
-       *  `<div class="native-edit-context">` with NO `contenteditable`
-       *  attribute (the EditContext API replaces the legacy textarea
-       *  entirely), so xyflow doesn't recognise it as input —
-       *  preventDefault then swallows Space before the browser can
-       *  commit text to the EditContext, and `onWillType` /
-       *  `onDidType` never fire.  The `.nokey` class is xyflow's
-       *  documented escape hatch (`target.closest(".nokey")` in the
-       *  same guard); marking this wrapper opts every keystroke
-       *  inside the editor out cleanly, without leaking a global
-       *  keybinding into other Monaco instances on the page.  See
-       *  @xyflow/react `node_modules/.vite/deps/@xyflow_react.js`
-       *  around the `downHandler` definition (currently ~line 6080)
-       *  and `isInputDOMNode` (~line 3759). */}
+      {/* `nokey` opts out of xyflow's Space-pan listener, which doesn't see Monaco's div as an input. */}
       <div id='editor drop handler' className='oplc-monaco-wrapper nokey relative h-full w-full' onDrop={handleDrop}>
         <PrimitiveEditor
           key={capabilities.hasLocalFilesystem ? undefined : editorModelPath}

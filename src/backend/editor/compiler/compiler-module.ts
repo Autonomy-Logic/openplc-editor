@@ -10,6 +10,7 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
+import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
@@ -2700,7 +2701,9 @@ class CompilerModule {
     }
     const { boardEntry, boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = selection
 
-    const normalizedProjectPath = projectPath.replace('project.json', '')
+    // A cloud project is an Edge id, not a directory: without this every path below
+    // would be relative and the build would land in `process.cwd()`.
+    const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
 
@@ -3305,7 +3308,8 @@ class CompilerModule {
 
     const debugResolver = await this.#createBoardInfoResolver()
     const { boardRuntime } = debugResolver.resolve(boardTarget)
-    const normalizedProjectPath = projectPath.replace('project.json', '')
+    // Same reason as the compile path: a cloud project has no directory to build in.
+    const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
 

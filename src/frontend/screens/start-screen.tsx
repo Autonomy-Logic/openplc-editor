@@ -4,7 +4,8 @@ import { useCapabilities, useDevice, useProject, useSystem, useWindow } from '..
 import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
-import { VideoIcon } from '../assets/icons/interface/Video'
+import { StartAccountSection } from '../components/_features/[start]/account'
+import { StartCloudProjects } from '../components/_features/[start]/cloud-projects'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
@@ -14,6 +15,8 @@ import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
+  // Bumped when the Edge account changes, so the sibling cloud list re-reads.
+  const [cloudRevision, setCloudRevision] = useState(0)
   const capabilities = useCapabilities()
   useSystem()
   const projectPort = useProject()
@@ -46,7 +49,6 @@ const StartScreen = () => {
     windowPort.close()
   }
 
-  // Load recent projects
   useEffect(() => {
     const loadRecent = async () => {
       const recentProjects = await projectPort.getRecentProjects()
@@ -72,7 +74,6 @@ const StartScreen = () => {
     }
   }, [device, setAvailableOptions])
 
-  // Web: show welcome message when no local filesystem
   if (!capabilities.hasLocalFilesystem) {
     return (
       <div className='flex h-full w-full items-center justify-center bg-neutral-950'>
@@ -93,7 +94,6 @@ const StartScreen = () => {
     )
   }
 
-  // Editor: show menu + recent projects
   return (
     <>
       <StartSideContent>
@@ -105,9 +105,8 @@ const StartScreen = () => {
             <MenuItem ghosted onClick={handleOpenProject}>
               <FolderIcon /> Open
             </MenuItem>
-            <MenuItem ghosted>
-              <VideoIcon /> Tutorials
-            </MenuItem>
+            {/* Above the divider with the actions; the account is not on the way out. */}
+            <StartAccountSection />
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
@@ -119,7 +118,12 @@ const StartScreen = () => {
       </StartSideContent>
       <StartMainContent>
         <ProjectFilterBar setSearchFilterValue={searchFilter} />
-        <DisplayRecentProjects searchNameFilterValue={searchFilterValue} />
+        {/* Hidden entirely when there is nothing to show; the filter box covers both sections. */}
+        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} />
+        <DisplayRecentProjects
+          searchNameFilterValue={searchFilterValue}
+          onProjectUploaded={() => setCloudRevision((current) => current + 1)}
+        />
       </StartMainContent>
     </>
   )
