@@ -11,7 +11,7 @@
  * protocol -- which UART, its speed when the server has it to itself, the slave
  * id. The board's package owns the physical line -- the default UART's speed and
  * the RS-485 driver-enable pin, through the Serial screen. Nothing reads a
- * pre-4.4.0 project's `modbus_rtu` section: 4.4.0 does not carry configuration
+ * pre-4.3.0 project's `modbus_rtu` section: 4.3.0 does not carry configuration
  * forward, and a project from before it creates its server again.
  *
  * Byte-identical between openplc-editor and openplc-web.

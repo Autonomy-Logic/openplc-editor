@@ -166,10 +166,24 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
     {
         uint16_t varSize = openplc_debug_size(arr, elem);
         // Bounds check — stop packing if this one won't fit.
+        //
+        // NOTE: two cases are conflated here, and they cannot be separated
+        // without a wire change. A leaf that cannot fit an EMPTY frame can
+        // never be sent (a WSTRING needs 11+253 against a 256-byte ceiling,
+        // because the READ path pads strings to their full width), so breaking
+        // starves every later variable in the range as well.
+        //
+        // Skipping it instead was tried and is WORSE: the response is
+        // positional, so omitting one leaf shifts every following value into
+        // the wrong slot. The decoder's bounds check turns most of those into a
+        // dropped batch, but a large enough payload would let it decode one
+        // variable's bytes AS another and display a confidently wrong value.
+        // Absent beats wrong, so this stays until the framing itself can say
+        // "skipped" -- see the compact-string work (DOPE-645).
         if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
         if (varSize == 0) {
-            // Entry has no readable bytes (string stub / out-of-bounds)
-            // — skip gracefully to keep the scan progressing.
+            // No readable bytes for this entry (out of bounds). Skip gracefully
+            // to keep the scan progressing.
             lastElemIdx = elem;
             continue;
         }
@@ -396,6 +410,53 @@ void plcSetState(uint8_t desired)
     mb_frame[3] = runtime_get_plc_state();
     mb_frame[4] = runtime_get_switch_position();
     mb_frame_len = 5;
+}
+
+// Magic that must accompany a reboot-to-bootloader request, so a stray or
+// probing 0x4C frame cannot reset a running PLC. The editor sends these bytes.
+static const uint8_t REBOOT_BOOTLOADER_MAGIC[4] = { 0xB0, 0x07, 0x10, 0xAD };
+
+// PDU request:  [FC][magic:4]
+// PDU response: [FC][status]        (0x7E = accepted and rebooting)
+//
+// Asks the HAL to reboot into its firmware bootloader. The response is built here
+// but sent after process_mbpacket() returns, so a HAL must arm the reset rather
+// than perform it. The weak default is a no-op.
+void rebootToBootloader(const uint8_t *magic)
+{
+    uint8_t status = MB_DEBUG_SUCCESS;
+    for (int i = 0; i < 4; i++)
+        if (magic[i] != REBOOT_BOOTLOADER_MAGIC[i]) { status = MB_DEBUG_ERROR_OUT_OF_BOUNDS; break; }
+
+    // Programming lock. A locked device must still answer, or the editor could
+    // only report a timeout, so reply MB_REFUSED_LOCKED and raise the unlock
+    // prompt on the device's own display for the person standing at it.
+    if (status == MB_DEBUG_SUCCESS && hardwareProgrammingLocked())
+    {
+        status = MB_REFUSED_LOCKED;
+        hardwarePromptUnlock();         // returns immediately; never blocks the scan
+    }
+
+    mb_frame[1] = MB_FC_REBOOT_BOOTLOADER;
+    mb_frame[2] = status;
+    mb_frame_len = 3;
+
+    if (status == MB_DEBUG_SUCCESS)
+        hardwareRebootToBootloader();   // arms; the actual reset happens post-reply
+}
+
+// PDU request:  [FC]
+// PDU response: [FC][STATUS][locked:u8]     (locked: 0 = unlocked, 1 = locked)
+//
+// Read-only companion to 0x4C, polled by the editor while it waits out a refused
+// reboot so it can tell "still locked" from "device went away". Free of side
+// effects, so polling cannot spam the display. A board with no lock reports 0.
+void getLockState(void)
+{
+    mb_frame[1] = MB_FC_GET_LOCK_STATE;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = hardwareProgrammingLocked() ? 1 : 0;
+    mb_frame_len = 4;
 }
 
 // PDU request:  [FC]

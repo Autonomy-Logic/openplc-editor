@@ -193,9 +193,20 @@ const OrchestratorsList = () => {
       }
 
       setSelectedDevice({ orchestratorId, orchestratorAgentId, deviceId, deviceName })
+      // Publish the choice app-wide. Picking a device is NOT connecting to it --
+      // that is still the Connect button's job -- but the choice has to be
+      // visible outside this screen, or nothing else can name the target. The
+      // debugger's offer-to-connect needs it to say WHICH device it is about to
+      // reach, and to tell "a device is chosen" apart from "nothing is chosen".
+      //
+      // Safe against the WebRTC lifecycle: its connect fires on the
+      // connection-status transition (`prev !== 'connected' && now ===
+      // 'connected'`) and only READS `selectedDevice` as a guard, so setting it
+      // here starts nothing.
+      deviceActions.setSelectedDevice({ orchestratorId, orchestratorAgentId, deviceId, deviceName })
       setConnectionError(null)
     },
-    [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice],
+    [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions],
   )
 
   const handleConnect = useCallback(async () => {
@@ -292,12 +303,16 @@ const OrchestratorsList = () => {
     if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
       void handleDisconnect().then(() => {
         setSelectedDevice(null)
+        deviceActions.setSelectedDevice(null)
         deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
       })
       return
     }
 
     setSelectedDevice(null)
+    // The simulator is a target, not a device: clear the published choice so
+    // nothing downstream still believes a device is selected.
+    deviceActions.setSelectedDevice(null)
     setConnectionError(null)
     deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
   }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions, handleDisconnect])
@@ -316,11 +331,23 @@ const OrchestratorsList = () => {
     // Disconnect from current device first
     await handleDisconnect()
 
-    // Select the new device
+    // Select the new device — locally AND in the store. Publishing to the store
+    // is what every other selection path does (handleDeviceSelect, handleConnect
+    // and the simulator clears); leaving it out here meant that after a switch
+    // the screen showed device B while `runtimeConnection.selectedDevice` was
+    // still null (handleDisconnect had just cleared it). The debugger reads the
+    // store, so it reported "No Device Selected", and on a simulator-named board
+    // that turned into an offer to start the simulator instead.
     setSelectedDevice(pendingDeviceSwitch)
+    deviceActions.setSelectedDevice({
+      orchestratorId: pendingDeviceSwitch.orchestratorId,
+      orchestratorAgentId: pendingDeviceSwitch.orchestratorAgentId,
+      deviceId: pendingDeviceSwitch.deviceId,
+      deviceName: pendingDeviceSwitch.deviceName,
+    })
     setPendingDeviceSwitch(null)
     setConnectionError(null)
-  }, [pendingDeviceSwitch, handleDisconnect])
+  }, [pendingDeviceSwitch, handleDisconnect, deviceActions])
 
   const handleCancelDeviceSwitch = useCallback(() => {
     setShowSwitchConfirmModal(false)
