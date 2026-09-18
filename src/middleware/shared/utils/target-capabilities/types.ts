@@ -177,3 +177,19 @@ export type AddressProducerCapabilities = Pick<
   TargetCapabilities,
   'pinMapping' | 'vppIo' | 'modbusTcpRemote' | 'ethercat'
 >
+
+/**
+ * The servers a target actually runs — which decides whether their configured
+ * exposure reaches the device at all.
+ *
+ * Separate from `AddressProducerCapabilities` because the two answer different
+ * questions and one is not a superset of the other. A producer PUTS something
+ * at an address; a server PUBLISHES what is already there. The image needs
+ * both, and a target can have either without the other.
+ *
+ * It matters because a server config outlives a target change. Retarget a
+ * project from Runtime v4 to a bare-metal board and `servers` stays in
+ * project.json — it is only hidden in the UI — so without this the `MAX_*`
+ * macros are sized from a slave config that board will never run.
+ */
+export type ServerCapabilities = Pick<TargetCapabilities, 'modbusTcpServer' | 'opcuaServer' | 's7Server'>

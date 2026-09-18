@@ -985,9 +985,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().tabsActions.setSelectedTab(nextTab.name)
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: nextTab.name,
-        // A diff-viewer tab has no corresponding project-tree leaf to
-        // highlight, so it maps to `null` rather than a tree leaf type.
-        type: nextTab.elementType.type === 'diff-viewer' ? null : nextTab.elementType.type,
+        // A diff-viewer or diagnostics tab has no corresponding project-tree
+        // leaf to highlight, so both map to `null` rather than a leaf type.
+        type:
+          nextTab.elementType.type === 'diff-viewer' || nextTab.elementType.type === 'diagnostics'
+            ? null
+            : nextTab.elementType.type,
       })
 
       return { success: true }

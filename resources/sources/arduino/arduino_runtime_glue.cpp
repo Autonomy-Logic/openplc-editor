@@ -119,6 +119,23 @@ static uint64_t gcd(uint64_t a, uint64_t b)
 
 // ---------------------------------------------------------------------------
 // I/O binding: walk locatedVars[] and bind to openplc.h buffer pointers
+//
+// Every slot write below is range-checked. locatedVars[] is authored from
+// whatever `AT %...` the user typed, and nothing in the descriptor itself
+// says how big this firmware's process image is -- so an address past the
+// end (`%QX7.0` on a 56-output image: byte_index 7 against bool_output[7][8])
+// used to write straight past the array and corrupt whatever followed it.
+// Only the DWord cases were guarded; the rest are now (openplc-editor#296).
+//
+// The editor rejects an out-of-range location before the build gets here,
+// so reaching a skip is not the expected path -- this is the backstop for a
+// hand-written .st, a project moved to a smaller board, or a stale build.
+// Dropping the binding leaves the slot NULL, which every HAL and the Modbus
+// glue already treat as "not wired" and step over.
+//
+// The bit-addressed buffers are declared [MAX/8][8], so the bound to check
+// is the FIRST dimension: an image whose digital count isn't a multiple of 8
+// rounds down, and the slots in the partial byte are unaddressable.
 // ---------------------------------------------------------------------------
 void runtime_bind_located_vars()
 {
@@ -131,10 +148,14 @@ void runtime_bind_located_vars()
         case LocatedArea::Input:
             switch (lv.size) {
             case LocatedSize::Bit:
-                bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                if (lv.byte_index < (MAX_DIGITAL_INPUT / 8) && lv.bit_index < 8) {
+                    bool_input[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                }
                 break;
             case LocatedSize::Word:
-                int_input[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                if (lv.byte_index < MAX_ANALOG_INPUT) {
+                    int_input[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                }
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
@@ -159,10 +180,14 @@ void runtime_bind_located_vars()
         case LocatedArea::Output:
             switch (lv.size) {
             case LocatedSize::Bit:
-                bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                if (lv.byte_index < (MAX_DIGITAL_OUTPUT / 8) && lv.bit_index < 8) {
+                    bool_output[lv.byte_index][lv.bit_index] = (::IEC_BOOL*)lv.pointer;
+                }
                 break;
             case LocatedSize::Word:
-                int_output[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                if (lv.byte_index < MAX_ANALOG_OUTPUT) {
+                    int_output[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                }
                 break;
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             case LocatedSize::DWord:
@@ -185,13 +210,19 @@ void runtime_bind_located_vars()
 #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
             switch (lv.size) {
             case LocatedSize::Word:
-                int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                if (lv.byte_index < MAX_MEMORY_WORD) {
+                    int_memory[lv.byte_index] = (::IEC_UINT*)lv.pointer;
+                }
                 break;
             case LocatedSize::DWord:
-                dint_memory[lv.byte_index] = (::IEC_UDINT*)lv.pointer;
+                if (lv.byte_index < MAX_MEMORY_DWORD) {
+                    dint_memory[lv.byte_index] = (::IEC_UDINT*)lv.pointer;
+                }
                 break;
             case LocatedSize::LWord:
-                lint_memory[lv.byte_index] = (::IEC_ULINT*)lv.pointer;
+                if (lv.byte_index < MAX_MEMORY_LWORD) {
+                    lint_memory[lv.byte_index] = (::IEC_ULINT*)lv.pointer;
+                }
                 break;
             default: break;
             }
@@ -412,15 +443,82 @@ static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
               "state, not only its inputs and outputs.");
 #endif
 
+// The bit areas must be a whole number of bytes, or the build FAILS.
+//
+// openplc.h declares them as `bool_input[MAX_DIGITAL_INPUT/8][8]`, so the
+// number is in bits and the division has to come out even. A value that is not
+// a multiple of eight truncates: the array comes up one byte short and the
+// slots of the partial byte become unaddressable, so the top few points of an
+// image simply do nothing. Nothing downstream can report that -- there is no
+// console on a microcontroller -- so the check happens at build time or not at
+// all, exactly as with OPLC_RETAIN_BLOB_SIZE above.
+//
+// The editor already rounds these up when it emits them (DOPE-615), which is
+// why this should never fire. That is the point: it is here so that the day it
+// stops rounding, the failure is a compiler error naming the cause rather than
+// I/O that quietly stops at the wrong index.
+static_assert(MAX_DIGITAL_INPUT % 8 == 0,
+              "MAX_DIGITAL_INPUT must be a multiple of 8: openplc.h declares "
+              "bool_input as [MAX_DIGITAL_INPUT/8][8], so a remainder is "
+              "silently dropped and the last few inputs become unaddressable.");
+static_assert(MAX_DIGITAL_OUTPUT % 8 == 0,
+              "MAX_DIGITAL_OUTPUT must be a multiple of 8: openplc.h declares "
+              "bool_output as [MAX_DIGITAL_OUTPUT/8][8], so a remainder is "
+              "silently dropped and the last few outputs become unaddressable.");
+
+// The image has to be at least as large as the pin table that indexes it.
+//
+// Both halves of defines.h now come from one emitter but two SOURCES:
+// NUM_DISCRETE_INPUT and its siblings are counts of mapped pins, while
+// MAX_DIGITAL_INPUT and its siblings come from the address registry and are
+// capability-scoped. The HALs index with the first and size with the second --
+// `for (int i = 0; i < NUM_DISCRETE_INPUT; i++) ... bool_input[i/8][i%8]`
+// against `bool_input[MAX_DIGITAL_INPUT/8][8]`.
+//
+// While the MAX_* were fixed constants comfortably above any board's pin count
+// the two could not disagree. They can now: MAX_DIGITAL_INPUT may legitimately
+// be 0, and any path where the registry sizes an area below the pin count --
+// a pin whose address does not parse still counts toward NUM_, a capability
+// block that switches pinMapping off while a mapping still reaches the
+// emitter -- is an out-of-bounds write on a microcontroller, with nothing
+// anywhere to report it.
+static_assert(MAX_DIGITAL_INPUT >= NUM_DISCRETE_INPUT,
+              "MAX_DIGITAL_INPUT is smaller than NUM_DISCRETE_INPUT: the HAL "
+              "loops over every mapped input pin and indexes bool_input, which "
+              "is declared from MAX_DIGITAL_INPUT. The image is sized from the "
+              "address registry and the pin count is not, so they have "
+              "disagreed -- writing past the end of bool_input.");
+static_assert(MAX_DIGITAL_OUTPUT >= NUM_DISCRETE_OUTPUT,
+              "MAX_DIGITAL_OUTPUT is smaller than NUM_DISCRETE_OUTPUT: the HAL "
+              "loops over every mapped output pin and indexes bool_output, "
+              "which is declared from MAX_DIGITAL_OUTPUT.");
+static_assert(MAX_ANALOG_INPUT >= NUM_ANALOG_INPUT,
+              "MAX_ANALOG_INPUT is smaller than NUM_ANALOG_INPUT: the HAL "
+              "loops over every mapped analog input and indexes int_input, "
+              "which is declared from MAX_ANALOG_INPUT.");
+static_assert(MAX_ANALOG_OUTPUT >= NUM_ANALOG_OUTPUT,
+              "MAX_ANALOG_OUTPUT is smaller than NUM_ANALOG_OUTPUT: the HAL "
+              "loops over every mapped analog output and indexes int_output, "
+              "which is declared from MAX_ANALOG_OUTPUT.");
+
 static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
 static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
 static bool     retain_available  = false;
 
 // This program's identity, handed to the driver on every read so it can tell
 // whether what it is holding belongs to the program now running. Supplied by
-// the sketch from PROGRAM_MD5 rather than read from defines.h here: defines.h
-// has no include guard and must reach a translation unit through exactly one
-// path (modbus_config.h), which this file is deliberately not on.
+// the sketch from PROGRAM_MD5 rather than read from defines.h here, which
+// keeps the value flowing on one path and the sketch as its only source.
+//
+// This comment used to say defines.h "must reach a translation unit through
+// exactly one path (modbus_config.h), which this file is deliberately not on".
+// That stopped being true with DOPE-615: openplc.h now includes defines.h from
+// inside its own guard, so every TU that sees openplc.h sees defines.h,
+// including this one. Re-inclusion is safe — defines.h holds nothing but
+// object-like macros, and redefining a macro to an identical token sequence is
+// permitted (C11 6.10.3p2) — and nothing here or in modbus_debug.cpp,
+// Arduino_OpenPLC.h or mega_due_bkp.cpp changes behaviour as a result. The
+// single-path rule is simply gone; do not restore it from memory.
 static const char *retain_program_md5 = nullptr;
 
 static uint16_t retain_read_leaf(uint8_t arr, uint16_t elem, uint8_t* dest) {

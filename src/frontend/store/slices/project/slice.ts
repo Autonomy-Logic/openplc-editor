@@ -21,6 +21,7 @@ import {
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
 import {
+  activeKindsFor,
   buildAliasIndex,
   channelKey,
   ethercatConsumerId,
@@ -34,12 +35,8 @@ import {
 import type {
   AddressProducerCapabilities,
   BoardInfoLike,
-  TargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
-import {
-  ALL_ADDRESS_PRODUCERS_ACTIVE,
-  resolveTargetCapabilities,
-} from '../../../../middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import {
   duplicateVariableNameMessage,
@@ -48,7 +45,6 @@ import {
 } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
-import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { clampIOGroupLength } from '../../../utils/modbus/io-group'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
@@ -305,20 +301,6 @@ function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
   )
 }
 
-/** Map the active target's capabilities to the set of consumer kinds that
- *  participate in allocation. A target without pin mapping / VPP simply
- *  omits those kinds, so their addresses free up and the still-active
- *  producers recompact into the space (project-wide recalc on target
- *  switch). */
-function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
-  const kinds = new Set<string>()
-  if (caps.pinMapping) kinds.add('pin-mapping')
-  if (caps.vppIo) kinds.add('vpp-io')
-  if (caps.modbusTcpRemote) kinds.add('modbus-tcp-remote')
-  if (caps.ethercat) kinds.add('ethercat')
-  return kinds
-}
-
 /** The active target's BoardInfo, or `undefined` when the board id doesn't
  *  resolve — a VPP board whose package isn't installed, a project authored on
  *  another machine, or the catalogue not having loaded yet. */
@@ -337,8 +319,7 @@ function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
  * silently keeps whatever stale addresses each point already had (DOPE-440).
  */
 function allocationCapabilities(live: ProjectSliceRoot): AddressProducerCapabilities {
-  const boardInfo = resolveBoardInfo(live)
-  return boardInfo ? resolveTargetCapabilities(boardInfo) : ALL_ADDRESS_PRODUCERS_ACTIVE
+  return resolveAddressProducerCapabilities(resolveBoardInfo(live))
 }
 
 /**
@@ -381,12 +362,25 @@ function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
  * Only an UNRESOLVED target gets `undefined`. A resolved board that declares
  * `modbusTcpRemote: false` must still deactivate that kind, so its space frees
  * up and the still-active producers compact into it — that's the deliberate
- * target-switch behaviour documented on `activeKindsFromCapabilities`, and the
+ * target-switch behaviour documented on `activeKindsFor`, and the
  * empty Set an unresolved board used to produce is indistinguishable from it.
  */
 function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefined {
   const boardInfo = resolveBoardInfo(live)
-  return boardInfo ? activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo)) : undefined
+  /* `resolveAddressProducerCapabilities`, the same resolver
+     `allocationCapabilities` uses, and NOT `resolveTargetCapabilities`.
+     Those two answer differently for a board that IS in the catalogue but
+     declares neither a capability block nor a recognised `compiler`: the
+     producer resolver is permissive, the target resolver answers
+     EMPTY_CAPABILITIES. Using the target resolver here made
+     `buildAddressPool` see every producer while `recalculateRegistry` saw
+     none — two answers to the same question, which is the drift
+     `activeKindsFor` was extracted to prevent.
+
+     `undefined` is kept for a genuinely ABSENT boardInfo, because a missing
+     Set means "every kind" to `allocateAddresses` while an empty one means
+     "no producers", and those must not be confused. */
+  return boardInfo ? activeKindsFor(resolveAddressProducerCapabilities(boardInfo)) : undefined
 }
 
 /**
@@ -1776,12 +1770,34 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (config.stopBits !== undefined) server.modbusSlaveConfig.stopBits = config.stopBits
           if (config.dataBits !== undefined) server.modbusSlaveConfig.dataBits = config.dataBits
           if (config.bufferMapping) {
-            const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
+            /* MERGE OVER WHAT IS STORED, NEVER OVER THE DEFAULTS.
+             *
+             * This used to start from DEFAULT_BUFFER_MAPPING when the server
+             * had no mapping yet, so editing ONE field persisted all eight --
+             * the other seven silently materialised at the old fixed sizes
+             * (8192 bits, 1024 registers). A project that had never asked for
+             * an exposure then carried a full one, and `compute-io-image`
+             * reads a persisted count as a request: the image came back to the
+             * constant this task exists to remove, and BR10 ("the image may
+             * end up smaller, and that is one of the main gains") could never
+             * hold for such a project.
+             *
+             * Absent stays absent. It means "expose whatever the image turns
+             * out to be", which is also what FR16 asks of the server. */
+            const base = server.modbusSlaveConfig.bufferMapping ?? {}
+            const patch = config.bufferMapping
             server.modbusSlaveConfig.bufferMapping = {
-              holdingRegisters: { ...base.holdingRegisters, ...config.bufferMapping.holdingRegisters },
-              coils: { ...base.coils, ...config.bufferMapping.coils },
-              discreteInputs: { ...base.discreteInputs, ...config.bufferMapping.discreteInputs },
-              inputRegisters: { ...base.inputRegisters, ...config.bufferMapping.inputRegisters },
+              ...base,
+              ...(base.holdingRegisters || patch.holdingRegisters
+                ? { holdingRegisters: { ...base.holdingRegisters, ...patch.holdingRegisters } }
+                : {}),
+              ...(base.coils || patch.coils ? { coils: { ...base.coils, ...patch.coils } } : {}),
+              ...(base.discreteInputs || patch.discreteInputs
+                ? { discreteInputs: { ...base.discreteInputs, ...patch.discreteInputs } }
+                : {}),
+              ...(base.inputRegisters || patch.inputRegisters
+                ? { inputRegisters: { ...base.inputRegisters, ...patch.inputRegisters } }
+                : {}),
             }
           }
         }),

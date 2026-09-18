@@ -428,6 +428,12 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // conversion logic itself stays local (mirrors compiler-adapter.ts's
   // portToSchemaProjectData) and has no other backend-shared dependency.
   'frontend/services/export-actions.ts': ['backend-shared'],
+  // I/O image diagnostics — reads the compile pipeline's own sizer and the two
+  // emitters it feeds (`computeIoImage`, `generateImageConf`,
+  // `generateProcessImageDefines`). The point of the tool is to answer what a
+  // BUILD would produce, so calling anything other than the functions the build
+  // calls would make it a second opinion instead of a preview.
+  'frontend/services/io-diagnostics/index.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------

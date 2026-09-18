@@ -8,6 +8,7 @@ import {
   useTheme,
   useWindow,
 } from '../../../middleware/shared/providers'
+import { openDiagnosticsTab } from '../../services/io-diagnostics/open-tab'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
 import { openPLCStoreBase, useOpenPLCStore } from '../../store'
@@ -332,6 +333,11 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [accelerator, toggleCollapse])
+
+  /**
+   * Developer I/O image diagnostics, from the native menu on a framed window.
+   */
+  useEffect(() => accelerator.onOpenDiagnostics?.(() => openDiagnosticsTab()), [accelerator])
 
   /**
    * Undo / Redo
