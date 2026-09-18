@@ -44,17 +44,27 @@ function shippedBoardManagerUrls(shipped: string): string[] {
   return Array.isArray(urls) ? urls.filter((url): url is string => typeof url === 'string') : []
 }
 
-/** Directory keys the shipped template declares, e.g. `data` and `user`. */
-function shippedDirectories(shipped: string): Record<string, string> {
+/**
+ * Directory settings the shipped template declares, as key paths under
+ * `directories`: `['data']`, `['user']`, `['builtin', 'libraries']`.
+ *
+ * Paths rather than flat keys because `builtin.libraries` is nested, and a flat
+ * read would have skipped it silently, leaving the user's own Arduino libraries
+ * invisible to every existing install while looking like it had worked.
+ */
+function shippedDirectories(shipped: string): { path: string[]; value: string }[] {
   const parsed: unknown = parse(shipped)
-  if (!isRecord(parsed)) return {}
+  if (!isRecord(parsed) || !isRecord(parsed.directories)) return []
 
-  const directories = parsed.directories
-  if (!isRecord(directories)) return {}
-
-  const out: Record<string, string> = {}
-  for (const [key, value] of Object.entries(directories)) {
-    if (typeof value === 'string') out[key] = value
+  const out: { path: string[]; value: string }[] = []
+  for (const [key, value] of Object.entries(parsed.directories)) {
+    if (typeof value === 'string') {
+      out.push({ path: [key], value })
+    } else if (isRecord(value)) {
+      for (const [nested, nestedValue] of Object.entries(value)) {
+        if (typeof nestedValue === 'string') out.push({ path: [key, nested], value: nestedValue })
+      }
+    }
   }
   return out
 }
@@ -125,14 +135,22 @@ export function reconcileArduinoCliConfig(existing: string, shipped: string): st
   //    user has none of their own. An existing value is never replaced: it is
   //    either a deliberate choice, or the place that user's cores are already
   //    installed under, and moving it silently would orphan them.
-  const directories = doc.get('directories')
-  if (directories === undefined || directories === null || isMap(directories)) {
-    for (const [key, value] of Object.entries(shippedDirectories(shipped))) {
-      const current = isMap(directories) ? directories.get(key) : undefined
-      if (current === undefined || current === null) {
-        doc.setIn(['directories', key], value)
-        changed = true
-      }
+  for (const { path, value } of shippedDirectories(shipped)) {
+    const keys = ['directories', ...path]
+
+    // Every ancestor has to be absent or a map before setIn can walk it. A
+    // hand-edited `directories: 7` would otherwise throw and abort the whole
+    // reconciliation, losing the board-manager merge along with it.
+    const ancestorsUsable = keys.slice(0, -1).every((_, depth) => {
+      const node = doc.getIn(keys.slice(0, depth + 1))
+      return node === undefined || node === null || isMap(node)
+    })
+    if (!ancestorsUsable) continue
+
+    const current = doc.getIn(keys)
+    if (current === undefined || current === null) {
+      doc.setIn(keys, value)
+      changed = true
     }
   }
 

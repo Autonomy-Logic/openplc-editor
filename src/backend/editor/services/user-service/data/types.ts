@@ -22,11 +22,26 @@ function yamlPath(value: string): string {
  *
  * `directories.downloads` is deliberately left out: arduino-cli defaults it to
  * `{directories.data}/staging`, so it follows along on its own.
+ *
+ * `builtin.libraries` points back at the sketchbook we just moved away from, and
+ * that asymmetry is deliberate. Users install libraries through the Arduino IDE
+ * and call them from C++ blocks here: a display driver, an Ethernet stack for a
+ * W5500. Owning our directories must not cost them that. arduino-cli documents
+ * this key as available to every platform without installation and at the LOWEST
+ * priority, which is exactly the split wanted: their libraries stay reachable,
+ * ours win any name collision, and nothing we install is ever written there.
+ * Cores are untouched by it, which is the other half of the split.
+ *
+ * `userLibraries` pointing at a directory that does not exist is fine and is the
+ * normal case on a machine that never had the Arduino IDE; arduino-cli ignores
+ * it and the build succeeds.
  */
-export function buildArduinoCliConfig(root: string): string {
+export function buildArduinoCliConfig(root: string, userLibraries: string): string {
   return `directories:
   data: ${yamlPath(join(root, 'data'))}
   user: ${yamlPath(join(root, 'user'))}
+  builtin:
+    libraries: ${yamlPath(userLibraries)}
 ${ARDUINO_DATA.trimStart()}`
 }
 
