@@ -324,6 +324,98 @@ void runtime_apply_located_forces()
 }
 
 // ---------------------------------------------------------------------------
+// Process image access (see arduino_runtime_glue.h for the contract).
+//
+// Every bound is taken here and nowhere else, so a protocol cannot get it
+// wrong by forgetting one. These read the tables the sketch defines; they own
+// no storage of their own, which is the whole point -- a protocol addressing
+// the image needs no mirror buffer.
+// ---------------------------------------------------------------------------
+
+/** Bits a bit area's array can actually hold. openplc.h declares them
+ *  [MAX/8][8], so a MAX that is not a whole number of bytes rounds DOWN and
+ *  the slots of the partial byte are unaddressable. Bounding on the macro
+ *  instead would hand out an index the array has no room for. */
+#define OPENPLC_BIT_CAPACITY(max_bits) ((uint16_t)(((max_bits) / 8) * 8))
+
+extern "C" uint16_t openplc_image_count(openplc_image_area_t area)
+{
+    switch (area) {
+    case OPENPLC_AREA_BOOL_INPUT:  return OPENPLC_BIT_CAPACITY(MAX_DIGITAL_INPUT);
+    case OPENPLC_AREA_BOOL_OUTPUT: return OPENPLC_BIT_CAPACITY(MAX_DIGITAL_OUTPUT);
+    case OPENPLC_AREA_INT_INPUT:   return (uint16_t)MAX_ANALOG_INPUT;
+    case OPENPLC_AREA_INT_OUTPUT:  return (uint16_t)MAX_ANALOG_OUTPUT;
+#if OPENPLC_HAS_EXTENDED_AREAS
+    case OPENPLC_AREA_REAL_INPUT:  return (uint16_t)MAX_REAL_INPUT;
+    case OPENPLC_AREA_REAL_OUTPUT: return (uint16_t)MAX_REAL_OUTPUT;
+    case OPENPLC_AREA_INT_MEMORY:  return (uint16_t)MAX_MEMORY_WORD;
+    case OPENPLC_AREA_DINT_MEMORY: return (uint16_t)MAX_MEMORY_DWORD;
+    case OPENPLC_AREA_LINT_MEMORY: return (uint16_t)MAX_MEMORY_LWORD;
+#endif
+    default: return 0;
+    }
+}
+
+extern "C" void* openplc_image_slot(openplc_image_area_t area, uint16_t index, uint8_t* width)
+{
+    uint8_t w = 0;
+    void*   p = nullptr;
+
+    switch (area) {
+    case OPENPLC_AREA_INT_INPUT:
+        w = 2;
+        if (index < openplc_image_count(area)) p = (void*)int_input[index];
+        break;
+    case OPENPLC_AREA_INT_OUTPUT:
+        w = 2;
+        if (index < openplc_image_count(area)) p = (void*)int_output[index];
+        break;
+#if OPENPLC_HAS_EXTENDED_AREAS
+    case OPENPLC_AREA_REAL_INPUT:
+        w = 4;
+        if (index < openplc_image_count(area)) p = (void*)real_input[index];
+        break;
+    case OPENPLC_AREA_REAL_OUTPUT:
+        w = 4;
+        if (index < openplc_image_count(area)) p = (void*)real_output[index];
+        break;
+    case OPENPLC_AREA_INT_MEMORY:
+        w = 2;
+        if (index < openplc_image_count(area)) p = (void*)int_memory[index];
+        break;
+    case OPENPLC_AREA_DINT_MEMORY:
+        w = 4;
+        if (index < openplc_image_count(area)) p = (void*)dint_memory[index];
+        break;
+    case OPENPLC_AREA_LINT_MEMORY:
+        w = 8;
+        if (index < openplc_image_count(area)) p = (void*)lint_memory[index];
+        break;
+#endif
+    // The bit areas answer through openplc_image_bit; width 0 says so.
+    default:
+        break;
+    }
+
+    if (width) *width = w;
+    return p;
+}
+
+extern "C" uint8_t* openplc_image_bit(openplc_image_area_t area, uint16_t bit_index)
+{
+    if (bit_index >= openplc_image_count(area)) return nullptr;
+
+    switch (area) {
+    case OPENPLC_AREA_BOOL_INPUT:
+        return (uint8_t*)bool_input[bit_index / 8][bit_index % 8];
+    case OPENPLC_AREA_BOOL_OUTPUT:
+        return (uint8_t*)bool_output[bit_index / 8][bit_index % 8];
+    default:
+        return nullptr;   // count already returned 0 for every other area
+    }
+}
+
+// ---------------------------------------------------------------------------
 // De-energise the output image.
 //
 // Called every cycle while stopped, immediately before updateOutputBuffers()
