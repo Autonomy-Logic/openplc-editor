@@ -2,11 +2,12 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
 import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
+import { homedir } from 'os'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
 import { reconcileArduinoCliConfig } from './data/arduino-cli-config'
-import { ARDUINO_DATA, HISTORY_DATA, SETTINGS_DATA } from './data/types'
+import { buildArduinoCliConfig, HISTORY_DATA, SETTINGS_DATA } from './data/types'
 import type { ArduinoListOutput } from './types'
 
 /**
@@ -56,8 +57,6 @@ class UserService {
   static DEFAULT_SETTINGS = SETTINGS_DATA
 
   static DEFAULT_HISTORY = HISTORY_DATA
-
-  static ARDUINO_FILE_CONTENT = ARDUINO_DATA
 
   static async createDirectoryIfNotExists(path: string): Promise<void> {
     /**
@@ -181,7 +180,8 @@ class UserService {
    * the file effectively write-once: an install that had launched an older
    * build kept a stale config forever, and the only fix was deleting it by
    * hand. Two things went stale that way — board-manager URLs added to
-   * `ARDUINO_DATA` never reached existing users, and `output.no_color` stayed
+   * board-manager URLs added to the shipped template never reached existing
+   * users, and `output.no_color` stayed
    * on, which would keep the console monochrome even though it renders SGR
    * colour itself now.
    *
@@ -189,11 +189,35 @@ class UserService {
    * settings in this file, and clobbering it would silently discard them.
    * See `reconcileArduinoCliConfig` for the (deliberately narrow) rules.
    */
+  /**
+   * The sketchbook libraries folder arduino-cli would have used by default, and
+   * which the Arduino IDE uses too. Read-only for us: it is where a user's own
+   * libraries live, so that a C++ block can still call the display driver or the
+   * W5500 stack they installed through the IDE.
+   *
+   * Platform split is arduino-cli's own: `{HOME}/Arduino` on Linux,
+   * `{HOME}/Documents/Arduino` on macOS, `{DOCUMENTS}/Arduino` on Windows, where
+   * Documents can be redirected and only Electron knows where to.
+   *
+   * A sketchbook the user moved in the IDE's preferences, or an IDE confined by
+   * snap or flatpak, is not found here. Making that configurable is its own
+   * piece of work; the default covers a stock install.
+   */
+  static defaultUserLibrariesPath(): string {
+    const sketchbook =
+      process.platform === 'linux' ? join(homedir(), 'Arduino') : join(app.getPath('documents'), 'Arduino')
+    return join(sketchbook, 'libraries')
+  }
+
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
+    const shipped = buildArduinoCliConfig(
+      join(app.getPath('userData'), 'arduino'),
+      UserService.defaultUserLibrariesPath(),
+    )
 
     try {
-      await writeFile(pathToArduinoCliConfig, UserService.ARDUINO_FILE_CONTENT, { flag: 'wx' })
+      await writeFile(pathToArduinoCliConfig, shipped, { flag: 'wx' })
       return
     } catch (err) {
       if (!(err instanceof Error && err.message.includes('EEXIST'))) {
@@ -205,7 +229,7 @@ class UserService {
     // File already exists — reconcile it with what we ship.
     try {
       const existing = await readFile(pathToArduinoCliConfig, 'utf-8')
-      const updated = reconcileArduinoCliConfig(existing, UserService.ARDUINO_FILE_CONTENT)
+      const updated = reconcileArduinoCliConfig(existing, shipped)
       if (!updated) return
 
       // Write via a sibling temp file and rename over the original. This runs

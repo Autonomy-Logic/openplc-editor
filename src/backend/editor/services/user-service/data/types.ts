@@ -1,3 +1,50 @@
+import { join } from 'node:path'
+
+/**
+ * Quote a filesystem path for YAML.
+ *
+ * Single quotes rather than double: a Windows path is full of backslashes, and
+ * YAML's double-quoted style would read them as escapes.
+ */
+function yamlPath(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+/**
+ * The `arduino-cli.yaml` the editor ships, rooted at a directory it owns.
+ *
+ * `directories` is why this is composed at runtime instead of being a constant:
+ * left unset, arduino-cli defaults to `~/.arduino15` (`AppData/Local/Arduino15`,
+ * `~/Library/Arduino15`) and to the user's sketchbook — which are the Arduino
+ * IDE's own directories, not ours. Every core and library the editor installs
+ * would otherwise land in the middle of whatever the user has set up there, and
+ * a pinned core version would change the version their IDE builds against.
+ *
+ * `directories.downloads` is deliberately left out: arduino-cli defaults it to
+ * `{directories.data}/staging`, so it follows along on its own.
+ *
+ * `builtin.libraries` points back at the sketchbook we just moved away from, and
+ * that asymmetry is deliberate. Users install libraries through the Arduino IDE
+ * and call them from C++ blocks here: a display driver, an Ethernet stack for a
+ * W5500. Owning our directories must not cost them that. arduino-cli documents
+ * this key as available to every platform without installation and at the LOWEST
+ * priority, which is exactly the split wanted: their libraries stay reachable,
+ * ours win any name collision, and nothing we install is ever written there.
+ * Cores are untouched by it, which is the other half of the split.
+ *
+ * `userLibraries` pointing at a directory that does not exist is fine and is the
+ * normal case on a machine that never had the Arduino IDE; arduino-cli ignores
+ * it and the build succeeds.
+ */
+export function buildArduinoCliConfig(root: string, userLibraries: string): string {
+  return `directories:
+  data: ${yamlPath(join(root, 'data'))}
+  user: ${yamlPath(join(root, 'user'))}
+  builtin:
+    libraries: ${yamlPath(userLibraries)}
+${ARDUINO_DATA.trimStart()}`
+}
+
 export const ARDUINO_DATA = `
 board_manager:
   additional_urls:

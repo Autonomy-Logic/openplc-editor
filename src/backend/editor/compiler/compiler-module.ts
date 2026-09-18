@@ -520,19 +520,47 @@ class CompilerModule {
     return coreControlFileContent
   }
 
-  async getArduinoInstalledLibraries() {
-    const libraryControlFilePath = join(
-      electronApp.getPath('userData'),
-      'User',
-      'Runtime',
-      'arduino-library-control.json',
-    )
-    const libraryControlFileContent =
-      await CompilerModule.readJSONFile<Array<Record<string, string>>>(libraryControlFilePath)
+  /**
+   * Ask arduino-cli which libraries are installed.
+   *
+   * This used to read `User/Runtime/arduino-library-control.json`, a file the
+   * editor ships already populated with 28 entries. On a profile where those
+   * libraries were not actually present the editor still believed they were,
+   * skipped `lib install`, and the build died at `fatal error: AVR_PWM.h: No
+   * such file or directory`. It went unnoticed for as long as the libraries
+   * directory was the user's shared sketchbook, which any earlier install had
+   * already populated; pointing `directories.user` at a directory of our own
+   * made it fatal on first build.
+   *
+   * Returns an empty list when the query fails. `handleLibraryInstallation`
+   * treats a missing library as "install it", and a redundant install is a
+   * no-op — far cheaper than a build that fails on a missing header.
+   */
+  async getArduinoInstalledLibraries(): Promise<string[]> {
+    let binaryPath = this.arduinoCliBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      binaryPath += '.exe'
+    }
+    const [flag, configFilePath] = this.arduinoCliBaseParameters
 
-    const installedLibraries = libraryControlFileContent.map((lib) => Object.keys(lib)[0])
+    const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
-    return installedLibraries
+    try {
+      const { stdout } = await execRecipeArgv([binaryPath, 'lib', 'list', flag, configFilePath, '--json'])
+      const parsed: unknown = JSON.parse(stdout)
+      if (!isRecord(parsed) || !Array.isArray(parsed.installed_libraries)) return []
+
+      const names: string[] = []
+      for (const entry of parsed.installed_libraries) {
+        if (!isRecord(entry) || !isRecord(entry.library)) continue
+        const { name } = entry.library
+        if (typeof name === 'string') names.push(name)
+      }
+      return names
+    } catch (error) {
+      console.warn(`Could not list installed Arduino libraries: ${error instanceof Error ? error.message : ''}`)
+      return []
+    }
   }
 
   /**
