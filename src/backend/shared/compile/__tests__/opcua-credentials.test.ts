@@ -1,3 +1,4 @@
+import type { PLCServer } from '@root/middleware/shared/ports/types'
 import { deriveOpcUaCredential, materialiseOpcUaCredentials } from '../opcua-credentials'
 
 const pbkdf2Profile = { passwordScheme: 'pbkdf2-sha256' as const, kdfIterations: 600_000 }
@@ -53,7 +54,7 @@ describe('deriveOpcUaCredential', () => {
     // The device would simply reject the login; without this the user has no
     // way to know why.
     const warn = jest.fn()
-    deriveOpcUaCredential(
+    await deriveOpcUaCredential(
       passwordUser({ password: null, passwordHash: 'pbkdf2:sha256:600000$c2FsdA==$aGFzaA==' }),
       plainProfile,
       warn,
@@ -68,14 +69,18 @@ describe('deriveOpcUaCredential', () => {
 })
 
 describe('materialiseOpcUaCredentials', () => {
-  const servers = () => [
-    { protocol: 'modbus', modbusSlaveConfig: {} },
-    { protocol: 'opcua', opcuaServerConfig: { users: [passwordUser()] } },
-  ]
+  // Minimal shapes: materialise only looks at `protocol` and
+  // `opcuaServerConfig.users`. Cast at the boundary rather than build two full
+  // PLCServer objects for a test that exercises neither's other fields.
+  const servers = () =>
+    [
+      { protocol: 'modbus', modbusSlaveConfig: {} },
+      { protocol: 'opcua', opcuaServerConfig: { users: [passwordUser()] } },
+    ] as unknown as PLCServer[]
 
   it('rewrites only the OPC-UA server, leaving others identical', async () => {
     const input = servers()
-    const out = (await materialiseOpcUaCredentials(input, plainProfile)) as typeof input
+    const out = (await materialiseOpcUaCredentials(input, plainProfile))!
     expect(out[0]).toBe(input[0])
     expect(
       (out[1] as never as { opcuaServerConfig: { users: { passwordHash: string }[] } }).opcuaServerConfig.users[0]
@@ -85,7 +90,7 @@ describe('materialiseOpcUaCredentials', () => {
 
   it('does not mutate the project, so a rebuild for another target is clean', async () => {
     const input = servers()
-    materialiseOpcUaCredentials(input, plainProfile)
+    await materialiseOpcUaCredentials(input, plainProfile)
     const opcua = input[1] as { opcuaServerConfig: { users: { password: string; passwordHash: string | null }[] } }
     expect(opcua.opcuaServerConfig.users[0].password).toBe('secret123')
     expect(opcua.opcuaServerConfig.users[0].passwordHash).toBeNull()

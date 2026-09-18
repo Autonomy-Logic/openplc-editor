@@ -423,8 +423,13 @@ void opcua_nodes_dematerialise(UA_VariableNode* node)
     // into a new allocation -- and "the materialised copy is discarded anyway"
     // is a property of today's flash nodestore, not a contract to rely on.
     // The per-target NodeIds are shared statics and must not be freed.
+    //
+    // Loop to referencesSize, not a hardcoded 2: build_refs() seeds two kinds,
+    // but UA_Server_addReference can APPEND a third (the same growth the alloc
+    // above accounts for), and freeing only the first two would leak it and its
+    // target array on every materialise -- which the ~19 KB arena cannot spare.
     UA_NodeReferenceKind* kinds = node->head.references;
-    for (size_t i = 0; i < 2; i++)
+    for (size_t i = 0; i < node->head.referencesSize; i++)
     {
         if (!kinds[i].hasRefTree && kinds[i].targets.array != nullptr)
             UA_free(kinds[i].targets.array);

@@ -644,6 +644,10 @@ async function runCompilePipelineInner(
       )
 
       confs = generateRuntimeConfs({
+        // generateRuntimeConfs declares a stricter inline server shape than
+        // PLCServer (bufferMapping required, etc.); the cast bridges that
+        // cross-module difference, not the credentials type which is now
+        // concrete.
         servers: opcuaCredentialServers as never,
         remoteDevices: processedData.remoteDevices as never,
         instances: processedData.configuration.resource.instances.map(
@@ -1051,7 +1055,7 @@ async function runCompilePipelineInner(
         (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
       )
       const resolvedOpcUa = buildOpcUaRuntimeConfig(
-        opcuaCredentialServers as never,
+        opcuaCredentialServers,
         debugMapJson,
         processedData.configuration.resource.instances.map((inst: { name: string; task: string; program: string }) => ({
           name: inst.name,
@@ -1081,9 +1085,12 @@ async function runCompilePipelineInner(
   let s7commConfigH: string | undefined
   if (targetCapabilities.s7Server && targetCapabilities.s7 && targetHostsServers) {
     try {
+      // Filter on ENABLED, like the OPC-UA lookup in generate-opcua-config —
+      // otherwise a disabled first S7 server hides an enabled second one, and
+      // the build ships the disabled config.
       const s7Server = (processedData.servers ?? []).find(
-        (server: { protocol?: string; s7commSlaveConfig?: unknown }) =>
-          server.protocol === 's7comm' && server.s7commSlaveConfig,
+        (server: { protocol?: string; s7commSlaveConfig?: { server?: { enabled?: boolean } } }) =>
+          server.protocol === 's7comm' && server.s7commSlaveConfig?.server?.enabled,
       ) as { s7commSlaveConfig?: S7CommSlaveConfigLike } | undefined
 
       s7commConfigH = generateS7CommHeaderContent({

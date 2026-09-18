@@ -76,14 +76,14 @@ export const GLOBAL_SCOPE_POU = 'GVL'
 /**
  * Is this node addressed in the global scope?
  *
- * Case-insensitive on both names. It used to read
- * `pouName === 'GVL' || pouName === 'CONFIG' || pouName.toUpperCase() === 'GVL'`,
- * which accepted `gvl` but not `config` for no reason anyone intended.
+ * `GVL` and `CONFIG` are reserved SENTINELS the variable picker and the
+ * configuration emit for a global — they are not POU names a user types. Matched
+ * exactly, not case-folded: lowercasing routed a user program literally named
+ * `Config` (or `Gvl`) into the global scope, binding its variables to whatever
+ * global happened to share a name. A real POU keeps its own name and its own
+ * instance-prefixed address.
  */
-export const isGlobalScopePou = (pouName: string): boolean => {
-  const normalised = pouName.toUpperCase()
-  return normalised === GLOBAL_SCOPE_POU || normalised === 'CONFIG'
-}
+export const isGlobalScopePou = (pouName: string): boolean => pouName === GLOBAL_SCOPE_POU || pouName === 'CONFIG'
 
 /**
  * A program-scoped path that missed, retried in the global scope.
@@ -104,9 +104,24 @@ const lookupAsGlobal = (
   pouName: string,
   variablePath: string,
   pathToAddr: Map<string, DebugLeafInfo>,
+  fallbackWarnings?: string[],
 ): LeafAddress | null => {
   if (isGlobalScopePou(pouName)) return null // the global path was already the first try
-  return lookup(buildGlobalDebugPath(variablePath), pathToAddr)
+  const addr = lookup(buildGlobalDebugPath(variablePath), pathToAddr)
+  if (addr) {
+    // This ONLY fires for a pre-migration address space: a VAR_EXTERNAL saved
+    // under the referencing program before the picker started stamping the
+    // global scope. It cannot be silent, because it is also the one way a
+    // genuinely-missing program-local (renamed, deleted) with a same-named
+    // global would bind to the wrong memory — so name it, every time, and let
+    // the build log show it. New projects never reach here.
+    fallbackWarnings?.push(
+      `OPC-UA variable "${pouName}:${variablePath}" resolved to the global "${variablePath}" ` +
+        `because no program-scoped leaf matched. If they are different variables, re-pick it in ` +
+        `the address space.`,
+    )
+  }
+  return addr
 }
 
 /**
@@ -146,6 +161,7 @@ export const resolveVariableAddress = (
   node: OpcUaNodeConfig,
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
+  fallbackWarnings?: string[],
 ): LeafAddress => {
   const result = pathForNode(node.pouName, node.variablePath, instances)
   if ('error' in result) throw result.error
@@ -153,7 +169,7 @@ export const resolveVariableAddress = (
   const addr = lookup(result.path, pathToAddr)
   if (addr) return addr
 
-  const asGlobal = lookupAsGlobal(node.pouName, node.variablePath, pathToAddr)
+  const asGlobal = lookupAsGlobal(node.pouName, node.variablePath, pathToAddr, fallbackWarnings)
   if (asGlobal) return asGlobal
 
   throw new OpcUaConfigError(
@@ -183,6 +199,7 @@ const resolveFieldRecursively = (
   pathToAddr: Map<string, DebugLeafInfo>,
   instanceName: string | null,
   droppedPaths: string[],
+  fallbackWarnings?: string[],
 ): ResolvedField | null => {
   const fullFieldPath = `${parentPath}.${field.fieldPath}`
 
@@ -192,7 +209,15 @@ const resolveFieldRecursively = (
   if (field.fields && field.fields.length > 0) {
     const nestedFields = field.fields
       .map((nestedField) =>
-        resolveFieldRecursively(nestedField, fullFieldPath, pouName, pathToAddr, instanceName, droppedPaths),
+        resolveFieldRecursively(
+          nestedField,
+          fullFieldPath,
+          pouName,
+          pathToAddr,
+          instanceName,
+          droppedPaths,
+          fallbackWarnings,
+        ),
       )
       .filter((f): f is ResolvedField => f !== null)
 
@@ -215,7 +240,7 @@ const resolveFieldRecursively = (
   const debugPath = isGlobalScopePou(pouName)
     ? buildGlobalDebugPath(fullFieldPath)
     : buildDebugPath(instanceName!, fullFieldPath)
-  const addr = lookup(debugPath, pathToAddr) ?? lookupAsGlobal(pouName, fullFieldPath, pathToAddr)
+  const addr = lookup(debugPath, pathToAddr) ?? lookupAsGlobal(pouName, fullFieldPath, pathToAddr, fallbackWarnings)
   if (!addr) {
     droppedPaths.push(`${pouName}:${fullFieldPath}`)
     return null
@@ -242,9 +267,10 @@ export const resolveStructureAddresses = (
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[] = [],
+  fallbackWarnings?: string[],
 ): ResolvedField[] => {
   if (!node.fields || node.fields.length === 0) {
-    const addr = resolveVariableAddress(node, pathToAddr, instances)
+    const addr = resolveVariableAddress(node, pathToAddr, instances, fallbackWarnings)
     return [
       {
         name: node.variablePath,
@@ -271,7 +297,15 @@ export const resolveStructureAddresses = (
 
   return node.fields
     .map((field) =>
-      resolveFieldRecursively(field, node.variablePath, node.pouName, pathToAddr, instanceName, droppedPaths),
+      resolveFieldRecursively(
+        field,
+        node.variablePath,
+        node.pouName,
+        pathToAddr,
+        instanceName,
+        droppedPaths,
+        fallbackWarnings,
+      ),
     )
     .filter((f): f is ResolvedField => f !== null)
 }

@@ -447,10 +447,14 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   // carries one for ET). That is not a connected variable, it shows no badge of
   // its own, and the block's badge is the only place its value appears -- so it
   // must NOT suppress anything.
-  const connectedOutputKey = useOpenPLCStore((state) => {
-    const rung = state.ladderFlows
-      .find((flow) => flow.name === pouName)
-      ?.rungs.find((r) => r.nodes.some((n) => n.id === id))
+  // Subscribe to the flows array only (a stable reference until the ladder
+  // actually changes), then derive in a memo. As a live selector this ran its
+  // whole-POU scan on EVERY store update — a debug-value tick, a cursor move —
+  // once per rendered block; keyed on the flows reference it runs only when the
+  // ladder is edited.
+  const ladderFlows = useOpenPLCStore((state) => state.ladderFlows)
+  const connectedOutputKey = useMemo(() => {
+    const rung = ladderFlows.find((flow) => flow.name === pouName)?.rungs.find((r) => r.nodes.some((n) => n.id === id))
     if (!rung) return ''
     const names: string[] = []
     for (const node of rung.nodes) {
@@ -467,7 +471,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       names.push(nd.block.handleId)
     }
     return names.sort().join('\u0000')
-  })
+  }, [ladderFlows, pouName, id])
 
   const connectedOutputNames = useMemo(() => {
     // Union with the cache: where it DOES carry an output entry, honour it.

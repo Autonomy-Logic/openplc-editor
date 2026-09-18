@@ -331,11 +331,23 @@ const OrchestratorsList = () => {
     // Disconnect from current device first
     await handleDisconnect()
 
-    // Select the new device
+    // Select the new device — locally AND in the store. Publishing to the store
+    // is what every other selection path does (handleDeviceSelect, handleConnect
+    // and the simulator clears); leaving it out here meant that after a switch
+    // the screen showed device B while `runtimeConnection.selectedDevice` was
+    // still null (handleDisconnect had just cleared it). The debugger reads the
+    // store, so it reported "No Device Selected", and on a simulator-named board
+    // that turned into an offer to start the simulator instead.
     setSelectedDevice(pendingDeviceSwitch)
+    deviceActions.setSelectedDevice({
+      orchestratorId: pendingDeviceSwitch.orchestratorId,
+      orchestratorAgentId: pendingDeviceSwitch.orchestratorAgentId,
+      deviceId: pendingDeviceSwitch.deviceId,
+      deviceName: pendingDeviceSwitch.deviceName,
+    })
     setPendingDeviceSwitch(null)
     setConnectionError(null)
-  }, [pendingDeviceSwitch, handleDisconnect])
+  }, [pendingDeviceSwitch, handleDisconnect, deviceActions])
 
   const handleCancelDeviceSwitch = useCallback(() => {
     setShowSwitchConfirmModal(false)

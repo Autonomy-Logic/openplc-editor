@@ -84,8 +84,10 @@ describe('resolveVariableAddress', () => {
     expect(resolveVariableAddress(node, pmap(['TEMP', 1, 12]), [])).toMatchObject({ arr: 1, elem: 12 })
   })
 
-  it('matches case-insensitively', () => {
-    const node = makeNode({ pouName: 'gvl', variablePath: 'b' })
+  it('uppercases the variable path for lookup (debug map is upper end-to-end)', () => {
+    // The GVL sentinel is emitted uppercase by the picker; the variable NAME is
+    // matched case-insensitively because buildGlobalDebugPath uppercases it.
+    const node = makeNode({ pouName: 'GVL', variablePath: 'b' })
     expect(resolveVariableAddress(node, pmap(['B', 0, 7]), [])).toMatchObject({ arr: 0, elem: 7 })
   })
 
@@ -524,13 +526,24 @@ describe('VAR_EXTERNAL / global scope', () => {
     expect(addr).toEqual({ arr: 0, elem: 7, type: 'DINT', size: 4 })
   })
 
-  it('resolves CONFIG as the global scope too (it used to be case-sensitive)', () => {
+  it('resolves the CONFIG sentinel (exact) as the global scope', () => {
     const addr = resolveVariableAddress(
-      makeNode({ pouName: 'config', variablePath: 'TEST_GLOBAL' }),
+      makeNode({ pouName: 'CONFIG', variablePath: 'TEST_GLOBAL' }),
       pmap(['TEST_GLOBAL', 0, 7, 'DINT', 4]),
       instances,
     )
     expect(addr).toEqual({ arr: 0, elem: 7, type: 'DINT', size: 4 })
+  })
+
+  it('does NOT treat a user program named "Config" as the global scope', () => {
+    // A real POU keeps its instance-prefixed address. `Config` is not the
+    // reserved CONFIG sentinel, and case-folding it used to misroute it.
+    const addr = resolveVariableAddress(
+      makeNode({ pouName: 'Config', variablePath: 'X' }),
+      pmap(['INSTANCE0.X', 3, 9, 'INT', 2]),
+      [inst('INSTANCE0', 'Config')],
+    )
+    expect(addr).toEqual({ arr: 3, elem: 9, type: 'INT', size: 2 })
   })
 
   it('falls back to the global path for a config saved with the program as pouName', () => {
@@ -542,6 +555,30 @@ describe('VAR_EXTERNAL / global scope', () => {
       instances,
     )
     expect(addr).toEqual({ arr: 0, elem: 7, type: 'DINT', size: 4 })
+  })
+
+  it('warns on every global-fallback hit so a mis-bind is never silent', () => {
+    const warnings: string[] = []
+    resolveVariableAddress(
+      makeNode({ pouName: 'MAIN', variablePath: 'TEST_GLOBAL' }),
+      pmap(['TEST_GLOBAL', 0, 7, 'DINT', 4]),
+      instances,
+      warnings,
+    )
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('MAIN:TEST_GLOBAL')
+    expect(warnings[0]).toContain('global')
+  })
+
+  it('does not warn when the program-scoped leaf resolves directly', () => {
+    const warnings: string[] = []
+    resolveVariableAddress(
+      makeNode({ pouName: 'MAIN', variablePath: 'OWNED' }),
+      pmap(['INSTANCE0.OWNED', 1, 2]),
+      instances,
+      warnings,
+    )
+    expect(warnings).toHaveLength(0)
   })
 
   it('prefers the program-scoped address when the POU owns a variable of that name', () => {

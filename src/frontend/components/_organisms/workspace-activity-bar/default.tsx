@@ -20,7 +20,7 @@ import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
 import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { buildDeviceResolverContext, showDeviceDialog } from '../../../services/device-link-resolution'
+import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -442,32 +442,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // Serial handoff (D72): if we released a held device connection for this
-        // upload, reconnect it now that arduino-cli is done with the port.
-        // Silent (no dialogs) — the user just flashed on purpose.
-        if (serialWasReleased && result.success) {
-          const boardTarget = deviceDefinitions.configuration.deviceBoard
-          const spec = currentBoardInfo?.debug
-          // Same candidate resolution Connect uses, so the link comes back the way
-          // the user established it. Only the serial link is ever released for an
-          // upload, but resolving the full list lets the reconnect land on Modbus
-          // TCP if that is what now answers.
-          // `deferPrompts`: this reconnect is silent and automatic (the user just
-          // flashed), so it must never pop an address dialog behind their back. A
-          // DHCP-only target simply stays disconnected until they press Connect.
-          const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
-            transports: caps.debuggerTransports,
-            deferPrompts: true,
-          })
-          if (candidates.kind === 'candidates') {
-            try {
-              await device.connect(candidates.candidates.map((candidate) => candidate.config))
-            } catch {
-              // best-effort: the user can press Connect again.
-            }
-          }
-        }
-
         // Ethernet handoff: after a successful upload the device is now running at
         // the program's configured IP (which may differ from the address we just
         // uploaded to). Advance the connect/upload IP to it, so the reconnect —
@@ -476,11 +450,30 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           const cfg = useOpenPLCStore.getState().deviceDefinitions.configuration
           const vsd = (cfg.vendorScreenData ?? {}) as {
             modbus_tcp?: { ip_address?: string }
-            network?: { ip_address?: string }
+            network?: { enable_dhcp?: boolean; ip_address?: string }
           }
-          const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
-          if (newIp && newIp !== cfg.runtimeIpAddress) {
-            useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(newIp)
+          // Under DHCP the firmware emits MBTCP_IP 0 and the stored ip_address is
+          // stale — the device just took whatever the server handed it, which the
+          // editor cannot know. Advancing to the stored static address would dial
+          // the wrong host, and the `finally` reconnect would follow it there. So
+          // ask the user for the address the device came up on (the modal already
+          // exists — showDeviceInput → debugger-ip-input) rather than guess.
+          if (vsd.network?.enable_dhcp) {
+            const entered = await showDeviceInput(
+              'Device IP address',
+              'This target uses DHCP, so its address is assigned by the network and the editor ' +
+                'cannot know it. Enter the IP the device came up on to reconnect and for later uploads.',
+              cfg.runtimeIpAddress ?? '',
+            )
+            const trimmed = entered?.trim()
+            if (trimmed) {
+              useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(trimmed)
+            }
+          } else {
+            const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
+            if (newIp && newIp !== cfg.runtimeIpAddress) {
+              useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(newIp)
+            }
           }
         }
         // The device rebooted into the new firmware, so the link we come back to
@@ -501,9 +494,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // with only "Build error: ..." in the console and nothing to say the
         // connection was gone. Guarded on its own flag, so it is a no-op when
         // there was nothing to restore.
-        if (ethWasConnected) {
+        // Restore whichever link this handler dropped for the upload -- serial
+        // OR ethernet, never both. Both live in `finally`, guarded on their own
+        // flag and independent of success: a build that threw (an IPC failure,
+        // an adapter throw) or returned { success: false } still released the
+        // port, so it must still be reconnected, or a USB target is left
+        // disconnected with only "Build error: ..." and nothing to say why.
+        // This is the bug the ethernet handoff already fixed; the serial handoff
+        // had the same shape one branch over.
+        if (serialWasReleased || ethWasConnected) {
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
+          // `deferPrompts`: silent and automatic (the user just flashed), so it
+          // must never pop an address dialog behind their back. A DHCP-only
+          // target simply stays disconnected until they press Connect.
           const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
             transports: caps.debuggerTransports,
             deferPrompts: true,

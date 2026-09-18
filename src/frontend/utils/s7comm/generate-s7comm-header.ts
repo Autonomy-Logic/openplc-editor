@@ -112,9 +112,17 @@ export interface GenerateS7CommHeaderInput {
   warn?: (message: string) => void
 }
 
-/** C string literal, escaped. */
+/** C string literal, escaped. \r included — escaping \n but not \r left a bare
+ *  carriage return in the literal, which the compiler reports as an unterminated
+ *  string with no hint which field carried it. */
 const cString = (value: string): string =>
-  `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`
+  `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`
+
+/** Text safe to drop into a `//` line comment: no newline can break out of it
+ *  into code. A data-block description reaches here from a hand-edited, imported
+ *  or shared project (the pipeline reads the S7 config through a cast, not a
+ *  parse), so a newline in it would otherwise inject arbitrary C. */
+const cComment = (value: string): string => value.replace(/[\r\n]+/g, ' ').replace(/\*\//g, '* /')
 
 /** Resolve one mapping to a `S7COMM_BUF_*` name, or explain why not. */
 const resolveBuffer = (
@@ -314,8 +322,9 @@ export function generateS7CommHeaderContent(input: GenerateS7CommHeaderInput): s
   lines.push('static const s7comm_area_t S7COMM_AREAS[S7COMM_AREA_COUNT] = {')
   for (const a of areas) {
     lines.push(
-      `    { ${a.area}, ${a.dbNumber}, ${a.sizeBytes}, ${a.buffer}, ${a.startIndex}, ${a.writable ? 1 : 0} },` +
-        `  // ${a.label}`,
+      `    { ${a.area}, ${Math.trunc(Number(a.dbNumber)) || 0}, ${Math.trunc(Number(a.sizeBytes)) || 0}, ` +
+        `${a.buffer}, ${Math.trunc(Number(a.startIndex)) || 0}, ${a.writable ? 1 : 0} },` +
+        `  // ${cComment(a.label)}`,
     )
   }
   lines.push('};')

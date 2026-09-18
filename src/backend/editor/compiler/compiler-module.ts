@@ -3212,7 +3212,7 @@ class CompilerModule {
     // Ethernet-upload boards reach the editor only over the network. Known
     // before the config read so the mandate below applies even when there is no
     // configuration.json.
-    const uploadsOverEthernet = (boardEntry as { uploadMethod?: string } | undefined)?.uploadMethod === 'ethernet'
+    const uploadsOverEthernet = boardEntry?.uploadMethod === 'ethernet'
     if (boardRuntime !== 'simulator' && boardRuntime !== 'openplc-compiler') {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
       let configuredIp: string | undefined
@@ -3291,7 +3291,13 @@ class CompilerModule {
         // wrong address means it cannot be reached again -- and the build said
         // it succeeded. An ethernet-upload board with no IP has no usable
         // firmware to emit, so this refuses rather than guesses.
-        const ip = vppModbusState?.network?.ip_address || configuredIp
+        // Precedence, highest first: the caller's runtimeIpAddress (the CLI's
+        // `--host`, or the store value the GUI passes), then the network
+        // screen's stored address, then the disk-persisted configuredIp. Same
+        // rule communicationPort follows for a serial upload -- a value passed
+        // for THIS upload beats whatever the project file remembers, or
+        // `--host 10.0.0.9` flashed 10.0.0.9 with the file's old IP baked in.
+        const ip = runtimeIpAddress || vppModbusState?.network?.ip_address || configuredIp
         if (!ip) {
           _mainProcessPort.postMessage({
             logLevel: 'error',
@@ -3311,13 +3317,24 @@ class CompilerModule {
         const subnet = vppModbusState?.network?.subnet || '255.255.255.0'
         const gateway = vppModbusState?.network?.gateway || gwFromIp(ip)
         const dns = vppModbusState?.network?.dns || gateway
+        // `interface` and `enable_dhcp` are DEFAULTED, not forced. Forcing them
+        // meant a user who ticked DHCP got static firmware with nothing said --
+        // the same silent override the three lines above deliberately avoid
+        // with `||`. A board with no network screen leaves both undefined, so
+        // it still lands on a working static config; a user who chose DHCP
+        // keeps it, and the editor asks for the reachable address separately
+        // (the DHCP-IP modal). `ip_address` still wins because the ethernet
+        // UPLOAD has to reach a concrete address regardless of the runtime's
+        // own interface choice.
+        const iface = vppModbusState?.network?.interface || 'Ethernet'
+        const enableDhcp = vppModbusState?.network?.enable_dhcp ?? false
         vppModbusState = {
           ...(vppModbusState ?? {}),
           network: {
             ...(vppModbusState?.network ?? {}),
             enabled: true,
-            interface: 'Ethernet',
-            enable_dhcp: false,
+            interface: iface,
+            enable_dhcp: enableDhcp,
             ip_address: ip,
             subnet,
             gateway,

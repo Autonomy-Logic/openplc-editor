@@ -161,7 +161,11 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
   ])
 
   const connect = useCallback(async () => {
-    if (connectionStatus === 'connected') return
+    // Already connected, or a connect is already in flight — either way there
+    // is nothing to start. Without the `connecting` guard a second press (the
+    // debugger clears its own processing flag before this resolves) fired a
+    // second getUsersInfo and a second login modal.
+    if (connectionStatus === 'connected' || connectionStatus === 'connecting') return
     await toggle()
   }, [connectionStatus, toggle])
 

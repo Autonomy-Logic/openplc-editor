@@ -11,6 +11,7 @@
  * already dispatches on.
  */
 
+import type { PLCServer } from '../../../middleware/shared/ports/types'
 import type { OpcUaTargetProfile } from '../../../middleware/shared/utils/target-capabilities/types'
 
 /** Salt and digest lengths, matching what the editor emitted historically and
@@ -124,30 +125,30 @@ export async function deriveOpcUaCredential(
  * stores, ready for both Runtime v4's `opcua_config.json` and the baremetal
  * `OPCUA_USERS[]` table. The project's plaintext is never mutated.
  */
-export async function materialiseOpcUaCredentials<T>(
-  servers: T,
+export async function materialiseOpcUaCredentials(
+  servers: PLCServer[] | undefined,
   profile: Pick<OpcUaTargetProfile, 'passwordScheme' | 'kdfIterations'> | undefined,
   warn?: (message: string) => void,
-): Promise<T> {
-  if (!Array.isArray(servers)) return servers
+): Promise<PLCServer[] | undefined> {
+  if (!servers) return servers
 
-  return (await Promise.all(
-    servers.map(async (server: unknown) => {
-      const s = server as { protocol?: string; opcuaServerConfig?: { users?: UserLike[] } }
-      if (s?.protocol !== 'opcua' || !Array.isArray(s.opcuaServerConfig?.users)) return server
+  return Promise.all(
+    servers.map(async (server) => {
+      const users = server.opcuaServerConfig?.users
+      if (server.protocol !== 'opcua' || !Array.isArray(users)) return server
 
       return {
-        ...s,
+        ...server,
         opcuaServerConfig: {
-          ...s.opcuaServerConfig,
+          ...server.opcuaServerConfig,
           users: await Promise.all(
-            s.opcuaServerConfig.users.map(async (user) => ({
+            (users as UserLike[]).map(async (user) => ({
               ...user,
               passwordHash: await deriveOpcUaCredential(user, profile, warn),
             })),
           ),
         },
-      }
+      } as PLCServer
     }),
-  )) as unknown as T
+  )
 }

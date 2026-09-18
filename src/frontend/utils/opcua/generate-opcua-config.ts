@@ -238,8 +238,9 @@ const resolveVariable = (
   node: OpcUaNodeConfig,
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
+  fallbackWarnings: string[],
 ): RuntimeVariable => {
-  const addr = resolveVariableAddress(node, pathToAddr, instances)
+  const addr = resolveVariableAddress(node, pathToAddr, instances, fallbackWarnings)
 
   return {
     node_id: node.nodeId,
@@ -294,8 +295,9 @@ const resolveStructure = (
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
+  fallbackWarnings: string[],
 ): RuntimeStructure | null => {
-  const resolvedFields = resolveStructureAddresses(node, pathToAddr, instances, droppedPaths)
+  const resolvedFields = resolveStructureAddresses(node, pathToAddr, instances, droppedPaths, fallbackWarnings)
   if (resolvedFields.length === 0) {
     return null
   }
@@ -347,6 +349,7 @@ const buildAddressSpace = (
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
+  fallbackWarnings: string[],
 ): RuntimeAddressSpace => {
   const variables: RuntimeVariable[] = []
   const structures: RuntimeStructure[] = []
@@ -362,11 +365,11 @@ const buildAddressSpace = (
           // the program. The user has to fix the OPC-UA config.
           // (Field-level mismatches are handled gracefully by
           // resolveStructureAddresses via droppedPaths.)
-          variables.push(resolveVariable(node, pathToAddr, instances))
+          variables.push(resolveVariable(node, pathToAddr, instances, fallbackWarnings))
           break
         case 'structure': {
           // Structures and FBs are handled the same way - resolve all leaf fields
-          const struct = resolveStructure(node, pathToAddr, instances, droppedPaths)
+          const struct = resolveStructure(node, pathToAddr, instances, droppedPaths, fallbackWarnings)
           if (struct) structures.push(struct)
           break
         }
@@ -374,7 +377,7 @@ const buildAddressSpace = (
           // Arrays with fields (complex element types) are treated like structures
           // because each leaf variable needs individual address resolution
           if (node.fields && node.fields.length > 0) {
-            const struct = resolveStructure(node, pathToAddr, instances, droppedPaths)
+            const struct = resolveStructure(node, pathToAddr, instances, droppedPaths, fallbackWarnings)
             if (struct) structures.push(struct)
             break
           }
@@ -488,7 +491,11 @@ export const buildOpcUaRuntimeConfig = (
   //    each one via onWarn so the user can clean up the OPC-UA config
   //    later if they care.
   const droppedPaths: string[] = []
-  const addressSpace = buildAddressSpace(config, pathToAddr, instances, droppedPaths)
+  const fallbackWarnings: string[] = []
+  const addressSpace = buildAddressSpace(config, pathToAddr, instances, droppedPaths, fallbackWarnings)
+  if (onWarn) {
+    for (const message of fallbackWarnings) onWarn(message)
+  }
   if (onWarn && droppedPaths.length > 0) {
     onWarn(
       `OPC-UA: dropped ${droppedPaths.length} unresolvable variable path(s) ` +

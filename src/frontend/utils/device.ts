@@ -67,7 +67,7 @@ export function isSimulatorTarget(boardInfo: BoardLike): boolean {
  * button.
  */
 export function isEthernetUploadTarget(boardInfo: BoardLike): boolean {
-  return (boardInfo as { uploadMethod?: string } | null | undefined)?.uploadMethod === 'ethernet'
+  return boardInfo?.uploadMethod === 'ethernet'
 }
 
 /**

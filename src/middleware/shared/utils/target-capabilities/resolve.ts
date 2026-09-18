@@ -43,6 +43,10 @@ export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | '
 export type BoardInfoLike = {
   compiler?: string
   capabilities?: DeclaredCapabilities
+  /** How the board is flashed. Declared here so readers (e.g.
+   *  `isEthernetUploadTarget`) test it without casting BoardInfo to an
+   *  anonymous shape. */
+  uploadMethod?: 'serial' | 'ethernet'
   /** Legacy hals.json BoardInfo flag: present and truthy when the board
    *  came from a VPP package. Used to flip `vppIo` on for v4-derived
    *  VPP boards that didn't ship an explicit capability block. */

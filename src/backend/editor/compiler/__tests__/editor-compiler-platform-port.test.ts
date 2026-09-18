@@ -267,6 +267,27 @@ describe('createEditorCompilerPlatformPort', () => {
     )
   })
 
+  it('uploadArduinoBoard forwards uploadMethod and ipAddress for an ethernet upload', async () => {
+    // These two were "declared but never populated" before the ethernet-upload
+    // work — an ethernet build ignored the address the caller gave and used
+    // whatever the project file remembered. Pin that they now reach the handler.
+    const handleUploadProgram = jest.fn(async () => ({ success: true, data: '' }))
+    const port = createEditorCompilerPlatformPort(makeHandlers({ handleUploadProgram }), makeContext())
+    await port.uploadArduinoBoard(
+      {
+        compilationPath: '',
+        fqbn: 'autonomylogic:tm4c:logo8',
+        port: '',
+        uploadMethod: 'ethernet',
+        ipAddress: '10.0.0.9',
+      },
+      () => undefined,
+    )
+    expect(handleUploadProgram).toHaveBeenCalledWith(
+      expect.objectContaining({ uploadMethod: 'ethernet', ipAddress: '10.0.0.9' }),
+    )
+  })
+
   it('uploadArduinoBoard passes communicationPort=undefined to the handler when args.port is empty', async () => {
     // Empty string means "no explicit port from the renderer" — the
     // handler must fall back to the disk-persisted value rather than
