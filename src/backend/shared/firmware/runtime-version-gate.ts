@@ -91,6 +91,25 @@ export function isStrucppCompatibleRuntime(raw: string | null | undefined): bool
   return isVersionAtLeast(raw, MIN_RUNTIME_VERSION)
 }
 
+/** Minimum runtime version that ships the persistent-storage (RETAIN)
+ *  settings API — `GET`/`PUT /api/retain-config` and the built-in file
+ *  store they configure. */
+export const MIN_RETAIN_CONFIG_RUNTIME_VERSION = '4.2.0'
+
+/**
+ * Returns true iff the runtime ships the persistent-storage settings API
+ * (>= 4.2.0).
+ *
+ * Older runtimes have no built-in retain store and no endpoints to configure
+ * one, so the editor hides the Persistent Storage screen for them rather than
+ * offering settings that would 404. Retain itself still works on those
+ * runtimes when a VPP plugin provides storage — the screen configures the
+ * BUILT-IN store, which is what did not exist before this version.
+ */
+export function isRetainConfigCapableRuntime(raw: string | null | undefined): boolean {
+  return isVersionAtLeast(raw, MIN_RETAIN_CONFIG_RUNTIME_VERSION)
+}
+
 /** Minimum runtime version that ships the user-management API
  *  (roles, whoami, unified update-user, delete/last-admin guards). */
 export const MIN_USER_MANAGEMENT_RUNTIME_VERSION = '4.1.9'
@@ -115,8 +134,8 @@ export function isUserManagementCapableRuntime(raw: string | null | undefined): 
 export function describeIncompatibleRuntime(raw: string | null | undefined): string {
   const reported = formatVersionForDisplay(raw)
   return (
-    `Runtime version ${reported} is not compatible with this editor.  ` +
-    `Upload requires OpenPLC Runtime v${MIN_RUNTIME_VERSION} or newer (STruC++ pipeline).  ` +
+    `Runtime version ${reported} is not compatible with this editor. ` +
+    `Upload requires OpenPLC Runtime v${MIN_RUNTIME_VERSION} or newer (STruC++ pipeline). ` +
     `Please upgrade the runtime on the target device before pushing this build.`
   )
 }
@@ -137,8 +156,8 @@ export function describeEditorTooOldForRuntime(args: {
   const runtime = formatVersionForDisplay(args.runtimeVersion)
   const where = args.deviceLabel ? ` on ${args.deviceLabel}` : ''
   return (
-    `Runtime ${runtime}${where} requires OpenPLC Editor ${args.minEditorVersion} or newer.  ` +
-    `This editor is ${args.editorVersion}.  ` +
+    `Runtime ${runtime}${where} requires OpenPLC Editor ${args.minEditorVersion} or newer. ` +
+    `This editor is ${args.editorVersion}. ` +
     `Update the editor, or connect to a runtime that accepts ${args.editorVersion}.`
   )
 }
@@ -159,8 +178,8 @@ export function describeVppRuntimeMismatch(args: {
   const runtime = formatVersionForDisplay(args.runtimeVersion)
   const where = args.deviceLabel ? `The runtime at ${args.deviceLabel} reports` : 'The connected runtime reports'
   return (
-    `Board "${args.boardTarget}" requires OpenPLC Runtime v${args.minRuntimeVersion} or newer.  ` +
-    `${where} ${runtime}.  ` +
+    `Board "${args.boardTarget}" requires OpenPLC Runtime v${args.minRuntimeVersion} or newer. ` +
+    `${where} ${runtime}. ` +
     `Upgrade the runtime on that device, or select a board supported by ${runtime}.`
   )
 }

@@ -21,7 +21,7 @@ jest.mock('electron', () => ({
   },
 }))
 
-import { getPlcopenExportSavePath, getPlcopenImportFilePath } from '../path-picker'
+import { getPdfExportSavePath, getPlcopenExportSavePath, getPlcopenImportFilePath } from '../path-picker'
 
 describe('getPlcopenImportFilePath', () => {
   let dir: string
@@ -127,6 +127,58 @@ describe('getPlcopenExportSavePath', () => {
     expect(result).toEqual({
       success: false,
       error: { title: 'Error writing file', description: 'Failed to write the PLCopen XML file.' },
+    })
+  })
+})
+
+describe('getPdfExportSavePath', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'pdf-export-'))
+    jest.clearAllMocks()
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes the PDF bytes to the chosen path', async () => {
+    const filePath = join(dir, 'exported.pdf')
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46])
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath })
+
+    const result = await getPdfExportSavePath({} as never, 'exported.pdf', bytes)
+
+    expect(showSaveDialogMock).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        title: 'Export PDF',
+        defaultPath: 'exported.pdf',
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      }),
+    )
+    expect(result).toEqual({ success: true })
+    expect(new Uint8Array(readFileSync(filePath))).toEqual(bytes)
+  })
+
+  it('returns a canceled result when the user dismisses the dialog', async () => {
+    showSaveDialogMock.mockResolvedValue({ canceled: true, filePath: undefined })
+
+    const result = await getPdfExportSavePath({} as never, 'exported.pdf', new Uint8Array([1]))
+
+    expect(result).toEqual({ success: false, canceled: true })
+  })
+
+  it('returns a write error when the target path cannot be written', async () => {
+    const badPath = join(dir, 'nonexistent-subdir', 'exported.pdf')
+    showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: badPath })
+
+    const result = await getPdfExportSavePath({} as never, 'exported.pdf', new Uint8Array([1]))
+
+    expect(result).toEqual({
+      success: false,
+      error: { title: 'Error writing file', description: 'Failed to write the PDF file.' },
     })
   })
 })

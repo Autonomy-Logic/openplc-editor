@@ -25,12 +25,14 @@ import { LibraryManagerEditor } from '../components/_features/[workspace]/editor
 import { LibraryManifestEditor } from '../components/_features/[workspace]/editor/library-manifest'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
 import { PackageManagerEditor } from '../components/_features/[workspace]/editor/package-manager'
+import { PersistentStorageEditor } from '../components/_features/[workspace]/editor/persistent-storage'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
 import { UserManagementEditor } from '../components/_features/[workspace]/editor/user-management'
 import { VendorScreenEditor } from '../components/_features/[workspace]/editor/vendor-screen'
+import { GlobalVariableListEditor } from '../components/_features/[workspace]/global-variable-list'
 import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
@@ -85,7 +87,16 @@ const WorkspaceScreen = () => {
   // tab switches — no dispose churn, no view-state loss.
   const editors = useOpenPLCStore(useCallback((s) => s.editors, []))
   const searchResults = useOpenPLCStore(useCallback((s) => s.searchResults, []))
-  const pous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  const projectPous = useOpenPLCStore(useCallback((s) => s.project.data.pous, []))
+  // A library-debug session runs a generated harness program declaring one
+  // instance of every block in the library (see `composeLibraryDebugHarness`).
+  // It is not part of the project, so it joins the POU list here — added, not
+  // substituted, so a debug flag ticked mid-session still takes effect.
+  const debugHarness = useOpenPLCStore(useCallback((s) => s.workspace.debugHarness, []))
+  const pous = useMemo(
+    () => (debugHarness ? [...projectPous, debugHarness.programPou] : projectPous),
+    [projectPous, debugHarness],
+  )
   const projectPath = useOpenPLCStore(useCallback((s) => s.project.meta.path, []))
   const projectType = useOpenPLCStore(useCallback((s) => s.project.meta.type, []))
   // Project-type capability matrix.  Combines with `capabilities`
@@ -453,7 +464,6 @@ const WorkspaceScreen = () => {
       if (cancelled) return
       for (const packageId of removed) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message: `Removed untrusted VPP package "${packageId}": its signature is missing or invalid.`,
         })
@@ -588,6 +598,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
+                        {editor['type'] === 'plc-persistent-storage' && <PersistentStorageEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
@@ -629,6 +640,31 @@ const WorkspaceScreen = () => {
                                 return (
                                   <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
                                     <DataTypeEditor dataTypeName={model.meta.name} />
+                                  </div>
+                                )
+                              })}
+                          </div>
+                        )}
+
+                        {/* Global Variable List editors — multi-instance, same
+                            pattern: each reads its own list by name, so every open
+                            list can stay mounted without one writing over another. */}
+                        {editors.some((m) => m.type === 'plc-global-variable-list') && (
+                          <div
+                            aria-label='Global variable lists editor container'
+                            className={cn(
+                              'flex h-full w-full flex-1 gap-2',
+                              editor.type !== 'plc-global-variable-list' && 'hidden',
+                            )}
+                          >
+                            {editors
+                              .filter((m) => m.type === 'plc-global-variable-list')
+                              .map((model) => {
+                                const isActive =
+                                  editor.type === 'plc-global-variable-list' && editor.meta.name === model.meta.name
+                                return (
+                                  <div key={model.meta.name} className={cn('h-full w-full', !isActive && 'hidden')}>
+                                    <GlobalVariableListEditor listName={model.meta.name} />
                                   </div>
                                 )
                               })}

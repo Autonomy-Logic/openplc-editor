@@ -1,11 +1,12 @@
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/frontend/components/_atoms/tooltip'
+import { FieldHelpIcon, TooltipProvider } from '@root/frontend/components/_atoms/tooltip'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { useEffect } from 'react'
 
 import type { ScreenSection } from '../index'
 
@@ -53,30 +54,6 @@ type FormLayoutProps = {
   section: ScreenSection
 }
 
-// Small "info" glyph that reveals the field's help text on hover.
-function FieldHelpIcon({ text }: { text: string }) {
-  return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>
-        <span
-          tabIndex={0}
-          aria-label='Field help'
-          className='inline-flex h-3.5 w-3.5 cursor-help select-none items-center justify-center rounded-full text-neutral-400 hover:text-neutral-600 focus:outline-none focus-visible:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300'
-        >
-          <svg viewBox='0 0 16 16' fill='none' className='h-3.5 w-3.5'>
-            <circle cx='8' cy='8' r='7' stroke='currentColor' strokeWidth='1.5' />
-            <path d='M8 7.25v4.25' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' />
-            <circle cx='8' cy='4.75' r='0.85' fill='currentColor' />
-          </svg>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side='right' align='start' sideOffset={6} className='text-xs'>
-        {text}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 function FormLayout({ section }: FormLayoutProps) {
   const fields = (section.fields ?? []) as FieldDef[]
 
@@ -86,6 +63,10 @@ function FormLayout({ section }: FormLayoutProps) {
   // serial-port picker reading `board.serialPorts`).
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
   const currentBoardInfo = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards.get(deviceBoard))
+
+  // Board context for `optionsRef`. `modbusSerialPorts` is derived rather than
+  // declared by the package: it is the board's UART list with the default one
+
   // Single-source-of-truth for the per-section storage key — see
   // `getSectionPersistenceKey` in ../index.tsx.  Every layout that
   // persists must derive its key through this helper so the
@@ -103,8 +84,53 @@ function FormLayout({ section }: FormLayoutProps) {
 
   const updateField = (id: string, value: string | number | boolean) => {
     if (persistenceKey === null) return
-    setVendorScreenData(persistenceKey, { ...storedValues, [id]: value })
+    // A `default` the user can see has to be a `default` the build gets.
+    // Above, defaults fill `values` for rendering, but only what someone
+    // actually typed was ever stored -- so a project that switched the
+    // network on without opening the Interface dropdown compiled with no
+    // carrier at all, and a Pico showing "17" for its chip select compiled
+    // against the library's pin 10. Seed every default that is visible after
+    // this edit and has nothing stored yet. Scoped to an edit the user is
+    // already making in this section, so nothing is written behind their
+    // back, and evaluated against the post-edit values so flipping a
+    // section's switch on seeds the fields it reveals.
+    const next = { ...values, [id]: value }
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.id === id || field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, next)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    setVendorScreenData(persistenceKey, { ...storedValues, ...seeded, [id]: value })
   }
+
+  // Persist visible defaults when the screen is SHOWN, not only when the user
+  // edits it. `updateField` seeds defaults on an edit, but a user who opens a
+  // screen, agrees with every default and changes nothing left those defaults
+  // unstored — so the build fell back to the library value (a Pico showing
+  // "17" for chip select compiled against pin 10). Per-board storage already
+  // keeps each target's data in its own bucket, so this writes into the active
+  // board's bucket only. Runs on mount and whenever the section or board
+  // changes; writes nothing when there is nothing new to seed, so it does not
+  // dirty a project just by being viewed once everything is already stored.
+  useEffect(() => {
+    if (persistenceKey === null) return
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, values)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    if (Object.keys(seeded).length > 0) {
+      setVendorScreenData(persistenceKey, { ...storedValues, ...seeded })
+    }
+    // `values`/`storedValues` are derived from the two deps below every render;
+    // depending on them directly would loop. The board key stands in for "the
+    // active bucket changed".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistenceKey, deviceBoard])
 
   return (
     <TooltipProvider>
@@ -171,9 +197,7 @@ function FormLayout({ section }: FormLayoutProps) {
                         align='center'
                         side='bottom'
                       >
-                        {resolveFieldOptions(field, {
-                          board: currentBoardInfo as Record<string, unknown> | undefined,
-                        }).map((opt) => {
+                        {resolveFieldOptions(field, { board: currentBoardInfo }).map((opt) => {
                           const value = typeof opt === 'string' ? opt : opt.value
                           const label = typeof opt === 'string' ? opt : opt.label
                           return (

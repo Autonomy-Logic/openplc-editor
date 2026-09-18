@@ -292,7 +292,11 @@ function locVar(name: string, location: string, cls: PLCVariable['class'] = 'loc
  *  Modbus claims. Producer-edit actions (addIOGroup, updateIOGroup …)
  *  rely on `caps.modbusTcpRemote = true` to count sibling groups when
  *  allocating addresses. */
-function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
+/** Land the board catalogue WITHOUT selecting a board — the project-load moment
+ *  where discovery finishes and target capabilities become resolvable. Split out
+ *  of `seedRuntimeV4Board` so a test can land the catalogue while the project's
+ *  own board stays unresolved. */
+function landBoardCatalogue(store: ReturnType<typeof makeStore>) {
   store.getState().deviceActions.setAvailableOptions({
     availableBoards: new Map<string, BoardInfo>([
       [
@@ -321,6 +325,21 @@ function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
       ],
     ]),
   })
+}
+
+/** Seed a microcontroller target — `compiler: 'arduino-cli'` is what makes a
+ *  board baremetal, and what decides the transport a new Modbus server gets. */
+function seedBaremetalBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      ['Arduino Uno', { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {} }],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('Arduino Uno')
+}
+
+function seedRuntimeV4Board(store: ReturnType<typeof makeStore>) {
+  landBoardCatalogue(store)
   store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
 }
 
@@ -356,6 +375,48 @@ function seedVppBoard(store: ReturnType<typeof makeStore>) {
     ]),
   })
   store.getState().deviceActions.setDeviceBoard('VPP Board')
+}
+
+/** Seed a Runtime v3 target: a target that RESOLVED and genuinely declares no
+ *  remote I/O. Distinct from an unresolved board — allocation must keep
+ *  honouring the declaration here (DOPE-440). */
+function seedRuntimeV3Board(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map<string, BoardInfo>([
+      [
+        'OpenPLC Runtime v3',
+        {
+          compiler: 'openplc-compiler',
+          core: 'rt-v3',
+          preview: '',
+          specs: {},
+          capabilities: {
+            pinMapping: false,
+            vppIo: false,
+            modbusTcpRemote: false,
+            ethercat: false,
+            modbusTcpServer: false,
+            opcuaServer: false,
+            s7Server: false,
+            debuggerTransports: ['modbus-tcp'],
+            pythonFunctionBlocks: true,
+            arduinoApiCompletions: false,
+            hasRuntimeStats: false,
+            isInProcessSimulator: false,
+            directUsbUpload: false,
+          },
+        },
+      ],
+    ]),
+  })
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v3')
+}
+
+/** Point the project at a board id that is NOT in `availableBoards` — a VPP
+ *  board whose package isn't installed, or a project authored elsewhere.
+ *  `resolveTargetCapabilities(undefined)` answers EMPTY_CAPABILITIES there. */
+function selectUnresolvedBoard(store: ReturnType<typeof makeStore>) {
+  store.getState().deviceActions.setDeviceBoard('Uninstalled VPP Board')
 }
 
 // ===========================================================================
@@ -760,6 +821,59 @@ describe('createProjectSlice', () => {
       expect((result.data as { name: string }).name).not.toBe('gx')
     })
 
+    it('steps a new global past a POU name the same way it steps past its own table', () => {
+      seedPou(store, makePou('Motor'))
+      const result = store.getState().projectActions.createVariable({
+        scope: 'global',
+        data: makeVariable('motor', 'global'),
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual([
+        'motor0',
+      ])
+    })
+
+    it('keeps incrementing a clone while the candidate is a POU, a type or a list', () => {
+      // A clone of `Motor` auto-increments to `Motor0`, which a POU already owns.
+      seedPou(store, makePou('Motor0'))
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('Motor', 'global') })
+      const result = store.getState().projectActions.createVariable({
+        scope: 'global',
+        data: makeVariable('Motor', 'global'),
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual([
+        'Motor',
+        'Motor1',
+      ])
+    })
+
+    it('seeds an empty table even when a POU already holds the default name', () => {
+      seedPou(store, makePou('GlobalVar'))
+      const result = store.getState().projectActions.createVariable({
+        scope: 'global',
+        data: makeVariable('GlobalVar', 'global'),
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables.map((v) => v.name)).toEqual([
+        'GlobalVar0',
+      ])
+    })
+
+    it('leaves a local variable that shares a POU name to the POU validator', () => {
+      seedPou(store, makePou('Motor'))
+      seedPou(store, makePou('Main', 'program', []))
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: makeVariable('Motor'),
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous.find((p) => p.name === 'Main')?.interface?.variables[0].name).toBe(
+        'Motor',
+      )
+    })
+
     it('fails for local scope when POU interface is missing', () => {
       const pou: PLCPou = { name: 'NoIface', pouType: 'program', body: makeBody() }
       seedPou(store, pou)
@@ -774,6 +888,16 @@ describe('createProjectSlice', () => {
   })
 
   describe('setPouVariables', () => {
+    it('replaces the list as-is, even with a duplicate name: undo/redo and reclassification restore through here', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('old')]))
+      const result = store.getState().projectActions.setPouVariables({
+        pouName: 'Main',
+        variables: [makeVariable('Motor'), makeVariable('motor')],
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['Motor', 'motor'])
+    })
+
     it('replaces all variables on a POU', () => {
       seedPou(store, makePou('Main', 'program', [makeVariable('old')]))
       const result = store.getState().projectActions.setPouVariables({
@@ -791,6 +915,14 @@ describe('createProjectSlice', () => {
   })
 
   describe('setGlobalVariables', () => {
+    it('replaces the list as-is, even with a duplicate name (restore paths rely on it)', () => {
+      const result = store.getState().projectActions.setGlobalVariables({
+        variables: [makeVariable('Line', 'global'), makeVariable('line', 'global')],
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables).toHaveLength(2)
+    })
+
     it('replaces global variables', () => {
       store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('old', 'global') })
       const result = store.getState().projectActions.setGlobalVariables({
@@ -932,6 +1064,84 @@ describe('createProjectSlice', () => {
       })
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.configurations.resource.globalVariables[0].location).toBe('')
+    })
+
+    it('renames a global variable to a different case of its own name', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('test_global', 'global') })
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'test_global',
+        data: { name: 'TEST_GLOBAL' },
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].name).toBe('TEST_GLOBAL')
+    })
+
+    it('refuses to rename a global variable onto another global that differs only by case', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('Motor', 'global') })
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('Pump', 'global') })
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'global',
+        variableId: 'Pump',
+        data: { name: 'motor' },
+      })
+      expect(result.ok).toBe(false)
+      expect(result.title).toContain('already exists')
+      expect(store.getState().project.data.configurations.resource.globalVariables[1].name).toBe('Pump')
+    })
+
+    it('renames a local variable to a different case of its own name', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('counter')]))
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'counter',
+        data: { name: 'Counter' },
+      })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.pous[0].interface?.variables[0].name).toBe('Counter')
+    })
+  })
+
+  describe('updateVariable — resource globals in the element namespace', () => {
+    it('refuses renaming a global onto a POU name', () => {
+      seedPou(store, makePou('Motor'))
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
+      const result = store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { name: 'motor' } })
+      expect(result).toMatchObject({ ok: false, title: 'Variable already exists' })
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].name).toBe('gx')
+    })
+
+    it('lets a global change only its case', () => {
+      store.getState().projectActions.createVariable({ scope: 'global', data: makeVariable('gx', 'global') })
+      const result = store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gx', data: { name: 'GX' } })
+      expect(result.ok).toBe(true)
+      expect(store.getState().project.data.configurations.resource.globalVariables[0].name).toBe('GX')
+    })
+
+    it('reports a missing row before judging its new name', () => {
+      seedPou(store, makePou('Motor'))
+      const result = store
+        .getState()
+        .projectActions.updateVariable({ scope: 'global', variableId: 'gone', data: { name: 'motor' } })
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Variable not found')
+    })
+
+    it('leaves a local variable rename to the POU validator', () => {
+      seedPou(store, makePou('Motor'))
+      seedPou(store, makePou('Main', 'program', [makeVariable('x')]))
+      const result = store.getState().projectActions.updateVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        variableId: 'x',
+        data: { name: 'motor' },
+      })
+      expect(result.ok).toBe(true)
     })
   })
 
@@ -1770,6 +1980,39 @@ describe('createProjectSlice', () => {
       expect(servers[0].modbusSlaveConfig?.port).toBe(502)
     })
 
+    it('seeds transports, so the new server is visible to the build', () => {
+      // `selectModbusServer` only considers a server that declares `transports`.
+      // Seeding none made a freshly created server invisible to the compile,
+      // so the firmware came out with Modbus entirely off while the screen said
+      // it was serving.
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
+    it('seeds RTU on a microcontroller, which is the transport those boards all have', () => {
+      // Seeding TCP everywhere is what let a board with no network carrier
+      // compile MBTCP into a firmware with no stack the moment the user switched
+      // the server on: the screen offered RTU only, the store still said TCP.
+      seedBaremetalBoard(store)
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['rtu'])
+    })
+
+    it('seeds TCP on a Runtime v4 target, which serves nothing else', () => {
+      seedRuntimeV4Board(store)
+      store.getState().projectActions.createServer({
+        data: { name: 'ModbusServer', protocol: 'modbus-tcp' },
+      })
+      const server = (store.getState().project.data.servers ?? [])[0]
+      expect(server.modbusSlaveConfig?.transports).toEqual(['tcp'])
+    })
+
     it('creates an s7comm server with default config', () => {
       const result = store.getState().projectActions.createServer({
         data: { name: 'S7Server', protocol: 's7comm' },
@@ -1827,6 +2070,15 @@ describe('createProjectSlice', () => {
       expect(result.ok).toBe(true)
       expect(store.getState().project.data.servers).toHaveLength(1)
       expect(store.getState().project.data.servers![0].name).toBe('B')
+    })
+
+    it('queues the file for deletion, so the save actually removes it from disk', () => {
+      // Dropping it from the array only changes memory. Without the queue entry
+      // the next save leaves `devices/servers/A.json` behind and the server
+      // returns on the following open.
+      seedServer(store, makeModbusTcpServer('A'))
+      store.getState().projectActions.deleteServer('A')
+      expect(store.getState().pendingDeletions).toContain('devices/servers/A.json')
     })
 
     it('returns ok even when server not found', () => {
@@ -2791,6 +3043,14 @@ describe('createProjectSlice', () => {
       expect(points[0].iecLocation).toBe('%IW0')
       expect(points[1].iecLocation).toBe('%IW1')
     })
+
+    it('clamps a non-positive length on create', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', -2))
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(1)
+      expect(group.length).toBe(1)
+    })
   })
 
   describe('updateIOGroup', () => {
@@ -2872,6 +3132,43 @@ describe('createProjectSlice', () => {
       expect(points[0].alias).toBe('Temp') // survived the reshuffle
       expect(points[2].alias).toBe('') // freshly allocated slot
     })
+
+    it('clamps a negative length to a single point, normalizing the stored field', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: -5 })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(1)
+      // `length` is what reaches the runtime as `len` — it must be normalized too.
+      expect(group.length).toBe(1)
+    })
+
+    it('clamps a zero length to a single point', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 0 })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(1)
+      expect(group.length).toBe(1)
+    })
+
+    it('floors a fractional length', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 1))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { length: 3.7 })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.ioPoints).toHaveLength(3)
+      expect(group.length).toBe(3)
+    })
+
+    it('forces a single point when the function code becomes single-element (FC 5)', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 4)) // FC3 -> %IW
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { functionCode: '5' }) // FC5 -> %QX, single
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.length).toBe(1)
+      expect(group.ioPoints!.map((p) => p.iecLocation)).toEqual(['%QX0.0'])
+    })
   })
 
   describe('deleteIOGroup', () => {
@@ -2904,6 +3201,156 @@ describe('createProjectSlice', () => {
       expect(groups).toHaveLength(1)
       // g2 slides down into the freed slots — no gap left behind.
       expect(groups[0].ioPoints!.map((p) => p.iecLocation)).toEqual(['%IW0', '%IW1'])
+    })
+  })
+
+  describe('allocation against an unresolved or incapable target (DOPE-440)', () => {
+    /** A device whose group already carries addresses — the shape a project
+     *  file has on load, before any edit. */
+    function seedDeviceAt(name: string, addresses: string[]) {
+      seedRemoteDevice(store, {
+        ...makeRemoteDevice(name),
+        modbusTcpConfig: {
+          host: '127.0.0.1',
+          port: 502,
+          slaveId: 1,
+          timeout: 1000,
+          ioGroups: [
+            {
+              ...makeIOGroup('g1', '3', addresses.length),
+              ioPoints: addresses.map((iecLocation, i) => ({
+                id: `group-g1_${i}`,
+                name: `group-g1_${i}`,
+                type: 'Analog Input (Holding Register)',
+                iecLocation,
+                alias: '',
+              })),
+            },
+          ],
+        },
+      })
+    }
+
+    /** Every IEC address the first remote device's groups currently hold.
+     *  Throws rather than asserting non-null so a broken fixture names itself
+     *  instead of failing as an unrelated expectation. */
+    function addressesOf(): string[] {
+      const groups = store.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig?.ioGroups
+      if (!groups) throw new Error('fixture: expected a remote device with a modbusTcpConfig')
+      return groups.flatMap((group) => {
+        if (!group.ioPoints) throw new Error(`fixture: group "${group.id}" has no ioPoints`)
+        return group.ioPoints.map((point) => point.iecLocation)
+      })
+    }
+
+    it('recompacts after a delete even when the board id does not resolve', () => {
+      seedRuntimeV4Board(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0,1
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2)) // %IW2,3
+      // The VPP package goes missing, or the project is opened on another
+      // machine: the board id no longer resolves to a BoardInfo.
+      selectUnresolvedBoard(store)
+
+      store.getState().projectActions.deleteIOGroup('Dev1', 'g1')
+
+      // Used to keep %IW2,3 — every consumer was filtered out of allocation,
+      // so the recompaction wrote nothing and reported success.
+      expect(addressesOf()).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('does not mint duplicate addresses when the board id does not resolve', () => {
+      selectUnresolvedBoard(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g2', '3', 2))
+
+      // Both groups used to restart at %IW0 — the pool couldn't see the sibling.
+      expect(addressesOf()).toEqual(['%IW0', '%IW1', '%IW2', '%IW3'])
+    })
+
+    it('still honours a resolved target that declares no remote I/O', () => {
+      // The other half of the invariant, and the guard against "simplifying"
+      // the fix into dropping capability scoping altogether: a board that
+      // ANSWERED keeps its declaration, so the inactive kind is not reallocated.
+      seedRuntimeV3Board(store)
+      seedDeviceAt('Dev1', ['%IW4', '%IW5'])
+
+      store.getState().projectActions.recalculateIecAddresses()
+
+      expect(addressesOf()).toEqual(['%IW4', '%IW5'])
+    })
+
+    it('compacts the same gap once the target is merely unresolved', () => {
+      selectUnresolvedBoard(store)
+      seedDeviceAt('Dev1', ['%IW4', '%IW5'])
+
+      store.getState().projectActions.recalculateIecAddresses()
+
+      expect(addressesOf()).toEqual(['%IW0', '%IW1'])
+    })
+
+    it('stays quiet when the target resolves', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        seedRuntimeV4Board(store)
+        store.getState().projectActions.recalculateIecAddresses()
+
+        expect(warn).not.toHaveBeenCalled()
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('stays quiet while the board catalogue is still loading, then reports once it lands', () => {
+      // The two halves are ONE behaviour and have to be asserted together. An
+      // empty catalogue is an ordinary startup state, not a missing package —
+      // but discovery finishing is precisely when the situation becomes
+      // actionable, so whatever suppresses the load-time warning must not also
+      // suppress the one after it. Asserting only the quiet half lets that
+      // through: it is how a module-scoped "warn once" latch, armed during
+      // load, silently swallowed the report forever.
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        selectUnresolvedBoard(store) // recalculates against an empty catalogue
+        expect(warn).not.toHaveBeenCalled()
+
+        landBoardCatalogue(store) // discovery finishes; this board isn't in it
+        store.getState().projectActions.recalculateIecAddresses()
+
+        expect(warn).toHaveBeenCalledTimes(1)
+        expect(warn.mock.calls[0][0]).toContain('Uninstalled VPP Board')
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('reports every recalculation against an unresolved target', () => {
+      // Not deduplicated by design — see `warnIfTargetUnresolved`. Each
+      // recalculation is a user-initiated mutation, and a latch that outlives
+      // the store silences the next project on the same board.
+      seedRuntimeV4Board(store)
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
+      try {
+        selectUnresolvedBoard(store) // setDeviceBoard recalculates
+        store.getState().projectActions.recalculateIecAddresses()
+
+        expect(warn).toHaveBeenCalledTimes(2)
+      } finally {
+        warn.mockRestore()
+      }
+    })
+
+    it('keeps the alias-uniqueness gate working when the board id does not resolve', () => {
+      selectUnresolvedBoard(store)
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', 'group-g1_0', 'Temp')
+
+      const result = store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', 'group-g1_1', 'Temp')
+
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Alias already in use')
     })
   })
 
@@ -3679,6 +4126,29 @@ describe('createProjectSlice', () => {
       if (editor.type === 'plc-textual') {
         expect(editor.variable.display).toBe('table')
       }
+    })
+
+    it('reconcile refuses a code-mode buffer that declares one name twice', () => {
+      seedPou(store, makePou('Main', 'program', [makeVariable('Original')]))
+      const duplicateText = 'VAR\n\tMotor : BOOL;\n\tmotor : INT;\nEND_VAR'
+      const model = {
+        type: 'plc-textual' as const,
+        meta: { name: 'Main', path: '/Main.st', language: 'st' as const, pouType: 'program' as const },
+        variable: { display: 'code' as const, code: duplicateText },
+      }
+      store.getState().editorActions.addModel(model)
+      store.getState().editorActions.setEditor(model)
+
+      const result = store.getState().projectActions.createVariable({
+        scope: 'local',
+        associatedPou: 'Main',
+        data: makeVariable('FromBlock'),
+      })
+
+      expect(result.ok).toBe(false)
+      expect(result.title).toBe('Variable already exists')
+      expect(result.message).toContain('"motor"')
+      expect(store.getState().project.data.pous[0].interface?.variables.map((v) => v.name)).toEqual(['Original'])
     })
 
     it('reconcile parses text + regenerate writes back when code-mode buffer is valid', () => {

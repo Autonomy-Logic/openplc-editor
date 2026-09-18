@@ -30,6 +30,7 @@ import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
+import { findOccupiedInOutPin } from '../../../../utils/graphical/in-out-pin-rules'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
 import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
@@ -429,10 +430,28 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     if (library) {
       const [blockLibraryType, blockLibrary, pouName] = library.split('/')
 
-      if (blockLibraryType === 'system')
-        pouLibrary = libraries.system
+      if (blockLibraryType === 'system') {
+        const libraryPou = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
+        // Copy the signature, not the library entry. That entry also carries
+        // `body` (the authored source, which for a native C/C++ or Python block
+        // is the entire file) and `language`, and passing the object straight
+        // through froze a copy of the library's source into every project that
+        // placed the block. Nothing ever reads either field back off a placed
+        // variant, and the embedded VAR ... END_VAR broke the POU parser badly
+        // enough that the project would not open (DOPE-592). The user-library
+        // branch below has always built a curated object this way.
+        pouLibrary = libraryPou
+          ? {
+              name: libraryPou.name,
+              type: libraryPou.type,
+              variables: libraryPou.variables,
+              documentation: libraryPou.documentation,
+              extensible: libraryPou.extensible ?? false,
+            }
+          : undefined
+      }
 
       if (blockLibraryType === 'user') {
         const library = libraries.user.find((library) => library.name === blockLibrary)
@@ -555,6 +574,22 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
+    // A VAR_IN_OUT pin takes exactly one variable. It is passed by reference, so a second
+    // wire would mean two variables aliasing the same parameter with no defined order —
+    // CODESYS refuses it too ("The 'X' pin internally contains more than one associated
+    // connection. This is not allowed.").
+    const occupiedInOutPin = findOccupiedInOutPin(connection, rungLocal)
+    if (occupiedInOutPin) {
+      toast({
+        title: 'Can not connect',
+        description:
+          `The '${occupiedInOutPin}' pin already has a connection. An in-out pin takes exactly ` +
+          'one variable — remove the existing connection first.',
+        variant: 'fail',
+      })
+      return
+    }
+
     captureAndPush(pouName)
 
     setRungLocal((rung) => ({

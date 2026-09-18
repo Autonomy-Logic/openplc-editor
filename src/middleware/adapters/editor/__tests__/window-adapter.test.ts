@@ -2,7 +2,45 @@ import type { WindowPort } from '../../../shared/ports/window-port'
 import { createEditorWindowAdapter } from '../window-adapter'
 
 let adapter: WindowPort
+
+/**
+ * A captured handler going back to `null` stands in for the real bridge
+ * dropping the IPC listener — the adapter must return the bridge's disposer
+ * verbatim for that to happen.
+ */
 const capturedHandlers: Record<string, ((...args: unknown[]) => void) | null> = {}
+
+/**
+ * Narrows an optional `WindowPort` member. CLAUDE.md forbids non-null
+ * assertions, and a bare `?.()` would let a missing implementation pass the
+ * test silently — this fails loudly instead.
+ */
+function implemented<T>(member: T | undefined, name: string): T {
+  if (!member) throw new Error(`WindowPort.${name} is not implemented by the editor adapter`)
+  return member
+}
+
+/** Invokes a captured bridge listener, failing loudly if none was registered. */
+const fire = (key: string, ...args: unknown[]): void => {
+  const handler = capturedHandlers[key]
+  if (!handler) throw new Error(`no listener captured for "${key}"`)
+  handler(...args)
+}
+
+/** Emits on a channel whose listener may already be gone — used after an
+ *  unsubscribe to show the callback stays silent. */
+const fireIfRegistered = (key: string, ...args: unknown[]): void => {
+  capturedHandlers[key]?.(...args)
+}
+
+/** Mirrors the bridge contract: register the listener, return its disposer. */
+const register = (key: string) =>
+  jest.fn().mockImplementation((cb: (...args: unknown[]) => void) => {
+    capturedHandlers[key] = cb
+    return () => {
+      capturedHandlers[key] = null
+    }
+  })
 
 beforeEach(() => {
   for (const key of Object.keys(capturedHandlers)) {
@@ -17,17 +55,17 @@ beforeEach(() => {
     reloadWindow: jest.fn(),
     handleQuitApp: jest.fn(),
     rebuildMenu: jest.fn(),
-    windowIsClosing: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.closeRequested = cb
+    windowIsClosing: register('closeRequested'),
+    darwinAppIsClosing: register('darwinQuitting'),
+    // Takes no callback of its own — the main process echoes the close back —
+    // but still hands out a disposer for the listener it registered.
+    handleCloseOrHideWindowAccelerator: jest.fn().mockImplementation(() => {
+      capturedHandlers.autoCloseHandshake = () => {}
+      return () => {
+        capturedHandlers.autoCloseHandshake = null
+      }
     }),
-    darwinAppIsClosing: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.darwinQuitting = cb
-    }),
-    handleCloseOrHideWindowAccelerator: jest.fn(),
-    removeHandleCloseOrHideWindowAccelerator: jest.fn(),
-    isMaximizedWindow: jest.fn().mockImplementation((cb: () => void) => {
-      capturedHandlers.maximized = cb
-    }),
+    isMaximizedWindow: register('maximized'),
   } as unknown as typeof window.bridge
 
   adapter = createEditorWindowAdapter()
@@ -88,75 +126,80 @@ describe('onCloseRequested', () => {
     adapter.onCloseRequested(cb)
 
     expect(window.bridge.windowIsClosing).toHaveBeenCalledTimes(1)
-    capturedHandlers.closeRequested!()
+    fire('closeRequested')
 
     expect(cb).toHaveBeenCalledTimes(1)
   })
 
-  it('returns an unsubscribe function that deactivates the callback', () => {
+  it('returns an unsubscribe function that removes the bridge listener', () => {
     const cb = jest.fn()
     const unsub = adapter.onCloseRequested(cb)
 
     unsub()
-    capturedHandlers.closeRequested!()
+    fireIfRegistered('closeRequested')
 
     expect(cb).not.toHaveBeenCalled()
+    expect(capturedHandlers.closeRequested).toBeNull()
   })
 })
 
 describe('onDarwinAppQuitting', () => {
   it('registers a bridge listener and fires callback', () => {
     const cb = jest.fn()
-    adapter.onDarwinAppQuitting!(cb)
+    implemented(adapter.onDarwinAppQuitting, 'onDarwinAppQuitting')(cb)
 
     expect(window.bridge.darwinAppIsClosing).toHaveBeenCalledTimes(1)
-    capturedHandlers.darwinQuitting!()
+    fire('darwinQuitting')
 
     expect(cb).toHaveBeenCalledTimes(1)
   })
 
-  it('returns an unsubscribe function that deactivates the callback', () => {
+  it('returns an unsubscribe function that removes the bridge listener', () => {
     const cb = jest.fn()
-    const unsub = adapter.onDarwinAppQuitting!(cb)
+    const unsub = implemented(adapter.onDarwinAppQuitting, 'onDarwinAppQuitting')(cb)
 
     unsub()
-    capturedHandlers.darwinQuitting!()
+    fireIfRegistered('darwinQuitting')
 
     expect(cb).not.toHaveBeenCalled()
+    expect(capturedHandlers.darwinQuitting).toBeNull()
   })
 })
 
 describe('enableAutoCloseHandshake', () => {
   it('registers handshake and returns unsubscribe that removes it', () => {
-    const unsub = adapter.enableAutoCloseHandshake!()
+    const unsub = implemented(adapter.enableAutoCloseHandshake, 'enableAutoCloseHandshake')()
 
     expect(window.bridge.handleCloseOrHideWindowAccelerator).toHaveBeenCalledTimes(1)
+    expect(capturedHandlers.autoCloseHandshake).toBeInstanceOf(Function)
 
     unsub()
-    expect(window.bridge.removeHandleCloseOrHideWindowAccelerator).toHaveBeenCalledTimes(1)
+    expect(capturedHandlers.autoCloseHandshake).toBeNull()
   })
 })
 
 describe('onMaximizedChanged', () => {
   it('registers a bridge listener and toggles maximized state', () => {
     const cb = jest.fn()
-    adapter.onMaximizedChanged!(cb)
+    implemented(adapter.onMaximizedChanged, 'onMaximizedChanged')(cb)
 
     expect(window.bridge.isMaximizedWindow).toHaveBeenCalledTimes(1)
 
-    capturedHandlers.maximized!()
+    fire('maximized')
     expect(cb).toHaveBeenCalledWith(true)
 
-    capturedHandlers.maximized!()
+    fire('maximized')
     expect(cb).toHaveBeenCalledWith(false)
   })
 
-  it('returns an unsubscribe function (no-op)', () => {
+  it('returns an unsubscribe function that removes the bridge listener', () => {
     const cb = jest.fn()
-    const unsub = adapter.onMaximizedChanged!(cb)
+    const unsub = implemented(adapter.onMaximizedChanged, 'onMaximizedChanged')(cb)
 
-    expect(typeof unsub).toBe('function')
-    // The unsubscribe is a no-op for this channel, but should not throw
     unsub()
+    fireIfRegistered('maximized')
+
+    expect(cb).not.toHaveBeenCalled()
+    expect(capturedHandlers.maximized).toBeNull()
   })
 })

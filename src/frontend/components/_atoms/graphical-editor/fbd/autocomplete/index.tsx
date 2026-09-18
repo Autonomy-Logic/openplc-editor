@@ -12,6 +12,7 @@ import { useOpenPLCStore } from '../../../../../store'
 import type { CreateGraphicalVariableModalData } from '../../../../../store/slices/modal/types'
 import { cn } from '../../../../../utils/cn'
 import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
+import { newUuid } from '../../../../../utils/new-uuid'
 import type { BoundBlockPin } from '../../../../../utils/PLC/validate-variable-type'
 import { isGenericTypeName } from '../../../../../utils/PLC/validate-variable-type'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
@@ -260,7 +261,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
       const res = createVariable({
         data: {
-          id: crypto.randomUUID(),
+          id: newUuid(),
           name,
           type: {
             definition: type.definition,
@@ -296,7 +297,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
     const submitCreateANewBlock = (blockType: CustomFbdNodeTypes) => {
       const newBlock = buildGenericNode({
-        id: crypto.randomUUID(),
+        id: newUuid(),
         position:
           block.positionAbsoluteX && block.positionAbsoluteY
             ? { x: block.positionAbsoluteX, y: block.positionAbsoluteY + (block.height ?? 0) + 16 }

@@ -10,8 +10,9 @@ export type TabsProps = {
     | { type: 'function'; language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp' }
     | { type: 'function-block'; language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp' }
     | { type: 'data-type'; derivation: 'enumerated' | 'structure' | 'array' }
+    | { type: 'global-variable-list' }
     | { type: 'resource' }
-    | { type: 'device'; derivation: 'configuration' | 'pin-mapping' | 'orchestrators' }
+    | { type: 'device'; derivation: 'configuration' | 'pin-mapping' | 'orchestrators' | 'runtime-status' }
     | { type: 'server'; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }
     | { type: 'remote-device'; protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' }
     | { type: 'vendor-screen'; screenName: string }
@@ -19,6 +20,7 @@ export type TabsProps = {
     | { type: 'library-manager' }
     | { type: 'library-manifest' }
     | { type: 'user-management' }
+    | { type: 'persistent-storage' }
     | { type: 'ethercat-device'; busName: string; deviceId: string }
     | { type: 'diff-viewer'; filePath: string }
   configuration?: Record<string, unknown>

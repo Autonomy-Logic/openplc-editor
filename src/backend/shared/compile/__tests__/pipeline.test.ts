@@ -93,6 +93,7 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     uploadRuntimeV3: jest.fn().mockResolvedValue({ ok: true }),
     checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0' }),
     packageVppPlugin: jest.fn().mockResolvedValue({ files: {} }),
+    materializeRuntimeV4Bundle: jest.fn().mockResolvedValue({ written: 0 }),
     ...overrides,
   } as jest.Mocked<CompilerPlatformPort>
 }
@@ -151,6 +152,7 @@ beforeEach(() => {
     md5Hash: 'a'.repeat(32),
     splitterFallbackMessage: null,
     debugMapSummary: null,
+    retainBlobSize: null,
   })
   // Default-mock: version gate returns compatible.
   mockedVersionGate.mockReturnValue(true)
@@ -197,6 +199,41 @@ describe('runCompilePipeline — simulator path', () => {
     expect(callArgs.files['examples/Baremetal/Baremetal.ino']).toBe('INO')
     expect(callArgs.files['src/defines.h']).toContain('PROGRAM_MD5')
     expect(callArgs.argv).toEqual(['compile', '-b', 'arduino:avr:mega'])
+  })
+
+  it('forwards a positive retainBlobSize into defines.h', async () => {
+    // The pipeline branch that carries the size was only ever exercised with
+    // `null`. `generate-defines` was covered directly, so the define itself was
+    // tested — but nothing proved the pipeline actually hands the number over,
+    // and a program that retains something needs it or the firmware's
+    // static_assert has nothing to check against.
+    mockedStrucpp.mockReturnValue({
+      success: true,
+      files: [{ name: 'debug-map.json', content: '{}' }],
+      errors: [],
+      warnings: [],
+      md5Hash: 'a'.repeat(32),
+      splitterFallbackMessage: null,
+      debugMapSummary: 'Debug map: 3 leaves in 1 arrays; retain blob 148 bytes',
+      retainBlobSize: 148,
+    })
+
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({}), port, emit)
+
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+  })
+
+  it('omits the define when nothing is retained', async () => {
+    // Boards that never touch retain must see byte-identical defines.h, or
+    // every one of them rebuilds for no reason.
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(makeArgs({}), port, emit)
+    const [callArgs] = port.compileArduino.mock.calls[0]
+    expect(callArgs.files['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
 
   // Regression: the board's `boardManagerUrl` (VPP `target.boardManagerUrl`)
@@ -562,6 +599,103 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
   })
 
+  it('writes the v4 bundle to disk on the compileOnly path', async () => {
+    // The bundle used to reach disk only as a side effect of uploadRuntimeV4,
+    // which compileOnly returns before — so a compile-only build left a build
+    // folder holding nothing but the VPP files.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        compileOnly: true,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(port.materializeRuntimeV4Bundle).toHaveBeenCalledTimes(1)
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    // Narrowed, not asserted: the port declares this method optional, and a `!`
+    // here would turn "the mock was never wired up" into a confusing crash
+    // inside jest's internals instead of a failed expectation.
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    const bundle = jest.mocked(materialize).mock.calls[0][0].bundle
+    expect(Object.keys(bundle).length).toBeGreaterThan(0)
+    expect(events.some((e) => e.message.includes('build artifact'))).toBe(true)
+  })
+
+  it('writes the v4 bundle on the upload path too, so both leave the same artifacts', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(port.materializeRuntimeV4Bundle).toHaveBeenCalledTimes(1)
+    expect(port.uploadRuntimeV4).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts the build when the bundle cannot be written', async () => {
+    // A build that reports success while its artifacts are missing is worse
+    // than one that fails.
+    const port = makePort({
+      materializeRuntimeV4Bundle: jest.fn().mockResolvedValue({
+        written: 0,
+        errors: [{ message: 'EACCES: permission denied', line: 0, column: 0, severity: 'error' }],
+      }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        compileOnly: true,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.errors?.[0].message).toContain('EACCES')
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events.some((e) => e.message.includes('Could not write the Runtime v4 build artifacts'))).toBe(true)
+  })
+
+  it('skips the write on a platform that does not implement it', async () => {
+    // Web has no project build directory; the pipeline must not require one.
+    const port = makePort({ materializeRuntimeV4Bundle: undefined })
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        compileOnly: true,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
   it('returns warning + success=true when deviceContext is missing on v4', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -816,6 +950,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: 'Falling back to monolithic compile (POU offsets unavailable).',
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -834,6 +969,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: 'Debug map: 42 leaves in 3 arrays',
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -853,6 +989,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -875,6 +1012,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { events, emit } = captureEvents()
@@ -950,6 +1088,7 @@ describe('runCompilePipeline — failure propagation', () => {
       md5Hash: '',
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     const port = makePort()
     const { emit } = captureEvents()
@@ -1049,6 +1188,7 @@ describe('runCompilePipeline — failure propagation', () => {
       md5Hash: 'a'.repeat(32),
       splitterFallbackMessage: null,
       debugMapSummary: null,
+      retainBlobSize: null,
     })
     mockedConfs.mockImplementationOnce(() => {
       throw new Error('EtherCAT validator: vendor id missing on slave #0')
@@ -1212,5 +1352,117 @@ describe('runCompilePipeline — side effects', () => {
     const stEvents = events.filter((e) => e.stage === 'st')
     expect(stEvents.some((e) => e.message === 'transpiler started' && e.level === 'info')).toBe(true)
     expect(stEvents.some((e) => e.message === 'transpiler: parsed 5 POUs' && e.level === 'info')).toBe(true)
+  })
+})
+
+// --- the project-snapshot capability reaches the upload ----------------------
+//
+// The runtime advertises `projectSnapshot` at `/api/capabilities` and the
+// pre-upload probe already reads it. The upload step is what acts on it, so the
+// value has to survive the trip: without this the flag is read and dropped, and
+// the editor builds an archive for a device that discards it.
+
+describe('project-snapshot capability', () => {
+  it('tells the upload step when the runtime stores source projects', async () => {
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.2.0', supportsProjectSnapshot: true }),
+    })
+
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.uploadRuntimeV4).toHaveBeenCalledWith(
+      expect.objectContaining({ supportsProjectSnapshot: true }),
+      expect.anything(),
+    )
+  })
+
+  it('tells the upload step when it does not', async () => {
+    // Every runtime predating the feature. The upload step skips building the
+    // archive and says why, rather than sending one into a device that drops it.
+    const port = makePort({
+      checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0', supportsProjectSnapshot: false }),
+    })
+
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+
+    expect(port.uploadRuntimeV4).toHaveBeenCalledWith(
+      expect.objectContaining({ supportsProjectSnapshot: false }),
+      expect.anything(),
+    )
+  })
+})
+
+/**
+ * A firmware build serves exactly one Modbus slave: `modbus.slaveid` is a single
+ * global and `init_mbregs` is called once. The selector that DETECTS the clash
+ * was covered; the refusal that acts on it was not, and the refusal is what the
+ * user meets.
+ */
+describe('runCompilePipeline — two enabled Modbus servers', () => {
+  const twoServers = [
+    {
+      name: 'mb_one',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: true, transports: ['rtu'], networkInterface: '0.0.0.0', port: 502 },
+    },
+    {
+      name: 'mb_two',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: true, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 },
+    },
+  ]
+
+  const withServers = () => ({
+    ...projectDataFixture,
+    servers: twoServers as unknown as typeof projectDataFixture.servers,
+  })
+
+  it('refuses the build and names both, so the user knows which to turn off', async () => {
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers(),
+        boardTarget: 'ESP32',
+        boardRuntime: 'arduino-cli',
+        isSimulator: false,
+      }),
+      makePort(),
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    const refusal = events.find((event) => event.message.includes('one Modbus server'))
+    expect(refusal?.message).toContain('mb_one')
+    expect(refusal?.message).toContain('mb_two')
+  })
+
+  it('lets a target that never reads the selection build anyway', async () => {
+    // The simulator takes its Modbus from a fixed block and Runtime v4 hosts the
+    // servers itself. Refusing them would block work on a project merely passing
+    // between targets, which is the reason the refusal lives here and not at
+    // creation.
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(makeArgs({ projectData: withServers() }), makePort(), emit)
+    expect(result.success).toBe(true)
   })
 })

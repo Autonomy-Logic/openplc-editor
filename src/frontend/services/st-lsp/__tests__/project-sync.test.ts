@@ -4,8 +4,8 @@
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import type { SystemLibrary } from '../../../store/slices/library/types'
 import { openPLCStoreBase } from '../../../store'
-import { attachEnabledLibrariesSync, attachProjectSync } from '../project-sync'
-import type { StLspService } from '../types'
+import { attachEnabledLibrariesSync, attachProjectSync, getSyncedDocumentText } from '../project-sync'
+import { pouUri, type StLspService } from '../types'
 
 function makeStPou(name: string, body: string = 'x := 1;'): PLCPou {
   return {
@@ -145,6 +145,145 @@ function setProjectPous(pous: PLCPou[]) {
 beforeEach(() => {
   // Clear any leftover POUs from prior tests.
   setProjectPous([])
+  // And any leftover lists: one left in the store adds its synthesized document to every
+  // later test's didOpen/didChange/didClose counts.
+  openPLCStoreBase.setState((state) => ({
+    ...state,
+    project: { ...state.project, data: { ...state.project.data, globalVariableLists: [] } },
+  }))
+})
+
+describe('attachProjectSync — global variable lists', () => {
+  const seedList = () => {
+    openPLCStoreBase.setState((state) => ({
+      ...state,
+      project: {
+        ...state.project,
+        data: {
+          ...state.project.data,
+          pous: [],
+          globalVariableLists: [
+            {
+              name: 'GVL',
+              variables: [
+                {
+                  name: 'Output1',
+                  class: 'global' as const,
+                  type: { definition: 'base-type' as const, value: 'BOOL' },
+                  location: '',
+                  documentation: '',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    }))
+  }
+
+  const listDocCalls = (mock: jest.Mock) =>
+    mock.mock.calls.filter(([uri]: [string]) => uri === 'inmemory://globals/__lists__.st')
+
+  it('opens the synthesized document with the lists already in the store', () => {
+    seedList()
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+
+    const [, text] = listDocCalls(service.openDocument)[0]
+    expect(text).toContain('GVL_TYPE : STRUCT')
+    expect(text).toContain('Output1 : BOOL;')
+    expect(text).toContain('GVL : GVL_TYPE;')
+    handle.dispose()
+  })
+
+  it('refreshes the document when a member is edited through the table', () => {
+    // The table writes one cell at a time through the shared variable action; the LSP has to
+    // hear about it, or the editor keeps completing `GVL.` against the members as they were.
+    seedList()
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.updateVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      rowId: 0,
+      data: { name: 'MotorEnable' },
+    })
+
+    const calls = listDocCalls(service.changeDocument)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[calls.length - 1][1]).toContain('MotorEnable : BOOL;')
+    handle.dispose()
+  })
+
+  it('re-publishes a POU that references the list, so it is analysed against the new members', () => {
+    // The POU's own text does not change when a member is renamed — it only ever names the
+    // list — so without this the worker answers `GVL.` from the analysis it already had.
+    seedList()
+    setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;'), makeStPou('Ignores', 'x := 1;')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.updateVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      rowId: 0,
+      data: { name: 'MotorEnable' },
+    })
+
+    const uris = service.changeDocument.mock.calls.map(([uri]: [string]) => uri)
+    expect(uris).toContain('inmemory://pou/Uses.st')
+    // And only that one: re-publishing every document per edited cell is analysis work
+    // nothing asked for.
+    expect(uris).not.toContain('inmemory://pou/Ignores.st')
+    handle.dispose()
+  })
+
+  it('does not re-publish consumers when the edit leaves the declaration identical', () => {
+    // Member documentation is not part of the declaration, so an edit to it moves the store
+    // without giving the worker anything to re-analyse.
+    seedList()
+    setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.updateVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      rowId: 0,
+      data: { documentation: 'now documented' },
+    })
+
+    expect(service.changeDocument).not.toHaveBeenCalled()
+    handle.dispose()
+  })
+
+  it('refreshes the document when a member is added through the table', () => {
+    seedList()
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    service.changeDocument.mockClear()
+
+    openPLCStoreBase.getState().projectActions.createVariable({
+      scope: 'global-variable-list',
+      associatedList: 'GVL',
+      data: {
+        name: 'Extra',
+        class: 'global',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '',
+        documentation: '',
+      },
+    })
+
+    const calls = listDocCalls(service.changeDocument)
+    expect(calls.length).toBeGreaterThan(0)
+    expect(calls[calls.length - 1][1]).toContain('Extra : INT;')
+    handle.dispose()
+  })
 })
 
 describe('attachProjectSync', () => {
@@ -471,5 +610,45 @@ describe('attachEnabledLibrariesSync', () => {
     expect(service.refreshStlibs).toHaveBeenCalledTimes(1)
     expect(onAfterRefresh).toHaveBeenCalledTimes(1)
     unsubscribe()
+  })
+})
+
+describe('getSyncedDocumentText', () => {
+  it('reads back the text last sent to the worker for a synced URI', () => {
+    setProjectPous([makeStPou('main', 'y := 2;')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    const text = getSyncedDocumentText(pouUri('main'))
+    expect(text).toContain('y := 2;')
+    handle.dispose()
+  })
+
+  it('answers undefined for a URI the sync never sent', () => {
+    setProjectPous([makeStPou('main')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    expect(getSyncedDocumentText(pouUri('ghost'))).toBeUndefined()
+    handle.dispose()
+  })
+
+  it('answers undefined after the owning sync is disposed', () => {
+    setProjectPous([makeStPou('main')])
+    const service = makeStubService()
+    const handle = attachProjectSync(service)
+    expect(getSyncedDocumentText(pouUri('main'))).toBeDefined()
+    handle.dispose()
+    expect(getSyncedDocumentText(pouUri('main'))).toBeUndefined()
+  })
+
+  it('rewires to the latest sync when a new one attaches', () => {
+    setProjectPous([makeStPou('main', 'first := 1;')])
+    const first = attachProjectSync(makeStubService())
+    setProjectPous([makeStPou('main', 'second := 2;')])
+    const second = attachProjectSync(makeStubService())
+    expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
+    // Disposing the superseded sync must not tear down the live reader.
+    first.dispose()
+    expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
+    second.dispose()
   })
 })

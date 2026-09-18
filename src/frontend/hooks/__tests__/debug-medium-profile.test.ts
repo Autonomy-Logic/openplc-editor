@@ -11,7 +11,7 @@
  */
 import type { DebugMedium } from '@root/middleware/shared/ports/types'
 
-import { DEBUG_MEDIUM_PROFILE, debugProfileFor } from '../useDebugPolling'
+import { DEBUG_MEDIUM_PROFILE, debugProfileFor } from '../../utils/debug-medium-profile'
 
 /** Every medium the type admits. A new one must be added here deliberately. */
 const ALL_MEDIA: DebugMedium[] = ['rtu', 'simulator', 'tcp', 'websocket', 'webrtc', 'http-relay']

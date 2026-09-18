@@ -76,6 +76,10 @@ function portToSchemaProjectData(input: PLCProjectData): SchemaPLCProjectData {
   return {
     pous,
     dataTypes: input.dataTypes,
+    // `globalVariableLists` is deliberately absent, not forgotten: PLCopen XML has
+    // no element for a GVL, and this projection feeds `XmlGenerator` only. A list
+    // survives a project through `project.json`; it is the CODESYS converter, not
+    // this exporter, that writes one back out.
     configuration: {
       resource: {
         tasks: input.configurations.resource.tasks,

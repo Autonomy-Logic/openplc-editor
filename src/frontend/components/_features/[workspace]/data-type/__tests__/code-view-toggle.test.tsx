@@ -1,12 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 // The code view pulls in Monaco, which cannot run in jsdom.
 vi.mock('@root/frontend/components/_organisms/variables-code-editor', () => ({
   VariablesCodeEditor: () => <div data-testid='variables-code-editor' />,
-}))
-
-vi.mock('@root/frontend/utils/feature-flags', () => ({
-  isDataTypeFilesEnabled: () => true,
 }))
 
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -34,5 +31,22 @@ describe('DataTypeEditor code view toggle', () => {
     // The jump's cursor is still on the model; it must not re-assert code
     // mode and pin the tab there.
     expect(screen.queryByTestId('variables-code-editor')).toBeNull()
+  })
+
+  it('switches from the keyboard alone', async () => {
+    const user = userEvent.setup()
+    const created = useOpenPLCStore.getState().datatypeActions.create({ name: 'Pump', derivation: 'structure' })
+    expect(created.ok).toBe(true)
+
+    arriveFromGotoDefinition('Pump')
+    render(<DataTypeEditor dataTypeName='Pump' />)
+
+    screen.getByRole('button', { name: 'Data type table visualization' }).focus()
+    await user.keyboard('{Enter}')
+    expect(screen.queryByTestId('variables-code-editor')).toBeNull()
+
+    screen.getByRole('button', { name: 'Data type code visualization' }).focus()
+    await user.keyboard(' ')
+    expect(screen.getByTestId('variables-code-editor')).toBeTruthy()
   })
 })

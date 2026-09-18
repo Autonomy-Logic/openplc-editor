@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import type { TimingStats } from '@root/middleware/shared/ports/types'
-import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { useCapabilities, useDevice } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -10,21 +9,20 @@ import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
+import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
-import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { isEthernetUploadTarget, isOpenPLCRuntimeTarget, isSimulatorTarget } from '../../../../../../utils/device'
+import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
 import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
 import { DeviceConnectButton } from '../../../../../_molecules/device-connect-button'
-import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
-import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
-import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
@@ -32,7 +30,6 @@ import { PinMappingTable } from './components/pin-mapping-table'
 const Board = memo(function () {
   const capabilities = useCapabilities()
   const device = useDevice()
-  const runtime = useRuntime()
 
   const {
     deviceAvailableOptions: { availableBoards },
@@ -56,12 +53,15 @@ const Board = memo(function () {
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
   // CONNECT flow (D72): open the device channel, classify it, and drive the
-  // flash follow-up when nothing answered the debug protocol.
+  // flash follow-up when nothing answered the debug protocol. `deviceLinkStatus`
+  // mirrors the MAIN process's session — it flips to 'connected' for a held
+  // serial/TCP link and for a runtime (REST) session alike, so it is the one
+  // signal that a session actually exists, whatever the medium.
   const {
     connect: connectDevice,
     disconnect: disconnectDevice,
     isConnected,
-    status: serialStatus,
+    status: deviceLinkStatus,
   } = useDeviceConnect(currentBoardInfo)
 
   // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
@@ -89,18 +89,8 @@ const Board = memo(function () {
   )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
-  const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
-  const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
-  const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
-  const timingStats = useOpenPLCStore((state): TimingStats | null => state.runtimeConnection.timingStats)
-  const setIncludeTimingStatsInPolling = useOpenPLCStore(
-    (state): ((include: boolean) => void) => state.deviceActions.setIncludeTimingStatsInPolling,
-  )
-  const setIncludeEthercatStatsInPolling = useOpenPLCStore(
-    (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
-  )
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -374,119 +364,101 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
-  const handleConnectToRuntime = useCallback(async () => {
-    if (connectionStatus === 'connected') {
-      // Disconnect - global polling hook will handle resetting failure counter
-      setRuntimeJwtToken(null)
-      setRuntimeConnectionStatus('disconnected')
-      await runtime.clearCredentials()
-      // The session goes with it: control was this REST connection, and any debug
-      // channel opened off it has nothing left to belong to.
-      await device.closeRuntimeSession?.()
+  // The runtime CONNECT lives in `useRuntimeConnect` so the debugger's
+  // offer-to-connect runs the same one. Keeping a second copy here is how the
+  // two would drift -- the version gate, the login/first-user choice and the
+  // licence teardown all have to behave identically wherever connect is
+  // invoked from.
+  const { toggle: handleConnectToRuntime } = useRuntimeConnect()
+
+  // Timing and EtherCAT stats polling now belongs to the Runtime Status screen
+  // (RTOP-283), which is where those statistics are displayed. Polling for them
+  // here would fetch data nobody is looking at, and would leave Runtime Status
+  // with nothing to show when opened on its own.
+
+  // Settle the licence for a RUNTIME target once its session is up — once per
+  // session PER BOARD.
+  //
+  // The serial flow settles it INSIDE `connect()`: one held link, awaited, so
+  // the user cannot race the sequence. A runtime target has no such moment in
+  // the renderer — login opens the session MAIN-side (useDeviceConnectionMonitor
+  // reacts to the REST login and calls `openRuntimeSession`), and the device
+  // link status flipping to 'connected' is the announcement that it exists.
+  // Keying on the REST login alone would race that IPC call; keying on BOTH
+  // means the licence FCs only ever run against an established session, over
+  // the debug WebSocket the main process acquires per call.
+  //
+  // The ref holds the BOARD the settle ran for, not a boolean: a board switch
+  // over a live session (confirm-device-switch allows it) clears the report via
+  // resetDeviceLicense, and a boolean ref would leave the new board unchecked
+  // and badge-less until a manual reconnect (review 2026-08-20). A ref, not
+  // state: the re-render caused by the report landing must not re-run the flow.
+  const runtimeLicenseSettledForRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isOpenPLCRuntimeTarget(currentBoardInfo) || !licensing.isLicensable) return
+    // A platform whose device port cannot carry the licensing calls has nothing
+    // to settle — STRUCTURAL inertness, not incidental: on openplc-web nothing
+    // publishes a device link today, but the day one is published this gate is
+    // what keeps a capability the platform never had from popping error dialogs
+    // (web review 2026-08-20, finding 1).
+    if (!device.refreshLicense) return
+    if (connectionStatus !== 'connected' || deviceLinkStatus !== 'connected') {
+      runtimeLicenseSettledForRef.current = null
       return
     }
-
-    if (!runtimeIpAddress) {
-      return
+    if (runtimeLicenseSettledForRef.current === deviceBoard) return
+    runtimeLicenseSettledForRef.current = deviceBoard
+    // Cleanup guard: `refresh` can take seconds (device read + backend round
+    // trip). A dialog for a screen the user already left is noise at best and
+    // a modal over an unrelated screen at worst.
+    let cancelled = false
+    void licensing.refresh().then((report) => {
+      if (cancelled || !report) return
+      explainLicenseOutcome(report, {
+        openModal,
+        buy: licensing.buy,
+        // AUTO flow: a check-failed outcome stays on the badge instead of
+        // opening an error modal the user did not ask for — the loudest case
+        // it suppresses is a runtime that predates the licence FCs, where
+        // every connect would otherwise open "Licence Check Failed" on a
+        // working device. User-initiated paths (serial connect, the badge's
+        // own retry) keep the dialog.
+        quietCheckFailed: true,
+        // A retry re-runs the flow and explains the NEW outcome, so a transient
+        // failure or a purchase completed in the browser resolves in place.
+        // NO quietCheckFailed here: a retry CLICK is user-initiated — the user
+        // asked a question, and silence would read as success (review
+        // 2026-08-20, E3). Only the unprompted auto-settle above stays quiet.
+        retry: async () => {
+          const next = await licensing.refresh()
+          if (next && !cancelled) {
+            explainLicenseOutcome(next, { openModal, buy: licensing.buy })
+          }
+        },
+      })
+    })
+    return () => {
+      cancelled = true
     }
-
-    setRuntimeConnectionStatus('connecting')
-
-    try {
-      const result = await runtime.getUsersInfo()
-
-      if (result.error) {
-        setRuntimeConnectionStatus('error')
-        return
-      }
-
-      // Remember the runtime version so version-gated UI (e.g. User
-      // Management) can react to it for the lifetime of the connection.
-      setRuntimeVersion(result.runtimeVersion ?? null)
-
-      // Validate runtime version matches the selected board target
-      const versionValidation = validateRuntimeVersion(deviceBoard, result.runtimeVersion)
-
-      // Helper to proceed with connection after validation
-      const proceedWithConnection = () => {
-        if (result.hasUsers) {
-          openModal('runtime-login', null)
-        } else {
-          openModal('runtime-create-user', null)
-        }
-      }
-
-      if (versionValidation.status === 'mismatch') {
-        // Hard error for version mismatch - cannot proceed
-        setRuntimeConnectionStatus('error')
-        openModal('debugger-message', {
-          type: 'error',
-          title: 'Runtime Version Mismatch',
-          message: versionValidation.message || 'Unknown version mismatch error',
-          buttons: ['OK'],
-          onResponse: () => {
-            // No action needed, just close the modal
-          },
-        })
-        return
-      }
-
-      if (versionValidation.status === 'missing') {
-        // Warning for older runtimes - allow user to continue anyway
-        // Note: buttons ordered as ['Continue Anyway', 'Cancel'] so Cancel (index 1) is the default
-        // when closing the modal (DebuggerMessageModal calls onResponse with last button index on close)
-        openModal('debugger-message', {
-          type: 'warning',
-          title: 'Older Runtime Detected',
-          message: versionValidation.message || 'Could not detect runtime version.',
-          buttons: ['Continue Anyway', 'Cancel'],
-          onResponse: (buttonIndex: number) => {
-            if (buttonIndex === 0) {
-              // User clicked "Continue Anyway" - proceed with connection
-              proceedWithConnection()
-            } else {
-              // User clicked "Cancel" or closed the modal - stay disconnected
-              setRuntimeConnectionStatus('disconnected')
-            }
-          },
-        })
-        return
-      }
-
-      // Version is OK - proceed normally
-      proceedWithConnection()
-    } catch (_error) {
-      setRuntimeConnectionStatus('error')
-    }
+    // Deps are the STABLE fields, never the `licensing` object (review
+    // 2026-08-20, E4): the hook returns a fresh literal each render, and
+    // `refresh()` itself flips `phase` in the store — an object dep re-ran this
+    // effect mid-flight and its cleanup set `cancelled` on the very run that
+    // started the refresh, so the report never reached the dialog. `refresh`
+    // and `buy` are useCallback'd on inputs that do not change during the
+    // flight (`buy`'s `report?.deviceId` only moves after the resolve).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    runtime,
-    runtimeIpAddress,
     connectionStatus,
-    setRuntimeConnectionStatus,
-    setRuntimeJwtToken,
-    openModal,
+    deviceLinkStatus,
+    currentBoardInfo,
     deviceBoard,
+    device.refreshLicense,
+    licensing.isLicensable,
+    licensing.refresh,
+    licensing.buy,
+    openModal,
   ])
-
-  // Enable timing stats in global polling when this screen is visible
-  useEffect(() => {
-    // Set the flag to include timing stats in the global status polling
-    setIncludeTimingStatsInPolling(true)
-
-    // Clear the flag when leaving this screen
-    return () => {
-      setIncludeTimingStatsInPolling(false)
-    }
-  }, [setIncludeTimingStatsInPolling])
-
-  // Only runtime targets expose the EtherCAT endpoint; skip the poll otherwise.
-  useEffect(() => {
-    if (!isOpenPLCRuntimeTarget(currentBoardInfo)) return
-    setIncludeEthercatStatsInPolling(true)
-    return () => {
-      setIncludeEthercatStatsInPolling(false)
-    }
-  }, [setIncludeEthercatStatsInPolling, currentBoardInfo])
 
   return (
     <DeviceEditorSlot>
@@ -636,6 +608,64 @@ const Board = memo(function () {
                 {connectionStatus === 'connected' && plcStatus && (
                   <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>
                 )}
+                {/* Same affordance as the serial connect row below: renders
+                    nothing at all unless this board's VPP is sold licensed AND a
+                    check has landed, so a plain runtime's row is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+              </DeviceConnectButton>
+            </>
+          ) : isEthernetUploadTarget(currentBoardInfo) ? (
+            // Baremetal board programmed over Ethernet (e.g. Siemens LOGO! 8.2):
+            // a device-IP target + Search like a runtime board, but the baremetal
+            // Connect (Modbus TCP), not the v4 REST connect.
+            <>
+              <div id='device-ip-address-field' className='flex w-full items-center justify-start gap-1'>
+                <Label className='whitespace-pre text-xs text-neutral-950 dark:text-white'>IP Address</Label>
+                <input
+                  type='text'
+                  value={runtimeIpAddress}
+                  onChange={(e) => setRuntimeIpAddress(e.target.value)}
+                  placeholder='192.168.0.2'
+                  className='flex h-[30px] min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <button
+                  type='button'
+                  aria-label='Search for devices'
+                  title='Search for devices on the local network'
+                  onClick={() => openModal('runtime-discover-devices', null)}
+                  className='flex h-[30px] items-center gap-1 rounded-md bg-neutral-100 px-3 font-caption text-cp-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+                >
+                  <MagnifierIcon size='sm' className='h-4 w-4 stroke-neutral-1000 dark:stroke-neutral-100' />
+                  Search
+                </button>
+              </div>
+              <DeviceConnectButton
+                containerId='device-connect-button-container'
+                status={deviceLinkStatus}
+                onConnect={connectDevice}
+                onDisconnect={disconnectDevice}
+              >
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
               </DeviceConnectButton>
             </>
           ) : capabilities.hasLocalSerialPorts ? (
@@ -702,7 +732,7 @@ const Board = memo(function () {
               </div>
               <DeviceConnectButton
                 containerId='device-connect-button-container'
-                status={serialStatus}
+                status={deviceLinkStatus}
                 onConnect={connectDevice}
                 onDisconnect={disconnectDevice}
                 // A missing port only blocks Connect when serial is the ONLY way in.
@@ -756,17 +786,18 @@ const Board = memo(function () {
         </div>
       </div>
       {(() => {
-        // Only draw the divider when there's actually content below it.
-        // Pin mapping renders for any non-simulator target that declares
-        // the pinMapping capability (Arduino boards, and runtime-v4 GPIO
-        // VPP boards like the Raspberry Pi). Runtime targets also render
-        // stats once connected — the two can coexist (a Pi shows the pin
-        // table always and the stats panels when connected).
+        // Only draw the divider when there's actually content below it, which
+        // now means the pin mapping table and nothing else. Pin mapping renders
+        // for any non-simulator target that declares the pinMapping capability
+        // (Arduino boards, and runtime-v4 GPIO VPP boards like the Raspberry Pi).
+        //
+        // A connected runtime target used to draw the divider too, for the stats
+        // panels that sat below it. Those moved to the Runtime Status screen (see
+        // the polling comment above) and the condition stayed, so connecting to a
+        // runtime target with no pin mapping drew a rule across the screen with
+        // nothing underneath it.
         const isSim = isSimulatorTarget(currentBoardInfo)
-        const isRuntime = isOpenPLCRuntimeTarget(currentBoardInfo)
-        const showStats = isRuntime && connectionStatus === 'connected'
-        const showPinMapping = !isSim && pinMappingEnabled
-        const showDivider = showStats || showPinMapping
+        const showDivider = !isSim && pinMappingEnabled
         return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null
       })()}
       {!isSimulatorTarget(currentBoardInfo) && pinMappingEnabled && (
@@ -797,14 +828,6 @@ const Board = memo(function () {
           <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
         </div>
       )}
-      {isOpenPLCRuntimeTarget(currentBoardInfo) && connectionStatus === 'connected' && (
-        <div className='flex w-full flex-col gap-6'>
-          {timingStats && <ScanCycleStats timingStats={timingStats} />}
-          <EtherCATStats />
-          <PluginStatsPanel pluginStats={timingStats?.plugin_stats} />
-        </div>
-      )}
-
       <Modal open={showPythonWarning} onOpenChange={setShowPythonWarning}>
         <ModalContent className='h-fit w-[500px]'>
           <ModalHeader>

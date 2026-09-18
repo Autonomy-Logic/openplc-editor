@@ -24,3 +24,4 @@ export {
   resolveAlias,
   validateAliasEdit,
 } from './alias-registry'
+export { resolveProjectAliases } from './resolve-project-aliases'

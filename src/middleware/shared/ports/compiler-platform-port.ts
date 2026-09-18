@@ -152,6 +152,17 @@ export interface UploadRuntimeV4Args {
   bundle: Record<string, string>
   /** Discriminated device context; see `PlatformDeviceContext`. */
   context: PlatformDeviceContext
+  /**
+   * Whether this runtime stores the source project sent beside a program, as
+   * declared at `GET /api/capabilities` and read by the pre-upload version
+   * check.
+   *
+   * `false` means do not build one: a runtime that does not support snapshots
+   * discards the extra parts silently, so sending one costs the user upload
+   * time for an archive that is thrown away, and leaves them a device they
+   * cannot retrieve from with nothing said about why.
+   */
+  supportsProjectSnapshot: boolean
 }
 
 export interface UploadResult {
@@ -172,6 +183,13 @@ export interface UploadArduinoBoardArgs {
   /** Serial port for upload (e.g. `/dev/cu.usbmodem1101`).  Editor
    *  resolves; web's adapter receives but ignores. */
   port: string
+  /** Upload transport. Absent/"serial" (default): `port` is a serial port.
+   *  "ethernet": the board's core does a network upload; `ipAddress` carries
+   *  the device IP that arduino-cli receives as `--port`. */
+  uploadMethod?: 'serial' | 'ethernet'
+  /** Device IP for `uploadMethod:"ethernet"` (from configuration
+   *  runtimeIpAddress). Ignored for serial uploads. */
+  ipAddress?: string
 }
 
 /** Runtime v3 upload (legacy, editor-only).  Web's adapter MUST
@@ -211,11 +229,25 @@ export interface InstallArduinoCoreArgs {
 
 /** Arduino-CLI library install (editor-only.  Same no-op
  *  contract as core install for web). */
+/** A library installed from a git URL rather than the Arduino index.
+ *  Mirrors `ThirdPartyLibrary` in backend/shared/compile/third-party-libraries.ts,
+ *  restated here so the port does not depend on a backend module. */
+export interface ThirdPartyLibraryRequest {
+  name: string
+  gitUrl: string
+  reason: string
+}
+
 export interface InstallArduinoLibArgs {
   /** Legacy single-library id (kept for the placeholder call sites
    *  that pre-date `extraLibraries`).  Empty string when the caller
    *  is driving the install entirely from `extraLibraries`. */
   libId: string
+  /** Libraries this target needs that are not in the Arduino index, installed
+   *  with `lib install --git-url`. Selected from the target's CAPABILITIES —
+   *  a board that cannot host an OPC-UA server never downloads the OPC-UA
+   *  stack. Web no-ops: its compile service pre-installs everything. */
+  thirdPartyLibraries?: ThirdPartyLibraryRequest[]
   /** Per-board library list.  Sourced from the selected board's
    *  `hals.json` `extra_libraries` (static boards) or its VPP
    *  manifest `hal.extraArduinoLibraries` (VPP boards) — both feed
@@ -246,6 +278,13 @@ export interface CheckRuntimeVersionResult {
    *  when the runtime is unreachable or doesn't expose the
    *  endpoint (very old v3 runtimes). */
   version: string | null
+  /**
+   * Whether this runtime stores the source project an upload carries, from
+   * `projectSnapshot` at `GET /api/capabilities`. `false` for every runtime
+   * predating the feature or the endpoint, which is the honest default: one
+   * that stores snapshots says so.
+   */
+  supportsProjectSnapshot: boolean
   /**
    * Oldest editor this runtime accepts programs from, declared at
    * `GET /api/capabilities` (DOPE-448).  `null` means the runtime
@@ -372,4 +411,37 @@ export interface CompilerPlatformPort {
    *  remote VPP packages).  The pipeline calls this between
    *  `composeRuntimeV4Bundle` and `uploadRuntimeV4`. */
   packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult>
+
+  /**
+   * Persist a composed runtime-v4 bundle to the platform's build location.
+   *
+   * Split out of `uploadRuntimeV4`, which used to be the only thing that wrote
+   * the bundle anywhere. That made `compileOnly` produce almost nothing on disk
+   * for a v4 target: the bundle is composed in memory, and the compile-only path
+   * returned before the upload that happened to materialise it. A build folder
+   * left holding only the VPP files (which `packageVppPlugin` writes directly)
+   * looked plausible enough to be mistaken for a complete build — and stale
+   * files from an earlier upload made it look complete outright.
+   *
+   * Called for every v4 compile, upload or not, so `compile` and `upload` leave
+   * byte-identical artifacts.
+   *
+   * Optional: a platform with no project build directory can omit it, and the
+   * pipeline simply skips the write.
+   */
+  materializeRuntimeV4Bundle?(
+    args: MaterializeRuntimeV4BundleArgs,
+    log: PlatformLog,
+  ): Promise<MaterializeRuntimeV4BundleResult>
+}
+
+export interface MaterializeRuntimeV4BundleArgs {
+  /** Path → file content, as composed by `composeRuntimeV4Bundle`. */
+  bundle: Record<string, string>
+}
+
+export interface MaterializeRuntimeV4BundleResult {
+  /** Number of files written, for the progress line. */
+  written: number
+  errors?: StructuredCompileError[]
 }

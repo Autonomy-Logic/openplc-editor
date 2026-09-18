@@ -3,6 +3,11 @@ import { Position } from '@xyflow/react'
 import type { PLCPou } from '../../../../../../middleware/shared/ports'
 import type { PLCVariable } from '../../../../../../middleware/shared/ports'
 import type { LadderFlowType } from '../../../../../store/slices/ladder'
+import {
+  blockInputVariables,
+  blockOutputVariables,
+  IN_OUT_MARKER_WIDTH,
+} from '../../../../../utils/graphical/in-out-pin-rules'
 import { resolveArrayVariableByName } from '../../../../../utils/PLC/array-variable-utils'
 import {
   getVariableRestrictionType as _getVariableRestrictionType,
@@ -121,12 +126,9 @@ export const getBlockSize = (
     y: number
   },
 ) => {
-  const inputConnectors = variant.variables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => variable.name)
-  const outputConnectors = variant.variables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => variable.name)
+  const inputVariables = blockInputVariables(variant.variables)
+  const inputConnectors = inputVariables.map((variable) => variable.name)
+  const outputConnectors = blockOutputVariables(variant.variables).map((variable) => variable.name)
 
   const blockHeight =
     DEFAULT_BLOCK_CONNECTOR_Y +
@@ -136,8 +138,10 @@ export const getBlockSize = (
   let variableInputWidth = 0
   let variableOutputWidth = 0
   const blockNameWidth = variant.name.length * 12
-  inputConnectors.forEach((input) => {
-    const inputWidth = input.length * 12
+  inputVariables.forEach((input) => {
+    // An in-out pin also renders the ⟷ marker after its name; pay for it here so a long
+    // name plus the arrow cannot overflow the block.
+    const inputWidth = input.name.length * 12 + (input.class === 'inOut' ? IN_OUT_MARKER_WIDTH : 0)
     if (inputWidth > variableInputWidth) variableInputWidth = inputWidth
   })
   outputConnectors.forEach((output) => {
@@ -196,18 +200,14 @@ export const getBlockSize = (
 }
 
 export const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
-  const inputConnectors = variantLib.variables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-    .map((variable) => ({
-      name: variable.name,
-      type: variable.type,
-    }))
-  const outputConnectors = variantLib.variables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-    .map((variable) => ({
-      name: variable.name,
-      type: variable.type,
-    }))
+  const inputConnectors = blockInputVariables(variantLib.variables).map((variable) => ({
+    name: variable.name,
+    type: variable.type,
+  }))
+  const outputConnectors = blockOutputVariables(variantLib.variables).map((variable) => ({
+    name: variable.name,
+    type: variable.type,
+  }))
 
   const mustHaveExecutionControlEnabled =
     inputConnectors.length === 0 ||

@@ -1,4 +1,10 @@
-import type { PLCDataType, PLCPou, PLCVariable, PLCVariableType } from '../../middleware/shared/ports/types'
+import type {
+  PLCDataType,
+  PLCGlobalVariableList,
+  PLCPou,
+  PLCVariable,
+  PLCVariableType,
+} from '../../middleware/shared/ports/types'
 import type {
   DataTypeReferenceImpactAnalysis,
   DataTypeReferenceKind,
@@ -14,6 +20,7 @@ const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toL
 const KIND_GROUP: Record<DataTypeReferenceKind, string> = {
   'pou-variable': 'POU variables',
   'global-variable': 'global variables',
+  'global-variable-list-member': 'global variable lists',
   'data-type-field': 'data types',
   'data-type-base-type': 'data types',
 }
@@ -41,6 +48,7 @@ export function findAllReferencesToDataType(
   pous: PLCPou[],
   globalVariables: PLCVariable[],
   dataTypes: PLCDataType[],
+  globalVariableLists: PLCGlobalVariableList[] = [],
 ): DataTypeReferenceImpactAnalysis {
   const references: DataTypeReferenceLocation[] = []
 
@@ -56,6 +64,17 @@ export function findAllReferencesToDataType(
     if (variableTypeReferencesDataType(variable.type, typeName)) {
       references.push({ kind: 'global-variable', container: GLOBAL_VARIABLES_CONTAINER, variableName: variable.name })
     }
+  })
+
+  // A list's members are typed like any other variable but live on the list, not in
+  // `globalVariables` — so without this pass the rename impact modal undercounts, and
+  // the user confirms a rename over references it never told them about.
+  globalVariableLists.forEach((list) => {
+    list.variables.forEach((variable) => {
+      if (variableTypeReferencesDataType(variable.type, typeName)) {
+        references.push({ kind: 'global-variable-list-member', container: list.name, variableName: variable.name })
+      }
+    })
   })
 
   dataTypes.forEach((dataType) => {

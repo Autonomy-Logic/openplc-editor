@@ -238,6 +238,23 @@ describe('runProgramBuildPipeline — debug artefacts', () => {
     const result = runProgramBuildPipeline({ ...baseOpts, pous: [] })
     expect(result.files.find((f) => f.name === 'debug-map.json')).toBeDefined()
     expect(result.debugMapSummary).toBe('Debug map: 3 leaves in 1 arrays')
+    expect(result.retainBlobSize).toBeNull()
+  })
+
+  it('reports the retain blob size so the firmware can be gated on it', () => {
+    strucppCompile.mockReturnValue({
+      ...okResult,
+      debugMap: {
+        leaves: [{ a: 1 }, { a: 2 }, { a: 3 }],
+        arrays: [{ b: 1 }],
+        retainBlobSize: 148,
+      },
+    } as unknown as CompileResult)
+    const result = runProgramBuildPipeline({ ...baseOpts, pous: [] })
+    expect(result.retainBlobSize).toBe(148)
+    // Said out loud, because watching this number grow is how someone notices
+    // before the build starts failing.
+    expect(result.debugMapSummary).toBe('Debug map: 3 leaves in 1 arrays; retain blob 148 bytes')
   })
 
   it('omits debug-map.json when strucpp returns no debugMap', () => {

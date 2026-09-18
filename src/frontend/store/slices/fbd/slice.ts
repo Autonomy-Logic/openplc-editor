@@ -15,6 +15,11 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {
           const flowIndex = fbdFlows.findIndex((f) => f.name === flow.name)
+          // Loading NEVER rewrites the diagram. A project saved before a VAR_IN_OUT pin became
+          // input-only still carries the pin's stale output side, and converting it here would
+          // mutate the user's graph behind their back — dropping wires with no signal and no
+          // way back. The block's update badge does it instead, on demand: see
+          // `hasLegacyInOutOutputHandle` for how such a block is detected.
           const rung = {
             ...flow.rung,
             selectedNodes: [],

@@ -9,6 +9,7 @@ import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/type
 import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
 import { useOpenPLCStore } from '../../../store'
 import type { ProjectResponse } from '../../../store/slices/project'
+import { elementNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
 import { isLegalIdentifier, sanitizeVariableInput } from '../../../utils/keywords'
 import { buildRemoteDeviceOptionGroups, buildVendorIoOptionGroups } from '../../../utils/remote-device-options'
@@ -32,8 +33,29 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCGlobalVariable, unknown> & { editable?: boolean }
-const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
+type IEditableCellProps = CellContext<PLCGlobalVariable, unknown> & {
+  editable?: boolean
+  /**
+   * Skip the rename impact analysis and the propagation that follows it.
+   *
+   * A Global Variable List's member is reached as `<list>.<member>`, never as a bare
+   * identifier, so searching POUs for the bare name finds unrelated locals and would
+   * rewrite them. The list's own name is what POUs reference, and renaming THAT is
+   * `propagateGlobalVariableListRename`'s job.
+   */
+  skipReferenceImpact?: boolean
+  /** A Resource global is a top-level symbol; a list member is not, so only the former is gated by name. */
+  isResourceGlobal?: boolean
+}
+const EditableNameCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+  skipReferenceImpact = false,
+  isResourceGlobal = true,
+}: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()
 
@@ -77,15 +99,19 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       return
     }
 
-    const impact = findAllReferencesToVariable(
-      oldName,
-      currentVariable.type,
-      'Resource',
-      pous,
-      ladderFlows,
-      fbdFlows,
-      'global',
-    )
+    if (isResourceGlobal) {
+      const collision = elementNameCollision(useOpenPLCStore.getState(), newName, 'resource-global', oldName)
+      if (collision) {
+        toast({ title: 'Variable already exists', description: collision, variant: 'fail' })
+        setCellValue(oldName)
+        setIsEditing(false)
+        return
+      }
+    }
+
+    const impact: ReferenceImpactAnalysis = skipReferenceImpact
+      ? { totalReferences: 0, byPou: new Map(), byEditorType: new Map(), references: [] }
+      : findAllReferencesToVariable(oldName, currentVariable.type, 'Resource', pous, ladderFlows, fbdFlows, 'global')
 
     let shouldPropagate = true
     if (impact.totalReferences > 0) {

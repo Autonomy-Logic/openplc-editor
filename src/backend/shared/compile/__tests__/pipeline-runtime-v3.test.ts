@@ -105,6 +105,7 @@ beforeEach(() => {
     md5Hash: 'a'.repeat(32),
     splitterFallbackMessage: null,
     debugMapSummary: null,
+    retainBlobSize: null,
   })
 })
 

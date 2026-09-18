@@ -5,33 +5,39 @@ import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
-
-/**
- * Validation contexts for save-before-close flows.
- *
- * - 'close-project': Close the current project (both platforms)
- * - 'create-project': Close current, then open create-project dialog (editor)
- * - 'open-project': Close current, then open file picker (editor)
- * - 'open-recent-project': Close current, then open a recent project (editor)
- * - 'open-project-by-path': Close current, then open project at path (editor)
- * - 'close-app': Save before quitting the application (editor)
- */
-export type ValidationContext =
-  | 'create-project'
-  | 'open-project'
-  | 'open-recent-project'
-  | 'open-project-by-path'
-  | 'close-project'
-  | 'close-app'
+import type { SaveChangesAbortReason, ValidationContext } from './save-changes-modal-data'
 
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
   validationContext: ValidationContext
   /** Callback to execute after save+close completes (e.g., re-open recent project). */
   onAfterAction?: () => void
+  /**
+   * Called instead of `onAfterAction` when the user chose Save and the save
+   * failed, so the caller can say that what it was waiting to do is not
+   * happening.
+   *
+   * A refused save is not always a broken one: a project retrieved from a
+   * device has no location the user chose, so saving it refuses BY DESIGN and
+   * points at Save As. Retrieving on top of it therefore took the one path that
+   * silently dropped the fetched project -- the dialog had already closed and
+   * the picker had already stepped aside, and the only thing on screen was a
+   * toast about the save.
+   *
+   * Cancel reports too. Answering a dialog you did not ask for with Cancel does
+   * not tell you what it abandoned: the user had pressed Continue on a retrieve,
+   * watched it fetch, and then both dialogs vanished with nothing said.
+   */
+  onActionAborted?: (reason: SaveChangesAbortReason) => void
 }
 
-const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }: SaveChangeModalProps) => {
+const SaveChangesModal = ({
+  isOpen,
+  validationContext,
+  onAfterAction,
+  onActionAborted,
+  ...rest
+}: SaveChangeModalProps) => {
   const {
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
@@ -56,7 +62,13 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
 
     if (operation === 'save') {
       const result = await executeSaveProject(projectPort, capabilities)
-      if (!result.success) return
+      if (!result.success) {
+        // The save already said why. This says what it cost: whatever was
+        // waiting on it is not going to happen, and the caller is the only one
+        // who can name it.
+        onActionAborted?.('save-failed')
+        return
+      }
     }
 
     switch (validationContext) {
@@ -71,8 +83,15 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
         }
         return
       }
+      // 'retrieve-project' belongs with these rather than with 'close-project':
+      // the deferred action opens something, so closing is a step on the way and
+      // not the outcome. Under 'close-project' both buttons ended at the start
+      // screen with the fetched project abandoned -- the retrieve was never
+      // resumed. (The comment sits above the labels rather than between them:
+      // `no-fallthrough` counts a case body of only comments as non-empty.)
       case 'open-recent-project':
       case 'open-project-by-path':
+      case 'retrieve-project':
         // Execute the deferred action (e.g., re-open the recent project)
         onAfterAction?.()
         return
@@ -85,13 +104,18 @@ const SaveChangesModal = ({ isOpen, validationContext, onAfterAction, ...rest }:
           windowPort.quit()
         }
         return
-      default:
-        break
+      default: {
+        // A context added without a branch here would otherwise close the
+        // dialog and do nothing, which is indistinguishable from Cancel.
+        const exhaustive: never = validationContext
+        return exhaustive
+      }
     }
   }
 
   const handleCancelModal = () => {
     closeModal()
+    onActionAborted?.('cancelled')
   }
 
   return (

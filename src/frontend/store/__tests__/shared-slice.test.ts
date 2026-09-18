@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCProjectData, PLCVariable } from '../../../middleware/shared/ports/types'
 import { createAISlice } from '../slices/ai'
 import { createConsoleSlice } from '../slices/console/slice'
 import { createDeviceSlice } from '../slices/device/slice'
@@ -88,11 +88,11 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('Main')
         expect(state.selectedTab).toBe('Main')
 
-        // Library slice: user library added
-        expect(state.libraries.user).toHaveLength(1)
-        expect(state.libraries.user[0].name).toBe('Main')
-        // program maps to 'function' library type
-        expect(state.libraries.user[0].type).toBe('function')
+        // Library slice: a program is NOT a library block. It is instantiated by
+        // the Resource, never called from another POU, and project load excludes
+        // programs when rebuilding `libraries.user` -- so registering one here
+        // would put it in the block pickers until the next reopen (DOPE-606).
+        expect(state.libraries.user).toHaveLength(0)
       })
 
       it('creates an LD function-block', () => {
@@ -117,7 +117,7 @@ describe('createSharedSlice', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         const result = store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'il' })
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('POU already exists')
+        expect(result.message).toBe('POU name already exists')
       })
 
       it('rejects a POU name that is not a valid IEC identifier', () => {
@@ -135,7 +135,8 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous).toHaveLength(3)
         expect(state.tabs).toHaveLength(3)
         expect(Object.keys(state.files)).toHaveLength(3)
-        expect(state.libraries.user).toHaveLength(3)
+        // Two, not three: the program is excluded from the library.
+        expect(state.libraries.user.map((library) => library.name)).toEqual(['Func1', 'FB1'])
       })
 
       it('seeds ladderFlows when creating an LD POU', () => {
@@ -233,7 +234,8 @@ describe('createSharedSlice', () => {
         expect(state.files['NewName']).toBeDefined()
         expect(state.files['OldName']).toBeUndefined()
         expect(state.tabs[0].name).toBe('NewName')
-        expect(state.libraries.user[0].name).toBe('NewName')
+        // The POU here is a program, so it never entered `libraries.user`.
+        expect(state.libraries.user).toHaveLength(0)
       })
 
       it('flags the workspace dirty after rename (persist only on save)', () => {
@@ -483,7 +485,7 @@ describe('createSharedSlice', () => {
         store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
         const result = store.getState().datatypeActions.create({ name: 'motor', derivation: 'structure' })
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Data type already exists')
+        expect(result.message).toBe('Data type name already exists')
         expect(store.getState().project.data.dataTypes).toHaveLength(1)
       })
 
@@ -497,7 +499,7 @@ describe('createSharedSlice', () => {
         store.getState().datatypeActions.create({ name: 'DT1', derivation: 'array' })
         const result = store.getState().datatypeActions.create({ name: 'DT1', derivation: 'structure' })
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Data type already exists')
+        expect(result.message).toBe('Data type name already exists')
       })
 
       it('rejects a data type name that is not a valid IEC identifier', () => {
@@ -848,7 +850,7 @@ describe('createSharedSlice', () => {
         const second = await store.getState().datatypeActions.rename('Chassis', 'Frame')
 
         expect(second.ok).toBe(false)
-        expect(second.message).toBe('Another data type rename is awaiting confirmation')
+        expect(second.message).toBe('Another data type change is awaiting confirmation')
         // The first request's resolver is untouched and still completes.
         expect(store.getState().pendingDatatypeRename).toBe(pendingBefore)
         store.getState().datatypeActions.respondToPendingRename(true)
@@ -946,6 +948,142 @@ describe('createSharedSlice', () => {
       })
     })
 
+    describe('deleteRequest with references (impact modal)', () => {
+      beforeEach(() => {
+        store.getState().datatypeActions.create({ name: 'OldDT', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Chassis', derivation: 'structure' })
+        store.getState().projectActions.updateDatatype('Chassis', {
+          name: 'Chassis',
+          derivation: 'structure',
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
+        store.getState().projectActions.setPouVariables({
+          pouName: 'Main',
+          variables: [
+            {
+              name: 'motor',
+              class: 'local',
+              type: { definition: 'user-data-type', value: 'olddt' },
+              location: '',
+              documentation: '',
+            },
+          ],
+        })
+      })
+
+      const dataTypeNames = () => store.getState().project.data.dataTypes.map((d) => d.name)
+
+      it('parks a pending delete instead of opening the confirm modal', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        const pending = store.getState().pendingDatatypeDelete
+        expect(pending?.name).toBe('OldDT')
+        expect(pending?.impact.totalReferences).toBe(2)
+        expect(Array.from(pending?.impact.byPou.entries() ?? [])).toEqual([
+          ['Main', 1],
+          ['Chassis', 1],
+        ])
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('confirm deletes the type and leaves the references in place', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.respondToPendingDelete(true)
+
+        const state = store.getState()
+        expect(state.pendingDatatypeDelete).toBeNull()
+        expect(dataTypeNames()).toEqual(['Chassis'])
+        expect(state.pendingDeletions).toContain('datatypes/OldDT.dt')
+        expect(state.files['OldDT']).toBeUndefined()
+        expect(state.project.data.pous[0].interface?.variables[0].type.value).toBe('olddt')
+        expect(state.project.data.dataTypes[0]).toMatchObject({
+          variable: [{ name: 'front', type: { definition: 'user-data-type', value: 'OldDT' } }],
+        })
+      })
+
+      it('cancel leaves the store untouched', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.respondToPendingDelete(false)
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+        expect(store.getState().pendingDeletions).toHaveLength(0)
+      })
+
+      it('ignores a second request while one is awaiting confirmation', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        store.getState().datatypeActions.deleteRequest('Chassis')
+
+        expect(store.getState().pendingDatatypeDelete?.name).toBe('OldDT')
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+      })
+
+      it('respondToPendingDelete without a pending request is a no-op', () => {
+        store.getState().datatypeActions.respondToPendingDelete(true)
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('refuses a delete request while a rename is awaiting confirmation', async () => {
+        const rename = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        const pendingRename = store.getState().pendingDatatypeRename
+
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').open).toBe(false)
+        expect(store.getState().pendingDatatypeRename).toBe(pendingRename)
+
+        store.getState().datatypeActions.respondToPendingRename(false)
+        await rename
+      })
+
+      it('refuses a rename while a delete is awaiting confirmation', async () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+
+        const result = await store.getState().datatypeActions.rename('OldDT', 'NewDT')
+
+        expect(result).toEqual({ ok: false, message: 'Another data type change is awaiting confirmation' })
+        expect(store.getState().pendingDatatypeDelete?.name).toBe('OldDT')
+        expect(dataTypeNames()).toEqual(['OldDT', 'Chassis'])
+      })
+
+      it('drops a pending delete when the project is closed', () => {
+        store.getState().datatypeActions.deleteRequest('OldDT')
+        expect(store.getState().pendingDatatypeDelete).not.toBeNull()
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+      })
+
+      it('cancels a pending rename when the project is closed', async () => {
+        const rename = store.getState().datatypeActions.rename('OldDT', 'NewDT')
+        expect(store.getState().pendingDatatypeRename).not.toBeNull()
+
+        store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+        expect(store.getState().pendingDatatypeRename).toBeNull()
+        // Without the resolver being fired, this await would never settle.
+        await expect(rename).resolves.toEqual({
+          ok: false,
+          cancelled: true,
+          message: 'Rename cancelled',
+        })
+      })
+
+      it('skips the modal when nothing references the type', () => {
+        store.getState().datatypeActions.deleteRequest('Chassis')
+
+        expect(store.getState().pendingDatatypeDelete).toBeNull()
+        expect(store.getState().modalActions.getModalState('confirm-delete-element').data).toEqual({
+          name: 'Chassis',
+          elementType: 'datatype',
+        })
+      })
+    })
+
     // -----------------------------------------------------------------------
     // duplicate
     // -----------------------------------------------------------------------
@@ -1002,6 +1140,352 @@ describe('createSharedSlice', () => {
       it('rejects duplicating to an invalid IEC identifier', () => {
         const result = store.getState().datatypeActions.duplicate('SourceDT', 'bad name')
         expect(result.ok).toBe(false)
+      })
+    })
+  })
+
+  // =========================================================================
+  // One identifier namespace across POUs, data types and global variable lists
+  // =========================================================================
+  describe('element name namespace', () => {
+    const seedPou = (name: string) => store.getState().pouActions.create({ type: 'program', name, language: 'st' })
+    const seedDatatype = (name: string) => store.getState().datatypeActions.create({ name, derivation: 'structure' })
+    const seedList = (name: string) => store.getState().globalVariableListActions.create(name)
+
+    describe('pouActions', () => {
+      it('refuses a create taking a data type name, case-insensitively', () => {
+        seedDatatype('Motor')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'motor', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"motor" is already the name of a data type')
+        expect(store.getState().project.data.pous).toHaveLength(0)
+      })
+
+      it('refuses a create taking a global variable list name', () => {
+        seedList('GVL')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'GVL', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL" is already the name of a global variable list')
+      })
+
+      it("refuses a create taking a global variable list's derived type name", () => {
+        seedList('GVL')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'GVL_TYPE', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL_TYPE" is the type name of global variable list "GVL"')
+      })
+
+      it('refuses a create differing from another POU only by case', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.create({ type: 'program', name: 'pump', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('POU name already exists')
+      })
+
+      it('refuses a rename onto a data type name', () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = store.getState().pouActions.rename('Pump', 'Motor')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Motor" is already the name of a data type')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      it('refuses a case-only rename: both names are one file on a case-folding disk', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('POU name already exists')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      /**
+       * `updatePouName` queues the old path for deletion unconditionally, so a no-op
+       * rename that reached it would mark the POU's own file deleted on the next save.
+       */
+      it('treats a rename onto the exact same name as a no-op', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'Pump')
+        expect(result.ok).toBe(true)
+        expect(store.getState().pendingDeletions).toEqual([])
+      })
+
+      it('refuses a duplicate taking a data type name', () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = store.getState().pouActions.duplicate('Pump', 'Motor')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Motor" is already the name of a data type')
+      })
+    })
+
+    describe('datatypeActions', () => {
+      it('refuses a create taking a POU name, case-insensitively', () => {
+        seedPou('Pump')
+        const result = store.getState().datatypeActions.create({ name: 'pump', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"pump" is already the name of a POU')
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('refuses a create taking a global variable list name', () => {
+        seedList('GVL')
+        const result = store.getState().datatypeActions.create({ name: 'GVL', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL" is already the name of a global variable list')
+      })
+
+      it("refuses a create taking a global variable list's derived type name", () => {
+        seedList('GVL')
+        const result = store.getState().datatypeActions.create({ name: 'GVL_TYPE', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL_TYPE" is the type name of global variable list "GVL"')
+      })
+
+      it('refuses a rename onto a POU name', async () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = await store.getState().datatypeActions.rename('Motor', 'Pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Pump" is already the name of a POU')
+        expect(store.getState().project.data.dataTypes[0].name).toBe('Motor')
+      })
+
+      it('refuses a duplicate taking a POU name', () => {
+        seedPou('Pump')
+        seedDatatype('Motor')
+        const result = store.getState().datatypeActions.duplicate('Motor', 'Pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Pump" is already the name of a POU')
+      })
+    })
+
+    describe('globalVariableListActions', () => {
+      /**
+       * The pair collides whichever half exists first: `GVL`'s generated struct takes
+       * `GVL_TYPE`, which is already the instance name of the other list.
+       */
+      it('refuses a create whose derived type name another list already holds', () => {
+        seedList('GVL_TYPE')
+        const result = store.getState().globalVariableListActions.create('GVL')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL" needs the type name "GVL_TYPE", which a global variable list already uses')
+        expect(store.getState().project.data.globalVariableLists ?? []).toHaveLength(1)
+      })
+
+      it('refuses the same pair in the opposite order', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.create('GVL_TYPE')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"GVL_TYPE" is the type name of global variable list "GVL"')
+      })
+
+      it('still allows a case-only rename: a list has no file of its own', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.rename('GVL', 'gvl')
+        expect(result.ok).toBe(true)
+      })
+
+      it('refuses a duplicate taking a POU name', () => {
+        seedPou('Pump')
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.duplicate('GVL', 'Pump')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Pump" is already the name of a POU')
+      })
+
+      /**
+       * An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares
+       * stays in the build and the list's generated struct would declare it a second time.
+       */
+      describe('with an unreadable datatypes/GVL_TYPE.dt on disk', () => {
+        const seedGhostTypeFile = () =>
+          store
+            .getState()
+            .projectActions.setUnparsedDataTypeFiles([
+              { relativePath: 'datatypes/GVL_TYPE.dt', content: 'TYPE garbage' },
+            ])
+
+        const expectedMessage = '"GVL" needs the type name "GVL_TYPE", which a data type file already uses'
+
+        it('refuses a create whose derived type name the file owns', () => {
+          seedGhostTypeFile()
+          const result = store.getState().globalVariableListActions.create('GVL')
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(expectedMessage)
+          expect(store.getState().project.data.globalVariableLists ?? []).toHaveLength(0)
+        })
+
+        it('refuses a rename whose derived type name the file owns', () => {
+          seedList('Other')
+          seedGhostTypeFile()
+          const result = store.getState().globalVariableListActions.rename('Other', 'GVL')
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(expectedMessage)
+          expect((store.getState().project.data.globalVariableLists ?? [])[0].name).toBe('Other')
+        })
+
+        it('refuses a duplicate whose derived type name the file owns', () => {
+          seedList('Other')
+          seedGhostTypeFile()
+          const result = store.getState().globalVariableListActions.duplicate('Other', 'GVL')
+          expect(result.ok).toBe(false)
+          expect(result.message).toBe(expectedMessage)
+          expect(store.getState().project.data.globalVariableLists ?? []).toHaveLength(1)
+        })
+      })
+    })
+
+    /**
+     * The bundled archives are always in the build, so their symbols are taken before
+     * the user creates anything: reusing one emits a duplicate declaration that only
+     * surfaces as a C++ error in a generated file.
+     */
+    describe('against library symbols', () => {
+      const librarySymbol = (name: string, type: 'function' | 'function-block') => ({
+        name,
+        type,
+        language: 'st' as const,
+        variables: [],
+        body: '',
+        documentation: '',
+      })
+
+      const seedLibraries = () =>
+        store.getState().libraryActions.setSystemLibraries([
+          {
+            name: 'oscat-basic',
+            author: 'OSCAT',
+            version: '3.3.4',
+            stPath: '',
+            cPath: '',
+            pous: [librarySymbol('MATRIX', 'function-block'), librarySymbol('LIMITS_TYPE', 'function-block')],
+          },
+          {
+            name: 'iec-std-functions',
+            author: 'IEC',
+            version: '1.0.0',
+            stPath: '',
+            cPath: '',
+            pous: [librarySymbol('SIN', 'function')],
+          },
+        ])
+
+      beforeEach(() => {
+        seedLibraries()
+      })
+
+      it('refuses a POU create, naming the library and the symbol kind', () => {
+        const result = store.getState().pouActions.create({ type: 'program', name: 'Matrix', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Matrix" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous).toHaveLength(0)
+      })
+
+      it('refuses a data type create, case-insensitively', () => {
+        const result = store.getState().datatypeActions.create({ name: 'matrix', derivation: 'structure' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"matrix" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes).toHaveLength(0)
+      })
+
+      it('names a library function as a function', () => {
+        const result = store.getState().pouActions.create({ type: 'function', name: 'Sin', language: 'st' })
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"Sin" is a function in the iec-std-functions library')
+      })
+
+      it('refuses a global variable list create', () => {
+        const result = store.getState().globalVariableListActions.create('MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('refuses a global variable list whose derived type name a library symbol owns', () => {
+        const result = store.getState().globalVariableListActions.create('Limits')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe(
+          '"Limits" needs the type name "Limits_TYPE", which is a function block in the oscat-basic library',
+        )
+      })
+
+      it('refuses a POU rename onto a library symbol', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.rename('Pump', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous[0].name).toBe('Pump')
+      })
+
+      it('refuses a data type rename onto a library symbol', async () => {
+        seedDatatype('Motor')
+        const result = await store.getState().datatypeActions.rename('Motor', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes[0].name).toBe('Motor')
+      })
+
+      it('refuses a global variable list rename onto a library symbol', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.rename('GVL', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('refuses a POU duplicate onto a library symbol', () => {
+        seedPou('Pump')
+        const result = store.getState().pouActions.duplicate('Pump', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.pous).toHaveLength(1)
+      })
+
+      it('refuses a data type duplicate onto a library symbol', () => {
+        seedDatatype('Motor')
+        const result = store.getState().datatypeActions.duplicate('Motor', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+        expect(store.getState().project.data.dataTypes).toHaveLength(1)
+      })
+
+      it('refuses a global variable list duplicate onto a library symbol', () => {
+        seedList('GVL')
+        const result = store.getState().globalVariableListActions.duplicate('GVL', 'MATRIX')
+        expect(result.ok).toBe(false)
+        expect(result.message).toBe('"MATRIX" is a function block in the oscat-basic library')
+      })
+
+      it('allows a name no library symbol owns', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'Matrices', language: 'st' })).toEqual({
+          ok: true,
+        })
+      })
+
+      /**
+       * The gate is entry-point only: a project saved before it existed still opens,
+       * and the offending element can still be renamed out of the collision.
+       */
+      it('still opens a project that already carries a colliding name', () => {
+        const projectData: PLCProjectData = {
+          dataTypes: [],
+          pous: [
+            {
+              name: 'MATRIX',
+              pouType: 'program',
+              interface: { variables: [] },
+              body: { language: 'st', value: '' },
+              documentation: '',
+            },
+          ],
+          configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
+          meta: { name: 'TestProject', type: 'plc-project', path: '/test/path' },
+          projectData,
+        })
+
+        expect(store.getState().project.data.pous.map((pou) => pou.name)).toEqual(['MATRIX'])
+        expect(store.getState().pouActions.rename('MATRIX', 'Matrices')).toEqual({ ok: true })
       })
     })
   })
@@ -1109,7 +1593,22 @@ describe('createSharedSlice', () => {
         addServer('ExistingServer')
         const result = store.getState().serverActions.rename('OldServer', 'ExistingServer')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Server name already exists')
+        expect(result.message).toBe('Server already exists')
+      })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().serverActions.rename('OldServer', 'oldserver')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldServer']).toBeDefined()
+        expect(state.files['oldserver']).toBeUndefined()
+        expect(state.project.data.servers?.[0].name).toBe('OldServer')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().serverActions.rename('OldServer', 'OldServer')).toEqual({ ok: true })
       })
     })
   })
@@ -1254,7 +1753,29 @@ describe('createSharedSlice', () => {
         addRemoteDevice('ExistingDevice')
         const result = store.getState().remoteDeviceActions.rename('OldDevice', 'ExistingDevice')
         expect(result.ok).toBe(false)
-        expect(result.message).toBe('Device name already exists')
+        expect(result.message).toBe('Remote device already exists')
+      })
+
+      it('refuses a case-only rename and leaves the registry alone: on a case-folding disk it is the same file', () => {
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'olddevice')
+        expect(result.ok).toBe(false)
+
+        const state = store.getState()
+        expect(state.files['OldDevice']).toBeDefined()
+        expect(state.files['olddevice']).toBeUndefined()
+        expect(state.project.data.remoteDevices?.[0].name).toBe('OldDevice')
+        expect(state.pendingDeletions).toEqual([])
+      })
+
+      it('treats a rename to the identical name as a no-op instead of a duplicate of itself', () => {
+        expect(store.getState().remoteDeviceActions.rename('OldDevice', 'OldDevice')).toEqual({ ok: true })
+      })
+
+      it('refuses a rename onto a POU name and says so', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().remoteDeviceActions.rename('OldDevice', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+        expect(store.getState().files['OldDevice']).toBeDefined()
       })
     })
   })
@@ -1371,6 +1892,23 @@ describe('createSharedSlice', () => {
       it('allows renaming to the same name (no-op)', () => {
         const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'EK1100')
         expect(result).toEqual({ ok: true })
+      })
+
+      it('rejects renaming a slave onto a POU name, and says which', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'Pump', language: 'st' })
+        const result = store.getState().ethercatDeviceActions.rename('bus1', 'slave-1', 'pump')
+        expect(result).toEqual({ ok: false, message: '"pump" is already the name of a POU' })
+      })
+
+      it('keeps a slave name out of reach of the other workspace kinds', () => {
+        expect(store.getState().pouActions.create({ type: 'program', name: 'EK1100', language: 'st' })).toEqual({
+          ok: false,
+          message: '"EK1100" is already the name of an EtherCAT slave',
+        })
+        expect(store.getState().serverActions.create({ name: 'el1809', protocol: 'modbus-tcp' })).toEqual({
+          ok: false,
+          message: '"el1809" is already the name of an EtherCAT slave',
+        })
       })
 
       it('returns error when the bus does not exist', () => {
@@ -2144,6 +2682,74 @@ describe('createSharedSlice', () => {
     })
 
     // -----------------------------------------------------------------------
+    // openRetrievedProject
+    // -----------------------------------------------------------------------
+    describe('openRetrievedProject', () => {
+      // The shared tail of both platforms' retrieve adapters: the desktop
+      // unpacks an archive to a scratch directory and reads it back, web parses
+      // the same archive in memory, and from here on they are the same two
+      // steps. Written per platform, the desktop's copy shipped without the
+      // load and web's marked the project ephemeral twice.
+      it('loads the project and marks it as having no location yet', () => {
+        store.getState().sharedWorkspaceActions.openRetrievedProject({
+          meta: { name: 'Irrigation Controller', type: 'plc-project', path: '/scratch/retrieved/irrigation' },
+          projectData: {
+            pous: [],
+            dataTypes: [],
+            globalVariableLists: [],
+            configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+          },
+        })
+
+        expect(store.getState().project.meta.name).toBe('Irrigation Controller')
+        // What stops the next Save writing into a scratch directory the app
+        // prunes behind the user: it points them at Save As instead.
+        expect(store.getState().workspace.isEphemeralProject).toBe(true)
+      })
+    })
+
+    // -----------------------------------------------------------------------
+    // hasUnsavedChanges
+    // -----------------------------------------------------------------------
+    describe('hasUnsavedChanges', () => {
+      // The rule `closeProject` applies, asked on its own by a caller that has
+      // to replace the project rather than close it -- retrieving from a
+      // device. The point of sharing it is that the two cannot drift: a caller
+      // that re-derived the condition would start discarding work silently the
+      // day the rule changed.
+      it('is true while the editing state is unsaved', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is true while any file is unsaved, whatever the editing state says', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: false })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(true)
+      })
+
+      it('is false once everything is saved', () => {
+        store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
+        store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
+        store.getState().workspaceActions.setEditingState('saved')
+
+        expect(store.getState().sharedWorkspaceActions.hasUnsavedChanges()).toBe(false)
+      })
+
+      it('agrees with what closeProject does about it', () => {
+        store.getState().workspaceActions.setEditingState('unsaved')
+
+        const dirty = store.getState().sharedWorkspaceActions.hasUnsavedChanges()
+        const { pendingConfirmation } = store.getState().sharedWorkspaceActions.closeProject()
+
+        expect(pendingConfirmation).toBe(dirty)
+      })
+    })
+
+    // -----------------------------------------------------------------------
     // closeProject
     // -----------------------------------------------------------------------
     describe('closeProject', () => {
@@ -2179,7 +2785,7 @@ describe('createSharedSlice', () => {
     describe('clearStatesOnCloseProject', () => {
       it('resets all slice states', () => {
         store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
-        store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'test' })
+        store.getState().consoleActions.addLog({ level: 'info', message: 'test' })
 
         store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
 
@@ -2263,6 +2869,68 @@ describe('createSharedSlice', () => {
           },
         }
       }
+
+      // DOPE-442
+      describe('a project saved before 4.3.0', () => {
+        /** A board whose Modbus lived in the VPP screen sections. */
+        const legacyBoard = {
+          deviceConfiguration: {
+            deviceBoard: 'ESP32',
+            communicationPort: '',
+            vendorScreenData: {
+              modbus_rtu: { enabled: true, rtu_slave_id: 7, rtu_interface: 'Serial2', rtu_baud_rate: '115200' },
+              modbus_tcp: { enabled: false },
+            },
+          },
+        }
+
+        it('opens with no Modbus server and leaves the old sections untouched', () => {
+          // 4.3.0 does not carry configuration forward. Nothing is promoted,
+          // nothing is rewritten, and the project is not dirtied on open -- the
+          // user creates the server again, and until then no Modbus is compiled.
+          const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
+          store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+          const state = store.getState()
+          expect(state.project.data.servers ?? []).toHaveLength(0)
+          expect(state.workspace.editingState).toBe('saved')
+          expect(state.deviceDefinitions.configuration.vendorScreenData).toEqual(
+            legacyBoard.deviceConfiguration.vendorScreenData,
+          )
+        })
+      })
+
+      // DOPE-592
+      it('opens EMPTY and read-only when a POU is unrecoverable, and says why on the Console', () => {
+        const data = {
+          ...makeMinimalProjectResponse(),
+          fatalErrors: ['POU "main" (pous/programs/main.ld) could not be parsed'],
+        }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        // The workspace must actually OPEN. `meta.path` is what moves the app
+        // off the start screen, and on the desktop build it is the only
+        // trigger — without it the user never sees the Console below.
+        expect(state.project.meta.path).toBe('/test/path')
+        // No content: a blank canvas would look like a legitimate empty diagram.
+        expect(state.project.data.pous).toHaveLength(0)
+        // Read-only, so no save can write that emptiness over the real file.
+        expect(state.workspace.canEdit).toBe(false)
+        // And the reason is on the Console, as an error rather than a warning.
+        const errors = state.logs.filter((log) => log.level === 'error')
+        expect(errors.some((log) => log.message.includes('pous/programs/main.ld'))).toBe(true)
+        expect(errors.some((log) => log.message.includes('read-only'))).toBe(true)
+      })
+
+      it('still opens normally when the failure is only a recoverable warning', () => {
+        const data = { ...makeMinimalProjectResponse(), warnings: ['POU "main" could not be fully parsed'] }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
+
+        const state = store.getState()
+        expect(state.project.data.pous).toHaveLength(1)
+        expect(state.workspace.canEdit).toBe(true)
+      })
 
       it('opens a minimal project with an ST main POU', () => {
         const data = makeMinimalProjectResponse()

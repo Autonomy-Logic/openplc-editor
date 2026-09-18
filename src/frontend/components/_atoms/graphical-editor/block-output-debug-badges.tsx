@@ -1,5 +1,6 @@
 import { useDebugCompositeKey } from '../../../hooks/use-debug-composite-key'
 import { useIsDebuggerVisible } from '../../../hooks/use-debug-value'
+import { blockOutputVariables } from '../../../utils/graphical/in-out-pin-rules'
 import { useIsGraphicalEditorActive } from '../../_features/[workspace]/editor/graphical/active-context'
 import { DebugValueBadge } from './debug-value-badge'
 
@@ -43,7 +44,9 @@ const BlockOutputDebugBadges = ({
     return null
   }
 
-  const outputs = outputVariables.filter((v) => v.class === 'output' || v.class === 'inOut')
+  // A VAR_IN_OUT has no output pin, so it gets no output badge — its value is shown by the
+  // variable connected to its input pin, which carries the written-back value.
+  const outputs = blockOutputVariables(outputVariables)
 
   return (
     <>

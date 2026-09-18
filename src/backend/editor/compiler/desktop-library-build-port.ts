@@ -6,13 +6,9 @@
  * Owns ONLY the platform-specific primitives the shared
  * `runLibraryBuildPipeline` cannot perform itself:
  *
- *   - MD5 hashing (Node `crypto`)
  *   - ST transpilation via the in-process JSON-fed transpiler
  *   - read / write / delete project files on the local disk
  *   - resolve library-name → `.stlib` archive via the main-process bridge
- *   - drive a verification compile through the editor's existing
- *     `compileProgram` flow (which already routes through the
- *     shared `runCompilePipeline`)
  *
  * No business logic lives here.  The orchestrator owns the build
  * sequence, cache decisions, error formatting, and the stable
@@ -20,7 +16,6 @@
  * shared with the web port impl.
  */
 
-import { createHash } from 'node:crypto'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -47,30 +42,10 @@ export interface DesktopLibraryBuildPortDeps {
    * pointing message before any heavy step runs.
    */
   loadEnabledArchives(enabledNames: string[]): { archives: unknown[]; missing: string[] }
-
-  /**
-   * Run a verification compile against the OpenPLC Simulator board.
-   * Wraps `CompilerModule.runVerificationCompile` so the port stays
-   * decoupled from the compiler module's full surface.  Failures
-   * here are advisory — caller surfaces them as warnings, never as
-   * a fatal build error.
-   */
-  runVerificationCompile(args: {
-    projectPath: string
-    verifyProjectData: unknown
-    emit: (message: string, level?: 'info' | 'warning' | 'error') => void
-  }): Promise<{ success: boolean; message?: string }>
 }
 
 export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps): LibraryBuildPort {
   return {
-    computeMd5(input: string): Promise<string> {
-      // Web's port impl computes the same digest via `spark-md5`.
-      // The orchestrator's verification cache keys off this value,
-      // so both platforms MUST agree byte-for-byte.
-      return Promise.resolve(createHash('md5').update(input).digest('hex'))
-    },
-
     transpileToSt(
       args: TranspileToStArgs,
       log: (message: string, level: 'info' | 'warning' | 'error') => void,
@@ -128,17 +103,6 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       // archives in one call; names that don't resolve come back
       // under `missing` for the orchestrator to fail the build on.
       return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs.map((r) => r.name)))
-    },
-
-    async verifyCompile({ projectPath, verifyProjectData, emit }) {
-      return deps.runVerificationCompile({
-        projectPath,
-        verifyProjectData,
-        // `runVerificationCompile` forwards every line off
-        // `compileProgram`'s message port; pass them straight
-        // through to the orchestrator's emit.
-        emit: (message, level) => emit(message, level ?? 'info'),
-      })
     },
   }
 }

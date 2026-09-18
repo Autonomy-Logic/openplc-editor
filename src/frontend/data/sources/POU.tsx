@@ -3,6 +3,7 @@ import { DataTypeIcon } from '../../assets/icons/project/DataType'
 import { FBDIcon } from '../../assets/icons/project/FBD'
 import { FunctionIcon } from '../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../assets/icons/project/FunctionBlock'
+import { GlobalVariableListIcon } from '../../assets/icons/project/GlobalVariableList'
 import { ILIcon } from '../../assets/icons/project/IL'
 import { LDIcon } from '../../assets/icons/project/LD'
 import { ProgramIcon } from '../../assets/icons/project/Program'
@@ -48,6 +49,7 @@ const CreatePouSources = {
   'function-block': <FunctionBlockIcon size='sm' />,
   program: <ProgramIcon size='sm' />,
   'data-type': <DataTypeIcon size='sm' />,
+  'global-variable-list': <GlobalVariableListIcon size='sm' />,
   server: <ServerIcon size='sm' />,
   'remote-device': <RemoteDeviceIcon size='sm' />,
 }

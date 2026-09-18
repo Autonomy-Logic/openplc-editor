@@ -21,8 +21,14 @@ type SelectGroup = {
 
 // Default trigger look = the table-cell style (centered, borderless). Field-style
 // callers (device pickers) override it via `triggerClassName`.
+//
+// `text-xs`, matching the `<table>` in _atoms/table — NOT `text-cp-sm`. Every
+// caller that keeps this default is a table cell that swaps between a plain
+// text display when the row is unselected and this trigger when it is
+// selected, so a smaller size here made the text visibly shrink on selection
+// (the Location column in the variables table is where it showed most).
 const DEFAULT_TRIGGER_CLASS =
-  'w-full flex-1 items-center justify-center p-2 font-caption text-cp-sm font-medium text-neutral-700 outline-none dark:text-neutral-500'
+  'w-full flex-1 items-center justify-center p-2 font-caption text-xs font-medium text-neutral-700 outline-none dark:text-neutral-500'
 
 export const GenericComboboxCell = ({
   value,

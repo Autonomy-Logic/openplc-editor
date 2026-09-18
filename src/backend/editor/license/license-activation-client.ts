@@ -106,11 +106,11 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
     const data = unwrapHttpEnvelope(raw) as Partial<EdgeActivationResponse> | undefined
 
     if (!data || typeof data.licensed !== 'boolean') {
-      return { licensed: false, error: 'Unexpected activation response shape' }
+      return { licensed: false, error: 'The licence server sent a reply the editor could not read.' }
     }
     if (!data.licensed) return { licensed: false, reason: data.reason }
     if (typeof data.license !== 'string') {
-      return { licensed: false, error: 'Activation response missing license blob' }
+      return { licensed: false, error: 'The licence server reported a licence but sent no licence data.' }
     }
 
     // `Buffer.from(s, 'base64')` NEVER throws: the decoder silently skips invalid
@@ -122,7 +122,7 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
     if (blob.length !== LIC_BLOB_SIZE) {
       return {
         licensed: false,
-        error: `Activation response license blob is ${blob.length} bytes, expected ${LIC_BLOB_SIZE}`,
+        error: 'The licence server sent licence data the editor could not use.',
       }
     }
 
@@ -167,22 +167,24 @@ function postJson(url: string, body: unknown): Promise<unknown> {
         res.on('end', () => {
           const status = res.statusCode ?? 0
           if (status < 200 || status >= 300) {
-            reject(new Error(`Activation request failed: ${status} ${res.statusMessage ?? ''}`.trim()))
+            reject(new Error(`The licence server refused the request (HTTP ${status}).`))
             return
           }
           try {
             resolve(JSON.parse(responseBody))
           } catch (err) {
-            reject(
-              new Error(`Activation response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`),
-            )
+            // The parse error is worth having when someone reports this, and
+            // worth keeping OUT of the dialog: the user can act on "the server
+            // sent something unreadable", never on a parser's column number.
+            console.warn('[license] activation response was not valid JSON:', err)
+            reject(new Error('The licence server sent a reply the editor could not read.'))
           }
         })
       },
     )
 
     req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      req.destroy(new Error(`Activation request timed out after ${REQUEST_TIMEOUT_MS}ms`))
+      req.destroy(new Error('The licence server did not answer in time.'))
     })
     req.on('error', (err) => reject(err))
     req.write(payload)

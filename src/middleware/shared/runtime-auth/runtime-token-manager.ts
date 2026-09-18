@@ -45,6 +45,12 @@ export interface RuntimeTokenManager {
   getToken(): string | null
   /** Whether a usable token is currently held. */
   hasToken(): boolean
+  /** Username of the live session, or null when there is none.
+   *
+   *  Only the username: the password stays private to this module. Callers
+   *  want it to attribute an action to an account -- the project snapshot
+   *  records who uploaded -- not to authenticate with it. */
+  getUsername(): string | null
   /** Adopt a token + the credentials that produced it (called on login). */
   setSession(token: string, credentials: RuntimeCredentials): void
   /** Forget the token and credentials (called on logout). */
@@ -79,6 +85,10 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
 
   function getToken(): string | null {
     return token
+  }
+
+  function getUsername(): string | null {
+    return credentials?.username ?? null
   }
 
   function hasToken(): boolean {
@@ -139,5 +149,5 @@ export function createRuntimeTokenManager(transport: TokenLoginTransport): Runti
     }
   }
 
-  return { getToken, hasToken, setSession, clear, refresh, withAuth, onTokenChanged }
+  return { getToken, getUsername, hasToken, setSession, clear, refresh, withAuth, onTokenChanged }
 }

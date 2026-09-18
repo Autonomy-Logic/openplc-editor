@@ -1,4 +1,10 @@
-import type { DiscoveredRuntimeDevice, RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
+import type {
+  DiscoveredRuntimeDevice,
+  RuntimeLogEntry,
+  RuntimeProjectSnapshotMetadata,
+} from '@root/middleware/shared/ports'
 import type {
   DeviceConnectionStatusPayload,
   DeviceLicenseReport,
@@ -19,6 +25,7 @@ import type {
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
+  PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
@@ -32,7 +39,33 @@ import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-serv
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import type {
+  BootloaderApiResult,
+  BootloaderCapabilities,
+  BootloaderLogs,
+  BootloaderStatus,
+  BootloaderUpdateProgress,
+  RuntimeDeviceInfo,
+} from '../../../backend/editor/runtime/bootloader-api-client'
+
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
+
+/**
+ * Register an IPC listener and hand back a per-listener unsubscribe.
+ *
+ * `removeAllListeners(channel)` would drop sibling subscribers on the same
+ * channel, so every `on`-style bridge method routes through here and returns
+ * the disposer instead. Callers that mount the same subscription repeatedly
+ * (React effects re-running on dependency changes) must call it on cleanup —
+ * otherwise dead listeners pile up until Node warns past ten.
+ */
+const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void) => {
+  const listener: IpcRendererCallbacks = (event, ...args) => callback(event, ...args)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
 
 /** Data posted through the MessagePort by the compiler module.
  *  `compileError` carries strucpp's structured `CompileError` (pouName,
@@ -47,6 +80,19 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
+  /** The build's verdict, carried on the `closePort` message. Sourced from
+   *  `runCompilePipeline`, which reduces every step's process exit code to one
+   *  boolean, so it — not the presence of error-level log lines — is what
+   *  decides whether a build failed.
+   *
+   *  Declared here because the seam is typed: `onmessage` currently forwards
+   *  `event.data` wholesale, so a consumer reading a `Record<string, unknown>`
+   *  sees the field regardless. A bridge refactor that reconstructs the
+   *  message field-by-field (the shape the `libraryBuildResult` path already
+   *  uses) would otherwise drop it silently, and `compileProgramFlow` would
+   *  fall back to its `hasError` heuristic — reintroducing a resolved bug with
+   *  no compile error and no failing test. */
+  success?: boolean
   /** Final structured outcome of a library build.  Set only on the
    *  close-port message emitted by `compileLibrary`; absent from
    *  intermediate log entries and from program-build / debug-build
@@ -60,26 +106,22 @@ type CompilerPortMessage = {
  */
 const rendererProcessBridge = {
   // ===================== PROJECT METHODS =====================
-  aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
-  aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
+  aboutAccelerator: (callback: IpcRendererCallbacks) => subscribe('website:about-accelerator', callback),
+  aboutModalAccelerator: (callback: IpcRendererCallbacks) => subscribe('about:open-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:close-project-accelerator', callback),
-  closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
+    subscribe('workspace:close-project-accelerator', callback),
+  closeTabAccelerator: (callback: IpcRendererCallbacks) => subscribe('workspace:close-tab-accelerator', callback),
   createProject: (data: CreateProjectFileProps): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:create', data),
-  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-  deleteFileAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:delete-file-accelerator', callback),
+  createProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:create-accelerator', callback),
+  deleteFileAccelerator: (callback: IpcRendererCallbacks) => subscribe('workspace:delete-file-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:find-in-project-accelerator', callback),
-  handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-project-request', (_event) => callback(_event)),
+    subscribe('project:find-in-project-accelerator', callback),
+  handleOpenProjectRequest: (callback: IpcRendererCallbacks) => subscribe('project:open-project-request', callback),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
-  openRecentAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+  openRecentAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:open-recent-accelerator', callback),
   pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
     ipcRenderer.invoke('project:path-picker'),
   openPathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
@@ -95,22 +137,23 @@ const rendererProcessBridge = {
     xml: string,
   ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
-  removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
-  removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
-  removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
-  removeDeleteFileListener: () => ipcRenderer.removeAllListeners('workspace:delete-file-accelerator'),
-  removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
-  removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
-  removeSaveFileAccelerator: () => ipcRenderer.removeAllListeners('project:save-file-accelerator'),
-  removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
+  exportPdfFile: (
+    defaultFileName: string,
+    bytes: Uint8Array,
+  ): Promise<{ success: boolean; canceled?: boolean; error?: { title: string; description: string } }> =>
+    ipcRenderer.invoke('project:export-pdf-file', defaultFileName, bytes),
   saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:save-file', filePath, content),
-  saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
+  saveFileAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-file-accelerator', callback),
   writeProjectFiles: (files: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:write-files', files),
-  saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
+  saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
+  saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
+  retrieveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:retrieve-accelerator', callback),
+  printAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:print-accelerator', callback),
+  pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+    subscribe('workspace:switch-perspective-accelerator', callback),
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
@@ -122,13 +165,11 @@ const rendererProcessBridge = {
   }): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:rename', data),
 
   // ===================== EDIT METHODS =====================
-  handleUndoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:undo-request', callback),
-  removeUndoRequestListener: () => ipcRenderer.removeAllListeners('edit:undo-request'),
-  handleRedoRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('edit:redo-request', callback),
-  removeRedoRequestListener: () => ipcRenderer.removeAllListeners('edit:redo-request'),
+  handleUndoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:undo-request', callback),
+  handleRedoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:redo-request', callback),
 
   // ===================== APP & SYSTEM METHODS =====================
-  darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
+  darwinAppIsClosing: (callback: IpcRendererCallbacks) => subscribe('app:darwin-is-closing', callback),
   getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   getSystemInfo: (): Promise<{
@@ -170,7 +211,7 @@ const rendererProcessBridge = {
   ): Promise<{ success: true; data: ListPublicLibrariesResponse } | { success: false; error: string }> =>
     ipcRenderer.invoke('catalog:list', args),
   installLibrariesFromCatalog: (
-    publishedLibraryIds: string[],
+    libraries: PublicLibrary[],
   ): Promise<{
     results: Array<{
       publishedLibraryId: string
@@ -179,7 +220,7 @@ const rendererProcessBridge = {
       version?: string
       error?: string
     }>
-  }> => ipcRenderer.invoke('catalog:install-many', publishedLibraryIds),
+  }> => ipcRenderer.invoke('catalog:install-many', libraries),
   onLibrariesChanged: (callback: () => void) => {
     const listener = () => callback()
     ipcRenderer.on('libraries:changed', listener)
@@ -188,14 +229,17 @@ const rendererProcessBridge = {
   handleQuitApp: () => ipcRenderer.send('app:quit'),
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
-  quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
-  removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
+  quitAppRequest: (callback: IpcRendererCallbacks) => subscribe('app:quit-accelerator', callback),
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
   /** Drop a recent-projects entry without touching disk — used by the
    *  start screen's "Remove from list" action. */
   removeProjectFromRecent: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('project:remove-from-recent', projectPath),
+  /** Add a project to the recent list without reading it — see
+   *  `ProjectPort.trackRecentProject`. */
+  trackRecentProject: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:track-recent', projectPath),
   /** Recursively delete a project directory AND drop it from the recent
    *  list. Gated by the main-process service's `project.json` safety
    *  check — see `ProjectService.deleteProject`. */
@@ -207,19 +251,17 @@ const rendererProcessBridge = {
   closeWindow: () => ipcRenderer.send('window-controls:closed'),
   handleCloseOrHideWindow: () => ipcRenderer.send('window-controls:close'),
   handleCloseOrHideWindowAccelerator: () =>
-    ipcRenderer.on('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
+    subscribe('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
   hideWindow: () => ipcRenderer.send('window-controls:hide'),
-  isMaximizedWindow: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
+  isMaximizedWindow: (callback: IpcRendererCallbacks) => subscribe('window-controls:toggle-maximized', callback),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
   reloadWindow: () => ipcRenderer.send('window:reload'),
-  removeHandleCloseOrHideWindowAccelerator: () => ipcRenderer.removeAllListeners('window-controls:request-close'),
-  windowIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:is-closing', callback),
+  windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 
   // ===================== THEME =====================
-  handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
+  handleUpdateTheme: (callback: IpcRendererCallbacks) => subscribe('system:update-theme', callback),
   winHandleUpdateTheme: (theme?: 'light' | 'dark' | 'nineties') => ipcRenderer.send('system:update-theme', theme),
   winGetTheme: (): Promise<'light' | 'dark' | 'nineties' | null> => ipcRenderer.invoke('system:get-theme'),
 
@@ -236,10 +278,7 @@ const rendererProcessBridge = {
     }>,
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
-  runCompileProgram: (
-    compileProgramArgs: Array<string | boolean | null | PLCProjectData | Record<string, unknown>>,
-    callback: (args: CompilerPortMessage) => void,
-  ) => {
+  runCompileProgram: (compileProgramArgs: CompileProgramIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     // Create a MessageChannel to communicate between the renderer and main process
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     // Send to the main process a message to run the compile program
@@ -267,21 +306,11 @@ const rendererProcessBridge = {
   },
 
   /** Build the open Library Project into a `.stlib` archive.  Same
-   *  MessageChannel pattern as `runCompileProgram`.  Args:
-   *    [0] projectPath
-   *    [1] projectData preprocessed with `isSimulator: false` (full
-   *        Python-as-ST), used for the library build proper.
-   *    [2] projectData preprocessed with `isSimulator: true` (Python
-   *        as no-op stubs), used as input to the simulator-target
-   *        verification compile so it doesn't try to link Python
-   *        loader externs the AVR simulator runtime doesn't ship.
-   *    [3] cleanBuild flag (skips the verification cache).
-   *  Callback receives a stream of log messages and a final
-   *  `libraryBuildResult`. */
-  runCompileLibrary: (
-    compileArgs: Array<string | PLCProjectData | boolean>,
-    callback: (args: CompilerPortMessage) => void,
-  ) => {
+   *  MessageChannel pattern as `runCompileProgram`; the tuple shape
+   *  is `CompileLibraryIpcArgs`, declared next to the adapter that
+   *  fills it.  Callback receives a stream of log messages and a
+   *  final `libraryBuildResult`. */
+  runCompileLibrary: (compileArgs: CompileLibraryIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-library', compileArgs, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
@@ -308,15 +337,13 @@ const rendererProcessBridge = {
       success: boolean
       message: string
     }>,
-  exportProjectRequest: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
+  exportProjectRequest: (callback: IpcRendererCallbacks) => subscribe('compiler:export-project-request', callback),
   generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
     rendererProcessPort.addEventListener('close', () => {})
   },
-  removeExportProjectListener: () => ipcRenderer.removeAllListeners('compiler:export-project-request'),
   setupCompilerEnvironment: (callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])
@@ -576,6 +603,33 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
+
+  // ===================== BOOTLOADER (RTOP-283) =====================
+  // The bootloader is a separate service on port 8445 with its own session.
+  // Results are the client's discriminated union, so a caller checks `success`
+  // and shows `error` verbatim -- its messages are written for a person.
+  bootloaderGetCapabilities: (ipAddress: string): Promise<BootloaderApiResult<BootloaderCapabilities>> =>
+    ipcRenderer.invoke('bootloader:get-capabilities', ipAddress),
+  bootloaderLogin: (
+    ipAddress: string,
+    username: string,
+    password: string,
+  ): Promise<BootloaderApiResult<{ role?: string }>> =>
+    ipcRenderer.invoke('bootloader:login', ipAddress, username, password),
+  bootloaderGetStatus: (ipAddress: string): Promise<BootloaderApiResult<BootloaderStatus>> =>
+    ipcRenderer.invoke('bootloader:get-status', ipAddress),
+  bootloaderGetDeviceInfo: (ipAddress: string): Promise<BootloaderApiResult<RuntimeDeviceInfo>> =>
+    ipcRenderer.invoke('bootloader:get-device-info', ipAddress),
+  bootloaderGetRuntimeLogs: (ipAddress: string, tail?: number): Promise<BootloaderApiResult<BootloaderLogs>> =>
+    ipcRenderer.invoke('bootloader:get-runtime-logs', ipAddress, tail),
+  bootloaderStartUpdate: (ipAddress: string, version: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:start-update', ipAddress, version),
+  bootloaderGetUpdateProgress: (ipAddress: string): Promise<BootloaderApiResult<BootloaderUpdateProgress>> =>
+    ipcRenderer.invoke('bootloader:get-update-progress', ipAddress),
+  bootloaderRestartRuntime: (ipAddress: string): Promise<BootloaderApiResult<{ state?: string; reason?: string }>> =>
+    ipcRenderer.invoke('bootloader:restart-runtime', ipAddress),
+  bootloaderClearSession: (ipAddress?: string): Promise<{ success: true }> =>
+    ipcRenderer.invoke('bootloader:clear-session', ipAddress),
   runtimeGetCompilationStatus: (
     ipAddress: string,
   ): Promise<{
@@ -597,6 +651,29 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
+  /**
+   * Retrieve the stored project and unpack it to a scratch directory.
+   *
+   * Returns a path, never the archive: those are untrusted bytes from a device,
+   * and every check deciding whether they are safe to write lives beside the
+   * write in the main process.
+   */
+  runtimeRetrieveProject: (
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: RuntimeProjectSnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => ipcRenderer.invoke('runtime:retrieve-project', ipAddress),
+  /** Install libraries a retrieved project brought with it, by name. */
+  runtimeInstallRetrievedLibraries: (
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> =>
+    ipcRenderer.invoke('runtime:install-retrieved-libraries', projectPath, names),
   onRuntimeDeviceDiscovered: (callback: (_event: IpcRendererEvent, device: DiscoveredRuntimeDevice) => void) => {
     ipcRenderer.on('runtime:device-discovered', callback)
     return () => ipcRenderer.removeListener('runtime:device-discovered', callback)

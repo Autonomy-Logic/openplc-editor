@@ -16,14 +16,22 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "openplc.h"
 #include "openplc_version.h"
 
-// ArduinoUniqueID (ricaun) backs the DEBUG_GET_BOARD_ID (0x48) function code.
-// It supports AVR/megaAVR/SAM/SAMD/STM32/ESP/RP2040/Teensy. On a core without
-// support (or when a board intentionally opts out via OPENPLC_NO_UNIQUE_ID),
-// the board-id handler returns id_len = 0 instead of failing to compile.
-#ifndef OPENPLC_NO_UNIQUE_ID
-    #include <ArduinoUniqueID.h>
-    #define OPENPLC_HAS_UNIQUE_ID
-#endif
+// The identity behind DEBUG_GET_DEVICE_ID (0x48) comes from the closed
+// license-core, not from a library compiled into this open firmware.
+//
+// It used to come from ArduinoUniqueID (ricaun), included right here, and that
+// had two problems. The library `#error`s out on any core it does not cover
+// (mbed is one, so every Arduino Opta, Portenta Machine Control and Edge
+// Control build failed, DOPE-587), and it made this file read the raw factory
+// serial in order to publish it on a channel with no authentication.
+//
+// Now the firmware ASKS: `license_gate_device_id()` reads the silicon inside
+// the closed artifact and hands back the derived device_id, so the anchor never
+// leaves it. On a board with no license-core the weak default answers 0, which
+// is the truthful answer for a board no licence can be bound to. Nothing here
+// derives, normalizes or reformats what it gets: the bytes go on the wire as
+// they arrive, because the editor compares them against what it purchased.
+#include "license_gate.h"
 
 /**
  * @brief Sends a Modbus response frame for the DEBUG_INFO function code.
@@ -158,10 +166,24 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
     {
         uint16_t varSize = openplc_debug_size(arr, elem);
         // Bounds check — stop packing if this one won't fit.
+        //
+        // NOTE: two cases are conflated here, and they cannot be separated
+        // without a wire change. A leaf that cannot fit an EMPTY frame can
+        // never be sent (a WSTRING needs 11+253 against a 256-byte ceiling,
+        // because the READ path pads strings to their full width), so breaking
+        // starves every later variable in the range as well.
+        //
+        // Skipping it instead was tried and is WORSE: the response is
+        // positional, so omitting one leaf shifts every following value into
+        // the wrong slot. The decoder's bounds check turns most of those into a
+        // dropped batch, but a large enough payload would let it decode one
+        // variable's bytes AS another and display a confidently wrong value.
+        // Absent beats wrong, so this stays until the framing itself can say
+        // "skipped" -- see the compact-string work (DOPE-645).
         if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
         if (varSize == 0) {
-            // Entry has no readable bytes (string stub / out-of-bounds)
-            // — skip gracefully to keep the scan progressing.
+            // No readable bytes for this entry (out of bounds). Skip gracefully
+            // to keep the scan progressing.
             lastElemIdx = elem;
             continue;
         }
@@ -390,6 +412,53 @@ void plcSetState(uint8_t desired)
     mb_frame_len = 5;
 }
 
+// Magic that must accompany a reboot-to-bootloader request, so a stray or
+// probing 0x4C frame cannot reset a running PLC. The editor sends these bytes.
+static const uint8_t REBOOT_BOOTLOADER_MAGIC[4] = { 0xB0, 0x07, 0x10, 0xAD };
+
+// PDU request:  [FC][magic:4]
+// PDU response: [FC][status]        (0x7E = accepted and rebooting)
+//
+// Asks the HAL to reboot into its firmware bootloader. The response is built here
+// but sent after process_mbpacket() returns, so a HAL must arm the reset rather
+// than perform it. The weak default is a no-op.
+void rebootToBootloader(const uint8_t *magic)
+{
+    uint8_t status = MB_DEBUG_SUCCESS;
+    for (int i = 0; i < 4; i++)
+        if (magic[i] != REBOOT_BOOTLOADER_MAGIC[i]) { status = MB_DEBUG_ERROR_OUT_OF_BOUNDS; break; }
+
+    // Programming lock. A locked device must still answer, or the editor could
+    // only report a timeout, so reply MB_REFUSED_LOCKED and raise the unlock
+    // prompt on the device's own display for the person standing at it.
+    if (status == MB_DEBUG_SUCCESS && hardwareProgrammingLocked())
+    {
+        status = MB_REFUSED_LOCKED;
+        hardwarePromptUnlock();         // returns immediately; never blocks the scan
+    }
+
+    mb_frame[1] = MB_FC_REBOOT_BOOTLOADER;
+    mb_frame[2] = status;
+    mb_frame_len = 3;
+
+    if (status == MB_DEBUG_SUCCESS)
+        hardwareRebootToBootloader();   // arms; the actual reset happens post-reply
+}
+
+// PDU request:  [FC]
+// PDU response: [FC][STATUS][locked:u8]     (locked: 0 = unlocked, 1 = locked)
+//
+// Read-only companion to 0x4C, polled by the editor while it waits out a refused
+// reboot so it can tell "still locked" from "device went away". Free of side
+// effects, so polling cannot spam the display. A board with no lock reports 0.
+void getLockState(void)
+{
+    mb_frame[1] = MB_FC_GET_LOCK_STATE;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = hardwareProgrammingLocked() ? 1 : 0;
+    mb_frame_len = 4;
+}
+
 // PDU request:  [FC]
 // PDU response: [FC, STATUS, version_ascii...]  (no NUL terminator)
 //
@@ -413,26 +482,28 @@ void debugGetVersion()
 // PDU request:  [FC]
 // PDU response: [FC, STATUS, id_len:u8, id_bytes...]
 //
-// Returns the unique hardware ID via ArduinoUniqueID. id_len is UniqueIDsize
-// (architecture-dependent: AVR 9-10, ESP8266 4, ESP32 6, SAM/SAMD 16, STM32
-// 12, Teensy 8). On a core without support, id_len = 0 and no bytes follow.
-void debugGetBoardId()
+// Reports this board's device_id: LIC_DEVICE_ID_SIZE bytes on a board that can
+// hold a licence, and id_len = 0 on one that cannot. Both are SUCCESS replies.
+// The empty answer is not an error and must not look like one: `device-probe`
+// reads a successful reply, not the id bytes, as proof that firmware is running
+// (requiring bytes once reported mbed boards as having no firmware at all), and
+// the editor's licensing flow reads a zero-length id as "no licence can be
+// bound to this board" (license-flow.ts, deriveIdentity).
+//
+// The frame is the capacity limit, so it is passed as one: if the id could not
+// fit after [FC][STATUS][id_len], `license_gate_device_id` refuses and reports
+// nothing rather than a truncated identity, which would be a DIFFERENT id and
+// would match no licence ever issued.
+void debugGetDeviceId()
 {
-    mb_frame[1] = MB_FC_DEBUG_GET_BOARD_ID;
+    size_t idLen;
+
+    mb_frame[1] = MB_FC_DEBUG_GET_DEVICE_ID;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-#ifdef OPENPLC_HAS_UNIQUE_ID
-    uint8_t idLen = (uint8_t)UniqueIDsize;
-    // Clamp so [FC][STATUS][id_len][id_bytes...] always fits the frame.
-    if ((uint16_t)(4 + idLen) > MAX_MB_FRAME) idLen = (uint8_t)(MAX_MB_FRAME - 4);
-    mb_frame[3] = idLen;
-    for (uint8_t i = 0; i < idLen; i++)
-        mb_frame[4 + i] = UniqueID[i];
-    mb_frame_len = 4 + idLen;
-#else
-    mb_frame[3] = 0; // no unique-id support on this core
-    mb_frame_len = 4;
-#endif
+    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MAX_MB_FRAME - 4));
+    mb_frame[3] = (uint8_t)idLen;
+    mb_frame_len = 4 + (int)idLen;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +561,7 @@ void debugWriteLicense(uint16_t len, const uint8_t *blob)
 // PDU response (EMPTY/CORRUPT/error): [FC][STATUS]   (no len, no blob)
 //
 // Absolute mb_frame indices (index 0 is the slave id, the PDU starts at 1,
-// exactly like debugGetBoardId): FC@1, STATUS@2, len@3..4 (BIG-ENDIAN), blob@5.
+// exactly like debugGetDeviceId): FC@1, STATUS@2, len@3..4 (BIG-ENDIAN), blob@5.
 //
 // The store reads straight into &mb_frame[5]: the frame IS the static buffer, so
 // there is no malloc on AVR. READ carries no request payload, so writing at [5]

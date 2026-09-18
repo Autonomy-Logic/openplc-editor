@@ -25,7 +25,11 @@ const configuration: webpack.Configuration = {
   target: 'electron-main',
 
   entry: {
-    main: join(webpackPaths.srcMainPath, 'main.ts'),
+    // `entry.ts`, not `main.ts`: a packaged Electron app always runs
+    // `package.json.main`, so the GUI and the headless CLI (DOPE-567) have to
+    // ship in one binary with argv deciding which starts. It imports the GUI
+    // only when this is not a `--cli` run.
+    main: join(webpackPaths.srcMainPath, 'entry.ts'),
     preload: join(webpackPaths.srcMainPath, 'modules/preload/preload.ts'),
   },
 

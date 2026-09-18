@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { useOpenPLCStore } from '../../../../../store'
 import { DeviceConfigurationEditor } from './configuration'
 import { DeviceOrchestratorsEditor } from './orchestrators'
+import { RuntimeStatusEditor } from './runtime-status'
 
 const DeviceEditor = () => {
   const {
@@ -23,7 +24,9 @@ const DeviceEditor = () => {
 
   return (
     <div aria-label='Device content container' className='h-full w-full overflow-hidden'>
-      {derivation === 'orchestrators' ? <DeviceOrchestratorsEditor /> : <DeviceConfigurationEditor />}
+      {derivation === 'orchestrators' && <DeviceOrchestratorsEditor />}
+      {derivation === 'runtime-status' && <RuntimeStatusEditor />}
+      {derivation !== 'orchestrators' && derivation !== 'runtime-status' && <DeviceConfigurationEditor />}
     </div>
   )
 }

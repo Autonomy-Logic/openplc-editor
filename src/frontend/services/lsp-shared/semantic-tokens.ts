@@ -41,12 +41,19 @@ export interface SemanticTokensRegistration extends monaco.IDisposable {
  * to clip the end at the body line so only VAR-block tokens render.
  * `outputStartLine` rebases the kept window for views that render
  * their own framing above it (the data type `.dt` code view).
+ * `keepLine` further drops the lines whose text the view no longer
+ * shares with the document (the variables view mid-edit).
  */
 export type ResolveSemanticTokensViewport = (
   lspUri: string,
   modelUri: string,
   lineOffset: number,
-) => { startLine: number; endLineExclusive: number; outputStartLine?: number }
+) => {
+  startLine: number
+  endLineExclusive: number
+  outputStartLine?: number
+  keepLine?: (lspLine: number) => boolean
+}
 
 const defaultViewport: ResolveSemanticTokensViewport = (_lspUri, _modelUri, lineOffset) => ({
   startLine: lineOffset,
@@ -89,10 +96,10 @@ export function registerLspSemanticTokens(opts: RegisterLspSemanticTokensOptions
         textDocument: { uri: lspUri },
       })
       if (!result) return null
-      const { startLine, endLineExclusive, outputStartLine } = resolveViewport(lspUri, modelUri, lineOffset)
+      const { startLine, endLineExclusive, outputStartLine, keepLine } = resolveViewport(lspUri, modelUri, lineOffset)
       return {
         ...(result.resultId ? { resultId: result.resultId } : {}),
-        data: shiftSemanticTokensToBody(result.data, startLine, endLineExclusive, outputStartLine),
+        data: shiftSemanticTokensToBody(result.data, startLine, endLineExclusive, outputStartLine, keepLine),
       }
     },
     releaseDocumentSemanticTokens() {

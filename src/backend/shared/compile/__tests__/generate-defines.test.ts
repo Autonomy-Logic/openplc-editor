@@ -57,13 +57,13 @@ describe('generateDefinesContent — board defines section', () => {
   })
 
   it('omits the Board defines header when boardEntry.define is an empty array', () => {
-    // Empty array is falsy-ish for the loop but the header is gated on
-    // boardEntry.define being truthy; an empty array IS truthy, so a
-    // header with no entries would be a bug.  Editor's behavior:
-    // empty-array case emits the header but no defines.  Snapshot the
-    // editor's behavior here.
+    // An empty array used to emit a bare header with no defines under it
+    // (the emitter gated the header on `define` being truthy, and `[]` is).
+    // Collecting the defines into a list first means the header follows the
+    // list, so this corner emits nothing at all.
     const out = generateDefinesContent({ ...EMPTY_INPUTS, boardEntry: { define: [] } })
-    expect(out.startsWith('// Board defines\n\n\n')).toBe(true)
+    expect(out).not.toContain('// Board defines')
+    expect(out.startsWith('\n\n')).toBe(true)
   })
 })
 
@@ -108,14 +108,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: {
-        modbus_rtu: {
-          enabled: true,
-          rtu_interface: 'Serial1',
-          rtu_baud_rate: '115200',
-          rtu_slave_id: 1,
-        },
-      },
+      vppModbusState: { serial: { baud_rate: '115200' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 1 },
     })
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 115200')
@@ -129,9 +123,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'openplc-compiler',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '115200', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '115200' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
     })
     expect(out).not.toContain('MBSERIAL_IFACE')
     expect(out).not.toContain('MODBUS_ENABLED')
@@ -145,7 +138,7 @@ describe('generateDefinesContent — simulator comms block', () => {
     const withEmptyState = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+      vppModbusState: {},
     })
     const withoutState = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
     // Same output either way — empty state collapses to no block.
@@ -159,11 +152,11 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('//Debugger\n#define DEBUGGER_ENABLED\n')
   })
 
-  it('emits DEBUGGER_ENABLED when the Modbus screen is present but disabled', () => {
+  it('emits DEBUGGER_ENABLED when the board has screen state but no Modbus server', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+      vppModbusState: {},
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
   })
@@ -172,10 +165,8 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: {
-        serial: { baud_rate: '9600' },
-        modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { enabled: true, transports: ['rtu' as const], port: 502 },
       defaultSerial: 'Serial',
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
@@ -205,14 +196,13 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // file. Emitting 115200 while MBSERIAL_BAUD said 9600 built a firmware the
   // editor could not talk to, and the user was told "No Firmware Detected" about
   // a board that was running fine.
-  it('aligns DEBUG_BAUD with MBSERIAL_BAUD for a published VPP (no `serial` section)', () => {
+  it('aligns DEBUG_BAUD with MBSERIAL_BAUD when the RTU shares the default port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { enabled: true, transports: ['rtu' as const], port: 502 },
     })
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
@@ -223,12 +213,12 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // editor dials 9600 (spec params ignore `enabledWhen`), so a firmware built at
   // 115200 opened the port and answered nothing — "No Firmware Detected" on a
   // healthy board.
-  it('aligns DEBUG_BAUD with the screen baud when Modbus is DISABLED', () => {
+  it('takes DEBUG_BAUD from the Serial screen even with no Modbus server', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
     expect(out).toContain('#define DEBUG_BAUD 9600')
@@ -236,51 +226,64 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).not.toContain('#define MODBUS_ENABLED')
   })
 
-  it('keeps DEBUG_BAUD at the firmware default when the RTU has its own second port', () => {
+  it('keeps DEBUG_BAUD on the package value when the RTU has its own second port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '57600' } },
+      modbusServer: { transports: ['rtu' as const], serialPort: 'Serial1', baudRate: 9600 },
     })
-    // Two distinct ports, two distinct rates — and the debugger keeps the default.
+    // Two distinct ports, two distinct rates — and the debugger keeps the one
+    // the package states for its own line.
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
-    expect(out).toContain('#define DEBUG_BAUD 115200')
+    expect(out).toContain('#define DEBUG_BAUD 57600')
   })
 
-  it('emits DEBUG_SLAVE from the RTU screen so it matches the id the editor addresses', () => {
+  it('keeps the two ids apart when the RTU shares the editor line', () => {
+    // The firmware answers both on that UART and routes by function code, so the
+    // server keeps the address the user picked. Emitting one id for both is what
+    // made this field read-only on the default port.
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 3 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial', slaveId: 7 },
     })
-    expect(out).toContain('#define MBSERIAL_SLAVE 3')
-    expect(out).toContain('#define DEBUG_SLAVE 3')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
   })
 
-  // The slave-id twin of the DEBUG_BAUD regression above, and the harsher one:
-  // Connect sweeps baud rates, but nothing sweeps slave ids. With Modbus off and
-  // slave id 7 saved on the screen, the editor addresses 7 while a firmware left
-  // on modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback frames on 1 — every
-  // frame dropped at the id check, reported as "No Firmware Detected".
-  it('aligns DEBUG_SLAVE with the screen slave id when Modbus is DISABLED', () => {
+  it('keeps the editor id untouched when the RTU has a UART of its own', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: false, rtu_slave_id: 7 } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 7 },
     })
-    expect(out).toContain('#define DEBUG_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
+  })
+
+  // The editor's id is a constant, so nothing a project can express moves it.
+  // This used to be derived from the screen, and a stale value there addressed a
+  // firmware framing on another id — every frame dropped at the id check and
+  // reported as "No Firmware Detected".
+  it('emits DEBUG_SLAVE 1 whatever the board screens hold', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { serial: {} },
+    })
+    expect(out).toContain('#define DEBUG_SLAVE 1')
     expect(out).not.toContain('#define MODBUS_ENABLED')
   })
 
-  it('falls back to DEBUG_SLAVE 1 when the project states no slave id', () => {
+  it('emits DEBUG_SLAVE 1 for a project with no screen state at all', () => {
     const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
     expect(out).toContain('#define DEBUG_SLAVE 1')
   })
@@ -431,6 +434,21 @@ describe('generateDefinesContent — Arduino library toggles', () => {
     // matching surfaces as a test failure.
     const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: 'XDS18B20;' })
     expect(out).toContain('#define USE_DS18B20_BLOCK\n')
+  })
+})
+
+describe('generateDefinesContent — retain blob size', () => {
+  it('emits OPLC_RETAIN_BLOB_SIZE when the program retains something', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 148 })
+    expect(out).toContain('//Retain')
+    expect(out).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+  })
+
+  it('emits nothing when the program retains nothing', () => {
+    // Boards that never touch retain must see byte-identical defines.h to
+    // before this existed, or every one of them rebuilds for no reason.
+    expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
+    expect(generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 0 })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
 })
 

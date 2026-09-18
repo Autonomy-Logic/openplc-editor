@@ -13,6 +13,7 @@
  *   </PlatformProvider>
  */
 
+import { APP_VERSION } from '../frontend/data/constants/app-version'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
@@ -20,8 +21,10 @@ import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
+import { openFetchedProject } from './adapters/editor/open-fetched-project'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
 import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
+import { createPackageUpdateNotifier } from './adapters/editor/package-update-notice'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
@@ -51,19 +54,41 @@ export function setProjectPath(path: string): void {
 /**
  * Editor platform ports — all port interfaces wired to Electron IPC bridge.
  */
+const editorProject = createEditorProjectAdapter()
+const editorRuntime = createEditorRuntimeAdapter(() => _runtimeIpAddress)
+
+/**
+ * Opening a fetched project is the one retrieve step that needs two ports, so
+ * it is composed here where both are in scope. The work itself lives in its own
+ * module, where a test can reach it — see `open-fetched-project.ts`.
+ */
+editorRuntime.openFetchedProject = (project) => openFetchedProject(project, editorProject)
+
+const editorPackages = createEditorPackageAdapter()
+
+/**
+ * Tells a build whether the board's package has a newer, editor-compatible
+ * release. Exported so the app root can `prime()` it at startup: the catalogue
+ * is fetched once, off the build's critical path, and every build after that
+ * reads the answer without touching the network.
+ */
+export const packageUpdateNotifier = createPackageUpdateNotifier(editorPackages, APP_VERSION)
+
 export const editorPorts: PlatformPorts = {
-  compiler: createEditorCompilerAdapter(),
-  runtime: createEditorRuntimeAdapter(() => _runtimeIpAddress),
+  compiler: createEditorCompilerAdapter({
+    findPackageUpdateNotice: (packageId) => packageUpdateNotifier.notice(packageId),
+  }),
+  runtime: editorRuntime,
   debugger: createEditorDebuggerAdapter(),
   simulator: createEditorSimulatorAdapter(),
-  project: createEditorProjectAdapter(),
+  project: editorProject,
   device: createEditorDeviceAdapter(),
   orchestrator: createEditorOrchestratorAdapter(),
   system: createEditorSystemAdapter(),
   window: createEditorWindowAdapter(),
   accelerator: createEditorAcceleratorAdapter(),
   theme: createEditorThemeAdapter(),
-  packages: createEditorPackageAdapter(),
+  packages: editorPackages,
   esi: createEditorEsiAdapter(() => _projectPath),
   versionControl: createEditorVersionControlAdapter(),
   navigation: createEditorNavigationAdapter(),

@@ -1,18 +1,15 @@
 import { ComponentPropsWithoutRef, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCDataType } from '../../../../../middleware/shared/ports/types'
-import { CodeIcon } from '../../../../assets/icons/interface/CodeIcon'
-import { TableIcon } from '../../../../assets/icons/interface/TableIcon'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { dtViewUri } from '../../../../services/st-lsp/types'
 import { useOpenPLCStore } from '../../../../store'
 import { extractSearchQuery } from '../../../../store/slices/search/utils'
-import { cn } from '../../../../utils/cn'
-import { isDataTypeFilesEnabled } from '../../../../utils/feature-flags'
 import { getErrorMessage } from '../../../../utils/get-error-message'
 import { serializeDataTypeToText } from '../../../../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../../../../utils/PLC/data-type-text-parser'
 import { InputWithRef } from '../../../_atoms/input'
+import { ViewModeToggle } from '../../../_atoms/view-mode-toggle'
 import { ArrayDataType } from '../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../_molecules/data-types/enumerated'
 import { StructureDataType } from '../../../_molecules/data-types/structure'
@@ -22,6 +19,10 @@ import { toast } from '../../[app]/toast/use-toast'
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string
 }
+
+// `name` is the type the commit left behind — the new one when the buffer
+// renamed it, so the caller can address the model it now lives under.
+type CommitOutcome = { committed: boolean; name: string }
 
 const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const {
@@ -46,8 +47,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   // this type's own model — never from the active `editor`.
   const model = editor.meta.name === dataTypeName ? editor : editors.find((e) => e.meta.name === dataTypeName)
   const modelStructure = model?.type === 'plc-datatype' ? model.structure : undefined
-  const codeViewEnabled = isDataTypeFilesEnabled()
-  const display = codeViewEnabled && modelStructure?.display === 'code' ? 'code' : 'table'
+  const display = modelStructure?.display === 'code' ? 'code' : 'table'
   const modelCode = modelStructure?.display === 'code' ? modelStructure.code : undefined
 
   // An unparseable file has no entry in `dataTypes` — raw text is all there is.
@@ -71,7 +71,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const lastRejectedCodeRef = useRef<string | null>(null)
   const lastMirroredCodeRef = useRef(editorCode)
   const isParsingRef = useRef(false)
-  const commitCodeRef = useRef<() => boolean>(() => false)
+  const commitCodeRef = useRef<() => Promise<CommitOutcome>>(() => Promise.resolve({ committed: false, name: '' }))
 
   useEffect(() => {
     const dataType = dataTypes.find((candidate) => candidate.name === dataTypeName)
@@ -120,37 +120,82 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     setParseError(parseDataTypeFromText(editorCode, dataTypeName).error ?? null)
   }, [display, editorContent, editorCode, dataTypeName])
 
-  const commitCode = (): boolean => {
-    const { dataType, error } = parseDataTypeFromText(editorCode, dataTypeName)
-    if (!dataType) {
-      const message = error ?? 'Unexpected syntax error.'
-      setParseError(message)
-      toast({ title: 'Syntax error', description: message, variant: 'fail' })
-      return false
-    }
+  const rejectBuffer = (message: string): boolean => {
+    setParseError(message)
+    lastRejectedCodeRef.current = editorCode
+    toast({ title: 'Syntax error', description: message, variant: 'fail' })
+    return false
+  }
 
+  // Everything a commit does once the text has parsed.
+  const commitParsedDataType = (dataType: PLCDataType): boolean => {
     captureAndPush(dataTypeName)
 
     if (editorContent) {
       updateDatatype(dataTypeName, dataType)
     } else {
       const result = createDatatype({ data: dataType })
-      if (!result.ok) {
-        const message = result.message ?? 'Could not create the data type.'
-        setParseError(message)
-        toast({ title: 'Syntax error', description: message, variant: 'fail' })
-        return false
-      }
+      if (!result.ok) return rejectBuffer(result.message ?? 'Could not create the data type.')
       if (rawFile) removeUnparsedDataTypeFile(rawFile.relativePath)
     }
 
     handleFileAndWorkspaceSavedState(dataTypeName)
+    // A buffer keeping the typed form drifts from the canonical LSP document and loses its colours.
+    const canonical = serializeDataTypeToText(dataType)
+    setEditorCode(canonical)
+    lastParsedCodeRef.current = canonical
+    lastMirroredCodeRef.current = canonical
+    lastRejectedCodeRef.current = null
     setParseError(null)
     return true
   }
 
+  const commitCode = (): boolean => {
+    const { dataType, error } = parseDataTypeFromText(editorCode, dataTypeName)
+    if (!dataType) return rejectBuffer(error ?? 'Unexpected syntax error.')
+    return commitParsedDataType(dataType)
+  }
+
+  // Write to the model directly: `rename` reconciles the stored buffer a render before React state lands.
+  const restoreBufferName = (parsed: PLCDataType) => {
+    const restored = serializeDataTypeToText({ ...parsed, name: dataTypeName })
+    lastMirroredCodeRef.current = restored
+    lastParsedCodeRef.current = restored
+    lastRejectedCodeRef.current = null
+    updateModelStructureForName(dataTypeName, { display: 'code', code: restored })
+    setEditorCode(restored)
+  }
+
+  // A name edited in the buffer is a rename intent, not a parse error — but an
+  // unparsed file has no type to rename, and a case-only difference is
+  // normalized rather than renamed, because the name gates refuse a case-only
+  // self-rename and routing one through the rename could only ever fail.
+  const isRenameIntent = (parsed: PLCDataType): boolean =>
+    editorContent !== undefined && parsed.name.toLowerCase() !== dataTypeName.toLowerCase()
+
+  const commitCodeWithRename = async (): Promise<CommitOutcome> => {
+    const { dataType, error } = parseDataTypeFromText(editorCode)
+    if (!dataType) return { committed: rejectBuffer(error ?? 'Unexpected syntax error.'), name: dataTypeName }
+    if (!isRenameIntent(dataType)) return { committed: commitCode(), name: dataTypeName }
+
+    // The body lands under the old name first, so a refused rename still keeps
+    // the edit and leaves the buffer committable.
+    if (!commitParsedDataType({ ...dataType, name: dataTypeName })) return { committed: false, name: dataTypeName }
+    restoreBufferName(dataType)
+
+    try {
+      const result = await rename(dataTypeName, dataType.name)
+      if (result.ok) return { committed: true, name: dataType.name }
+      // A declined impact modal is a user choice, not a failure.
+      if (!result.cancelled) toast({ title: 'Rename failed', description: result.message, variant: 'fail' })
+    } catch (error) {
+      toast({ title: 'Rename failed', description: getErrorMessage(error), variant: 'fail' })
+    }
+    return { committed: true, name: dataTypeName }
+  }
+
   useEffect(() => {
-    commitCodeRef.current = commitCode
+    commitCodeRef.current = commitCodeWithRename
   })
 
   // Stable reference, or the child's cursor-jump effect re-fires every
@@ -179,21 +224,19 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   useEffect(() => {
     if (display !== 'code') return
 
-    // Clicking away raises mousedown then focusout, and the commit is
-    // synchronous, so `isParsingRef` is clear by the second one. Both
-    // watermarks make the pair one attempt whatever its outcome.
+    // Clicking away raises mousedown then focusout, and the watermarks the
+    // commit itself sets make the pair one attempt whatever its outcome. The
+    // flag outlives the await: an impact modal sits outside the container, so
+    // its own buttons would otherwise re-enter through mousedown.
     const tryCommit = () => {
       if (isParsingRef.current) return
       if (editorCode === lastParsedCodeRef.current) return
       if (editorCode === lastRejectedCodeRef.current) return
       isParsingRef.current = true
-      if (commitCodeRef.current()) {
-        lastParsedCodeRef.current = editorCode
-        lastRejectedCodeRef.current = null
-      } else {
-        lastRejectedCodeRef.current = editorCode
+      const release = () => {
+        isParsingRef.current = false
       }
-      isParsingRef.current = false
+      void commitCodeRef.current().then(release, release)
     }
 
     const onDocMouseDown = (e: MouseEvent) => {
@@ -221,8 +264,30 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     if (display === value) return
-    if (display === 'code' && !commitCode()) return
-    updateModelStructureForName(dataTypeName, { display: value, code: value === 'code' ? editorCode : undefined })
+    if (display !== 'code') {
+      updateModelStructureForName(dataTypeName, { display: value, code: editorCode })
+      return
+    }
+    if (isParsingRef.current) return
+
+    // Only a rename has to wait for the store; keep the plain switch instant.
+    const parsed = parseDataTypeFromText(editorCode).dataType
+    if (!parsed || !isRenameIntent(parsed)) {
+      if (commitCode()) updateModelStructureForName(dataTypeName, { display: value, code: undefined })
+      return
+    }
+
+    isParsingRef.current = true
+    void commitCodeWithRename().then(
+      ({ committed, name }) => {
+        isParsingRef.current = false
+        // A rename rekeyed the model, so the switch belongs to the new name.
+        if (committed) updateModelStructureForName(name, { display: value, code: undefined })
+      },
+      () => {
+        isParsingRef.current = false
+      },
+    )
   }
 
   const handleStartEditing = () => {
@@ -309,40 +374,21 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             )}
           </div>
         </div>
-        {codeViewEnabled && (
-          <div
-            aria-label='Data type visualization switch container'
-            className='ml-auto flex h-fit w-fit items-center justify-center rounded-md'
-          >
-            <TableIcon
-              aria-label='Data type table visualization'
-              onClick={() => handleVisualizationTypeChange('table')}
-              size='md'
-              currentVisible={display === 'table'}
-              className={cn(
-                display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-              )}
-            />
-            <CodeIcon
-              aria-label='Data type code visualization'
-              onClick={() => handleVisualizationTypeChange('code')}
-              size='md'
-              currentVisible={display === 'code'}
-              className={cn(
-                display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-              )}
-            />
-          </div>
-        )}
+        <ViewModeToggle
+          display={display}
+          onDisplayChange={handleVisualizationTypeChange}
+          containerLabel='Data type visualization switch container'
+          tableLabel='Data type table visualization'
+          codeLabel='Data type code visualization'
+          className='ml-auto'
+        />
       </div>
       <div aria-label='Data type content container' className='flex h-full w-full flex-col overflow-hidden'>
         {display === 'table' ? (
           <>
             {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
             {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
-            {editorContent?.derivation === 'structure' && <StructureDataType />}
+            {editorContent?.derivation === 'structure' && <StructureDataType dataTypeName={dataTypeName} />}
           </>
         ) : (
           <>

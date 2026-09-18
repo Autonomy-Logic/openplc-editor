@@ -10,6 +10,7 @@ import {
 import { BlockVariant } from '../../../../components/_atoms/graphical-editor/types/block'
 import { buildGenericNode } from '../../../../components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
+import { newUuid } from '../../../../utils/new-uuid'
 import { FBDRungState } from '../types'
 
 export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number; y: number }) => {
@@ -77,7 +78,7 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
 }
 
 export const duplicateFBDRung = (rung: FBDRungState) => {
-  const newRung = { ...rung, id: `rung_${crypto.randomUUID()}` }
+  const newRung = { ...rung, id: `rung_${newUuid()}` }
   newRung.selectedNodes = []
 
   const newNodes = newRung.nodes.map((node) => {

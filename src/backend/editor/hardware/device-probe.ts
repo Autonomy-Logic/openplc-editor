@@ -8,17 +8,17 @@
  * Never throws — failures resolve to a status.
  */
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
-import type { DebugBoardIdResult } from '../../shared/debug/types'
+import type { DebugDeviceIdResult } from '../../shared/debug/types'
 
 /** Just enough of a channel to open it. */
 type Connectable = { connect(): Promise<void> }
 
 /**
  * Just enough of a channel to classify it. Narrower than
- * `DeviceChannelTransport`, where `getBoardId` is optional: a channel that
- * cannot answer the board-id read is not one this module can classify.
+ * `DeviceChannelTransport`, where `getDeviceId` is optional: a channel that
+ * cannot answer the device-id read is not one this module can classify.
  */
-type BoardIdReadable = { getBoardId(): Promise<DebugBoardIdResult> }
+type DeviceIdReadable = { getDeviceId(): Promise<DebugDeviceIdResult> }
 
 /** Retry budget for a bounded connect/probe loop. */
 export interface ProbeBudget {
@@ -38,8 +38,8 @@ export interface ProbeBudget {
  * a Modbus TCP address the user is not even using delays the serial connection
  * that would have worked. Such callers pass a short budget and move on.
  */
-export const PATIENT_BOARD_ID_PROBE: ProbeBudget = { attempts: 6, backoffMs: 500 }
-export const QUICK_BOARD_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 300 }
+export const PATIENT_DEVICE_ID_PROBE: ProbeBudget = { attempts: 6, backoffMs: 500 }
+export const QUICK_DEVICE_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 300 }
 /**
  * For a SPECULATIVE candidate — an alternative baud rate nobody configured.
  *
@@ -49,7 +49,7 @@ export const QUICK_BOARD_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 300 }
  * reason that has nothing to do with the rate. Two is the floor that makes the
  * sweep trustworthy; more would multiply across every rate tried.
  */
-export const SPECULATIVE_BOARD_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 400 }
+export const SPECULATIVE_DEVICE_ID_PROBE: ProbeBudget = { attempts: 2, backoffMs: 400 }
 
 /**
  * Baud rates tried, in this order, when the configured one does not answer.
@@ -119,25 +119,25 @@ export async function connectWithRetries(client: Connectable, { attempts, backof
 }
 
 /**
- * Read the board id (FC 0x48) with a bounded retry/backoff loop -- a readiness
+ * Read the device id (FC 0x48) with a bounded retry/backoff loop -- a readiness
  * probe for the firmware itself (the serial open auto-resets ESP8266/AVR boards).
  *
  * A SUCCESSFUL REPLY is the signal, not a non-empty id. `success` already means
  * the frame came back with the right function code and a SUCCESS status, which
  * only an OpenPLC firmware sends. The id itself is allowed to be empty: cores
- * without ArduinoUniqueID support, and boards that opt out with
- * `OPENPLC_NO_UNIQUE_ID`, deliberately answer `id_len = 0` rather than fail to
- * compile (see `debugGetBoardId` in modbus_debug.cpp). Requiring bytes here
+ * with no license-core linked, and boards whose architecture the closed
+ * reader refuses (AVR, RP2040), deliberately answer `id_len = 0` rather than fail to
+ * compile (see `debugGetDeviceId` in modbus_debug.cpp). Requiring bytes here
  * reported those boards as having no firmware at all.
  */
-export async function readBoardIdWithRetries(
-  client: BoardIdReadable,
+export async function readDeviceIdWithRetries(
+  client: DeviceIdReadable,
   { attempts, backoffMs }: ProbeBudget,
-): Promise<{ success: boolean; boardId?: Uint8Array }> {
-  let last: { success: boolean; boardId?: Uint8Array } = { success: false }
+): Promise<{ success: boolean; deviceId?: Uint8Array }> {
+  let last: { success: boolean; deviceId?: Uint8Array } = { success: false }
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const result = await client.getBoardId()
-    last = { success: result.success, boardId: result.boardId }
+    const result = await client.getDeviceId()
+    last = { success: result.success, deviceId: result.deviceId }
     if (last.success) return last
     if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, backoffMs))
   }
@@ -156,21 +156,21 @@ export interface DeviceProbeOutcome {
  * Classify an already-connected candidate: did an OpenPLC firmware answer the
  * debug protocol on it?
  *
- * Only the board-id read decides. A channel that opens but answers nothing —
+ * Only the device-id read decides. A channel that opens but answers nothing —
  * a blank board, or an IP that belongs to something else entirely — classifies
  * as `no-firmware`, so the caller can fall through to the next candidate rather
  * than keeping a link that cannot serve a single command.
  */
 export async function classifyDeviceLink(
-  client: BoardIdReadable,
-  opts: { boardIdProbe?: ProbeBudget } = {},
+  client: DeviceIdReadable,
+  opts: { deviceIdProbe?: ProbeBudget } = {},
 ): Promise<DeviceProbeOutcome> {
   try {
-    const probe = await readBoardIdWithRetries(client, opts.boardIdProbe ?? PATIENT_BOARD_ID_PROBE)
+    const probe = await readDeviceIdWithRetries(client, opts.deviceIdProbe ?? PATIENT_DEVICE_ID_PROBE)
     if (!probe.success) {
       // Channel opened but nothing spoke the debug protocol -> blank board, a
       // non-OpenPLC device, or the wrong baud rate. Whether the reply carried a
-      // unique id is NOT part of this question — see `readBoardIdWithRetries`.
+      // unique id is NOT part of this question — see `readDeviceIdWithRetries`.
       return { status: 'no-firmware' }
     }
     return { status: 'connected-with-firmware' }

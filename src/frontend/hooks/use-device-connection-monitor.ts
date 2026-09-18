@@ -40,7 +40,6 @@ import { useOpenPLCStore } from '../store'
 const useRuntimeSession = (): void => {
   const device = useDevice()
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
-  const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
 
   useEffect(() => {
     if (!device.openRuntimeSession) return
@@ -60,7 +59,6 @@ const useRuntimeSession = (): void => {
     // command answered "not connected" on a target the user had just uploaded to.
     if (!address) {
       store.consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'warning',
         message: '[connection] runtime is connected but has no address recorded; no session opened',
       })
@@ -69,7 +67,6 @@ const useRuntimeSession = (): void => {
     const debugChannel = resolveRuntimeDebugChannel(boardTarget, boardInfo)
     if (!debugChannel) {
       store.consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'warning',
         message: `[connection] no debug channel could be described for ${boardTarget}; debugging will not be available`,
       })
@@ -79,13 +76,17 @@ const useRuntimeSession = (): void => {
     void device.openRuntimeSession({ address, debug: debugChannel }).then((result) => {
       if (!result.success) {
         store.consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `[connection] could not open the runtime session: ${result.error ?? 'unknown error'}`,
         })
       }
     })
-  }, [device, connectionStatus, jwtToken])
+    // `jwtToken` used to be a dependency so a refreshed token rebuilt the
+    // session — but rebuilding CLOSES the debug channel under the debugger on
+    // every refresh, and it is redundant now: the main-side candidate reads the
+    // token manager at create() time and pushes renewals to a held channel via
+    // reauth (review 2026-08-20, R1/E2).
+  }, [device, connectionStatus])
 }
 
 export const useDeviceConnectionMonitor = (): void => {
@@ -102,7 +103,7 @@ export const useDeviceConnectionMonitor = (): void => {
   useEffect(() => {
     if (!device.onLinkLog) return
     return device.onLinkLog((message) => {
-      addLog({ id: crypto.randomUUID(), level: 'info', message: `[connection] ${message}` })
+      addLog({ level: 'info', message: `[connection] ${message}` })
     })
   }, [device, addLog])
 

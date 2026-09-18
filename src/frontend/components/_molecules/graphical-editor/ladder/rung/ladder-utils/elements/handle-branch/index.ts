@@ -3,6 +3,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { blockParameterSide } from '../../../../../../../../utils/graphical/in-out-pin-rules'
 import { buildHandle } from '../../../../../../../_atoms/graphical-editor/ladder/handle'
 // Import from node-builders directly (not the atoms barrel) — the barrel
 // re-exports the LD React components, which import the store, which would
@@ -1132,6 +1133,27 @@ export function startParallelInBranch(
  * Must be called BEFORE main connector edge remapping in handleBlockSubmit,
  * so that branch edges get correct IDs and the main remapping loop won't find them.
  */
+/**
+ * Whether a branch can stay attached after its block's variant changed.
+ *
+ * Three things have to hold, and all three are load-bearing:
+ *  - the pin still exists under the same name;
+ *  - it is still on the SAME SIDE of the block. A `VAR_IN_OUT` parameter keeps its name and its
+ *    type but has only an input-side pin now, so an output branch on it has nothing left to
+ *    attach to — matching on name alone would remap the branch onto a handle that is no longer
+ *    rendered, leaving a coil wired to nothing;
+ *  - it is still BOOL-compatible, so a ladder element can sit on it at all.
+ */
+export function branchSurvivesBlockChange(
+  branch: Pick<HandleBranch, 'handleId' | 'direction'>,
+  newVariables: BlockVariant['variables'],
+): boolean {
+  const newVariable = newVariables.find((v) => v.name === branch.handleId)
+  if (!newVariable) return false
+  if (blockParameterSide(newVariable) !== branch.direction) return false
+  return canPlaceElementOnHandle(newVariable)
+}
+
 export function reconcileBranches(
   rung: RungLadderState,
   oldBlockId: string,
@@ -1151,8 +1173,7 @@ export function reconcileBranches(
   const branchesToKeep: HandleBranch[] = []
 
   for (const branch of blockBranches) {
-    const newVariable = newVariables.find((v) => v.name === branch.handleId)
-    if (newVariable && canPlaceElementOnHandle(newVariable)) {
+    if (branchSurvivesBlockChange(branch, newVariables)) {
       branchesToKeep.push(branch)
     } else {
       branchesToRemove.push(branch)

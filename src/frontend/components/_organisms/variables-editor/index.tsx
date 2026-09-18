@@ -2,11 +2,9 @@ import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
-import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
 import { selectEditorForPou } from '../../../store/slices/editor/utils'
@@ -14,7 +12,11 @@ import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import {
+  duplicateVariableNameMessage,
+  findDuplicateVariableName,
+  parseIecStringToVariables,
+} from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
@@ -29,6 +31,7 @@ import {
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import TableActions from '../../_atoms/table-actions'
+import { ViewModeToggle } from '../../_atoms/view-mode-toggle'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
 import { TypeChangeModal } from '../../_molecules/type-change-modal'
@@ -291,16 +294,11 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
 
       isParsingRef.current = true
 
-      void commitCodeRef
-        .current()
-        .then((ok) => {
-          if (ok) {
-            lastParsedCodeRef.current = editorCode
-          }
-        })
-        .finally(() => {
-          isParsingRef.current = false
-        })
+      // `commitCode` owns the watermark — setting it here would pin pre-commit text and re-commit a no-op.
+      const release = () => {
+        isParsingRef.current = false
+      }
+      void commitCodeRef.current().then(release, release)
     }
 
     const onDocMouseDown = (e: MouseEvent) => {
@@ -771,6 +769,8 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       if (!language) return false
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
+      const duplicate = findDuplicateVariableName(newVariables)
+      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
 
       const renamedPairs = tableData.flatMap((previousVariable) => {
         const variableStillExists = newVariables.some(
@@ -964,6 +964,11 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       if (freshPou && 'variablesText' in freshPou) {
         clearPouVariablesText(editor.meta.name)
       }
+
+      // A buffer keeping the typed form drifts from the canonical LSP document and loses its colours.
+      const canonical = generateIecVariablesToString(freshVariables)
+      setEditorCode(canonical)
+      lastParsedCodeRef.current = canonical
 
       return true
     } catch (err) {
@@ -1197,37 +1202,16 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
               </div>
             )}
 
-            <div
-              aria-label='Variables visualization switch container'
-              className={cn('flex h-fit w-fit items-center justify-center rounded-md', {
-                'absolute right-0': editorVariables.display === 'code',
-              })}
-            >
-              <TableIcon
-                aria-label='Variables table visualization'
-                onClick={() => {
-                  void handleVisualizationTypeChange('table')
-                }}
-                size='md'
-                currentVisible={editorVariables.display === 'table'}
-                className={cn(
-                  editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                  'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-                )}
-              />
-              <CodeIcon
-                aria-label='Variables code visualization'
-                onClick={() => {
-                  void handleVisualizationTypeChange('code')
-                }}
-                size='md'
-                currentVisible={editorVariables.display === 'code'}
-                className={cn(
-                  editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                  'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-                )}
-              />
-            </div>
+            <ViewModeToggle
+              display={editorVariables.display}
+              onDisplayChange={(value) => {
+                void handleVisualizationTypeChange(value)
+              }}
+              containerLabel='Variables visualization switch container'
+              tableLabel='Variables table visualization'
+              codeLabel='Variables code visualization'
+              className={cn({ 'absolute right-0': editorVariables.display === 'code' })}
+            />
           </div>
         </div>
 
@@ -1275,38 +1259,16 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
             </div>
           )}
 
-          <div
-            aria-label='Variables visualization switch container'
-            className={cn('flex h-fit w-fit items-center justify-center rounded-md', {
-              'absolute right-0 top-0': editorVariables.display === 'code',
-            })}
-          >
-            <TableIcon
-              aria-label='Variables table visualization'
-              onClick={() => {
-                void handleVisualizationTypeChange('table')
-              }}
-              size='md'
-              currentVisible={editorVariables.display === 'table'}
-              className={cn(
-                editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-              )}
-            />
-            {/** TODO: Need to be implemented */}
-            <CodeIcon
-              aria-label='Variables code visualization'
-              onClick={() => {
-                void handleVisualizationTypeChange('code')
-              }}
-              size='md'
-              currentVisible={editorVariables.display === 'code'}
-              className={cn(
-                editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-              )}
-            />
-          </div>
+          <ViewModeToggle
+            display={editorVariables.display}
+            onDisplayChange={(value) => {
+              void handleVisualizationTypeChange(value)
+            }}
+            containerLabel='Variables visualization switch container'
+            tableLabel='Variables table visualization'
+            codeLabel='Variables code visualization'
+            className={cn({ 'absolute right-0 top-0': editorVariables.display === 'code' })}
+          />
         </div>
 
         {editorVariables.display === 'table' && (

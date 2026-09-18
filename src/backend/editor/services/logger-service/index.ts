@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { createLogger, format, transports } from 'winston'
+import { config, createLogger, format, transports } from 'winston'
 
 const { combine, colorize, timestamp, label, printf } = format
 
@@ -26,6 +26,17 @@ const logger = createLogger({
 if (process.env.NODE_ENV !== 'production') {
   logger.add(
     new transports.Console({
+      // EVERY level to stderr, not just the error ones.
+      //
+      // stdout is a DATA channel: the headless CLI promises exactly one JSON
+      // document there, and `openplc-cli devices | jq` breaks the moment a log
+      // line lands in the middle of it. Winston's default is the opposite of
+      // what is wanted here — only the levels named in `stderrLevels` go to
+      // stderr, everything else to stdout — which is how a container missing
+      // arduino-cli and udevadm produced two coloured log lines wrapped around
+      // otherwise valid JSON. Diagnostics belong on stderr on both surfaces;
+      // the GUI's terminal shows them either way.
+      stderrLevels: Object.keys(config.npm.levels),
       format: combine(
         colorize(),
         printf(({ level, message }) => {

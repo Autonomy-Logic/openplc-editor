@@ -18,7 +18,13 @@
  */
 
 import type { DevicePin } from '../../types/PLC/devices'
-import { generateModbusDefines, resolveDebugBaud, resolveDebugSlave, type VppModbusScreenState } from './modbus-defines'
+import {
+  DEBUG_SLAVE,
+  generateModbusDefines,
+  type ModbusServerCompileConfig,
+  resolveDefaultPortBaud,
+  type VppModbusScreenState,
+} from './modbus-defines'
 
 export type { VppModbusScreenState } from './modbus-defines'
 
@@ -79,17 +85,34 @@ export interface GenerateDefinesInput {
    *  fixed RTU-over-USART0 block.  Web passes `undefined` until
    *  VPP screens land on the web build. */
   vppModbusState?: VppModbusScreenState
+  /** The project's Modbus server, when it has one. Says what is served; the
+   *  screen state says what it is served over. */
+  modbusServer?: ModbusServerCompileConfig
   /** Name of the board's default serial port (from the VPP manifest device's
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
   defaultSerial?: string
+  /** The board's `networkInterfaces`, forwarded to `generateModbusDefines`
+   *  so a project that never picked a carrier compiles for the one the
+   *  board has instead of assuming Ethernet. */
+  networkInterfaces?: string[]
+  /** Bytes the program's retain blob occupies (`debugMap.retainBlobSize`);
+   *  absent or 0 when the program retains nothing.
+   *
+   *  Emitted as `OPLC_RETAIN_BLOB_SIZE` so the firmware can `static_assert`
+   *  it against its own buffer. Without it, a program retaining more than the
+   *  board holds links, runs, and drops retain in silence — there is no
+   *  console on a microcontroller to report it, so the check has to happen at
+   *  build time or not at all. */
+  retainBlobSize?: number
 }
 
 /**
  * Build the contents of `defines.h`.
  *
  * Output sections, in order:
- *   1. `// Board defines` — only when `boardEntry.define` is present.
+ *   1. `// Board defines` — `boardEntry.define`; omitted entirely when
+ *      the board declares none.
  *   2. `#define PROGRAM_MD5 "<md5>"` — always.
  *   3. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
  *      over emulated USART0 so avr8js's serial bridge can drive
@@ -111,23 +134,40 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     buildMD5Hash,
     boardRuntime,
     vppModbusState,
+    modbusServer,
     defaultSerial,
+    networkInterfaces,
+    retainBlobSize,
   } = input
 
   let DEFINES_CONTENT = ''
 
-  // 1. Board defines from hals.json.  Single-string and array forms
-  //    both supported; absent `define` field means no Board defines
-  //    section header at all (the next section starts directly).
+  // 1. Board defines from `hals.json`'s per-board `define` field
+  //    (single-string and array forms both supported, emitted verbatim).
+  //    An empty list means no header at all: the next section starts
+  //    directly.
+  //
+  //    DOPE-589 removed the second source that briefly lived here,
+  //    `OPENPLC_NO_UNIQUE_ID`. It existed to keep `ArduinoUniqueID` out of
+  //    a build the library refuses to compile in (mbed), and it is
+  //    unnecessary now that the open firmware links no unique-id library
+  //    at all: the identity comes from the closed license-core through
+  //    `license_gate_device_id()`. The list-then-header shape it
+  //    introduced stays, because it is what makes a board with
+  //    `define: []` emit no bare header.
+  const boardDefines: string[] = []
   if (boardEntry && boardEntry.define) {
-    DEFINES_CONTENT = '// Board defines\n'
     if (Array.isArray(boardEntry.define)) {
-      boardEntry.define.forEach((define) => {
-        DEFINES_CONTENT += `#define ${define}\n`
-      })
+      boardDefines.push(...boardEntry.define)
     } else if (typeof boardEntry.define === 'string') {
-      DEFINES_CONTENT += `#define ${boardEntry.define}\n`
+      boardDefines.push(boardEntry.define)
     }
+  }
+  if (boardDefines.length > 0) {
+    DEFINES_CONTENT = '// Board defines\n'
+    boardDefines.forEach((define) => {
+      DEFINES_CONTENT += `#define ${define}\n`
+    })
   }
 
   // 2. Trailing blank-line pair after the board-defines section
@@ -167,7 +207,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
-    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial)
+    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial, modbusServer, networkInterfaces)
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'
@@ -187,18 +227,15 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define DEBUGGER_ENABLED\n'
     DEFINES_CONTENT += `#define DEBUG_IFACE ${defaultSerial ?? 'Serial'}\n`
     // Not `serial.baud_rate ?? 115200`: a package published without a `serial`
-    // section still configures a baud — on the RTU section — and when the RTU
-    // shares the default port that IS this port's speed. Ignoring it compiled a
-    // firmware listening at 115200 while the editor dialled the RTU's baud, and
-    // the board answered nothing ("No Firmware Detected" on a healthy board).
-    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDebugBaud(vppModbusState ?? {}, defaultSerial)}\n`
-    // Same two-sided agreement as the baud, and the same symptom when it breaks:
-    // the firmware drops every frame whose slave id doesn't match, and that check
-    // is the only validation debug function codes get. The editor addresses the
-    // RTU screen's slave id whether or not the RTU is enabled, so emit it rather
-    // than leaving modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback to disagree
-    // with a project that configured anything else.
-    DEFINES_CONTENT += `#define DEBUG_SLAVE ${resolveDebugSlave(vppModbusState ?? {})}\n`
+    // section still configures a baud — on the RTU section — and that IS this
+    // port's speed. Ignoring it compiled a firmware listening at 115200 while
+    // the editor dialled the other value, and the board answered nothing
+    // ("No Firmware Detected" on a healthy board).
+    DEFINES_CONTENT += `#define DEBUG_BAUD ${resolveDefaultPortBaud(vppModbusState ?? {})}\n`
+    // A constant, unlike the baud: the firmware answers it alongside the Modbus
+    // server's id and routes by function code, so nothing the user configures can
+    // move the editor's link off it.
+    DEFINES_CONTENT += `#define DEBUG_SLAVE ${DEBUG_SLAVE}\n`
     DEFINES_CONTENT += `\n\n`
   }
 
@@ -277,6 +314,16 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     stProgramFileContent.includes('SM_8MOSFET;')
   ) {
     DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
+  }
+
+  // 6. Retain blob size.  Emitted only when the program retains something,
+  //    so boards that never touch retain see no change at all.  The firmware
+  //    static_asserts this against RETAIN_BUFFER_MAX: a program that outgrows
+  //    the buffer must fail the build rather than silently start behaving as
+  //    NON_RETAIN on a machine somebody has already installed.
+  if (retainBlobSize !== undefined && retainBlobSize > 0) {
+    DEFINES_CONTENT += '\n//Retain\n'
+    DEFINES_CONTENT += `#define OPLC_RETAIN_BLOB_SIZE ${retainBlobSize}\n`
   }
 
   return DEFINES_CONTENT

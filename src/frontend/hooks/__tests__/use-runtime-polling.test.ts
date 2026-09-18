@@ -1,4 +1,8 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
+
+// Mirrors the hook's own constant; the test has to cross it to reach the
+// connection-lost path at all.
+const MAX_CONSECUTIVE_FAILURES = 5
 
 // The `mock*` prefix lets ts-jest hoist these references into the
 // `jest.mock` factories below — Jest reuses the same babel-plugin-jest
@@ -16,8 +20,36 @@ const mockSetPlcLogs = jest.fn()
 const mockAppendPlcLogs = jest.fn()
 const mockSetPlcLogsLastId = jest.fn()
 const mockClearPlcLogs = jest.fn()
+// The poller lowers this once the device reports a terminal update state.
+const mockSetRuntimeUpdateInProgress = jest.fn()
 
-const mockState: Record<string, unknown> = {
+/**
+ * The slice of the store this hook reads.
+ *
+ * Typed so the per-test setup can assign fields directly. It used to be
+ * `Record<string, unknown>` and every setup cast it with `as object`, which
+ * meant a typo in a field name -- or a field the hook stopped reading --
+ * produced no error at all.
+ */
+type MockRuntimeConnection = {
+  connectionStatus: string
+  jwtToken: string | null
+  includeTimingStatsInPolling: boolean
+  includeEthercatStatsInPolling: boolean
+  plcStatus: unknown
+  ethercatStatus: unknown
+  runtimeUpdateInProgress?: boolean
+  selectedDevice?: { deviceName?: string } | null
+  ipAddress?: string | null
+}
+
+const mockState: {
+  runtimeConnection: MockRuntimeConnection
+  workspace: Record<string, unknown>
+  deviceActions: Record<string, jest.Mock>
+  modalActions: Record<string, jest.Mock>
+  workspaceActions: Record<string, jest.Mock>
+} = {
   runtimeConnection: {
     connectionStatus: 'connected',
     jwtToken: 'tok',
@@ -34,6 +66,7 @@ const mockState: Record<string, unknown> = {
     setEthercatStatus: mockSetEthercatStatus,
     setRuntimeJwtToken: mockSetRuntimeJwtToken,
     setRuntimeConnectionStatus: mockSetRuntimeConnectionStatus,
+    setRuntimeUpdateInProgress: mockSetRuntimeUpdateInProgress,
   },
   modalActions: { openModal: mockOpenModal },
   workspaceActions: {
@@ -54,9 +87,13 @@ const mockRuntime: {
   getStatus: jest.Mock
   getLogs: jest.Mock
   getEthercatRuntimeStatus: undefined | jest.Mock
+  // The hook asks the bootloader whether a version change has finished, so it
+  // can lower the flag that suspends connection-lost detection.
+  bootloader: { getUpdateProgress: jest.Mock }
 } = {
   getStatus: jest.fn(),
   getLogs: jest.fn(),
+  bootloader: { getUpdateProgress: jest.fn() },
   getEthercatRuntimeStatus: undefined,
 }
 
@@ -85,7 +122,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
     mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
     mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
     mockRuntime.getEthercatRuntimeStatus = undefined
-    Object.assign(mockState.runtimeConnection as object, {
+    Object.assign(mockState.runtimeConnection, {
       connectionStatus: 'connected',
       jwtToken: 'tok',
       includeTimingStatsInPolling: false,
@@ -94,7 +131,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('clears stored ethercat status when the polling flag is off', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: false })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: false })
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: { masters: [] } })
 
     renderHook(() => useRuntimePolling())
@@ -107,7 +144,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('skips cleanly when the optional getEthercatRuntimeStatus method is not on the runtime', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
     mockRuntime.getEthercatRuntimeStatus = undefined
 
     renderHook(() => useRuntimePolling())
@@ -120,7 +157,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('writes the runtime payload into the store on a successful ethercat poll', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
     const payload = { masters: [{ name: 'BusA', plugin_state: 'OPERATIONAL' }] }
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: payload })
 
@@ -132,7 +169,7 @@ describe('useRuntimePolling — EtherCAT branches', () => {
   })
 
   it('does not tear down the connection on a transient ethercat rejection', async () => {
-    Object.assign(mockState.runtimeConnection as object, { includeEthercatStatsInPolling: true })
+    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockRejectedValue(new Error('boom'))
 
     renderHook(() => useRuntimePolling())
@@ -144,5 +181,73 @@ describe('useRuntimePolling — EtherCAT branches', () => {
     expect(mockSetEthercatStatus).not.toHaveBeenCalled()
     // No connection-lost modal opened.
     expect(mockOpenModal).not.toHaveBeenCalled()
+  })
+})
+
+describe('useRuntimePolling — while the runtime is being replaced', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
+    mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
+    mockRuntime.getEthercatRuntimeStatus = undefined
+    mockRuntime.bootloader.getUpdateProgress.mockResolvedValue({ success: false, error: 'idle' })
+    Object.assign(mockState.runtimeConnection, {
+      connectionStatus: 'connected',
+      jwtToken: 'tok',
+      includeTimingStatsInPolling: false,
+      includeEthercatStatsInPolling: false,
+      runtimeUpdateInProgress: false,
+      selectedDevice: { deviceName: '192.168.2.4' },
+      ipAddress: '192.168.1.112',
+    })
+  })
+
+  it('stands down while a version change is in flight', async () => {
+    // The runtime is stopped and its container replaced during an update, so
+    // its silence is the expected state, not a fault. Polling through it
+    // counted the gap as failures and announced a lost connection in the
+    // middle of an update that was working.
+    Object.assign(mockState.runtimeConnection, { runtimeUpdateInProgress: true })
+
+    renderHook(() => useRuntimePolling())
+    await flushAll()
+
+    expect(mockRuntime.getStatus).not.toHaveBeenCalled()
+    expect(mockOpenModal).not.toHaveBeenCalled()
+  })
+
+  it('names the device when the connection really is lost', async () => {
+    // This path passed null, which the modal rendered as the literal
+    // "Unknown" -- so every message from it read "The connection to Unknown
+    // has been lost".
+    mockRuntime.getStatus.mockResolvedValue({ success: false })
+    mockRuntime.getLogs.mockResolvedValue({ success: false })
+
+    // The polls happen on a 2s interval, so the clock has to move. Awaiting
+    // microtasks in a loop -- what this used to do -- runs the FIRST poll five
+    // times over and never reaches the failure threshold, which is why the
+    // assertions below were reachable only behind an `if`.
+    jest.useFakeTimers()
+    try {
+      renderHook(() => useRuntimePolling())
+      for (let attempt = 0; attempt < MAX_CONSECUTIVE_FAILURES + 1; attempt += 1) {
+        await act(async () => {
+          jest.advanceTimersByTime(2000)
+          await flushAll()
+        })
+      }
+    } finally {
+      jest.useRealTimers()
+    }
+
+    // Asserted unconditionally. This sat behind `if (calls.length > 0)`, so
+    // when the five failing polls never reached handleConnectionLost the test
+    // asserted nothing and passed -- it could not regress, and did not prove
+    // the label fix it was named for.
+    expect(mockOpenModal).toHaveBeenCalled()
+    const [id, data] = mockOpenModal.mock.calls[mockOpenModal.mock.calls.length - 1]
+    expect(id).toBe('runtime-connection-lost')
+    expect(data).not.toBeNull()
+    expect(data.label).toBe('192.168.2.4')
   })
 })

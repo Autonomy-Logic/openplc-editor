@@ -153,21 +153,148 @@ describe('generateSTCode (cpp)', () => {
     expect(result).toContain('vars.D = &D[0] - 0;')
   })
 
-  it('filters out local variables', () => {
-    const localVar: PLCVariable = {
-      name: 'localVal',
-      class: 'local',
+  it('assigns a pointer for every class the struct carries', () => {
+    // The assignments and the struct must select the same variables: a field
+    // the assignments skip is a dangling pointer the user's first write
+    // follows. Both read `cBlockInterfaceVariables`, and this pins the result.
+    const byClass = (name: string, cls: PLCVariable['class']): PLCVariable => ({
+      name,
+      class: cls,
       type: { definition: 'base-type', value: 'INT' },
       location: '',
       documentation: '',
       debug: false,
-    }
+    })
 
     const result = generateSTCode({
       pouName: 'test',
-      allVariables: [makeScalarVar('x', 'input', 'INT'), localVar],
+      allVariables: [
+        makeScalarVar('x', 'input', 'INT'),
+        byClass('localVal', 'local'),
+        byClass('tempVal', 'temp'),
+        byClass('ioVal', 'inOut'),
+      ],
     })
 
-    expect(result).not.toContain('LOCALVAL')
+    expect(result).toContain('vars.X = &X;')
+    expect(result).toContain('vars.LOCALVAL = &LOCALVAL;')
+    expect(result).toContain('vars.TEMPVAL = &TEMPVAL;')
+    expect(result).toContain('vars.IOVAL = &IOVAL;')
+  })
+
+  describe('VAR_EXTERNAL', () => {
+    const ext = (name: string): PLCVariable => ({
+      name,
+      class: 'external',
+      type: { definition: 'base-type', value: 'DINT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+
+    const extArray = (name: string, dimension: string): PLCVariable => ({
+      name,
+      class: 'external',
+      type: {
+        definition: 'array',
+        value: `ARRAY [${dimension}] OF INT`,
+        data: { baseType: { definition: 'base-type', value: 'INT' }, dimensions: [{ dimension }] },
+      },
+      location: '',
+      documentation: '',
+      debug: false,
+    })
+
+    it('takes each global’s pointer inside that global’s own lock', () => {
+      // strucpp holds a global as a `GlobalVar<V>` — value plus mutex — and
+      // hands out a `V*` only through `with_lock`. Filling the field anywhere
+      // else would compile and silently drop the lock.
+      const result = generateSTCode({ pouName: 'blk', allVariables: [ext('gCount')] })
+
+      expect(result).toContain('GCOUNT->with_lock([&](auto* g0) {')
+      expect(result).toContain('vars.GCOUNT = g0;')
+    })
+
+    it('deduces the pointer type instead of naming it', () => {
+      // `V` is IEC_DINT for a scalar, MOTOR for a structure, IEC_MODE for an
+      // enumeration and Array1D<IEC_INT, 0, 3> for an array. Writing any of
+      // those here would restate the compiler's layout, which has to stay
+      // stated in one place.
+      const result = generateSTCode({ pouName: 'blk', allVariables: [ext('gCount')] })
+
+      expect(result).toContain('auto* g0')
+      expect(result).not.toContain('GlobalVar<')
+    })
+
+    it('holds the lock across the call, not merely around the assignment', () => {
+      const result = generateSTCode({ pouName: 'blk', allVariables: [ext('gCount')] })
+      const openIdx = result.indexOf('GCOUNT->with_lock')
+      const callIdx = result.indexOf('blk_loop(&vars);')
+      const closeIdx = result.indexOf('});', callIdx)
+
+      expect(openIdx).toBeGreaterThan(-1)
+      expect(callIdx).toBeGreaterThan(openIdx)
+      expect(closeIdx).toBeGreaterThan(callIdx)
+    })
+
+    it('wraps setup as well as loop, since setup may touch a global too', () => {
+      const result = generateSTCode({ pouName: 'blk', allVariables: [ext('gCount')] })
+
+      expect(result.match(/GCOUNT->with_lock/g)).toHaveLength(2)
+    })
+
+    it('nests several globals in name order, identically in every block', () => {
+      // A fixed order is what stops two blocks taking the same pair of globals
+      // in opposite orders and deadlocking.
+      const result = generateSTCode({
+        pouName: 'blk',
+        allVariables: [ext('gZulu'), ext('gAlpha'), ext('gMike')],
+      })
+
+      const order = ['GALPHA', 'GMIKE', 'GZULU'].map((n) => result.indexOf(`${n}->with_lock`))
+      expect(order).toEqual([...order].sort((a, b) => a - b))
+    })
+
+    it('offsets an array global so it indexes by the declared IEC range', () => {
+      const result = generateSTCode({ pouName: 'blk', allVariables: [extArray('gArr', '2..5')] })
+
+      expect(result).toContain('vars.GARR = &g0_arr[2] - 2;')
+    })
+
+    it('binds the array dereference to a reference, never inline as `(*g)`', () => {
+      // This C++ sits inside an `{external}` block that the ST front end still
+      // scans, and `(*` opens a block comment there: inline would swallow the
+      // rest of the POU and fail as `Unclosed block comment`.
+      const result = generateSTCode({ pouName: 'blk', allVariables: [extArray('gArr', '0..3')] })
+
+      expect(result).toContain('auto& g0_arr = *g0;')
+      expect(result).not.toContain('(*g0)')
+    })
+
+    it('emits no wrapper at all when the block declares no externals', () => {
+      const result = generateSTCode({ pouName: 'blk', allVariables: [makeScalarVar('x', 'input', 'INT')] })
+
+      expect(result).not.toContain('with_lock')
+      expect(result).toContain('blk_loop(&vars);')
+    })
+  })
+
+  it('does not assign the latch the toolchain injects', () => {
+    const result = generateSTCode({
+      pouName: 'test',
+      allVariables: [
+        makeScalarVar('x', 'input', 'INT'),
+        {
+          name: 'hasBeenInitialized',
+          class: 'local',
+          type: { definition: 'base-type', value: 'BOOL' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ],
+    })
+
+    expect(result).not.toContain('vars.HASBEENINITIALIZED')
   })
 })

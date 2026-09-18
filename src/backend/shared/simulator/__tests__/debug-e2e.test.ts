@@ -54,9 +54,15 @@ describeIfHex('Phase 4 debugger end-to-end (avr8js + ModbusRtuClient)', () => {
     sim?.stop()
   })
 
-  it('FC 0x45 DEBUG_GET_MD5 returns a 32-char MD5', async () => {
-    const md5 = await client.getMd5Hash()
-    expect(md5).toMatch(/^[0-9a-f]{32}$/)
+  it('FC 0x45 DEBUG_GET_MD5 returns a 32-char MD5 and the target endianness', async () => {
+    // `getMd5Hash` returns an `Md5ProbeResult`, not a bare string — the probe
+    // reads the endianness marker off the same frame. Asserting `toMatch` on
+    // the whole object silently passed for as long as it returned a string and
+    // has failed ever since; nothing caught it because this suite only runs
+    // with CHRIS_DEMO_HEX set, which CI never does.
+    const probe = await client.getMd5Hash()
+    expect(probe.md5).toMatch(/^[0-9a-f]{32}$/)
+    expect(probe.targetEndian).toBe('le')
   }, 30000)
 
   it('FC 0x42 DEBUG_SET force blink=TRUE → FC 0x44 read returns 1', async () => {
@@ -107,12 +113,20 @@ describeIfHex('Phase 4 debugger end-to-end (avr8js + ModbusRtuClient)', () => {
     expect(result.version).toMatch(/^\d+\.\d+\.\d+/)
   }, 30000)
 
-  it('FC 0x48 DEBUG_GET_BOARD_ID returns the AVR unique id (9 bytes on ATmega2560)', async () => {
-    const result = await client.getBoardId()
+  it('FC 0x48 DEBUG_GET_DEVICE_ID answers a well-formed reply with no id', async () => {
+    const result = await client.getDeviceId()
+    // The simulator links no license-core, so `license_gate_device_id` resolves
+    // to the weak default in license_gate_weak.cpp and answers 0. That is the
+    // truthful reply rather than a gap: an identity exists only to bind a paid
+    // VPP licence to a board, and a simulated board cannot hold one.
+    //
+    // What matters is that the FRAME is still valid: SUCCESS status, id_len
+    // 0, no trailing bytes. `device-probe` reads the successful reply (not
+    // the id bytes) as proof of firmware, so an empty id must not look like
+    // a protocol error.
     expect(result.success).toBe(true)
-    // ArduinoUniqueID reports 9 bytes on AVR (10 on ATmega328PB). The
-    // emulated ATmega2560 yields a non-empty id; assert it round-trips.
-    expect(result.boardId!.length).toBeGreaterThan(0)
-    expect(result.boardIdHex).toMatch(/^[0-9a-f]+$/)
+    expect(result.error).toBeUndefined()
+    expect(result.deviceId).toHaveLength(0)
+    expect(result.deviceIdHex).toBe('')
   }, 30000)
 })

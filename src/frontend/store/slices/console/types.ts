@@ -10,8 +10,16 @@ export type ConsoleFilters = {
   timestampFormat: TimestampFormat
 }
 
+/**
+ * A log as the store holds it: the caller's {@link LogObject} plus the `id`
+ * the slice minted for it. The id exists only so the console's list has a
+ * stable React key — nothing outside the renderer reads it, which is why
+ * callers neither supply nor see it.
+ */
+export type LogEntry = LogObject & { id: string }
+
 export type ConsoleState = {
-  logs: LogObject[]
+  logs: LogEntry[]
   filters: ConsoleFilters
   // Monotonic nonce bumped each time something (e.g. a build start) wants the
   // console to become visible and re-attach to the tail. Consumers compare it
@@ -34,7 +42,6 @@ export type AddLogOptions = {
 
 export type ConsoleActions = {
   addLog: (log: LogObject, options?: AddLogOptions) => void
-  removeLog: (id: string) => void
   clearLogs: () => void
   setLevelFilter: (level: LogLevel, enabled: boolean) => void
   setSearchTerm: (term: string) => void

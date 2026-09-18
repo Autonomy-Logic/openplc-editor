@@ -13,12 +13,22 @@ type ArrayModalProps = {
   arrayModalIsOpen: boolean
   setArrayModalIsOpen: (value: boolean) => void
   closeContainer: () => void
-  language?: string | null
 }
 
 type Pou = { type: string; name: string }
 type UserLibWithPous = { pous: Pou[] }
 type UserLibFunctionBlock = { type: string; name: string }
+
+/**
+ * Which shape of user library this is.
+ *
+ * A predicate rather than an inline `'pous' in userLib && …`: the two members
+ * of the union share no discriminant, so the inline form leaves the else
+ * branch un-narrowed and every access on it reads as unsafe. Written this way
+ * both branches are typed without an assertion.
+ */
+const hasPous = (lib: UserLibWithPous | UserLibFunctionBlock): lib is UserLibWithPous =>
+  'pous' in lib && Array.isArray(lib.pous)
 
 export const ArrayModal = ({
   arrayModalIsOpen,
@@ -26,7 +36,6 @@ export const ArrayModal = ({
   setArrayModalIsOpen,
   variableName,
   VariableRow,
-  language,
 }: ArrayModalProps) => {
   const {
     editor: {
@@ -39,58 +48,48 @@ export const ArrayModal = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const isNativeLanguage = language === 'python' || language === 'cpp'
-  // Same exclusion as `selectable-cell.tsx`: native-language POUs
-  // can't yet round-trip strucpp's chrono types.
-  const excludedNativeTypes = ['TIME', 'DATE', 'TOD', 'DT']
-
+  // An array element may be any type a plain variable may be, in every
+  // language. Python and C++ blocks were once cut down to base types minus
+  // TIME/DATE/TOD/DT here, mirroring the same cut in `selectable-cell.tsx`;
+  // both bridges now carry the time and calendar types, user-defined types and
+  // function block instances, so the element picker offers the full set.
   const baseTypes = baseTypeEnum.options.filter((type) => {
     if (typeof type !== 'string') return false
     if (type.toUpperCase() === 'ARRAY') return false
-    if (isNativeLanguage && excludedNativeTypes.includes(type.toUpperCase())) return false
     return true
   })
 
-  const userDataTypes = isNativeLanguage
-    ? []
-    : dataTypes
+  const userDataTypes = dataTypes
+    .filter(hasStringName)
+    .map((type) => type.name)
+    .filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
+
+  const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
+    (lib.pous ?? [])
+      .filter((pou) => pou?.type === 'function-block')
+      .filter(hasStringName)
+      .map((pou) => pou.name.toUpperCase()),
+  )
+
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
+    if (hasPous(userLib)) {
+      return userLib.pous
+        .filter((pou) => pou?.type === 'function-block')
         .filter(hasStringName)
-        .map((type) => type.name)
-        .filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
-
-  const systemFunctionBlocks = isNativeLanguage
-    ? []
-    : sliceLibraries.system.flatMap((lib) =>
-        (lib.pous ?? [])
-          .filter((pou) => pou?.type === 'function-block')
-          .filter(hasStringName)
-          .map((pou) => pou.name.toUpperCase()),
-      )
-
-  const userFunctionBlocks = isNativeLanguage
-    ? []
-    : sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) => {
-        if ('pous' in userLib && Array.isArray(userLib.pous)) {
-          return userLib.pous
-            .filter((pou) => pou?.type === 'function-block')
-            .filter(hasStringName)
-            .map((pou) => pou.name.toUpperCase())
-        }
-        const fb = userLib as UserLibFunctionBlock
-        return fb.type === 'function-block' && typeof fb.name === 'string' ? [fb.name.toUpperCase()] : []
-      })
+        .map((pou) => pou.name.toUpperCase())
+    }
+    return userLib.type === 'function-block' && typeof userLib.name === 'string' ? [userLib.name.toUpperCase()] : []
+  })
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypes },
-    ...(isNativeLanguage ? [] : [{ definition: 'user-data-type', values: userDataTypes }]),
+    { definition: 'user-data-type', values: userDataTypes },
   ]
 
-  const LibraryTypes = isNativeLanguage
-    ? []
-    : [
-        { definition: 'system', values: systemFunctionBlocks },
-        { definition: 'user', values: userFunctionBlocks },
-      ]
+  const LibraryTypes = [
+    { definition: 'system', values: systemFunctionBlocks },
+    { definition: 'user', values: userFunctionBlocks },
+  ]
 
   const [selectedInput, setSelectedInput] = useState<string>('')
   const [dimensions, setDimensions] = useState<string[]>([])

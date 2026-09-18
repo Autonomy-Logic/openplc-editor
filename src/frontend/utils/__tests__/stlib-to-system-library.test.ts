@@ -116,38 +116,47 @@ describe('stlibToSystemLibrary — function blocks', () => {
   })
 })
 
-describe('stlibToSystemLibrary — cppBlocks branch', () => {
-  it('surfaces each library cpp block under the prefixed name', () => {
-    const archive: StlibArchiveDTO = {
+describe('stlibToSystemLibrary — native (C/C++, Python) blocks', () => {
+  const nativeArchive = (
+    blocks: Array<{ name: string; implementation: 'cpp' | 'python'; sourceFile?: string; documentation?: string }>,
+    sources: Array<{ fileName: string; source: string }>,
+  ): StlibArchiveDTO =>
+    ({
       manifest: {
         name: 'mylib',
         version: '1.0.0',
         namespace: 'mylib',
         isBuiltin: false,
         functions: [],
-        functionBlocks: [],
+        functionBlocks: blocks.map((b) => ({
+          name: b.name,
+          inputs: [{ name: 'pin', type: 'INT' }],
+          outputs: [{ name: 'angle', type: 'INT' }],
+          inouts: [{ name: 'state', type: 'BOOL' }],
+          implementation: b.implementation,
+          sourceFile: b.sourceFile ?? `${b.name}.${b.implementation === 'cpp' ? 'cpp' : 'py'}`,
+          ...(b.documentation !== undefined ? { documentation: b.documentation } : {}),
+        })),
         types: [],
       },
-      cppBlocks: [
-        {
-          name: 'Servo',
-          code: 'void setup(){}void loop(){}',
-          variables: [
-            { name: 'pin', class: 'input', type: { value: 'INT' } },
-            { name: 'angle', class: 'output', type: { value: 'INT' } },
-            { name: 'state', class: 'inOut', type: { value: 'BOOL' } },
-            { name: 'local', class: 'local', type: { value: 'INT' } },
-          ],
-          documentation: 'A servo motor block',
-        },
-      ],
-    }
+      sources,
+    }) as unknown as StlibArchiveDTO
 
-    const lib = stlibToSystemLibrary(archive)
+  it('surfaces a C++ block under its own name, with its authored source as the body', () => {
+    const lib = stlibToSystemLibrary(
+      nativeArchive(
+        [{ name: 'Servo', implementation: 'cpp', documentation: 'A servo motor block' }],
+        [{ fileName: 'Servo.cpp', source: 'void setup(){}void loop(){}' }],
+      ),
+    )
 
     expect(lib.pous).toHaveLength(1)
     const block = lib.pous[0]
-    expect(block.name).toBe('mylib__Servo')
+    // One name across the whole system: the graft synthesizes a POU under
+    // exactly this name and `resolveFunctionBlockPins` looks it up by it, so
+    // a block inserted from the tree resolves its pins. No library prefix —
+    // that namespace was private to the graft and broke both.
+    expect(block.name).toBe('Servo')
     expect(block.type).toBe('function-block')
     expect(block.language).toBe('cpp')
     expect(block.body).toBe('void setup(){}void loop(){}')
@@ -155,48 +164,57 @@ describe('stlibToSystemLibrary — cppBlocks branch', () => {
     expect(block.variables.map((v) => v.class)).toEqual(['input', 'output', 'inOut'])
   })
 
-  it('falls back to BOOL when a cpp block variable omits its type', () => {
-    const archive: StlibArchiveDTO = {
-      manifest: {
-        name: 'mylib',
-        version: '1.0.0',
-        namespace: 'mylib',
-        isBuiltin: false,
-        functions: [],
-        functionBlocks: [],
-        types: [],
-      },
-      cppBlocks: [
-        {
-          name: 'Bare',
-          code: '',
-          variables: [{ name: 'x', class: 'input' }],
-        },
-      ],
-    }
-
-    const lib = stlibToSystemLibrary(archive)
-
-    expect(lib.pous[0].variables[0].type).toEqual({ definition: 'base-type', value: 'BOOL' })
+  it('surfaces a Python block as a python POU', () => {
+    const lib = stlibToSystemLibrary(
+      nativeArchive(
+        [{ name: 'Scale', implementation: 'python' }],
+        [{ fileName: 'Scale.py', source: 'def block_loop():\n    pass' }],
+      ),
+    )
+    expect(lib.pous[0].name).toBe('Scale')
+    expect(lib.pous[0].language).toBe('python')
+    expect(lib.pous[0].body).toBe('def block_loop():\n    pass')
   })
 
-  it('uses an empty documentation string when the cpp block omits one', () => {
-    const archive: StlibArchiveDTO = {
+  it('resolves the body via sourceFile rather than guessing from the block name', () => {
+    const lib = stlibToSystemLibrary(
+      nativeArchive(
+        [{ name: 'Block', implementation: 'cpp', sourceFile: 'renamed.cpp' }],
+        [{ fileName: 'renamed.cpp', source: 'void loop(){}' }],
+      ),
+    )
+    expect(lib.pous[0].body).toBe('void loop(){}')
+  })
+
+  it('leaves the body empty when the archive has no matching source', () => {
+    const lib = stlibToSystemLibrary(nativeArchive([{ name: 'Gone', implementation: 'cpp' }], []))
+    expect(lib.pous[0].body).toBe('')
+  })
+
+  it('uses an empty documentation string when the block omits one', () => {
+    const lib = stlibToSystemLibrary(
+      nativeArchive([{ name: 'Bare', implementation: 'cpp' }], [{ fileName: 'Bare.cpp', source: 'x' }]),
+    )
+    expect(lib.pous[0].documentation).toBe('')
+  })
+
+  it('leaves ordinary ST blocks unprefixed and marked st', () => {
+    const archive = {
       manifest: {
         name: 'mylib',
         version: '1.0.0',
         namespace: 'mylib',
         isBuiltin: false,
         functions: [],
-        functionBlocks: [],
+        functionBlocks: [{ name: 'ST_ADD', inputs: [], outputs: [], inouts: [] }],
         types: [],
       },
-      cppBlocks: [{ name: 'NoDoc', code: '', variables: [] }],
-    }
+    } as unknown as StlibArchiveDTO
 
     const lib = stlibToSystemLibrary(archive)
-
-    expect(lib.pous[0].documentation).toBe('')
+    expect(lib.pous[0].name).toBe('ST_ADD')
+    expect(lib.pous[0].language).toBe('st')
+    expect(lib.pous[0].body).toBe('')
   })
 })
 

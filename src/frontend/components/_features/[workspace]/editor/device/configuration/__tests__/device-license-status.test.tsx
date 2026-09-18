@@ -161,11 +161,33 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.queryByText('Device ID')).toBeNull()
     })
 
-    it('always offers a re-check', () => {
+    it('offers a re-check for a failure that could resolve on its own', () => {
       const { onRecheck } = setup({ deviceId: DEVICE_ID, outcome: { state: 'check-failed', error: 'x' } })
       expand()
       fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
       expect(onRecheck).toHaveBeenCalledTimes(1)
+    })
+
+    it('withholds the re-check when the flow marked the failure terminal', () => {
+      // A board with no identity to bind a licence to, or a firmware speaking an
+      // identity format this editor does not know: asking again reproduces the
+      // same error verbatim, so the button would turn a legible message into a
+      // loop. The modal already withholds it for these — the panel used to offer
+      // it anyway, which is the same disagreement rendered in two places.
+      setup({ deviceId: DEVICE_ID, outcome: { state: 'check-failed', error: 'x', retryable: false } })
+      expand()
+      expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull()
+    })
+
+    it('still shows the failure detail when the re-check is withheld', () => {
+      // Withholding the ACTION must not withhold the EXPLANATION: those messages
+      // are the ones that name what to do instead.
+      setup({
+        deviceId: DEVICE_ID,
+        outcome: { state: 'check-failed', error: 'rebuild and upload the program', retryable: false },
+      })
+      expand()
+      expect(screen.getByText(/rebuild and upload the program/)).not.toBeNull()
     })
 
     it('disables the re-check while one is already running', () => {
@@ -290,13 +312,13 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.queryByRole('button', { name: 'Stop waiting' })).toBeNull()
     })
 
-    it('explains that OpenPLC will write the licence by itself', () => {
+    it('explains that OpenPLC keeps checking and writes the licence when the purchase clears', () => {
       setup(UNLICENSED, { awaitingPurchase: true })
       expand()
       // The subject is deliberately product-neutral ("OpenPLC", not "the
       // editor"): the same bytes render in the desktop editor and the web IDE.
-      expect(screen.getByText(/OpenPLC checks periodically/)).toBeTruthy()
-      expect(screen.getByText(/write the licence to this device by itself/)).toBeTruthy()
+      expect(screen.getByText(/OpenPLC keeps checking/)).toBeTruthy()
+      expect(screen.getByText(/writes the licence to this device as soon as the purchase clears/)).toBeTruthy()
     })
   })
 })

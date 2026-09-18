@@ -10,7 +10,6 @@ function makeStore() {
 
 function makeLog(overrides?: Partial<LogObject>): LogObject {
   return {
-    id: overrides?.id ?? 'log-1',
     level: overrides?.level ?? 'info',
     message: overrides?.message ?? 'Test message',
     tstamp: overrides?.tstamp,
@@ -47,12 +46,10 @@ describe('createConsoleSlice', () => {
   // addLog
   // -------------------------------------------------------------------------
   it('addLog appends a log entry', () => {
-    const log = makeLog({ id: 'log-1', message: 'Hello' })
-    store.getState().consoleActions.addLog(log)
+    store.getState().consoleActions.addLog(makeLog({ message: 'Hello' }))
 
     const { logs } = store.getState()
     expect(logs).toHaveLength(1)
-    expect(logs[0].id).toBe('log-1')
     expect(logs[0].message).toBe('Hello')
     expect(logs[0].level).toBe('info')
   })
@@ -77,19 +74,16 @@ describe('createConsoleSlice', () => {
   })
 
   it('addLog appends multiple logs in order', () => {
-    store.getState().consoleActions.addLog(makeLog({ id: 'a', message: 'first' }))
-    store.getState().consoleActions.addLog(makeLog({ id: 'b', message: 'second' }))
-    store.getState().consoleActions.addLog(makeLog({ id: 'c', message: 'third' }))
+    store.getState().consoleActions.addLog(makeLog({ message: 'first' }))
+    store.getState().consoleActions.addLog(makeLog({ message: 'second' }))
+    store.getState().consoleActions.addLog(makeLog({ message: 'third' }))
 
     const { logs } = store.getState()
-    expect(logs).toHaveLength(3)
-    expect(logs[0].id).toBe('a')
-    expect(logs[1].id).toBe('b')
-    expect(logs[2].id).toBe('c')
+    expect(logs.map((l) => l.message)).toEqual(['first', 'second', 'third'])
   })
 
   it('addLog handles log without level', () => {
-    store.getState().consoleActions.addLog({ id: 'no-level', message: 'bare' })
+    store.getState().consoleActions.addLog({ message: 'bare' })
 
     const { logs } = store.getState()
     expect(logs).toHaveLength(1)
@@ -97,42 +91,45 @@ describe('createConsoleSlice', () => {
   })
 
   // -------------------------------------------------------------------------
-  // removeLog
+  // Entry ids — minted by the slice, never by the caller. The list owns its
+  // own React keys; a caller logging "Build process started" does not.
   // -------------------------------------------------------------------------
-  it('removeLog removes a log by id', () => {
-    store.getState().consoleActions.addLog(makeLog({ id: 'keep' }))
-    store.getState().consoleActions.addLog(makeLog({ id: 'remove' }))
-    store.getState().consoleActions.addLog(makeLog({ id: 'also-keep' }))
+  it('addLog mints an id the caller never supplied', () => {
+    store.getState().consoleActions.addLog(makeLog({ message: 'Build process started' }))
 
-    store.getState().consoleActions.removeLog('remove')
-
-    const { logs } = store.getState()
-    expect(logs).toHaveLength(2)
-    expect(logs.map((l) => l.id)).toEqual(['keep', 'also-keep'])
+    const [log] = store.getState().logs
+    expect(log.id).toEqual(expect.any(String))
+    expect(log.id).not.toBe('')
   })
 
-  it('removeLog does nothing when id does not exist', () => {
-    store.getState().consoleActions.addLog(makeLog({ id: 'existing' }))
+  it('addLog gives identical messages distinct ids', () => {
+    const { addLog } = store.getState().consoleActions
+    addLog(makeLog({ message: 'same' }))
+    addLog(makeLog({ message: 'same' }))
+    addLog(makeLog({ message: 'same' }))
 
-    store.getState().consoleActions.removeLog('nonexistent')
-
-    const { logs } = store.getState()
-    expect(logs).toHaveLength(1)
-    expect(logs[0].id).toBe('existing')
+    const ids = store.getState().logs.map((l) => l.id)
+    expect(new Set(ids).size).toBe(3)
   })
 
-  it('removeLog on empty logs array does not throw', () => {
-    expect(() => store.getState().consoleActions.removeLog('anything')).not.toThrow()
-    expect(store.getState().logs).toEqual([])
+  it('addLog does not reuse an id after clearLogs', () => {
+    const { addLog, clearLogs } = store.getState().consoleActions
+    addLog(makeLog({ message: 'before' }))
+    const beforeId = store.getState().logs[0].id
+
+    clearLogs()
+    addLog(makeLog({ message: 'after' }))
+
+    expect(store.getState().logs[0].id).not.toBe(beforeId)
   })
 
   // -------------------------------------------------------------------------
   // clearLogs
   // -------------------------------------------------------------------------
   it('clearLogs removes all logs', () => {
-    store.getState().consoleActions.addLog(makeLog({ id: '1' }))
-    store.getState().consoleActions.addLog(makeLog({ id: '2' }))
-    store.getState().consoleActions.addLog(makeLog({ id: '3' }))
+    store.getState().consoleActions.addLog(makeLog())
+    store.getState().consoleActions.addLog(makeLog())
+    store.getState().consoleActions.addLog(makeLog())
 
     store.getState().consoleActions.clearLogs()
 
@@ -147,7 +144,7 @@ describe('createConsoleSlice', () => {
   it('clearLogs does not affect filters', () => {
     store.getState().consoleActions.setLevelFilter('debug', false)
     store.getState().consoleActions.setSearchTerm('query')
-    store.getState().consoleActions.addLog(makeLog({ id: '1' }))
+    store.getState().consoleActions.addLog(makeLog())
 
     store.getState().consoleActions.clearLogs()
 
@@ -258,7 +255,7 @@ describe('createConsoleSlice', () => {
   })
 
   it('requestConsoleFollow does not affect logs or filters', () => {
-    store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'kept' })
+    store.getState().consoleActions.addLog({ level: 'info', message: 'kept' })
     store.getState().consoleActions.setSearchTerm('term')
 
     store.getState().consoleActions.requestConsoleFollow()
@@ -271,37 +268,52 @@ describe('createConsoleSlice', () => {
   // Carriage-return redraws — a progress bar must stay on one line.
   // -------------------------------------------------------------------------
   describe('addLog with a carriage-return redraw', () => {
-    const frame = (id: string, message: string, transient = true) =>
-      [{ id, level: 'info' as const, message, transient }, { redraw: true }] as const
+    const frame = (message: string, transient = true) =>
+      [{ level: 'info' as const, message, transient }, { redraw: true }] as const
 
     it('overwrites the open line instead of appending', () => {
       const { addLog } = store.getState().consoleActions
-      addLog(...frame('1', 'Downloading 10%'))
-      addLog(...frame('2', 'Downloading 60%'))
-      addLog(...frame('3', 'Downloading 100%'))
+      addLog(...frame('Downloading 10%'))
+      addLog(...frame('Downloading 60%'))
+      addLog(...frame('Downloading 100%'))
 
       expect(store.getState().logs).toHaveLength(1)
       expect(store.getState().logs[0].message).toBe('Downloading 100%')
     })
 
+    // A progress bar redraws many times a second. Handing each frame a fresh
+    // id would make React tear the line's node down and rebuild it every
+    // frame; keeping the replaced entry's id updates it in place instead.
+    it('keeps the overwritten line id so React updates the node in place', () => {
+      const { addLog } = store.getState().consoleActions
+      addLog(...frame('Downloading 10%'))
+      const openLineId = store.getState().logs[0].id
+
+      addLog(...frame('Downloading 60%'))
+      addLog(...frame('Downloading 100%'))
+
+      expect(store.getState().logs[0].id).toBe(openLineId)
+    })
+
     it('starts a new line once a newline has committed the previous one', () => {
       const { addLog } = store.getState().consoleActions
-      addLog(...frame('1', 'Downloading A 50%'))
+      addLog(...frame('Downloading A 50%'))
       // The frame that arrived with a trailing newline: it still overwrites,
       // but closes the line behind it.
-      addLog(...frame('2', 'Downloading A done', false))
-      addLog(...frame('3', 'Downloading B 50%'))
+      addLog(...frame('Downloading A done', false))
+      addLog(...frame('Downloading B 50%'))
 
       const { logs } = store.getState()
       expect(logs).toHaveLength(2)
       expect(logs[0].message).toBe('Downloading A done')
       expect(logs[1].message).toBe('Downloading B 50%')
+      expect(logs[0].id).not.toBe(logs[1].id)
     })
 
     it('never overwrites an ordinary log line', () => {
       const { addLog } = store.getState().consoleActions
-      addLog({ id: '1', level: 'info', message: 'Compiling...' })
-      addLog(...frame('2', 'Downloading 10%'))
+      addLog({ level: 'info', message: 'Compiling...' })
+      addLog(...frame('Downloading 10%'))
 
       expect(store.getState().logs).toHaveLength(2)
       expect(store.getState().logs[0].message).toBe('Compiling...')
@@ -309,8 +321,8 @@ describe('createConsoleSlice', () => {
 
     it('appends when the write is not a redraw, even above an open line', () => {
       const { addLog } = store.getState().consoleActions
-      addLog(...frame('1', 'Downloading 10%'))
-      addLog({ id: '2', level: 'info', message: 'Unrelated output' })
+      addLog(...frame('Downloading 10%'))
+      addLog({ level: 'info', message: 'Unrelated output' })
 
       expect(store.getState().logs).toHaveLength(2)
     })
@@ -324,7 +336,6 @@ describe('createConsoleSlice', () => {
 
     it('stores clean text and keeps the styling in segments', () => {
       store.getState().consoleActions.addLog({
-        id: '1',
         level: 'info',
         message: `${ESC}[93marduino:avr${ESC}[0m   1.8.8`,
       })
@@ -336,7 +347,7 @@ describe('createConsoleSlice', () => {
     })
 
     it('leaves uncoloured logs exactly as they were — no segments allocated', () => {
-      store.getState().consoleActions.addLog({ id: '1', level: 'info', message: 'plain' })
+      store.getState().consoleActions.addLog({ level: 'info', message: 'plain' })
 
       const [log] = store.getState().logs
       expect(log.message).toBe('plain')

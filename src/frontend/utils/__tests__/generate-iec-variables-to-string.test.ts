@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
 import { generateIecVariablesToString, getIecVariableLineMap } from '../generate-iec-variables-to-string'
 
 const makeVariable = (overrides: Partial<PLCVariable> & Pick<PLCVariable, 'name'>): PLCVariable => ({
@@ -211,5 +212,27 @@ describe('getIecVariableLineMap', () => {
   it('uses column 5 (4-space indent + 1-indexed Monaco) for every variable name', () => {
     const map = getIecVariableLineMap([makeVariable({ name: 'OnlyOne', class: 'input' })])
     expect(map.get('OnlyOne')?.column).toBe(5)
+  })
+
+  // The variables table and the code view are two views of the same data, so
+  // text -> variables -> text has to be byte-stable. Multi-dimensional array
+  // types are the interesting case: the parser splits the bounds into
+  // `dimensions` but keeps the full type string in `type.value`, which is what
+  // this serializer emits.
+  it('round-trips inline multi-dimensional array declarations unchanged', () => {
+    const input = [
+      '  VAR',
+      '    m : ARRAY[0..1, 0..2] OF INT := [[1,2,3],[4,5,6]];',
+      '    c : ARRAY[0..1, 0..1, 0..1] OF INT := [1,2,3,4,5,6,7,8];',
+      '    g : ARRAY[0..1, 0..1] OF Point;',
+      '  END_VAR',
+    ].join('\n')
+
+    const vars = parseIecStringToVariables(input)
+    expect(vars).toHaveLength(3)
+
+    const out = generateIecVariablesToString(vars)
+    expect(out).toBe(input)
+    expect(parseIecStringToVariables(out)).toEqual(vars)
   })
 })

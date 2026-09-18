@@ -18,6 +18,20 @@ const BASE_TYPE_TO_IEC: Record<string, string> = {
   real: 'IEC_REAL',
   lreal: 'IEC_LREAL',
   string: 'IEC_STRING',
+  wstring: 'IEC_WSTRING',
+
+  // Duration and calendar types. Absent until DOPE-584's type sweep: a C++
+  // block declaring `TIME` emitted `strucpp::TIME`, which names nothing, and the
+  // build failed on generated code the user never wrote. The aliases these map
+  // to are the ones strucpp declares (`IEC_TIME = IECVar<TIME_t>`, and so on).
+  time: 'IEC_TIME',
+  date: 'IEC_DATE',
+  tod: 'IEC_TOD',
+  dt: 'IEC_DT',
+
+  // The long spellings IEC 61131-3 also allows for the same two types.
+  time_of_day: 'IEC_TOD',
+  date_and_time: 'IEC_DT',
 }
 
 /**
@@ -55,8 +69,71 @@ const getArrayBaseTypeValue = (variable: PLCVariable): string => {
  * Map a base type string to its IEC C type name.
  * Falls back to uppercasing the type value if not found.
  */
-const mapBaseTypeToIEC = (baseType: string): string => {
-  return BASE_TYPE_TO_IEC[baseType.toLowerCase()] || baseType.toUpperCase()
+/**
+ * Spell a user-defined type the way strucpp declares it.
+ *
+ * The compiler emits two different shapes and there is no single rule that
+ * covers both, so the caller has to say which names are data types:
+ *
+ *   - A data type gets an `IEC_`-prefixed alias — `struct MOTOR { … };
+ *     using IEC_MOTOR = MOTOR;` for a structure, and
+ *     `enum class MODE { … }; using IEC_MODE = IEC_ENUM<MODE>;` for an
+ *     enumeration. The alias is the one to use: for an enumeration the bare
+ *     name is the raw C++ `enum class`, while `IEC_MODE` is the force-aware
+ *     wrapper, and a pin must be the wrapper like every other pin.
+ *   - A function block instance is a plain `class HELPER;` with no alias, so
+ *     the bare name is the only spelling that exists.
+ *
+ * Without `userTypeNames` the bare name is returned, which is the correct
+ * answer for a function block and the historical behaviour for everything else.
+ *
+ * This is the spelling for a variable that IS the type. An element INSIDE an
+ * array is spelled differently — see `mapArrayElementTypeToIEC`.
+ */
+const mapUserTypeToIEC = (typeName: string, userTypeNames?: ReadonlySet<string>): string => {
+  const upper = typeName.toUpperCase()
+  return userTypeNames?.has(upper) ? `IEC_${upper}` : upper
+}
+
+/**
+ * Spell a type the way strucpp spells it as an ARRAY ELEMENT, which is not
+ * always how it spells the same type as a standalone variable.
+ *
+ * Read off the compiler's own output for a block declaring one of each:
+ *
+ *     Array2D<IEC_INT, 1, 2, 0, 2> IGRID;     // elementary: the wrapper
+ *     Array1D<IEC_STRING, 0, 1> INAMES;       // elementary: the wrapper
+ *     Array1D<MOTOR, 0, 1> IBANK;             // structure:   bare
+ *     Array1D<MODE, 0, 1> IMODES;             // enumeration: bare
+ *     IEC_MODE IMODE;                         // ...but a SCALAR enum is wrapped
+ *
+ * So an elementary type keeps its `IEC_` wrapper in both positions, and a
+ * user-defined type is bare as an element. Applying the scalar rule here
+ * instead is a silent type error for an enumeration: `using IEC_MODE =
+ * IEC_ENUM<MODE>` is a wrapper, so `IEC_MODE *` and the `MODE *` that
+ * `&IMODES[0]` actually yields are different types, and the generated C-block
+ * glue fails to compile with `cannot convert MODE* to IEC_MODE*`. A structure
+ * survived the same mistake only by luck, because `using IEC_MOTOR = MOTOR` is
+ * the identity and the two spellings name one type.
+ *
+ * Function block instances have no alias at all, so bare is their only
+ * spelling and this rule already covers them.
+ *
+ * Needs no type registry: the rule is the same whichever kind of user-defined
+ * type the name refers to, so the name alone decides.
+ */
+const mapArrayElementTypeToIEC = (baseType: string): string => {
+  const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
+  return elementary ?? baseType.toUpperCase()
+}
+
+const mapBaseTypeToIEC = (baseType: string, userTypeNames?: ReadonlySet<string>): string => {
+  const elementary = BASE_TYPE_TO_IEC[baseType.toLowerCase()]
+  if (elementary) return elementary
+  // Not elementary: a type the map does not know. It takes the scalar spelling
+  // rule. Array elements do NOT come through here — they take the element rule,
+  // which differs for an enumeration; see `mapArrayElementTypeToIEC`.
+  return mapUserTypeToIEC(baseType, userTypeNames)
 }
 
 /**
@@ -64,14 +141,15 @@ const mapBaseTypeToIEC = (baseType: string): string => {
  * For arrays, returns the IEC type of the base element type.
  * For scalars, returns the IEC type of the variable's type.
  */
-const getVariableIECType = (variable: PLCVariable): string => {
+const getVariableIECType = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   if (variable.type.definition === 'array' && variable.type.data) {
-    return mapBaseTypeToIEC(variable.type.data.baseType.value)
+    // Element position, not scalar position — an enumeration is spelled bare here.
+    return mapArrayElementTypeToIEC(variable.type.data.baseType.value)
   }
   if (variable.type.definition === 'base-type') {
-    return mapBaseTypeToIEC(variable.type.value)
+    return mapBaseTypeToIEC(variable.type.value, userTypeNames)
   }
-  return variable.type.value.toUpperCase()
+  return mapUserTypeToIEC(variable.type.value, userTypeNames)
 }
 
 /**
@@ -84,6 +162,43 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
   if (dimensions.length === 0) return 0
   const range = parseDimensionRange(dimensions[0].dimension)
   return range ? range.lower : 0
+}
+
+/**
+ * strucpp container type for an array of rank two or three, or `null` for
+ * anything else.
+ *
+ * A one-dimensional array is passed as a pointer to its first element, offset by
+ * the lower bound, so the block writes `arr[i]` with the declared IEC indices
+ * and the element type is all the struct has to name. That trick does not extend
+ * past rank one: `IEC_ARRAY_2D` deliberately has no `operator[]` — a row
+ * subscript would have to return a view — and takes every index in one
+ * `operator()` call instead. So a multi-dimensional array is passed as a pointer
+ * to the container itself, and the block indexes it as `grid(i, j)`, which is
+ * the same accessor the compiler's own generated code uses.
+ *
+ * `Array2D` / `Array3D` are strucpp's documented public aliases, and the bounds
+ * handed to them come from the user's own declaration rather than from any
+ * assumption about how the container is laid out.
+ *
+ * Rank four and beyond returns `null`: strucpp declares no alias for it, so
+ * there is no type to name and no array to describe.
+ */
+const multiDimensionalContainerType = (variable: PLCVariable): string | null => {
+  if (variable.type.definition !== 'array' || !variable.type.data) return null
+
+  const dimensions = variable.type.data.dimensions
+  if (dimensions.length < 2 || dimensions.length > 3) return null
+
+  const bounds: number[] = []
+  for (const dimension of dimensions) {
+    const range = parseDimensionRange(dimension.dimension)
+    if (!range) return null
+    bounds.push(range.lower, range.upper)
+  }
+
+  const elementType = mapArrayElementTypeToIEC(variable.type.data.baseType.value)
+  return `Array${dimensions.length}D<strucpp::${elementType}, ${bounds.join(', ')}>`
 }
 
 /**
@@ -108,9 +223,12 @@ const getArrayStartIndex = (variable: PLCVariable): number => {
  * numeric raw typedefs that still cover the user's local-variable
  * declarations inside `setup()` / `loop()`.
  */
-const generateStructMember = (variable: PLCVariable): string => {
-  const iecType = getVariableIECType(variable)
+const generateStructMember = (variable: PLCVariable, userTypeNames?: ReadonlySet<string>): string => {
   const name = variable.name.toUpperCase()
+  const multiDimensional = multiDimensionalContainerType(variable)
+  if (multiDimensional) return `  strucpp::${multiDimensional} *${name};\n`
+
+  const iecType = getVariableIECType(variable, userTypeNames)
   return `  strucpp::${iecType} *${name};\n`
 }
 
@@ -121,5 +239,8 @@ export {
   getArrayTotalElements,
   getVariableIECType,
   isArrayVariable,
+  mapArrayElementTypeToIEC,
   mapBaseTypeToIEC,
+  mapUserTypeToIEC,
+  multiDimensionalContainerType,
 }

@@ -1,5 +1,5 @@
 /*
-license_store.h - Single storage interface for the on-device license blob
+license_store.h - Single storage interface for the on-device license blob (OLS-04)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The one point of contact for persisting the license blob. The closed license-core

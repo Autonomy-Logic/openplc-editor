@@ -1,19 +1,19 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - serialport types are not available at build time but will be at runtime
 import {
-  buildGetBoardIdRequest,
+  buildGetDeviceIdRequest,
   buildGetStatusRequest,
   buildPlcSetStateRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
-  parseGetBoardIdResponse,
+  parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
-  DebugBoardIdResult,
+  DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
@@ -76,6 +76,8 @@ export class ModbusRtuClient implements DeviceModbusTransport {
   private serialPort: any = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private injectedSerialPort: any = null
+  /** In-flight close, awaited via `closed()`. */
+  private closing: Promise<void> | null = null
 
   private static readonly CRC_HI_TABLE = [
     0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41, 0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80,
@@ -182,11 +184,39 @@ export class ModbusRtuClient implements DeviceModbusTransport {
     })
   }
 
+  /**
+   * Close the port.
+   *
+   * `close()` is asynchronous in the native binding, and the callback is passed
+   * so a failure is HANDLED rather than surfacing as an unhandled `error` event
+   * on a port we have already dropped.
+   *
+   * `closed` resolves when the native handle is actually released. A caller that
+   * is about to end the process must await it: `@serialport/bindings-cpp`
+   * registers a NAPI async cleanup hook, and tearing the Node environment down
+   * mid-close makes that hook throw a C++ exception, which aborts the process
+   * (SIGABRT, "Electron quit unexpectedly"). Long-lived hosts like the editor
+   * never noticed, because they keep running after a disconnect.
+   */
   disconnect(): void {
     if (this.serialPort && this.serialPort.isOpen) {
-      this.serialPort.close()
+      const port = this.serialPort
       this.serialPort = null
+      this.closing = new Promise<void>((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        port.close((error: Error | null) => {
+          if (error) console.warn(`Warning: failed to close serial port: ${error.message}`)
+          resolve()
+        })
+      })
+      return
     }
+    this.serialPort = null
+  }
+
+  /** Resolves once a `disconnect()` has released the native handle. */
+  closed(): Promise<void> {
+    return this.closing ?? Promise.resolve()
   }
 
   private flushInputBuffer(): Promise<void> {
@@ -439,6 +469,15 @@ export class ModbusRtuClient implements DeviceModbusTransport {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === ModbusDebugResponse.READ_ONLY) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -527,6 +566,15 @@ export class ModbusRtuClient implements DeviceModbusTransport {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === ModbusDebugResponse.READ_ONLY) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -604,19 +652,19 @@ export class ModbusRtuClient implements DeviceModbusTransport {
   }
 
   /**
-   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). Response offsets
+   * FC 0x48 DEBUG_GET_DEVICE_ID. Bare `[FC]` PDU (no payload). Response offsets
    * account for the 6-byte TCP-compat padding sendRequestImpl prepends, so the
    * pure PDU `[FC][status][id_len:u8][id_bytes...]` starts at offset 7 — hand it
-   * to the shared parseGetBoardIdResponse rather than parsing inline.
+   * to the shared parseGetDeviceIdResponse rather than parsing inline.
    */
-  async getBoardId(): Promise<DebugBoardIdResult> {
+  async getDeviceId(): Promise<DebugDeviceIdResult> {
     try {
-      // buildGetBoardIdRequest() returns the [FC] PDU; assembleRequest writes
+      // buildGetDeviceIdRequest() returns the [FC] PDU; assembleRequest writes
       // the function code + slaveId itself and expects only the trailing payload
-      // (empty for board-id), so strip the leading FC byte.
-      const pdu = buildGetBoardIdRequest()
+      // (empty for device-id), so strip the leading FC byte.
+      const pdu = buildGetDeviceIdRequest()
       const payload = Buffer.from(pdu.subarray(1))
-      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_BOARD_ID, payload)
+      const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_DEVICE_ID, payload)
       const response = await this.sendRequest(request)
 
       if (response.length < 9) {
@@ -624,7 +672,7 @@ export class ModbusRtuClient implements DeviceModbusTransport {
       }
 
       const pduResponse = Uint8Array.prototype.slice.call(response, 7)
-      return parseGetBoardIdResponse(pduResponse)
+      return parseGetDeviceIdResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

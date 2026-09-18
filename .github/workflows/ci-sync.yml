@@ -160,8 +160,22 @@ jobs:
               echo "::endgroup::"
               exit 0
             else
-              DIFF_COUNT=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['total_diffs'])")
-              echo "Still $DIFF_COUNT difference(s) with PR #$PR_NUMBER"
+              # Name the files, not just a count.
+              #
+              # A bare "Still 8 difference(s)" is undiagnosable: it gives no
+              # way to tell a genuine divergence from a PR head this run
+              # fetched before the other repo's push had propagated, which is
+              # a real race when both PRs are pushed within seconds of each
+              # other. The target-branch comparison already lists its files;
+              # this one now does too.
+              echo "$RESULT" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          print(f\"Still {data['total_diffs']} difference(s) with this PR:\")
+          for surface, info in data['surfaces'].items():
+              for d in info.get('diffs', []):
+                  print(f\"    {d['reason']}: src/{d['file']}\")
+          "
             fi
 
             echo "::endgroup::"

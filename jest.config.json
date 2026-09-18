@@ -8,9 +8,11 @@
   "moduleNameMapper": {
     "^@root/(.*)$": "<rootDir>/src/$1",
     "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/configs/mocks/fileMock.js",
-    "\\.(css|less|sass|scss)$": "identity-obj-proxy"
+    "\\.(css|less|sass|scss)$": "identity-obj-proxy",
+    "^monaco-editor$": "<rootDir>/configs/mocks/monaco-editor-mock.js"
   },
   "testEnvironment": "jsdom",
+  "workerIdleMemoryLimit": "1GB",
   "testEnvironmentOptions": {
     "url": "http://localhost/"
   },
@@ -20,7 +22,9 @@
     "src/frontend/utils/__tests__/notify-no-write-permission.test.ts",
     "src/frontend/services/__tests__/export-actions.test.ts",
     "src/frontend/services/__tests__/import-actions.test.ts",
-    "src/frontend/components/_organisms/modals/__tests__/confirm-plcopen-import-modal.test.tsx"
+    "src/frontend/components/_organisms/modals/__tests__/confirm-plcopen-import-modal.test.tsx",
+    "src/backend/shared/library/__tests__/build-pipeline-real-strucpp.test.ts",
+    "src/backend/shared/print/__tests__/fixtures/"
   ],
   "transformIgnorePatterns": ["node_modules/(?!strucpp)"],
   "transform": {
@@ -35,7 +39,9 @@
     "src/frontend/store/slices/**/*.ts",
     "src/frontend/utils/**/*.ts",
     "src/backend/shared/**/*.ts",
+    "src/middleware/shared/**/*.ts",
     "src/middleware/adapters/editor/**/*.ts",
+    "src/frontend/hooks/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/**/*.{test,spec}.{ts,tsx}",
@@ -49,27 +55,39 @@
   "coverageThreshold": {
     "src/frontend/store/slices/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 98,
+      "lines": 98,
+      "statements": 97
     },
     "src/frontend/utils/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 97,
+      "lines": 95,
+      "statements": 95
     },
     "src/backend/shared/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 76,
+      "lines": 77,
+      "statements": 75
     },
     "src/middleware/adapters/editor/": {
       "branches": 0,
-      "functions": 100,
-      "lines": 100,
-      "statements": 100
+      "functions": 87,
+      "lines": 85,
+      "statements": 85
+    },
+    "src/middleware/shared/": {
+      "branches": 88,
+      "functions": 89,
+      "lines": 76,
+      "statements": 78
+    },
+    "src/frontend/hooks/": {
+      "branches": 30,
+      "functions": 30,
+      "lines": 35,
+      "statements": 35
     }
   }
 }

@@ -18,6 +18,7 @@
       },
       "save": "Save File",
       "saveProject": "Save Project",
+      "retrieveProject": "Retrieve Project from PLC…",
       "saveAs": "Save As",
       "closeTab": "Close Tab",
       "closeProject": "Close Project",

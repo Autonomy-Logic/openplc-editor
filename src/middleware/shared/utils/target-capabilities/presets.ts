@@ -10,7 +10,75 @@
  * updated yet.
  */
 
-import type { TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
+
+/**
+ * Every address producer active. NOT a target preset — no board reports this,
+ * and it must never reach a UI / feature gate.
+ *
+ * This is the allocation-time answer to a board id that did not resolve: a VPP
+ * board whose package isn't installed, a project authored on another machine,
+ * or the catalogue not having loaded yet. `resolveTargetCapabilities`
+ * answers `EMPTY_CAPABILITIES` there, which is right for gating (never offer
+ * an affordance the target can't back) and wrong for allocation, where it
+ * reads as "this target supports no producers" and freezes every address in
+ * place — the recompaction after a delete silently keeps the stale addresses.
+ *
+ * Permissive is the safe direction here: the worst case is that addresses get
+ * compacted for a producer the eventual target turns out not to support, and
+ * selecting that target recalculates anyway (`setDeviceBoard`).
+ */
+export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
+  pinMapping: true,
+  vppIo: true,
+  modbusTcpRemote: true,
+  ethercat: true,
+}
+
+/**
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only the
+ * fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ *
+ * The numbers are the safe end of every axis: `maxSessions: 1` because each
+ * session is 16 KB of protocol-mandated buffers, `arenaBytes: 32 KB` to cover
+ * one session plus channel state plus the node pool, `security: 'none'` with
+ * all-false `hw` to keep mbedTLS out of the link.
+ */
+export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
+  arenaBytes: 32 * 1024,
+  maxSessions: 1,
+  nodePoolSlots: 8,
+  maxNodesPerRead: 20,
+  maxNodesPerWrite: 20,
+  maxNodesPerBrowse: 10,
+  maxReferencesPerNode: 32,
+  maxArrayLength: 256,
+  security: 'none',
+  certificates: false,
+  subscriptions: false,
+  // 600 000 and PBKDF2 by default, matching what Runtime v4 consumes, so a
+  // target declaring nothing keeps working. Constrained targets opt down.
+  kdfIterations: 600_000,
+  passwordScheme: 'pbkdf2-sha256',
+  hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
+}
+
+/**
+ * What a target gets when it declares `s7Server` and nothing else. Below Runtime
+ * v4's numbers, because v4 is a Linux process with a thread per client and this
+ * is a microcontroller where each client is a PDU pair in .bss.
+ *
+ * `szl` is on because the clients that need it refuse to talk to a device
+ * without it, at ~228 bytes. `pduSize` 240 is what an S7-300 offers and what
+ * every client copes with.
+ */
+export const DEFAULT_S7_PROFILE: S7TargetProfile = {
+  maxClients: 2,
+  pduSize: 240,
+  maxDataBlocks: 8,
+  szl: true,
+  writeEnabled: true,
+}
 
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
@@ -21,6 +89,11 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Simulator runs no Modbus slave at all — the flags are UX, so a
+  // project authored for another target keeps its server config while the
+  // user simulates it. It has no VPP Modbus screen, so it resolves to the
+  // `plc-server` profile, where RTU is not on offer anyway.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   // RTU over the emulated virtual serial port the in-process simulator
@@ -30,6 +103,7 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: true,
+  nativeRetainStore: false,
   plcStateControl: false,
   directUsbUpload: true,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -45,6 +119,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: false,
   ethercat: false,
   modbusTcpServer: false,
+  modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
   debuggerTransports: ['modbus-tcp'],
@@ -57,6 +132,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   // (v3: Modbus TCP, v4: WebSocket). The main process already routes the
   // command over REST for both, so the only thing that ever stopped v3
   // was this flag.
+  nativeRetainStore: false,
   plcStateControl: true,
   directUsbUpload: false,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -74,6 +150,9 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Runtime v4 Modbus slave plugin is a TCP listener; there is no serial
+  // path in it.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   debuggerTransports: ['websocket'],
@@ -81,6 +160,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: false,
   hasRuntimeStats: true,
   isInProcessSimulator: false,
+  nativeRetainStore: true,
   plcStateControl: true,
   directUsbUpload: false,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -95,7 +175,16 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   vppIo: false,
   modbusTcpRemote: false,
   ethercat: false,
-  modbusTcpServer: false,
+  // The baremetal firmware serves both, gated by the VPP Modbus screen's
+  // per-transport toggles. These read `false` until DOPE-442 because the
+  // config lived in a vendor screen the Servers UX could not see; now that
+  // one screen renders both stores, hiding the target's real capability is
+  // what would be wrong.
+  //
+  // A board still only gets the screen when its VPP declares a Modbus screen,
+  // so a package that has not been migrated is unaffected.
+  modbusTcpServer: true,
+  modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
   // Arduino targets speak RTU over USB always; some also speak TCP
@@ -106,6 +195,7 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
+  nativeRetainStore: false,
   plcStateControl: true,
   directUsbUpload: true,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is

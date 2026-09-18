@@ -1,4 +1,4 @@
-import type { PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { LogObject, PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../../store'
 import type { DebugMap, DebugVariableEntry } from '../debug-parser'
 import { packDebugAddr } from '../debug-parser'
@@ -78,18 +78,8 @@ function makeInstance(name: string, program: string, task = 'Task0'): PLCInstanc
 
 /** Simple log collector — NOT jest.fn(), just a plain function with a captured array. */
 function createLogCollector() {
-  const entries: {
-    id: string
-    level: string
-    message: string
-    compileError?: import('../../../middleware/shared/ports/types').StructuredCompileError
-  }[] = []
-  const log = (entry: {
-    id: string
-    level: 'error' | 'debug' | 'info' | 'warning'
-    message: string
-    compileError?: import('../../../middleware/shared/ports/types').StructuredCompileError
-  }) => {
+  const entries: LogObject[] = []
+  const log = (entry: LogObject) => {
     entries.push(entry)
   }
   return { entries, log }
@@ -146,13 +136,16 @@ describe('logCompilerEvent', () => {
     expect(entries[0].message).toBe('hello')
   })
 
-  it('generates unique IDs for each log entry', () => {
+  // Entry ids are the console slice's business, not this helper's. It used to
+  // mint one per line with `crypto.randomUUID` — which does not exist when the
+  // node serves the bundle over plain HTTP. What it owes callers now is one
+  // entry per line; the store keys them.
+  it('emits one entry per line and supplies no id of its own', () => {
     const { entries, log } = createLogCollector()
     logCompilerEvent({ message: 'a\nb' }, log)
 
-    expect(entries[0].id).toBeTruthy()
-    expect(entries[1].id).toBeTruthy()
-    expect(entries[0].id).not.toBe(entries[1].id)
+    expect(entries.map((e) => e.message)).toEqual(['a', 'b'])
+    expect(entries.every((e) => !('id' in e))).toBe(true)
   })
 
   // -------------------------------------------------------------------------

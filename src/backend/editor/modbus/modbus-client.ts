@@ -1,17 +1,17 @@
 import {
-  buildGetBoardIdRequest,
+  buildGetDeviceIdRequest,
   buildGetStatusRequest,
   buildPlcSetStateRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
-  parseGetBoardIdResponse,
+  parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
-  DebugBoardIdResult,
+  DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
@@ -32,7 +32,7 @@ export enum ModbusFunctionCode {
   DEBUG_GET_MD5 = 0x45,
   DEBUG_GET_STATUS = 0x46,
   DEBUG_GET_VERSION = 0x47,
-  DEBUG_GET_BOARD_ID = 0x48,
+  DEBUG_GET_DEVICE_ID = 0x48,
   /** Store a license blob on the device. Write-only; the read back is 0x4A. */
   DEBUG_WRITE_LICENSE = 0x49,
   /** Read the stored license blob back off the device. */
@@ -55,6 +55,10 @@ export enum ModbusDebugResponse {
   /** PLC_SET_STATE only: a RUN request was refused because the hardware mode
    *  switch reads STOP. */
   REFUSED_BY_SWITCH = 0x86,
+  /** DEBUG_SET only: refused because the variable is an IEC `CONSTANT`.
+   *  Mirrors `STATUS_READ_ONLY` in STruC++'s `debug_dispatch.hpp`, and the copy
+   *  of this enum in `backend/shared/simulator/types.ts`. */
+  READ_ONLY = 0x87,
 }
 
 interface ModbusTcpClientOptions {
@@ -271,6 +275,15 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === Number(ModbusDebugResponse.READ_ONLY)) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -377,6 +390,15 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
       }
 
+      // Refused because the variable is an IEC CONSTANT. The target is what
+      // enforces it — a constant is emitted as a `const` C++ member and the
+      // debug table reaches it through a cast that strips the qualifier — so
+      // this decode is the difference between a usable message and
+      // "Unknown error code: 0x87".
+      if (statusCode === Number(ModbusDebugResponse.READ_ONLY)) {
+        return { success: false, error: 'This variable is declared CONSTANT and cannot be written or forced' }
+      }
+
       if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
         return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
       }
@@ -388,12 +410,12 @@ export class ModbusTcpClient implements DeviceModbusTransport {
   }
 
   /**
-   * FC 0x48 DEBUG_GET_BOARD_ID. Bare `[FC]` PDU (no payload). TCP frame is
+   * FC 0x48 DEBUG_GET_DEVICE_ID. Bare `[FC]` PDU (no payload). TCP frame is
    * [MBAP:6][FC@7][...], so the pure PDU `[FC][status][id_len:u8][id_bytes...]`
-   * starts at offset 7 — hand it to the shared parseGetBoardIdResponse rather
+   * starts at offset 7 — hand it to the shared parseGetDeviceIdResponse rather
    * than parsing inline.
    */
-  async getBoardId(): Promise<DebugBoardIdResult> {
+  async getDeviceId(): Promise<DebugDeviceIdResult> {
     if (!this.socket) {
       return { success: false, error: 'Not connected to target' }
     }
@@ -401,9 +423,9 @@ export class ModbusTcpClient implements DeviceModbusTransport {
     const transactionId = this.incrementTransactionId()
     const protocolId = 0x0000
     const unitId = 0x00
-    // buildGetBoardIdRequest() returns the [FC] PDU; the MBAP frame carries the
-    // function code + payload, empty for board-id.
-    const pdu = buildGetBoardIdRequest()
+    // buildGetDeviceIdRequest() returns the [FC] PDU; the MBAP frame carries the
+    // function code + payload, empty for device-id.
+    const pdu = buildGetDeviceIdRequest()
 
     const pduLength = 1 + pdu.length // unitId + PDU (FC only)
     const request = Buffer.alloc(6 + pduLength)
@@ -426,7 +448,7 @@ export class ModbusTcpClient implements DeviceModbusTransport {
       }
 
       const pduResponse = Uint8Array.prototype.slice.call(data, 7)
-      return parseGetBoardIdResponse(pduResponse)
+      return parseGetDeviceIdResponse(pduResponse)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

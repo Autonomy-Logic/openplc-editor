@@ -36,6 +36,23 @@
 #include "ModbusSlave.h"
 #endif
 
+// Protocol servers. Included unconditionally: each facade is defined either way
+// and the implementation compiles out when the target's VPP does not declare the
+// capability. The call sites below are still guarded, because an unconditional
+// call to an empty function keeps the call and the evaluation of its argument.
+#include "opcua_server.h"
+#include "opcua_log.h"
+#include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+
+// Network device-discovery responder ("Search" in the editor). Feature-gated so
+// only targets declaring SUPPORTS_UDP_SCAN pull it in; unrelated to Modbus.
+#if defined(SUPPORTS_UDP_SCAN)
+#include "udp_scan.h"
+// Weak NULL default for the discovery brand/type string. A VPP declares its
+// identity with a strong OPLC_DEVICE_NAME in its HAL, which overrides this.
+extern "C" { const char *OPLC_DEVICE_NAME __attribute__((weak)) = 0; }
+#endif
+
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
 #ifndef MBTCP
     #if defined(BOARD_ESP8266)
@@ -127,6 +144,17 @@ void setup()
     // Discover tasks and compute scheduling
     runtime_discover_tasks();
 
+    // Retained variables. init() decides what this runtime can do about them;
+    // load() asks the driver for what it is holding for THIS program, which is
+    // also where a driver discards the previous program's values. Both must
+    // follow runtime_bind_located_vars(), because a retained variable may also
+    // be located and its storage has to be bound before anything writes to it.
+    //
+    // PROGRAM_MD5 is passed from here because the sketch is on defines.h's one
+    // legitimate include path and the glue is not.
+    runtime_retain_init(PROGRAM_MD5);
+    runtime_retain_load();
+
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
 
@@ -204,37 +232,24 @@ void setup()
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
-            // NOTE (single-serial model): the debugger and Modbus RTU share one
-            // mb_serialport. When MBSERIAL_SHARES_DEBUG_SERIAL is defined the RTU
-            // port IS the debugger's default serial, so this single begin() also
-            // brings up the debugger. Running the debugger on the default USB
-            // serial while RTU uses a *different* UART simultaneously would need
-            // a second serial handler — a documented follow-up.
+            // Two models, chosen by which UART the project gave Modbus RTU:
+            //
+            //  - MBSERIAL_SHARES_DEBUG_SERIAL: the RTU port IS the debugger's
+            //    default serial, so the single begin() above brings up both and
+            //    one mb_serialport serves them.
+            //  - MBSERIAL_ON_SECONDARY: the RTU has its own UART and the
+            //    debugger keeps the default one, begun further up. `handle_serial`
+            //    polls both, each with its own RX assembly buffer.
+            //
+            // The second case was once listed here as an unimplemented
+            // follow-up; it landed in 4b3c1386f and is now the normal shape,
+            // since the editor's connection occupies the default port.
         #elif defined(DEBUGGER_ENABLED)
             // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
             // still needs the default serial up on mb_serialport to respond.
             DEBUG_IFACE.begin(DEBUG_BAUD);
             mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
             modbus.slaveid = DEBUG_SLAVE;
-        #endif
-
-        #ifdef MBTCP
-            uint8_t mac[] = { MBTCP_MAC };
-            uint8_t ip[] = { MBTCP_IP };
-            uint8_t dns[] = { MBTCP_DNS };
-            uint8_t gateway[] = { MBTCP_GATEWAY };
-            uint8_t subnet[] = { MBTCP_SUBNET };
-
-            if (sizeof(ip)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
-            else if (sizeof(dns)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
-            else if (sizeof(gateway)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
-            else if (sizeof(subnet)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
-            else
-                mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
         #endif
 
         init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
@@ -249,6 +264,69 @@ void setup()
         mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
         modbus.slaveid = DEBUG_SLAVE;
     #endif
+
+    // ---- The network, on its own switch ----------------------------------
+    //
+    // Everything below is gated on the NETWORK being enabled, not on Modbus
+    // being served. The link carries the debugger, the ethernet upload,
+    // discovery, OPC-UA and S7Comm; Modbus TCP is one tenant among several and
+    // was never the right thing to hang the interface off. A project with no
+    // Modbus server used to compile a firmware that never called
+    // mbconfig_*_iface(), which on a board reached only over Ethernet is a
+    // device that boots and can never be reached again.
+#if defined(OPLC_NET_ENABLED)
+    {
+        uint8_t mac[] = { MBTCP_MAC };
+        uint8_t ip[] = { MBTCP_IP };
+        uint8_t dns[] = { MBTCP_DNS };
+        uint8_t gateway[] = { MBTCP_GATEWAY };
+        uint8_t subnet[] = { MBTCP_SUBNET };
+
+        // Five byte arrays, `sizeof(arr) < 4` as a compile-time DHCP-vs-static
+        // selector: an unset value is emitted as a single `0` byte.
+        if (sizeof(ip)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
+        else if (sizeof(dns)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
+        else if (sizeof(gateway)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
+        else if (sizeof(subnet)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
+        else
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
+    }
+
+    // The TCP listener: Modbus TCP when the project serves it, and the
+    // debugger's transport regardless, on a board reached only this way.
+    #ifdef MB_TCP_ACTIVE
+        mbtcp_server_begin();
+    #endif
+
+    // OPC-UA and S7Comm listen on the interface brought up above, and must not
+    // re-init the link themselves (see baremetal_net.h). No-ops when disabled.
+    #if OPCUA_ENABLED
+        opcua_log_begin();
+        opcua_init();
+    #endif
+    #if S7COMM_ENABLED
+        s7comm_init();
+    #endif
+#endif  // OPLC_NET_ENABLED
+
+#if defined(SUPPORTS_UDP_SCAN)
+    // Network is up now; start answering editor discovery probes.
+    udp_scan_begin();
+#endif
+
+#if defined(BOARD_LOGO8)
+    // The LOGO! core defers its SysTick/millis() time base, because its reset
+    // path skips the Energia _init that would start it. Start it here and before
+    // setupCycleDelay(), so the scan-cycle baseline is captured from a running
+    // micros(); otherwise the first cycle underflows and the scan runs unthrottled.
+    (*(volatile uint32_t *)0xE000E014u) = (F_CPU / 1000U) - 1U;  /* SYST_RVR */
+    (*(volatile uint32_t *)0xE000E018u) = 0U;                    /* SYST_CVR */
+    (*(volatile uint32_t *)0xE000E010u) = 0x00000007U;           /* SYST_CSR: CLK|TICKINT|EN */
+#endif
 
     setupCycleDelay(base_tick_ns);
 
@@ -431,6 +509,17 @@ void modbusTask()
 // =============================================================================
 // SCHEDULER
 // =============================================================================
+/** How much of the current scan cycle is still unspent.
+ *
+ *  Zero once the cycle is already over budget, so a late caller is told there
+ *  is no room rather than being handed a huge number from unsigned wraparound.
+ *  OPC-UA uses this to decide whether it may run at all; see opcuatask(). */
+static inline uint32_t cycle_slack_us()
+{
+    const unsigned long used = micros() - last_run;
+    return (used >= scan_cycle) ? 0u : (uint32_t)(scan_cycle - used);
+}
+
 void scheduler()
 {
     runtime_plc_cycle();
@@ -447,6 +536,22 @@ void scheduler()
         mbtask();
     #endif
 
+    // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
+    // Modbus. Each is handed what remains and declines to run unless that covers
+    // its worst case, so neither can extend the cycle. No-ops when disabled.
+    //
+    // cycle_slack_us() is called twice deliberately: the protocols share one
+    // budget, so the second sees what the first actually spent.
+    //
+    // Guarded rather than relying on the no-op bodies, because the call and its
+    // micros() argument survive when the body compiles to `return`.
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
+    #endif
+
     if (!first_cycle)
     {
         first_cycle = true;
@@ -460,6 +565,12 @@ void scheduler()
 // =============================================================================
 void loop()
 {
+#if defined(SUPPORTS_UDP_SCAN)
+    // Answer editor discovery probes every iteration, independent of the scan
+    // cycle, so Search stays responsive even with a long task interval.
+    udp_scan_poll();
+#endif
+
     if ((micros() - last_run) >= scan_cycle)
     {
         scheduler();
@@ -478,6 +589,18 @@ void loop()
     {
         mbtask();
     }
+    #endif
+
+    // OPC-UA gets the same inter-cycle slack Modbus does. Servicing it only from
+    // scheduler() capped it at one message per scan while Modbus was polled
+    // twice per cycle. No fixed guard is needed here: opcuatask() is given the
+    // real remaining slack and decides for itself. Guarded for the same reason
+    // as in scheduler().
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
     #endif
 
     #ifdef SIMULATOR_MODE

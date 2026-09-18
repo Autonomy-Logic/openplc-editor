@@ -126,15 +126,15 @@ function describeOutcome(report: DeviceLicenseReport): {
         Icon: ShieldUnknownIcon,
         negative: false,
         detail:
-          'The firmware running on this device reports no licence storage. This hardware supports it, ' +
-          'so the image was built without the storage backend — rebuild and upload.',
+          'The firmware on this device reports no licence storage. This hardware supports it, ' +
+          'so the image was built without the storage backend. Rebuild and upload.',
       }
     case 'check-failed':
       return {
         label: 'Licence check failed',
         Icon: ShieldUnknownIcon,
         negative: false,
-        detail: `${report.outcome.error}\n\nThis is not the same as having no licence — nothing on the device has changed.`,
+        detail: `${report.outcome.error}\n\nThis is not the same as having no licence. Nothing on the device has changed.`,
       }
   }
 }
@@ -187,6 +187,15 @@ export function DeviceLicenseStatus({
   // a double purchase.
   const offerPurchase =
     !!buyUrl && !awaitingPurchase && report.outcome.state === 'unlicensed' && report.outcome.entitlementChecked === true
+
+  // "Check again" is the panel's default affordance, and rightly so: almost
+  // every state gets better by asking again. The exception is a check-failed
+  // the flow marked terminal — a board with no identity to bind a licence to, a
+  // firmware speaking an identity format this editor does not know. Re-asking
+  // reproduces the same error verbatim, so the button turns a legible message
+  // into a loop. The modal already withholds it for these; the panel used to
+  // offer it anyway, which is the same disagreement rendered in two places.
+  const offerRecheck = !(report.outcome.state === 'check-failed' && report.outcome.retryable === false)
 
   return (
     // Radix Popover, PORTALLED. The details used to be a conditional <div> in the
@@ -267,35 +276,41 @@ export function DeviceLicenseStatus({
 
           {awaitingPurchase ? (
             <p className='font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
-              Waiting for the purchase to complete. OpenPLC checks periodically and will write the licence to this
-              device by itself — you can keep working meanwhile.
+              Waiting for the purchase to complete. OpenPLC keeps checking for up to ten minutes and writes the licence
+              to this device as soon as the purchase clears. You can keep working in the meantime.
             </p>
           ) : null}
 
-          <div className='flex items-center gap-3'>
-            <button
-              type='button'
-              disabled={isChecking}
-              onClick={onRecheck}
-              className='font-caption text-cp-xs text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400'
-            >
-              Check again
-            </button>
-            {offerPurchase ? (
-              <button type='button' onClick={onBuy} className='font-caption text-cp-xs text-brand hover:underline'>
-                Buy licence
-              </button>
-            ) : null}
-            {awaitingPurchase ? (
-              <button
-                type='button'
-                onClick={onCancelPurchaseWatch}
-                className='font-caption text-cp-xs text-neutral-600 hover:underline dark:text-neutral-400'
-              >
-                Stop waiting
-              </button>
-            ) : null}
-          </div>
+          {/* Skipped entirely when nothing is offered: an empty flex row still
+              costs the popover's 12px gap, which reads as a missing control. */}
+          {offerRecheck || offerPurchase || awaitingPurchase ? (
+            <div className='flex items-center gap-3'>
+              {offerRecheck ? (
+                <button
+                  type='button'
+                  disabled={isChecking}
+                  onClick={onRecheck}
+                  className='font-caption text-cp-xs text-neutral-600 hover:underline disabled:opacity-50 dark:text-neutral-400'
+                >
+                  Check again
+                </button>
+              ) : null}
+              {offerPurchase ? (
+                <button type='button' onClick={onBuy} className='font-caption text-cp-xs text-brand hover:underline'>
+                  Buy licence
+                </button>
+              ) : null}
+              {awaitingPurchase ? (
+                <button
+                  type='button'
+                  onClick={onCancelPurchaseWatch}
+                  className='font-caption text-cp-xs text-neutral-600 hover:underline dark:text-neutral-400'
+                >
+                  Stop waiting
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

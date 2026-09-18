@@ -25,6 +25,7 @@ import { useOpenPLCStore } from '../../../../../../store'
 import { RungLadderState } from '../../../../../../store/slices/ladder'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
+import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
 import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '../../../../../_atoms/graphical-editor/ladder/contact'
@@ -112,7 +113,11 @@ export default function LadderEditor() {
         const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
         const hasDivergence =
           originalInOut?.length !== currentVariables.length ||
-          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
+          !originalInOut?.every((variable) => currentMap.has(formatVariable(variable))) ||
+          // The declarations can agree while the persisted GEOMETRY is stale: a rung saved
+          // before a VAR_IN_OUT pin became input-only still carries the pin's output side. The
+          // interface never changed, so the comparison above cannot see it.
+          hasLegacyInOutOutputHandle(node)
 
         if (hasDivergence) {
           divergences.push(`${rung.id}:${node.id}`)

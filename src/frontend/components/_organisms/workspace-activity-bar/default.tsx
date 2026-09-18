@@ -1,3 +1,5 @@
+import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
+import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -13,9 +15,12 @@ import {
   useSimulator,
 } from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
+import { useDeviceConnect } from '../../../hooks/use-device-connect'
+import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
+import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { buildDeviceResolverContext, showDeviceDialog } from '../../../services/device-link-resolution'
+import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -25,6 +30,7 @@ import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
+import { BuildLibraryButton } from '../../_molecules/workspace-activity-bar/default/build-library'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
 import { DebuggerButton } from '../../_molecules/workspace-activity-bar/default/debugger'
 import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play'
@@ -33,6 +39,15 @@ import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
+
+/**
+ * Board the library debug harness is compiled for.  Pinned rather than read
+ * from the project: a library project hides the device tree entirely
+ * (`hasDevices: false`), so there is no board the author could have chosen,
+ * and the in-process simulator is the only target that runs on both the
+ * desktop and the web edition.
+ */
+const LIBRARY_DEBUG_BOARD = 'OpenPLC Simulator'
 
 type DefaultWorkspaceActivityBarProps = {
   zoom?: {
@@ -67,7 +82,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const [isCompiling, setIsCompiling] = useState(false)
   const [isDebuggerProcessing, setIsDebuggerProcessing] = useState(false)
-  const [simulatorRunning, setSimulatorRunning] = useState(false)
   const pendingSimulatorDebugRef = useRef(false)
   // True while a debug session is running OVER THE DEVICE CONNECTION (a baremetal
   // target, whatever transport that connection uses). Such a session shares the
@@ -85,6 +99,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
+
+  // The two CONNECT actions, both shared with the device Configuration screen so
+  // the debugger's offer runs exactly what the Connect button runs.
+  const deviceConnect = useDeviceConnect(currentBoardInfo)
+  const runtimeConnect = useRuntimeConnect()
+
+  // Web reaches a device through the Orchestrators screen, which SELECTS one;
+  // until it has, there is nothing to connect to. Desktop addresses the device
+  // directly and always has a target once a board is chosen, so this is false
+  // there -- the same predicate, answered differently by the platform rather
+  // than a branch on which platform it is.
+  const needsDeviceSelection = useOpenPLCStore(
+    (state) => capabilities.hasOrchestratorDevices && state.runtimeConnection.selectedDevice === null,
+  )
+
+  // The device the user has CHOSEN, which is not the same as one they have
+  // connected to. Named in the offer below so a mis-click in the Orchestrators
+  // list is visible before it becomes a connection to the wrong machine.
+  const selectedDeviceName = useOpenPLCStore((state) => state.runtimeConnection.selectedDevice?.deviceName ?? null)
+
+  // A chosen device outranks the board target. The board only becomes a runtime
+  // one when a connection is established, so between picking a device and
+  // connecting to it the target still reads as the simulator -- which had the
+  // debugger offering to start the simulator for someone who had just selected
+  // a Runtime v4 device.
+  const offerSimulatorStart = isSimulatorBoard && selectedDeviceName === null
 
   const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
 
@@ -128,16 +168,27 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       ? 'Connect to the target first'
       : 'PLC is changing state...'
 
-  // The emulator stopping is a session ending, and a debug session riding it ends
-  // with it — which the drop handler below already does for every target. This
-  // only mirrors the emulator's own state into the button.
-  useEffect(() => {
-    const unsub = simulator.onStopped(() => {
+  // Emulator lifecycle — load firmware, attach the debugger, tear both down.
+  // Owned by the hook so the PLC Start button and the library Debug button
+  // cannot drift on the ordering rules it encodes.
+  const simulatorRun = useSimulatorDebugRun({
+    debugSession,
+    // The debug session rides the emulator's session, so it ends when the
+    // emulator does — through the same handler a pulled cable goes through.
+    onDebugAttached: () => {
+      debugSessionRidesDeviceRef.current = true
+    },
+    onStopped: () => {
       pendingSimulatorDebugRef.current = false
-      setSimulatorRunning(false)
-    })
-    return unsub
-  }, [simulator])
+      // The session this debug session was riding is gone, so the claim that it
+      // rides one goes with it. The drop handler cannot clear it on this path:
+      // `stopSession()` has already hidden the debugger, so the handler's
+      // `isDebuggerVisible` gate returns before it reaches the reset — leaving
+      // the ref stale-`true` for a session that no longer exists.
+      debugSessionRidesDeviceRef.current = false
+    },
+  })
+  const simulatorRunning = simulatorRun.isRunning
 
   // A serial debug session lives on the device connection: it shares that
   // client, so when the link drops (unplug, reset, liveness failure, or the user
@@ -159,7 +210,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     if (!useOpenPLCStore.getState().workspace.isDebuggerVisible) return
 
     addLog({
-      id: crypto.randomUUID(),
       level: 'warning',
       message: 'Device disconnected — stopping the debug session (serial debugging runs over the device connection).',
     })
@@ -175,7 +225,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     if (wasSimulator && !isSimulatorBoard && simulator.isRunning()) {
       addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: 'Board changed from simulator. Stopping simulator.',
       })
@@ -188,9 +237,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog])
 
   const executeSave = useCallback(async (): Promise<boolean> => {
-    const result = await executeSaveProject(projectPort, capabilities)
+    // 'pre-build', not a user save: the compiler reads source from disk, so
+    // this flush has to run even for a project retrieved from a device that has
+    // no chosen location yet. Refusing it would not protect that project, it
+    // would just stop it compiling. The user-facing Save is the one that is
+    // gated, in executeSaveProject.
+    const result = await executeSaveProject(projectPort, capabilities, 'pre-build')
     return result.success
-  }, [projectPort])
+  }, [projectPort, capabilities])
 
   // ---------------------------------------------------------------------------
   // Build (Compile)
@@ -245,9 +299,16 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const boardInfo = state.deviceAvailableOptions.availableBoards.get(
           state.deviceDefinitions.configuration.deviceBoard,
         )
-        const requiresRuntimeConnection = !resolveTargetCapabilities(boardInfo).directUsbUpload
         const { connectionStatus: connStatus, plcStatus: runStatus } = state.runtimeConnection
-        if (requiresRuntimeConnection && connStatus === 'connected' && runStatus === 'RUNNING') {
+        // The RULE lives in `evaluatePreBuildPlcGate`, shared with the headless
+        // CLI. Only the consent mechanism differs — a dialog here, `--yes` there
+        // — so the two cannot disagree about when a build is allowed to start.
+        const gate = evaluatePreBuildPlcGate({
+          buildsOnDevice: !resolveTargetCapabilities(boardInfo).directUsbUpload,
+          connected: connStatus === 'connected',
+          running: runStatus === 'RUNNING',
+        })
+        if (gate.kind === 'must-stop') {
           const response = await showDeviceDialog(
             'warning',
             'Stop PLC',
@@ -270,7 +331,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
           if (!stopResult.success) {
             addLog({
-              id: crypto.randomUUID(),
               level: 'error',
               message: `Failed to stop PLC: ${stopResult.error ?? 'Unknown error'}`,
             })
@@ -278,11 +338,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             return
           }
           useOpenPLCStore.getState().deviceActions.setPlcRuntimeStatus('STOPPED')
-          addLog({ id: crypto.randomUUID(), level: 'info', message: 'PLC stopped before build.' })
+          addLog({ level: 'info', message: 'PLC stopped before build.' })
         }
       }
 
-      addLog({ id: crypto.randomUUID(), level: 'info', message: 'Build process started' })
+      addLog({ level: 'info', message: 'Build process started' })
 
       // Compile-time alias resolution: snapshot the project with every
       // variable's `location` resolved to a concrete IEC address (alias name
@@ -295,7 +355,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // arduino-cli needs for a direct-USB upload. Release it before the build so
       // the upload can take the port; reconnect afterwards (auto-reconnect).
       const caps = resolveTargetCapabilities(currentBoardInfo)
-      const willUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false) && caps.directUsbUpload
+      const doUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false)
+      const isEthernetUpload = currentBoardInfo?.uploadMethod === 'ethernet'
+      // Serial handoff (D72): only for a direct-USB upload, never for ethernet.
+      const willUpload = doUpload && caps.directUsbUpload && !isEthernetUpload
       // Release ONLY if the held connection is the serial one arduino-cli needs.
       // A connection over Modbus TCP is untouched, so debugging and run/stop keep
       // working across the upload; disconnecting unconditionally used to throw it
@@ -306,6 +369,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           serialWasReleased = await device.releaseSerialPort(
             useOpenPLCStore.getState().deviceDefinitions.configuration.communicationPort ?? null,
           )
+        } catch {
+          // best-effort: never block a build on the handoff.
+        }
+      }
+
+      // Ethernet handoff: the program upload and the debugger's Modbus-TCP status
+      // polls share the one Ethernet link, so leaving the connection up lets the
+      // polls collide with the transfer. Drop it before the build and reconnect
+      // afterwards, only if it was connected here.
+      const willEthUpload = doUpload && isEthernetUpload
+      let ethWasConnected = false
+      if (willEthUpload && useOpenPLCStore.getState().deviceConnection.status === 'connected') {
+        ethWasConnected = true
+        try {
+          await device.disconnect()
         } catch {
           // best-effort: never block a build on the handoff.
         }
@@ -353,49 +431,83 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
             logCompilerEvent(event, addLog)
             if (event.firmwarePath && isSimulatorBoard) {
-              void simulator.loadFirmware(event.firmwarePath).then((loadResult) => {
-                if (loadResult.success) {
-                  setSimulatorRunning(true)
-                  addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator is running.' })
-                  if (pendingSimulatorDebugRef.current) {
-                    pendingSimulatorDebugRef.current = false
-                    // Rides the emulator's session, so it ends when the emulator
-                    // does — through the same handler a pulled cable goes through.
-                    debugSessionRidesDeviceRef.current = true
-                    // No config: starting the emulator opened its session, so the
-                    // connection manager already knows how to reach it.
-                    void debugSession.connectAndStart()
-                  }
-                } else {
-                  pendingSimulatorDebugRef.current = false
-                  addLog({
-                    id: crypto.randomUUID(),
-                    level: 'error',
-                    message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}`,
-                  })
-                }
-              })
+              const attachDebugger = pendingSimulatorDebugRef.current
+              pendingSimulatorDebugRef.current = false
+              void simulatorRun.launch(event.firmwarePath, { attachDebugger })
             }
           },
         )
 
         if (!result.success && !streamedError) {
-          addLog({ id: crypto.randomUUID(), level: 'error', message: result.error ?? 'Compilation failed' })
+          addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // Serial handoff (D72): if we released a held device connection for this
-        // upload, reconnect it now that arduino-cli is done with the port.
-        // Silent (no dialogs) — the user just flashed on purpose.
-        if (serialWasReleased && result.success) {
+        // Ethernet handoff: after a successful upload the device is now running at
+        // the program's configured IP (which may differ from the address we just
+        // uploaded to). Advance the connect/upload IP to it, so the reconnect —
+        // and every later upload/connect — targets where the device actually is.
+        if (willEthUpload && result.success) {
+          const cfg = useOpenPLCStore.getState().deviceDefinitions.configuration
+          const vsd = (cfg.vendorScreenData ?? {}) as {
+            modbus_tcp?: { ip_address?: string }
+            network?: { enable_dhcp?: boolean; ip_address?: string }
+          }
+          // Under DHCP the firmware emits MBTCP_IP 0 and the stored ip_address is
+          // stale — the device just took whatever the server handed it, which the
+          // editor cannot know. Advancing to the stored static address would dial
+          // the wrong host, and the `finally` reconnect would follow it there. So
+          // ask the user for the address the device came up on (the modal already
+          // exists — showDeviceInput → debugger-ip-input) rather than guess.
+          if (vsd.network?.enable_dhcp) {
+            const entered = await showDeviceInput(
+              'Device IP address',
+              'This target uses DHCP, so its address is assigned by the network and the editor ' +
+                'cannot know it. Enter the IP the device came up on to reconnect and for later uploads.',
+              cfg.runtimeIpAddress ?? '',
+            )
+            const trimmed = entered?.trim()
+            if (trimmed) {
+              useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(trimmed)
+            }
+          } else {
+            const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
+            if (newIp && newIp !== cfg.runtimeIpAddress) {
+              useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(newIp)
+            }
+          }
+        }
+        // The device rebooted into the new firmware, so the link we come back to
+        // is a different one -- wait out the bootloader window and the app boot
+        // before `finally` dials it. Only on success: a build that failed never
+        // reached the device.
+        if (ethWasConnected && result.success) {
+          await new Promise((resolve) => setTimeout(resolve, 6000))
+        }
+      } catch (err: unknown) {
+        addLog({ level: 'error', message: `Build error: ${getErrorMessage(err)}` })
+      } finally {
+        // Restore the Ethernet link this handler dropped for the upload, in the
+        // same block that clears the compiling flag -- the teardown happens
+        // before the `try`, so putting the restore inside it meant a throw from
+        // compileProgram (an IPC failure, an adapter throw -- not a
+        // `{ success: false }` return) left the debugger disconnected for good,
+        // with only "Build error: ..." in the console and nothing to say the
+        // connection was gone. Guarded on its own flag, so it is a no-op when
+        // there was nothing to restore.
+        // Restore whichever link this handler dropped for the upload -- serial
+        // OR ethernet, never both. Both live in `finally`, guarded on their own
+        // flag and independent of success: a build that threw (an IPC failure,
+        // an adapter throw) or returned { success: false } still released the
+        // port, so it must still be reconnected, or a USB target is left
+        // disconnected with only "Build error: ..." and nothing to say why.
+        // This is the bug the ethernet handoff already fixed; the serial handoff
+        // had the same shape one branch over.
+        if (serialWasReleased || ethWasConnected) {
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
-          // Same candidate resolution Connect uses, so the link comes back the way
-          // the user established it. Only the serial link is ever released for an
-          // upload, but resolving the full list lets the reconnect land on Modbus
-          // TCP if that is what now answers.
-          // `deferPrompts`: this reconnect is silent and automatic (the user just
-          // flashed), so it must never pop an address dialog behind their back. A
-          // DHCP-only target simply stays disconnected until they press Connect.
+          // `deferPrompts`: silent and automatic (the user just flashed), so it
+          // must never pop an address dialog behind their back. A DHCP-only
+          // target simply stays disconnected until they press Connect.
           const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
             transports: caps.debuggerTransports,
             deferPrompts: true,
@@ -408,9 +520,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           }
         }
-      } catch (err: unknown) {
-        addLog({ id: crypto.randomUUID(), level: 'error', message: `Build error: ${getErrorMessage(err)}` })
-      } finally {
         setIsCompiling(false)
       }
     },
@@ -420,8 +529,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       deviceDefinitions,
       currentBoardInfo,
       isSimulatorBoard,
-      simulator,
-      debugSession,
+      simulatorRun,
       addLog,
       isCompiling,
       executeSave,
@@ -448,79 +556,174 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build Library (.stlib)
   // ---------------------------------------------------------------------------
 
-  const handleBuildLibrary = useCallback(
-    async (overrides?: { cleanBuild?: boolean }) => {
-      if (isCompiling) return
+  const handleBuildLibrary = useCallback(async () => {
+    if (isCompiling) return
 
-      // Reveal the console and re-attach to the tail (see handleBuild).
-      requestConsoleFollow()
+    // Reveal the console and re-attach to the tail (see handleBuild).
+    requestConsoleFollow()
 
-      // Always save before building.  The manifest tab and any POU
-      // bodies may have edits the workspace-level `editingState`
-      // doesn't track (each editor manages its own dirty flag against
-      // its file-slice entry), and the build pipeline reads everything
-      // off disk — `library.json`, `pous/**`, and the rest — so a
-      // stale on-disk copy would compile from the previous session's
-      // content.  `executeSaveProject` is the same full-project save
-      // the PLC build invokes; it walks every file the project owns
-      // and flushes the in-memory buffer to disk before the build
-      // starts.
+    // Always save before building.  The manifest tab and any POU
+    // bodies may have edits the workspace-level `editingState`
+    // doesn't track (each editor manages its own dirty flag against
+    // its file-slice entry), and the build pipeline reads everything
+    // off disk — `library.json`, `pous/**`, and the rest — so a
+    // stale on-disk copy would compile from the previous session's
+    // content.  `executeSaveProject` is the same full-project save
+    // the PLC build invokes; it walks every file the project owns
+    // and flushes the in-memory buffer to disk before the build
+    // starts.
+    const saved = await executeSave()
+    if (!saved) return
+
+    if (!compiler.compileLibrary) {
+      addLog({
+        level: 'error',
+        message: 'Current platform does not implement library builds.',
+      })
+      return
+    }
+
+    setIsCompiling(true)
+    addLog({ level: 'info', message: 'Library build started' })
+
+    try {
+      const result = await compiler.compileLibrary({ projectData, projectPath: projectMeta.path }, (event) => {
+        if (!event.message) return
+        addLog({
+          level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
+          message: event.message,
+        })
+      })
+      if (!result.success) {
+        addLog({
+          level: 'error',
+          message: result.error ?? 'Library build failed.',
+        })
+      }
+    } catch (err) {
+      addLog({
+        level: 'error',
+        message: `Library build error: ${getErrorMessage(err)}`,
+      })
+    } finally {
+      setIsCompiling(false)
+    }
+  }, [compiler, projectData, projectMeta, addLog, isCompiling, canEdit, executeSave, requestConsoleFollow])
+
+  // ---------------------------------------------------------------------------
+  // Debug Library — run the library's blocks on the simulator
+  // ---------------------------------------------------------------------------
+
+  /**
+   * A library has no program, so there is nothing to run and nothing to attach
+   * a debugger to.  `composeLibraryDebugHarness` synthesises the missing piece:
+   * a program declaring one instance of every block in the library.  That
+   * project compiles for the simulator exactly like any other, and the debug
+   * session that follows is the ordinary one — the harness's instances are what
+   * `buildFbInstanceMap` binds each block editor to.
+   *
+   * The harness is never written to the project: it lives in the session
+   * overlay (`workspace.debugHarness`) until the session ends.
+   */
+  const handleDebugLibrary = useCallback(async (): Promise<void> => {
+    if (simulatorRunning) {
+      await simulatorRun.stop()
+      return
+    }
+    if (isCompiling) return
+
+    requestConsoleFollow()
+
+    // Same reason the build path always saves: the compile pipeline reads the
+    // project's own files off disk, so an unflushed edit compiles stale bytes.
+    if (canEdit) {
       const saved = await executeSave()
       if (!saved) return
+    }
 
-      if (!compiler.compileLibrary) {
-        addLog({
-          id: crypto.randomUUID(),
-          level: 'error',
-          message: 'Current platform does not implement library builds.',
-        })
-        return
-      }
+    const harness = composeLibraryDebugHarness(useOpenPLCStore.getState().project.data)
 
-      setIsCompiling(true)
+    for (const skip of harness.skipped) {
+      addLog({ level: 'warning', message: `${skip.pouName}: ${skip.reason}` })
+    }
+    if (harness.blocks.length === 0) {
       addLog({
-        id: crypto.randomUUID(),
-        level: 'info',
-        message: overrides?.cleanBuild ? 'Library build started (clean)' : 'Library build started',
+        level: 'error',
+        message:
+          'Nothing to debug: this library has no function blocks the simulator can run. ' +
+          'Add a function block — to exercise a function, write one that calls it.',
       })
+      return
+    }
 
-      try {
-        const result = await compiler.compileLibrary(
-          { projectData, projectPath: projectMeta.path, cleanBuild: overrides?.cleanBuild ?? false },
-          (event) => {
-            if (!event.message) return
-            addLog({
-              id: crypto.randomUUID(),
-              level: event.level === 'error' || event.stage === 'error' ? 'error' : 'info',
-              message: event.message,
+    setIsCompiling(true)
+    addLog({
+      level: 'info',
+      message: `Debugging ${harness.blocks.length} block(s) on the simulator: ${harness.blocks
+        .map((block) => block.pouName)
+        .join(', ')}`,
+    })
+
+    // Installed BEFORE the compile so the debug session that the firmware event
+    // triggers can already see it.  `clearDebugState()` drops it when the
+    // session ends.
+    useOpenPLCStore.getState().workspaceActions.setDebugHarness({
+      programPou: harness.programPou,
+      instances: harness.projectData.configurations.resource.instances,
+    })
+
+    try {
+      let streamedError = false
+      const result = await compiler.compileProgram(
+        {
+          projectData: harness.projectData,
+          boardTarget: LIBRARY_DEBUG_BOARD,
+          projectPath: projectMeta.path,
+          compileOnly: false,
+          isSimulator: true,
+          runtimeIpAddress: null,
+          runtimeJwtToken: null,
+        },
+        (event) => {
+          if (event.level === 'error' || event.stage === 'error') streamedError = true
+          logCompilerEvent(event, addLog)
+          if (event.firmwarePath) {
+            // The compile succeeded — it produced firmware — so a failure to
+            // LOAD that firmware never reaches the `!result.success` branch
+            // below. Without this the harness would stay installed with no
+            // emulator behind it, and the watch list would keep showing a
+            // generated program that is not running.
+            void simulatorRun.launch(event.firmwarePath, { attachDebugger: true }).then((launched) => {
+              if (!launched) {
+                useOpenPLCStore.getState().workspaceActions.setDebugHarness(null)
+              }
             })
-          },
-        )
-        if (!result.success) {
-          addLog({
-            id: crypto.randomUUID(),
-            level: 'error',
-            message: result.error ?? 'Library build failed.',
-          })
-        } else if (result.verification && !result.verification.success) {
-          addLog({
-            id: crypto.randomUUID(),
-            level: 'warning',
-            message: `Library built, but verification reported: ${result.verification.message ?? 'unknown'}`,
-          })
+          }
+        },
+      )
+      if (!result.success) {
+        useOpenPLCStore.getState().workspaceActions.setDebugHarness(null)
+        if (!streamedError) {
+          addLog({ level: 'error', message: result.error ?? 'Harness compilation failed' })
         }
-      } catch (err) {
-        addLog({
-          id: crypto.randomUUID(),
-          level: 'error',
-          message: `Library build error: ${getErrorMessage(err)}`,
-        })
-      } finally {
-        setIsCompiling(false)
       }
-    },
-    [compiler, projectData, projectMeta, addLog, isCompiling, executeSave, requestConsoleFollow],
-  )
+    } catch (err: unknown) {
+      useOpenPLCStore.getState().workspaceActions.setDebugHarness(null)
+      addLog({ level: 'error', message: `Library debug error: ${getErrorMessage(err)}` })
+    } finally {
+      setIsCompiling(false)
+    }
+  }, [
+    compiler,
+    projectMeta,
+    addLog,
+    isCompiling,
+    canEdit,
+    executeSave,
+    requestConsoleFollow,
+    simulatorRun,
+    simulatorRunning,
+  ])
 
   // ---------------------------------------------------------------------------
   // PLC control (Start/Stop for runtime targets)
@@ -586,7 +789,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
       if (result.unsupported) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: 'This firmware predates run/stop control. Rebuild and upload the program to enable Start/Stop.',
         })
@@ -600,7 +802,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
       if (!result.success) {
         addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `Failed to ${wantRun ? 'start' : 'stop'} PLC: ${result.error ?? 'Unknown error'}`,
         })
@@ -621,7 +822,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           )
       }
     } catch (error: unknown) {
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
+      addLog({ level: 'error', message: `PLC control error: ${getErrorMessage(error)}` })
     }
   }, [
     deviceDefinitions.configuration.deviceBoard,
@@ -634,57 +835,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   ])
 
   const handleSimulatorControl = useCallback(async (): Promise<void> => {
-    try {
-      if (simulatorRunning) {
-        // Two things end here, in this order, and the emulator's end is not
-        // conditional on the debug session's.
-        //
-        // The debug session goes first: it is a CONSUMER of the emulator, so it
-        // has to let go of the transport before the thing on the other end
-        // disappears.
-        //
-        // The emulator goes second, from a `finally`, because stopping it is
-        // this button's job and nothing else's. `stopSession()` deliberately
-        // does not do it (see its docstring: a debug session is not the owner of
-        // the thing it talks to), so with this call missing "Stop" ended the
-        // debug session, logged "Simulator stopped." and left the avr8js loop
-        // running — re-scheduling itself and burning a core for the rest of the
-        // session, unreachable because the button had flipped back to "Start".
-        //
-        // Sequencing it after a plain `await` reintroduced the same leak on the
-        // error path: anything that rejects inside the teardown (today only a
-        // throwing `onDisconnected` subscriber, which is why nothing hits it
-        // yet) skipped straight to the catch below, which only logs. The
-        // emulator kept running, `simulatorRunning` stayed true, and every
-        // retry failed identically — worse than the original bug, because
-        // nothing settled at all. `finally` keeps the order and drops the
-        // condition.
-        try {
-          await debugSession.stopSession()
-        } finally {
-          await simulator.stop()
-        }
-
-        // The session this debug session was riding is gone, so the claim that it
-        // rides one goes with it. The drop handler cannot clear it on this path:
-        // `stopSession()` has already hidden the debugger, so the handler's
-        // `isDebuggerVisible` gate returns before it reaches the reset — leaving
-        // the ref stale-`true` for a session that no longer exists.
-        debugSessionRidesDeviceRef.current = false
-
-        setSimulatorRunning(false)
-        addLog({ id: crypto.randomUUID(), level: 'info', message: 'Simulator stopped.' })
-      } else {
-        pendingSimulatorDebugRef.current = true
-        handleBuildRef.current().catch(() => {
-          pendingSimulatorDebugRef.current = false
-        })
-      }
-    } catch (error: unknown) {
-      pendingSimulatorDebugRef.current = false
-      addLog({ id: crypto.randomUUID(), level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
+    if (simulatorRunning) {
+      await simulatorRun.stop()
+      return
     }
-  }, [debugSession, simulator, simulatorRunning, addLog])
+    // Starting means building first — the emulator is fed by the compile's
+    // firmware event, which `handleBuild` hands to `simulatorRun.launch`.
+    pendingSimulatorDebugRef.current = true
+    handleBuildRef.current().catch(() => {
+      pendingSimulatorDebugRef.current = false
+    })
+  }, [simulatorRun, simulatorRunning])
 
   // ---------------------------------------------------------------------------
   // MD5 verification — runs after debug compilation for non-simulator
@@ -703,12 +864,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           ['Yes', 'No'],
         )
         if (response === 1) {
-          consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Debugger session cancelled.' })
+          consoleActions.addLog({ level: 'info', message: 'Debugger session cancelled.' })
           setIsDebuggerProcessing(false)
           return
         }
 
-        consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting PLC...' })
+        consoleActions.addLog({ level: 'info', message: 'Starting PLC...' })
         const startResult = (await debuggerPort.setPlcState?.('RUNNING')) ?? {
           success: false,
           error: 'This target does not support run/stop control',
@@ -728,7 +889,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       // Read local MD5
-      consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Verifying program MD5...' })
+      consoleActions.addLog({ level: 'info', message: 'Verifying program MD5...' })
       const md5Result = await debuggerPort.readProgramMd5(projectPath, boardTarget)
       if (!md5Result.success || !md5Result.md5) {
         await showDeviceDialog('error', 'MD5 Extraction Failed', md5Result.error ?? 'Could not extract MD5', ['OK'])
@@ -765,7 +926,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       if (verifyResult.match) {
-        consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'MD5 verified. Starting debugger...' })
+        consoleActions.addLog({ level: 'info', message: 'MD5 verified. Starting debugger...' })
         // Persist the target's byte order — detected from the MD5
         // response trailer in the runtime — so the swap layer at the
         // read / write boundaries flips on BE targets.  Default to
@@ -779,7 +940,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         await debuggerPort.disconnect()
 
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
@@ -808,7 +968,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           )
           if (compileResult.success) {
             consoleActions.addLog({
-              id: crypto.randomUUID(),
               level: 'info',
               message: 'Upload completed. Re-verifying...',
             })
@@ -816,7 +975,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             void handleMd5Verification(projectPath, boardTarget, isRuntimeTarget)
           } else {
             consoleActions.addLog({
-              id: crypto.randomUUID(),
               level: 'error',
               message: `Upload failed: ${compileResult.error ?? 'Unknown error'}`,
             })
@@ -829,7 +987,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } catch (error: unknown) {
       await debuggerPort.disconnect()
       consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'error',
         message: `MD5 verification error: ${getErrorMessage(error)}`,
       })
@@ -842,11 +999,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // ---------------------------------------------------------------------------
 
   const handleDebuggerClick = useCallback(async () => {
-    // Simulator targets debug through the Start Simulator button
-    // (compile + load firmware + connect), so the Debugger button
-    // is hidden for them at the JSX level — but guard here too in
-    // case the gate ever flips.
-    if (isSimulatorBoard) return
+    // The simulator guard has MOVED, not gone: it now sits after the
+    // offer-to-start below. Standing here it made the Debugger button a dead
+    // end on a simulator target -- the answer to "I want to debug" was a
+    // disabled button and a tooltip naming a different one. What follows the
+    // offer is the device path (debug compile, MD5 verify, channel connect),
+    // which means nothing for an emulator, so the simulator still stops short
+    // of it.
 
     const { workspace, project, deviceDefinitions: devDefs, consoleActions } = useOpenPLCStore.getState()
 
@@ -884,7 +1043,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // debug session can start — a device by Connect, a runtime by logging in, the
       // simulator by pressing Start — so the only question left is whether that
       // session exists. Which medium it uses is the connection manager's to know.
-      const isRuntime = isOpenPLCRuntimeTarget(boardInfo)
+      // A device chosen in the Orchestrators list IS a Runtime v4 target -- that
+      // is the only thing an orchestrator serves -- and it counts as one before
+      // the board target catches up. The board only turns into a runtime board
+      // once a connection is established, so deriving this from the board alone
+      // sent a selected-but-unconnected device down the SERIAL connect path and
+      // answered "Could not reach the device on simulator".
+      const isRuntime =
+        isOpenPLCRuntimeTarget(boardInfo) || (capabilities.hasOrchestratorDevices && selectedDeviceName !== null)
 
       // A session the manager holds (a device or the simulator) also OWNS the debug
       // channel, so the session ending ends the debug session — see the drop handler
@@ -896,22 +1062,89 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // login — all three publish the same status.
       const sessionStatus = useOpenPLCStore.getState().deviceConnection.status
       addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: `[connection] debug session requested for ${boardTarget}; session is "${sessionStatus}"`,
       })
 
-      // Connect first. Starting a debug session must never establish the connection
-      // itself: connecting is the user's explicit action and reports what it found.
+      // No session yet: OFFER to establish one rather than sending the user away.
+      // Telling someone the debugger needs a connection and leaving them to go
+      // find the button is a worse answer than asking "shall I?" -- the editor
+      // knows the target and already owns every action needed to reach it.
+      //
+      // One flow for desktop and web. The only genuine difference is WHICH
+      // action connects, and that is a property of the target, not of the
+      // platform: the simulator starts, an orchestrator-reached device and a
+      // locally-addressed one both connect. A runtime's connect raises its login
+      // modal, so this is deliberately a modal opening a modal.
       if (sessionStatus !== 'connected') {
-        await showDeviceDialog(
-          'warning',
-          'Connection Required',
-          isRuntime
-            ? 'Connect to the runtime first. The debugger runs over that connection, so it must be established before a debug session can start.'
-            : 'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
-          ['OK'],
+        // Nothing selected to connect TO. On web that is a real state (the
+        // Orchestrators screen picks the device); on desktop the UI makes it
+        // unreachable, and it is handled identically anyway rather than
+        // branching on platform.
+        if (!offerSimulatorStart && needsDeviceSelection) {
+          await showDeviceDialog(
+            'warning',
+            'No Device Selected',
+            'Select a device to connect to before starting the debugger. The debugger runs over the ' +
+              'device connection, so there has to be a device for it to run over.',
+            ['OK'],
+          )
+          setIsDebuggerProcessing(false)
+          return
+        }
+
+        // Name the target. "Would you like to connect?" with no name is how a
+        // mis-selection turns into a session on someone else's machine.
+        const targetName =
+          selectedDeviceName ??
+          deviceDefinitions.configuration.runtimeIpAddress ??
+          deviceDefinitions.configuration.communicationPort ??
+          boardTarget
+        const offer = await showDeviceDialog(
+          'question',
+          offerSimulatorStart ? 'Simulator Not Running' : 'Not Connected',
+          offerSimulatorStart
+            ? 'The debugger runs against the running simulator. Would you like to start the simulator now?'
+            : isRuntime
+              ? `The debugger runs over the runtime connection. Would you like to connect to "${targetName}" now?`
+              : `The debugger runs over the device connection. Would you like to connect to "${targetName}" now?`,
+          ['Yes', 'No'],
         )
+        if (offer !== 0) {
+          addLog({ level: 'info', message: 'Debugger session cancelled.' })
+          setIsDebuggerProcessing(false)
+          return
+        }
+
+        setIsDebuggerProcessing(false)
+        if (offerSimulatorStart) {
+          // Same action as the sidebar's Start: it builds, launches the emulator
+          // and — via `pendingSimulatorDebugRef` — attaches the debugger once the
+          // firmware event lands, so the session continues on its own.
+          pendingSimulatorDebugRef.current = true
+          void handleSimulatorControl()
+          return
+        }
+        // Connect, then let the user press Debug again. Connecting is not a
+        // single await for a runtime (its login is a modal the user still has to
+        // fill in), so chaining the session onto it here would either race the
+        // login or need this handler to sit waiting on a status change.
+        if (isRuntime) {
+          void runtimeConnect.connect()
+        } else {
+          void deviceConnect.connect()
+        }
+        return
+      }
+
+      // A RUNNING simulator already carries its debug session: Start attaches it
+      // as the firmware event lands (`simulatorRun.launch({ attachDebugger })`),
+      // and there is no attach-to-an-already-running path to call here. The
+      // button's remaining job for it is the toggle-off handled at the top, so
+      // stop before the device path -- a debug compile, an MD5 verify against
+      // flashed firmware and a channel connect all describe hardware, not an
+      // emulator.
+      if (isSimulatorBoard) {
         setIsDebuggerProcessing(false)
         return
       }
@@ -920,14 +1153,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // addresses first (same pre-compile snapshot the build/upload paths
       // use) — the compiler only understands `%…` literals, not alias names.
       const freshProjectData = useOpenPLCStore.getState().projectActions.getCompileReadyProjectData()
-      consoleActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Starting debug compilation...' })
+      consoleActions.addLog({ level: 'info', message: 'Starting debug compilation...' })
       const debugCompileResult = await compiler.compileForDebug(
         { projectData: freshProjectData, boardTarget, projectPath },
         (event) => logCompilerEvent(event, consoleActions.addLog),
       )
       if (!debugCompileResult.success) {
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `Debug compilation failed: ${debugCompileResult.error ?? 'Unknown error'}`,
         })
@@ -941,7 +1173,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       void handleMd5Verification(projectPath, boardTarget, isRuntime)
     } catch (error: unknown) {
       consoleActions.addLog({
-        id: crypto.randomUUID(),
         level: 'error',
         message: `Debugger init error: ${getErrorMessage(error)}`,
       })
@@ -1048,45 +1279,49 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
             </PlayButton>
           </TooltipSidebarWrapperButton>
-          <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
+          {/* Enabled for the simulator too. It used to be disabled with a "Use
+              Start to debug" tooltip, which made the button a dead end: the
+              answer to "I want to debug" was a tooltip telling you to press a
+              different button. The handler now offers to START the simulator,
+              the same way it offers to connect a device, so the one control
+              means the same thing on every target. */}
+          <TooltipSidebarWrapperButton tooltipContent='Debugger'>
             <DebuggerButton
               onClick={() => void handleDebuggerClick()}
-              disabled={isDebuggerProcessing || isSimulatorBoard}
+              disabled={isDebuggerProcessing}
               isActive={isDebuggerVisible}
-              className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
+              className={cn(isDebuggerProcessing && disabledButtonClass)}
             />
           </TooltipSidebarWrapperButton>
         </>
       )}
-      {/* Library-build affordance: shown only for library projects.
-          Two options surface via the `libraryMode` popover:
-            - "Build"       → fast build (verification short-
-              circuited by MD5 cache hit, when warm).
-            - "Clean build" → skip verification cache and force a
-              fresh avr-gcc verify against the simulator target. */}
+      {/* Library affordances: shown only for library projects.  Build
+          produces the `.stlib`; Debug compiles a generated harness that
+          instantiates every block once and runs it on the simulator with
+          the debugger attached — the only way to see a library actually
+          execute. */}
       {projectCaps.hasLibraryBuild && (
-        // No outer `TooltipSidebarWrapperButton`: `BuildOptionsPopover`
-        // already renders its own Radix tooltip via `triggerTooltip`,
-        // and the wrapper's tooltip persisted on top of the popover
-        // contents once the menu opened (PLC build button doesn't wrap
-        // either — same idiom here for consistency).
-        <BuildOptionsPopover
-          disabled={isCompiling}
-          triggerTooltip={isCompiling ? 'Building library…' : 'Build Library'}
-          libraryMode={true}
-          uploadAvailable={false}
-          uploadDisabledReason='library builds do not upload'
-          onSelect={(option: BuildOption) => {
-            switch (option) {
-              case 'build-only':
-                void handleBuildLibrary({ cleanBuild: false })
-                break
-              case 'clean-upload':
-                void handleBuildLibrary({ cleanBuild: true })
-                break
-            }
-          }}
-        />
+        <TooltipSidebarWrapperButton tooltipContent={isCompiling ? 'Building library…' : 'Build Library'}>
+          <BuildLibraryButton
+            onClick={() => void handleBuildLibrary()}
+            disabled={isCompiling}
+            className={cn(isCompiling && disabledButtonClass)}
+          />
+        </TooltipSidebarWrapperButton>
+      )}
+      {projectCaps.hasLibraryDebug && (
+        <TooltipSidebarWrapperButton
+          tooltipContent={
+            simulatorRunning ? 'Stop Debugging' : isCompiling ? 'Building harness…' : 'Debug Library on Simulator'
+          }
+        >
+          <DebuggerButton
+            onClick={() => void handleDebugLibrary()}
+            disabled={isCompiling}
+            isActive={isDebuggerVisible}
+            className={cn(isCompiling && disabledButtonClass)}
+          />
+        </TooltipSidebarWrapperButton>
       )}
       <TooltipSidebarWrapperButton tooltipContent='AI Chat'>
         <ChatButton />

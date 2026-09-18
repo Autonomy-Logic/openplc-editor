@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 
 import { useOpenPLCStore } from '../../../../../../store'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
+import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
@@ -68,7 +69,11 @@ export default function FbdEditor() {
       const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
       const hasDivergence =
         originalInOut?.length !== currentVariables.length ||
-        !originalInOut?.every((variable) => currentMap.has(formatVariable(variable)))
+        !originalInOut?.every((variable) => currentMap.has(formatVariable(variable))) ||
+        // The declarations can agree while the persisted GEOMETRY is stale: a diagram saved
+        // before a VAR_IN_OUT pin became input-only still carries the pin's output side. The
+        // interface never changed, so the comparison above cannot see it.
+        hasLegacyInOutOutputHandle(node)
 
       if (hasDivergence) {
         divergences.push(node.id)

@@ -436,6 +436,55 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
     })
 
+    it("a board change swaps in the new board's persistent storage, never the old board's path", () => {
+      // The bug this pins: the per-board archive was written on every edit and
+      // never read back, so switching board left the FLAT `persistentStorage`
+      // holding the previous board's values. The compile path reads the flat
+      // view, so the retain.conf that shipped to the new device carried the old
+      // device's file path — the exact outcome the archive exists to prevent.
+      const store = makeStore()
+
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/pi.bin' })
+
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage?.path).toBe('/data/pi.bin')
+
+      // Back again: the first board's settings are still there, not lost.
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage?.path).toBe('/data/esp.bin')
+    })
+
+    it("a board never configured gets NO settings, rather than inheriting the previous board's", () => {
+      // `undefined`, deliberately, not an empty record: absent settings are what
+      // make generateRetainConf emit no retain.conf, which is the right default
+      // for a board nobody has configured. An empty record would be a claim that
+      // storage was considered and switched off.
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
+
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toBeUndefined()
+    })
+
+    it("keeps each board's settings in its own archive bucket", () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      store.getState().deviceActions.setPersistentStorage({ enabled: true, path: '/data/esp.bin' })
+      store.getState().deviceActions.setDeviceBoard('Raspberry Pi 4')
+      store.getState().deviceActions.setPersistentStorage({ enabled: false, path: '/data/pi.bin' })
+
+      const archive = store.getState().deviceDefinitions.configuration.persistentStorageByBoard
+      expect(archive?.['ESP8266 NodeMCU']?.path).toBe('/data/esp.bin')
+      expect(archive?.['Raspberry Pi 4']?.path).toBe('/data/pi.bin')
+      expect(archive?.['ESP8266 NodeMCU']?.enabled).toBe(true)
+      expect(archive?.['Raspberry Pi 4']?.enabled).toBe(false)
+    })
+
     it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
       // The device screen re-sets the board on several paths; only an actual
       // change invalidates the licence — or ends a running purchase watch.
@@ -475,6 +524,43 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
       expect(store.getState().deviceAvailableOptions.availableBoards.size).toBe(1)
       expect(store.getState().deviceAvailableOptions.availableBoards.get('Arduino Uno')).toBeDefined()
+    })
+
+    it('leaves the wiring alone for a board whose package has not been split', () => {
+      // That board still renders the old Modbus screen, which reads
+      // modbus_rtu.rtu_interface directly; migrating would mirror the bug.
+      const store = makeStore()
+      const legacy = { modbus_rtu: { enabled: true, rtu_interface: 'Serial2' } }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'Old Board',
+          communicationPort: '',
+          selectedPlatformOptions: {},
+          vendorScreenData: legacy,
+        },
+      })
+      const boards = new Map<string, BoardInfo>([
+        [
+          'Old Board',
+          {
+            compiler: 'arduino-cli',
+            core: 'esp32',
+            preview: '',
+            specs: {},
+            vpp: {
+              packageId: 'com.openplc.legacy',
+              vendor: 'v',
+              deviceId: 'd',
+              packagePath: '/fake',
+              screens: { Modbus: {} },
+              moduleSystem: null,
+            },
+          },
+        ],
+      ])
+      store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
+
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(legacy)
     })
 
     it('sets available communication ports', () => {
@@ -1786,6 +1872,167 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setDeviceBoard('Custom')
       store.getState().deviceActions.clearRuntimeConnection()
       expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('Custom')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Pin edits drive the central IEC recalculation (DOPE-440)
+  // -------------------------------------------------------------------------
+
+  describe('pin edits recompact the other address producers (DOPE-440)', () => {
+    /** A board that hosts BOTH fixed pins and Modbus remote I/O — the only
+     *  configuration where the two producers share an address space. */
+    function seedPinAndModbusBoard(store: ReturnType<typeof makeStore>) {
+      store.getState().deviceActions.setAvailableOptions({
+        availableBoards: new Map<string, BoardInfo>([
+          [
+            'GPIO Runtime v4',
+            {
+              compiler: 'openplc-compiler',
+              core: 'rt-v4',
+              preview: '',
+              specs: {},
+              capabilities: {
+                pinMapping: true,
+                vppIo: false,
+                modbusTcpRemote: true,
+                ethercat: false,
+                modbusTcpServer: true,
+                opcuaServer: true,
+                s7Server: true,
+                debuggerTransports: ['websocket'],
+                pythonFunctionBlocks: true,
+                arduinoApiCompletions: false,
+                hasRuntimeStats: true,
+                isInProcessSimulator: false,
+                directUsbUpload: false,
+              },
+            },
+          ],
+        ]),
+      })
+      store.getState().deviceActions.setDeviceBoard('GPIO Runtime v4')
+    }
+
+    /** Three digital-input pins occupying %IX0.0–%IX0.2, plus a two-point
+     *  Modbus FC1 group that allocates immediately after them. */
+    function seedPinsAndGroup(store: ReturnType<typeof makeStore>) {
+      seedPinAndModbusBoard(store)
+      store.getState().deviceActions.setDeviceDefinitions({
+        pinMapping: [
+          makePin({ pin: 'D0', pinType: 'digitalInput', address: '%IX0.0' }),
+          makePin({ pin: 'D1', pinType: 'digitalInput', address: '%IX0.1' }),
+          makePin({ pin: 'D2', pinType: 'digitalInput', address: '%IX0.2' }),
+        ],
+      })
+      const project = store.getState().project
+      store.getState().projectActions.setProject({
+        ...project,
+        data: {
+          ...project.data,
+          remoteDevices: [
+            {
+              name: 'Dev1',
+              protocol: 'modbus-tcp',
+              modbusTcpConfig: { host: '127.0.0.1', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] },
+            },
+          ],
+        },
+      })
+      store.getState().projectActions.addIOGroup('Dev1', {
+        id: 'g1',
+        name: 'group-g1',
+        functionCode: '1',
+        cycleTime: 100,
+        offset: '0',
+        length: 2,
+        errorHandling: 'keep-last-value',
+        ioPoints: [],
+      })
+    }
+
+    /** The seeded group's IEC addresses. Throws rather than asserting non-null
+     *  so a broken fixture names itself instead of failing as an unrelated
+     *  expectation. */
+    function modbusAddresses(store: ReturnType<typeof makeStore>): string[] {
+      const points = store.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig?.ioGroups[0]?.ioPoints
+      if (!points) throw new Error('fixture: expected a remote device with one IO group holding points')
+      return points.map((point) => point.iecLocation)
+    }
+
+    /** Count store writes from here on. The actions are frozen by Immer so
+     *  `recalculateIecAddresses` can't be spied on directly, and a skipped
+     *  recalculation has no other observable — it changes no address. Only the
+     *  negative cases assert on this; where addresses move, they are the
+     *  stronger assertion. */
+    function countWrites(store: ReturnType<typeof makeStore>) {
+      let writes = 0
+      store.subscribe(() => {
+        writes += 1
+      })
+      return () => writes
+    }
+
+    it('removePin lets the Modbus group reclaim the freed pin slot', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      expect(modbusAddresses(store)).toEqual(['%IX0.3', '%IX0.4'])
+
+      store.getState().deviceActions.selectPinTableRow(1)
+      store.getState().deviceActions.removePin()
+
+      // The pin block shrank to %IX0.0–%IX0.1; the group used to stay put at
+      // %IX0.3/.4, leaving %IX0.2 stranded.
+      expect(activePins(store.getState()).map((p) => p.address)).toEqual(['%IX0.0', '%IX0.1'])
+      expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
+    })
+
+    it('createNewPin pushes the Modbus group off the slot it just claimed', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+
+      // `createNewPin` mints highest+1 = %IX0.3, checking only OTHER PINS for a
+      // collision — so it lands squarely on the group's first point.
+      store.getState().deviceActions.selectPinTableRow(2)
+      store.getState().deviceActions.createNewPin()
+
+      expect(activePins(store.getState()).map((p) => p.address)).toContain('%IX0.3')
+      // Pins are fixed hardware and stay pinned, so the group moves instead.
+      expect(modbusAddresses(store)).toEqual(['%IX0.4', '%IX0.5'])
+    })
+
+    it('updatePin recalculates when a pin type change rewrites addresses', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      store.getState().deviceActions.updatePin({ pinType: 'digitalOutput' })
+
+      // %IX0.0 moved to the output space and the remaining inputs slid down,
+      // so the group follows into the freed slot.
+      expect(modbusAddresses(store)).toEqual(['%IX0.2', '%IX0.3'])
+    })
+
+    it('updatePin does not recalculate for an alias-only edit', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ alias: 'Start' })
+
+      expect(writes()).toBe(1)
+    })
+
+    it('updatePin does not recalculate for a pin-number-only edit', () => {
+      const store = makeStore()
+      seedPinsAndGroup(store)
+      store.getState().deviceActions.selectPinTableRow(0)
+
+      const writes = countWrites(store)
+      store.getState().deviceActions.updatePin({ pin: 'D9' })
+
+      expect(writes()).toBe(1)
     })
   })
 })

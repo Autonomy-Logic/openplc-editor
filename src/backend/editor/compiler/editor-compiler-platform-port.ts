@@ -27,6 +27,10 @@
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
+  describeSnapshotUploadWarning,
+  readSnapshotUploadWarning,
+} from '@root/backend/shared/project/upload-snapshot-warning'
+import {
   fromSchemaShape,
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
@@ -39,6 +43,8 @@ import type {
   CompilerPlatformPort,
   InstallArduinoCoreArgs,
   InstallArduinoLibArgs,
+  MaterializeRuntimeV4BundleArgs,
+  MaterializeRuntimeV4BundleResult,
   PackageVppPluginArgs,
   PackageVppPluginResult,
   PlatformDeviceContext,
@@ -109,6 +115,8 @@ export interface EditorCompilerPlatformPortContext {
       filename: string
       contentType: string
       cleanBuild: boolean
+      snapshotBuffer?: Buffer
+      snapshotMetadata?: string
       onUploadAccepted?: (responseBody: string) => void
     }) => Promise<{ success: true; data: string } | { success: false; error: string }>
   }
@@ -117,6 +125,18 @@ export interface EditorCompilerPlatformPortContext {
    *  in the `archiver`-dependent compressSourceFolder method (which
    *  has its own private state on CompilerModule). */
   compressSourceFolder: (folderPath: string) => Promise<Buffer>
+  /** Build the source-project archive stored on the device so the project can
+   *  be retrieved later. Injected for the same reason as
+   *  `compressSourceFolder`: it reaches the Electron-bound library manager, and
+   *  this adapter has to stay importable outside a real Electron process.
+   *
+   *  Optional so a caller predating it stays valid — absent simply means the
+   *  upload carries no snapshot, which is what an older editor does anyway. */
+  buildUploadSnapshot?: () => Promise<{
+    archive: Buffer
+    metadata: string
+    missingLibraries: string[]
+  } | null>
   /**
    * `package.minRuntimeVersion` of the VPP providing a given board, or
    * null when the board isn't from a VPP / declares no floor
@@ -245,10 +265,14 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation(args.extraLibraries ?? [], (chunk, level) => {
-          const message = typeof chunk === 'string' ? chunk : chunk.toString()
-          log(message, level ?? 'info')
-        })
+        await handlers.handleLibraryInstallation(
+          args.extraLibraries ?? [],
+          (chunk, level) => {
+            const message = typeof chunk === 'string' ? chunk : chunk.toString()
+            log(message, level ?? 'info')
+          },
+          args.thirdPartyLibraries ?? [],
+        )
         return { ok: true }
       } catch (error) {
         // Reached only when the install machinery itself can't run
@@ -351,16 +375,42 @@ export function createEditorCompilerPlatformPort(
     async uploadRuntimeV4(args: UploadRuntimeV4Args, log: PlatformLog): Promise<UploadResult> {
       const deviceContext = assertEditorHttpsContext(args.context)
       try {
-        // Materialise the bundle to disk under sourceTargetFolderPath
-        // so the existing `compressSourceFolder` can zip it.
-        await Promise.all(
-          Object.entries(args.bundle).map(async ([relPath, content]) => {
-            const absPath = join(context.sourceTargetFolderPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
-        )
+        // The bundle is already on disk: the pipeline calls
+        // `materializeRuntimeV4Bundle` for every v4 compile, upload or not. This
+        // used to write it here, which is precisely why a compile-only build
+        // produced no artifacts.
         const fileBuffer = await context.compressSourceFolder(context.sourceTargetFolderPath)
+
+        // The source project, stored on the device beside the artifacts so it
+        // can be retrieved later. Never fatal: the device runs the new program
+        // either way, and failing an upload over the optional half of it would
+        // be a worse outcome than losing retrievability.
+        let snapshot: { archive: Buffer; metadata: string; missingLibraries: string[] } | null = null
+        if (!args.supportsProjectSnapshot) {
+          // Asked and answered by the pre-upload capability check. Building one
+          // anyway would spend the user's time compressing a project this
+          // device discards on arrival, and leave them a device they cannot
+          // retrieve from with nothing said about why.
+          log(
+            'This runtime does not store source projects, so the project will not be sent with the program and cannot be retrieved from this device later.',
+            'warning',
+          )
+        } else {
+          try {
+            snapshot = (await context.buildUploadSnapshot?.()) ?? null
+            if (snapshot && snapshot.missingLibraries.length > 0) {
+              log(
+                `Stored project will not include these libraries, which are not installed here: ${snapshot.missingLibraries.join(', ')}`,
+                'warning',
+              )
+            }
+          } catch (error) {
+            log(
+              `Could not prepare the project for storage on the device: ${error instanceof Error ? error.message : String(error)}`,
+              'warning',
+            )
+          }
+        }
 
         const deployOutcome = await deployRuntimeProgram({
           uploadProgram: () =>
@@ -370,7 +420,15 @@ export function createEditorCompilerPlatformPort(
               contentType: 'application/zip',
               fileBuffer,
               cleanBuild: context.cleanBuild,
+              snapshotBuffer: snapshot?.archive,
+              snapshotMetadata: snapshot?.metadata,
               onUploadAccepted: (responseBody) => {
+                // The device may have accepted the program and refused the
+                // project beside it. Saying so here is the difference between
+                // "not retrievable" being found out now and being found out by
+                // whoever needed the project back.
+                const warning = readSnapshotUploadWarning(responseBody)
+                if (warning) log(describeSnapshotUploadWarning(warning), 'warning')
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   log(`Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`, 'info')
@@ -443,6 +501,12 @@ export function createEditorCompilerPlatformPort(
           arduinoPlatform: args.fqbn,
           compilationPath: context.compilationPath,
           communicationPort: args.port || undefined,
+          uploadMethod: args.uploadMethod,
+          // Declared on UploadArduinoBoardArgs since the ethernet-upload work
+          // landed, populated only now: without it an ethernet build ignored
+          // the address the caller gave and used whatever the project file
+          // remembered.
+          ipAddress: args.ipAddress,
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')
@@ -475,6 +539,12 @@ export function createEditorCompilerPlatformPort(
               fileBuffer,
               cleanBuild: context.cleanBuild,
               onUploadAccepted: (responseBody) => {
+                // The device may have accepted the program and refused the
+                // project beside it. Saying so here is the difference between
+                // "not retrievable" being found out now and being found out by
+                // whoever needed the project back.
+                const warning = readSnapshotUploadWarning(responseBody)
+                if (warning) log(describeSnapshotUploadWarning(warning), 'warning')
                 try {
                   const response = JSON.parse(responseBody) as { CompilationStatus?: string }
                   log(`Runtime compilation started: ${response.CompilationStatus || 'COMPILING'}`, 'info')
@@ -551,12 +621,12 @@ export function createEditorCompilerPlatformPort(
         if (!result.success) return { success: false as const, error: result.error }
         return { success: true as const, body: result.data }
       }
-      const { version, minEditorVersion } = await probeRuntimeVersion({
+      const { version, minEditorVersion, supportsProjectSnapshot } = await probeRuntimeVersion({
         fetchCapabilities: () => getJson('/api/capabilities'),
         fetchVersion: () => getJson('/api/version'),
         log,
       })
-      return { ok: true, version, minEditorVersion }
+      return { ok: true, version, minEditorVersion, supportsProjectSnapshot }
     },
 
     /**
@@ -581,6 +651,34 @@ export function createEditorCompilerPlatformPort(
      * disk layer is already the source of truth for the editor; web's
      * adapter will need to surface them in the returned map instead.
      */
+    /**
+     * Write the composed v4 bundle into `build/<target>/src`.
+     *
+     * The same directory `compressSourceFolder` zips for the upload, so a
+     * compile-only build and a build-and-upload leave byte-identical artifacts —
+     * which is what lets a test inspect a compile without touching a device.
+     */
+    async materializeRuntimeV4Bundle(
+      args: MaterializeRuntimeV4BundleArgs,
+      log: PlatformLog,
+    ): Promise<MaterializeRuntimeV4BundleResult> {
+      try {
+        const entries: Array<[string, string]> = Object.entries(args.bundle)
+        await Promise.all(
+          entries.map(async ([relPath, content]: [string, string]) => {
+            const absPath = join(context.sourceTargetFolderPath, relPath)
+            await fs.mkdir(dirname(absPath), { recursive: true })
+            await fs.writeFile(absPath, content, 'utf-8')
+          }),
+        )
+        return { written: entries.length }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        log(`Could not write build artifacts: ${message}`, 'error')
+        return { written: 0, errors: [{ message, line: 0, column: 0, severity: 'error' }] }
+      }
+    },
+
     async packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult> {
       try {
         await handlers.handleVendorPluginPackaging(

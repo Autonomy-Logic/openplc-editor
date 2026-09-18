@@ -5,7 +5,7 @@ import type {
   OnNodesChange,
   ReactFlowInstance,
 } from '@xyflow/react'
-import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
+import { applyNodeChanges } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
 import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -34,7 +34,7 @@ import {
   renderPlaceholderElements,
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
-import { findNode } from './ladder-utils/nodes'
+import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
 
 /**
  * Check recursively if the related target or any of its parent elements are within the ladder area
@@ -303,18 +303,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   /**
    * Update flow panel extent based on the bounds of the nodes
-   * To make the getNodesBounds function work, the nodes must have width and height properties set in the node data
+   * For getRungNodesBounds to work, the nodes must have width and height properties set in the node data
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
   const updateReactFlowPanelExtent = (rung: RungLadderState) => {
-    const zeroPositionNode: FlowNode = {
-      id: '-1',
-      position: { x: 0, y: 0 },
-      data: { label: 'Node 0' },
-      width: 150,
-      height: 40,
-    }
-    const bounds = getNodesBounds([zeroPositionNode, ...rung.nodes])
+    const bounds = getRungNodesBounds(rung.nodes)
     const [defaultWidth, defaultHeight] = rung.defaultBounds
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
@@ -510,10 +503,28 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
 
-      if (blockLibraryType === 'system')
-        pouLibrary = libraries.system
+      if (blockLibraryType === 'system') {
+        const libraryPou = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
+        // Copy the signature, not the library entry. That entry also carries
+        // `body` (the authored source, which for a native C/C++ or Python block
+        // is the entire file) and `language`, and passing the object straight
+        // through froze a copy of the library's source into every project that
+        // placed the block. Nothing ever reads either field back off a placed
+        // variant, and the embedded VAR ... END_VAR broke the POU parser badly
+        // enough that the project would not open (DOPE-592). The user-library
+        // branch below has always built a curated object this way.
+        pouLibrary = libraryPou
+          ? {
+              name: libraryPou.name,
+              type: libraryPou.type,
+              variables: libraryPou.variables,
+              documentation: libraryPou.documentation,
+              extensible: libraryPou.extensible ?? false,
+            }
+          : undefined
+      }
 
       if (blockLibraryType === 'user') {
         const library = libraries.user.find((library) => library.name === blockLibrary)

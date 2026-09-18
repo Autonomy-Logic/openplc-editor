@@ -30,3 +30,18 @@ export { BoardInfoSchema, HalsFileSchema } from '../hardware/types'
 export { ArduinoCoreControlSchema }
 
 export type { ArduinoCoreControl, ToolchainProperties }
+
+/**
+ * What the compile pipeline needs from the channel it reports progress on.
+ *
+ * The pipeline is handed an Electron `MessagePortMain` by the main process and
+ * only ever calls these three methods on it. Naming the narrow contract lets a
+ * headless caller (the CLI) drive the SAME pipeline with a plain object:
+ * `MessagePortMain` satisfies this structurally, so the Electron call sites are
+ * unchanged and neither side needs a type assertion.
+ */
+export interface CompileProgressChannel {
+  start(): void
+  postMessage(message: unknown): void
+  close(): void
+}

@@ -32,6 +32,9 @@ export interface DebugPollingState {
     debugGraphList: string[]
     fbSelectedInstance: Map<string, string>
     fbDebugInstances: Map<string, FbInstanceInfo[]>
+    /** Generated program the session is running, when it runs one the
+     *  project does not contain — see the workspace slice. */
+    debugHarness: { programPou: PLCPou } | null
   }
   editor: { meta: { name: string; [key: string]: unknown } }
   ladderFlows: Array<{
@@ -75,7 +78,6 @@ export function buildActiveIndexSet(
 ): { activeIndexes: number[]; cacheResult: VisibleVarsCache } {
   const activeKeys = new Set<string>()
 
-  const { pous } = state.project.data
   const {
     debugVariableIndexes,
     debugForcedVariables,
@@ -83,7 +85,14 @@ export function buildActiveIndexSet(
     debugGraphList,
     fbSelectedInstance,
     fbDebugInstances,
+    debugHarness,
   } = state.workspace
+  // A library-debug session runs a generated harness program that is not
+  // part of the project.  Its variables (one instance per library block,
+  // all flagged for debug) have to be polled like any other watch, so it
+  // joins the project's own POUs here rather than replacing them — a flag
+  // the author ticks mid-session must still take effect.
+  const pous = debugHarness ? [...state.project.data.pous, debugHarness.programPou] : state.project.data.pous
   const { editor } = state
 
   // -----------------------------------------------------------------------

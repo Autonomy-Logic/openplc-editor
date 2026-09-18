@@ -3,14 +3,19 @@ import { parseDurationLiteral } from './iec-duration'
 import { type IECTypeMetadata, type IECWireFormat, lookupBaseType } from './iec-types-registry'
 
 /**
- * STRING / WSTRING wire size cap, in characters. Strucpp's
- * IECStringVar / IECWStringVar default to 254 chars in declarations
- * but the debug protocol pre-dates that change and still frames
- * length-prefixed payloads at 1 length byte + 126 code units. Pull
- * this into a constant so the parser/encoder/sizer all share the cap
- * — bump it in one place when the protocol catches up.
+ * STRING / WSTRING wire size cap, in characters, and the single place it is
+ * written down.
+ *
+ * Strucpp's `IECStringVar` / `IECWStringVar` default to 254 characters in
+ * declarations, but the debug protocol pre-dates that change and still frames
+ * length-prefixed payloads at 1 length byte + 126 code units. Every consumer
+ * reads it from here — the debugger decoder below, the Python SHM layout
+ * (`python/shm-type-map.ts` re-exports it as `SHM_STRING_CHARS`), and the
+ * declaration parser's user-facing message — so the transport, the layout built
+ * on it, and the limit quoted to the user cannot drift apart. Bump it once when
+ * the protocol catches up.
  */
-const DEBUG_STRING_CAP = 126
+export const DEBUG_STRING_CAP = 126
 
 function readInt8(data: Uint8Array, offset: number): number {
   const value = data[offset]
@@ -92,12 +97,22 @@ function formatDtValue(totalNs: bigint): string {
 }
 
 /**
- * Format a strucpp DATE (int64 nanoseconds since the Unix epoch, but
- * semantically date-only) as `D#YYYY-MM-DD`.
+ * Format a strucpp DATE as `D#YYYY-MM-DD`.
+ *
+ * DATE is a count of **days** since the Unix epoch, not nanoseconds. It is the
+ * one temporal type that is: TIME is a nanosecond duration, TOD is nanoseconds
+ * since midnight and DT is nanoseconds since the epoch, but STruC++ lowers a
+ * DATE literal through a helper it named `parseDateLiteralToDays`, and
+ * `D#2026-08-26` compiles to `20691LL`.
+ *
+ * This used to divide by 1_000_000 as though the payload were nanoseconds, so
+ * every DATE in the debugger read `D#1970-01-01` — 20691 nanoseconds rounds to
+ * zero milliseconds. The value on the device was always correct; only the
+ * display was wrong.
  */
-function formatDateValue(totalNs: bigint): string {
-  const ms = Number(totalNs / 1_000_000n)
-  const d = new Date(ms)
+function formatDateValue(totalDays: bigint): string {
+  const MS_PER_DAY = 86_400_000n
+  const d = new Date(Number(totalDays * MS_PER_DAY))
   if (Number.isNaN(d.getTime())) return 'ERR'
   return `D#${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
 }

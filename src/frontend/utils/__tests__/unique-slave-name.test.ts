@@ -54,4 +54,8 @@ describe('generateUniqueSlaveName', () => {
   it('accepts a Set directly as the existing argument', () => {
     expect(generateUniqueSlaveName('EL1809', new Set(['EL1809']))).toBe('EL1809_01')
   })
+
+  it('accepts a predicate for what counts as taken', () => {
+    expect(generateUniqueSlaveName('EL1809', (name) => name === 'EL1809' || name === 'EL1809_01')).toBe('EL1809_02')
+  })
 })

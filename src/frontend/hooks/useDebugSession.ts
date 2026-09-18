@@ -64,30 +64,37 @@ export function useDebugSession(): UseDebugSessionReturn {
     const boardTarget = deviceDefinitions.configuration.deviceBoard
     const projectPath = project.meta.path
 
-    logActions.addLog({ id: crypto.randomUUID(), level: 'info', message: 'Connecting debugger...' })
+    logActions.addLog({ level: 'info', message: 'Connecting debugger...' })
 
     try {
       const debugFileResult = await debuggerPort.readDebugFile(projectPath, boardTarget)
       if (!debugFileResult.success || !debugFileResult.content) {
         const error = `Failed to read debug-map.json: ${debugFileResult.error ?? 'No content'}`
-        logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+        logActions.addLog({ level: 'error', message: error })
         return { success: false, error }
       }
 
       wsActions.setDebugCContent(debugFileResult.content)
 
-      const instances = project.data.configurations.resource.instances
+      // A library-debug session runs against a generated harness program
+      // that instantiates every block in the library — it exists only in
+      // memory, so the POU list and instance list the debug tree is built
+      // from come from the session overlay, not from `project.data`.  An
+      // ordinary PLC project has no overlay and reads the project itself.
+      // See `composeLibraryDebugHarness`.
+      const harness = useOpenPLCStore.getState().workspace.debugHarness
+      const debugPous = harness ? [...project.data.pous, harness.programPou] : project.data.pous
+      const instances = harness?.instances ?? project.data.configurations.resource.instances
 
       const debugMap = parseDebugMap(debugFileResult.content)
       if (!debugMap) {
         const error = 'Invalid debug-map.json (expected schema version 2)'
-        logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+        logActions.addLog({ level: 'error', message: error })
         return { success: false, error }
       }
 
       const entriesForTree = debugMapToEntries(debugMap)
       logActions.addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: `Debug map: ${debugMap.leaves.length} leaves across ${debugMap.arrays.length} arrays.`,
       })
@@ -100,10 +107,10 @@ export function useDebugSession(): UseDebugSessionReturn {
       const pouTrees: Record<string, DebugTreeNode[]> = {}
       try {
         const treeResult = buildDebugVariableTreeMap(
-          project.data.pous,
+          debugPous,
           instances,
           entriesForTree,
-          project.data,
+          { ...project.data, pous: debugPous },
           useOpenPLCStore.getState().libraries.system,
         )
         treeMap = treeResult.treeMap
@@ -116,17 +123,15 @@ export function useDebugSession(): UseDebugSessionReturn {
         }
 
         for (const w of treeResult.warnings) {
-          logActions.addLog({ id: crypto.randomUUID(), level: 'warning', message: w })
+          logActions.addLog({ level: 'warning', message: w })
         }
 
         logActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: `Debug tree builder: Built ${treeResult.trees.length} trees (${treeResult.complexCount} complex).`,
         })
       } catch {
         logActions.addLog({
-          id: crypto.randomUUID(),
           level: 'warning',
           message: 'Debug tree builder encountered errors.',
         })
@@ -138,13 +143,12 @@ export function useDebugSession(): UseDebugSessionReturn {
       const indexMap = deriveVariableIndexMap(treeMap, debugMap)
 
       // Build FB instance map
-      const fbDebugInstancesMap = buildFbInstanceMap(project.data.pous, instances)
+      const fbDebugInstancesMap = buildFbInstanceMap(debugPous, instances)
 
       const fbTypesCount = fbDebugInstancesMap.size
       const totalFbInstances = Array.from(fbDebugInstancesMap.values()).reduce((sum, list) => sum + list.length, 0)
       if (fbTypesCount > 0) {
         logActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: `FB instance map: Found ${totalFbInstances} instances across ${fbTypesCount} FB types.`,
         })
@@ -154,7 +158,7 @@ export function useDebugSession(): UseDebugSessionReturn {
       const connectResult = await debuggerPort.connect()
       if (!connectResult.success) {
         const error = `Debugger connection failed: ${connectResult.error ?? 'Unknown error'}`
-        logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+        logActions.addLog({ level: 'error', message: error })
         return { success: false, error }
       }
 
@@ -183,7 +187,6 @@ export function useDebugSession(): UseDebugSessionReturn {
       // medium was not yet known silently poll as if it were the simulator.
       wsActions.setDebuggerVisible(true)
       logActions.addLog({
-        id: crypto.randomUUID(),
         level: 'info',
         message: `Debugger connected. Found ${indexMap.size} debug variables.`,
       })
@@ -191,7 +194,7 @@ export function useDebugSession(): UseDebugSessionReturn {
       return { success: true }
     } catch (err: unknown) {
       const error = `Debugger error: ${err instanceof Error ? err.message : String(err)}`
-      logActions.addLog({ id: crypto.randomUUID(), level: 'error', message: error })
+      logActions.addLog({ level: 'error', message: error })
       return { success: false, error }
     }
   }, [debuggerPort, deviceDefinitions, projectData, projectMeta])
@@ -219,7 +222,6 @@ export function useDebugSession(): UseDebugSessionReturn {
           valueBuffer = encodeForceValue(value ?? '0', type ?? 'BOOL', enumValues)
         } catch (err) {
           consoleActions.addLog({
-            id: crypto.randomUUID(),
             level: 'error',
             message: `Force input error: ${err instanceof Error ? err.message : String(err)}`,
           })
@@ -229,14 +231,12 @@ export function useDebugSession(): UseDebugSessionReturn {
       const result = await debuggerPort.setVariable(index, force, valueBuffer)
       if (result.success) {
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'info',
           message: 'Variable force applied successfully',
         })
         return true
       } else {
         consoleActions.addLog({
-          id: crypto.randomUUID(),
           level: 'error',
           message: `Failed to set variable: ${result.error}`,
         })

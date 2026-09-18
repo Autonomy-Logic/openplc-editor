@@ -1,17 +1,27 @@
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
-import { getRuntimeHttpsOptions } from '@root/backend/editor/utils/runtime-https-config'
+import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
+import {
+  materializeRetrievedProject,
+  pruneRetrievedProjects,
+  RETAINED_RETRIEVALS,
+} from '@root/backend/editor/project/materialize-retrieved-project'
 import type {
+  DebugAnchorResult,
+  DebugDeviceIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
   DeviceModbusTransport,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
 import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
-import { listPublicLibraries } from '@root/backend/shared/library/public-catalog-client'
+import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
+import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
+import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type {
@@ -28,32 +38,28 @@ import type {
 import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
+  PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
-import { createRuntimeTokenManager } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import dgram from 'dgram'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
-import type { IncomingHttpHeaders, IncomingMessage } from 'http'
-import https from 'https'
-import { networkInterfaces } from 'os'
-import { join, resolve, sep } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
+import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/editor/hardware/debug-channel-factory'
 import {
   classifyDeviceLink,
   type DeviceProbeOutcome,
-  PATIENT_BOARD_ID_PROBE,
-  planBaudAttempts,
-  QUICK_BOARD_ID_PROBE,
-  SPECULATIVE_BOARD_ID_PROBE,
+  PATIENT_DEVICE_ID_PROBE,
+  QUICK_DEVICE_ID_PROBE,
+  SPECULATIVE_DEVICE_ID_PROBE,
 } from '../../../backend/editor/hardware/device-probe'
 import {
   describeLinkCandidate,
@@ -62,21 +68,25 @@ import {
   type DeviceLinkStatus,
   DeviceSessionManager,
 } from '../../../backend/editor/hardware/device-session-manager'
-import {
-  buildDeviceModbusTransport,
-  modbusTransportKind,
-} from '../../../backend/editor/hardware/device-transport-factory'
+import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import { inspectDeviceLicense, resolveDeviceLicense } from '../../../backend/editor/license/license-flow'
+import {
+  type DeviceIdentity,
+  inspectDeviceLicense,
+  type LicenseReadWritable,
+  resolveDeviceLicense,
+} from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
+import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
+import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
   getOpenProjectPath,
+  getPdfExportSavePath,
   getPlcopenExportSavePath,
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { WebSocketDebugTransport } from '../../../backend/shared/debug/websocket-debug-transport'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
@@ -85,6 +95,70 @@ import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-en
 interface ChannelUnavailable {
   error: string
   needsReconnect: true
+}
+
+/**
+ * What the licensing flow needs from whichever channel carries it: the two
+ * license FCs plus the identity read. `DeviceModbusTransport` satisfies it
+ * structurally (all three are required there); a debug channel is narrowed into
+ * it by `isLicenseChannel`.
+ *
+ * The identity read is EITHER `getDeviceId` (baremetal, an id derived inside the
+ * closed core) OR `getAnchor` (runtime-v4, the raw device-tree serial), never
+ * both, and the union is an XOR so the compiler enforces the "never both" half
+ * rather than only asserting it in prose.
+ *
+ * Be clear about what that does and does not buy, because this exact bug got
+ * through review once: the XOR stops a transport from declaring BOTH reads. It
+ * does NOT protect `isLicenseChannel`, which inspects a `DeviceDebugChannel` at
+ * RUNTIME with `typeof`, where both methods are legitimately optional. That
+ * guard demanded `getDeviceId` after the WebSocket transport had been renamed
+ * to `getAnchor`, cutting off licensing on every runtime-v4 board with `tsc`
+ * perfectly clean. What catches that class of mistake is the handler test
+ * driving the REST branch through a double that has `getAnchor` and no
+ * `getDeviceId` — see device-license.handler.test.ts.
+ */
+type LicenseChannel = LicenseReadWritable &
+  (
+    | { getDeviceId(): Promise<DebugDeviceIdResult>; getAnchor?: never }
+    | { getAnchor(): Promise<DebugAnchorResult>; getDeviceId?: never }
+  )
+
+/**
+ * Whether a debug channel can carry the licensing flow: the two licence FCs plus
+ * ONE of the two identity reads. The methods are optional on
+ * `DeviceDebugChannel` because not every medium implements them; the runtime-v4
+ * WebSocket implements `getAnchor`, `readLicense` and `writeLicense`, and a
+ * Modbus client implements `getDeviceId` instead. Demanding `getDeviceId` here
+ * is what made runtime-v4 licensing unreachable before this was fixed, so the
+ * check accepts either half deliberately. Narrows the client ITSELF rather
+ * than wrapping it, so the flow talks to the same object every other caller
+ * holds — and the transport's own send mutex (the Modbus clients'
+ * sendRequestMutex; the debug WebSocket's, since review 2026-08-20) keeps
+ * serialising everyone's traffic.
+ */
+function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
+  return (
+    (typeof client.getDeviceId === 'function' || typeof client.getAnchor === 'function') &&
+    typeof client.readLicense === 'function' &&
+    typeof client.writeLicense === 'function'
+  )
+}
+
+/**
+ * Turn a failed identity read into a `check-failed` outcome, carrying the
+ * `retryable` flag when the cause set one.
+ *
+ * `retryable` is only ever written as `false` — absent means retryable, so the
+ * common causes (a dropped link, a timeout) keep the retry they have always
+ * had. Written as one helper because both handlers must agree: a "Try Again"
+ * offered by read-license and withheld by refresh-license for the same board
+ * would be worse than either choice.
+ */
+function checkFailedOutcome(identity: { error: string; retryable?: boolean }): DeviceLicenseReport['outcome'] {
+  return identity.retryable === false
+    ? { state: 'check-failed', error: identity.error, retryable: false }
+    : { state: 'check-failed', error: identity.error }
 }
 
 /** Program-identity comparison, case-insensitively — targets report either case. */
@@ -103,6 +177,28 @@ interface Md5VerifyReply {
   targetMd5?: string
   targetEndian?: 'le' | 'be'
   error?: string
+}
+
+/**
+ * Where a project retrieved from a device is unpacked.
+ *
+ * One definition, used both by the retrieval that writes there and by the read
+ * that has to recognise the result: a second spelling of this path would go
+ * stale silently, and the only symptom would be retrievals reappearing under
+ * Recent.
+ */
+const retrievedProjectsRoot = (): string => join(app.getPath('userData'), 'retrieved-projects')
+
+/** True for the scratch root or anything inside it — the retrieval area, not a
+ *  project the user keeps anywhere. `relative` rather than `startsWith`, so a
+ *  sibling directory whose name merely begins the same way is not caught by it.
+ *
+ *  The root ITSELF counts: `relative()` answers '' for it, and excluding that
+ *  made the one directory the whole area is named after the one path this
+ *  returned false for. */
+const isRetrievedProjectPath = (projectPath: string): boolean => {
+  const rel = relative(retrievedProjectsRoot(), projectPath)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -138,20 +234,30 @@ class MainProcessBridge implements MainIpcModule {
   /** Classification of the candidate the held link came from. */
   private deviceLinkProbe: DeviceProbeOutcome | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
+  /**
+   * The runtime REST API, extracted to `backend/editor/runtime` so the headless
+   * CLI makes the same calls rather than carrying its own copy — see that
+   * module's docblock for the two bugs a second copy produced.
+   *
+   * The token-refresh listener is registered in the CONSTRUCTOR, not here. Both
+   * did, briefly: the extraction added this constructor option while #1023's
+   * registration stayed, and since `this.tokens` IS `runtimeApi.tokens` the same
+   * manager notified twice, sending `runtime:token-refreshed` twice per refresh.
+   * Harmless downstream — the renderer's setter is idempotent — but two
+   * registrations for one event is a bug waiting for a listener that is not.
+   * The constructor's does strictly more (it also re-authenticates a held debug
+   * channel), so this one goes.
+   */
+  private runtimeApi = new RuntimeApiClient()
+
+  /**
+   * The runtime bootloader (RTOP-283), on its own port with its own session.
+   * Separate from runtimeApi because the two services share a credential
+   * database, not a token.
+   */
+  private bootloaderApi = new BootloaderApiClient()
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
-  private runtimeIp: string | null = null
-  // Single token authority for the editor: owns the access token + credentials
-  // and the refresh/retry-on-401 logic, shared byte-for-byte with the web app.
-  // Every runtime HTTP call (GET, POST, and the project upload) goes through it,
-  // so they all self-heal identically when the 15-min JWT expires.
-  private tokens = createRuntimeTokenManager({
-    login: async (credentials) => {
-      if (!this.runtimeIp) return { success: false, error: 'No runtime address configured' }
-      const result = await this.performAuthentication(this.runtimeIp, credentials.username, credentials.password)
-      return { success: result.success, token: result.accessToken, error: result.error }
-    },
-  })
   // Current project root path used to validate file-watcher IPC calls
   private currentProjectPath: string | null = null
   // File watchers for auto-reload functionality (using watchFile for better macOS compatibility)
@@ -193,126 +299,61 @@ class MainProcessBridge implements MainIpcModule {
     // the fresh token to the renderer so its store connection flag tracks it.
     this.tokens.onTokenChanged((newToken) => {
       this.mainWindow?.webContents?.send('runtime:token-refreshed', newToken)
+      // A held debug channel (the debugger's long-lived WebSocket) outlives the
+      // token that opened it, and the runtime re-verifies per command — push
+      // the renewal so the session survives the refresh (review 2026-08-20,
+      // R1/E2). Channels opened per call already read the manager at create().
+      this.deviceSession.getDebugClient()?.reauth?.(newToken)
     })
+  }
+
+  // ===================== BOOTLOADER HANDLERS =====================
+  // Thin pass-throughs: the client owns validation and message wording, and
+  // its errors are written to be shown to a person as they are.
+
+  handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getCapabilities(ipAddress)
+
+  handleBootloaderLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
+    this.bootloaderApi.login(ipAddress, username, password)
+
+  handleBootloaderGetStatus = (_event: IpcMainInvokeEvent, ipAddress: string) => this.bootloaderApi.getStatus(ipAddress)
+
+  handleBootloaderGetDeviceInfo = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getDeviceInfo(ipAddress)
+
+  handleBootloaderGetRuntimeLogs = (_event: IpcMainInvokeEvent, ipAddress: string, tail?: number) =>
+    this.bootloaderApi.getRuntimeLogs(ipAddress, tail)
+
+  handleBootloaderStartUpdate = (_event: IpcMainInvokeEvent, ipAddress: string, version: string) =>
+    this.bootloaderApi.startUpdate(ipAddress, version)
+
+  handleBootloaderGetUpdateProgress = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.getUpdateProgress(ipAddress)
+
+  handleBootloaderRestartRuntime = (_event: IpcMainInvokeEvent, ipAddress: string) =>
+    this.bootloaderApi.restartRuntime(ipAddress)
+
+  handleBootloaderClearSession = (_event: IpcMainInvokeEvent, ipAddress?: string) => {
+    this.bootloaderApi.clearSession(ipAddress)
+    return { success: true as const }
   }
 
   // ===================== RUNTIME API HANDLERS =====================
-  private readonly RUNTIME_API_PORT = 8443
-  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
-  private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000 // 15 seconds
+  // The port and the two timeouts live on `RuntimeApiClient` now, with the eight
+  // call sites that used them. The declarations stayed behind here with zero
+  // references — invisible because `noUnusedLocals` is off, and misleading
+  // because one of them was the `8443` this work claimed to have unified.
 
-  /**
-   * Low-level HTTP helper that handles data accumulation, timeout, and error handling.
-   * Returns the raw status code, response body, and headers for the caller to interpret.
-   */
-  private httpRequest(options: {
-    method: 'GET' | 'POST'
-    url: string
-    body?: string
-    headers?: Record<string, string>
-    timeoutMs?: number
-  }): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
-    return new Promise((resolve, reject) => {
-      const parsedUrl = new URL(options.url)
-      const reqOptions = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: options.method,
-        headers: {
-          ...options.headers,
-          ...(options.body
-            ? {
-                'Content-Type': 'application/json',
-                'Content-Length': String(Buffer.byteLength(options.body)),
-              }
-            : {}),
-        },
-        ...getRuntimeHttpsOptions(),
-      }
+  handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
 
-      const req = https.request(reqOptions as https.RequestOptions, (res: IncomingMessage) => {
-        let data = ''
-        res.on('data', (chunk: Buffer) => {
-          data += chunk.toString()
-        })
-        res.on('end', () => {
-          resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
-        })
-      })
-      req.setTimeout(options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-        req.destroy()
-        reject(new Error('Connection timeout'))
-      })
-      req.on('error', (error: Error) => {
-        reject(error)
-      })
-      if (options.body) {
-        req.write(options.body)
-      }
-      req.end()
-    })
-  }
-
-  private runtimeUrl(ipAddress: string, endpoint: string): string {
-    return `https://${ipAddress}:${this.RUNTIME_API_PORT}${endpoint}`
-  }
-
-  handleRuntimeGetUsersInfo = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
-    try {
-      const res = await this.httpRequest({
-        method: 'GET',
-        url: this.runtimeUrl(ipAddress, '/api/get-users-info'),
-      })
-      const runtimeVersion = res.headers['x-openplc-runtime-version'] as string | undefined
-
-      if (res.statusCode === 404) {
-        return { hasUsers: false, runtimeVersion }
-      } else if (res.statusCode === 200) {
-        return { hasUsers: true, runtimeVersion }
-      } else {
-        return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
-      }
-    } catch (error) {
-      return { hasUsers: false, error: getErrorMessage(error) }
-    }
-  }
-
-  handleRuntimeCreateUser = async (
+  handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
     username: string,
     password: string,
     role?: RuntimeUserRole,
-  ) => {
-    try {
-      // `role` is only honoured by the runtime for authenticated (admin) creation;
-      // the unauthenticated first-user bootstrap always becomes an admin regardless.
-      const body: { username: string; password: string; role?: RuntimeUserRole } = { username, password }
-      if (role) body.role = role
-      const payload = JSON.stringify(body)
-
-      // First-user bootstrap runs before any login (no token yet) and the
-      // runtime allows it unauthenticated. Once a session exists this is an
-      // admin adding an account, which the runtime requires to be authenticated
-      // — route it through the token authority (mutation helper accepts the
-      // runtime's 201 Created and refreshes an expired token).
-      if (this.tokens.hasToken()) {
-        const res = await this.makeRuntimeApiMutation('POST', ipAddress, '/api/create-user', payload)
-        return res.success ? { success: true } : { success: false, error: res.error }
-      }
-
-      const res = await this.httpRequest({
-        method: 'POST',
-        url: this.runtimeUrl(ipAddress, '/api/create-user'),
-        body: payload,
-      })
-      if (res.statusCode === 201) return { success: true }
-      return { success: false, error: res.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  ) => this.runtimeApi.createUser(ipAddress, username, password, role)
 
   handleRuntimeListUsers = async (_event: IpcMainInvokeEvent, ipAddress: string) => {
     const res = await this.makeRuntimeApiRequest<RuntimeUser[]>(ipAddress, '/api/get-users-info', (data) => {
@@ -355,92 +396,10 @@ class MainProcessBridge implements MainIpcModule {
     return res.success ? { success: true } : { success: false, error: res.error }
   }
 
-  private async performAuthentication(
-    ipAddress: string,
-    username: string,
-    password: string,
-  ): Promise<{ success: boolean; accessToken?: string; error?: string }> {
-    try {
-      const res = await this.httpRequest({
-        method: 'POST',
-        url: this.runtimeUrl(ipAddress, '/api/login'),
-        body: JSON.stringify({ username, password }),
-        timeoutMs: this.RUNTIME_LOGIN_TIMEOUT_MS,
-      })
-      if (res.statusCode === 200) {
-        try {
-          const response = JSON.parse(res.data) as { access_token: string }
-          return { success: true, accessToken: response.access_token }
-        } catch {
-          return { success: false, error: 'Invalid response format' }
-        }
-      }
-      return { success: false, error: res.data }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
-
-  handleRuntimeLogin = async (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) => {
-    const result = await this.performAuthentication(ipAddress, username, password)
-    if (result.success && result.accessToken) {
-      // Hand the session to the token authority so it can transparently
-      // re-authenticate against this device when the token expires.
-      this.runtimeIp = ipAddress
-      this.tokens.setSession(result.accessToken, { username, password })
-    }
-    return result
-  }
-
-  private isTokenExpiredError(statusCode: number | undefined, errorMessage: string): boolean {
-    if (statusCode === 401 || statusCode === 403) {
-      return true
-    }
-    const lowerError = errorMessage.toLowerCase()
-    return (
-      lowerError.includes('unauthorized') ||
-      lowerError.includes('token') ||
-      lowerError.includes('expired') ||
-      lowerError.includes('invalid token')
-    )
-  }
-
-  private parseApiResponse<T>(
-    data: string,
-    responseParser?: (data: string) => T,
-  ): { success: true; data?: T } | { success: false; error: string } {
-    if (responseParser) {
-      try {
-        return { success: true, data: responseParser(data) }
-      } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : 'Invalid response format' }
-      }
-    }
-    return { success: true }
-  }
-
-  async makeRuntimeApiRequest<T = void>(
-    ipAddress: string,
-    endpoint: string,
-    responseParser?: (data: string) => T,
-  ): Promise<{ success: true; data?: T } | { success: false; error: string }> {
-    // The token authority owns the live token + refresh.
-    type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
-    const url = this.runtimeUrl(ipAddress, endpoint)
-    const result = await this.tokens.withAuth<Raw>(
-      async (token) => {
-        try {
-          const res = await this.httpRequest({ method: 'GET', url, headers: { Authorization: `Bearer ${token}` } })
-          if (res.statusCode === 200) return this.parseApiResponse(res.data, responseParser)
-          return { success: false, error: res.data, statusCode: res.statusCode }
-        } catch (error) {
-          return { success: false, error: getErrorMessage(error) }
-        }
-      },
-      (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
-    )
-    return result.success ? result : { success: false, error: result.error }
-  }
+  handleRuntimeLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
+    // The client adopts the session so it can transparently re-authenticate
+    // against this device when the token expires.
+    this.runtimeApi.login(ipAddress, username, password)
 
   /**
    * Wrap a service call with standardized error handling.
@@ -451,222 +410,6 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return { success: false, error: String(error) }
     }
-  }
-
-  /**
-   * Make an authenticated POST request to the runtime API with automatic token refresh on 401/403.
-   */
-  makeRuntimeApiPostRequest<T>(
-    ipAddress: string,
-    endpoint: string,
-    body: string,
-    responseParser: (data: string) => T,
-    timeoutMs?: number,
-  ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    // Token + refresh owned by the authority.
-    type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
-
-    const doRequest = (token: string): Promise<PostResult> => {
-      return new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: endpoint,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(body),
-              Authorization: `Bearer ${token}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  resolve({ success: true, data: responseParser(data) })
-                } catch (err) {
-                  resolve({ success: false, error: err instanceof Error ? err.message : 'Invalid response format' })
-                }
-              } else {
-                // Propagate HTTP status so the caller can detect 401/403 for
-                // token-refresh without relying on brittle message parsing.
-                resolve({
-                  success: false,
-                  error: data || `Unexpected status: ${res.statusCode}`,
-                  statusCode: res.statusCode,
-                })
-              }
-            })
-          },
-        )
-        req.setTimeout(timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        req.write(body)
-        req.end()
-      })
-    }
-
-    const stripStatus = (r: PostResult): { success: true; data: T } | { success: false; error: string } =>
-      r.success ? r : { success: false, error: r.error }
-
-    return this.tokens
-      .withAuth<PostResult>(
-        (token) => doRequest(token),
-        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
-      )
-      .then(stripStatus)
-  }
-
-  /**
-   * Authenticated PUT/DELETE against the runtime API, going through the token
-   * authority. Unlike the GET/POST helpers this retries only on 401 (a genuine
-   * expired token): the user-management endpoints use 403 as a legitimate
-   * business response (e.g. "current password incorrect", "admin required"),
-   * so retrying on 403 would trigger a pointless re-authentication. Any 2xx is
-   * success; the raw body is returned so callers can surface error messages.
-   */
-  private makeRuntimeApiMutation(
-    method: 'POST' | 'PUT' | 'DELETE',
-    ipAddress: string,
-    endpoint: string,
-    body?: string,
-  ): Promise<{ success: true; data: string } | { success: false; error: string }> {
-    type R = { success: true; data: string } | { success: false; error: string; statusCode?: number }
-
-    const doRequest = (token: string): Promise<R> =>
-      new Promise((resolve) => {
-        const headers: Record<string, string | number> = { Authorization: `Bearer ${token}` }
-        if (body !== undefined) {
-          headers['Content-Type'] = 'application/json'
-          headers['Content-Length'] = Buffer.byteLength(body)
-        }
-        const req = https.request(
-          {
-            hostname: ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path: endpoint,
-            method,
-            headers,
-            ...getRuntimeHttpsOptions(),
-          },
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              const statusCode = res.statusCode ?? 0
-              if (statusCode >= 200 && statusCode < 300) {
-                resolve({ success: true, data })
-              } else {
-                resolve({ success: false, error: data || `Unexpected status: ${statusCode}`, statusCode })
-              }
-            })
-          },
-        )
-        req.setTimeout(this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Connection timeout' })
-        })
-        req.on('error', (error: Error) => {
-          resolve({ success: false, error: error.message })
-        })
-        if (body !== undefined) req.write(body)
-        req.end()
-      })
-
-    return this.tokens
-      .withAuth<R>(
-        (token) => doRequest(token),
-        (r) => !r.success && r.statusCode === 401,
-      )
-      .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
-  }
-
-  /**
-   * Upload a compiled program (multipart) to the runtime, going through the
-   * token authority so an expired token is transparently refreshed and the
-   * upload retried — the same self-healing every other runtime call gets. This
-   * is the path that previously had no refresh, so a long session's upload 401'd
-   * while status polling kept working.
-   */
-  makeRuntimeApiUpload(opts: {
-    ipAddress: string
-    fileBuffer: Buffer
-    filename: string
-    contentType: string
-    cleanBuild: boolean
-    onUploadAccepted?: (responseBody: string) => void
-  }): Promise<{ success: true; data: string } | { success: false; error: string }> {
-    type UploadResult = { success: true; data: string } | { success: false; error: string; statusCode?: number }
-    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2)
-    const header = Buffer.from(
-      `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="${opts.filename}"\r\n` +
-        `Content-Type: ${opts.contentType}\r\n\r\n`,
-    )
-    const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-    const reqBody = Buffer.concat([header, opts.fileBuffer, footer] as unknown as ReadonlyArray<Uint8Array>)
-    const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
-
-    const doRequest = (token: string): Promise<UploadResult> =>
-      new Promise((resolve) => {
-        const req = https.request(
-          {
-            hostname: opts.ipAddress,
-            port: this.RUNTIME_API_PORT,
-            path,
-            method: 'POST',
-            headers: {
-              'Content-Type': `multipart/form-data; boundary=${boundary}`,
-              'Content-Length': reqBody.length,
-              Authorization: `Bearer ${token}`,
-            },
-            ...getRuntimeHttpsOptions(),
-          } as https.RequestOptions,
-          (res: IncomingMessage) => {
-            let data = ''
-            res.on('data', (chunk: Buffer) => {
-              data += chunk.toString()
-            })
-            res.on('end', () => {
-              if (res.statusCode === 200) resolve({ success: true, data })
-              else resolve({ success: false, error: data || `HTTP ${res.statusCode}`, statusCode: res.statusCode })
-            })
-          },
-        )
-        req.setTimeout(300_000, () => {
-          req.destroy()
-          resolve({ success: false, error: 'Upload request timed out after 5 minutes' })
-        })
-        req.on('error', (err: Error) => resolve({ success: false, error: err.message }))
-        req.write(reqBody)
-        req.end()
-      })
-
-    return this.tokens
-      .withAuth<UploadResult>(
-        (token) => doRequest(token),
-        (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
-      )
-      .then((result) => {
-        if (result.success) {
-          opts.onUploadAccepted?.(result.data)
-          return { success: true as const, data: result.data }
-        }
-        return { success: false as const, error: result.error }
-      })
   }
 
   handleRuntimeGetStatus = async (_event: IpcMainInvokeEvent, ipAddress: string, includeStats?: boolean) => {
@@ -796,146 +539,41 @@ class MainProcessBridge implements MainIpcModule {
 
   handleRuntimeClearCredentials = (_event: IpcMainInvokeEvent) => {
     this.tokens.clear()
-    this.runtimeIp = null
+    this.runtimeApi.clearSession()
+    // The bootloader keeps its own session, so clearing only the runtime's
+    // left the previous user's bootloader token usable -- and that token can
+    // change the runtime version. Signing out has to mean both.
+    this.bootloaderApi.clearSession()
     return { success: true }
   }
 
   // ===================== RUNTIME LAN DISCOVERY =====================
-  private readonly DISCOVERY_PORT = 33333
-  private readonly DISCOVERY_MAGIC = 'OPENPLC_DISCOVER_V1'
-  private readonly DISCOVERY_DEFAULT_DURATION_MS = 3000
 
-  /**
-   * Compute the directed broadcast address for an IPv4 interface
-   * given its address and netmask in dotted-quad form.  Returns
-   * `255.255.255.255` for /32 or otherwise-degenerate masks where a
-   * meaningful broadcast cannot be derived.
-   */
-  private computeBroadcastAddress(address: string, netmask: string): string {
-    const toOctets = (s: string): number[] | null => {
-      const parts = s.split('.').map((p) => Number(p))
-      if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
-        return null
-      }
-      return parts
-    }
-    const addr = toOctets(address)
-    const mask = toOctets(netmask)
-    if (!addr || !mask) {
-      return '255.255.255.255'
-    }
-    const broadcast = addr.map((octet, i) => (octet & mask[i]) | (~mask[i] & 0xff))
-    return broadcast.join('.')
-  }
-
-  handleRuntimeDiscoverDevices = (
+  handleRuntimeDiscoverDevices = async (
     event: IpcMainInvokeEvent,
     opts?: { durationMs?: number },
   ): Promise<{
     success: boolean
-    devices?: Array<{ ipAddress: string; hostname: string; runtimeVersion: string; apiPort: number }>
+    devices?: DiscoveredRuntime[]
     error?: string
   }> => {
-    const duration = Math.max(500, Math.min(10000, opts?.durationMs ?? this.DISCOVERY_DEFAULT_DURATION_MS))
+    // The scan itself lives in `backend/editor/hardware/discover-runtimes` so
+    // the headless CLI runs exactly this code — which interfaces get probed and
+    // how replies are deduplicated is what decides whether a device is found,
+    // and a second copy would drift on precisely those details.
     const senderWebContents = event.sender
-
-    return new Promise((resolveOuter) => {
-      const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true })
-      // Dedup by source IP; last reply wins so a runtime updating its
-      // hostname mid-scan still settles on fresh data.
-      const discovered = new Map<
-        string,
-        { ipAddress: string; hostname: string; runtimeVersion: string; apiPort: number }
-      >()
-      let settled = false
-      let timer: NodeJS.Timeout | null = null
-
-      const finish = (err?: Error) => {
-        if (settled) return
-        settled = true
-        if (timer) clearTimeout(timer)
-        try {
-          sock.close()
-        } catch {
-          /* socket already closed */
-        }
-        if (err) {
-          resolveOuter({ success: false, error: err.message })
-        } else {
-          resolveOuter({ success: true, devices: Array.from(discovered.values()) })
-        }
-      }
-
-      sock.on('error', (err) => finish(err))
-
-      sock.on('message', (msg, rinfo) => {
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(msg.toString('utf-8'))
-        } catch {
-          return
-        }
-        if (
-          typeof parsed !== 'object' ||
-          parsed === null ||
-          (parsed as { service?: unknown }).service !== 'openplc-runtime'
-        ) {
-          return
-        }
-        const p = parsed as {
-          runtime_version?: unknown
-          hostname?: unknown
-          api_port?: unknown
-        }
-        const device = {
-          ipAddress: rinfo.address,
-          hostname: typeof p.hostname === 'string' ? p.hostname : '',
-          runtimeVersion: typeof p.runtime_version === 'string' ? p.runtime_version : '',
-          apiPort: typeof p.api_port === 'number' ? p.api_port : 8443,
-        }
-        discovered.set(device.ipAddress, device)
-        // Stream the live update to the renderer so the modal can
-        // append rows as devices come in, instead of waiting for the
-        // full timeout.
+    const result = await discoverRuntimes({
+      durationMs: opts?.durationMs,
+      onDevice: (device) => {
+        // Stream live so the modal appends rows as devices come in rather than
+        // waiting out the whole window.
         if (!senderWebContents.isDestroyed()) {
           senderWebContents.send('runtime:device-discovered', device)
         }
-      })
-
-      sock.bind(0, () => {
-        try {
-          sock.setBroadcast(true)
-        } catch (err) {
-          finish(err as Error)
-          return
-        }
-
-        const magic = new Uint8Array(Buffer.from(this.DISCOVERY_MAGIC, 'utf-8'))
-        const targets = new Set<string>(['255.255.255.255'])
-        const ifaces = networkInterfaces()
-        for (const list of Object.values(ifaces)) {
-          if (!list) continue
-          for (const ifaceInfo of list) {
-            if (ifaceInfo.family !== 'IPv4' || ifaceInfo.internal) continue
-            const broadcast = this.computeBroadcastAddress(ifaceInfo.address, ifaceInfo.netmask)
-            targets.add(broadcast)
-          }
-        }
-
-        for (const target of targets) {
-          sock.send(magic, this.DISCOVERY_PORT, target, (sendErr) => {
-            // Per-target send errors are logged but don't abort the
-            // scan; some interfaces (e.g. VPN tun adapters) reject
-            // broadcast and that's fine.
-            if (sendErr) {
-              logger.debug(`Discovery send to ${target} failed: ${sendErr.message}`)
-            }
-          })
-        }
-
-        timer = setTimeout(() => finish(), duration)
-      })
+      },
+      onDiagnostic: (message) => logger.debug(message),
     })
+    return result.success ? { success: true, devices: result.devices } : { success: false, error: result.error }
   }
 
   handleRuntimeGetSerialPorts = async (
@@ -965,6 +603,187 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
+  }
+
+  // ===================== RUNTIME API (delegated) =====================
+  // Thin pass-throughs to `RuntimeApiClient`. They stay on this class because
+  // `CompilerModule`'s bridge contract and several handlers call them by name.
+
+  makeRuntimeApiRequest = <T = void>(
+    ipAddress: string,
+    endpoint: string,
+    responseParser?: (data: string) => T,
+  ): Promise<{ success: true; data?: T } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiRequest(ipAddress, endpoint, responseParser)
+
+  makeRuntimeApiPostRequest = <T>(
+    ipAddress: string,
+    endpoint: string,
+    body: string,
+    responseParser: (data: string) => T,
+    timeoutMs?: number,
+  ): Promise<{ success: true; data: T } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiPostRequest(ipAddress, endpoint, body, responseParser, timeoutMs)
+
+  makeRuntimeApiUpload = (opts: {
+    ipAddress: string
+    fileBuffer: Buffer
+    filename: string
+    contentType: string
+    cleanBuild: boolean
+    snapshotBuffer?: Buffer
+    snapshotMetadata?: string
+    onUploadAccepted?: (responseBody: string) => void
+  }): Promise<{ success: true; data: string } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiUpload(opts)
+
+  /** Username of the live runtime session, so an uploaded project can record
+   *  who stored it. Only the username crosses this boundary. */
+  getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
+
+  /**
+   * Install the libraries a retrieved project brought with it.
+   *
+   * The archives are re-read from the project's own archive rather than kept
+   * in memory between calls, so installing is always installing what that
+   * project actually carries. Each goes through the same strucpp validation as
+   * a library the user picked by hand -- an archive off a device earns no extra
+   * trust.
+   */
+  handleInstallRetrievedLibraries = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    names: string[],
+  ): Promise<{ success: boolean; installed: string[]; failed: Array<{ name: string; error: string }> }> => {
+    const archives = this.retrievedLibraries.get(projectPath) ?? []
+    const manager = new LibraryManagerModule()
+    const installed: string[] = []
+    const failed: Array<{ name: string; error: string }> = []
+
+    for (const library of archives) {
+      if (!names.includes(library.name)) continue
+      const result = await manager.installFromText(library.archive)
+      if (result.success) installed.push(library.name)
+      else failed.push({ name: library.name, error: result.error ?? 'Install failed' })
+    }
+    return { success: failed.length === 0, installed, failed }
+  }
+
+  /**
+   * Retrieve the stored project and write it to a scratch directory.
+   *
+   * Fetch and unpack are one IPC call because the archive should not sit in the
+   * renderer at all: it is untrusted bytes from a device, and every check that
+   * decides whether it is safe to write lives next to the write. The renderer
+   * gets back a path and a description, never the archive.
+   *
+   * The scratch location is why this works at all -- see
+   * `materialize-retrieved-project` for what depends on the project having a
+   * real path from the moment it is opened.
+   */
+  /**
+   * Bundled library archives from the most recent retrievals, keyed by the
+   * project they came with.
+   *
+   * Kept here rather than sent to the renderer so the bytes never leave the
+   * process that validates them, and keyed by project path so installing
+   * always installs what THAT project carried rather than whatever was
+   * retrieved most recently.
+   */
+  private retrievedLibraries = new Map<string, Array<{ name: string; archive: string }>>()
+
+  /**
+   * Drop every retrieved project's libraries except the one just retrieved.
+   *
+   * The map exists so installing installs what THAT project carried, which only
+   * needs the project currently open. Keeping the rest held the full text of
+   * every library of every retrieval for the life of the session.
+   */
+  private forgetRetrievedLibrariesExcept(keep: string): void {
+    for (const path of [...this.retrievedLibraries.keys()]) {
+      if (path !== keep) this.retrievedLibraries.delete(path)
+    }
+  }
+
+  handleRuntimeRetrieveProject = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{
+    success: boolean
+    projectPath?: string
+    projectName?: string
+    metadata?: SnapshotMetadata
+    libraries?: Array<{ name: string; version: string; status: 'installed' | 'differs' | 'missing' }>
+    error?: string
+  }> => {
+    const fetched = await this.runtimeApi.retrieveProjectSnapshot(ipAddress)
+    if (!fetched.success) return { success: false, error: fetched.error }
+
+    try {
+      const scratchRoot = retrievedProjectsRoot()
+      // Old retrievals go before the new one is written. A retrieved project
+      // deliberately stays in scratch until the user runs Save As, so without
+      // this an engineer who retrieves a project just to look at it leaves a
+      // full copy of its source on disk permanently -- unencrypted, in
+      // userData, accumulating one folder per retrieval.
+      await pruneRetrievedProjects(scratchRoot, RETAINED_RETRIEVALS)
+      // Retrievals recorded under Recent before they were excluded from it.
+      // Pruning removes the directories; without this their rows outlive them
+      // and the list keeps one dead entry per retrieval anyone ever made.
+      //
+      // Its own try/catch, outside the retrieve's: a `projects.json` that is
+      // locked or unwritable would otherwise turn tidying up after the feature
+      // into a failed retrieve.
+      try {
+        await this.forgetRetrievedProjectsInHistory()
+      } catch (error) {
+        logger.error('Could not drop retrieved projects from history: ' + getErrorMessage(error))
+      }
+
+      const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
+        scratchRoot,
+      })
+      // Same for the in-memory copy: this map holds the full text of every
+      // library each retrieval carried, and it only ever grew.
+      this.forgetRetrievedLibrariesExcept(materialized.projectPath)
+      this.retrievedLibraries.set(
+        materialized.projectPath,
+        materialized.libraries.map(({ name, archive }) => ({ name, archive })),
+      )
+      return {
+        success: true,
+        projectPath: materialized.projectPath,
+        projectName: materialized.projectName,
+        metadata: materialized.metadata,
+        // Status, not archives. The renderer decides what to offer; the bytes
+        // stay in the main process where the library manager can write them,
+        // and are re-read from the same archive when the user says yes.
+        libraries: await describeRetrievedLibraries(materialized.libraries, (name) =>
+          new LibraryManagerModule().readArchiveText(name),
+        ),
+      }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  private makeRuntimeApiMutation = (
+    method: 'POST' | 'PUT' | 'DELETE',
+    ipAddress: string,
+    endpoint: string,
+    body?: string,
+  ): Promise<{ success: true; data: string } | { success: false; error: string }> =>
+    this.runtimeApi.makeRuntimeApiMutation(method, ipAddress, endpoint, body)
+
+  private restStartPlc = (address: string) => this.runtimeApi.startPlc(address)
+
+  /** The token authority, so existing call sites keep reading `this.tokens`. */
+  private get tokens() {
+    return this.runtimeApi.tokens
+  }
+
+  private get runtimeIp(): string | null {
+    return this.runtimeApi.getAddress()
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -1003,6 +822,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:read-files', this.handleReadProjectFiles)
     this.registerHandle('project:pick-plcopen-import-file', this.handlePickPlcopenImportFile)
     this.registerHandle('project:export-plcopen-file', this.handleExportPlcopenFile)
+    this.registerHandle('project:export-pdf-file', this.handleExportPdfFile)
 
     // Pou-related handlers
     this.registerHandle('pou:create', this.handleCreatePouFile)
@@ -1020,6 +840,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
+    this.registerHandle('project:track-recent', this.handleTrackRecentProject)
     this.registerHandle('project:delete', this.handleDeleteProject)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
@@ -1106,6 +927,19 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
+    this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
+    this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
+
+    // ===================== BOOTLOADER =====================
+    this.registerHandle('bootloader:get-capabilities', this.handleBootloaderGetCapabilities)
+    this.registerHandle('bootloader:login', this.handleBootloaderLogin)
+    this.registerHandle('bootloader:get-status', this.handleBootloaderGetStatus)
+    this.registerHandle('bootloader:get-device-info', this.handleBootloaderGetDeviceInfo)
+    this.registerHandle('bootloader:get-runtime-logs', this.handleBootloaderGetRuntimeLogs)
+    this.registerHandle('bootloader:start-update', this.handleBootloaderStartUpdate)
+    this.registerHandle('bootloader:get-update-progress', this.handleBootloaderGetUpdateProgress)
+    this.registerHandle('bootloader:restart-runtime', this.handleBootloaderRestartRuntime)
+    this.registerHandle('bootloader:clear-session', this.handleBootloaderClearSession)
 
     // ===================== ETHERCAT DISCOVERY =====================
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
@@ -1227,13 +1061,35 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * Drop every Recent entry that points into the retrieval scratch root.
+   *
+   * One read and at most one write. `removeProjectFromHistory` re-reads and
+   * rewrites the whole file per call, so looping it over the matches cost N
+   * round trips to remove N rows.
+   */
+  private forgetRetrievedProjectsInHistory = async (): Promise<void> => {
+    const historyPath = this.projectService.getHistoryProjectsFilePath()
+    const history = await this.projectService.readProjectHistory(historyPath)
+    const kept = history.filter((entry) => !isRetrievedProjectPath(entry.path))
+    if (kept.length === history.length) return
+    await this.projectService.replaceProjectHistory(historyPath, kept)
+  }
+
   handleReadProjectFiles = async (_event: IpcMainInvokeEvent, projectPath: string) => {
     try {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
         this.currentProjectPath = projectPath
-        await this.projectService.updateProjectHistory(projectPath)
+        // Everything except a retrieval, which is not a project the user has
+        // anywhere yet: it lives in scratch, is pruned behind them, and becomes
+        // a real project only when Save As writes it somewhere they chose.
+        // Listing it under Recent offered them a project that deletes itself,
+        // and one more row per retrieval.
+        if (!isRetrievedProjectPath(projectPath)) {
+          await this.projectService.updateProjectHistory(projectPath)
+        }
       }
       return result
     } catch (_error) {
@@ -1270,6 +1126,21 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
     } catch (error) {
       logger.error('Error exporting PLCopen file: ' + getErrorMessage(error))
+      return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
+    }
+  }
+
+  handleExportPdfFile = async (_event: IpcMainInvokeEvent, defaultFileName: string, bytes: Uint8Array) => {
+    const windowManager = this.mainWindow
+    try {
+      if (windowManager) {
+        const res = await getPdfExportSavePath(windowManager, defaultFileName, bytes)
+        return res
+      }
+      logger.error('Window object not defined')
+      return { success: false, error: { title: 'Internal error', description: 'Window object not defined' } }
+    } catch (error) {
+      logger.error('Error exporting PDF file: ' + getErrorMessage(error))
       return { success: false, error: { title: 'Internal error', description: getErrorMessage(error) } }
     }
   }
@@ -1429,11 +1300,15 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, publishedLibraryIds: string[]) => {
-    if (!Array.isArray(publishedLibraryIds) || publishedLibraryIds.length === 0) {
+  handleCatalogInstallMany = async (_event: IpcMainInvokeEvent, libraries: PublicLibrary[]) => {
+    if (!Array.isArray(libraries) || libraries.length === 0) {
       return { results: [] }
     }
-    const batch = await this.libraryManagerModule.installFromCatalog(publishedLibraryIds)
+    const validLibraries = libraries.filter((row): row is PublicLibrary => PublicLibrarySchema.safeParse(row).success)
+    if (validLibraries.length === 0) {
+      return { results: [] }
+    }
+    const batch = await this.libraryManagerModule.installFromCatalog(validLibraries)
     // Fire one change event for the whole batch — saves N renderer
     // refreshes for an N-library install.
     if (batch.results.some((r) => r.success)) {
@@ -1451,6 +1326,40 @@ class MainProcessBridge implements MainIpcModule {
     } catch (error) {
       logger.error('Error reading history file: ' + getErrorMessage(error))
       return []
+    }
+  }
+
+  /**
+   * Put a project on the recent list without reading it — Save As, which
+   * produces a location the user picked without going through an open.
+   *
+   * Still refuses the scratch root: a Save As target is somewhere the user
+   * chose, so a path in there did not come from this flow. Answers in the same
+   * shape as its sibling below, so a caller that wants to know whether the row
+   * was written can find out.
+   */
+  handleTrackRecentProject = async (_event: unknown, projectPath: unknown) => {
+    // `unknown`, then narrowed: a TypeScript annotation on an IPC parameter is
+    // a claim about the caller, not a check on the payload, and what arrives
+    // here is written to `projects.json`.
+    if (typeof projectPath !== 'string' || projectPath.trim() === '') {
+      return { success: false, error: 'A project path is required to track a project.' }
+    }
+    // Absolute, because Recent is read back later and from elsewhere: a
+    // relative path would be resolved against whatever the working directory
+    // happened to be, which is never what the user picked in Save As.
+    if (!isAbsolute(projectPath)) {
+      return { success: false, error: 'A project path must be absolute to be tracked.' }
+    }
+    if (isRetrievedProjectPath(projectPath)) {
+      return { success: false, error: 'A retrieved project is not tracked until it has a location.' }
+    }
+    try {
+      await this.projectService.updateProjectHistory(projectPath)
+      return { success: true }
+    } catch (error) {
+      logger.error('Error tracking project in history: ' + getErrorMessage(error))
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 
@@ -1503,7 +1412,7 @@ class MainProcessBridge implements MainIpcModule {
     xmlFormatTarget: 'old-editor' | 'codesys',
   ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
 
-  handleRunCompileProgram = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
+  handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
       mainProcessPort.postMessage({
@@ -1520,7 +1429,7 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileForDebugger(args, mainProcessPort, this)
   }
 
-  handleRunCompileLibrary = (event: IpcMainEvent, args: Array<string | PLCProjectData | boolean>) => {
+  handleRunCompileLibrary = (event: IpcMainEvent, args: CompileLibraryIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileLibrary(args, mainProcessPort, this)
   }
@@ -1776,43 +1685,13 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Run/stop over a REST control channel, reported in the same shape the Modbus
-   * path returns — so the caller handles one result type, not two.
-   *
-   * `ERROR_SWITCH_STOP` in the runtime's reply is its way of saying the hardware
-   * mode switch refused a start, which is exactly what `refusedBySwitch` means on
-   * the Modbus side (FC 0x4b status 0x86).
+   * Run/stop over a REST control channel. Lives on `RuntimeApiClient` so the
+   * headless CLI gets the same semantics — notably the `ERROR_SWITCH_STOP`
+   * translation, which is the runtime's way of saying a hardware mode switch
+   * refused a start.
    */
-  private async restSetPlcState(address: string, action: 'run' | 'stop'): Promise<PlcControlResult> {
-    const result =
-      action === 'run' ? await this.restStartPlc(address) : await this.makeRuntimeApiRequest(address, '/api/stop-plc')
-    if (!result.success) return { success: false, error: result.error }
-
-    const status = 'status' in result ? (result.status ?? '') : ''
-    if (status.includes('ERROR_SWITCH_STOP')) return { success: false, refusedBySwitch: true }
-
-    // The runtime settles into the new state on its next scan; report the state the
-    // command asked for so the button can reflect it without a second round trip.
-    return { success: true, state: action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED }
-  }
-
-  /** The `/api/start-plc` call, shared by the session router and the IPC handler. */
-  private async restStartPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
-    try {
-      // The body is parsed because the runtime answers `COMMAND:BUSY` while it is
-      // still unloading a previous program after an upload, and callers drive a
-      // retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
-      const result = await this.makeRuntimeApiRequest<{ status?: string }>(
-        address,
-        '/api/start-plc',
-        (data: string) => JSON.parse(data) as { status?: string },
-      )
-      if (!result.success) return { success: false, error: result.error }
-      return { success: true, status: (result.data?.status ?? '').trim() }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  }
+  private restSetPlcState = (address: string, action: 'run' | 'stop'): Promise<PlcControlResult> =>
+    this.runtimeApi.setPlcState(address, action)
 
   handleDebuggerGetVariablesList = async (
     _event: IpcMainInvokeEvent,
@@ -1998,74 +1877,25 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Turn a resolved channel config into something the link manager can try.
-   * The only transport-specific step left in the flow; a config that names a
-   * transport this build cannot speak is dropped rather than half-built.
+   * Turn resolved channel configs into things the link manager can try.
+   *
+   * Delegates to `debug-channel-factory` — see `toDebugCandidate` above.
    */
-  private toDeviceLinkCandidates(
+  private toDeviceLinkCandidates = (
     configs: DebugConnectionConfig[],
     opts: { probeBaudRates?: boolean } = {},
-  ): DeviceLinkCandidate[] {
-    const declared: DeviceLinkCandidate[] = []
-    // Baud guesses go AFTER everything the project declared: a configured Modbus
-    // TCP address is a better next try than a rate nobody asked for.
-    const speculative: DeviceLinkCandidate[] = []
+  ): DeviceLinkCandidate[] => toDeviceLinkCandidates(configs, opts, this.debugChannelDeps)
 
-    const build = (config: DebugConnectionConfig, baudRate: number | undefined, isGuess: boolean): void => {
-      const kind = modbusTransportKind(config.connectionType)
-      if (kind === null) return
-      const params = {
-        connectionType: config.connectionType,
-        port: config.connectionParams.port,
-        baudRate,
-        slaveId: config.connectionParams.slaveId,
-        host: config.connectionParams.ipAddress,
-      }
-      // Only the simulator needs an in-process serial port; building one for a real
-      // transport would allocate a virtual port nobody reads.
-      const options = kind === 'simulator' ? { virtualSerialPort: new VirtualSerialPort(this.simulatorModule) } : {}
-      // Probe the params now so a malformed config fails resolution rather than
-      // becoming a candidate that always throws on `create()`.
-      if ('error' in buildDeviceModbusTransport(params, options)) return
-      ;(isGuess ? speculative : declared).push({
-        transport: kind,
-        // The endpoint ONLY. It is matched against the OS port list and against
-        // the port an upload asks to borrow, so the baud travels beside it rather
-        // than inside it — decorating this string made every swept candidate match
-        // no port and be skipped in 1ms.
-        descriptor: describeDebugEndpoint(config),
-        baudRate,
-        speculative: isGuess,
-        create: () => {
-          const built = buildDeviceModbusTransport(params, options)
-          if ('error' in built) throw new Error(built.error)
-          return built.client
-        },
-      })
-    }
-
-    for (const config of configs) {
-      // A wrong baud is the one misconfiguration that looks like healthy silence:
-      // the port opens, so it is not "no response", and nothing decodes, so it
-      // reads as "no firmware" — and the user gets told to reflash a board that is
-      // running fine. Sweeping the rates OpenPLC is ever built with turns that dead
-      // end into a connection. Serial only; a TCP address is either right or not.
-      for (const attempt of planBaudAttempts(config.connectionParams.baudRate, { sweep: opts.probeBaudRates })) {
-        build(config, attempt.baudRate, attempt.speculative)
-      }
-    }
-
-    // The patient budget belongs to the last DECLARED endpoint, not to the last
-    // candidate overall. Without this the baud sweep would silently take that
-    // patience away from the configured endpoint and hand it to a guess — and a
-    // board that was just flashed, still booting on the right rate, would be ruled
-    // out in ~10s instead of the ~32s it sometimes needs.
-    const lastDeclared = declared[declared.length - 1]
-    if (lastDeclared) lastDeclared.patient = true
-
-    return [...declared, ...speculative]
+  /**
+   * The simulator lives in this process, so the factory is given a way to build
+   * the in-process serial port it answers on.
+   */
+  private readonly debugChannelDeps = {
+    createVirtualSerialPort: () => new VirtualSerialPort(this.simulatorModule),
+    // Read from the TOKEN MANAGER at open time, never from a closure over the
+    // login-time value — see `DebugChannelFactoryDeps.getToken`.
+    getToken: () => this.runtimeApi.tokens.getToken(),
   }
-
   /** Consume the classification the last verified candidate produced. */
   private takeDeviceLinkProbe(): DeviceProbeOutcome | null {
     const probe = this.deviceLinkProbe
@@ -2104,32 +1934,14 @@ class MainProcessBridge implements MainIpcModule {
     }
     return Promise.resolve({ success: true })
   }
-
   /**
-   * Turn a resolved channel config into an openable DEBUG channel. The one place
-   * that knows a WebSocket is a debug channel too.
+   * Turn a resolved channel config into an openable DEBUG channel.
+   *
+   * Delegates to `debug-channel-factory`, shared with the headless CLI so both
+   * build every declared transport from the same code.
    */
-  private toDebugCandidate(config: DebugConnectionConfig): DeviceDebugCandidate | null {
-    if (config.connectionType === 'websocket') {
-      const host = config.connectionParams.ipAddress
-      const token = config.connectionParams.jwtToken
-      if (!host || !token) return null
-      return {
-        transport: 'websocket',
-        descriptor: `websocket ${host}`,
-        create: () => new WebSocketDebugTransport({ host, port: 8443, token, rejectUnauthorized: false }),
-      }
-    }
-    // One config in, one candidate out: this builds the DEBUG channel for a
-    // session that already exists, so the rate is settled and guessing is wrong.
-    const [candidate] = this.toDeviceLinkCandidates([config], { probeBaudRates: false })
-    if (!candidate) return null
-    return {
-      transport: candidate.transport,
-      descriptor: `${candidate.transport} ${candidate.descriptor}`,
-      create: candidate.create,
-    }
-  }
+  private toDebugCandidate = (config: DebugConnectionConfig): DeviceDebugCandidate | null =>
+    toDebugCandidate(config, this.debugChannelDeps)
 
   /**
    * Is this freshly opened candidate a device we can work with? Runs the
@@ -2147,7 +1959,7 @@ class MainProcessBridge implements MainIpcModule {
     context: { isLastCandidate: boolean },
   ): Promise<boolean> {
     // The simulator is in-process: there is no hardware to identify, so the
-    // board-id read is not the right question to ask of it.
+    // device-id read is not the right question to ask of it.
     //
     // Retried because the session is opened the instant the emulator starts, and
     // the sketch inside it still has to reach the point where it services Modbus.
@@ -2175,12 +1987,12 @@ class MainProcessBridge implements MainIpcModule {
     // them. Spending the patient budget on the final guess would put ~32s at the
     // end of a sweep whose whole point is to finish quickly.
     const isPatient = !candidate.speculative && (candidate.patient === true || context.isLastCandidate)
-    const boardIdProbe = candidate.speculative
-      ? SPECULATIVE_BOARD_ID_PROBE
+    const deviceIdProbe = candidate.speculative
+      ? SPECULATIVE_DEVICE_ID_PROBE
       : isPatient
-        ? PATIENT_BOARD_ID_PROBE
-        : QUICK_BOARD_ID_PROBE
-    const result = await classifyDeviceLink(client, { boardIdProbe })
+        ? PATIENT_DEVICE_ID_PROBE
+        : QUICK_DEVICE_ID_PROBE
+    const result = await classifyDeviceLink(client, { deviceIdProbe })
     this.deviceLinkProbe = result
     if (result.status !== 'connected-with-firmware') {
       // Traced only when the endpoint is REJECTED, and then with the budget it was
@@ -2189,7 +2001,7 @@ class MainProcessBridge implements MainIpcModule {
       // the budget up front, as this used to, put the line before the outcome it
       // explains and printed it on every success too.
       this.traceDeviceLink(
-        `  ${candidate.descriptor}: "${result.status}" after up to ${boardIdProbe.attempts} id read(s)` +
+        `  ${candidate.descriptor}: "${result.status}" after up to ${deviceIdProbe.attempts} id read(s)` +
           `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, was patient)' : ''}` +
           `${result.error ? ` — ${result.error}` : ''}`,
       )
@@ -2204,7 +2016,7 @@ class MainProcessBridge implements MainIpcModule {
   /**
    * Per-tick liveness read, and the ONE place baremetal run/stop state is polled.
    *
-   * Prefers the status read (FC 0x46) over the board id (0x48): both prove the
+   * Prefers the status read (FC 0x46) over the device id (0x48): both prove the
    * firmware is answering, but the status frame also carries the run/stop state
    * and the mode-switch position — so a switch flipped by hand at the panel shows
    * up within one interval, with no second timer and no extra traffic.
@@ -2218,7 +2030,7 @@ class MainProcessBridge implements MainIpcModule {
       await this.pushPlcState(client, descriptor, 0)
       return true
     }
-    return (await client.getBoardId()).success
+    return (await client.getDeviceId()).success
   }
 
   /**
@@ -2266,8 +2078,12 @@ class MainProcessBridge implements MainIpcModule {
    * released by `debugger:disconnect`); every per-command caller goes through
    * `withDebugChannel`, which releases in a `finally`.
    */
-  private async requireDebug(what: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
-    const acquired = await this.deviceSession.acquireDebugChannel(what)
+  private async requireDebug(holder: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
+    // `holder` may carry a per-call uniqueness suffix (`what#seq`); the trace
+    // and the messages use the human prefix so the once-per-combination dedup
+    // in traceChannelUse keeps working.
+    const what = holder.split('#')[0]
+    const acquired = await this.deviceSession.acquireDebugChannel(holder)
     if ('error' in acquired) {
       if (!this.deviceSession.isConnected()) return this.explainMissingChannel(what)
       this.traceDeviceLink(`${what}: debug channel unavailable — ${acquired.error}`)
@@ -2294,17 +2110,27 @@ class MainProcessBridge implements MainIpcModule {
    * under run/stop or the status poll. Only a session whose debug medium is its
    * own — v3's second Modbus TCP connection, v4's WebSocket — is ever closed.
    */
+  /**
+   * Monotonic suffix for per-command debug holders. The holder set is keyed by
+   * STRING, so two concurrent callers sharing a `what` would be one reference:
+   * the second's release found the set empty and closed the WebSocket under
+   * the first, mid-sequence (review 2026-08-20). Unique keys make the count
+   * honest; `what` stays as the human-readable prefix the trace shows.
+   */
+  private debugHolderSeq = 0
+
   private async withDebugChannel<T>(
     what: string,
     run: (client: DeviceDebugChannel) => Promise<T>,
     onUnavailable: (reason: ChannelUnavailable) => T,
   ): Promise<T> {
-    const acquired = await this.requireDebug(what)
+    const holder = `${what}#${++this.debugHolderSeq}`
+    const acquired = await this.requireDebug(holder)
     if ('error' in acquired) return onUnavailable(acquired)
     try {
       return await run(acquired.client)
     } finally {
-      this.deviceSession.releaseDebugChannel(what)
+      this.deviceSession.releaseDebugChannel(holder)
     }
   }
 
@@ -2332,7 +2158,7 @@ class MainProcessBridge implements MainIpcModule {
   private explainMissingChannel(what: string): ChannelUnavailable {
     if (this.deviceSession.isRecovering()) {
       this.traceDeviceLink(`${what}: refused, the connection is mid-recovery`)
-      return { error: 'the connection dropped and is being restored — try again in a moment', needsReconnect: true }
+      return { error: 'the connection dropped and is being restored, try again in a moment', needsReconnect: true }
     }
     this.traceDeviceLink(`${what}: refused, nothing is connected`)
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
@@ -2430,9 +2256,14 @@ class MainProcessBridge implements MainIpcModule {
   // or reflash. Exposing the step means the buy dialog can simply call it again on
   // the link that is already open.
   //
-  // Both ride the CONTROL channel (`requireControl`): the license FCs are ordinary
-  // frames on the same held Modbus link as run/stop and the status poll, so they
-  // queue behind the same mutex and need no connection of their own.
+  // CHANNEL CHOICE (`withLicenseChannel`). On baremetal the license FCs are
+  // ordinary frames on the same held Modbus link as run/stop and the status poll,
+  // so they ride the CONTROL channel and queue behind the same mutex. A
+  // REST-controlled runtime (v4) holds no control channel at all — there the SAME
+  // PDUs ride the debug WebSocket, which the runtime answers at the webserver
+  // level, ahead of its is_connected gate, so a device can be activated while the
+  // PLC is stopped. That channel is acquired per call and released in a
+  // `finally`, exactly like every other per-command debug caller.
 
   /**
    * True while a COMPOUND licensing sequence is running over the held client.
@@ -2447,19 +2278,120 @@ class MainProcessBridge implements MainIpcModule {
   private deviceLicenseSequenceInFlight = false
 
   /**
-   * Read the anchor the licensing identity derives from, over the held link.
+   * Read this board's licensing identity over the held link, tagged with which
+   * KIND of value the channel answered (DOPE-589).
    *
-   * Read FRESH on every licensing call rather than cached at connect. The anchor
-   * IS the device identity, and a board swapped on the same serial path would
+   * Baremetal answers an id already derived inside the closed license-core;
+   * runtime-v4 answers the raw device-tree anchor and the editor derives from
+   * it. Both arrive as `[FC][status][len][bytes]` on 0x48, which is exactly why
+   * the kind travels in the return value instead of being inferred downstream.
+   *
+   * Read FRESH on every licensing call rather than cached at connect. The
+   * identity IS the device, and a board swapped on the same serial path would
    * otherwise inherit the previous one's — deciding a license question for
    * hardware that is no longer there. One extra frame on an operation that already
    * spends several is not worth that risk.
    */
-  private async readLicenseAnchor(client: DeviceModbusTransport): Promise<{ anchor: Uint8Array } | { error: string }> {
-    const board = await client.getBoardId()
-    if (!board.success) return { error: board.error ?? 'the device did not answer the board-id read' }
-    this.deviceSession.noteTraffic()
-    return { anchor: board.boardId ?? new Uint8Array(0) }
+  private async readLicenseIdentity(
+    client: LicenseChannel,
+  ): Promise<{ identity: DeviceIdentity } | { error: string; retryable?: boolean }> {
+    // The device-condition half of the reply is identical for both forms, so it
+    // is checked once; only the NAME of the bytes differs, and that is the whole
+    // reason the two are separate methods.
+    const settle = (read: { success: boolean; unsupported?: boolean; error?: string }) => {
+      // The target itself said "no identity to license against" (0x85 on 0x48 —
+      // a runtime-v4 host without a device-tree serial). Terminal, so it must
+      // not offer a retry — but it is NOT the 'unsupported' outcome, which
+      // means "this firmware has no licence STORAGE" and whose whole message is
+      // "this hardware supports it, rebuild and upload". Routing an
+      // identity-less host there told the user their x86 box would work if they
+      // rebuilt, which is false and unactionable. It is a check that could not
+      // conclude, with a cause that will not change: check-failed, retryable
+      // false.
+      if (read.unsupported) {
+        return {
+          error:
+            'this device has no hardware identity a licence can be issued for. ' +
+            'Licensed VPPs require hardware that reports a unique identifier.',
+          retryable: false,
+        } as const
+      }
+      if (!read.success) return { error: read.error ?? 'the device did not answer the identity read' } as const
+      // Liveness evidence for the CONTROL link's poll. On a REST session this
+      // frame rode the debug WebSocket instead — crediting it here is a no-op,
+      // not a lie: a REST session runs no liveness poll (openRestSession never
+      // starts one), so there is no check for this stamp to suppress.
+      this.deviceSession.noteTraffic()
+      return null
+    }
+
+    // Exactly one of the two exists on any real channel: the Modbus clients
+    // implement `getDeviceId`, the runtime-v4 WebSocket implements `getAnchor`.
+    // Narrowed on the CHANNEL rather than on the reply, so each branch knows
+    // statically which kind it is holding.
+    if (client.getDeviceId) {
+      const read = await client.getDeviceId()
+      const bad = settle(read)
+      if (bad) return bad
+      return { identity: { kind: 'device-id', deviceId: read.deviceId ?? new Uint8Array(0) } }
+    }
+
+    if (client.getAnchor) {
+      const read = await client.getAnchor()
+      const bad = settle(read)
+      if (bad) return bad
+      return { identity: { kind: 'anchor', anchor: read.anchor ?? new Uint8Array(0) } }
+    }
+
+    // Neither: a programming error rather than a device condition, so it says so
+    // instead of deriving an identity from nothing.
+    // Permanent: a channel either implements an identity read or it never will.
+    // The comment below calls it a programming error, and a retry button on a
+    // programming error is a loop with a friendly label.
+    return { error: 'This connection cannot read the device identity that licensing needs.', retryable: false }
+  }
+
+  /**
+   * Run one licensing call over the channel that carries licensing for THIS
+   * session: the held CONTROL link on baremetal, the debug WebSocket on a
+   * REST-controlled runtime. See the CHANNEL CHOICE comment above.
+   *
+   * Every unavailable-channel answer is `check-failed` — never "not licensed":
+   * nothing was asked of the device, so nothing can be asserted about it.
+   */
+  private async withLicenseChannel(
+    what: string,
+    run: (client: LicenseChannel) => Promise<DeviceLicenseReport>,
+  ): Promise<DeviceLicenseReport> {
+    const checkFailed = (error: string): DeviceLicenseReport => ({ outcome: { state: 'check-failed', error } })
+    /** Same, for a cause that cannot change by asking again — the UI drops the retry. */
+    const checkFailedTerminal = (error: string): DeviceLicenseReport => ({
+      outcome: { state: 'check-failed', error, retryable: false },
+    })
+
+    const control = this.deviceClient()
+    if (control) {
+      this.traceChannelUse(what, 'control')
+      return run(control)
+    }
+
+    // No control channel and no REST session: nothing is connected (or the link
+    // is mid-recovery) — explain which, in the same words every handler uses.
+    if (this.deviceSession.getRestAddress() === null) {
+      return checkFailed(this.explainMissingChannel(what).error)
+    }
+
+    return this.withDebugChannel(
+      what,
+      async (client) => {
+        if (!isLicenseChannel(client)) {
+          // Permanent for this kind of session, so no retry.
+          return checkFailedTerminal('This connection cannot carry the licensing protocol.')
+        }
+        return run(client)
+      },
+      (reason) => checkFailed(reason.error),
+    )
   }
 
   /**
@@ -2473,17 +2405,16 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     request: DeviceLicenseRequest,
   ): Promise<DeviceLicenseReport> => {
-    const control = this.requireControl('read license')
-    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+    return await this.withLicenseChannel('read license', async (client) => {
+      try {
+        const identity = await this.readLicenseIdentity(client)
+        if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-    try {
-      const anchor = await this.readLicenseAnchor(control.client)
-      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
-
-      return await inspectDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
-    } catch (error) {
-      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
-    }
+        return await inspectDeviceLicense(client, { ...request, identity: identity.identity })
+      } catch (error) {
+        return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+      }
+    })
   }
 
   /**
@@ -2496,31 +2427,32 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     request: DeviceLicenseRequest,
   ): Promise<DeviceLicenseReport> => {
-    const control = this.requireControl('refresh license')
-    if ('error' in control) return { outcome: { state: 'check-failed', error: control.error } }
+    return await this.withLicenseChannel('refresh license', async (client) => {
+      // Checked INSIDE the channel scope, so a caller with no channel at all does
+      // not consume the guard — see the "no link to run on" test.
+      if (this.deviceLicenseSequenceInFlight) {
+        // Reported rather than queued: the caller is a button or a connect, and a
+        // second answer arriving later for a question already being answered is
+        // noise at best and a contradictory badge at worst.
+        return { outcome: { state: 'check-failed', error: 'A licence check is already running on this device.' } }
+      }
+      this.deviceLicenseSequenceInFlight = true
 
-    if (this.deviceLicenseSequenceInFlight) {
-      // Reported rather than queued: the caller is a button or a connect, and a
-      // second answer arriving later for a question already being answered is
-      // noise at best and a contradictory badge at worst.
-      return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
-    }
-    this.deviceLicenseSequenceInFlight = true
+      try {
+        const identity = await this.readLicenseIdentity(client)
+        if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-    try {
-      const anchor = await this.readLicenseAnchor(control.client)
-      if ('error' in anchor) return { outcome: { state: 'check-failed', error: anchor.error } }
-
-      const report = await resolveDeviceLicense(control.client, { ...request, anchor: anchor.anchor })
-      // The license FCs are device traffic like any other: without noting them the
-      // liveness poll can fall due mid-sequence and declare a healthy link lost.
-      this.deviceSession.noteTraffic()
-      return report
-    } catch (error) {
-      return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
-    } finally {
-      this.deviceLicenseSequenceInFlight = false
-    }
+        const report = await resolveDeviceLicense(client, { ...request, identity: identity.identity })
+        // The license FCs are device traffic like any other: without noting them the
+        // liveness poll can fall due mid-sequence and declare a healthy link lost.
+        this.deviceSession.noteTraffic()
+        return report
+      } catch (error) {
+        return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
+      } finally {
+        this.deviceLicenseSequenceInFlight = false
+      }
+    })
   }
 
   handleDebuggerSetVariable = async (

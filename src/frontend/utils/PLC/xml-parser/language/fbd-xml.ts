@@ -128,17 +128,15 @@ function parseBlockXml(entry: Record<string, unknown>): { node: BlockNode<BlockV
       deletable: true,
       // Full class/type per pin can't be recovered from the FBD XML alone
       // (it only ever names pins, never their IEC variable class/type) —
-      // an honest, documented gap rather than a guess. `body`/`language` are
-      // part of `BlockVariant`'s library-POU shape (ports/block-types.ts)
-      // but never read back by the generator for a placed instance —
-      // harmless placeholders.
+      // an honest, documented gap rather than a guess. `body`/`language` used
+      // to be filled in here as placeholders; `BlockVariant` no longer carries
+      // them (see ports/block-types.ts, DOPE-592), which is what they always
+      // were for a placed instance: never read back.
       variant: {
         name: typeName,
         type: isFunctionBlock ? 'function-block' : 'function',
-        language: 'st',
         variables: [],
         documentation: '',
-        body: '',
         extensible: false,
       },
       executionControl: false,

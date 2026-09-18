@@ -9,10 +9,7 @@ import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
-import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
-import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
-import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
 // Note: Status and timing stats polling is handled globally by useRuntimePolling hook.
@@ -125,7 +122,7 @@ const OrchestratorsList = () => {
       setError(null)
     } catch (error) {
       console.error('[Orchestrators] Fetch failed', error)
-      setError('Failed to load orchestrators. Please try again.')
+      setError('Failed to load Edge Devices. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -136,7 +133,7 @@ const OrchestratorsList = () => {
   }, [fetchOrchestrators])
 
   // Sync selectedDevice with runtimeConnection.selectedDevice on mount and when connection changes
-  // This ensures the UI shows the connected device when reopening the orchestrators screen
+  // This ensures the UI shows the connected device when reopening the Edge Devices screen
   useEffect(() => {
     if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
       setSelectedDevice({
@@ -196,9 +193,20 @@ const OrchestratorsList = () => {
       }
 
       setSelectedDevice({ orchestratorId, orchestratorAgentId, deviceId, deviceName })
+      // Publish the choice app-wide. Picking a device is NOT connecting to it --
+      // that is still the Connect button's job -- but the choice has to be
+      // visible outside this screen, or nothing else can name the target. The
+      // debugger's offer-to-connect needs it to say WHICH device it is about to
+      // reach, and to tell "a device is chosen" apart from "nothing is chosen".
+      //
+      // Safe against the WebRTC lifecycle: its connect fires on the
+      // connection-status transition (`prev !== 'connected' && now ===
+      // 'connected'`) and only READS `selectedDevice` as a guard, so setting it
+      // here starts nothing.
+      deviceActions.setSelectedDevice({ orchestratorId, orchestratorAgentId, deviceId, deviceName })
       setConnectionError(null)
     },
-    [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice],
+    [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions],
   )
 
   const handleConnect = useCallback(async () => {
@@ -231,6 +239,16 @@ const OrchestratorsList = () => {
         deviceActions.setRuntimeConnectionStatus('error')
         return
       }
+
+      // Remember the runtime version so version-gated UI (User Management, Persistent
+      // Storage) can react to it for the lifetime of the connection.
+      //
+      // This is the web editor's only connect path, and it was discarding the version
+      // `getUsersInfo` returns. The desktop path stores it in `board.tsx`, so the gates
+      // worked there and never here: with the version left null,
+      // `isUserManagementCapableRuntime` answers false and its tree leaf could not
+      // appear on any runtime, however new.
+      deviceActions.setRuntimeVersion(usersInfo.runtimeVersion ?? null)
 
       // Open the appropriate modal based on whether users exist
       if (usersInfo.hasUsers) {
@@ -285,36 +303,24 @@ const OrchestratorsList = () => {
     if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
       void handleDisconnect().then(() => {
         setSelectedDevice(null)
+        deviceActions.setSelectedDevice(null)
         deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
       })
       return
     }
 
     setSelectedDevice(null)
+    // The simulator is a target, not a device: clear the published choice so
+    // nothing downstream still believes a device is selected.
+    deviceActions.setSelectedDevice(null)
     setConnectionError(null)
     deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
   }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions, handleDisconnect])
 
-  // Enable timing stats in global polling when this screen is visible
-  useEffect(() => {
-    // Set the flag to include timing stats in the global status polling
-    deviceActions.setIncludeTimingStatsInPolling(true)
-
-    // Clear the flag when leaving this screen
-    return () => {
-      deviceActions.setIncludeTimingStatsInPolling(false)
-    }
-  }, [deviceActions])
-
-  // Same pattern for EtherCAT runtime status. Only fetched while this screen
-  // is mounted, so non-EtherCAT setups don't pay for the extra round-trip on
-  // every poll.
-  useEffect(() => {
-    deviceActions.setIncludeEthercatStatsInPolling(true)
-    return () => {
-      deviceActions.setIncludeEthercatStatsInPolling(false)
-    }
-  }, [deviceActions])
+  // Timing and EtherCAT stats polling moved to the Runtime Status screen
+  // (RTOP-283) along with the panels that display them. Polling here would
+  // fetch data nobody is looking at, and would leave Runtime Status with
+  // nothing to show when opened on its own.
 
   // Handle device switch confirmation
   const handleConfirmDeviceSwitch = useCallback(async () => {
@@ -325,11 +331,23 @@ const OrchestratorsList = () => {
     // Disconnect from current device first
     await handleDisconnect()
 
-    // Select the new device
+    // Select the new device — locally AND in the store. Publishing to the store
+    // is what every other selection path does (handleDeviceSelect, handleConnect
+    // and the simulator clears); leaving it out here meant that after a switch
+    // the screen showed device B while `runtimeConnection.selectedDevice` was
+    // still null (handleDisconnect had just cleared it). The debugger reads the
+    // store, so it reported "No Device Selected", and on a simulator-named board
+    // that turned into an offer to start the simulator instead.
     setSelectedDevice(pendingDeviceSwitch)
+    deviceActions.setSelectedDevice({
+      orchestratorId: pendingDeviceSwitch.orchestratorId,
+      orchestratorAgentId: pendingDeviceSwitch.orchestratorAgentId,
+      deviceId: pendingDeviceSwitch.deviceId,
+      deviceName: pendingDeviceSwitch.deviceName,
+    })
     setPendingDeviceSwitch(null)
     setConnectionError(null)
-  }, [pendingDeviceSwitch, handleDisconnect])
+  }, [pendingDeviceSwitch, handleDisconnect, deviceActions])
 
   const handleCancelDeviceSwitch = useCallback(() => {
     setShowSwitchConfirmModal(false)
@@ -339,18 +357,18 @@ const OrchestratorsList = () => {
   return (
     <div className='flex h-full w-full flex-col'>
       <div className='min-h-0 flex-1'>
-        <DeviceEditorSlot heading='Device Orchestrators'>
+        <DeviceEditorSlot heading='Edge Devices'>
           <div id='orchestrators-container' className='flex h-full w-full flex-col gap-4'>
             <div id='orchestrators-header' className='flex items-center justify-between'>
               <p className='text-sm text-neutral-600 dark:text-neutral-400'>
-                Select a device from your orchestrators to connect to.
+                Select a vPLC from your Edge Devices to connect to.
               </p>
               <button
                 type='button'
                 onClick={() => void handleRefresh()}
                 disabled={isRefreshing}
                 className={cn('group', isRefreshing && 'cursor-not-allowed opacity-50')}
-                aria-label='Refresh orchestrators'
+                aria-label='Refresh Edge Devices'
               >
                 <RefreshIcon size='sm' className={isRefreshing ? 'animate-spin' : ''} />
               </button>
@@ -383,7 +401,7 @@ const OrchestratorsList = () => {
 
             {loading && (
               <div className='flex items-center justify-center py-8'>
-                <p className='text-sm text-neutral-500 dark:text-neutral-400'>Loading orchestrators...</p>
+                <p className='text-sm text-neutral-500 dark:text-neutral-400'>Loading Edge Devices...</p>
               </div>
             )}
 
@@ -395,9 +413,9 @@ const OrchestratorsList = () => {
 
             {!loading && !error && orchestrators.length === 0 && (
               <div className='flex flex-col items-center justify-center gap-2 py-8'>
-                <p className='text-sm text-neutral-500 dark:text-neutral-400'>No orchestrators found.</p>
+                <p className='text-sm text-neutral-500 dark:text-neutral-400'>No Edge Devices found.</p>
                 <p className='text-xs text-neutral-400 dark:text-neutral-500'>
-                  Register an orchestrator in the Autonomy Edge platform to see it here.
+                  Register an Edge Device in the Autonomy Edge platform to see it here.
                 </p>
               </div>
             )}
@@ -442,7 +460,7 @@ const OrchestratorsList = () => {
                           )}
                         </div>
                         <span className='text-xs text-neutral-400 dark:text-neutral-500'>
-                          {orchestrator.devices.length} device{orchestrator.devices.length !== 1 ? 's' : ''}
+                          {orchestrator.devices.length} vPLC{orchestrator.devices.length !== 1 ? 's' : ''}
                         </span>
                       </div>
 
@@ -556,7 +574,7 @@ const OrchestratorsList = () => {
             {/* Device Switch Confirmation Modal */}
             <Modal open={showSwitchConfirmModal} onOpenChange={setShowSwitchConfirmModal}>
               <ModalContent className='flex h-[320px] w-[400px] select-none flex-col items-center justify-evenly rounded-lg'>
-                <ModalTitle className='hidden'>Switch Device</ModalTitle>
+                <ModalTitle className='hidden'>Switch vPLC</ModalTitle>
                 <div className='flex select-none flex-col items-center gap-6 p-4'>
                   <WarningIcon className='h-[60px] w-[60px]' />
                   <div className='text-center'>
@@ -565,7 +583,7 @@ const OrchestratorsList = () => {
                     </p>
                     <p className='mt-2 text-sm text-neutral-600 dark:text-neutral-400'>
                       To connect to <strong>{pendingDeviceSwitch?.deviceName}</strong>, you must disconnect from the
-                      current device first.
+                      current vPLC first.
                     </p>
                   </div>
 
@@ -596,16 +614,6 @@ const OrchestratorsList = () => {
        *  Web builds (orchestrator-driven) and Electron builds (board-
        *  screen-driven) thus render identical stats regardless of how
        *  the user navigated to the device. */}
-      {runtimeConnection.connectionStatus === 'connected' && (
-        <div
-          id='scan-cycle-stats-panel'
-          className='flex w-full shrink-0 flex-col gap-6 overflow-y-auto overflow-x-hidden p-4 lg:px-8 lg:py-4'
-        >
-          {runtimeConnection.timingStats && <ScanCycleStats timingStats={runtimeConnection.timingStats} />}
-          <EtherCATStats />
-          <PluginStatsPanel pluginStats={runtimeConnection.timingStats?.plugin_stats} />
-        </div>
-      )}
     </div>
   )
 }
