@@ -41,6 +41,10 @@ interface RuntimeSecurityProfile {
   security_policy: string
   security_mode: string
   auth_methods: string[]
+  /** Role granted to Anonymous sessions on this profile (viewer/operator/
+   *  engineer). The runtime enforces the per-variable matrix against it.
+   *  Absent -> 'viewer' (least privilege). */
+  anonymous_role: string
 }
 
 interface RuntimeServerConfig {
@@ -188,6 +192,8 @@ const buildServerConfig = (config: OpcUaServerConfig): RuntimeServerConfig => {
         security_policy: sp.securityPolicy,
         security_mode: sp.securityMode,
         auth_methods: sp.authMethods,
+        // Anonymous sessions map to this role; absent means least-privilege.
+        anonymous_role: sp.anonymousRole ?? 'viewer',
       })),
   }
 }

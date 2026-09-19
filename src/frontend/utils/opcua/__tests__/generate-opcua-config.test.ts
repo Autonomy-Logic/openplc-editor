@@ -195,6 +195,26 @@ describe('generateOpcUaConfig', () => {
     expect(profiles[0].name).toBe('None-None')
   })
 
+  it('defaults the anonymous session role to viewer when unset', () => {
+    const cfg = baseServerConfig()
+    // baseServerConfig's profile carries no anonymousRole (older projects).
+    const json = generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), [])!
+    const parsed = JSON.parse(json) as Array<{
+      config: { server: { security_profiles: Array<{ anonymous_role: string }> } }
+    }>
+    expect(parsed[0].config.server.security_profiles[0].anonymous_role).toBe('viewer')
+  })
+
+  it('passes an explicit anonymous session role through to the runtime config', () => {
+    const cfg = baseServerConfig()
+    cfg.securityProfiles[0].anonymousRole = 'engineer'
+    const json = generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), [])!
+    const parsed = JSON.parse(json) as Array<{
+      config: { server: { security_profiles: Array<{ anonymous_role: string }> } }
+    }>
+    expect(parsed[0].config.server.security_profiles[0].anonymous_role).toBe('engineer')
+  })
+
   it('maps security config with trusted certificates', () => {
     const cfg = baseServerConfig()
     cfg.security.trustedClientCertificates = [{ id: 'c1', pem: '-----BEGIN-----\n...' }]

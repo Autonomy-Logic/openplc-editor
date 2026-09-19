@@ -37,6 +37,17 @@ const SECURITY_MODES: { value: SecurityMode; label: string }[] = [
   { value: 'SignAndEncrypt', label: 'Sign and Encrypt' },
 ]
 
+type UserRole = 'viewer' | 'operator' | 'engineer'
+
+// An anonymous session carries no identity, so the role it maps to is stated
+// explicitly here rather than inferred. Least-privilege 'viewer' is the default;
+// raising it is a deliberate choice to let unauthenticated clients write.
+const ANONYMOUS_ROLES: { value: UserRole; label: string }[] = [
+  { value: 'viewer', label: 'Viewer (read-only)' },
+  { value: 'operator', label: 'Operator (read/write per variable)' },
+  { value: 'engineer', label: 'Engineer (full access)' },
+]
+
 export const SecurityProfileModal = ({
   isOpen,
   onClose,
@@ -52,6 +63,7 @@ export const SecurityProfileModal = ({
   const [securityPolicy, setSecurityPolicy] = useState<SecurityPolicy>('None')
   const [securityMode, setSecurityMode] = useState<SecurityMode>('None')
   const [authMethods, setAuthMethods] = useState<AuthMethod[]>(['Anonymous'])
+  const [anonymousRole, setAnonymousRole] = useState<UserRole>('viewer')
 
   // Reset form when modal opens/closes or profile changes
   useEffect(() => {
@@ -61,6 +73,8 @@ export const SecurityProfileModal = ({
       setSecurityPolicy(existingProfile.securityPolicy)
       setSecurityMode(existingProfile.securityMode)
       setAuthMethods(existingProfile.authMethods)
+      // Projects authored before this field default to viewer (least privilege).
+      setAnonymousRole(existingProfile.anonymousRole ?? 'viewer')
     } else if (isOpen && !existingProfile) {
       // Reset to defaults for new profile
       setName('')
@@ -68,6 +82,7 @@ export const SecurityProfileModal = ({
       setSecurityPolicy('None')
       setSecurityMode('None')
       setAuthMethods(['Anonymous'])
+      setAnonymousRole('viewer')
     }
   }, [isOpen, existingProfile])
 
@@ -167,11 +182,12 @@ export const SecurityProfileModal = ({
       securityPolicy,
       securityMode,
       authMethods,
+      anonymousRole,
     }
 
     onSave(profile)
     onClose()
-  }, [isValid, name, enabled, securityPolicy, securityMode, authMethods, existingProfile, onSave, onClose])
+  }, [isValid, name, enabled, securityPolicy, securityMode, authMethods, anonymousRole, existingProfile, onSave, onClose])
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -319,6 +335,40 @@ export const SecurityProfileModal = ({
                 </span>
               </div>
             </div>
+
+            {/* Anonymous session role — only relevant when Anonymous is enabled */}
+            {authMethods.includes('Anonymous') && (
+              <div className='flex flex-col gap-2 pl-8'>
+                <Label className='text-xs text-neutral-950 dark:text-white'>Anonymous session role</Label>
+                <Select value={anonymousRole} onValueChange={(v) => setAnonymousRole(v as UserRole)}>
+                  <SelectTrigger
+                    withIndicator
+                    placeholder='Select role'
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                    {ANONYMOUS_ROLES.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        className={cn(
+                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                          'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                        )}
+                      >
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                  Role granted to anonymous clients. Per-variable permissions still apply. Defaults to Viewer
+                  (read-only); raise it only to deliberately allow unauthenticated writes.
+                </span>
+              </div>
+            )}
 
             {/* Username */}
             <div className='flex items-center gap-3'>
