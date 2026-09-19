@@ -78,8 +78,8 @@ describe('listRecentCloudProjects', () => {
     await expect(listRecentCloudProjects(5)).resolves.toEqual({
       status: 'ok',
       projects: [
-        { id: 'p1', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' },
-        { id: 'p2', name: 'No language', language: null, updatedAt: '2026-08-23T10:00:00.000Z' },
+        { id: 'p1', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z', locked: false },
+        { id: 'p2', name: 'No language', language: null, updatedAt: '2026-08-23T10:00:00.000Z', locked: false },
       ],
     })
   })
@@ -99,7 +99,59 @@ describe('listRecentCloudProjects', () => {
     // A card with no id is a card that does nothing when clicked.
     await expect(listRecentCloudProjects(5)).resolves.toEqual({
       status: 'ok',
-      projects: [{ id: 'p3', name: 'Fine', language: null, updatedAt: '2026-08-24T00:00:00.000Z' }],
+      projects: [{ id: 'p3', name: 'Fine', language: null, updatedAt: '2026-08-24T00:00:00.000Z', locked: false }],
+    })
+  })
+
+  /**
+   * A project past the plan's private-project limit is read-only on Edge, which
+   * answers 403 to save and commit. The desktop listed it like any other and
+   * only found out on save, so the state has to arrive with the list.
+   */
+  describe('the plan-limit lock', () => {
+    const rows = ok({
+      projects: [
+        { id: 'p1', name: 'Locked', language: 'st', updatedAt: '2026-08-24T00:00:00.000Z' },
+        { id: 'p2', name: 'Fine', language: 'st', updatedAt: '2026-08-23T00:00:00.000Z' },
+      ],
+    })
+
+    it('marks the projects the overflow endpoint names', async () => {
+      request.mockResolvedValueOnce(rows).mockResolvedValueOnce(ok({ projectIds: ['p1'] }))
+
+      const result = await listRecentCloudProjects(5)
+
+      expect(result).toEqual({
+        status: 'ok',
+        projects: [
+          expect.objectContaining({ id: 'p1', locked: true }),
+          expect.objectContaining({ id: 'p2', locked: false }),
+        ],
+      })
+    })
+
+    it('asks the same endpoint the Edge SPA drives its own lock from', async () => {
+      request.mockResolvedValueOnce(rows).mockResolvedValueOnce(ok({ projectIds: [] }))
+
+      await listRecentCloudProjects(5)
+
+      expect(request.mock.calls[1]?.[0]).toBe('/me/overflow')
+    })
+
+    it('still lists the projects when it cannot find out', async () => {
+      request.mockResolvedValueOnce(rows).mockRejectedValueOnce(new Error('offline'))
+
+      const result = await listRecentCloudProjects(5)
+
+      // Not knowing must not cost the user their list, and it fails safe: an
+      // unmarked locked project is still refused by the API.
+      expect(result).toEqual({
+        status: 'ok',
+        projects: [
+          expect.objectContaining({ id: 'p1', locked: false }),
+          expect.objectContaining({ id: 'p2', locked: false }),
+        ],
+      })
     })
   })
 
@@ -395,6 +447,21 @@ describe('saveCloudProject', () => {
     request.mockResolvedValueOnce({ status: 403, body: '{}' })
 
     await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false })
+  })
+
+  it('explains a plan-limit refusal instead of quoting the contract string', async () => {
+    serverHas()
+    request.mockResolvedValueOnce({
+      status: 403,
+      body: JSON.stringify({ error: { message: 'RESOURCE_OVER_LIMIT_AFTER_DOWNGRADE' } }),
+    })
+
+    const result = await saveCloudProject(files)
+
+    expect(result.success).toBe(false)
+    // The API's own word is a contract token, not a sentence to show anyone.
+    expect(result.error).not.toContain('RESOURCE_OVER_LIMIT')
+    expect(result.error).toMatch(/read-only/i)
   })
 
   it('does not write at all when the project could not be read first', async () => {

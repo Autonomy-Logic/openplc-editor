@@ -114,6 +114,17 @@ export class MergeConflictError extends Error {
     this.conflictedFiles = conflictedFiles
   }
 }
+/**
+ * The exact string Autonomy Edge answers with, as a 403, when the project sits
+ * beyond the plan's private-project limit. It is a stable contract, not prose,
+ * so it must be recognised rather than shown.
+ */
+export const OVER_PLAN_LIMIT = 'RESOURCE_OVER_LIMIT_AFTER_DOWNGRADE'
+
+/** What to say instead — the same sentence Edge's own SPA uses. */
+export const OVER_PLAN_LIMIT_MESSAGE =
+  'This project is over your plan\'s private-project limit, so it is read-only. You can still open it on Autonomy Edge to make it public, download it, or delete it.'
+
 
 /** How a version-control operation can fail, as data rather than an exception (IPC structure-clones the value). */
 export type VersionControlFailure =

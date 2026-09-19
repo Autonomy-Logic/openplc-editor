@@ -2,7 +2,12 @@
 
 import { z } from 'zod'
 
-import type { VersionControlFailure, VersionControlResult } from '../../../middleware/shared/ports/version-control-port'
+import {
+  OVER_PLAN_LIMIT,
+  OVER_PLAN_LIMIT_MESSAGE,
+  type VersionControlFailure,
+  type VersionControlResult,
+} from '../../../middleware/shared/ports/version-control-port'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBody } from '../edge-account/edge-http'
 import { logger } from '../services'
@@ -58,7 +63,9 @@ function messageFromBody(body: string, status: number): string {
   }
 
   if (typeof raw === 'string' && raw.length > 0) {
-    return raw
+    // A contract string, not a sentence: showing it verbatim put
+    // `RESOURCE_OVER_LIMIT_AFTER_DOWNGRADE` in front of the user.
+    return raw === OVER_PLAN_LIMIT ? OVER_PLAN_LIMIT_MESSAGE : raw
   }
 
   return `Autonomy Edge answered ${status}.`

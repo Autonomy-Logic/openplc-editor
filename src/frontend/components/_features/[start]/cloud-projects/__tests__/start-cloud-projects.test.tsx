@@ -156,6 +156,36 @@ describe('StartCloudProjects', () => {
     await waitFor(() => expect(openPLCStoreBase.getState().project.meta.path).toBe('p1'))
   })
 
+  /**
+   * Edge refuses every write on a project past the plan's private limit, and
+   * its own SPA disables "open in editor" for it. The desktop listed it like
+   * any other, opened it, and let the user edit and commit until the API said
+   * no — so the editor has to know the state, not discover it on save.
+   */
+  describe('a project the plan no longer allows', () => {
+    beforeEach(() => {
+      listRecentCloudProjects.mockResolvedValue({
+        status: 'ok',
+        projects: [{ ...PROJECT, locked: true }],
+      })
+    })
+
+    it('does not open it, and says why instead', async () => {
+      renderSection({ searchNameFilterValue: '' })
+      await userEvent.click(await screen.findByText(PROJECT.name))
+
+      expect(openProjectByPath).not.toHaveBeenCalled()
+      await waitFor(() => expect(lastToast()?.description).toMatch(/plan that allows private projects/i))
+    })
+
+    it('marks it in the list rather than hiding it', async () => {
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(await screen.findByText(PROJECT.name)).not.toBeNull()
+      expect(await screen.findByLabelText(/needs a plan with private projects/i)).not.toBeNull()
+    })
+  })
+
   it('reports a failed open with the reason the adapter gave', async () => {
     openProjectByPath.mockResolvedValueOnce({
       success: false,

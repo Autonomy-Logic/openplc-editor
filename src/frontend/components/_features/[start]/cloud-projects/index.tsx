@@ -3,18 +3,29 @@
  * stays reserved whether or not anyone is signed in, so the layout never reflows.
  */
 
-import { CloudUpload } from 'lucide-react'
+import { CloudUpload, Lock } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { CloudProjectsResult, CloudProjectSummary } from '../../../../../middleware/shared/ports/project-port'
 import { useCapabilities, useEdgeAccountPort, useProject } from '../../../../../middleware/shared/providers'
 import { useOpenPLCStore } from '../../../../store'
+import { cn } from '../../../../utils/cn'
 import { File } from '../../../_atoms/file'
 import { EdgeSignInModal } from '../../../_organisms/edge-sign-in-modal'
 import { toast } from '../../[app]/toast/use-toast'
 
 /** A shortcut to recent work, not a project browser — Edge's own SPA covers everything. */
 const RECENT_LIMIT = 5
+
+/**
+ * Word for word what Edge's own SPA says when it refuses to open a locked
+ * project. Two screens explaining the same rule differently is how a user
+ * concludes one of them is broken.
+ */
+const LOCKED_REASON =
+  'You need a plan that allows private projects to open this one in the editor. You can still make it public, download it, or delete it.'
+
+const LOCKED_TOOLTIP = 'Locked, needs a plan with private projects'
 
 export type StartCloudProjectsProps = {
   searchNameFilterValue: string
@@ -73,6 +84,14 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudP
   }, [available, edgeAccount, load])
 
   const openProject = async (summary: CloudProjectSummary) => {
+    // Refused here rather than on the way back: Edge now answers 403 to every
+    // write on this project, so opening it would only lead to a save that fails.
+    if (summary.locked) {
+      toast({ title: 'This project is locked.', description: LOCKED_REASON, variant: 'fail' })
+
+      return
+    }
+
     const result = await project.openProjectByPath(summary.id)
 
     if (result.success && result.data) {
@@ -172,14 +191,23 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudP
       ) : (
         <div className='flex h-auto w-full flex-wrap gap-[25px]'>
           {visible.map((summary) => (
-            <File
-              key={summary.id}
-              onClick={() => void openProject(summary)}
-              className='overflow-hidden'
-              projectName={summary.name}
-              projectPath='Autonomy Edge'
-              lastModified={new Date(summary.updatedAt).toLocaleString()}
-            />
+            <div key={summary.id} className='relative' title={summary.locked ? LOCKED_TOOLTIP : undefined}>
+              <File
+                onClick={() => void openProject(summary)}
+                className={cn('overflow-hidden', summary.locked && 'opacity-50 grayscale')}
+                projectName={summary.name}
+                projectPath='Autonomy Edge'
+                lastModified={new Date(summary.updatedAt).toLocaleString()}
+              />
+              {summary.locked ? (
+                <span
+                  aria-label={LOCKED_TOOLTIP}
+                  className='pointer-events-none absolute right-3 top-9 flex size-6 items-center justify-center rounded-md bg-neutral-900/80 text-white'
+                >
+                  <Lock className='size-3.5' />
+                </span>
+              ) : null}
+            </div>
           ))}
         </div>
       )}

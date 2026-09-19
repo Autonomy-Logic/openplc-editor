@@ -12,6 +12,10 @@ import type {
   WriteProjectFiles,
 } from '../../../middleware/shared/ports/project-port'
 import {
+  OVER_PLAN_LIMIT,
+  OVER_PLAN_LIMIT_MESSAGE,
+} from '../../../middleware/shared/ports/version-control-port'
+import {
   apiFilesToRaw,
   ApiProjectFilesSchema,
   envelopeFromWriteProjectFiles,
@@ -25,6 +29,9 @@ import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
+
+/** Only `projectIds` is read; the endpoint also carries orchestrators, devices and seats. */
+const OverflowSchema = envelopeOf(z.object({ projectIds: z.array(z.unknown()).nullish() }))
 
 /** Fields stay `unknown`: the narrowing below decides whether a row is usable at all. */
 const ApiProjectRowSchema = z
@@ -61,6 +68,34 @@ const UNREADABLE_PROJECT = 'Autonomy Edge returned a project this editor cannot 
  * Ordered by the server, since sorting a truncated page locally would be wrong. Which
  * kind of nothing it found is reported, as the start screen words each one differently.
  */
+/**
+ * Project ids the account can no longer write to: they sit beyond the active
+ * plan's private-project limit, so Edge answers 403 to save, commit and every
+ * other mutation (UC04 / RF12). Edge's own SPA drives its lock off this exact
+ * endpoint, so asking it here is what keeps the two screens agreeing.
+ *
+ * A failure returns an empty set rather than propagating. Not knowing must not
+ * cost the user their project list, and it fails safe in the right direction:
+ * an unmarked locked project still gets refused by the API.
+ */
+async function lockedProjectIds(): Promise<Set<string>> {
+  let response: { status: number; body: string } | null
+
+  try {
+    response = await edgeAuthedRequest('/me/overflow')
+  } catch {
+    return new Set()
+  }
+
+  if (!response || response.status < 200 || response.status >= 300) {
+    return new Set()
+  }
+
+  const ids = parseJsonBodyAs(response.body, OverflowSchema)?.data?.projectIds
+
+  return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
+}
+
 export async function listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
   const query = new URLSearchParams({ limit: String(limit), sortBy: 'updatedAt', sortOrder: 'desc' })
 
@@ -91,6 +126,8 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
 
   // Narrowed field by field, not cast: a row missing an id would otherwise become a
   // list entry that cannot be opened.
+  const locked = await lockedProjectIds()
+
   const projects = rows.flatMap((row) => {
     if (typeof row?.id !== 'string' || typeof row.name !== 'string' || typeof row.updatedAt !== 'string') {
       return []
@@ -102,6 +139,7 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
         name: row.name,
         language: typeof row.language === 'string' ? row.language : null,
         updatedAt: row.updatedAt,
+        locked: locked.has(row.id),
       },
     ]
   })
@@ -251,6 +289,12 @@ async function writeEnvelope(
   }
 
   if (response.status < 200 || response.status >= 300) {
+    // 403 here is almost always the plan limit rather than a permission the
+    // user could fix, and the body carries a contract string, not a sentence.
+    if (response.status === 403 && response.body.includes(OVER_PLAN_LIMIT)) {
+      return { success: false, error: OVER_PLAN_LIMIT_MESSAGE }
+    }
+
     return { success: false, error: `Autonomy Edge answered ${response.status}.` }
   }
 

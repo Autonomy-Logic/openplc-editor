@@ -166,6 +166,13 @@ export interface CloudProjectSummary {
   language?: string | null
   /** ISO timestamp of the last change, which is what "recent" is ordered by. */
   updatedAt: string
+  /**
+   * The project sits beyond the plan's private-project limit, so Edge answers
+   * 403 to every write. Absent when the platform cannot tell, which reads as
+   * "not locked" — a project wrongly shown as open still fails safely at the
+   * API, whereas one wrongly shown as locked cannot be opened at all.
+   */
+  locked?: boolean
 }
 
 /** Flattened, with `depth` to read back as a tree. */
@@ -207,6 +214,7 @@ export const CloudProjectsResultSchema = z.union([
         name: z.string(),
         language: z.string().nullish(),
         updatedAt: z.string(),
+        locked: z.boolean().optional(),
       }),
     ),
   }),
