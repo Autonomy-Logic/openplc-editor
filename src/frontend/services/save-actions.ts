@@ -744,12 +744,26 @@ export async function executeSaveActiveFile(
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  const name = openPLCStoreBase.getState().editor.meta.name
-  if (!name) {
+  const state = openPLCStoreBase.getState()
+
+  // The start screen is `path === ''` (see App.tsx). Ctrl+S there is a stray
+  // keystroke rather than a save that failed, so it says nothing.
+  if (!state.project.meta.path) {
+    return { success: false }
+  }
+
+  const editor = state.editor
+
+  // `available` is the union's "nothing open" case, and its `meta.name` holds
+  // the literal string 'available'. Checking the name therefore read as a real
+  // file and fell through to the save, which then failed looking for a file
+  // called "available" — the discriminant is the field to test.
+  if (editor.type === 'available' || !editor.meta.name) {
     toast({ title: 'No file open', description: 'There is no file to save.', variant: 'fail' })
     return { success: false }
   }
-  return executeSaveFile(name, projectPort, capabilities)
+
+  return executeSaveFile(editor.meta.name, projectPort, capabilities)
 }
 
 export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {

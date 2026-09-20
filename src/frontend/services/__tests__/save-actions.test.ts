@@ -7,7 +7,12 @@ import { openPLCStoreBase } from '../../store'
 import type { LadderFlowType } from '../../store/slices/ladder'
 import { getMemoryState } from '../../utils/toast'
 import { hasSaveWaitingForSignIn, resetResumeSaveForTests } from '../resume-save-after-sign-in'
-import { buildAllProjectFileContentsPure, executeSaveFile, executeSaveProject } from '../save-actions'
+import {
+  buildAllProjectFileContentsPure,
+  executeSaveActiveFile,
+  executeSaveFile,
+  executeSaveProject,
+} from '../save-actions'
 
 // hasEdgeAccount is explicit: omitting it would silently route a future case down the wrong branch.
 const capabilities = { isNativeApplication: true, hasEdgeAccount: true } as PlatformCapabilities
@@ -71,6 +76,48 @@ describe('save-actions', () => {
 
   afterEach(() => {
     warn.mockRestore()
+  })
+
+  /**
+   * Ctrl+S on the start screen ran a real save. `editor.meta.name` is the
+   * literal string 'available' while nothing is open — the union's "no editor"
+   * case carries it as a placeholder — so the emptiness check passed and the
+   * save went looking for a file by that name, reporting
+   * `File "available" not found` on a screen with no project at all.
+   */
+  describe('executeSaveActiveFile', () => {
+    let path: string
+
+    beforeEach(() => {
+      path = openPLCStoreBase.getState().project.meta.path
+    })
+
+    afterEach(() => {
+      openPLCStoreBase.getState().projectActions.updateMetaPath(path)
+    })
+
+    it('says nothing at all on the start screen, where there is no project', async () => {
+      openPLCStoreBase.getState().projectActions.updateMetaPath('')
+      const before = getMemoryState().toasts.length
+
+      const result = await executeSaveActiveFile(makeProjectPort(), capabilities)
+
+      expect(result.success).toBe(false)
+      // A stray keystroke is not a failed save: no toast, and nothing attempted.
+      expect(getMemoryState().toasts.length).toBe(before)
+    })
+
+    it('does not mistake the placeholder editor for an open file', async () => {
+      openPLCStoreBase.getState().projectActions.updateMetaPath('/some/project')
+      const projectPort = makeProjectPort()
+
+      const result = await executeSaveActiveFile(projectPort, capabilities)
+
+      expect(result.success).toBe(false)
+      expect(lastToast()).toMatchObject({ title: 'No file open' })
+      // The old code reached the write and failed on a file called "available".
+      expect(projectPort.saveFile).not.toHaveBeenCalled()
+    })
   })
 
   describe('executeSaveProject', () => {
