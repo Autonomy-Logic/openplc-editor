@@ -8,13 +8,15 @@ import { StartAccountSection } from '../components/_features/[start]/account'
 import { StartCloudProjects } from '../components/_features/[start]/cloud-projects'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
-import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
+import { ProjectFilterBar, type ProjectOrder } from '../components/_organisms/project-filter-bar'
 import { StartMainContent } from '../components/_templates/[start]/main-content'
 import { StartSideContent } from '../components/_templates/[start]/side-content'
 import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
+  // Held here because the bar orders both lists below it, not just the local one.
+  const [orderBy, setOrderBy] = useState<ProjectOrder>('Recent')
   // Bumped when the Edge account changes, so the sibling cloud list re-reads.
   const [cloudRevision, setCloudRevision] = useState(0)
   const capabilities = useCapabilities()
@@ -117,9 +119,9 @@ const StartScreen = () => {
         </MenuRoot>
       </StartSideContent>
       <StartMainContent>
-        <ProjectFilterBar setSearchFilterValue={searchFilter} />
+        <ProjectFilterBar setSearchFilterValue={searchFilter} setOrderBy={setOrderBy} />
         {/* Hidden entirely when there is nothing to show; the filter box covers both sections. */}
-        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} />
+        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} orderBy={orderBy} />
         <DisplayRecentProjects
           searchNameFilterValue={searchFilterValue}
           onProjectUploaded={() => setCloudRevision((current) => current + 1)}

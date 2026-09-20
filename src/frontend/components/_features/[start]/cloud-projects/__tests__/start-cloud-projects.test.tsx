@@ -22,7 +22,7 @@ import { PlatformProvider } from '../../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
 import { openPLCStoreBase } from '../../../../../store'
 import { dispatch, getMemoryState } from '../../../../../utils/toast'
-import { StartCloudProjects } from '..'
+import { StartCloudProjects, type StartCloudProjectsProps } from '..'
 
 /** A port whose every method answers `undefined`, except the ones handed in. */
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
@@ -88,7 +88,7 @@ const accountPort: EdgeAccountPort = {
   },
 }
 
-function renderSection(props: { searchNameFilterValue: string; revision?: number }) {
+function renderSection(props: StartCloudProjectsProps) {
   const ports = makePorts({ capabilities, project: projectPort, edgeAccount: accountPort })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <PlatformProvider ports={ports}>{children}</PlatformProvider>
@@ -183,6 +183,50 @@ describe('StartCloudProjects', () => {
 
       expect(await screen.findByText(PROJECT.name)).not.toBeNull()
       expect(await screen.findByLabelText(/needs a plan with private projects/i)).not.toBeNull()
+    })
+  })
+
+  /**
+   * The "Order by" control sorted only the local list: it rewrote the store's
+   * `recent` array in place, and this section never reads that. Switching
+   * between Recent and Name left the cloud cards in the same order.
+   */
+  describe('the order the list is shown in', () => {
+    const ROWS = [
+      { id: 'a', name: 'Zebra', language: 'st', updatedAt: '2026-08-26T00:00:00.000Z' },
+      { id: 'b', name: 'Alpha', language: 'st', updatedAt: '2026-08-24T00:00:00.000Z' },
+      { id: 'c', name: 'Mango', language: 'st', updatedAt: '2026-08-25T00:00:00.000Z' },
+    ]
+
+    const shown = () =>
+      screen
+        .getAllByText(/^(Zebra|Alpha|Mango)$/)
+        .map((node) => node.textContent)
+
+    beforeEach(() => {
+      listRecentCloudProjects.mockResolvedValue({ status: 'ok', projects: ROWS })
+    })
+
+    it('puts the newest first by default', async () => {
+      renderSection({ searchNameFilterValue: '' })
+      await screen.findByText('Zebra')
+
+      expect(shown()).toEqual(['Zebra', 'Mango', 'Alpha'])
+    })
+
+    it('orders by name when asked', async () => {
+      renderSection({ searchNameFilterValue: '', orderBy: 'Name' })
+      await screen.findByText('Zebra')
+
+      expect(shown()).toEqual(['Alpha', 'Mango', 'Zebra'])
+    })
+
+    it('still orders what a search narrowed down', async () => {
+      renderSection({ searchNameFilterValue: 'a', orderBy: 'Name' })
+      await screen.findByText('Alpha')
+
+      // All three contain an "a"; the filter must not undo the ordering.
+      expect(shown()).toEqual(['Alpha', 'Mango', 'Zebra'])
     })
   })
 

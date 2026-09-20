@@ -6,16 +6,25 @@ import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { useOpenPLCStore } from '../../../store'
 import { InputWithRef } from '../../_atoms/input'
 
+/** The two orderings the control offers; also the label shown on the trigger. */
+export type ProjectOrder = 'Recent' | 'Name'
+
 interface ProjectFilterBarProps {
   setSearchFilterValue: (searchNameFilterValue: string) => void
+  /**
+   * Lifted for the same reason the search value is: this bar sits above both
+   * project lists, but it used to order only the local one — it sorted the
+   * store's `recent` array in place, which the cloud section does not read.
+   */
+  setOrderBy?: (order: ProjectOrder) => void
 }
 
-const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({ setSearchFilterValue }): ReactNode => {
+const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({ setSearchFilterValue, setOrderBy }): ReactNode => {
   const {
     workspace: { recent },
     workspaceActions: { setRecent },
   } = useOpenPLCStore()
-  const [projectFilter, setProjectFilter] = useState('Recent')
+  const [projectFilter, setProjectFilter] = useState<ProjectOrder>('Recent')
   useEffect(() => {
     let sortedProjects = []
 
@@ -33,6 +42,12 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({ setSearchFilterValu
     }
     setRecent(sortedProjects)
   }, [projectFilter])
+
+  // Separate effect: the sort above rewrites the store, and folding the two
+  // together would make the cloud list depend on the local one being present.
+  useEffect(() => {
+    setOrderBy?.(projectFilter)
+  }, [projectFilter, setOrderBy])
 
   return (
     <div

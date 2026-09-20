@@ -29,11 +29,20 @@ const LOCKED_TOOLTIP = 'Locked, needs a plan with private projects'
 
 export type StartCloudProjectsProps = {
   searchNameFilterValue: string
+  /**
+   * Shared with the local list, from the one "Order by" control above both.
+   *
+   * Applied to the page already fetched, not to the query: the server is asked
+   * for the most recently changed projects, so ordering by name re-arranges
+   * those, it does not go and find the alphabetically first ones. That matches
+   * what the section is — a shortcut to recent work, not a project browser.
+   */
+  orderBy?: 'Recent' | 'Name'
   /** Bumped to force a re-read; a counter keeps it an ordinary effect dependency. */
   revision?: number
 }
 
-const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudProjectsProps) => {
+const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Recent' }: StartCloudProjectsProps) => {
   const caps = useCapabilities()
   const edgeAccount = useEdgeAccountPort()
   const project = useProject()
@@ -109,7 +118,14 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0 }: StartCloudP
 
   const filter = searchNameFilterValue.trim().toLowerCase()
   const projects = result?.status === 'ok' ? result.projects : []
-  const visible = filter ? projects.filter((summary) => summary.name.toLowerCase().includes(filter)) : projects
+  const matching = filter ? projects.filter((summary) => summary.name.toLowerCase().includes(filter)) : projects
+  // Copied before sorting: `result.projects` is state, and sorting in place
+  // would mutate it without React ever hearing about the change.
+  const visible = [...matching].sort((a, b) =>
+    orderBy === 'Name'
+      ? a.name.localeCompare(b.name)
+      : new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  )
 
   // `edgeAccount` is checked here, once, so the rest of the render can use it without a null check.
   if (!available || !edgeAccount || result?.status === 'unavailable') {
