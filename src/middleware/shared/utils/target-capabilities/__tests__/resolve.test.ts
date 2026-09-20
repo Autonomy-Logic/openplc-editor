@@ -16,12 +16,45 @@ describe('resolveTargetCapabilities', () => {
     expect(caps.debuggerTransports).toEqual([])
   })
 
+  // The presets carry no nested `opcua` / `s7` block; the resolver fills them
+  // whenever the matching server flag is on, so a target that declares nothing
+  // still gets a usable profile. Compared field-by-field rather than with
+  // toEqual for that reason.
   it('returns Simulator preset for compiler="simulator"', () => {
-    expect(resolveTargetCapabilities({ compiler: 'simulator' })).toEqual(SIMULATOR_CAPABILITIES)
+    expect(resolveTargetCapabilities({ compiler: 'simulator' })).toMatchObject(SIMULATOR_CAPABILITIES)
   })
 
   it('returns Runtime v4 preset for compiler="openplc-compiler" (non-VPP)', () => {
-    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' })).toEqual(RUNTIME_V4_CAPABILITIES)
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' })).toMatchObject(RUNTIME_V4_CAPABILITIES)
+  })
+
+  it('fills the nested profiles even with no capability block at all', () => {
+    // The regression this guards: the resolver used to return the preset
+    // unchanged when a board carried no `capabilities`, leaving `opcua`
+    // undefined on a target whose preset enables the server. The pipeline tests
+    // `capability && profile` before emitting a config header, so such a target
+    // silently got no server.
+    const caps = resolveTargetCapabilities({ compiler: 'simulator' })
+    expect(caps.opcuaServer).toBe(true)
+    expect(caps.opcua).toBeDefined()
+    expect(caps.s7).toBeDefined()
+  })
+
+  it('defaults to the MOST COMPATIBLE profile, not the most capable', () => {
+    // A target that says nothing about itself gets the configuration that
+    // works everywhere: no security policy, no certificates, and no assumed
+    // crypto hardware. Anything else would be the editor guessing that
+    // silicon it has never heard of can do RSA.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { opcuaServer: true, s7Server: true },
+    })
+    expect(caps.opcua?.security).toBe('none')
+    expect(caps.opcua?.certificates).toBe(false)
+    expect(caps.opcua?.subscriptions).toBe(false)
+    expect(caps.opcua?.hw).toEqual({ sha256: false, aes: false, pk: false, trng: false, rtc: false })
+    expect(caps.s7?.pduSize).toBe(240)
+    expect(caps.s7?.szl).toBe(true)
   })
 
   it('flips vppIo on when the board is marked as VPP-derived', () => {
@@ -160,5 +193,49 @@ describe('preset shapes', () => {
     expect(RUNTIME_V3_CAPABILITIES.modbusRtuServer).toBe(false)
     expect(RUNTIME_V4_CAPABILITIES.modbusRtuServer).toBe(false)
     expect(ARDUINO_CLI_CAPABILITIES.modbusRtuServer).toBe(true)
+  })
+})
+
+describe('the S7 profile', () => {
+  it('is materialised only for a target that can host an S7 server', () => {
+    // A profile on a target that cannot host one is noise, and leaving it
+    // undefined keeps EMPTY_CAPABILITIES genuinely empty.
+    const without = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: false } })
+    expect(without.s7).toBeUndefined()
+
+    const with7 = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: true } })
+    expect(with7.s7).toBeDefined()
+  })
+
+  it('fills everything a manifest did not declare', () => {
+    // A VPP declares only what it raises. A shallow spread would leave the
+    // rest undefined and the generated header would be missing defines.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { s7Server: true, s7: { maxClients: 4 } },
+    })
+    expect(caps.s7?.maxClients).toBe(4)
+    expect(caps.s7?.pduSize).toBe(240)
+    expect(caps.s7?.maxDataBlocks).toBe(8)
+    expect(caps.s7?.writeEnabled).toBe(true)
+    expect(caps.s7?.szl).toBe(true)
+  })
+
+  it('defaults below Runtime v4, deliberately', () => {
+    // v4 allows 32 clients and 64 DBs because it is a Linux process with a
+    // thread each. Here every client is a PDU pair in .bss.
+    const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: true } })
+    expect(caps.s7?.maxClients).toBe(2)
+    expect(caps.s7?.maxDataBlocks).toBe(8)
+  })
+
+  it('leaves the OPC-UA profile alone', () => {
+    // The two are independent blocks; resolving one must not disturb the other.
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { s7Server: true, opcuaServer: true, opcua: { maxSessions: 2 } },
+    })
+    expect(caps.opcua?.maxSessions).toBe(2)
+    expect(caps.s7?.maxClients).toBe(2)
   })
 })

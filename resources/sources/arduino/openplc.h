@@ -114,6 +114,21 @@ void updateOutputBuffers();
  * ---------------------------------------------------------------------- */
 uint8_t hardwareStateSwitch(void);
 
+/* ---- Optional: reboot into the device's firmware bootloader ------------
+ * Weak default is a no-op; a HAL whose device has a resident bootloader
+ * overrides it so the editor can re-flash over the network. Invoked from the
+ * Modbus FC 0x4C handler after the response frame is built but before the
+ * transport sends it, so an implementation must ARM the reset, not perform it. */
+void hardwareRebootToBootloader(void);
+
+/* ---- Optional: programming lock ---------------------------------------
+ * A device that can be locked at the panel reports it here; the runtime checks
+ * it before honouring reboot-to-bootloader FC 0x4C. Both are called from the
+ * Modbus handler and must return immediately without blocking: the unlock answer
+ * arrives as a later change of hardwareProgrammingLocked(). */
+uint8_t hardwareProgrammingLocked(void);
+void    hardwarePromptUnlock(void);
+
 /* ---- Optional: state indication ----------------------------------------
  * There is no indication callback. The runtime holds the state; a HAL with
  * a status LED reads it inside updateOutputBuffers() (which the runtime

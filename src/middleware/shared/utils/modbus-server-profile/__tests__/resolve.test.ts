@@ -197,7 +197,7 @@ describe('resolveModbusServerProfile', () => {
 })
 
 /**
- * A package published before 4.4.0 declares no `io` block. The screen used to
+ * A package published before 4.3.0 declares no `io` block. The screen used to
  * answer that by showing nothing — no counts, no address map — on a board that
  * plainly has both, which is what a user hits the moment they upgrade the
  * editor without updating their packages.

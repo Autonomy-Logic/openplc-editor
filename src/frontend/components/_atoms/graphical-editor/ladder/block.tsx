@@ -433,8 +433,49 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   // saved since in-outs became input-only.
   const staleInOutSourcePins = useMemo(() => legacyInOutSourcePinIds(data), [data])
 
+  // Output pins that already have a NAMED variable of their own on the rung, so
+  // the block must not draw a second badge for the same value.
+  //
+  // Derived from the rung's own nodes, not from `data.connectedVariables`. That
+  // field is a denormalised cache and it does not carry output entries in
+  // practice -- a CTU with `current_count` wired to CV records only its inputs
+  // (`R`, `PV`), so the skip never fired and CV was badged twice: once by the
+  // block, once by the variable. The rung graph is the authority, and reading it
+  // also fixes projects saved before now without a migration.
+  //
+  // An output variable node with an EMPTY name is a bare pin stub (every TON
+  // carries one for ET). That is not a connected variable, it shows no badge of
+  // its own, and the block's badge is the only place its value appears -- so it
+  // must NOT suppress anything.
+  // Subscribe to the flows array only (a stable reference until the ladder
+  // actually changes), then derive in a memo. As a live selector this ran its
+  // whole-POU scan on EVERY store update — a debug-value tick, a cursor move —
+  // once per rendered block; keyed on the flows reference it runs only when the
+  // ladder is edited.
+  const ladderFlows = useOpenPLCStore((state) => state.ladderFlows)
+  const connectedOutputKey = useMemo(() => {
+    const rung = ladderFlows.find((flow) => flow.name === pouName)?.rungs.find((r) => r.nodes.some((n) => n.id === id))
+    if (!rung) return ''
+    const names: string[] = []
+    for (const node of rung.nodes) {
+      if (node.type !== 'variable') continue
+      const nd = node.data as {
+        variant?: string
+        block?: { id?: string; handleId?: string }
+        variable?: { name?: string }
+      }
+      if (nd.variant !== 'output') continue
+      if (nd.block?.id !== id) continue
+      if (!nd.block?.handleId) continue
+      if (!nd.variable?.name) continue
+      names.push(nd.block.handleId)
+    }
+    return names.sort().join('\u0000')
+  }, [ladderFlows, pouName, id])
+
   const connectedOutputNames = useMemo(() => {
-    const names = new Set<string>()
+    // Union with the cache: where it DOES carry an output entry, honour it.
+    const names = new Set<string>(connectedOutputKey ? connectedOutputKey.split('\u0000') : [])
     if (Array.isArray(data.connectedVariables)) {
       for (const cv of data.connectedVariables) {
         if (cv.type === 'output' && cv.variable) {
@@ -443,7 +484,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       }
     }
     return names
-  }, [data.connectedVariables])
+  }, [connectedOutputKey, data.connectedVariables])
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {

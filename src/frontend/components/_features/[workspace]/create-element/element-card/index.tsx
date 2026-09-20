@@ -151,7 +151,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const isSimulator = isSimulatorTarget(currentBoardInfo)
   const isRuntimeV4 = isOpenPLCRuntimeV4Target(deviceBoard, currentBoardInfo)
 
-  // Since 4.4.0 a baremetal board's Modbus is an ordinary `PLCServer`, so the
+  // Since 4.3.0 a baremetal board's Modbus is an ordinary `PLCServer`, so the
   // "+" flow asks for a name and a protocol on every target alike. What the
   // profile still decides is whether this target serves Modbus at all.
   const modbusProfile = resolveModbusServerProfile(currentBoardInfo)
