@@ -30,6 +30,27 @@ npm run test:e2e         # Playwright E2E tests
 npm run validate:arch    # Architecture layer dependency validation
 ```
 
+## Verify before pushing (CI parity)
+
+CI runs these commands directly — NOT `npm run lint` / `npm run format`, which
+AUTO-FIX and so pass locally while CI's `--check` still fails. Tests run under
+**Jest** (not Vitest), and both `tsc` and `jest` import the `strucpp` package,
+so it must be installed first or they fail with `TS2307: Cannot find module
+'strucpp'`. Run each exact command (from `.github/workflows/`) green before you push:
+
+```bash
+npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
+npx tsc --noEmit                                   # ci-build:       Build Check
+npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
+npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
+npx jest --config jest.config.json --collectCoverage --ci   # ci-unit-tests
+```
+
+`prettier --check` only reports; fix with `npx prettier --write <files>`.
+The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared`)
+is byte-identical with **openplc-web** — mirror any change and run the check suite
+in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).
+
 ## Architecture
 
 ### Layer Overview
