@@ -493,6 +493,14 @@ const OpcUaSecurityProfileSchema = z.object({
   securityPolicy: OpcUaSecurityPolicySchema,
   securityMode: OpcUaSecurityModeSchema,
   authMethods: z.array(OpcUaAuthMethodSchema).min(1),
+  /** Role granted to Anonymous sessions on this profile. An anonymous client
+   *  carries no identity, so the role it maps to must be stated explicitly
+   *  rather than inferred. Defaults to the least-privilege 'viewer'
+   *  (read-only); an administrator raises it deliberately to allow anonymous
+   *  writes. Only meaningful when authMethods includes 'Anonymous'. Optional
+   *  for backward compatibility with projects authored before this field —
+   *  those are treated as 'viewer'. */
+  anonymousRole: OpcUaUserRoleSchema.optional(),
 })
 type OpcUaSecurityProfile = z.infer<typeof OpcUaSecurityProfileSchema>
 
