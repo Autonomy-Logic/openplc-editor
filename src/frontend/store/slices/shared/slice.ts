@@ -1497,8 +1497,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // For POUs with unparseable variables (variablesText present, variables empty),
       // pre-create editor models in code mode so the raw text is displayed when opened.
       pous.forEach((pou) => {
-        const pouWithText = pou as typeof pou & { variablesText?: string }
-        if (pouWithText.variablesText && (!pou.interface?.variables || pou.interface.variables.length === 0)) {
+        const pouWithText = pou as typeof pou & { variablesText?: string; variablesTextUnparsed?: boolean }
+        if (pouWithText.variablesTextUnparsed === true && pouWithText.variablesText) {
           const language = pou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
           const model = createEditorObjectForPou(pou.name, pou.pouType, language)
           // Switch to code mode with the raw variable text

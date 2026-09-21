@@ -314,6 +314,12 @@ function createFallbackPou(content: string, language: string, pouType: string, p
     },
     documentation,
     variablesText,
+    // An explicit marker, because "has text and no variables" stopped meaning
+    // "did not parse" the moment every loaded POU started carrying its text.
+    // An empty POU has both, and was being forced into the code view on open
+    // (DOPE-650) — which is exactly the POU a user is most likely to have, now
+    // that an empty one compiles.
+    variablesTextUnparsed: true,
   }
 }
 

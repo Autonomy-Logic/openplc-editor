@@ -212,6 +212,30 @@ describe('parseProjectFiles — fallback POU creation', () => {
     consoleSpy.mockRestore()
   })
 
+  it('marks a fallback POU as unparsed, and a POU that parsed as not', () => {
+    // "has text but no variables" used to be the signal that a POU's
+    // declarations had failed to parse. Every POU carries its text now, so an
+    // empty-but-valid POU matched that signal too and was forced into the code
+    // view on open (DOPE-650). The flag says it explicitly.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pouFiles: RawProjectFile[] = [
+      {
+        relativePath: 'pous/programs/broken.st',
+        content: 'PROGRAM broken\nVAR\n  x : INT;\nEND_VAR\nbody content here',
+      },
+      {
+        relativePath: 'pous/programs/empty.st',
+        content: 'PROGRAM empty\nVAR\nEND_VAR\n\nEND_PROGRAM',
+      },
+    ]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    const byName = (name: string) => result.projectData.pous.find((pou) => pou.name === name)
+    expect(byName('broken')?.variablesTextUnparsed).toBe(true)
+    expect(byName('empty')?.variablesText).toBeDefined()
+    expect(byName('empty')?.variablesTextUnparsed).toBeUndefined()
+    consoleSpy.mockRestore()
+  })
+
   it('derives the fallback name from the basename even for Windows backslash paths', () => {
     // The desktop reader builds relativePaths with path.join → backslashes on
     // Windows. A parse failure must still yield the bare basename, not the whole

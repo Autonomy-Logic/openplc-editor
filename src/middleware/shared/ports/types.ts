@@ -190,6 +190,16 @@ export interface PLCPou {
    * serialised; anything loaded from disk carries it.
    */
   variablesText?: string
+  /**
+   * True when {@link variablesText} could not be parsed on load, so the editor
+   * should open this POU's variables in the code view for repair.
+   *
+   * An explicit flag rather than the old inference of "has text but no
+   * variables": every loaded POU carries its text now, and an empty POU
+   * legitimately has no variables, so that test matched a POU with nothing
+   * wrong with it.
+   */
+  variablesTextUnparsed?: boolean
 }
 
 // ---------------------------------------------------------------------------

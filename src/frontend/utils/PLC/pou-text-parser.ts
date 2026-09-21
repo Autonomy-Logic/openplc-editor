@@ -151,7 +151,13 @@ export const parseTextualPouFromString = (content: string, language: string, typ
       const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
 
       if (lastEndVarIndex !== -1) {
-        variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
+        // From the start of the LINE holding the keyword, not the keyword
+        // itself. `search` finds `VAR`, so slicing there dropped the two spaces
+        // in front of it — and since this text is now written back verbatim, a
+        // load/save round trip re-indented the first block header of every POU
+        // file in the project (DOPE-650).
+        const lineStart = remainingContent.lastIndexOf('\n', varSectionStart) + 1
+        variablesString = remainingContent.slice(lineStart, lastEndVarIndex)
         bodyStartIndex = lastEndVarIndex
       }
     }
@@ -256,7 +262,13 @@ export const parseHybridPouFromString = (content: string, language: string, type
       const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
 
       if (lastEndVarIndex !== -1) {
-        variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
+        // From the start of the LINE holding the keyword, not the keyword
+        // itself. `search` finds `VAR`, so slicing there dropped the two spaces
+        // in front of it — and since this text is now written back verbatim, a
+        // load/save round trip re-indented the first block header of every POU
+        // file in the project (DOPE-650).
+        const lineStart = remainingContent.lastIndexOf('\n', varSectionStart) + 1
+        variablesString = remainingContent.slice(lineStart, lastEndVarIndex)
         bodyStartIndex = lastEndVarIndex
       }
     }
@@ -365,7 +377,13 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
       )
 
       if (lastEndVarIndex !== -1) {
-        variablesString = remainingContent.slice(varSectionStart, lastEndVarIndex)
+        // From the start of the LINE holding the keyword, not the keyword
+        // itself. `search` finds `VAR`, so slicing there dropped the two spaces
+        // in front of it — and since this text is now written back verbatim, a
+        // load/save round trip re-indented the first block header of every POU
+        // file in the project (DOPE-650).
+        const lineStart = remainingContent.lastIndexOf('\n', varSectionStart) + 1
+        variablesString = remainingContent.slice(lineStart, lastEndVarIndex)
         bodyStartIndex = lastEndVarIndex
       }
     }
