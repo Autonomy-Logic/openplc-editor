@@ -288,3 +288,36 @@ describe('reordering refuses to guess', () => {
     expect(out).toBe('VAR\n  a : INT;\nEND_VAR')
   })
 })
+
+describe('the committed text follows the committed model, not the typed buffer', () => {
+  it('restores a type the user declined, leaving the rest of the line alone', () => {
+    // The shape of the type-change-decline path in `commitCode` (found by
+    // CodeRabbit on PR #1130). The user types a new type, the modal asks, they
+    // decline, and `finalVariables` keeps the OLD type while the buffer still
+    // carries the new one. `commitCode` reconciles the two through this
+    // function before storing the text — without it the declined type reaches
+    // disk and the LSP stub, because the text is what gets serialised.
+    const typed = 'VAR\n  (* keep *)\n  Counter : Helper AT %MW0;  (* doc *)\nEND_VAR'
+    const committedModel: PLCVariable[] = [
+      {
+        name: 'Counter',
+        class: 'local',
+        type: { definition: 'base-type', value: 'INT' },
+        location: '%MW0',
+        documentation: 'doc',
+      },
+    ]
+
+    const out = apply(typed, committedModel)
+
+    expect(out).toBe('VAR\n  (* keep *)\n  Counter : INT AT %MW0;  (* doc *)\nEND_VAR')
+    expect(out).not.toContain('Helper')
+  })
+
+  it('returns the buffer untouched when the model already agrees with it', () => {
+    // The overwhelmingly common case: nothing was declined, so reconciling
+    // must not disturb a single byte.
+    const typed = 'VAR\n  (* keep *)\n  Counter : INT AT %MW0;  (* doc *)\nEND_VAR'
+    expect(apply(typed, modelOf(typed))).toBe(typed)
+  })
+})

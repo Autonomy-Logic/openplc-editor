@@ -14,7 +14,7 @@ import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/l
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { validateVariableSet } from '../../../store/slices/project/validation/variables'
 import { cn } from '../../../utils/cn'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { buildScanContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
@@ -26,6 +26,7 @@ import {
   propagateVariableRename,
   type ReferenceImpactAnalysis,
 } from '../../../utils/variable-references'
+import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import TableActions from '../../_atoms/table-actions'
@@ -1006,8 +1007,25 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       // clicked away. The LSP stub is now built from this same text
       // (`serializePouSignatureToSTWithBodyOffset`), so the two agree without
       // anything having to be rewritten.
-      setPouVariablesText(editor.meta.name, editorCode)
-      lastParsedCodeRef.current = editorCode
+      // Reconcile the typed text against what was actually committed before
+      // storing it. `finalVariables` is not always what the buffer says: when
+      // the user DECLINES a type change in the modal, the old type is restored
+      // in the model while the buffer still carries the new one. Storing the
+      // buffer verbatim would let the declined type win, because this text is
+      // what gets serialised to disk and fed to the LSP stub — the user's "no"
+      // would silently become a yes on the next save (CodeRabbit, PR #1130).
+      //
+      // `applyVariablesToText` returns the text unchanged when nothing differs,
+      // which is the overwhelmingly common case, so the comments and spacing
+      // still survive byte for byte.
+      const committedText = applyVariablesToText(
+        editorCode,
+        finalVariables,
+        buildScanContext(pous, dataTypes, libraries),
+      )
+      if (committedText !== editorCode) setEditorCode(committedText)
+      setPouVariablesText(editor.meta.name, committedText)
+      lastParsedCodeRef.current = committedText
 
       return true
     } catch (err) {
