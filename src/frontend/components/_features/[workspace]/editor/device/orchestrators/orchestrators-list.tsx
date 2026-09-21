@@ -5,7 +5,7 @@ import type {
   OrchestratorDevice,
   OrchestratorInfo,
 } from '../../../../../../../middleware/shared/ports/orchestrator-port'
-import { useOrchestrator, useRuntime } from '../../../../../../../middleware/shared/providers'
+import { useOrchestrator, usePlatform, useRuntime } from '../../../../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
@@ -71,21 +71,34 @@ const BackplaneBadge = () => (
   </span>
 )
 
+/** Same rule for both: absent clears the key, a value writes it. */
+function sameBinding(a: SelectedDevice['vpp'], b: SelectedDevice['vpp']): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.packageId === b.packageId && a.version === b.version && a.contentHash === b.contentHash
+}
+
 function refreshSelection(selection: SelectedDevice | null, orchestrators: OrchestratorInfo[]): SelectedDevice | null {
   if (!selection) return null
   const device = orchestrators
     .find((item) => item.id === selection.orchestratorId)
     ?.devices.find((item) => item.id === selection.deviceId)
-  if (!device || device.backplaneAccess === selection.backplaneAccess) return selection
+  if (!device) return selection
+  if (device.backplaneAccess === selection.backplaneAccess && sameBinding(device.vpp, selection.vpp)) {
+    return selection
+  }
   const updated = { ...selection }
   if (device.backplaneAccess === undefined) delete updated.backplaneAccess
   else updated.backplaneAccess = device.backplaneAccess
+  if (device.vpp === undefined) delete updated.vpp
+  else updated.vpp = device.vpp
   return updated
 }
 
 const OrchestratorsList = () => {
   const orchestratorPort = useOrchestrator()
   const runtimePort = useRuntime()
+  const packages = usePlatform().packages
   const { modalActions, deviceActions, runtimeConnection } = useOpenPLCStore()
   const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([])
   const [loading, setLoading] = useState(true)
@@ -127,6 +140,42 @@ const OrchestratorsList = () => {
       deviceActions.setDeviceBoard(RUNTIME_BOARD_NAME)
     }
   }, [runtimeConnection.connectionStatus, isSimulatorSelected, deviceActions])
+
+  // What the target vPLC's vendor package offers. The port is the only gate:
+  // it answers empty wherever no vPLC is targeted — the desktop always, and
+  // web until one is picked — which keeps the board rules below inert there
+  // and leaves the two constants above in charge. Deliberately NOT gated on
+  // the connection: the binding comes from the device listing, and a board is
+  // a compile-time choice that must not wait on a runtime login.
+  const [vendorBoards, setVendorBoards] = useState<string[]>([])
+  useEffect(() => {
+    if (!packages) return
+    let cancelled = false
+    const resolve = (): void => {
+      void packages
+        .listTargetBoards()
+        .catch(() => [] as string[])
+        .then((boards) => {
+          if (!cancelled) setVendorBoards(boards)
+        })
+    }
+    resolve()
+    // Switching vPLC reloads the package, and the new board set arrives here.
+    const unsubscribe = packages.onBoardsUpdated(resolve)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [packages])
+
+  // A vPLC runs the package it was created with, so one board is not a choice
+  // to put to the user. Several is: the package ships more than one device and
+  // only the user knows which is wired up, so the picker below asks.
+  const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
+  useEffect(() => {
+    const only = vendorBoards.length === 1 ? vendorBoards[0] : undefined
+    if (only !== undefined && deviceBoard !== only) deviceActions.setDeviceBoard(only)
+  }, [vendorBoards, deviceBoard, deviceActions])
 
   const fetchOrchestrators = useCallback(async () => {
     try {
@@ -203,6 +252,8 @@ const OrchestratorsList = () => {
         deviceName: device.name,
         // Absent stays absent: a host that predates the field must not read as one that said no.
         ...(typeof device.backplaneAccess === 'boolean' ? { backplaneAccess: device.backplaneAccess } : {}),
+        // `null` is a real answer — "runs no vendor package" — and absent is not.
+        ...(device.vpp !== undefined ? { vpp: device.vpp } : {}),
       }
 
       // If already connected to a different device, show confirmation modal
@@ -365,6 +416,40 @@ const OrchestratorsList = () => {
                 <RefreshIcon size='sm' className={isRefreshing ? 'animate-spin' : ''} />
               </button>
             </div>
+
+            {/* Which board of a multi-device vendor package this vPLC drives.
+                Absent whenever the package names exactly one, which the effect
+                above has already selected, and on every platform that targets
+                no vPLC. */}
+            {vendorBoards.length > 1 && (
+              <div
+                id='vendor-board-picker'
+                className='rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'
+              >
+                <label htmlFor='vendor-board-select' className='text-sm font-medium text-neutral-900 dark:text-white'>
+                  Vendor board
+                </label>
+                <p className='mt-1 text-xs text-neutral-500 dark:text-neutral-400'>
+                  This vPLC&apos;s vendor package supports several boards. Choose the one wired to the backplane.
+                </p>
+                <select
+                  id='vendor-board-select'
+                  aria-label='Vendor board selection'
+                  value={vendorBoards.includes(deviceBoard) ? deviceBoard : ''}
+                  onChange={(event) => {
+                    if (event.target.value) deviceActions.setDeviceBoard(event.target.value)
+                  }}
+                  className='mt-2 w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-850 outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                >
+                  <option value=''>Select a board…</option>
+                  {vendorBoards.map((board) => (
+                    <option key={board} value={board}>
+                      {board}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Simulator option — always visible */}
             <div

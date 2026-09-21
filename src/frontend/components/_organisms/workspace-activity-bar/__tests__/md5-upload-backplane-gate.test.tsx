@@ -219,8 +219,8 @@ describe('MD5 re-upload — backplane gate', () => {
     expect(loggedMessages()).not.toContain(REFUSAL)
   })
 
-  it('uploads on mismatch when no vPLC is the target', async () => {
-    renderBar(VPP_BOARD_NAME, null)
+  it('uploads an ordinary board on mismatch when no vPLC is the target', async () => {
+    renderBar(PLAIN_BOARD_NAME, null)
 
     startDebugSession()
 
@@ -229,5 +229,18 @@ describe('MD5 re-upload — backplane gate', () => {
 
     await waitFor(() => expect(compileProgram).toHaveBeenCalled())
     expect(loggedMessages()).not.toContain(REFUSAL)
+  })
+
+  // Same rule as the build path, in the same words: a vendor board comes from
+  // the package a vPLC was created with, so there is nothing to upload it to.
+  it('refuses a vendor board on mismatch when no vPLC is the target', async () => {
+    renderBar(VPP_BOARD_NAME, null)
+
+    startDebugSession()
+
+    await waitFor(() =>
+      expect(loggedMessages().some((message) => message.startsWith('Select a vPLC before building'))).toBe(true),
+    )
+    expect(compileProgram).not.toHaveBeenCalled()
   })
 })

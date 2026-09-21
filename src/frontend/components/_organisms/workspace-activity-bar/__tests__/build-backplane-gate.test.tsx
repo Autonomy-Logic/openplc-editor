@@ -1,6 +1,6 @@
 import { openPLCStoreBase } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
-import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
@@ -49,7 +49,11 @@ const holder: SelectedDevice = {
 
 const compileProgram = vi.fn(() => Promise.resolve({ success: true }))
 
-function renderBar(board: string, selectedDevice: SelectedDevice | null) {
+function renderBar(
+  board: string,
+  selectedDevice: SelectedDevice | null,
+  capabilities: PlatformPorts['capabilities'] = WEB_CAPABILITIES,
+) {
   const { deviceActions, workspaceActions, consoleActions } = openPLCStoreBase.getState()
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
@@ -81,7 +85,7 @@ function renderBar(board: string, selectedDevice: SelectedDevice | null) {
     versionControl: stubPort(),
     navigation: stubPort(),
     library: stubPort(),
-    capabilities: WEB_CAPABILITIES,
+    capabilities,
   }
   render(
     <PlatformProvider ports={ports}>
@@ -168,13 +172,67 @@ describe('Build — backplane gate', () => {
     expect(loggedMessages()).not.toContain(REFUSAL)
   })
 
-  it('deploys when no vPLC is the target', async () => {
-    // The editor never selects one, and neither does a LAN runtime on web.
+  // A vendor board comes from the package its vPLC was created with, so with
+  // no vPLC selected there is nothing it could be built for.
+  it('refuses a vendor board when no vPLC is the target', async () => {
     renderBar(VPP_BOARD_NAME, null)
+
+    chooseBuildOption('Build and upload')
+
+    await waitFor(() =>
+      expect(loggedMessages().some((message) => message.startsWith('Select a vPLC before building'))).toBe(true),
+    )
+    expect(compileProgram).not.toHaveBeenCalled()
+  })
+
+  it('deploys an ordinary board with no vPLC at all', async () => {
+    // The simulator, a LAN runtime and the whole desktop editor land here.
+    renderBar(PLAIN_BOARD_NAME, null)
 
     chooseBuildOption('Build and upload')
 
     await waitFor(() => expect(compileProgram).toHaveBeenCalled())
     expect(loggedMessages()).not.toContain(REFUSAL)
   })
+
+  it('refuses a vendor board from a package the vPLC does not run', async () => {
+    renderBar(VPP_BOARD_NAME, {
+      ...holder,
+      vpp: { packageId: 'com.other.board', version: '1.0.0', contentHash: 'sha256:x' },
+    })
+
+    chooseBuildOption('Build and upload')
+
+    await waitFor(() =>
+      expect(loggedMessages().some((message) => message.includes('com.other.board'))).toBe(true),
+    )
+    expect(compileProgram).not.toHaveBeenCalled()
+  })
+
+  it('deploys a vendor board to the vPLC that runs its package', async () => {
+    renderBar(VPP_BOARD_NAME, {
+      ...holder,
+      vpp: { packageId: 'com.acme.backplane', version: '1.0.0', contentHash: 'sha256:x' },
+    })
+
+    chooseBuildOption('Build and upload')
+
+    await waitFor(() => expect(compileProgram).toHaveBeenCalled())
+  })
+
+  /**
+   * The desktop's own regression. It never selects a vPLC and installs vendor
+   * packages locally, so a build for a vendor board has to go through — the
+   * vPLC-scoped rule is inert here, and a mistake in it would refuse every
+   * vendor build on the desktop.
+   */
+  it('builds a vendor board on the desktop, where no vPLC is ever the target', async () => {
+    renderBar(VPP_BOARD_NAME, null, EDITOR_CAPABILITIES)
+
+    chooseBuildOption('Build and upload')
+
+    await waitFor(() => expect(compileProgram).toHaveBeenCalled())
+    expect(loggedMessages()).not.toContain(REFUSAL)
+  })
+
 })

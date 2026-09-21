@@ -1,5 +1,5 @@
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
-import { evaluateVppBackplaneGate } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
+import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -248,10 +248,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const boardInfo = state.deviceAvailableOptions.availableBoards.get(
           state.deviceDefinitions.configuration.deviceBoard,
         )
-        const gate = evaluateVppBackplaneGate({
-          isVppBoard: boardInfo?.vpp !== undefined,
-          backplaneAccess: state.runtimeConnection.selectedDevice?.backplaneAccess,
-        })
+        const gate = evaluateVppBackplaneGate(
+          vppGateStateFor({
+            board: boardInfo,
+            boardName: state.deviceDefinitions.configuration.deviceBoard,
+            target: state.runtimeConnection.selectedDevice,
+            vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+          }),
+        )
         if (gate.kind === 'refuse') {
           addLog({ level: 'error', message: gate.reason })
           return
@@ -888,10 +892,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // below releases it, so the session ends the way "No" ends it.
         {
           const state = useOpenPLCStore.getState()
-          const gate = evaluateVppBackplaneGate({
-            isVppBoard: state.deviceAvailableOptions.availableBoards.get(boardTarget)?.vpp !== undefined,
-            backplaneAccess: state.runtimeConnection.selectedDevice?.backplaneAccess,
-          })
+          const gate = evaluateVppBackplaneGate(
+            vppGateStateFor({
+              board: state.deviceAvailableOptions.availableBoards.get(boardTarget),
+              boardName: boardTarget,
+              target: state.runtimeConnection.selectedDevice,
+              vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+            }),
+          )
           if (gate.kind === 'refuse') {
             consoleActions.addLog({ level: 'error', message: gate.reason })
             setIsDebuggerProcessing(false)

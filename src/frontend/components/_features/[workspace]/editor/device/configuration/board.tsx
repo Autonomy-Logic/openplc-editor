@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { useCapabilities, useDevice, usePackages, useRuntime } from '@root/middleware/shared/providers/platform-context'
-import { evaluateVppBackplaneGate } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
+import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -212,6 +212,16 @@ const Board = memo(function () {
     handleDeviceValueAtFirstRender()
   }, [])
 
+  // The project's board can stop being resolvable underneath it: on web the
+  // board list is the selected vPLC's package, so switching to a vPLC that
+  // runs another package takes those boards away. Keep the name showing as the
+  // selection rather than falling back to a placeholder — a board that vanishes
+  // silently reads as lost work, and the build refuses with the reason anyway.
+  const boardIsUnavailable = deviceBoard !== '' && currentBoardInfo === undefined
+  useEffect(() => {
+    if (boardIsUnavailable) setFormattedBoardState(deviceBoard)
+  }, [boardIsUnavailable, deviceBoard])
+
   // A target switch no longer needs to touch program variables: their
   // `location` holds a stable alias name (resolved at compile) or a literal
   // address — neither changes with the board. Producer address recompaction
@@ -263,13 +273,21 @@ const Board = memo(function () {
   // that was laid out against the old one — a mismatch the device would
   // otherwise only show as wrong I/O.
   const vppPackageId = availableBoards.get(deviceBoard)?.vpp?.packageId
+  const targetVpp = selectedDevice?.vpp
   useEffect(() => {
     if (!packages || !vppPackageId) {
       setPinDrift(null)
       return
     }
     let cancelled = false
-    void packages.getPackagePin(vppPackageId).then((installed) => {
+    // The vPLC's own binding is authoritative: the host decided which bytes
+    // that vPLC runs, and the browser's copy is only what it managed to fetch.
+    // Fall back to the loaded package when no vPLC is the target — the desktop,
+    // and a host that reports no binding.
+    const authoritative = targetVpp
+      ? Promise.resolve<VppPackagePin | null>(targetVpp)
+      : packages.getPackagePin(vppPackageId)
+    void authoritative.then((installed) => {
       if (cancelled) return
       const recorded = recordedPins?.[deviceBoard]
       // First time on this board: record what it is being authored against
@@ -284,7 +302,7 @@ const Board = memo(function () {
     return () => {
       cancelled = true
     }
-  }, [deviceBoard, vppPackageId, packages, recordedPins, setVppPackagePin])
+  }, [deviceBoard, vppPackageId, targetVpp, packages, recordedPins, setVppPackagePin])
 
   const refreshCommunicationPorts = useCallback(
     async (e: React.MouseEvent) => {
@@ -657,6 +675,34 @@ const Board = memo(function () {
                   onChange={(e) => setDeviceSearchTerm(e.target.value)}
                   aria-label='Search devices'
                 />
+                {boardIsUnavailable && (
+                  <SelectItem
+                    key={deviceBoard}
+                    value={deviceBoard}
+                    disabled
+                    className='flex w-full cursor-not-allowed items-center px-2 py-[7px] pl-5 opacity-60 outline-none'
+                  >
+                    <span className='flex flex-col gap-0.5'>
+                      <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                        {deviceBoard}
+                      </span>
+                      <span className='font-caption text-[10px] leading-snug text-neutral-500 dark:text-neutral-400'>
+                        {
+                          evaluateVppBackplaneGate(
+                            vppGateStateFor({
+                              board: undefined,
+                              boardName: deviceBoard,
+                              target: selectedDevice,
+                              vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+                            }),
+                          ).kind === 'refuse'
+                            ? 'Not available on the selected vPLC. Select a vPLC created with the package this board comes from.'
+                            : 'Not available. The package this board comes from is not installed.'
+                        }
+                      </span>
+                    </span>
+                  </SelectItem>
+                )}
                 {groupedBoards.length === 0 ? (
                   <div className='px-3 py-6 text-center text-[11px] italic text-neutral-500 dark:text-neutral-400'>
                     No devices match “{deviceSearchTerm}”.
@@ -675,10 +721,13 @@ const Board = memo(function () {
                         // same boards with the same words. A refused board stays
                         // listed and carries its explanation — hiding it would read
                         // as "this package is not installed".
-                        const gate = evaluateVppBackplaneGate({
-                          isVppBoard: data.vpp !== undefined,
-                          backplaneAccess: selectedDevice?.backplaneAccess,
-                        })
+                        const gate = evaluateVppBackplaneGate(
+                          vppGateStateFor({
+                            board: data,
+                            target: selectedDevice,
+                            vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+                          }),
+                        )
                         const refusal = gate.kind === 'refuse' ? gate.reason : null
                         return (
                           <SelectItem

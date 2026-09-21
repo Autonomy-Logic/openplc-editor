@@ -10,6 +10,19 @@
 
 export type VppSource = 'user' | 'system'
 
+/**
+ * The vendor package a vPLC was created with, as the host reports it.
+ *
+ * The binding lives on the vPLC, not in a per-user store: the host decided
+ * which bytes that vPLC runs, so this is what the IDE loads, gates on and
+ * compares a project's pin against.
+ */
+export interface DeviceVpp {
+  packageId: string
+  version: string
+  contentHash: string
+}
+
 export interface InstalledVpp {
   packageId: string
   name: string

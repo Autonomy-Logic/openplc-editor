@@ -1,6 +1,6 @@
 import { openPLCStoreBase } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
-import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
@@ -38,7 +38,10 @@ const REFUSAL =
 
 const VPP_BOARD_NAME = 'Acme SLM-RP4'
 
-function renderBoard(selectedDevice: SelectedDevice | null) {
+function renderBoard(
+  selectedDevice: SelectedDevice | null,
+  capabilities: PlatformPorts['capabilities'] = WEB_CAPABILITIES,
+) {
   const { deviceActions } = openPLCStoreBase.getState()
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
@@ -63,7 +66,7 @@ function renderBoard(selectedDevice: SelectedDevice | null) {
     versionControl: stubPort(),
     navigation: stubPort(),
     library: stubPort(),
-    capabilities: WEB_CAPABILITIES,
+    capabilities,
   }
   render(
     <PlatformProvider ports={ports}>
@@ -123,9 +126,68 @@ describe('Board device list', () => {
     expect(screen.queryByText(REFUSAL)).toBeNull()
   })
 
-  it('offers a VPP board when no vPLC is the target', () => {
-    // The editor never selects one, and neither does a LAN runtime on web.
+  // A vendor board comes from the package its vPLC was created with, so with
+  // no vPLC selected there is nothing it could be built for.
+  it('disables a VPP board with the reason when no vPLC is the target', () => {
     renderBoard(null)
+    expect(boardOption(VPP_BOARD_NAME)?.getAttribute('data-disabled')).not.toBeNull()
+    expect(screen.getByText(/Select a vPLC before building/)).toBeTruthy()
+  })
+
+  it('leaves an ordinary board alone when no vPLC is the target', () => {
+    renderBoard(null)
+    expect(boardOption('OpenPLC Runtime')?.getAttribute('data-disabled')).toBeNull()
+  })
+
+  it('offers a VPP board on the vPLC that runs its package', () => {
+    renderBoard({ ...holder, vpp: { packageId: 'com.acme.backplane', version: '1.0.0', contentHash: 'sha256:x' } })
     expect(boardOption(VPP_BOARD_NAME)?.getAttribute('data-disabled')).toBeNull()
   })
+
+  it('disables a VPP board from another package and names the one the vPLC runs', () => {
+    renderBoard({ ...holder, vpp: { packageId: 'com.other.board', version: '1.0.0', contentHash: 'sha256:x' } })
+    expect(boardOption(VPP_BOARD_NAME)?.getAttribute('data-disabled')).not.toBeNull()
+    expect(screen.getByText(/This vPLC runs com\.other\.board/)).toBeTruthy()
+  })
+
+  // A board the project names but the vPLC does not have must stay visible:
+  // dropping it silently from the picker reads as lost work.
+  it('keeps a board the vPLC does not have visible, marked unavailable', () => {
+    const { deviceActions } = openPLCStoreBase.getState()
+    deviceActions.setDeviceBoard('Vanished SLM-RP4')
+    renderBoard({ ...holder, vpp: { packageId: 'com.acme.backplane', version: '1.0.0', contentHash: 'sha256:x' } })
+
+    // Two nodes carry the name: the trigger, which is the point (it still reads
+    // as the selection), and the disabled row in the list.
+    const row = screen
+      .getAllByText('Vanished SLM-RP4')
+      .map((node) => node.closest('[role="option"]'))
+      .find((option) => option !== null)
+    expect(row).toBeTruthy()
+    expect(row?.getAttribute('data-disabled')).not.toBeNull()
+    expect(screen.getAllByText(/Not available on the selected vPLC/).length).toBeGreaterThan(0)
+  })
+
+  /**
+   * The desktop's own regression. Vendor packages are installed locally here
+   * and no vPLC is ever selected, so every board a package provides has to
+   * stay offered — the whole vPLC-scoped rule is inert on this platform, and
+   * a mistake in it would silently empty the desktop's board list.
+   */
+  describe('desktop', () => {
+    it('offers every VPP board with no vPLC selected', () => {
+      renderBoard(null, EDITOR_CAPABILITIES)
+      expect(boardOption(VPP_BOARD_NAME)?.getAttribute('data-disabled')).toBeNull()
+      expect(boardOption('OpenPLC Runtime')?.getAttribute('data-disabled')).toBeNull()
+      expect(screen.queryByText(REFUSAL)).toBeNull()
+      expect(screen.queryByText(/Select a vPLC before building/)).toBeNull()
+    })
+
+    it('says nothing about a board the project names that is not installed', () => {
+      openPLCStoreBase.getState().deviceActions.setDeviceBoard('Vanished SLM-RP4')
+      renderBoard(null, EDITOR_CAPABILITIES)
+      expect(screen.queryByText(/Not available on the selected vPLC/)).toBeNull()
+    })
+  })
+
 })

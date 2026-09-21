@@ -12,6 +12,7 @@ import type {
   PlcStatus,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
+import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
 
 // ---------------------------------------------------------------------------
 // Device available options
@@ -57,6 +58,13 @@ export type SelectedDevice = {
   deviceName: string
   /** Whether this vPLC holds the Device's backplane I/O. Absent means the host did not say, not `false`. */
   backplaneAccess?: boolean
+  /**
+   * The vendor package this vPLC runs. `null` means it was created without
+   * one; absent means the host predates the field and said nothing, which
+   * gates nothing. Selecting a device with a package is what makes the IDE
+   * fetch its archive and offer its boards.
+   */
+  vpp?: DeviceVpp | null
 }
 
 export type StoredCredentials = {
