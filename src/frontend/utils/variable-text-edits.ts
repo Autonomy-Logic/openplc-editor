@@ -131,7 +131,12 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
     }
   }
 
-  if (at(declaration.fields.type) !== variable.type.value) {
+  // A type name is case-insensitive in IEC, and the model holds the canonical
+  // spelling: `bool` in the text is `BOOL` in the model. Comparing them exactly
+  // meant merely opening a project retyped every declaration the user had
+  // written in lower case, and the first save wrote that back to their file.
+  // A real type change still differs with the case folded away.
+  if (at(declaration.fields.type).toUpperCase() !== variable.type.value.toUpperCase()) {
     edits.push({ span: declaration.fields.type, replacement: variable.type.value })
   }
 

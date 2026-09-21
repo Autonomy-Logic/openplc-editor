@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { validateAliasName } from '../../../../../middleware/shared/utils/iec-address/alias-registry'
 import {
   formatAddress,
   parseAddress,
@@ -210,7 +211,14 @@ const addressClassTypeOf = (variableType: PLCVariable['type']): string =>
  *   - A literal `%…` → must match the variable's type's address class.
  */
 const variableLocationValidation = (variableLocation: string, variableType: string) => {
-  if (variableLocation === '' || !variableLocation.startsWith('%')) return true
+  if (variableLocation === '') return true
+  // A non-`%` location is an alias name, and the alias is spliced verbatim into
+  // the declaration as the operand of `AT`. So it has to be a name the compiler
+  // can read: `AT flow sensor` is not a declaration any parser accepts, and
+  // typing one used to leave the variables code view unable to parse the POU it
+  // had just written (DOPE-650). Whether the alias resolves is still a
+  // compile-time question; this only checks that it is a legal identifier.
+  if (!variableLocation.startsWith('%')) return validateAliasName(variableLocation).ok
   switch (variableType.toUpperCase()) {
     case 'BOOL': {
       const boolMatch = BOOL_LOCATION_REGEX.test(variableLocation) && variableLocation.split('.')[1] <= '7'
@@ -239,7 +247,14 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
   }
 }
 
-const variableLocationValidationErrorMessage = (variableType: string) => {
+const variableLocationValidationErrorMessage = (variableType: string, variableLocation = '') => {
+  // An alias that is not a legal identifier is rejected for its own reason, not
+  // for the address class of the variable's type — "Valid locations: %QW0" says
+  // nothing to someone who typed a name with a space in it.
+  if (variableLocation !== '' && !variableLocation.startsWith('%')) {
+    const named = validateAliasName(variableLocation)
+    if (!named.ok) return named.reason
+  }
   switch (variableType.toUpperCase()) {
     case 'BOOL':
       return 'Valid locations: %QX0.0..7, %IX0.0..7, %MX0.0..7 (change the number to the desired location)'
@@ -507,7 +522,7 @@ const updateVariableValidation = (
       response = {
         ok: false,
         title: 'Location is invalid.',
-        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(effectiveAddressClass)}`,
+        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(effectiveAddressClass, location)}`,
       }
       return response
     }
@@ -672,7 +687,7 @@ const validateVariableSet = (variables: PLCVariable[]): VariableSetValidation =>
     if (!variableLocationValidation(variable.location, addressClass)) {
       fail(
         'Location is invalid.',
-        `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClass)}`,
+        `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClass, variable.location)}`,
       )
       return
     }

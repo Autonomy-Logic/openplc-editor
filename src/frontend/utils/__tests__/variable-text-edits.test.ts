@@ -56,6 +56,21 @@ describe('an edit leaves everything it did not touch alone', () => {
     expect(out).toContain('// a line comment of its own')
   })
 
+  it('leaves a lower-case type name as the user wrote it', () => {
+    // The parser canonicalises `bool` to `BOOL` in the model, so comparing the
+    // two exactly made every declaration written in lower case an edit — the
+    // project was retyped just by being opened, and the first save wrote that
+    // back to the user's file.
+    const text = 'VAR\n\tflag : bool;\n\tcount : int := 0;\nEND_VAR'
+    expect(apply(text, modelOf(text))).toBe(text)
+  })
+
+  it('still rewrites the type when it actually changed', () => {
+    const text = 'VAR\n\tflag : bool;\nEND_VAR'
+    const out = apply(text, edit(modelOf(text), 'flag', { type: { definition: 'base-type', value: 'DINT' } }))
+    expect(out).toBe('VAR\n\tflag : DINT;\nEND_VAR')
+  })
+
   it('adds a location to a declaration that had none', () => {
     const out = apply(RICH, edit(modelOf(RICH), 'total', { location: '%MD0' }))
     expect(out).toContain('total   : DINT AT %MD0;')
