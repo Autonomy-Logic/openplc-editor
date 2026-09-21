@@ -52,7 +52,7 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({ setSearchFilterValu
   return (
     <div
       id='project-filter-bar'
-      className='relative mb-4 flex w-full items-center justify-between gap-4 pr-10 xl:pr-10 3xl:pr-10 4xl:pr-0'
+      className='relative mb-4 flex w-full shrink-0 items-center justify-between gap-4 pr-10 xl:pr-10 3xl:pr-10 4xl:pr-0'
     >
       <div
         id='project-filter-dropdown-container'

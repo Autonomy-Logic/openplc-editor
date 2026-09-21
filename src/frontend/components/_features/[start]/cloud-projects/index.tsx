@@ -135,7 +135,7 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Re
   return (
     // `mb-10` must exceed the `mb-6` heading-to-cards rhythm, or the local "Projects"
     // heading below reads as a label for these cards.
-    <section className='mb-10 flex w-full select-none flex-col pr-9 4xl:pr-0'>
+    <section className='mb-10 flex w-full shrink-0 select-none flex-col pr-9 4xl:pr-0'>
       <h2 className='mb-6 flex cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Autonomy Edge Cloud Projects
       </h2>

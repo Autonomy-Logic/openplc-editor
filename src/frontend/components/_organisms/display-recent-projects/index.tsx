@@ -142,13 +142,16 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
 
   return (
     <section
-      className='flex h-[52%] w-full select-none flex-col pr-9 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 4xl:pr-0'
+      // `flex-1 min-h-0`, not a percentage: the cloud section above is as tall as its rows, and a
+      // fixed share of the column pushed this one past the `overflow-hidden` main, clipping the
+      // last row even with its own scroll at the end.
+      className='flex min-h-0 w-full flex-1 select-none flex-col pr-9 4xl:pr-0'
       {...props}
     >
       <h2 className='mb-6 flex  cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Projects
       </h2>
-      <div className='scroll-area flex h-auto w-full flex-wrap  gap-[25px] overflow-y-auto'>
+      <div className='scroll-area flex min-h-0 w-full flex-1 flex-wrap gap-[25px] overflow-y-auto pb-2'>
         {recentProjects.map((proj) => (
           <div key={proj.path} className='group relative'>
             <File
