@@ -687,3 +687,60 @@ describe('a project with no location the user chose', () => {
     expect(port.saveProject).toHaveBeenCalled()
   })
 })
+
+/**
+ * A project saved before blocks wrote their library into `project.libraries`
+ * still has the FB instances in its variables tables. On the side that has the
+ * library installed, the save reads usage from those and writes the entry, so
+ * the other side finally has something to warn about.
+ */
+describe('project.json libraries', () => {
+  const POU = 'LibUsageProbe'
+
+  beforeEach(() => {
+    const state = openPLCStoreBase.getState()
+    state.libraryActions.setSystemLibraries([
+      { name: 'demo-utils', author: 'qa', version: '2.1.0', stPath: '', cPath: '', pous: [{ name: 'ANALOGSCALE' }] },
+    ] as unknown as Parameters<typeof state.libraryActions.setSystemLibraries>[0])
+    state.libraryActions.setBundledLibraryNames([])
+    state.libraryActions.setProjectLibraries([])
+    state.pouActions.create({ type: 'program', name: POU, language: 'st' })
+    state.projectActions.createVariable({
+      data: {
+        id: 'v-scale',
+        name: 'Scale0',
+        type: { definition: 'derived', value: 'ANALOGSCALE' },
+        class: 'local',
+        location: '',
+        documentation: '',
+        debug: false,
+      },
+      scope: 'local',
+      associatedPou: POU,
+    })
+  })
+
+  afterEach(() => {
+    openPLCStoreBase.getState().pouActions.delete(POU)
+    openPLCStoreBase.getState().libraryActions.setProjectLibraries([])
+  })
+
+  it('writes the library an FB instance comes from, even when nothing declared it', () => {
+    const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
+      data: { libraries: { name: string; version: string }[] }
+    }
+
+    expect(parsed.data.libraries).toEqual([{ name: 'demo-utils', version: '2.1.0' }])
+  })
+
+  it('keeps a declared entry as declared, without duplicating it', () => {
+    openPLCStoreBase.getState().libraryActions.setProjectLibraries([{ name: 'demo-utils', version: '1.0.0' }])
+
+    const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
+      data: { libraries: { name: string; version: string }[] }
+    }
+
+    // The declared version wins: the save fills gaps, it does not rewrite choices.
+    expect(parsed.data.libraries).toEqual([{ name: 'demo-utils', version: '1.0.0' }])
+  })
+})

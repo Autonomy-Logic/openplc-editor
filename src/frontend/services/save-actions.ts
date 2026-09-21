@@ -12,6 +12,7 @@ import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
+import { librariesUsedByProject } from '../utils/library-usage'
 import { notifyNoWritePermission } from '../utils/notify-no-write-permission'
 import { serializeDataTypeToText } from '../utils/PLC/data-type-serializer'
 import { parseDataTypeFromText } from '../utils/PLC/data-type-text-parser'
@@ -49,8 +50,18 @@ type ProjectFileSpec = {
 function buildProjectJsonContent(state: StoreState): string {
   const { project } = state
   const debugVariables = collectDebugVariables(project.data.configurations.resource.globalVariables, project.data.pous)
+  // Declared refs, plus what the POUs actually instantiate. A project saved before blocks
+  // wrote their library into `project.libraries` gets the entry here, on the side that has
+  // the library installed, so the other side finally has something to warn about.
+  const declared = project.data.libraries ?? []
+  const derived = librariesUsedByProject(project.data.pous, state.libraries.system, state.bundledLibraryNames)
+    .filter((name) => !declared.some((ref) => ref.name === name))
+    .flatMap((name) => {
+      const owner = state.libraries.system.find((library) => library.name === name)
+      return owner ? [{ name, version: owner.version }] : []
+    })
   // Alphabetical order keeps diffs stable.
-  const libraries = [...(project.data.libraries ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const libraries = [...declared, ...derived].sort((a, b) => a.name.localeCompare(b.name))
   // A re-saved library must round-trip as `plc-library`, not silently downgrade to `plc-project`.
   const metaType: 'plc-project' | 'plc-library' = project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
   return JSON.stringify(
