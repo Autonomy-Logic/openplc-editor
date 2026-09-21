@@ -9,7 +9,7 @@
  * It reuses the POU scanner's comment pass rather than growing its own, so the
  * two views cannot end up disagreeing about what a comment is.
  */
-import { parseDataTypeFromText } from '../data-type-text-parser'
+import { parseDataTypeFromText } from '../data-type-declarations'
 
 const fieldsOf = (text: string) => {
   const result = parseDataTypeFromText(text, 'S')

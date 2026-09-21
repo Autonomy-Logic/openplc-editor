@@ -14,7 +14,7 @@ import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/l
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { validateVariableSet } from '../../../store/slices/project/validation/variables'
 import { cn } from '../../../utils/cn'
-import { buildScanContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
@@ -1021,7 +1021,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       const committedText = applyVariablesToText(
         editorCode,
         finalVariables,
-        buildScanContext(pous, dataTypes, libraries),
+        buildTypeContext(pous, dataTypes, libraries),
       )
       if (committedText !== editorCode) setEditorCode(committedText)
       setPouVariablesText(editor.meta.name, committedText)

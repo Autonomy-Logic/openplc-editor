@@ -1,8 +1,8 @@
 import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import type { ScanContext } from './variable-declaration-scanner'
-import { scanVariableDeclarations } from './variable-declaration-scanner'
+import type { TypeContext } from './PLC/variable-declarations'
+import { parseVariableDeclarations } from './PLC/variable-declarations'
 
 /**
  * Classes whose declarations cannot carry a physical location ("AT").
@@ -34,7 +34,7 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
 /**
  * Parse an array type string like "ARRAY[1..10] OF INT" or "ARRAY[1..10, 1..5] OF MyStruct"
  * Returns null if not an array type, otherwise returns the parsed array type definition.
- * Also consumed by the data-type text parser (`PLC/data-type-text-parser.ts`).
+ * Also consumed by the global-variable-list text parser.
  */
 export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
   // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
@@ -94,12 +94,11 @@ export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
  * vocabulary. Kept here rather than in the scanner so the scanner stays free
  * of project types and stays testable on a bare string.
  */
-export const buildScanContext = (
+export const buildTypeContext = (
   pous?: PLCPou[],
   _dataTypes?: PLCDataType[], // Reserved: will enable user-defined data type validation
   libraries?: LibraryState['libraries'],
-): ScanContext => ({
-  parseArrayType,
+): TypeContext => ({
   resolveBaseType: (typeName) => {
     const check = baseTypeSchema.safeParse(typeName.toUpperCase())
     return check.success ? check.data : undefined
@@ -142,12 +141,11 @@ export const parseIecStringToVariables = (
   dataTypes?: PLCDataType[],
   libraries?: LibraryState['libraries'],
 ): PLCVariable[] => {
-  const result = scanVariableDeclarations(iecString, buildScanContext(pous, dataTypes, libraries))
+  const result = parseVariableDeclarations(iecString, buildTypeContext(pous, dataTypes, libraries))
   if (result.errors.length > 0) throw new Error(result.errors[0].message)
   return result.variables
 }
 
-/** First name declared twice, folded case-insensitively like every IEC identifier lookup. */
 export const findDuplicateVariableName = (variables: PLCVariable[]): string | undefined => {
   const seen = new Set<string>()
   for (const variable of variables) {

@@ -8,7 +8,7 @@
  * The backend only reads raw files from disk; all parsing happens here.
  */
 
-import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-text-parser'
+import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-declarations'
 import {
   detectLanguageFromExtension,
   findGraphicalBodyStartIndex,

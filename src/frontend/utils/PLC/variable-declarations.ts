@@ -106,7 +106,19 @@ export interface TypeContext {
  */
 const WRAPPER_HEAD = 'PROGRAM __openplc_variables__\n'
 const WRAPPER_TAIL = '\n;\nEND_PROGRAM\n'
-const WRAPPER_LINES = 1
+
+/**
+ * True when the source is already a whole POU rather than a bare run of VAR
+ * blocks.
+ *
+ * Most callers hand over just the declarations, which have to be wrapped
+ * because STruC++ parses compilation units. A few hand over the POU itself, and
+ * wrapping that would nest one POU inside another. Detecting it keeps both
+ * callers working off one entry point.
+ */
+function isWholePou(source: string): boolean {
+  return /^\s*(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w/i.test(source)
+}
 
 /** Character offset of the start of each 1-indexed line. */
 function lineStarts(source: string): number[] {
@@ -128,9 +140,9 @@ interface StrucppSpan {
  * STruC++ span (1-indexed line/column, inclusive end) → character offsets in
  * the caller's source.
  */
-function toSpan(starts: number[], span: StrucppSpan): Span {
-  const startLine = span.startLine - WRAPPER_LINES
-  const endLine = span.endLine - WRAPPER_LINES
+function toSpan(starts: number[], span: StrucppSpan, wrapperLines: number): Span {
+  const startLine = span.startLine - wrapperLines
+  const endLine = span.endLine - wrapperLines
   const start = (starts[startLine - 1] ?? 0) + span.startCol - 1
   const end = (starts[endLine - 1] ?? 0) + span.endCol
   return { start, end }
@@ -188,7 +200,7 @@ function arrayElementText(typeText: string): string | undefined {
   return element ? element[1].trim() : undefined
 }
 
-function classifyType(typeText: string, context: TypeContext): PLCVariable['type'] {
+export function classifyType(typeText: string, context: TypeContext): PLCVariable['type'] {
   const dimensions = arrayDimensions(typeText)
   if (dimensions) {
     const elementText = arrayElementText(typeText) ?? ''
@@ -274,7 +286,8 @@ interface StrucppVarBlock {
  */
 export function parseVariableDeclarations(source: string, context: TypeContext = {}): ParseResult {
   const starts = lineStarts(source)
-  const wrapped = `${WRAPPER_HEAD}${source}${WRAPPER_TAIL}`
+  const wrapperLines = isWholePou(source) ? 0 : 1
+  const wrapped = wrapperLines === 0 ? source : `${WRAPPER_HEAD}${source}${WRAPPER_TAIL}`
 
   let ast: { programs?: Array<{ varBlocks?: StrucppVarBlock[] }> } | undefined
   let rawErrors: Array<{ message: string; line?: number; column?: number }> = []
@@ -291,7 +304,7 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
   }
 
   const errors: ParseError[] = rawErrors.map((error) => {
-    const line = Math.max(1, (error.line ?? 1) - WRAPPER_LINES)
+    const line = Math.max(1, (error.line ?? 1) - wrapperLines)
     const start = (starts[line - 1] ?? 0) + Math.max(0, (error.column ?? 1) - 1)
     const lineEnd = source.indexOf('\n', start)
     return { message: error.message, line, span: { start, end: lineEnd === -1 ? source.length : lineEnd } }
@@ -303,35 +316,43 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
   for (const block of ast?.programs?.[0]?.varBlocks ?? []) {
     const blockClass = BLOCK_TO_CLASS[block.blockType.toUpperCase()] ?? 'local'
     const flag = blockFlag(block)
-    const blockSpan = toSpan(starts, block.sourceSpan)
+    const blockSpan = toSpan(starts, block.sourceSpan, wrapperLines)
     const declarations: ParsedDeclaration[] = []
 
     for (const declaration of block.declarations) {
-      const declSpan = toSpan(starts, declaration.sourceSpan)
-      const typeSpan = toSpan(starts, declaration.type.sourceSpan)
+      // STruC++ spans the declaration inclusive of its `;`. The model's span
+      // ends AT the semicolon instead, so an edit that appends a clause (`:= 7`)
+      // anchors before it rather than after — otherwise `a : INT;` became
+      // `a : INT; := 7`.
+      const declFull = toSpan(starts, declaration.sourceSpan, wrapperLines)
+      const declSpan: Span =
+        source[declFull.end - 1] === ';' ? { start: declFull.start, end: declFull.end - 1 } : declFull
+      const typeSpan = toSpan(starts, declaration.type.sourceSpan, wrapperLines)
       const typeText = source.slice(typeSpan.start, typeSpan.end).trim()
 
-      const locationSpan = declaration.addressSpan ? toSpan(starts, declaration.addressSpan) : undefined
+      const locationSpan = declaration.addressSpan ? toSpan(starts, declaration.addressSpan, wrapperLines) : undefined
       const locationText = locationSpan ? source.slice(locationSpan.start, locationSpan.end) : ''
 
-      const initialSpan = declaration.initialValue ? toSpan(starts, declaration.initialValue.sourceSpan) : undefined
+      const initialSpan = declaration.initialValue
+        ? toSpan(starts, declaration.initialValue.sourceSpan, wrapperLines)
+        : undefined
       const initialText = initialSpan ? source.slice(initialSpan.start, initialSpan.end).trim() : ''
 
-      const comment = trailingComment(source, declSpan.end)
+      const comment = trailingComment(source, declFull.end)
       const documentation = comment ? source.slice(comment.inner.start, comment.inner.end).trim() : ''
 
       const lineStart = source.lastIndexOf('\n', declSpan.start - 1) + 1
-      const consumedTo = comment ? comment.end : declSpan.end
+      const consumedTo = comment ? comment.end : declFull.end
       const nextNewline = source.indexOf('\n', consumedTo)
       const lineSpan = { start: lineStart, end: nextNewline === -1 ? source.length : nextNewline + 1 }
-      const line = declaration.sourceSpan.startLine - WRAPPER_LINES
+      const line = declaration.sourceSpan.startLine - wrapperLines
 
       // One variable per declared name. `a, b : INT;` is two variables that
       // happen to share a line; the model has no way to say otherwise, and the
       // text is normalised to match.
       declaration.names.forEach((_folded, index) => {
         const nameSpan = declaration.nameSpans?.[index]
-          ? toSpan(starts, declaration.nameSpans[index])
+          ? toSpan(starts, declaration.nameSpans[index], wrapperLines)
           : { start: declSpan.start, end: declSpan.start }
         const name = source.slice(nameSpan.start, nameSpan.end)
 

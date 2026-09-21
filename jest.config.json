@@ -5,6 +5,7 @@
     "<rootDir>/src"
   ],
   "setupFiles": [
+    "<rootDir>/src/jest-platform-globals.ts",
     "<rootDir>/src/jest-vi-shim.ts"
   ],
   "moduleDirectories": [

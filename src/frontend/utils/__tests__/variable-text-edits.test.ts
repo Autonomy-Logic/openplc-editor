@@ -11,17 +11,17 @@
  */
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { buildScanContext } from '../generate-iec-string-to-variables'
-import { scanVariableDeclarations } from '../variable-declaration-scanner'
+import { buildTypeContext } from '../generate-iec-string-to-variables'
+import { parseVariableDeclarations } from '../PLC/variable-declarations'
 import { applyVariablesToText, resolveLocationsInText } from '../variable-text-edits'
 
-const context = buildScanContext()
+const context = buildTypeContext()
 
 const apply = (text: string, variables: PLCVariable[]) => applyVariablesToText(text, variables, context)
 
 /** The model the text currently describes — what the store would be holding. */
 const modelOf = (text: string): PLCVariable[] => {
-  const result = scanVariableDeclarations(text, context)
+  const result = parseVariableDeclarations(text, context)
   expect(result.errors).toEqual([])
   return result.variables
 }
@@ -61,10 +61,10 @@ describe('an edit leaves everything it did not touch alone', () => {
     expect(out).toContain('total   : DINT AT %MD0;')
   })
 
-  it('changes an existing location, including to an alias with a space', () => {
+  it('changes an existing location to an alias', () => {
     const text = 'VAR\n  a : BOOL AT %QX0.0; (* keep me *)\nEND_VAR'
-    const out = apply(text, edit(modelOf(text), 'a', { location: 'Motor Start' }))
-    expect(out).toBe('VAR\n  a : BOOL AT Motor Start; (* keep me *)\nEND_VAR')
+    const out = apply(text, edit(modelOf(text), 'a', { location: 'Motor_Start' }))
+    expect(out).toBe('VAR\n  a : BOOL AT Motor_Start; (* keep me *)\nEND_VAR')
   })
 
   it('removes a location, taking the AT keyword with it', () => {
@@ -188,11 +188,11 @@ describe('round-trip stability', () => {
   it('keeps the model intact after a patch', () => {
     // The patched text must still describe exactly what was asked for —
     // otherwise the table and the text have drifted, which is the bug.
-    const next = edit(modelOf(RICH), 'counter', { name: 'tally', location: 'Motor Start', documentation: 'renamed' })
+    const next = edit(modelOf(RICH), 'counter', { name: 'tally', location: 'Motor_Start', documentation: 'renamed' })
     const reparsed = modelOf(apply(RICH, next))
 
     expect(reparsed.map((v) => v.name)).toEqual(['tally', 'total'])
-    expect(reparsed[0].location).toBe('Motor Start')
+    expect(reparsed[0].location).toBe('Motor_Start')
     expect(reparsed[0].documentation).toBe('renamed')
     expect(reparsed[0].initialValue).toBe('0')
   })
@@ -211,13 +211,13 @@ describe('round-trip stability', () => {
 
 describe('resolveLocationsInText, for the LSP stub', () => {
   const aliases = new Map([
-    ['Motor Start', '%IX0.0'],
-    ['relay-1', '%QX0.1'],
+    ['Motor_Start', '%IX0.0'],
+    ['relay_1', '%QX0.1'],
   ])
   const resolve = (location: string) => (location.startsWith('%') ? location : (aliases.get(location) ?? ''))
 
   it('swaps an alias for its address and leaves everything else alone', () => {
-    const text = 'VAR\n  (* keep me *)\n  start : BOOL AT Motor Start; (* and me *)\nEND_VAR'
+    const text = 'VAR\n  (* keep me *)\n  start : BOOL AT Motor_Start; (* and me *)\nEND_VAR'
     const out = resolveLocationsInText(text, resolve, context)
 
     expect(out).toBe('VAR\n  (* keep me *)\n  start : BOOL AT %IX0.0; (* and me *)\nEND_VAR')
@@ -232,13 +232,13 @@ describe('resolveLocationsInText, for the LSP stub', () => {
     // An orphaned alias resolves to nothing at compile time; leaving `AT` with
     // a dangling operand would break the VAR block for strucpp and take every
     // symbol after it out of scope.
-    const text = 'VAR\n  a : BOOL AT Ghost Alias;\nEND_VAR'
+    const text = 'VAR\n  a : BOOL AT Ghost_Alias;\nEND_VAR'
     expect(resolveLocationsInText(text, resolve, context)).toBe('VAR\n  a : BOOL;\nEND_VAR')
   })
 
   it('never changes the line count', () => {
     // `bodyLineOffset` and the pouvars diagnostics mirror both depend on this.
-    const text = 'VAR\n  (* a *)\n  a : BOOL AT Motor Start;\n  b : BOOL AT Ghost;\n  c : BOOL AT relay-1;\nEND_VAR'
+    const text = 'VAR\n  (* a *)\n  a : BOOL AT Motor_Start;\n  b : BOOL AT Ghost;\n  c : BOOL AT relay_1;\nEND_VAR'
     const out = resolveLocationsInText(text, resolve, context)
     expect(out.split('\n')).toHaveLength(text.split('\n').length)
   })

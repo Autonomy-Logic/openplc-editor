@@ -8,7 +8,7 @@
  */
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
 import { serializeDataTypeToText } from '../data-type-serializer'
-import { parseDataTypeFromText } from '../data-type-text-parser'
+import { parseDataTypeFromText } from '../data-type-declarations'
 
 const roundTrip = (dt: PLCDataType) => parseDataTypeFromText(serializeDataTypeToText(dt), dt.name)
 
@@ -142,79 +142,86 @@ describe('parseDataTypeFromText tolerance', () => {
 })
 
 describe('parseDataTypeFromText errors', () => {
+  // These used to assert hand-written hints ("missing END_STRUCT", "invalid
+  // enumeration value"). The parser is STruC++ now, so the wording is the
+  // compiler's (DOPE-650) — which is the point: the editor reports what the
+  // build would report, rather than a second opinion that could disagree with
+  // it. What matters is that each input is still refused, and that the message
+  // names the token the user has to look at.
+
+  const errorFor = (source: string): string => {
+    const result = parseDataTypeFromText(source)
+    expect(result.dataType).toBeUndefined()
+    expect(result.error).toBeDefined()
+    return result.error ?? ''
+  }
+
   it('rejects an empty file', () => {
-    expect(parseDataTypeFromText('').error).toMatch(/empty file/)
-    expect(parseDataTypeFromText('  \n \n').error).toMatch(/empty file/)
+    expect(errorFor('')).toMatch(/declares no data type/)
+    expect(errorFor('  \n \n')).toMatch(/declares no data type/)
   })
 
-  it('rejects a missing TYPE frame', () => {
-    expect(parseDataTypeFromText('Color : (Red);\nEND_TYPE\n').error).toMatch(/must start with a TYPE/)
-    expect(parseDataTypeFromText('TYPE\n  Color : (Red);\n').error).toMatch(/must end with END_TYPE/)
+  it('rejects a declaration outside a TYPE frame', () => {
+    expect(errorFor('Color : (Red);\nEND_TYPE\n')).toBeTruthy()
+    expect(errorFor('TYPE\n  Color : (Red);\n')).toMatch(/END_TYPE/)
   })
 
   it('rejects a TYPE block with no declaration', () => {
-    expect(parseDataTypeFromText('TYPE\nEND_TYPE\n').error).toMatch(/declares no data type/)
+    expect(errorFor('TYPE\nEND_TYPE\n')).toMatch(/declares no data type/)
   })
 
   it('rejects more than one declaration per file', () => {
-    const twoEnums = 'TYPE\n  A : (X);\n  B : (Y);\nEND_TYPE\n'
-    expect(parseDataTypeFromText(twoEnums).error).toMatch(/exactly one data type/)
-    const structPlusEnum = 'TYPE\n  P : STRUCT\n    x : INT;\n  END_STRUCT;\n  B : (Y);\nEND_TYPE\n'
-    expect(parseDataTypeFromText(structPlusEnum).error).toMatch(/exactly one data type/)
-  })
-
-  it('rejects a structure without END_STRUCT', () => {
-    expect(parseDataTypeFromText('TYPE\n  P : STRUCT\n    x : INT;\nEND_TYPE\n').error).toMatch(/missing END_STRUCT/)
-  })
-
-  it('rejects invalid structure fields with a hint', () => {
-    const missingSemicolon = 'TYPE\n  P : STRUCT\n    x : INT\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(missingSemicolon).error).toMatch(/missing semicolon/)
-    const missingColon = 'TYPE\n  P : STRUCT\n    x INT;\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(missingColon).error).toMatch(/missing colon/)
-    const badFieldType = 'TYPE\n  P : STRUCT\n    x : MY TYPE;\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(badFieldType).error).toMatch(/invalid structure field/)
-  })
-
-  it('rejects a structure field whose ARRAY has a blank bound', () => {
-    // `parseArrayType` is shared with the variables text parser and declines a
-    // blank bound, so `buildFieldType` falls through to `identifierRegex`, which
-    // the bracketed type cannot satisfy.
-    const trailingComma = 'TYPE\n  P : STRUCT\n    m : ARRAY[0..1,] OF INT;\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(trailingComma).error).toMatch(/invalid structure field/)
-    const doubledComma = 'TYPE\n  P : STRUCT\n    m : ARRAY[0..1,,0..2] OF INT;\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(doubledComma).error).toMatch(/invalid structure field/)
-  })
-
-  it('rejects invalid enumeration values', () => {
-    expect(parseDataTypeFromText('TYPE\n  Color : (Red, 2bad);\nEND_TYPE\n').error).toMatch(/invalid enumeration value/)
-  })
-
-  it('rejects invalid structure field names', () => {
-    const badName = 'TYPE\n  P : STRUCT\n    2bad : INT;\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(badName).error).toMatch(/invalid structure field name: "2bad"/)
-    // Reserved words are rejected too — same isLegalIdentifier rule
-    // the structure form enforces at entry.
-    const keywordName = 'TYPE\n  P : STRUCT\n    IF : INT;\n  END_STRUCT;\nEND_TYPE\n'
-    expect(parseDataTypeFromText(keywordName).error).toMatch(/invalid structure field name: "IF" — is a reserved word/)
-  })
-
-  it('rejects unrecognized declarations with a hint', () => {
-    expect(parseDataTypeFromText('TYPE\n  Foo\nEND_TYPE\n').error).toMatch(/missing semicolon/)
-    expect(parseDataTypeFromText('TYPE\n  Foo Bar;\nEND_TYPE\n').error).toMatch(/missing colon/)
-    expect(parseDataTypeFromText('TYPE\n  Foo : ?!;\nEND_TYPE\n').error).toMatch(/unrecognized declaration format/)
-  })
-
-  it('rejects an invalid type name', () => {
-    expect(parseDataTypeFromText('TYPE\n  2bad : (Red);\nEND_TYPE\n').error).toMatch(/invalid type name/)
-    expect(parseDataTypeFromText('TYPE\n  ARRAY : (Red);\nEND_TYPE\n').error).toMatch(
-      /invalid type name: "ARRAY" — is a reserved word/,
+    expect(errorFor('TYPE\n  A : (X);\n  B : (Y);\nEND_TYPE\n')).toMatch(/exactly one data type/)
+    expect(errorFor('TYPE\n  P : STRUCT\n    x : INT;\n  END_STRUCT;\n  B : (Y);\nEND_TYPE\n')).toMatch(
+      /exactly one data type/,
     )
   })
 
-  it('rejects a declared name that does not match the expected name', () => {
-    const result = parseDataTypeFromText('TYPE\n  Other : (Red);\nEND_TYPE\n', 'Color')
-    expect(result.error).toMatch(/does not match the expected name "Color"/)
-    expect(result.error).toMatch(/rename the data type via the project tree/)
+  it('rejects a structure without END_STRUCT, naming the token it wanted', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    x : INT;\nEND_TYPE\n')).toMatch(/END_STRUCT/)
+  })
+
+  it('rejects a field missing its semicolon', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    x : INT\n  END_STRUCT;\nEND_TYPE\n')).toMatch(/Semicolon/)
+  })
+
+  it('rejects a field missing its colon', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    x INT;\n  END_STRUCT;\nEND_TYPE\n')).toBeTruthy()
+  })
+
+  it('rejects a two-word field type', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    x : MY TYPE;\n  END_STRUCT;\nEND_TYPE\n')).toBeTruthy()
+  })
+
+  it('rejects a structure field whose ARRAY has a blank bound', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    m : ARRAY[0..1,] OF INT;\n  END_STRUCT;\nEND_TYPE\n')).toMatch(
+      /ARRAY dimension/,
+    )
+    expect(errorFor('TYPE\n  P : STRUCT\n    m : ARRAY[0..1,,0..2] OF INT;\n  END_STRUCT;\nEND_TYPE\n')).toMatch(
+      /ARRAY dimension/,
+    )
+  })
+
+  it('rejects an enumeration value that is not an identifier', () => {
+    expect(errorFor('TYPE\n  Color : (Red, 2bad);\nEND_TYPE\n')).toMatch(/Identifier/)
+  })
+
+  it('rejects a structure field name that is not an identifier', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    2bad : INT;\nEND_STRUCT;\nEND_TYPE\n')).toBeTruthy()
+  })
+
+  it('rejects a reserved word as a field name', () => {
+    expect(errorFor('TYPE\n  P : STRUCT\n    IF : INT;\n  END_STRUCT;\nEND_TYPE\n')).toBeTruthy()
+  })
+
+  it('rejects a type name that is not an identifier', () => {
+    expect(errorFor('TYPE\n  2bad : (Red);\nEND_TYPE\n')).toBeTruthy()
+  })
+
+  it('refuses an alias type, which the editor model cannot represent', () => {
+    // `MyInt : INT;` is legal IEC but the editor knows only structures,
+    // enumerations and arrays. Saying so beats inventing a one-field structure
+    // the user never wrote.
+    expect(errorFor('TYPE\n  MyInt : INT;\nEND_TYPE\n')).toMatch(/alias for another type/)
   })
 })

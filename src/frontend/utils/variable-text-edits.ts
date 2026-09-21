@@ -13,16 +13,16 @@
  *
  * So: splice the fields that changed, delete the lines that went away, insert
  * the ones that appeared, and do not touch a single other byte. Everything here
- * is driven by the scanner's source map; there is no re-serialisation of
- * anything the user already wrote.
+ * is driven by the parser's source map — STruC++'s own spans — so there is no
+ * re-serialisation of anything the user already wrote.
  *
  * Pure: text in, text out.
  */
 
 import type { PLCVariable } from '../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from './generate-iec-variables-to-string'
-import type { ScanContext, ScannedBlock, ScannedDeclaration, Span } from './variable-declaration-scanner'
-import { scanVariableDeclarations } from './variable-declaration-scanner'
+import type { ParsedBlock, ParsedDeclaration, Span, TypeContext } from './PLC/variable-declarations'
+import { parseVariableDeclarations } from './PLC/variable-declarations'
 
 interface TextEdit {
   span: Span
@@ -42,10 +42,10 @@ function applyEdits(text: string, edits: TextEdit[]): string {
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 const blockKey = (variable: PLCVariable): string => `${variable.class ?? 'global'}\u0000${variable.flag ?? ''}`
-const scannedBlockKey = (block: ScannedBlock): string => `${block.class ?? 'global'}\u0000${block.flag ?? ''}`
+const parsedBlockKey = (block: ParsedBlock): string => `${block.class ?? 'global'}\u0000${block.flag ?? ''}`
 
 /** The declaration's own indentation, so an inserted sibling lines up with it. */
-function indentOf(text: string, declaration: ScannedDeclaration): string {
+function indentOf(text: string, declaration: ParsedDeclaration): string {
   const lineStart = text.lastIndexOf('\n', declaration.span.start - 1) + 1
   return text.slice(lineStart, declaration.span.start)
 }
@@ -71,13 +71,13 @@ function renderDeclaration(variable: PLCVariable, indent: string): string {
  * it.
  */
 function matchDeclarations(
-  declarations: ScannedDeclaration[],
+  declarations: ParsedDeclaration[],
   nextVariables: PLCVariable[],
-): Map<number, ScannedDeclaration> {
-  const matched = new Map<number, ScannedDeclaration>()
-  const taken = new Set<ScannedDeclaration>()
+): Map<number, ParsedDeclaration> {
+  const matched = new Map<number, ParsedDeclaration>()
+  const taken = new Set<ParsedDeclaration>()
 
-  const claim = (index: number, declaration: ScannedDeclaration | undefined): boolean => {
+  const claim = (index: number, declaration: ParsedDeclaration | undefined): boolean => {
     if (!declaration || taken.has(declaration)) return false
     matched.set(index, declaration)
     taken.add(declaration)
@@ -120,7 +120,7 @@ function matchDeclarations(
 }
 
 /** Field-level edits turning `declaration` into `variable`. */
-function editsForDeclaration(text: string, declaration: ScannedDeclaration, variable: PLCVariable): TextEdit[] {
+function editsForDeclaration(text: string, declaration: ParsedDeclaration, variable: PLCVariable): TextEdit[] {
   const edits: TextEdit[] = []
   const current = declaration.variable
   const at = (span: Span) => text.slice(span.start, span.end)
@@ -207,8 +207,8 @@ function findClauseStart(text: string, operand: Span, keyword: string): number {
  * is no source map to patch against then, and silently keeping a stale buffer
  * would be worse than reformatting it.
  */
-export function applyVariablesToText(text: string, nextVariables: PLCVariable[], context: ScanContext = {}): string {
-  const scanned = scanVariableDeclarations(text, context)
+export function applyVariablesToText(text: string, nextVariables: PLCVariable[], context: TypeContext = {}): string {
+  const scanned = parseVariableDeclarations(text, context)
   if (scanned.errors.length > 0) return generateIecVariablesToString(nextVariables)
 
   const declarations = scanned.blocks.flatMap((block) => block.declarations)
@@ -242,7 +242,7 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
     }
 
     for (const [key, variables] of byBlock) {
-      const block = scanned.blocks.find((candidate) => scannedBlockKey(candidate) === key)
+      const block = scanned.blocks.find((candidate) => parsedBlockKey(candidate) === key)
       if (block) {
         const indent = block.declarations.length > 0 ? indentOf(text, block.declarations[0]) : '    '
         const lineStart = text.lastIndexOf('\n', block.endVarSpan.start - 1) + 1
@@ -293,8 +293,8 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
  * exists to remove. Leaving the order alone loses nothing, and the duplicate is
  * still reported by the validator.
  */
-function reorderDeclarations(text: string, nextVariables: PLCVariable[], context: ScanContext): string {
-  const scanned = scanVariableDeclarations(text, context)
+function reorderDeclarations(text: string, nextVariables: PLCVariable[], context: TypeContext): string {
+  const scanned = parseVariableDeclarations(text, context)
   if (scanned.errors.length > 0) return text
 
   const edits: TextEdit[] = []
@@ -306,7 +306,7 @@ function reorderDeclarations(text: string, nextVariables: PLCVariable[], context
     if (new Set(current).size !== current.length) continue
 
     const wanted = nextVariables
-      .filter((variable) => blockKey(variable) === scannedBlockKey(block))
+      .filter((variable) => blockKey(variable) === parsedBlockKey(block))
       .map((variable) => variable.name.toLowerCase())
     if (new Set(wanted).size !== wanted.length) continue
 
@@ -358,9 +358,9 @@ function reorderDeclarations(text: string, nextVariables: PLCVariable[], context
 export function resolveLocationsInText(
   text: string,
   resolve: (location: string) => string,
-  context: ScanContext = {},
+  context: TypeContext = {},
 ): string {
-  const scanned = scanVariableDeclarations(text, context)
+  const scanned = parseVariableDeclarations(text, context)
   if (scanned.errors.length > 0) return text
 
   const edits: TextEdit[] = []

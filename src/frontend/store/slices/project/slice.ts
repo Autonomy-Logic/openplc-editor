@@ -43,13 +43,13 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import { buildScanContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { clampIOGroupLength } from '../../../utils/modbus/io-group'
+import { parseDataTypeFromText } from '../../../utils/PLC/data-type-declarations'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
-import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
 import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variable-list-references'
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
@@ -697,7 +697,7 @@ const regenerateVariablesText = (pouName: string | undefined, getState: ProjectG
   if (!pou) return
 
   const variables = pou.interface?.variables ?? []
-  const context = buildScanContext(state.project.data.pous, state.project.data.dataTypes, state.libraries)
+  const context = buildTypeContext(state.project.data.pous, state.project.data.dataTypes, state.libraries)
   const current = readPouVariablesText(pou)
   const nextText =
     current === undefined ? generateIecVariablesToString(variables) : applyVariablesToText(current, variables, context)
