@@ -24,6 +24,7 @@ import {
 } from '@root/backend/editor/edge-ai'
 import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
 import {
+  listCloudProjectsInFolder,
   listRecentCloudProjects,
   readCloudProject,
   saveCloudFile,
@@ -812,6 +813,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
     this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
     this.registerHandle('edge-projects:list-recent', this.handleEdgeProjectsListRecent)
+    this.registerHandle('edge-projects:list-in-folder', this.handleEdgeProjectsListInFolder)
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
@@ -1300,11 +1302,22 @@ class MainProcessBridge implements MainIpcModule {
   // handlers use, so a revoked token is renewed once rather than per call site.
 
   handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectsResult> => {
+
     // Clamped rather than trusted: this crosses IPC, and an absurd limit would be
     // forwarded straight into the API's own bounds check as a 400.
     const requested = typeof limit === 'number' && Number.isInteger(limit) ? limit : 5
 
     return listRecentCloudProjects(Math.min(Math.max(requested, 1), 50))
+  }
+
+  handleEdgeProjectsListInFolder = (_event: IpcMainInvokeEvent, folderId: unknown): Promise<CloudProjectsResult> => {
+    // Checked rather than trusted: this crosses IPC. A folder id that is not a
+    // non-empty string reads as "could not list", never as an empty folder.
+    if (typeof folderId !== 'string' || folderId.length === 0) {
+      return Promise.resolve({ status: 'unreachable' })
+    }
+
+    return listCloudProjectsInFolder(folderId)
   }
 
   handleEdgeProjectsRead = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<RawProjectFiles> => {

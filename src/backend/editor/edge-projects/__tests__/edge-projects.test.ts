@@ -6,7 +6,13 @@ import { z } from 'zod'
 
 import { ApiProjectFilesSchema } from '../../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
-import { listRecentCloudProjects, readCloudProject, saveCloudFile, saveCloudProject } from '..'
+import {
+  listCloudProjectsInFolder,
+  listRecentCloudProjects,
+  readCloudProject,
+  saveCloudFile,
+  saveCloudProject,
+} from '..'
 
 jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAuthedRequest: jest.fn(),
@@ -47,6 +53,38 @@ const FILES = {
 
 beforeEach(() => {
   jest.clearAllMocks()
+})
+
+/**
+ * The Open dialog browses one Edge folder at a time, the way Edge's sidebar does.
+ * Same rows, same lock marking as the recent list; only the query differs.
+ */
+describe('listCloudProjectsInFolder', () => {
+  it('asks for that folder, newest first, at the API page cap', async () => {
+    request.mockResolvedValueOnce(ok({ projects: [] })).mockResolvedValueOnce(ok({ projectIds: [] }))
+
+    await listCloudProjectsInFolder('folder-7')
+
+    const query = new URL(request.mock.calls[0][0], 'https://example.test').searchParams
+    expect(query.get('folderId')).toBe('folder-7')
+    expect(query.get('sortBy')).toBe('updatedAt')
+    expect(query.get('sortOrder')).toBe('desc')
+    // 50 is the most the API allows on one page; asking for more is a 400.
+    expect(query.get('limit')).toBe('50')
+  })
+
+  it('marks the locked ones, like the recent list does', async () => {
+    request
+      .mockResolvedValueOnce(
+        ok({ projects: [{ id: 'p1', name: 'Pump', language: 'st', updatedAt: '2026-08-24T00:00:00.000Z' }] }),
+      )
+      .mockResolvedValueOnce(ok({ projectIds: ['p1'] }))
+
+    await expect(listCloudProjectsInFolder('f')).resolves.toEqual({
+      status: 'ok',
+      projects: [expect.objectContaining({ id: 'p1', locked: true })],
+    })
+  })
 })
 
 describe('listRecentCloudProjects', () => {

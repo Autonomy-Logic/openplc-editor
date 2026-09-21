@@ -240,6 +240,8 @@ const rendererProcessBridge = {
   edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
   edgeProjectsListRecent: (limit: number): Promise<CloudProjectsResult> =>
     ipcRenderer.invoke('edge-projects:list-recent', limit),
+  edgeProjectsListInFolder: (folderId: string): Promise<CloudProjectsResult> =>
+    ipcRenderer.invoke('edge-projects:list-in-folder', folderId),
   edgeProjectsRead: (projectId: string): Promise<RawProjectFiles> =>
     ipcRenderer.invoke('edge-projects:read', projectId),
   edgeProjectsSaveProject: (files: WriteProjectFiles): Promise<{ success: boolean; error?: string }> =>

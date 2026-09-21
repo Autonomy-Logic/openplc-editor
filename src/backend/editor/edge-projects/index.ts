@@ -93,8 +93,7 @@ async function lockedProjectIds(): Promise<Set<string>> {
   return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [])
 }
 
-export async function listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
-  const query = new URLSearchParams({ limit: String(limit), sortBy: 'updatedAt', sortOrder: 'desc' })
+async function listCloudProjects(query: URLSearchParams): Promise<CloudProjectsResult> {
 
   let response: { status: number; body: string } | null
 
@@ -142,6 +141,19 @@ export async function listRecentCloudProjects(limit: number): Promise<CloudProje
   })
 
   return { status: 'ok', projects }
+}
+
+export async function listRecentCloudProjects(limit: number): Promise<CloudProjectsResult> {
+  return listCloudProjects(new URLSearchParams({ limit: String(limit), sortBy: 'updatedAt', sortOrder: 'desc' }))
+}
+
+/** The API caps a page at 50, so a folder holding more shows its 50 most recently changed. */
+const FOLDER_PAGE_LIMIT = 50
+
+export async function listCloudProjectsInFolder(folderId: string): Promise<CloudProjectsResult> {
+  return listCloudProjects(
+    new URLSearchParams({ folderId, limit: String(FOLDER_PAGE_LIMIT), sortBy: 'updatedAt', sortOrder: 'desc' }),
+  )
 }
 
 /**

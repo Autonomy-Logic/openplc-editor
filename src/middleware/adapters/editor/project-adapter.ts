@@ -493,6 +493,21 @@ export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdge
       return parsed.success ? parsed.data : { status: 'unreachable' }
     },
 
+    async listCloudProjectsInFolder(folderId: string): Promise<CloudProjectsResult> {
+      if (typeof window.bridge.edgeProjectsListInFolder !== 'function') {
+        return { status: 'unavailable' }
+      }
+
+      const result = await window.bridge
+        .edgeProjectsListInFolder(folderId)
+        .catch((): CloudProjectsResult => ({ status: 'unreachable' }))
+
+      // An unreadable answer must not become an empty list, which reads as "this folder is empty".
+      const parsed = CloudProjectsResultSchema.safeParse(result)
+
+      return parsed.success ? parsed.data : { status: 'unreachable' }
+    },
+
     async uploadProjectToCloud(params: UploadProjectParams): Promise<UploadProjectResult> {
       if (typeof window.bridge.edgeUploadProject !== 'function') {
         return {

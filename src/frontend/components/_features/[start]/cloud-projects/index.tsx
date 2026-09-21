@@ -22,10 +22,10 @@ const RECENT_LIMIT = 5
  * project. Two screens explaining the same rule differently is how a user
  * concludes one of them is broken.
  */
-const LOCKED_REASON =
+export const LOCKED_REASON =
   'You need a plan that allows private projects to open this one in the editor. You can still make it public, download it, or delete it.'
 
-const LOCKED_TOOLTIP = 'Locked, needs a plan with private projects'
+export const LOCKED_TOOLTIP = 'Locked, needs a plan with private projects'
 
 export type StartCloudProjectsProps = {
   searchNameFilterValue: string

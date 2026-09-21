@@ -32,6 +32,10 @@ function stubPort<T extends object>(overrides: Partial<T> = {}): T {
 
 /** Every URL the screen asked the platform to open, in order. */
 const openedLinks: string[] = []
+/** How many times the local folder picker was asked for. */
+let localOpens = 0
+
+let projectOverrides: Partial<ProjectPort> = {}
 
 function makePorts(): PlatformPorts {
   return {
@@ -44,6 +48,11 @@ function makePorts(): PlatformPorts {
     project: stubPort<ProjectPort>({
       getRecentProjects: () => Promise.resolve([]),
       listRecentCloudProjects: () => Promise.resolve({ status: 'unavailable' }),
+      openProject: () => {
+        localOpens += 1
+        return Promise.resolve({ success: false })
+      },
+      ...projectOverrides,
     }),
     device: stubPort<DevicePort>({ getCommunicationPorts: () => Promise.resolve([]) }),
     orchestrator: stubPort(),
@@ -69,6 +78,8 @@ function Wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   openedLinks.length = 0
+  localOpens = 0
+  projectOverrides = {}
 })
 
 describe('the Documentation entry', () => {
@@ -90,5 +101,41 @@ describe('the Documentation entry', () => {
     expect(labels[0]).toMatch(/New Project$/)
     expect(labels[1]).toMatch(/Open$/)
     expect(labels[2]).toMatch(/Documentation$/)
+  })
+})
+
+/**
+ * Open used to go straight to the local folder picker. It now asks which world
+ * first, because a signed-in user's projects may live on Edge, filed in folders
+ * the start screen's "five most recent" never shows.
+ */
+describe('the Open entry', () => {
+  it('offers the local picker and the Edge browser', async () => {
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    await userEvent.click(await screen.findByRole('button', { name: /^open$/i }))
+
+    expect(await screen.findByRole('menuitem', { name: /local project/i })).not.toBeNull()
+    expect(await screen.findByRole('menuitem', { name: /autonomy edge project/i })).not.toBeNull()
+  })
+
+  it('keeps the local choice on the flow it always had', async () => {
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    await userEvent.click(await screen.findByRole('button', { name: /^open$/i }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: /local project/i }))
+
+    expect(localOpens).toBe(1)
+  })
+
+  it('greys out the Edge choice on a build with no cloud channel', async () => {
+    // `undefined` on purpose: the stub would otherwise answer every name with a function.
+    projectOverrides = { listCloudFolders: undefined, listCloudProjectsInFolder: undefined }
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    await userEvent.click(await screen.findByRole('button', { name: /^open$/i }))
+
+    const edge = await screen.findByRole('menuitem', { name: /autonomy edge project/i })
+    expect(edge.getAttribute('aria-disabled')).toBe('true')
   })
 })

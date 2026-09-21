@@ -300,6 +300,9 @@ export interface ProjectPort {
   /** Server-ordered. Discriminated so signed-out, empty and offline read differently to the user. */
   listRecentCloudProjects?(limit: number): Promise<CloudProjectsResult>
 
+  /** One folder's projects, newest first, capped at the API's page size; optional for the same reason as `listCloudFolders`. */
+  listCloudProjectsInFolder?(folderId: string): Promise<CloudProjectsResult>
+
   /** Touches the recent list only, not disk; re-opening the project by path re-adds it. */
   removeRecentProject(projectPath: string): Promise<{ success: boolean; error?: string }>
 
