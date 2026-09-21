@@ -13,6 +13,7 @@
  * is recorded in `duplicateAliases`.
  */
 
+import { isLegalIdentifier } from '../../../../frontend/utils/keywords'
 import type { AddressPool, SourceRef } from './address-pool'
 
 export interface AliasEntry {
@@ -76,7 +77,31 @@ export function isAliasNameAvailable(registry: AliasRegistry, alias: string, ign
  *  callers can render a precise error message (e.g.  "alias 'relay_1'
  *  is already used by slot 2 channel O3").
  */
-export type AliasEditValidation = { ok: true } | { ok: false; conflict: AliasEntry }
+export type AliasEditValidation = { ok: true } | { ok: false; conflict: AliasEntry } | { ok: false; reason: string }
+
+/** True when the rejection is a name collision rather than a malformed name. */
+export function isAliasConflict(validation: AliasEditValidation): validation is { ok: false; conflict: AliasEntry } {
+  return validation.ok === false && 'conflict' in validation
+}
+
+/**
+ * An alias has to be a plain IEC identifier — one word, no spaces, no
+ * punctuation, not a reserved word.
+ *
+ * It is not a label. A variable bound to an alias is written to disk as
+ * `AT <alias>`, and that text is parsed by STruC++, which reads the operand as
+ * an identifier. `AT Motor Start` cannot be read back as one thing, and
+ * `AT relay-1` is an expression. Before this rule the editor accepted both and
+ * then could not re-read its own file (DOPE-650).
+ */
+export function validateAliasName(alias: string): { ok: true } | { ok: false; reason: string } {
+  const [legal, reason] = isLegalIdentifier(alias)
+  if (legal) return { ok: true }
+  return {
+    ok: false,
+    reason: `"${alias}" ${reason}. An I/O alias must be a single word made of letters, digits and underscores, starting with a letter or underscore — it is used as a name in the generated code.`,
+  }
+}
 
 /**
  * Human-readable description of a `SourceRef`, for use inside error
@@ -159,10 +184,37 @@ export function validateAliasEdit(
   ignoring: SourceRef,
 ): AliasEditValidation {
   if (!alias || alias.trim().length === 0) return { ok: true }
+
+  // Shape first: a malformed name is wrong whether or not it collides, and
+  // "already in use" would be a confusing thing to say about `Motor Start`.
+  const named = validateAliasName(alias)
+  if (!named.ok) return named
+
   const entry = registry.byAlias.get(alias)
   if (!entry) return { ok: true }
   if (entry.source.kind === ignoring.kind && entry.source.ref === ignoring.ref) {
     return { ok: true }
   }
   return { ok: false, conflict: entry }
+}
+
+/**
+ * Title and description for a rejected alias edit.
+ *
+ * Two different refusals reach the same place: a name that is not a legal IEC
+ * identifier, and a legal name already taken by another channel. Saying "alias
+ * already in use" about `Motor Start` would send the user looking for the
+ * channel that has it.
+ */
+export function describeAliasRejection(
+  validation: Exclude<AliasEditValidation, { ok: true }>,
+  alias: string,
+): { title: string; description: string } {
+  if (isAliasConflict(validation)) {
+    return {
+      title: 'Alias already in use',
+      description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
+    }
+  }
+  return { title: 'Alias name is invalid', description: validation.reason }
 }

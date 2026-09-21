@@ -183,6 +183,8 @@ export type ProjectActions = {
    * onto every producer, and reconciles bound variables. Invoked after every
    * producer mutation and on target switch.
    */
+  /** Repair aliases saved before they had to be IEC identifiers; returns what it changed. */
+  normalizeProjectAliases: () => { repairs: Array<{ from: string; to: string; reason: string }> }
   recalculateIecAddresses: () => ProjectResponse
 
   /**

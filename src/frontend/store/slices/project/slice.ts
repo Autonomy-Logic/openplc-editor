@@ -16,11 +16,12 @@ import {
   type AddressPool,
   buildAddressPool,
   buildAliasRegistry,
-  describeSource,
+  describeAliasRejection,
   nextFreeAddress,
   resolveProjectAliases,
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
+import { planAliasNormalization } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import {
   buildAliasIndex,
   channelKey,
@@ -2172,6 +2173,78 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
+    /**
+     * Repair I/O aliases saved before they had to be identifiers (DOPE-650).
+     *
+     * `AT <alias>` is read back by STruC++ as an identifier, so `Motor Start`
+     * and `relay-1` are not names it can read. The editor used to accept them,
+     * so projects carrying them exist and must keep working: they are renamed
+     * on load, and every variable bound to the old name follows through
+     * `renameAlias`.
+     *
+     * Renamed rather than dropped. Dropping the alias would leave its bound
+     * variables pointing at a name no producer declares, which resolves to
+     * unlocated at compile time — a silent wrong answer, and the precise
+     * failure the alias machinery exists to prevent.
+     *
+     * Returns the repairs so the caller can report them; an untouched project
+     * returns an empty list and nothing is written.
+     */
+    normalizeProjectAliases: () => {
+      const live = getState()
+      const board = live.deviceDefinitions.configuration.deviceBoard
+      const pins = live.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
+      const vppEntries = readVppEntries(live)
+      const remoteDevices = live.project.data.remoteDevices ?? []
+
+      const aliases: string[] = [
+        ...pins.map((pin) => pin.alias ?? ''),
+        ...vppEntries.map((entry) => entry.alias ?? ''),
+        ...remoteDevices.flatMap((device) => [
+          ...(device.modbusTcpConfig?.ioGroups ?? []).flatMap((group) =>
+            (group.ioPoints ?? []).map((point) => point.alias ?? ''),
+          ),
+          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) =>
+            (slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
+          ),
+        ]),
+      ].filter((alias) => alias.trim() !== '')
+
+      const plan = planAliasNormalization(aliases)
+      if (plan.length === 0) return { repairs: [] }
+
+      const rename = new Map(plan.map((entry) => [entry.from, entry.to]))
+      const remap = (alias: string | undefined): string | undefined =>
+        alias !== undefined && rename.has(alias) ? rename.get(alias) : alias
+
+      setState(
+        produce((slice: ProjectSliceRoot) => {
+          for (const pin of slice.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []) {
+            pin.alias = remap(pin.alias)
+          }
+          for (const entry of readVppEntries(slice)) {
+            entry.alias = remap(entry.alias)
+          }
+          for (const device of slice.project.data.remoteDevices ?? []) {
+            for (const group of device.modbusTcpConfig?.ioGroups ?? []) {
+              for (const point of group.ioPoints ?? []) point.alias = remap(point.alias)
+            }
+            for (const slave of device.ethercatConfig?.devices ?? []) {
+              for (const channel of slave.channelMappings ?? []) channel.alias = remap(channel.alias)
+            }
+          }
+        }),
+      )
+
+      // Cascade after the producers are written, so a variable that already
+      // held the new name (impossible today, but cheap to be safe about) is
+      // not renamed twice.
+      for (const entry of plan) {
+        getState().projectActions.renameAlias(entry.from, entry.to)
+      }
+
+      return { repairs: plan }
+    },
     recalculateIecAddresses: () => {
       // Central, capability-scoped recalculation via the IEC address
       // registry. Build the registry from live producer state (VPP + Modbus
@@ -2314,11 +2387,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       const registry = buildAliasRegistry(buildModbusProducerPool(live))
       const validation = validateAliasEdit(registry, alias, sourceRef)
       if (!validation.ok) {
-        return {
-          ok: false,
-          title: 'Alias already in use',
-          message: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
-        }
+        const rejection = describeAliasRejection(validation, alias)
+        return { ok: false, title: rejection.title, message: rejection.description }
       }
 
       // Phase 2 — capture the old alias and cascade rename onto

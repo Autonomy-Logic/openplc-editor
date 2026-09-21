@@ -3,6 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
+import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
 import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
@@ -1344,6 +1345,22 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           configuration: data.deviceConfiguration,
           pinMapping: data.devicePinMapping,
         })
+      }
+
+      // Repair I/O aliases saved before they had to be IEC identifiers.
+      //
+      // `AT <alias>` is read back by STruC++ as an identifier, so a project
+      // carrying `Motor Start` or `relay-1` cannot be re-read — the editor
+      // accepted those names before the rule existed (DOPE-650). They are
+      // renamed here rather than dropped, and every variable bound to the old
+      // name follows, because dropping would leave those variables unlocated
+      // at compile time with nothing to show for it.
+      //
+      // Runs after the device definitions load, since pins are one of the
+      // producers, and before the variables are read anywhere.
+      const aliasRepairs = getState().projectActions.normalizeProjectAliases().repairs
+      for (const repair of aliasRepairs) {
+        getState().consoleActions.addLog({ level: 'warning', message: describeAliasRename(repair) })
       }
 
       // Restore debug flags from debugVariables
