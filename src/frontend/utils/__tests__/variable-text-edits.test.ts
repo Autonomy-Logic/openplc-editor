@@ -257,3 +257,34 @@ describe('matching by id', () => {
     expect(out).toBe('VAR\n  tally : INT; (* doc *)\nEND_VAR')
   })
 })
+
+describe('reordering refuses to guess', () => {
+  it('leaves a block alone when two declarations share a name', () => {
+    // Invalid IEC — `validateVariableSet` refuses it — but this runs on text
+    // that has not necessarily been through the validator. A name is the only
+    // identity a declaration has here, so reordering used to overwrite one
+    // with the other: `a : INT; a : DINT;` came back as `a : INT; a : INT;`,
+    // silently rewriting a declaration the user never touched.
+    const text = 'VAR\n  a : INT;\n  a : DINT;\n  b : INT;\nEND_VAR'
+    const model = modelOf(text)
+    expect(apply(text, [model[2], model[0], model[1]])).toBe(text)
+  })
+
+  it('reorders one block without letting another block decide its order', () => {
+    const text = 'VAR_INPUT\n  x : INT;\nEND_VAR\nVAR\n  x : BOOL;\n  y : INT;\nEND_VAR'
+    const model = modelOf(text)
+    // Same name in two blocks: legal nowhere, but the ordering index must be
+    // per block regardless, or one block's positions steer the other's.
+    const out = apply(text, [model[0], model[2], model[1]])
+    expect(out).toBe('VAR_INPUT\n  x : INT;\nEND_VAR\nVAR\n  y : INT;\n  x : BOOL;\nEND_VAR')
+  })
+
+  it('leaves the order alone when a declaration is not in the model at all', () => {
+    const text = 'VAR\n  a : INT;\n  b : INT;\nEND_VAR'
+    const model = modelOf(text)
+    // `b` is absent and `c` is unknown: deletion handles removals, so an
+    // unmatched declaration here means the two views disagree.
+    const out = apply(text, [model[0]])
+    expect(out).toBe('VAR\n  a : INT;\nEND_VAR')
+  })
+})

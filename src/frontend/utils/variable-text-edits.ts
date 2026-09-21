@@ -105,7 +105,6 @@ function matchDeclarations(
   let cursor = 0
   nextVariables.forEach((variable, index) => {
     if (matched.has(index)) return
-    if (blockKey(variable) === undefined) return
     while (cursor < leftoverDeclarations.length) {
       const candidate = leftoverDeclarations[cursor++]
       // Only pair within the same block: moving a variable between classes is
@@ -278,18 +277,45 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
  * Only lines that hold a declaration move; anything between them — a comment,
  * a blank line — is left alone. A no-op when the order already matches, which
  * is the overwhelmingly common case.
+ *
+ * Ordering is resolved per block, against the variables of that same class and
+ * flag, rather than against the flattened model: two blocks may legitimately be
+ * reordered independently, and a global index lets one block's positions decide
+ * another's.
+ *
+ * A block whose declaration names are not unique is skipped outright. A name is
+ * the only identity a declaration has here, so with a duplicate the matching is
+ * ambiguous and the move silently overwrites one declaration with the other —
+ * `a : INT; a : DINT;` came back as `a : INT; a : INT;`. `validateVariableSet`
+ * refuses duplicates, but this runs on text that has not necessarily been
+ * through it (a hand-edited project file, a buffer mid-edit), and rewriting a
+ * declaration the user did not touch is the exact failure this whole change
+ * exists to remove. Leaving the order alone loses nothing, and the duplicate is
+ * still reported by the validator.
  */
 function reorderDeclarations(text: string, nextVariables: PLCVariable[], context: ScanContext): string {
   const scanned = scanVariableDeclarations(text, context)
   if (scanned.errors.length > 0) return text
 
-  const wanted = nextVariables.map((variable) => variable.name.toLowerCase())
   const edits: TextEdit[] = []
 
   for (const block of scanned.blocks) {
     if (block.declarations.length < 2) continue
 
     const current = block.declarations.map((declaration) => declaration.variable.name.toLowerCase())
+    if (new Set(current).size !== current.length) continue
+
+    const wanted = nextVariables
+      .filter((variable) => blockKey(variable) === scannedBlockKey(block))
+      .map((variable) => variable.name.toLowerCase())
+    if (new Set(wanted).size !== wanted.length) continue
+
+    // A declaration the model no longer mentions has no position to sort to.
+    // Deletion has already removed the ones that went away, so anything still
+    // unmatched here means the two views disagree, and the order is not ours
+    // to guess.
+    if (current.some((name) => !wanted.includes(name))) continue
+
     const target = [...current].sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b))
     if (current.every((name, index) => name === target[index])) continue
 
