@@ -195,23 +195,27 @@ describe('generateOpcUaConfig', () => {
     expect(profiles[0].name).toBe('None-None')
   })
 
+  // Parse a generated config for its anonymous_role fields, failing the test
+  // loudly on a null result instead of asserting non-null, and letting the
+  // return-type annotation type the parsed value instead of an `as` cast.
+  const parseAnonymousRoleConfig = (
+    json: string | null,
+  ): Array<{ config: { server: { security_profiles: Array<{ anonymous_role: string }> } } }> => {
+    if (json === null) throw new Error('expected generateOpcUaConfig to return JSON, got null')
+    return JSON.parse(json)
+  }
+
   it('defaults the anonymous session role to viewer when unset', () => {
     const cfg = baseServerConfig()
     // baseServerConfig's profile carries no anonymousRole (older projects).
-    const json = generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), [])!
-    const parsed = JSON.parse(json) as Array<{
-      config: { server: { security_profiles: Array<{ anonymous_role: string }> } }
-    }>
+    const parsed = parseAnonymousRoleConfig(generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), []))
     expect(parsed[0].config.server.security_profiles[0].anonymous_role).toBe('viewer')
   })
 
   it('passes an explicit anonymous session role through to the runtime config', () => {
     const cfg = baseServerConfig()
     cfg.securityProfiles[0].anonymousRole = 'engineer'
-    const json = generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), [])!
-    const parsed = JSON.parse(json) as Array<{
-      config: { server: { security_profiles: Array<{ anonymous_role: string }> } }
-    }>
+    const parsed = parseAnonymousRoleConfig(generateOpcUaConfig([makePLCServer(cfg)], debugMapJson([]), []))
     expect(parsed[0].config.server.security_profiles[0].anonymous_role).toBe('engineer')
   })
 

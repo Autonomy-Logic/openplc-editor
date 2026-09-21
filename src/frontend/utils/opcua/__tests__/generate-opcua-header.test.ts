@@ -263,11 +263,14 @@ describe('generateOpcUaHeaderContent', () => {
 const withUsersAndProfiles = (
   users: Array<{ type: string; username?: string; password_hash?: string | null; role?: string }>,
   authMethods: string[],
+  anonymousRole?: string,
 ): ResolvedOpcUaConfig => {
   const r = makeResolved({})
   ;(r as unknown as { runtime: { config: { users: unknown } } }).runtime.config.users = users
   ;(r as unknown as { runtime: { config: { server: { security_profiles: unknown } } } }).runtime.config.server = {
-    security_profiles: [{ name: 'p', enabled: true, auth_methods: authMethods }],
+    security_profiles: [
+      { name: 'p', enabled: true, auth_methods: authMethods, ...(anonymousRole ? { anonymous_role: anonymousRole } : {}) },
+    ],
   }
   return r
 }
@@ -300,31 +303,56 @@ describe('generateOpcUaHeaderContent — credentials and anonymous role', () => 
     expect(warnings.some((w) => w.includes('blank') && w.includes('no password'))).toBe(true)
   })
 
-  it('warns hard when dropping the last password user hands anonymous the engineer role', () => {
-    const warnings: string[] = []
+  it('defaults the anonymous role to viewer when the profile does not set one', () => {
+    // The role is now the PROJECT's explicit choice, defaulting to viewer (least
+    // privilege) — the old heuristic that escalated anonymous to engineer
+    // whenever no password user survived is gone. Anonymous offered, no role
+    // set, no users -> viewer (0), not engineer.
     const header = generateOpcUaHeaderContent({
-      resolved: withUsersAndProfiles(
-        [{ type: 'password', username: 'blank', password_hash: null }],
-        ['Anonymous', 'Username'],
-      ),
-      profile: PROFILE,
-      buildEpochSeconds: 0,
-      warn: (m) => warnings.push(m),
-    })
-    // No surviving password user, anonymous allowed -> role engineer (2).
-    expect(header).toContain('#define OPCUA_ALLOW_ANONYMOUS 1')
-    expect(header).toContain('#define OPCUA_ANONYMOUS_ROLE 2')
-    expect(warnings.some((w) => w.includes('ENGINEER') && w.includes('anonymous'))).toBe(true)
-  })
-
-  it('does not warn about anonymous when no password users were declared at all', () => {
-    const warnings: string[] = []
-    generateOpcUaHeaderContent({
       resolved: withUsersAndProfiles([], ['Anonymous']),
       profile: PROFILE,
       buildEpochSeconds: 0,
-      warn: (m) => warnings.push(m),
     })
-    expect(warnings.some((w) => w.includes('ENGINEER'))).toBe(false)
+    expect(header).toContain('#define OPCUA_ALLOW_ANONYMOUS 1')
+    expect(header).toContain('#define OPCUA_ANONYMOUS_ROLE 0')
+  })
+
+  it('honors an explicit engineer anonymous role, even alongside declared users', () => {
+    // The user opting the insecure profile up to engineer must be respected:
+    // anonymous carries engineer (2) even with a password user present.
+    const header = generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles(
+        [{ type: 'password', username: 'eng', password_hash: 'pbkdf2:x', role: 'engineer' }],
+        ['Anonymous', 'Username'],
+        'engineer',
+      ),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+    })
+    expect(header).toContain('#define OPCUA_ALLOW_ANONYMOUS 1')
+    expect(header).toContain('#define OPCUA_ANONYMOUS_ROLE 2')
+  })
+
+  it('maps an explicit operator anonymous role to index 1', () => {
+    const header = generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles([], ['Anonymous'], 'operator'),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+    })
+    expect(header).toContain('#define OPCUA_ANONYMOUS_ROLE 1')
+  })
+
+  it('refuses anonymous (role irrelevant) when no profile offers it', () => {
+    const header = generateOpcUaHeaderContent({
+      resolved: withUsersAndProfiles(
+        [{ type: 'password', username: 'a', password_hash: 'pbkdf2:x', role: 'viewer' }],
+        ['Username'],
+      ),
+      profile: PROFILE,
+      buildEpochSeconds: 0,
+    })
+    expect(header).toContain('#define OPCUA_ALLOW_ANONYMOUS 0')
+    // Defaults to viewer (0) since no anonymous profile carries a role.
+    expect(header).toContain('#define OPCUA_ANONYMOUS_ROLE 0')
   })
 })

@@ -48,6 +48,8 @@ const ANONYMOUS_ROLES: { value: UserRole; label: string }[] = [
   { value: 'engineer', label: 'Engineer (full access)' },
 ]
 
+const isUserRole = (value: string): value is UserRole => ANONYMOUS_ROLES.some((r) => r.value === value)
+
 export const SecurityProfileModal = ({
   isOpen,
   onClose,
@@ -340,7 +342,12 @@ export const SecurityProfileModal = ({
             {authMethods.includes('Anonymous') && (
               <div className='flex flex-col gap-2 pl-8'>
                 <Label className='text-xs text-neutral-950 dark:text-white'>Anonymous session role</Label>
-                <Select value={anonymousRole} onValueChange={(v) => setAnonymousRole(v as UserRole)}>
+                <Select
+                  value={anonymousRole}
+                  onValueChange={(v) => {
+                    if (isUserRole(v)) setAnonymousRole(v)
+                  }}
+                >
                   <SelectTrigger
                     withIndicator
                     placeholder='Select role'
