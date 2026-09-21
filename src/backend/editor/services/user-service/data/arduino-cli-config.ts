@@ -6,10 +6,13 @@
  * existing install — the only fix was deleting the file by hand. This brings
  * a stale file up to date in place.
  *
- * Three rules, and deliberately only three:
+ * Four rules, and deliberately only four:
  *
  * - **Add missing board-manager URLs.** Never remove one: users add their own
  *   vendor indexes here, and VPP-declared indexes arrive at compile time.
+ * - **Enable `library.enable_unsafe_install`.** `lib install --git-url` is how
+ *   the editor installs the third-party libraries some targets need, and
+ *   arduino-cli refuses it outright without this.
  * - **Drop `output.no_color`.** The editor forced it on to stop raw `ESC[92m`
  *   bytes appearing in the console. The console now renders SGR colour
  *   itself, so the suppression is obsolete; leaving it behind would silently
@@ -131,7 +134,7 @@ export function reconcileArduinoCliConfig(existing: string, shipped: string): st
     if (output.items.length === 0) doc.delete('output')
   }
 
-  // 3. Point the tool at directories the editor owns, per key and only when the
+  // 4. Point the tool at directories the editor owns, per key and only when the
   //    user has none of their own. An existing value is never replaced: it is
   //    either a deliberate choice, or the place that user's cores are already
   //    installed under, and moving it silently would orphan them.
