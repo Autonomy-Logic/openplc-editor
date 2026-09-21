@@ -41,11 +41,7 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import {
-  duplicateVariableNameMessage,
-  findDuplicateVariableName,
-  parseIecStringToVariables,
-} from '../../../utils/generate-iec-string-to-variables'
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
@@ -59,7 +55,7 @@ import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/P
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
-import { createVariableValidation, updateVariableValidation } from './validation/variables'
+import { createVariableValidation, updateVariableValidation, validateVariableSet } from './validation/variables'
 
 const ok = (data?: unknown): ProjectResponse => ({ ok: true, data })
 const fail = (message: string, title?: string): ProjectResponse => ({ ok: false, message, title })
@@ -637,8 +633,14 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
-    const duplicate = findDuplicateVariableName(parsed)
-    if (duplicate) return fail(duplicateVariableNameMessage(duplicate), 'Variable already exists')
+    // The same gate the table applies and the code view's explicit commit
+    // applies. An implicit reconcile must not be the one path that lets an
+    // invalid declaration into the store (DOPE-650).
+    const validation = validateVariableSet(parsed)
+    if (!validation.ok) {
+      const [first] = validation.errors
+      return fail(first.message, first.title)
+    }
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)

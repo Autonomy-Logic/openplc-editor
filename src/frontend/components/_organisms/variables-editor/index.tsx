@@ -11,12 +11,9 @@ import { selectEditorForPou } from '../../../store/slices/editor/utils'
 import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
+import { validateVariableSet } from '../../../store/slices/project/validation/variables'
 import { cn } from '../../../utils/cn'
-import {
-  duplicateVariableNameMessage,
-  findDuplicateVariableName,
-  parseIecStringToVariables,
-} from '../../../utils/generate-iec-string-to-variables'
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
@@ -769,8 +766,16 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       if (!language) return false
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
-      const duplicate = findDuplicateVariableName(newVariables)
-      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
+
+      // Same gate the table applies cell by cell. Without it the text path
+      // wrote straight through `setPouVariables`, which never validates, so a
+      // declaration the table refuses was accepted the moment it was typed
+      // instead of picked (DOPE-650).
+      const validation = validateVariableSet(newVariables)
+      if (!validation.ok) {
+        const [first] = validation.errors
+        throw new Error(`${first.title} ${first.message}`)
+      }
 
       const renamedPairs = tableData.flatMap((previousVariable) => {
         const variableStillExists = newVariables.some(

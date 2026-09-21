@@ -1,5 +1,6 @@
 import type { LibraryState } from '../../../middleware/shared/ports/library-types'
 import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import { validateVariableSet } from '../../store/slices/project/validation/variables'
 import {
   duplicateVariableNameMessage,
   findDuplicateVariableName,
@@ -362,45 +363,45 @@ describe('parseIecStringToVariables', () => {
     expect(() => parseIecStringToVariables(input)).toThrow(/Syntax error on line 2/)
   })
 
-  // ---- location disallowed for certain classes (line 126) ----
+  // ---- location / initial-value rules moved to validateVariableSet ----
+  //
+  // These are not the parser's rules any more (DOPE-650). The parser reads the
+  // declaration; `validateVariableSet` judges it, and it is the SAME function
+  // the variables table calls on every cell edit — which is the point. While
+  // the rule lived here as well, the two views refused the same declaration
+  // with two different messages, and the code view skipped every other rule
+  // the table enforced.
+  //
+  // The rule itself is real, and STruC++ states it too: "Variable 'I' in
+  // VAR_INPUT cannot have a location ('AT %IX0.0'). Only VAR and VAR_GLOBAL
+  // declarations may be located."
 
-  it('throws when location is used with input class', () => {
-    const input = 'VAR_INPUT\n  sensor AT %IX0.0 : BOOL;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*INPUT/)
+  it.each([
+    ['input', 'VAR_INPUT\n  sensor AT %IX0.0 : BOOL;\nEND_VAR', 'INPUT'],
+    ['output', 'VAR_OUTPUT\n  actuator AT %QX0.0 : BOOL;\nEND_VAR', 'OUTPUT'],
+    ['inOut', 'VAR_IN_OUT\n  x AT %MW0 : INT;\nEND_VAR', 'INOUT'],
+    ['external', 'VAR_EXTERNAL\n  x AT %MW0 : INT;\nEND_VAR', 'EXTERNAL'],
+    ['temp', 'VAR_TEMP\n  x AT %MW0 : INT;\nEND_VAR', 'TEMP'],
+  ])('parses a located %s declaration, leaving the refusal to validateVariableSet', (_label, input, klass) => {
+    const parsed = parseIecStringToVariables(input)
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].location).not.toBe('')
+
+    const validation = validateVariableSet(parsed)
+    expect(validation.ok).toBe(false)
+    if (validation.ok) return
+    expect(validation.errors[0].title).toBe('Location is not allowed.')
+    expect(validation.errors[0].message).toContain(klass)
   })
 
-  it('throws when location is used with output class', () => {
-    const input = 'VAR_OUTPUT\n  actuator AT %QX0.0 : BOOL;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*OUTPUT/)
-  })
+  it('refuses an initial value on an EXTERNAL variable through validateVariableSet', () => {
+    const parsed = parseIecStringToVariables('VAR_EXTERNAL\n  x : INT := 10;\nEND_VAR')
+    expect(parsed[0].initialValue).toBe('10')
 
-  it('includes the offending line and a repair hint in the located-class error (issue #904)', () => {
-    const input = 'VAR_OUTPUT\n  actuator AT %QX0.0 : BOOL;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(
-      'Syntax error on line 2: "actuator AT %QX0.0 : BOOL;". Location ("AT") is not allowed for variables of class "OUTPUT". Move "actuator" to a VAR block (class LOCAL) or remove the "AT %QX0.0" clause.',
-    )
-  })
-
-  it('throws when location is used with inOut class', () => {
-    const input = 'VAR_IN_OUT\n  x AT %MW0 : INT;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*INOUT/)
-  })
-
-  it('throws when location is used with external class', () => {
-    const input = 'VAR_EXTERNAL\n  x AT %MW0 : INT;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*EXTERNAL/)
-  })
-
-  it('throws when location is used with temp class', () => {
-    const input = 'VAR_TEMP\n  x AT %MW0 : INT;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(/Location.*not allowed.*TEMP/)
-  })
-
-  // ---- initial value disallowed for external (line 132) ----
-
-  it('throws when initial value is used with external class', () => {
-    const input = 'VAR_EXTERNAL\n  x : INT := 10;\nEND_VAR'
-    expect(() => parseIecStringToVariables(input)).toThrow(/Initial Value.*not allowed.*EXTERNAL/)
+    const validation = validateVariableSet(parsed)
+    expect(validation.ok).toBe(false)
+    if (validation.ok) return
+    expect(validation.errors[0].message).toMatch(/Initial Value.*not allowed.*EXTERNAL/)
   })
 
   // ---- array type branch inside main loop (lines 142-151) ----
