@@ -21,6 +21,7 @@ import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable, PLCVariableType } from '../../../middleware/shared/ports/types'
 import { parseArrayType } from '../generate-iec-string-to-variables'
 import { isLegalIdentifier } from '../keywords'
+import { blankNonDocumentationComments } from '../variable-declaration-scanner'
 
 export interface ParseDataTypeResult {
   dataType?: PLCDataType
@@ -125,7 +126,21 @@ function parseSingleLine(line: string): ParseDataTypeResult {
 }
 
 export function parseDataTypeFromText(content: string, expectedName?: string): ParseDataTypeResult {
-  const lines = content
+  // Comments are trivia here too (DOPE-650). The `.dt` code view is the same
+  // kind of surface as the POU variables view, and it used to answer a
+  // standalone `(* … *)` with `invalid structure field: "(* a comment *)".
+  // Possible cause: missing semicolon` — a message about a line the user never
+  // meant as a field. Blanking them first reuses the POU scanner's pass, so
+  // both views agree on what a comment is, including that block comments nest
+  // and that a C-style pair is not one.
+  //
+  // A comment in the DOCUMENTATION position is left in place: `structFieldRegex`
+  // below has always captured it as the field's documentation, and blanking it
+  // would quietly drop that.
+  const { code: uncommented, error: commentError } = blankNonDocumentationComments(content)
+  if (commentError) return { error: commentError.message }
+
+  const lines = uncommented
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line !== '')

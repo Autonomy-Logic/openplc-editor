@@ -109,6 +109,34 @@ describe('VariablesEditor keeps the buffer the user typed after a commit', () =>
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Syntax error' }))
   })
 
+  it('shows the POU\u2019s own declaration text when switching table \u2192 code', () => {
+    // Caught in the browser, not by the suite: the text survived the load, but
+    // toggling to code view re-rendered the buffer from the table and dropped
+    // every comment on the way. Every buffer-filling path reads
+    // `variablesText` now.
+    const withComments = 'VAR\n  (* section header *)\n  Counter : INT;\n  // trailing note\nEND_VAR'
+    expect(getState().pouActions.create({ type: 'program', name: 'FromDisk', language: 'st' }).ok).toBe(true)
+    getState().projectActions.setPouVariablesText('FromDisk', withComments)
+    getState().projectActions.setPouVariables({
+      pouName: 'FromDisk',
+      variables: [
+        {
+          name: 'Counter',
+          class: 'local',
+          type: { definition: 'base-type', value: 'INT' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ],
+    })
+    getState().editorActions.updateModelVariablesForName('FromDisk', { display: 'code' })
+
+    render(<VariablesEditor name='FromDisk' />)
+
+    expect(bufferText()).toBe(withComments)
+  })
+
   it('does not re-commit on the next blur', async () => {
     seedPou('Once')
     render(<VariablesEditor name='Once' />)

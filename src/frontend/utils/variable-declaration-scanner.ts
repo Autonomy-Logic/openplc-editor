@@ -672,3 +672,37 @@ export function scanVariableDeclarations(source: string, context: ScanContext = 
 
   return { blocks, variables, comments, errors }
 }
+
+/**
+ * Blank every comment EXCEPT one sitting immediately after a `;` on its own
+ * line — the documentation position.
+ *
+ * For callers that parse declarations with a regex that already captures a
+ * trailing `(* … *)` as documentation, and only need the *other* comments to
+ * stop breaking them. Blanking all of them would silently drop the
+ * documentation those callers have always read; blanking none of them is the
+ * bug. Offsets and line structure are preserved exactly as in
+ * {@link blankComments}.
+ */
+export function blankNonDocumentationComments(source: string): {
+  code: string
+  comments: ScannedComment[]
+  error?: ScanError
+} {
+  const { comments, error } = blankComments(source)
+  if (error) return { code: source, comments, error }
+
+  const out = source.split('')
+  for (const comment of comments) {
+    const lineStart = source.lastIndexOf('\n', comment.span.start - 1) + 1
+    const before = source.slice(lineStart, comment.span.start)
+    // Documentation is a comment preceded, on its own line, by a declaration
+    // that has already been terminated.
+    if (before.trimEnd().endsWith(';')) continue
+    for (let i = comment.span.start; i < comment.span.end; i++) {
+      if (out[i] !== '\n' && out[i] !== '\r') out[i] = ' '
+    }
+  }
+
+  return { code: out.join(''), comments }
+}

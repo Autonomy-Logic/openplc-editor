@@ -1,6 +1,7 @@
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
@@ -34,6 +35,23 @@ import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
 import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesTable } from '../../_molecules/variables-table'
 import { VariablesCodeEditor } from '../variables-code-editor'
+
+/**
+ * The declaration text to put in the code view.
+ *
+ * The POU's own text when it has one, because that text is the source of
+ * truth (DOPE-650) and is the only thing carrying the user's comments, blank
+ * lines and alignment. Serialising the model is the fallback for a POU that
+ * has never had text — one created in memory this session.
+ *
+ * Every buffer-filling path goes through here. They used to call
+ * `generateIecVariablesToString` directly, which meant simply toggling to code
+ * view replaced the user's declarations with a canonical re-rendering of the
+ * table and dropped every comment, even though the text itself had survived
+ * the load intact.
+ */
+const declarationTextFor = (pou: PLCPou | undefined, variables: PLCVariable[]): string =>
+  pou?.variablesText ?? generateIecVariablesToString(variables)
 
 interface VariablesEditorProps {
   /**
@@ -130,7 +148,10 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     ) {
       return editor.variable.code
     }
-    return generateIecVariablesToString(tableData)
+    return declarationTextFor(
+      pous.find((candidate) => candidate.name === editor.meta.name),
+      tableData,
+    )
   })
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -203,9 +224,17 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
 
   useEffect(() => {
     if (editorVariables.display !== 'code') {
-      setEditorCode(generateIecVariablesToString(tableData))
+      // The store patches `variablesText` on every table mutation, so it is
+      // already current here; reading it keeps the comments the model cannot
+      // carry.
+      setEditorCode(
+        declarationTextFor(
+          pous.find((candidate) => candidate.name === editor.meta.name),
+          tableData,
+        ),
+      )
     }
-  }, [tableData, editorVariables.display])
+  }, [tableData, editorVariables.display, editor.meta.name, pous])
 
   // Sync local view state from this instance's own model when the
   // POU is renamed or its display mode toggles (table ↔ code).  Each
@@ -229,7 +258,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       setEditorCode(
         typeof code === 'string' && code.length > 0
           ? code
-          : generateIecVariablesToString(targetPou?.interface?.variables ?? []),
+          : declarationTextFor(targetPou, targetPou?.interface?.variables ?? []),
       )
     } else {
       setEditorVariables({
