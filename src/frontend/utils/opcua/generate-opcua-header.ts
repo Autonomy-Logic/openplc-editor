@@ -384,33 +384,23 @@ export const generateOpcUaHeaderContent = (input: GenerateOpcUaHeaderInput): str
       )
     }
   }
-  // Whether anonymous is allowed is the PROJECT's answer, carried on the
-  // security profiles, and until now it never reached the firmware at all —
-  // `opcua_auth.cpp` inferred it from `OPCUA_USER_COUNT == 0`. That inference
-  // is wrong in both directions: a profile offering Anonymous AND Username with
-  // users declared had anonymous silently refused, and a Username-only profile
-  // with no users yet had the server silently opened to anonymous.
-  const allowAnonymous = (resolved.runtime.config.server.security_profiles ?? []).some(
+  // Whether anonymous is allowed, and the role an anonymous session carries,
+  // are both the PROJECT's answer — carried on the security profile that offers
+  // Anonymous, and until now neither reached the firmware. `opcua_auth.cpp`
+  // inferred allowance from `OPCUA_USER_COUNT == 0` and the role was escalated
+  // to engineer whenever no password user survived, silently trading every
+  // credential for full anonymous write the moment one went missing. The
+  // profile now says both: the explicit `anonymous_role` (default viewer, least
+  // privilege) exactly as Runtime v4 does — `generate-opcua-config.ts` emits
+  // `anonymous_role` and `user_manager.py` enforces it — while `opcua_auth.cpp`
+  // enforces OPCUA_ANONYMOUS_ROLE per session on baremetal.
+  const ROLE_TO_INDEX: Record<string, number> = { viewer: 0, operator: 1, engineer: 2 }
+  const anonymousProfile = (resolved.runtime.config.server.security_profiles ?? []).find(
     (sp) => sp.enabled !== false && (sp.auth_methods ?? []).includes('Anonymous'),
   )
-  // The role an anonymous session carries, matching what Runtime v4 does
-  // (`user_manager.py`): with no users configured the server is single-tenant
-  // and anonymous gets the highest role, because there is no privilege model to
-  // enforce; once an administrator has declared even one user, anonymous drops
-  // to read-only rather than bypassing the model they just opted into.
-  const anonymousRole = passwordUsers.length === 0 ? 2 : 0 // 2=engineer, 0=viewer
+  const allowAnonymous = anonymousProfile !== undefined
+  const anonymousRole = ROLE_TO_INDEX[anonymousProfile?.anonymous_role ?? 'viewer'] ?? 0
 
-  // "No users configured" and "every configured user was dropped" are different
-  // statements, and only the first one justifies handing anonymous the engineer
-  // role. If the project declared password users and none survived, the server
-  // would come up open to anyone with full write — say so rather than ship it.
-  if (allowAnonymous && anonymousRole === 2 && users.some((u) => u.type === 'password')) {
-    warn?.(
-      'OPC-UA: every password user was dropped for want of a credential, so anonymous access ' +
-        'is being granted the ENGINEER role (full write) on this device. Give the users passwords, ' +
-        'or turn Anonymous off on the security profile.',
-    )
-  }
   lines.push(`#define OPCUA_ALLOW_ANONYMOUS ${allowAnonymous ? 1 : 0}`)
   lines.push(`#define OPCUA_ANONYMOUS_ROLE ${anonymousRole} // 0=viewer 1=operator 2=engineer`)
   lines.push(`#define OPCUA_USER_COUNT ${passwordUsers.length}`)

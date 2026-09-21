@@ -73,9 +73,13 @@ const connectedState = (overrides: Record<string, unknown> = {}) => ({
     connectionStatus: 'connected',
     runtimeVersion: 'v4.2.1',
     ipAddress: '192.168.1.112',
+    // The two ids are deliberately DISTINCT: the record PK and the agent id are
+    // different values in production, and RTOP-289 was passing the record id
+    // where the agent id was required. A fixture that used one value for both
+    // let the bug pass — see the 'queries host info by agent id' test below.
     selectedDevice: {
-      orchestratorId: 'local',
-      orchestratorAgentId: 'local',
+      orchestratorId: 'record-1',
+      orchestratorAgentId: 'agent-1',
       deviceId: 'd1',
       deviceName: '192.168.2.4',
     },
@@ -300,6 +304,20 @@ describe('A device with no bootloader', () => {
     expect(screen.getByText('6.12.35-rt10-v8+')).toBeTruthy()
     // And still no version action: nothing on this device can perform a swap.
     expect(screen.queryByRole('button', { name: /change runtime version/i })).toBeNull()
+  })
+
+  it('queries host info by the orchestrator AGENT id, not the record id (RTOP-289)', async () => {
+    // Edge resolves the /details route by the agent id (the orchestratorId
+    // column), so passing the record PK 404s and the header sits blank. The
+    // fixture gives the two ids distinct values; asserting the argument is what
+    // stops the record-id-vs-agent-id regression from coming back silently.
+    getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
+    getOrchestratorHostInfo.mockResolvedValue(null)
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(getOrchestratorHostInfo).toHaveBeenCalledWith('agent-1'))
+    expect(getOrchestratorHostInfo).not.toHaveBeenCalledWith('record-1')
   })
 
   it('treats a blank CPU or memory value as not reported', async () => {
