@@ -575,6 +575,21 @@ export const validateOpcUaConfig = (
     errors.push('Username authentication is enabled but no users are configured')
   }
 
+  // At most one enabled profile may offer Anonymous. The anonymous session role
+  // is a per-profile setting, but an anonymous connection carries no endpoint
+  // identity into the runtime, so it cannot tell which Anonymous profile a
+  // client came through — the runtime falls back to the first in list order.
+  // Rather than ship that ambiguity, reject it here: this is the fix, the
+  // runtime's load-time warning is only the backstop.
+  const anonymousProfiles = enabledProfiles.filter((sp) => sp.authMethods.includes('Anonymous'))
+  if (anonymousProfiles.length > 1) {
+    errors.push(
+      `Only one enabled security profile may allow Anonymous access; found ${anonymousProfiles.length} ` +
+        `(${anonymousProfiles.map((sp) => sp.name).join(', ')}). Anonymous sessions cannot be mapped to a ` +
+        `specific endpoint, so the anonymous role would be ambiguous. Disable Anonymous on all but one profile.`,
+    )
+  }
+
   // Try to resolve all variables
   const pathToAddr = parseDebugMapToInfoMap(debugMapContent)
 

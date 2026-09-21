@@ -638,6 +638,41 @@ describe('validateOpcUaConfig', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('reports error when more than one enabled profile allows Anonymous', () => {
+    // Anonymous carries no endpoint identity into the runtime, so a per-profile
+    // anonymous role is ambiguous across two Anonymous profiles. Reject it here.
+    const cfg = baseServerConfig()
+    cfg.securityProfiles[0].authMethods = ['Anonymous']
+    cfg.securityProfiles.push({
+      id: 'sp2',
+      name: 'secure_anon',
+      enabled: true,
+      securityPolicy: 'Basic256Sha256',
+      securityMode: 'SignAndEncrypt',
+      authMethods: ['Anonymous'],
+      anonymousRole: 'engineer',
+    })
+    const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('one enabled security profile may allow Anonymous'))).toBe(true)
+  })
+
+  it('a single Anonymous profile plus a disabled Anonymous profile validates clean', () => {
+    const cfg = baseServerConfig()
+    cfg.securityProfiles[0].authMethods = ['Anonymous']
+    cfg.securityProfiles.push({
+      id: 'sp2',
+      name: 'disabled_anon',
+      enabled: false,
+      securityPolicy: 'None',
+      securityMode: 'None',
+      authMethods: ['Anonymous'],
+      anonymousRole: 'engineer',
+    })
+    const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
+    expect(result.valid).toBe(true)
+  })
+
   it('validates variable node resolution errors', () => {
     const cfg = baseServerConfig()
     cfg.addressSpace.nodes = [makeNode({ pouName: 'MAIN', variablePath: 'GHOST' })]
