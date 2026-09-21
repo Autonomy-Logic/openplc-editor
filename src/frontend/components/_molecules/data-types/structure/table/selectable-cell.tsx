@@ -14,17 +14,20 @@ import { InputWithRef } from '../../../../_atoms/input'
 import { seedStringLengths, StringLengthMenuItem } from '../../../../_atoms/string-length-menu-item'
 import { ArrayModal } from './elements/array-modal'
 
-type ISelectableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }
+type ISelectableCellProps = CellContext<PLCStructureVariable, unknown> & {
+  dataTypeName: string
+  editable?: boolean
+}
 
 const SelectableTypeCell = ({
   getValue,
   row: { index },
   column: { id },
   table,
+  dataTypeName,
   editable = true,
 }: ISelectableCellProps) => {
   const {
-    editor,
     project: {
       data: { dataTypes },
     },
@@ -50,7 +53,7 @@ const SelectableTypeCell = ({
       definition: 'user',
       values: sliceLibraries.user
         .filter(hasStringName)
-        .filter((userLibrary) => userLibrary.name !== editor.meta.name)
+        .filter((userLibrary) => userLibrary.name !== dataTypeName)
         .flatMap((userLibrary) => {
           const pous = (userLibrary as { pous?: { type?: string; name?: string }[] }).pous
           if (Array.isArray(pous)) {
@@ -103,6 +106,7 @@ const SelectableTypeCell = ({
   return (
     <>
       <ArrayModal
+        dataTypeName={dataTypeName}
         variableName={variableName}
         VariableRow={index}
         arrayModalIsOpen={arrayModalIsOpen}

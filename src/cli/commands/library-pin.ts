@@ -98,7 +98,7 @@ function describePlacedBlockDrift(refs: ProjectLibraryRef[]): { changes: Restamp
   openPLCStoreBase.getState().libraryActions.setProjectLibraries(refs)
   const state = openPLCStoreBase.getState()
   const systemLibraries: SystemLibrary[] = state.libraries.system
-  const userPouNames = state.project.data.pous.map((pou) => pou.name)
+  const userPous = state.project.data.pous.filter((pou) => pou.pouType !== 'program')
 
   const changes: RestampChange[] = []
   let poolEmpty = false
@@ -106,7 +106,7 @@ function describePlacedBlockDrift(refs: ProjectLibraryRef[]): { changes: Restamp
   for (const pou of state.project.data.pous) {
     if (pou.body.language !== 'ld' && pou.body.language !== 'fbd') continue
     const flow = structuredClone(pou.body.value) as LadderFlowType | FBDFlowType
-    const report = restampFlowLibraryVariants([flow], systemLibraries, userPouNames, { pou: pou.name })
+    const report = restampFlowLibraryVariants([flow], systemLibraries, userPous, { pou: pou.name })
     changes.push(...report.changes)
     poolEmpty = poolEmpty || report.poolEmpty
   }

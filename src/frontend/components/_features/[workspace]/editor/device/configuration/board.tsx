@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { useCapabilities, useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { useCapabilities, useDevice } from '@root/middleware/shared/providers/platform-context'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -9,12 +9,13 @@ import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
+import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { openPackageManagerTab } from '../../../../../../services/open-package-manager-tab'
 import { useOpenPLCStore } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
-import { isOpenPLCRuntimeTarget, isSimulatorTarget, validateRuntimeVersion } from '../../../../../../utils/device'
+import { isEthernetUploadTarget, isOpenPLCRuntimeTarget, isSimulatorTarget } from '../../../../../../utils/device'
 import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
 import { serialPortDisplay } from '../../../../../../utils/serial-port-label'
 import { DropdownSearchInput } from '../../../../../_atoms/dropdown-search-input'
@@ -30,7 +31,6 @@ import { PinMappingTable } from './components/pin-mapping-table'
 const Board = memo(function () {
   const capabilities = useCapabilities()
   const device = useDevice()
-  const runtime = useRuntime()
 
   const {
     deviceAvailableOptions: { availableBoards },
@@ -90,10 +90,6 @@ const Board = memo(function () {
   )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
-  const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
-  const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
-  const clearDeviceLicense = useOpenPLCStore((state) => state.deviceActions.clearDeviceLicense)
-  const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
 
@@ -355,104 +351,12 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
-  const handleConnectToRuntime = useCallback(async () => {
-    if (connectionStatus === 'connected') {
-      // Disconnect - global polling hook will handle resetting failure counter
-      setRuntimeJwtToken(null)
-      setRuntimeConnectionStatus('disconnected')
-      await runtime.clearCredentials()
-      // The session goes with it: control was this REST connection, and any debug
-      // channel opened off it has nothing left to belong to.
-      await device.closeRuntimeSession?.()
-      // A DELIBERATE disconnect drops the licence report too, exactly as the
-      // serial flow does: leaving a badge behind would assert possession for
-      // hardware nothing is talking to.
-      clearDeviceLicense()
-      return
-    }
-
-    if (!runtimeIpAddress) {
-      return
-    }
-
-    setRuntimeConnectionStatus('connecting')
-
-    try {
-      const result = await runtime.getUsersInfo()
-
-      if (result.error) {
-        setRuntimeConnectionStatus('error')
-        return
-      }
-
-      // Remember the runtime version so version-gated UI (e.g. User
-      // Management) can react to it for the lifetime of the connection.
-      setRuntimeVersion(result.runtimeVersion ?? null)
-
-      // Validate runtime version matches the selected board target
-      const versionValidation = validateRuntimeVersion(deviceBoard, result.runtimeVersion)
-
-      // Helper to proceed with connection after validation
-      const proceedWithConnection = () => {
-        if (result.hasUsers) {
-          openModal('runtime-login', null)
-        } else {
-          openModal('runtime-create-user', null)
-        }
-      }
-
-      if (versionValidation.status === 'mismatch') {
-        // Hard error for version mismatch - cannot proceed
-        setRuntimeConnectionStatus('error')
-        openModal('debugger-message', {
-          type: 'error',
-          title: 'Runtime Version Mismatch',
-          message: versionValidation.message || 'Unknown version mismatch error',
-          buttons: ['OK'],
-          onResponse: () => {
-            // No action needed, just close the modal
-          },
-        })
-        return
-      }
-
-      if (versionValidation.status === 'missing') {
-        // Warning for older runtimes - allow user to continue anyway
-        // Note: buttons ordered as ['Continue Anyway', 'Cancel'] so Cancel (index 1) is the default
-        // when closing the modal (DebuggerMessageModal calls onResponse with last button index on close)
-        openModal('debugger-message', {
-          type: 'warning',
-          title: 'Older Runtime Detected',
-          message: versionValidation.message || 'Could not detect runtime version.',
-          buttons: ['Continue Anyway', 'Cancel'],
-          onResponse: (buttonIndex: number) => {
-            if (buttonIndex === 0) {
-              // User clicked "Continue Anyway" - proceed with connection
-              proceedWithConnection()
-            } else {
-              // User clicked "Cancel" or closed the modal - stay disconnected
-              setRuntimeConnectionStatus('disconnected')
-            }
-          },
-        })
-        return
-      }
-
-      // Version is OK - proceed normally
-      proceedWithConnection()
-    } catch (_error) {
-      setRuntimeConnectionStatus('error')
-    }
-  }, [
-    runtime,
-    runtimeIpAddress,
-    connectionStatus,
-    setRuntimeConnectionStatus,
-    setRuntimeJwtToken,
-    clearDeviceLicense,
-    openModal,
-    deviceBoard,
-  ])
+  // The runtime CONNECT lives in `useRuntimeConnect` so the debugger's
+  // offer-to-connect runs the same one. Keeping a second copy here is how the
+  // two would drift -- the version gate, the login/first-user choice and the
+  // licence teardown all have to behave identically wherever connect is
+  // invoked from.
+  const { toggle: handleConnectToRuntime } = useRuntimeConnect()
 
   // Timing and EtherCAT stats polling now belongs to the Runtime Status screen
   // (RTOP-283), which is where those statistics are displayed. Polling for them
@@ -694,6 +598,50 @@ const Board = memo(function () {
                 {/* Same affordance as the serial connect row below: renders
                     nothing at all unless this board's VPP is sold licensed AND a
                     check has landed, so a plain runtime's row is unchanged. */}
+                {licensing.isLicensable ? (
+                  <DeviceLicenseStatus
+                    report={licensing.report}
+                    isChecking={licensing.isChecking}
+                    buyUrl={licensing.buyUrl}
+                    awaitingPurchase={licensing.awaitingPurchase}
+                    onBuy={() => void licensing.buy()}
+                    onRecheck={() => void licensing.refresh()}
+                    onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+              </DeviceConnectButton>
+            </>
+          ) : isEthernetUploadTarget(currentBoardInfo) ? (
+            // Baremetal board programmed over Ethernet (e.g. Siemens LOGO! 8.2):
+            // a device-IP target + Search like a runtime board, but the baremetal
+            // Connect (Modbus TCP), not the v4 REST connect.
+            <>
+              <div id='device-ip-address-field' className='flex w-full items-center justify-start gap-1'>
+                <Label className='whitespace-pre text-xs text-neutral-950 dark:text-white'>IP Address</Label>
+                <input
+                  type='text'
+                  value={runtimeIpAddress}
+                  onChange={(e) => setRuntimeIpAddress(e.target.value)}
+                  placeholder='192.168.0.2'
+                  className='flex h-[30px] min-w-0 flex-1 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <button
+                  type='button'
+                  aria-label='Search for devices'
+                  title='Search for devices on the local network'
+                  onClick={() => openModal('runtime-discover-devices', null)}
+                  className='flex h-[30px] items-center gap-1 rounded-md bg-neutral-100 px-3 font-caption text-cp-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+                >
+                  <MagnifierIcon size='sm' className='h-4 w-4 stroke-neutral-1000 dark:stroke-neutral-100' />
+                  Search
+                </button>
+              </div>
+              <DeviceConnectButton
+                containerId='device-connect-button-container'
+                status={deviceLinkStatus}
+                onConnect={connectDevice}
+                onDisconnect={disconnectDevice}
+              >
                 {licensing.isLicensable ? (
                   <DeviceLicenseStatus
                     report={licensing.report}

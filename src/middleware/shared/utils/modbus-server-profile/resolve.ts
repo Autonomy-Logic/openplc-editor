@@ -140,7 +140,7 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
 
   // Baremetal is the compiler, and only the compiler. It used to also be
   // recognised by the package shipping a Modbus screen, which was compatibility
-  // with a pre-4.4.0 package -- and 4.4.0 does not carry that compatibility.
+  // with a pre-4.3.0 package -- and 4.3.0 does not carry that compatibility.
   const isBaremetal = board.compiler === 'arduino-cli'
 
   if (isBaremetal) {

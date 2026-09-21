@@ -199,9 +199,10 @@ describe('createEditorCompilerPlatformPort', () => {
     )
     expect(handleLibraryInstallation).toHaveBeenCalledTimes(1)
     // The per-board library list is the first argument; the output
-    // callback follows.  Asserting the exact list catches accidental
-    // drops in plumbing between port → handler.
-    expect(handleLibraryInstallation).toHaveBeenCalledWith(['Arduino_Opta_Blueprint', 'P1AM'], expect.any(Function))
+    // callback follows, then the git-installed third-party list.
+    // Asserting the exact list catches accidental drops in plumbing
+    // between port → handler.
+    expect(handleLibraryInstallation).toHaveBeenCalledWith(['Arduino_Opta_Blueprint', 'P1AM'], expect.any(Function), [])
     expect(result).toEqual({ ok: true })
   })
 
@@ -209,7 +210,28 @@ describe('createEditorCompilerPlatformPort', () => {
     const handleLibraryInstallation = jest.fn(async () => undefined)
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleLibraryInstallation }), makeContext())
     await port.installArduinoLib({ libId: '' }, () => undefined)
-    expect(handleLibraryInstallation).toHaveBeenCalledWith([], expect.any(Function))
+    expect(handleLibraryInstallation).toHaveBeenCalledWith([], expect.any(Function), [])
+  })
+
+  it('installArduinoLib forwards third-party libraries as a separate list', async () => {
+    // Index-installed and git-installed libraries travel separately all the way
+    // down, because they are installed by different arduino-cli invocations:
+    // `lib install <name>` versus `lib install --git-url`.
+    const handleLibraryInstallation = jest.fn(async () => undefined)
+    const port = createEditorCompilerPlatformPort(makeHandlers({ handleLibraryInstallation }), makeContext())
+    await port.installArduinoLib(
+      {
+        libId: '',
+        extraLibraries: ['P1AM'],
+        thirdPartyLibraries: [
+          { name: 'open62541', gitUrl: 'https://example.invalid/open62541.git', reason: 'OPC-UA server' },
+        ],
+      },
+      () => undefined,
+    )
+    expect(handleLibraryInstallation).toHaveBeenCalledWith(['P1AM'], expect.any(Function), [
+      { name: 'open62541', gitUrl: 'https://example.invalid/open62541.git', reason: 'OPC-UA server' },
+    ])
   })
 
   it('installArduinoLib warns and returns ok:true when the install machinery throws', async () => {
@@ -242,6 +264,27 @@ describe('createEditorCompilerPlatformPort', () => {
         communicationPort: '/dev/cu.usbmodem1101',
         arduinoPlatform: 'arduino:avr:mega',
       }),
+    )
+  })
+
+  it('uploadArduinoBoard forwards uploadMethod and ipAddress for an ethernet upload', async () => {
+    // These two were "declared but never populated" before the ethernet-upload
+    // work — an ethernet build ignored the address the caller gave and used
+    // whatever the project file remembered. Pin that they now reach the handler.
+    const handleUploadProgram = jest.fn(async () => ({ success: true, data: '' }))
+    const port = createEditorCompilerPlatformPort(makeHandlers({ handleUploadProgram }), makeContext())
+    await port.uploadArduinoBoard(
+      {
+        compilationPath: '',
+        fqbn: 'autonomylogic:tm4c:logo8',
+        port: '',
+        uploadMethod: 'ethernet',
+        ipAddress: '10.0.0.9',
+      },
+      () => undefined,
+    )
+    expect(handleUploadProgram).toHaveBeenCalledWith(
+      expect.objectContaining({ uploadMethod: 'ethernet', ipAddress: '10.0.0.9' }),
     )
   })
 

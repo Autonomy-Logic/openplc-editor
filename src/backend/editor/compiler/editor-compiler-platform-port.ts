@@ -287,10 +287,14 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation(args.extraLibraries ?? [], (chunk, level) => {
-          const message = typeof chunk === 'string' ? chunk : chunk.toString()
-          log(message, level ?? 'info')
-        })
+        await handlers.handleLibraryInstallation(
+          args.extraLibraries ?? [],
+          (chunk, level) => {
+            const message = typeof chunk === 'string' ? chunk : chunk.toString()
+            log(message, level ?? 'info')
+          },
+          args.thirdPartyLibraries ?? [],
+        )
         return { ok: true }
       } catch (error) {
         // Reached only when the install machinery itself can't run
@@ -517,6 +521,12 @@ export function createEditorCompilerPlatformPort(
           arduinoPlatform: args.fqbn,
           compilationPath: context.compilationPath,
           communicationPort: args.port || undefined,
+          uploadMethod: args.uploadMethod,
+          // Declared on UploadArduinoBoardArgs since the ethernet-upload work
+          // landed, populated only now: without it an ethernet build ignored
+          // the address the caller gave and used whatever the project file
+          // remembered.
+          ipAddress: args.ipAddress,
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')

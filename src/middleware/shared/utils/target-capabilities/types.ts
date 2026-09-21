@@ -31,6 +31,116 @@
  */
 export type DebuggerTransport = 'modbus-serial' | 'modbus-tcp' | 'websocket'
 
+/**
+ * Per-target OPC-UA server dimensions for the baremetal runtime.
+ *
+ * A capability block rather than runtime constants because only the VPP knows
+ * the silicon: a part without crypto accelerator, TRNG or RTC builds with
+ * encryption and certificates out. Every field lands in the generated
+ * `src/opcua_config.h` as an `OPCUA_*` define.
+ *
+ * OPC-UA Part 6 6.7.1 requires an 8192-byte chunk in each direction, so each
+ * session costs 16 KB; `maxSessions` is the expensive dimension.
+ */
+export interface OpcUaTargetProfile {
+  /** Bytes of the static arena that backs `UA_malloc` / `UA_free`. A fixed arena
+   *  rather than the newlib heap: a hard cap by construction, it overflows at
+   *  link time rather than in the field, and it cannot fragment the user
+   *  program's heap. */
+  arenaBytes: number
+
+  /** Concurrent OPC-UA sessions. 16 KB of protocol-mandated buffers each —
+   *  the dominant RAM term. Default 1. */
+  maxSessions: number
+
+  /** RAM slots for materialising flash-resident nodes on demand. What has to be
+   *  in RAM is how many nodes are held at once, which the operation limits bound. */
+  nodePoolSlots: number
+
+  /** OPC-UA `ServerCapabilities.OperationLimits`, published so conformant
+   *  clients split their own requests, and enforced so the rest get
+   *  `Bad_TooManyOperations` instead of exhausting the arena. */
+  maxNodesPerRead: number
+  maxNodesPerWrite: number
+  maxNodesPerBrowse: number
+  /** References returned per node before the client must continue with
+   *  `BrowseNext` and a continuation point. */
+  maxReferencesPerNode: number
+  /** Longest array a single node may expose. An array node is the one case where
+   *  a value must be materialised whole, so it needs a real bound. */
+  maxArrayLength: number
+
+  /** Highest security mode the target can sustain. `'none'` keeps mbedTLS out of
+   *  the link entirely; anything above it requires `hw.trng`. */
+  security: 'none' | 'sign' | 'sign-and-encrypt'
+
+  /** X.509 server certificate + client trust list. Requires `hw.rtc`:
+   *  `notBefore` / `notAfter` cannot be checked against an uptime counter. */
+  certificates: boolean
+
+  /** Data-change subscriptions (the Micro Embedded Device profile's addition
+   *  over Nano). Off means Nano only — clients must poll. */
+  subscriptions: boolean
+
+  /** PBKDF2-HMAC-SHA256 work factor for username/password auth. Only meaningful
+   *  when `passwordScheme` is `pbkdf2-sha256`; 600 000 is the OWASP figure and
+   *  what Runtime v4 uses. */
+  kdfIterations: number
+
+  /** How the build turns a project's plaintext password into what this target
+   *  stores and compares against. A device property, not an editor preference.
+   *
+   *  - `pbkdf2-sha256` — the string Runtime v4 consumes. The default.
+   *  - `plain` — for parts with no crypto acceleration, where PBKDF2 at a secure
+   *    iteration count costs seconds of stalled scan. */
+  passwordScheme: 'pbkdf2-sha256' | 'plain'
+
+  /** Hardware facts about the part. These gate the fields above; they are
+   *  not user preferences. */
+  hw: {
+    sha256: boolean
+    aes: boolean
+    /** Public-key accelerator (RSA / ECC). Without it a Basic256Sha256
+     *  handshake is software RSA-2048. */
+    pk: boolean
+    trng: boolean
+    rtc: boolean
+  }
+}
+
+/**
+ * Baremetal S7Comm server dimensions, the same role `OpcUaTargetProfile` plays.
+ * Smaller because S7 has no address space, node ids, sessions or security
+ * handshake: a request names (area, db, offset, length) and the server answers
+ * with bytes.
+ */
+export interface S7TargetProfile {
+  /** Concurrent S7 connections; the expensive dimension. Each costs a
+   *  receive/transmit PDU pair, so RAM is `2 * pduSize` per client. Runtime v4
+   *  allows 32 as a Linux process with a thread each. */
+  maxClients: number
+
+  /** Negotiated S7 PDU ceiling, 240..960. 240 is what an S7-300 offers and what
+   *  every client copes with. The server answers a client's proposal with the
+   *  smaller of the two, so raising this never breaks a client that wanted less. */
+  pduSize: number
+
+  /** Ceiling on data blocks, enforced by the editor before the build rather
+   *  than discovered on a device that stops answering. Flash, not RAM: the
+   *  area table is `const`. v4 allows 64. */
+  maxDataBlocks: number
+
+  /** Build the System Status List / identification service at all. Many clients
+   *  query SZL to identify the CPU before doing anything else and some refuse to
+   *  connect without it, so it is a capability rather than an assumption. */
+  szl: boolean
+
+  /** Serve Write Var at all. A read-only server is cheaper and, for a protocol
+   *  with no authentication, often the right default on a plant network. The
+   *  refusal is a proper S7 error, not a dropped connection. */
+  writeEnabled: boolean
+}
+
 export interface TargetCapabilities {
   /* ---------------------------------------------------------------
    * Address producers — sources that allocate IEC addresses and
@@ -78,6 +188,18 @@ export interface TargetCapabilities {
 
   opcuaServer: boolean
   s7Server: boolean
+
+  /** Baremetal OPC-UA server dimensions. Meaningful only where `opcuaServer` is
+   *  true and the target compiles the baremetal runtime. Optional so a VPP
+   *  declares only what it overrides; `resolveTargetCapabilities` fills the rest
+   *  from `DEFAULT_OPCUA_PROFILE`. */
+  opcua?: OpcUaTargetProfile
+
+  /** Baremetal S7Comm server dimensions. Meaningful only where `s7Server` is
+   *  true and the target compiles the baremetal runtime. Optional so a VPP
+   *  declares only what it overrides; `resolveTargetCapabilities` fills the rest
+   *  from `DEFAULT_S7_PROFILE`. */
+  s7?: S7TargetProfile
 
   /* ---------------------------------------------------------------
    * Build / runtime behavior

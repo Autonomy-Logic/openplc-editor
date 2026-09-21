@@ -1,5 +1,6 @@
 import type { BlockVariant } from '@root/middleware/shared/ports/block-types'
 import type { SystemLibrary } from '@root/middleware/shared/ports/library-types'
+import type { PLCPou } from '@root/middleware/shared/ports/types'
 
 import { blockParameterSide } from '../graphical/in-out-pin-rules'
 
@@ -7,13 +8,22 @@ import { blockParameterSide } from '../graphical/in-out-pin-rules'
  * Refresh placed graphical block variants from the current library definitions.
  *
  * A block's signature is copied into `node.data.variant` when the block is
- * dropped on the canvas and then frozen in the saved project. On project load
- * we re-stamp every block that resolves to a library definition; blocks backed
- * by a user-defined POU are skipped, because the project owns their interface.
+ * dropped on the canvas and then frozen in the saved project. Two definitions
+ * can back a placed block, and both are re-stamped: the installed libraries and
+ * the project's own functions and function blocks. A user POU wins over a
+ * library entry of the same name, since the project owns its own interface.
  *
- * What is applied in place: pin `type`, pin `class` that stays on the same
- * side, `documentation`, `extensible` and the block `type`. None of those move
- * a pin.
+ * The two are treated differently, because the reporting only makes sense for
+ * one of them. A library changes under the project, so every difference is
+ * described and the breaking ones are left for the user to fix. A user POU
+ * changes *because* the user just edited it, so it gets a silent, type-only
+ * refresh (matching by pin name, never touching the pin set) -- there is
+ * nothing to tell them that they do not already know, and the stale copy is
+ * what breaks the relink pass (DOPE-548).
+ *
+ * What is applied in place for a library block: pin `type`, pin `class` that
+ * stays on the same side, `documentation`, `extensible` and the block `type`.
+ * None of those move a pin.
  *
  * A pin the library ADDED is applied only when the caller supplies
  * `measureBlock` — the canvas wires to `data.handles`, so a new pin needs the
@@ -96,15 +106,43 @@ export interface RestampReport {
   modified: boolean
 }
 
-/** Index every library POU by name. First definition wins. */
+/** Index every library POU by name. First definition wins. IEC names are case-insensitive. */
 function indexLibraryPous(systemLibraries: SystemLibrary[]): Map<string, LibraryPou> {
   const byName = new Map<string, LibraryPou>()
   for (const library of systemLibraries) {
     for (const pou of library.pous) {
-      if (!byName.has(pou.name)) byName.set(pou.name, pou)
+      const key = pou.name.toUpperCase()
+      if (!byName.has(key)) byName.set(key, pou)
     }
   }
   return byName
+}
+
+/** Index the project's own functions and function blocks by name. */
+function indexUserPous(userPous: PLCPou[]): Map<string, PLCPou> {
+  const byName = new Map<string, PLCPou>()
+  for (const pou of userPous) byName.set(pou.name.toUpperCase(), pou)
+  return byName
+}
+
+/** The pin types a user POU's interface declares, keyed by upper-cased pin name. */
+function userPouPinTypes(pou: PLCPou): Map<string, VariantVariable['type']> {
+  const types = new Map<string, VariantVariable['type']>()
+  for (const variable of pou.interface?.variables ?? []) {
+    // Placed variants upper-case their values (see the drop path), and a user
+    // pin may be a data type or an array, which the variant schema's union
+    // does not name -- the placed shape has always carried them.
+    types.set(variable.name.toUpperCase(), {
+      definition: variable.type.definition,
+      value: variable.type.value.toUpperCase(),
+    } as VariantVariable['type'])
+  }
+  const returnType = pou.interface?.returnType
+  // A function's return pin is synthesised as OUT when the block is dropped.
+  if (pou.pouType === 'function' && returnType) {
+    types.set('OUT', { definition: 'base-type', value: returnType.toUpperCase() } as VariantVariable['type'])
+  }
+  return types
 }
 
 type FlowEdge = {
@@ -182,30 +220,58 @@ function remeasure(node: BlockBearingNode, measureBlock: MeasureBlock): boolean 
   return true
 }
 
+/**
+ * Type-only refresh of a block backed by one of the project's own POUs.
+ *
+ * Matches pins by name and copies the type across; the pin set, ids, handles
+ * and wiring are left exactly as they are. A pin the interface no longer
+ * declares (EN/ENO, one the user removed) is skipped rather than dropped,
+ * because dropping it would orphan its handle and its wiring, and a pin the
+ * interface gained is not added, because that needs the node rebuilt. Both
+ * stay the divergence badge's job.
+ */
+function restampUserPouBlock(variant: BlockVariant, pou: PLCPou): boolean {
+  const pinTypes = userPouPinTypes(pou)
+  let modified = false
+  for (const variable of variant.variables) {
+    const next = pinTypes.get(variable.name.toUpperCase())
+    if (!next) continue
+    const current = variable.type
+    if (current.definition === next.definition && current.value === next.value) continue
+    variable.type = { definition: next.definition, value: next.value } as VariantVariable['type']
+    modified = true
+  }
+  return modified
+}
+
 function restampNodes(
   nodes: BlockBearingNode[],
   edges: FlowEdge[],
   libraryPousByName: Map<string, LibraryPou>,
-  userPouNames: Set<string>,
+  userPousByName: Map<string, PLCPou>,
   pou: string | undefined,
   measureBlock: MeasureBlock | undefined,
   changes: RestampChange[],
 ): boolean {
   let modified = false
-  // Block node id -> its pins as the library now declares them, so the
-  // variables wired to those pins can be brought along.
-  const refreshedPins = new Map<string, Map<string, LibraryPou['variables'][number]>>()
 
   for (const node of nodes) {
     if (node?.type !== 'block') continue
     const variant = node.data?.variant
     const name = variant?.name
-    if (!variant || !name) continue
+    // `node.data` is `z.any()` in the flow schema, so a hand-edited or
+    // half-migrated project can reach here without a usable variant.
+    if (!variant || !name || !Array.isArray(variant.variables)) continue
 
-    // The project owns a user-defined POU's shape.
-    if (userPouNames.has(name.toUpperCase())) continue
+    // The project owns its own POUs, so they win over a library of the same
+    // name -- and they are refreshed silently, without the library reporting.
+    const userPou = userPousByName.get(name.toUpperCase())
+    if (userPou) {
+      if (restampUserPouBlock(variant, userPou)) modified = true
+      continue
+    }
 
-    const libPou = libraryPousByName.get(name)
+    const libPou = libraryPousByName.get(name.toUpperCase())
     if (!libPou) continue
 
     const instance = node.data?.variable?.name
@@ -236,8 +302,7 @@ function restampNodes(
       record({ kind: 'block-type', from: variant.type, to: libPou.type, severity: 'error', applied: false })
     }
 
-    const libVarByName = new Map(libPou.variables.map((variable) => [variable.name, variable]))
-    if (node.id) refreshedPins.set(node.id, libVarByName)
+    const libVarByName = new Map(libPou.variables.map((variable) => [variable.name.toUpperCase(), variable]))
     const seen = new Set<string>()
     // Block width and handle positions are measured from the pins: their
     // names, which side they sit on, and whether an in-out marker has to be
@@ -245,10 +310,10 @@ function restampNodes(
     let geometryChanged = false
 
     for (const variable of variant.variables) {
-      if (IMPLICIT_PINS.has(variable.name)) continue
-      seen.add(variable.name)
+      if (IMPLICIT_PINS.has(variable.name.toUpperCase())) continue
+      seen.add(variable.name.toUpperCase())
       const connected = isPinConnected(node, variable.name, edges)
-      const libVar = libVarByName.get(variable.name)
+      const libVar = libVarByName.get(variable.name.toUpperCase())
 
       if (!libVar) {
         // An extensible block grows past its declared parameters -- ADD's IN3,
@@ -306,7 +371,9 @@ function restampNodes(
       }
     }
 
-    const added = libPou.variables.filter((libVar) => !IMPLICIT_PINS.has(libVar.name) && !seen.has(libVar.name))
+    const added = libPou.variables.filter(
+      (libVar) => !IMPLICIT_PINS.has(libVar.name.toUpperCase()) && !seen.has(libVar.name.toUpperCase()),
+    )
     // Appended together so the box is measured once, whatever the library added.
     let grown = false
     if (added.length > 0 && measureBlock) {
@@ -332,33 +399,59 @@ function restampNodes(
     }
   }
 
-  // A variable wired to a pin carries its own copy of that pin's signature.
-  // Leaving it behind shows the old type on the canvas and rejects a variable
-  // of the new one, which reads as the update having done nothing.
-  for (const node of nodes) {
-    const attached = node.data?.block
-    if (!attached?.id || !attached.handleId || !attached.variableType) continue
-    const libVar = refreshedPins.get(attached.id)?.get(attached.handleId)
-    if (!libVar) continue
-    const current = attached.variableType
-    if (
-      current.name === libVar.name &&
-      current.class === libVar.class &&
-      current.type?.definition === libVar.type.definition &&
-      current.type?.value === libVar.type.value
-    ) {
-      continue
-    }
-    attached.variableType = { name: libVar.name, class: libVar.class, type: { ...libVar.type } }
-    modified = true
-  }
-
   return modified
 }
 
 /**
- * Re-stamp every block in the given flows from the current system libraries.
- * Mutates the flow objects in place.
+ * Re-stamp the copy of a block pin's signature that the variable wired to it
+ * carries.
+ *
+ * A variable node caches the pin it connects to in `data.block.variableType`,
+ * and that copy -- not the block's own variant -- is what the canvas renders as
+ * the `(*TYPE*)` placeholder, what it validates a dropped variable against, and
+ * what the relink pass reads. Leaving it behind shows the old type and rejects
+ * a variable of the new one, which reads as the update having done nothing.
+ *
+ * Driven off the variants rather than off the definitions, so it runs AFTER the
+ * blocks are re-stamped and covers library and user-POU blocks alike.
+ */
+function restampPinNodes(nodes: BlockBearingNode[]): boolean {
+  const variantsByBlockId = new Map<string, BlockVariant>()
+  for (const node of nodes) {
+    const variant = node?.type === 'block' ? node.data?.variant : undefined
+    if (variant && Array.isArray(variant.variables) && node.id) variantsByBlockId.set(node.id, variant)
+  }
+  if (variantsByBlockId.size === 0) return false
+
+  let modified = false
+  for (const node of nodes) {
+    const attached = node.data?.block
+    if (!attached?.id || !attached.handleId) continue
+    const variant = variantsByBlockId.get(attached.id)
+    if (!variant) continue
+
+    const handleId = attached.handleId.toUpperCase()
+    const pin = variant.variables.find((variable) => variable.name.toUpperCase() === handleId)
+    if (!pin) continue
+
+    const current = attached.variableType
+    if (
+      current?.name === pin.name &&
+      current.class === pin.class &&
+      current.type?.definition === pin.type.definition &&
+      current.type?.value === pin.type.value
+    ) {
+      continue
+    }
+    attached.variableType = { name: pin.name, class: pin.class, type: { ...pin.type } }
+    modified = true
+  }
+  return modified
+}
+
+/**
+ * Re-stamp every block in the given flows from the current system libraries and
+ * the project's own POUs. Mutates the flow objects in place.
  *
  * `flows` accepts both FBD flows (single `rung`) and LD flows (`rungs[]`); the
  * shape is duck-typed so the helper stays language-agnostic.
@@ -366,14 +459,15 @@ function restampNodes(
 export function restampFlowLibraryVariants(
   flows: Array<{ rung?: RungLike; rungs?: RungLike[] }>,
   systemLibraries: SystemLibrary[],
-  userPouNames: Iterable<string>,
+  userPous: PLCPou[],
   options: RestampOptions = {},
 ): RestampReport {
   const libraryPousByName = indexLibraryPous(systemLibraries)
-  if (libraryPousByName.size === 0) return { changes: [], poolEmpty: true, modified: false }
-
-  const skip = new Set<string>()
-  for (const userPouName of userPouNames) skip.add(userPouName.toUpperCase())
+  const userPousByName = indexUserPous(userPous)
+  // Nothing to check anything against. `poolEmpty` stays the library's story:
+  // a project whose own POUs still resolve is not an unchecked project.
+  const poolEmpty = libraryPousByName.size === 0
+  if (poolEmpty && userPousByName.size === 0) return { changes: [], poolEmpty: true, modified: false }
 
   const changes: RestampChange[] = []
   let modified = false
@@ -387,15 +481,17 @@ export function restampFlowLibraryVariants(
         nodes as BlockBearingNode[],
         edges,
         libraryPousByName,
-        skip,
+        userPousByName,
         options.pou,
         options.measureBlock,
         changes,
       )
-      modified = modified || touched
+      // After the blocks, so the pin nodes copy the refreshed types.
+      const pinsTouched = restampPinNodes(nodes as BlockBearingNode[])
+      modified = modified || touched || pinsTouched
     }
   }
-  return { changes, poolEmpty: false, modified }
+  return { changes, poolEmpty, modified }
 }
 
 export interface RestampSummaryLine {

@@ -92,6 +92,10 @@ export interface GenerateDefinesInput {
    *  `defaultSerial`; `BoardInfo.defaultSerial`). Drives `DEBUG_IFACE` and the
    *  RTU "shares the debug serial" flag. Absent → `Serial`. */
   defaultSerial?: string
+  /** The board's `networkInterfaces`, forwarded to `generateModbusDefines`
+   *  so a project that never picked a carrier compiles for the one the
+   *  board has instead of assuming Ethernet. */
+  networkInterfaces?: string[]
   /** Bytes the program's retain blob occupies (`debugMap.retainBlobSize`);
    *  absent or 0 when the program retains nothing.
    *
@@ -141,6 +145,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     vppModbusState,
     modbusServer,
     defaultSerial,
+    networkInterfaces,
     retainBlobSize,
     resourceLibraryDepends,
   } = input
@@ -212,7 +217,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
-    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial, modbusServer)
+    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial, modbusServer, networkInterfaces)
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'

@@ -45,3 +45,23 @@ export function resolveRuntimeCredentials(args: ParsedArgs): RuntimeCredentialsI
   }
   return { username, password }
 }
+
+/**
+ * Credentials for a command that only sometimes needs them.
+ *
+ * `debug open` reaches targets that log in (runtime v4 websocket) and targets
+ * that do not (a board over Modbus). The command layer cannot know which until
+ * the session daemon resolves the board's capabilities, so validate any
+ * credential the user supplied and otherwise return empty and let it decide.
+ */
+export function resolveOptionalRuntimeCredentials(args: ParsedArgs): RuntimeCredentialsInput | { error: string } {
+  const provided =
+    stringFlag(args, 'credentials') ??
+    process.env.OPENPLC_CREDENTIALS ??
+    stringFlag(args, 'user') ??
+    process.env.OPENPLC_USER ??
+    stringFlag(args, 'password') ??
+    process.env.OPENPLC_PASSWORD
+  if (!provided) return { username: '', password: '' }
+  return resolveRuntimeCredentials(args)
+}

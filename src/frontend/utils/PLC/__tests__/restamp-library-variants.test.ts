@@ -1,6 +1,8 @@
 import { produce } from 'immer'
 
 import type { SystemLibrary } from '../../../../middleware/shared/ports/library-types'
+import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { syncNodesWithVariables } from '../../graphical/sync-nodes-with-variables'
 import { type RestampChange, restampFlowLibraryVariants, summariseRestampChanges } from '../restamp-library-variants'
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,59 @@ function measurableNode() {
   return node
 }
 
+/** One of the project's own POUs, as the store holds it. */
+function makeUserPou(
+  name: string,
+  variables: Array<{ name: string; class: string; definition: string; value: string }>,
+  options: { pouType?: string; returnType?: string } = {},
+) {
+  return {
+    name,
+    pouType: options.pouType ?? 'function-block',
+    body: { language: 'st', value: '' },
+    interface: {
+      ...(options.returnType ? { returnType: options.returnType } : {}),
+      variables: variables.map((variable) => ({
+        name: variable.name,
+        class: variable.class,
+        type: { definition: variable.definition, value: variable.value },
+      })),
+    },
+  } as unknown as Parameters<typeof restampFlowLibraryVariants>[2][number]
+}
+
+/** A placed user FB whose IN1 pin is still stamped with the old type. */
+function makeStaleUserBlockNode(pinValue = 'OLDSTRUCT') {
+  return {
+    id: 'block-1',
+    type: 'block',
+    data: {
+      variant: {
+        name: 'MyFB',
+        type: 'function-block',
+        variables: [{ name: 'IN1', class: 'input', type: { definition: 'user-data-type', value: pinValue } }],
+      },
+    },
+  }
+}
+
+/** The ladder pin node that connects a variable to that block's IN1 pin. */
+function makePinNode(pinValue = 'OLDSTRUCT') {
+  return {
+    id: 'pin-1',
+    type: 'variable',
+    data: {
+      variable: { name: 'motor' },
+      variant: 'input',
+      block: {
+        id: 'block-1',
+        handleId: 'IN1',
+        variableType: { name: 'IN1', class: 'input', type: { definition: 'user-data-type', value: pinValue } },
+      },
+    },
+  }
+}
+
 const applied = (changes: RestampChange[]) => changes.filter((change) => change.applied)
 const kindOf = (changes: RestampChange[], kind: string) => changes.find((change) => change.kind === kind)
 
@@ -105,14 +160,31 @@ describe('restampFlowLibraryVariants', () => {
     expect(node.data.variant.variables[0].type.value).toBe('__XWORD')
   })
 
-  it('skips blocks backed by a user-defined POU', () => {
+  it('lets a user-defined POU win over a library block of the same name', () => {
+    // The project owns its own interface, so the library definition does not
+    // reach a block the project also defines.
     const node = makeStaleAdrNode()
     const flow = { rung: { nodes: [node] } }
 
-    const { changes } = restampFlowLibraryVariants([flow], makeSystemLibraries(), ['ADR'])
+    const { changes } = restampFlowLibraryVariants([flow], makeSystemLibraries(), [
+      makeUserPou('ADR', [{ name: 'OUT', class: 'output', definition: 'base-type', value: 'DINT' }]),
+    ])
 
     expect(changes).toHaveLength(0)
-    expect(node.data.variant.variables[0].type.value).toBe('ULINT')
+    expect(node.data.variant.variables[0].type.value).toBe('DINT')
+  })
+
+  it('reports nothing for a user POU, whose interface the user just edited', () => {
+    const node = makeStaleAdrNode()
+    const flow = { rung: { nodes: [node] } }
+
+    const report = restampFlowLibraryVariants([flow], makeSystemLibraries(), [
+      makeUserPou('ADR', [{ name: 'OUT', class: 'output', definition: 'base-type', value: 'DINT' }]),
+    ])
+
+    // Silent, but still persisted -- otherwise the refresh is redone on every load.
+    expect(report.changes).toHaveLength(0)
+    expect(report.modified).toBe(true)
   })
 
   it('leaves up-to-date variants untouched (no spurious changes)', () => {
@@ -617,5 +689,207 @@ describe('summariseRestampChanges', () => {
     ])
 
     expect(lines.map((line) => line.severity)).toEqual(['error', 'warning', 'info'])
+  })
+})
+
+describe('restampFlowLibraryVariants — blocks backed by a project POU', () => {
+  it('refreshes a stale user function-block pin type from the POU interface', () => {
+    const node = makeStaleUserBlockNode()
+    const flow = { rung: { nodes: [node] } }
+
+    const report = restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+    )
+
+    expect(report.modified).toBe(true)
+    expect(node.data.variant.variables[0].type).toEqual({ definition: 'user-data-type', value: 'MYSTRUCT' })
+  })
+
+  it("follows the POU's return type for a function's OUT pin", () => {
+    const node = makeStaleUserBlockNode()
+    node.data.variant.name = 'MyFn'
+    node.data.variant.type = 'function'
+    node.data.variant.variables = [
+      { name: 'OUT', class: 'output', type: { definition: 'base-type', value: 'INT' } },
+    ] as unknown as typeof node.data.variant.variables
+    const flow = { rung: { nodes: [node] } }
+
+    const report = restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('MyFn', [], { pouType: 'function', returnType: 'REAL' })],
+    )
+
+    expect(report.modified).toBe(true)
+    expect(node.data.variant.variables[0].type.value).toBe('REAL')
+  })
+
+  it('leaves pins the interface no longer declares alone (EN/ENO, removed pins)', () => {
+    const node = makeStaleUserBlockNode()
+    node.data.variant.variables = [
+      { name: 'EN', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
+      { name: 'GONE', class: 'input', type: { definition: 'base-type', value: 'INT' } },
+    ] as unknown as typeof node.data.variant.variables
+    const flow = { rung: { nodes: [node] } }
+
+    const report = restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'base-type', value: 'REAL' }])],
+    )
+
+    expect(report.modified).toBe(false)
+    expect(node.data.variant.variables.map((variable) => variable.name)).toEqual(['EN', 'GONE'])
+  })
+
+  it('never adds a pin the interface gained (that needs the node rebuilt)', () => {
+    const node = makeStaleUserBlockNode()
+    const flow = { rung: { nodes: [node] } }
+
+    restampFlowLibraryVariants(
+      [flow],
+      [],
+      [
+        makeUserPou('MyFB', [
+          { name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' },
+          { name: 'IN2', class: 'input', definition: 'base-type', value: 'INT' },
+        ]),
+      ],
+    )
+
+    expect(node.data.variant.variables).toHaveLength(1)
+  })
+
+  it('matches the POU name case-insensitively, as IEC identifiers are', () => {
+    const node = makeStaleUserBlockNode()
+    const flow = { rung: { nodes: [node] } }
+
+    const report = restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('myfb', [{ name: 'in1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+    )
+
+    expect(report.modified).toBe(true)
+    expect(node.data.variant.variables[0].type.value).toBe('MYSTRUCT')
+  })
+
+  it('leaves an up-to-date user block untouched', () => {
+    const node = makeStaleUserBlockNode('MYSTRUCT')
+    const flow = { rung: { nodes: [node] } }
+
+    const report = restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+    )
+
+    expect(report.modified).toBe(false)
+  })
+
+  it('still reports an empty library pool when only user POUs resolve', () => {
+    const node = makeStaleUserBlockNode()
+
+    const report = restampFlowLibraryVariants(
+      [{ rung: { nodes: [node] } }],
+      [],
+      [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+    )
+
+    expect(report.poolEmpty).toBe(true)
+    expect(report.modified).toBe(true)
+  })
+})
+
+describe('restampFlowLibraryVariants — malformed or oddly cased data', () => {
+  it('matches a library POU name case-insensitively', () => {
+    const node = makeStaleAdrNode()
+    node.data.variant.name = 'adr'
+    const flow = { rung: { nodes: [node] } }
+
+    const { changes } = restampFlowLibraryVariants([flow], makeSystemLibraries(), [])
+
+    expect(kindOf(changes, 'type')).toBeDefined()
+    expect(node.data.variant.variables[0].type.value).toBe('__XWORD')
+  })
+
+  it('skips a block whose persisted variant has no variables array', () => {
+    const node = makeStaleAdrNode()
+    delete (node.data.variant as { variables?: unknown }).variables
+    const flow = { rung: { nodes: [node] } }
+
+    expect(() => restampFlowLibraryVariants([flow], makeSystemLibraries(), [])).not.toThrow()
+  })
+
+  it('skips a pin node whose block variant has no variables array', () => {
+    const blockNode = makeStaleUserBlockNode()
+    delete (blockNode.data.variant as { variables?: unknown }).variables
+    const pinNode = makePinNode()
+    const flow = { rung: { nodes: [blockNode, pinNode] } }
+
+    expect(() =>
+      restampFlowLibraryVariants(
+        [flow],
+        [],
+        [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+      ),
+    ).not.toThrow()
+    expect(pinNode.data.block.variableType.type.value).toBe('OLDSTRUCT')
+  })
+})
+
+describe('restampFlowLibraryVariants — ladder pin nodes', () => {
+  it("refreshes the pin node's cached type from the block it connects to", () => {
+    const pinNode = makePinNode()
+    const flow = { rung: { nodes: [makeStaleUserBlockNode(), pinNode] } }
+
+    restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+    )
+
+    expect(pinNode.data.block.variableType.type).toEqual({ definition: 'user-data-type', value: 'MYSTRUCT' })
+  })
+
+  it('leaves a pin node whose block is not in the rung alone', () => {
+    const pinNode = makePinNode()
+    const flow = { rung: { nodes: [pinNode] } }
+
+    const report = restampFlowLibraryVariants(
+      [flow],
+      [],
+      [makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }])],
+    )
+
+    expect(report.modified).toBe(false)
+    expect(pinNode.data.block.variableType.type.value).toBe('OLDSTRUCT')
+  })
+})
+
+describe('DOPE-548 — a user FB pin type change must not break a linked variable', () => {
+  it('leaves the link intact once the block and its pin node are re-stamped', () => {
+    const flow = {
+      name: 'Prog',
+      rungs: [{ id: 'r1', nodes: [makeStaleUserBlockNode(), makePinNode()], edges: [] }],
+    }
+    // The FB now declares IN1 : MyStruct, and the POU variable follows it.
+    const userPous = [
+      makeUserPou('MyFB', [{ name: 'IN1', class: 'input', definition: 'user-data-type', value: 'MyStruct' }]),
+    ]
+    const variables = [
+      { id: '1', name: 'motor', type: { definition: 'user-data-type', value: 'MYSTRUCT' } },
+    ] as unknown as PLCVariable[]
+
+    restampFlowLibraryVariants([flow], [], userPous)
+
+    const updateNodes = vi.fn()
+    syncNodesWithVariables(variables, [flow] as unknown as Parameters<typeof syncNodesWithVariables>[1], updateNodes)
+
+    // Without the re-stamp the pin still reads OLDSTRUCT and the node is
+    // replaced by a broken-… payload flagged wrongVariable.
+    expect(updateNodes).not.toHaveBeenCalled()
   })
 })

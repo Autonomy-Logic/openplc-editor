@@ -157,9 +157,24 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
  * channel, for no visible reason.
  */
 export function applyConnectionOverrides(overrides: { port?: string; host?: string }): void {
-  const configuration: { communicationPort?: string; runtimeIpAddress?: string } = {}
-  if (overrides.port) configuration.communicationPort = overrides.port
-  if (overrides.host) configuration.runtimeIpAddress = overrides.host
-  if (Object.keys(configuration).length === 0) return
-  openPLCStoreBase.getState().deviceActions.setDeviceDefinitions({ configuration })
+  const patch: { communicationPort?: string; runtimeIpAddress?: string } = {}
+  if (overrides.port) patch.communicationPort = overrides.port
+  if (overrides.host) patch.runtimeIpAddress = overrides.host
+  if (Object.keys(patch).length === 0) return
+  // Merged onto what the project loaded, not sent alone.
+  //
+  // `setDeviceDefinitions` REPLACES `configuration` with merge(passed,
+  // DEFAULTS) -- not with merge(passed, current) -- so handing it `--host` by
+  // itself reset `deviceBoard`, `communicationPort` and, fatally,
+  // `vendorScreenData`. That last one is the `screens` the debug-spec resolver
+  // reads, so a TCP channel declaring `enabledWhen: screens.network.enabled`
+  // evaluated against an empty object and was never eligible. Serial then
+  // failed too (its port had just been wiped) and the CLI reported that the
+  // target "declares none this build can open" -- on a board sitting on the
+  // network with its port open.
+  //
+  // It only showed on a board whose TCP channel is state-gated: the LOGO!'s is
+  // `enabledWhen: true`, so it resolved either way and hid this.
+  const current = openPLCStoreBase.getState().deviceDefinitions.configuration
+  openPLCStoreBase.getState().deviceActions.setDeviceDefinitions({ configuration: { ...current, ...patch } })
 }

@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/frontend/store'
+import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
@@ -24,6 +25,25 @@ interface AddressSpaceTabProps {
 const inputStyles =
   'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
+/**
+ * The tree id a STORED node corresponds to.
+ *
+ * A VAR_EXTERNAL used to be saved under the POU that declared it; it is now
+ * attributed to the global scope, where its address actually lives. Both
+ * spellings have to land on the same tree entry, or an address space saved
+ * before that change shows the variable unticked and ticking it again adds a
+ * SECOND node for one address.
+ *
+ * Only ever widens: a node whose own id is in the tree keeps it, so a program
+ * variable that merely shares a name with a global is untouched.
+ */
+const treeIdForNode = (node: { pouName: string; variablePath: string }, tree: VariableTreeNode[]): string => {
+  const own = `${node.pouName}-${node.variablePath}`
+  if (findTreeNodeById(tree, own)) return own
+  const asGlobal = `${GLOBAL_SCOPE_POU}-${node.variablePath}`
+  return findTreeNodeById(tree, asGlobal) ? asGlobal : own
+}
+
 export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressSpaceTabProps) => {
   const {
     projectActions: { updateOpcUaAddressSpaceNamespace, addOpcUaNode, updateOpcUaNode, removeOpcUaNode },
@@ -36,7 +56,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   const [filter, setFilter] = useState('')
   const [selectedVariableIds, setSelectedVariableIds] = useState<Set<string>>(() => {
     // Initialize with IDs of already configured nodes
-    return new Set(config.addressSpace.nodes.map((n) => `${n.pouName}-${n.variablePath}`))
+    return new Set(config.addressSpace.nodes.map((n) => treeIdForNode(n, projectVariables)))
   })
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingVariable, setEditingVariable] = useState<VariableTreeNode | null>(null)
@@ -63,9 +83,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
       const nodeKey = `${node.pouName}-${node.variablePath}`
       if (selectedVariableIds.has(nodeKey)) {
         // Deselect - remove from config if it exists
-        const existingNode = config.addressSpace.nodes.find(
-          (n) => n.pouName === node.pouName && n.variablePath === node.variablePath,
-        )
+        const existingNode = config.addressSpace.nodes.find((n) => treeIdForNode(n, projectVariables) === nodeKey)
         if (existingNode) {
           removeOpcUaNode(serverName, existingNode.id)
           onConfigChange()
@@ -105,7 +123,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         setIsModalOpen(true)
       }
     },
-    [selectedVariableIds, config.addressSpace.nodes, serverName, removeOpcUaNode, onConfigChange],
+    [selectedVariableIds, config.addressSpace.nodes, projectVariables, serverName, removeOpcUaNode, onConfigChange],
   )
 
   // Handle save from configuration modal
@@ -142,7 +160,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   const handleEditNode = useCallback(
     (node: OpcUaNodeConfig) => {
       // Find the corresponding tree node
-      const treeNode = findTreeNodeById(projectVariables, `${node.pouName}-${node.variablePath}`)
+      const treeNode = findTreeNodeById(projectVariables, treeIdForNode(node, projectVariables))
       if (treeNode) {
         setEditingVariable(treeNode)
         setEditingConfig(node)
@@ -160,7 +178,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         removeOpcUaNode(serverName, nodeId)
 
         // Find the tree node to check if it's a complex type with descendants
-        const nodeKey = `${node.pouName}-${node.variablePath}`
+        const nodeKey = treeIdForNode(node, projectVariables)
         const treeNode = findTreeNodeById(projectVariables, nodeKey)
 
         if (treeNode && isComplexType(treeNode)) {

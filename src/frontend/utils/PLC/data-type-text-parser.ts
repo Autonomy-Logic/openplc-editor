@@ -13,8 +13,9 @@
  * preserving the raw file content.
  *
  * When `expectedName` is given, the declared name must match it
- * (case-insensitive) — the file name is the type's identity, so
- * renaming happens through the project tree, not by editing text.
+ * (case-insensitive) — the file name is the type's identity, so a
+ * file whose content disagrees with its path is a parse error.  The
+ * code view omits it and treats a mismatch as a rename instead.
  */
 import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable, PLCVariableType } from '../../../middleware/shared/ports/types'

@@ -59,6 +59,34 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 #undef min
 #undef max
 #undef abs
+// \`round\` is the same story: Energia defines it as a macro and \`<chrono>\`
+// declares \`chrono::round<ToDur>()\`, so the macro swallows the call and the
+// header fails to parse. Undef'd here because the include that trips over it is
+// in this preamble. \`std::round\` / \`::round\` from <cmath> remain available.
+#undef round
+// Energia numbers the GPIO ports as the macros \`PA\` through \`PT\`, each two
+// letters a PLC program is likely to want. \`PT\` is the preset-time input of
+// every IEC standard timer, so a project holding a TON, TOF or TP expanded the
+// struct strucpp emits into \`IEC_TIME 18;\`. The whole family goes, since a port
+// letter is not how anything addresses a pin from a C block.
+#undef PA
+#undef PB
+#undef PC
+#undef PD
+#undef PE
+#undef PF
+#undef PG
+#undef PH
+#undef PJ
+#undef PK
+#undef PL
+#undef PM
+#undef PN
+#undef PP
+#undef PQ
+#undef PR
+#undef PS
+#undef PT
 #endif
 
 // The C block interface — the \`<POU>_VARS\` struct for every C++ POU in this

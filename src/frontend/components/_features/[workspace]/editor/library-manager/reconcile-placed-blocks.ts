@@ -28,7 +28,7 @@ const measureFbd = fbdBlockSize as unknown as MeasureBlock
 export function reconcilePlacedBlocks(): RestampChange[] {
   const state = useOpenPLCStore.getState()
   const systemLibraries = state.libraries.system
-  const userPouNames = state.project.data.pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
+  const userPous = state.project.data.pous.filter((pou) => pou.pouType !== 'program')
 
   const changes: RestampChange[] = []
   let modified = false
@@ -38,7 +38,7 @@ export function reconcilePlacedBlocks(): RestampChange[] {
   // does before it re-stamps.
   for (const flow of state.ladderFlows) {
     const draft = structuredClone(flow)
-    const report = restampFlowLibraryVariants([draft], systemLibraries, userPouNames, {
+    const report = restampFlowLibraryVariants([draft], systemLibraries, userPous, {
       pou: flow.name,
       measureBlock: measureLadder,
     })
@@ -52,7 +52,7 @@ export function reconcilePlacedBlocks(): RestampChange[] {
 
   for (const flow of state.fbdFlows) {
     const draft = structuredClone(flow)
-    const report = restampFlowLibraryVariants([draft], systemLibraries, userPouNames, {
+    const report = restampFlowLibraryVariants([draft], systemLibraries, userPous, {
       pou: flow.name,
       measureBlock: measureFbd,
     })

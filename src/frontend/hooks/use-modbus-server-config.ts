@@ -2,7 +2,7 @@
  * One Modbus-server view over one store.
  *
  * Every target's Modbus server is a `PLCServer` in `project.data.servers`,
- * written to `devices/servers/<name>.json` -- baremetal included, since 4.4.0.
+ * written to `devices/servers/<name>.json` -- baremetal included, since 4.3.0.
  * Protocol configuration is the editor's, so there is no second store and no
  * fork at each call site: what differs between a microcontroller and a Runtime
  * v4 target is which fields the target lets the user set, and saying that is

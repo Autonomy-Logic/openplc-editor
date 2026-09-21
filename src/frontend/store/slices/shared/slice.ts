@@ -1165,13 +1165,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // drift auto-recover on first open.
       const pous = data.projectData.pous
 
-      // Refresh placed library-block variant types from the current libraries
-      // before the flows enter the store, so existing projects pick up library
-      // type changes (e.g. ADR: ULINT -> __XWORD). Blocks backed by a
-      // user-defined POU are skipped — the project owns their interface. A
-      // no-op when the libraries haven't loaded yet or nothing is stale.
+      // Refresh placed block variant types before the flows enter the store, so
+      // existing projects pick up library type changes (e.g. ADR: ULINT ->
+      // __XWORD) and user-POU pin changes alike. A no-op when nothing is stale.
       const systemLibraries = getState().libraries.system
-      const userPouNames = pous.filter((pou) => pou.pouType !== 'program').map((pou) => pou.name)
+      const userPous = pous.filter((pou) => pou.pouType !== 'program')
+      const userPouNames = userPous.map((pou) => pou.name.toUpperCase())
       const restampChanges: RestampChange[] = []
       let restampPoolEmpty = false
       let restampModified = false
@@ -1192,7 +1191,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         for (const node of nodes ?? []) {
           if (!hasLegacyInOutOutputHandle(node as Parameters<typeof hasLegacyInOutOutputHandle>[0])) continue
           const name = (node as { data?: { variant?: { name?: string } } }).data?.variant?.name
-          if (name !== undefined && userPouNames.includes(name)) convertibleInOutPous.add(pouName)
+          if (name !== undefined && userPouNames.includes(name.toUpperCase())) convertibleInOutPous.add(pouName)
           else if (name !== undefined) libraryInOutBlocks.add(name)
         }
       }
@@ -1202,7 +1201,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           // The loaded project data is frozen, so clone before re-stamping
           // (which mutates variant types in place) and hand the store the copy.
           const bodyValue = structuredClone(pou.body.value) as LadderFlowType
-          const report = restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames, { pou: pou.name })
+          const report = restampFlowLibraryVariants([bodyValue], systemLibraries, userPous, { pou: pou.name })
           restampChanges.push(...report.changes)
           restampPoolEmpty = restampPoolEmpty || report.poolEmpty
           for (const rung of bodyValue.rungs ?? []) scanLegacyInOut(rung.nodes, pou.name)
@@ -1217,7 +1216,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
         if (pou.body.language === 'fbd') {
           const bodyValue = structuredClone(pou.body.value) as FBDFlowType
-          const report = restampFlowLibraryVariants([bodyValue], systemLibraries, userPouNames, { pou: pou.name })
+          const report = restampFlowLibraryVariants([bodyValue], systemLibraries, userPous, { pou: pou.name })
           restampChanges.push(...report.changes)
           restampPoolEmpty = restampPoolEmpty || report.poolEmpty
           scanLegacyInOut(bodyValue.rung?.nodes, pou.name)
