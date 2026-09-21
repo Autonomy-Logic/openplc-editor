@@ -5,6 +5,7 @@ import { StateCreator } from 'zustand'
 import type {
   ModbusIOPoint,
   OpcUaServerConfig,
+  PLCPou,
   PLCServer,
   PLCVariable,
   S7CommLogging,
@@ -41,7 +42,7 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { buildScanContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
@@ -52,6 +53,7 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
@@ -654,17 +656,57 @@ const reconcileVariablesText = (
   }
 }
 
+/**
+ * Fold a variables mutation back into the declaration text.
+ *
+ * The text is the source of truth (DOPE-650), so this PATCHES it rather than
+ * regenerating it. It used to call `generateIecVariablesToString` over the
+ * whole model and overwrite the buffer, which meant the first cell edit after
+ * the user typed a comment deleted that comment, along with their blank lines
+ * and alignment. `applyVariablesToText` splices only the fields that changed.
+ *
+ * It also no longer returns early when the editor is in table display. Under
+ * the old contract the text existed only while it failed to parse, so there
+ * was nothing to keep current outside code mode; now it is the artifact that
+ * gets written to disk, and a table edit that did not reach it would be lost
+ * on save.
+ */
+/**
+ * A POU's declaration text, the artifact the project file actually stores.
+ *
+ * Optional on the type because it is absent only for a POU built in memory
+ * this session and never yet serialised; everything loaded from disk has it,
+ * because the loader keeps the block it read (DOPE-650). `undefined` means
+ * "no text yet", which is the one case that has to be serialised from the
+ * model rather than patched.
+ */
+const readPouVariablesText = (pou: PLCPou): string | undefined =>
+  (pou as PLCPou & { variablesText?: string }).variablesText
+
+const writePouVariablesText = (pouName: string, text: string, getState: ProjectGetState): void => {
+  getState().projectActions.setPouVariablesText(pouName, text)
+}
+
 const regenerateVariablesText = (pouName: string | undefined, getState: ProjectGetState): void => {
   /* istanbul ignore if -- same callsite guarantees as reconcileVariablesText */
   if (!pouName) return
   const state = getState()
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  if (!pou) return
+
+  const variables = pou.interface?.variables ?? []
+  const context = buildScanContext(state.project.data.pous, state.project.data.dataTypes, state.libraries)
+  const current = readPouVariablesText(pou)
+  const nextText =
+    current === undefined ? generateIecVariablesToString(variables) : applyVariablesToText(current, variables, context)
+
+  if (nextText !== current) writePouVariablesText(pouName, nextText, getState)
+
   const editorModel =
     state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
   if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return
   if (editorModel.variable.display !== 'code') return
-  const pou = state.project.data.pous.find((p) => p.name === pouName)
-  const newText = generateIecVariablesToString(pou?.interface?.variables ?? [])
-  state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
+  state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: nextText })
 }
 
 // Same contract as the variables pair above, for the `.dt` code view.
@@ -973,6 +1015,20 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         produce((slice: ProjectSlice) => {
           const pou = slice.project.data.pous.find((p) => p.name === name)
           if (pou?.interface) pou.interface.returnType = returnType
+        }),
+      )
+    },
+    /**
+     * Record the POU's declaration text. This is the artifact the project file
+     * stores and the thing the variables table is a view of (DOPE-650), so it
+     * is written on every change rather than only while the text fails to
+     * parse, which was the old contract.
+     */
+    setPouVariablesText: (name, text) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const pou = slice.project.data.pous.find((p) => p.name === name) as { variablesText?: string } | undefined
+          if (pou) pou.variablesText = text
         }),
       )
     },

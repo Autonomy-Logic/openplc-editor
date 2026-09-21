@@ -87,7 +87,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       rearrangeVariables,
       updatePouDocumentation,
       updatePouReturnType,
-      clearPouVariablesText,
+      setPouVariablesText,
       setPouVariables,
       updatePou,
       updateVariable,
@@ -966,14 +966,19 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
-      if (freshPou && 'variablesText' in freshPou) {
-        clearPouVariablesText(editor.meta.name)
-      }
-
-      // A buffer keeping the typed form drifts from the canonical LSP document and loses its colours.
-      const canonical = generateIecVariablesToString(freshVariables)
-      setEditorCode(canonical)
-      lastParsedCodeRef.current = canonical
+      // The text the user wrote IS the declaration (DOPE-650) — record it as
+      // the POU's, rather than clearing it and letting a serialisation of the
+      // model take its place.
+      //
+      // The buffer is deliberately left alone. It used to be replaced with
+      // `generateIecVariablesToString(freshVariables)` so it would match the
+      // synthesised LSP document line for line and keep its colours; that
+      // re-canonicalisation is what deleted every comment the moment the user
+      // clicked away. The LSP stub is now built from this same text
+      // (`serializePouSignatureToSTWithBodyOffset`), so the two agree without
+      // anything having to be rewritten.
+      setPouVariablesText(editor.meta.name, editorCode)
+      lastParsedCodeRef.current = editorCode
 
       return true
     } catch (err) {

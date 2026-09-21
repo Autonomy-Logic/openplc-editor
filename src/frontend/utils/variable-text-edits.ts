@@ -305,3 +305,53 @@ function reorderDeclarations(text: string, nextVariables: PLCVariable[], context
 
   return edits.length > 0 ? applyEdits(text, edits) : text
 }
+
+/**
+ * Rewrite every alias-bound `AT` operand in `text` to the literal address it
+ * resolves to, leaving every other byte alone.
+ *
+ * For the LSP stub. STruC++ does not know what `AT Motor Start` means, and one
+ * unresolved alias breaks the VAR block, taking every symbol after it out of
+ * the POU's scope — no autocomplete, red boxes in the graphical editors. The
+ * stub used to sidestep that by being regenerated from the model, which is
+ * also why the code buffer had to be re-canonicalised to match it, which is
+ * what deleted the user's comments (DOPE-650).
+ *
+ * Substituting in place instead means the stub is the user's own text with
+ * only the alias operands swapped, so the buffer and the synthesised document
+ * agree byte for byte without anything being rewritten.
+ *
+ * `resolve` returns the literal address, or `''` for an alias no producer
+ * declares any more — in which case the whole `AT` clause is dropped, exactly
+ * as the compile-time snapshot does with an orphaned alias.
+ *
+ * Line-count invariant: only ever rewrites within a declaration line, never
+ * adds or removes one, so `bodyLineOffset` and the `pouvars://` diagnostics
+ * mirror stay correct.
+ */
+export function resolveLocationsInText(
+  text: string,
+  resolve: (location: string) => string,
+  context: ScanContext = {},
+): string {
+  const scanned = scanVariableDeclarations(text, context)
+  if (scanned.errors.length > 0) return text
+
+  const edits: TextEdit[] = []
+  for (const block of scanned.blocks) {
+    for (const declaration of block.declarations) {
+      const span = declaration.fields.location
+      if (!span) continue
+      const current = text.slice(span.start, span.end)
+      const resolved = resolve(current)
+      if (resolved === current) continue
+      edits.push(
+        resolved === ''
+          ? { span: { start: findClauseStart(text, span, 'AT'), end: span.end }, replacement: '' }
+          : { span, replacement: resolved },
+      )
+    }
+  }
+
+  return edits.length > 0 ? applyEdits(text, edits) : text
+}

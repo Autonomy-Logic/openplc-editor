@@ -13,7 +13,7 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { buildScanContext } from '../generate-iec-string-to-variables'
 import { scanVariableDeclarations } from '../variable-declaration-scanner'
-import { applyVariablesToText } from '../variable-text-edits'
+import { applyVariablesToText, resolveLocationsInText } from '../variable-text-edits'
 
 const context = buildScanContext()
 
@@ -206,5 +206,54 @@ describe('round-trip stability', () => {
     )
     expect(out).toContain('a : INT;')
     expect(out).not.toContain('unterminated')
+  })
+})
+
+describe('resolveLocationsInText, for the LSP stub', () => {
+  const aliases = new Map([
+    ['Motor Start', '%IX0.0'],
+    ['relay-1', '%QX0.1'],
+  ])
+  const resolve = (location: string) => (location.startsWith('%') ? location : (aliases.get(location) ?? ''))
+
+  it('swaps an alias for its address and leaves everything else alone', () => {
+    const text = 'VAR\n  (* keep me *)\n  start : BOOL AT Motor Start; (* and me *)\nEND_VAR'
+    const out = resolveLocationsInText(text, resolve, context)
+
+    expect(out).toBe('VAR\n  (* keep me *)\n  start : BOOL AT %IX0.0; (* and me *)\nEND_VAR')
+  })
+
+  it('passes a literal address through untouched', () => {
+    const text = 'VAR\n  a : BOOL AT %QX0.0;\nEND_VAR'
+    expect(resolveLocationsInText(text, resolve, context)).toBe(text)
+  })
+
+  it('drops the AT clause for an alias no producer declares any more', () => {
+    // An orphaned alias resolves to nothing at compile time; leaving `AT` with
+    // a dangling operand would break the VAR block for strucpp and take every
+    // symbol after it out of scope.
+    const text = 'VAR\n  a : BOOL AT Ghost Alias;\nEND_VAR'
+    expect(resolveLocationsInText(text, resolve, context)).toBe('VAR\n  a : BOOL;\nEND_VAR')
+  })
+
+  it('never changes the line count', () => {
+    // `bodyLineOffset` and the pouvars diagnostics mirror both depend on this.
+    const text = 'VAR\n  (* a *)\n  a : BOOL AT Motor Start;\n  b : BOOL AT Ghost;\n  c : BOOL AT relay-1;\nEND_VAR'
+    const out = resolveLocationsInText(text, resolve, context)
+    expect(out.split('\n')).toHaveLength(text.split('\n').length)
+  })
+
+  it('returns the text untouched when it cannot be scanned', () => {
+    const broken = 'VAR\n  (* unterminated\nEND_VAR'
+    expect(resolveLocationsInText(broken, resolve, context)).toBe(broken)
+  })
+})
+
+describe('matching by id', () => {
+  it('follows a variable through a rename when both sides carry an id', () => {
+    const text = 'VAR\n  counter : INT; (* doc *)\nEND_VAR'
+    const model = modelOf(text).map((variable) => ({ ...variable, id: 'v1' }))
+    const out = apply(text, [{ ...model[0], id: 'v1', name: 'tally' }])
+    expect(out).toBe('VAR\n  tally : INT; (* doc *)\nEND_VAR')
   })
 })

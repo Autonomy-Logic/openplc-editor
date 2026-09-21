@@ -49,22 +49,52 @@ const clickAway = async () => {
 /** Legal but non-canonical: no spaces around the colon, single-space indent. */
 const TYPED = 'VAR\n Counter:INT;\nEND_VAR'
 
-describe('VariablesEditor re-canonicalises the buffer after a commit', () => {
+/** What the user actually types: their own spacing, and a comment. */
+const TYPED_WITH_COMMENT = 'VAR\n  (* what it counts *)\n  Counter : INT;\nEND_VAR'
+
+describe('VariablesEditor keeps the buffer the user typed after a commit', () => {
   beforeEach(() => {
     toastMock.mockClear()
     getState().sharedWorkspaceActions.clearStatesOnCloseProject()
   })
 
-  it('replaces the typed text with the canonical serialisation', async () => {
+  it('keeps the typed text instead of replacing it with a serialisation', async () => {
+    // The inverse of what this asserted for DOPE-622. Re-canonicalising the
+    // buffer kept it in step with the synthesised LSP document, but it also
+    // deleted every comment and every column of alignment the user had put
+    // there (DOPE-650). The stub is now built from this same text, so the two
+    // agree without the buffer having to be rewritten.
     seedPou('Main')
     render(<VariablesEditor name='Main' />)
 
     typeInto(TYPED)
     await clickAway()
 
-    const canonical = canonicalOf('Main')
-    expect(canonical).not.toBe(TYPED)
-    expect(bufferText()).toBe(canonical)
+    expect(bufferText()).toBe(TYPED)
+    expect(canonicalOf('Main')).not.toBe(TYPED)
+  })
+
+  it('keeps a comment through a commit', async () => {
+    seedPou('Commented')
+    render(<VariablesEditor name='Commented' />)
+
+    typeInto(TYPED_WITH_COMMENT)
+    await clickAway()
+
+    expect(bufferText()).toBe(TYPED_WITH_COMMENT)
+    expect(bufferText()).toContain('(* what it counts *)')
+  })
+
+  it('records the typed text on the POU, so it survives a save', async () => {
+    seedPou('Persisted')
+    render(<VariablesEditor name='Persisted' />)
+
+    typeInto(TYPED_WITH_COMMENT)
+    await clickAway()
+
+    const pou = getState().project.data.pous.find((candidate) => candidate.name === 'Persisted')
+    expect(pou?.variablesText).toBe(TYPED_WITH_COMMENT)
+    expect(pou?.interface?.variables.map((variable) => variable.name)).toEqual(['Counter'])
   })
 
   it('leaves the typed text alone when the commit fails', async () => {

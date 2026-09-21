@@ -125,6 +125,7 @@ export type ProjectActions = {
   deletePou: (name: string) => void
   updatePouDocumentation: (name: string, documentation: string) => void
   updatePouReturnType: (name: string, returnType: string) => void
+  setPouVariablesText: (name: string, text: string) => void
   clearPouVariablesText: (name: string) => void
   updatePouName: (oldName: string, newName: string) => void
   applyPouSnapshot: (name: string, variables: PLCVariable[], body: PLCBody) => void

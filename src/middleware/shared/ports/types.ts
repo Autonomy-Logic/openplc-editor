@@ -173,6 +173,23 @@ export interface PLCPou {
   }
   body: PLCBody
   documentation?: string
+  /**
+   * The POU's `VAR … END_VAR` declarations, verbatim, as the user wrote them.
+   *
+   * This is the source of truth for the variables, and `interface.variables`
+   * is the view of it the table renders (DOPE-650). The project file has
+   * always stored the declarations as IEC text; what changed is that the text
+   * is now KEPT rather than discarded the moment it parsed.
+   *
+   * Everything the model cannot carry lives here and only here: comments,
+   * blank lines, alignment, the user's choice of declaration ordering within a
+   * block. A table edit patches this text (`applyVariablesToText`) instead of
+   * regenerating it, so editing one cell no longer deletes the rest.
+   *
+   * Optional only for a POU created in memory this session and not yet
+   * serialised; anything loaded from disk carries it.
+   */
+  variablesText?: string
 }
 
 // ---------------------------------------------------------------------------

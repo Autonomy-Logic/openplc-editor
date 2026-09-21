@@ -192,6 +192,12 @@ export const parseTextualPouFromString = (content: string, language: string, typ
         value: bodyContent,
       },
       documentation,
+      // The declaration text is the source of truth (DOPE-650): keep the block
+      // exactly as it was written, so comments, blank lines and alignment survive
+      // the round trip through the table. It used to be kept only when parsing
+      // FAILED, so a successful load silently discarded everything the model
+      // does not carry.
+      variablesText: variablesString,
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -289,6 +295,12 @@ export const parseHybridPouFromString = (content: string, language: string, type
         value: bodyContent,
       },
       documentation,
+      // The declaration text is the source of truth (DOPE-650): keep the block
+      // exactly as it was written, so comments, blank lines and alignment survive
+      // the round trip through the table. It used to be kept only when parsing
+      // FAILED, so a successful load silently discarded everything the model
+      // does not carry.
+      variablesText: variablesString,
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -422,6 +434,12 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
         value: parsedBody,
       },
       documentation,
+      // The declaration text is the source of truth (DOPE-650): keep the block
+      // exactly as it was written, so comments, blank lines and alignment survive
+      // the round trip through the table. It used to be kept only when parsing
+      // FAILED, so a successful load silently discarded everything the model
+      // does not carry.
+      variablesText: variablesString,
     }
   } catch (error: unknown) {
     if (error instanceof Error) {
