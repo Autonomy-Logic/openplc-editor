@@ -269,7 +269,12 @@ const withUsersAndProfiles = (
   ;(r as unknown as { runtime: { config: { users: unknown } } }).runtime.config.users = users
   ;(r as unknown as { runtime: { config: { server: { security_profiles: unknown } } } }).runtime.config.server = {
     security_profiles: [
-      { name: 'p', enabled: true, auth_methods: authMethods, ...(anonymousRole ? { anonymous_role: anonymousRole } : {}) },
+      {
+        name: 'p',
+        enabled: true,
+        auth_methods: authMethods,
+        ...(anonymousRole ? { anonymous_role: anonymousRole } : {}),
+      },
     ],
   }
   return r

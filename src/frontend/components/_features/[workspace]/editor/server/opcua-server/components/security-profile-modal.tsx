@@ -189,7 +189,18 @@ export const SecurityProfileModal = ({
 
     onSave(profile)
     onClose()
-  }, [isValid, name, enabled, securityPolicy, securityMode, authMethods, anonymousRole, existingProfile, onSave, onClose])
+  }, [
+    isValid,
+    name,
+    enabled,
+    securityPolicy,
+    securityMode,
+    authMethods,
+    anonymousRole,
+    existingProfile,
+    onSave,
+    onClose,
+  ])
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
