@@ -111,6 +111,7 @@ const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
       securityPolicy: 'None',
       securityMode: 'None',
       authMethods: ['Anonymous'],
+      anonymousRole: 'viewer',
     },
   ],
   security: {
