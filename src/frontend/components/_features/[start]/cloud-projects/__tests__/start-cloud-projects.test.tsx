@@ -198,10 +198,7 @@ describe('StartCloudProjects', () => {
       { id: 'c', name: 'Mango', language: 'st', updatedAt: '2026-08-25T00:00:00.000Z' },
     ]
 
-    const shown = () =>
-      screen
-        .getAllByText(/^(Zebra|Alpha|Mango)$/)
-        .map((node) => node.textContent)
+    const shown = () => screen.getAllByText(/^(Zebra|Alpha|Mango)$/).map((node) => node.textContent)
 
     beforeEach(() => {
       listRecentCloudProjects.mockResolvedValue({ status: 'ok', projects: ROWS })
