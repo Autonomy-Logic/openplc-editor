@@ -1,0 +1,94 @@
+/**
+ * The start screen's side menu. The Tutorials entry that used to sit here did
+ * nothing when clicked; Documentation replaces it and has to actually go
+ * somewhere, through the system port rather than a bare `window.open`, since
+ * the desktop hands links to the OS shell and the web to a new tab.
+ *
+ * Driven through `PlatformProvider` with stub ports and the real store, so the
+ * file runs unchanged under jest and vitest.
+ */
+
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
+
+import type { DevicePort } from '../../../middleware/shared/ports/device-port'
+import { EDITOR_CAPABILITIES } from '../../../middleware/shared/ports/platform-capabilities'
+import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
+import type { SystemPort } from '../../../middleware/shared/ports/system-port'
+import { PlatformProvider } from '../../../middleware/shared/providers'
+import type { PlatformPorts } from '../../../middleware/shared/providers/types'
+import { StartScreen } from '../start-screen'
+
+/** A port whose every method answers `undefined`, except the ones handed in. */
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy({} as T, {
+    get: (_, prop) => {
+      if (Reflect.has(overrides, prop)) return Reflect.get(overrides, prop)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
+
+/** Every URL the screen asked the platform to open, in order. */
+const openedLinks: string[] = []
+
+function makePorts(): PlatformPorts {
+  return {
+    compiler: stubPort(),
+    runtime: stubPort(),
+    debugger: stubPort(),
+    simulator: stubPort(),
+    // The screen reads both lists on mount. The stub's `undefined` would be sorted as the
+    // recent list, and the cloud section would `.catch` on it; `unavailable` hides that section.
+    project: stubPort<ProjectPort>({
+      getRecentProjects: () => Promise.resolve([]),
+      listRecentCloudProjects: () => Promise.resolve({ status: 'unavailable' }),
+    }),
+    device: stubPort<DevicePort>({ getCommunicationPorts: () => Promise.resolve([]) }),
+    orchestrator: stubPort(),
+    system: stubPort<SystemPort>({
+      openExternalLink: (url: string) => {
+        openedLinks.push(url)
+        return Promise.resolve({ success: true })
+      },
+    }),
+    window: stubPort(),
+    accelerator: stubPort(),
+    theme: stubPort(),
+    versionControl: stubPort(),
+    navigation: stubPort(),
+    library: stubPort(),
+    capabilities: EDITOR_CAPABILITIES,
+  }
+}
+
+function Wrapper({ children }: { children: ReactNode }) {
+  return <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
+}
+
+beforeEach(() => {
+  openedLinks.length = 0
+})
+
+describe('the Documentation entry', () => {
+  it('opens the Edge docs through the platform, not the browser', async () => {
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    await userEvent.click(await screen.findByRole('button', { name: /documentation/i }))
+
+    expect(openedLinks).toEqual(['https://edge.autonomylogic.com/docs'])
+  })
+
+  it('sits with the project actions, above the account', async () => {
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    const labels = (await screen.findAllByRole('button')).map((button) => button.textContent?.trim() ?? '')
+
+    // Order is part of the design: New Project, Open, Documentation, then whatever the account renders.
+    // Matched, not equalled: an icon's `<title>` leaks into `textContent` ("Plus Icon New Project").
+    expect(labels[0]).toMatch(/New Project$/)
+    expect(labels[1]).toMatch(/Open$/)
+    expect(labels[2]).toMatch(/Documentation$/)
+  })
+})

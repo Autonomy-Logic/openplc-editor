@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { useCapabilities, useDevice, useProject, useSystem, useWindow } from '../../middleware/shared/providers'
+import { DocumentationIcon } from '../assets/icons/interface/Documentation'
 import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
@@ -13,6 +14,9 @@ import { StartMainContent } from '../components/_templates/[start]/main-content'
 import { StartSideContent } from '../components/_templates/[start]/side-content'
 import { useOpenPLCStore } from '../store'
 
+/** Public docs on Autonomy Edge; the same page for every environment, so not derived from the API URL. */
+const DOCUMENTATION_URL = 'https://edge.autonomylogic.com/docs'
+
 const StartScreen = () => {
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
   // Held here because the bar orders both lists below it, not just the local one.
@@ -20,7 +24,7 @@ const StartScreen = () => {
   // Bumped when the Edge account changes, so the sibling cloud list re-reads.
   const [cloudRevision, setCloudRevision] = useState(0)
   const capabilities = useCapabilities()
-  useSystem()
+  const system = useSystem()
   const projectPort = useProject()
   const device = useDevice()
   const windowPort = useWindow()
@@ -49,6 +53,10 @@ const StartScreen = () => {
 
   const handleExitAppRequest = () => {
     windowPort.close()
+  }
+
+  const handleOpenDocumentation = () => {
+    void system.openExternalLink(DOCUMENTATION_URL)
   }
 
   useEffect(() => {
@@ -106,6 +114,10 @@ const StartScreen = () => {
             </MenuItem>
             <MenuItem ghosted onClick={handleOpenProject}>
               <FolderIcon /> Open
+            </MenuItem>
+            <MenuItem ghosted onClick={handleOpenDocumentation}>
+              {/* `shrink-0`: this label is the longest in the menu, and a flex row squeezed the icon to zero width. */}
+              <DocumentationIcon className='shrink-0' /> Documentation
             </MenuItem>
             {/* Above the divider with the actions; the account is not on the way out. */}
             <StartAccountSection />
