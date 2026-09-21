@@ -1086,13 +1086,20 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
     const freshPou = freshState.project.data.pous.find((p) => p.name === pouName)
     if (freshPou) {
       const vars = freshPou.interface?.variables ?? []
-      const iecString = generateIecVariablesToString(vars)
+      // Reclassify from the POU's OWN text when it has one, not from a
+      // re-serialisation of the model. Round-tripping through
+      // `generateIecVariablesToString` throws away the comments and spacing
+      // that only the text carries, and this runs on an external-file reload,
+      // where the text is the thing that just changed (DOPE-650).
+      const iecString = freshPou.variablesText ?? generateIecVariablesToString(vars)
       const reparsedVars = parseIecStringToVariables(
         iecString,
         freshState.project.data.pous,
         freshState.project.data.dataTypes,
         freshState.libraries,
       )
+      // `setPouVariables` carries `debug` across and patches the text, so the
+      // reclassify cannot silently clear a Debug tick or desync the two.
       freshState.projectActions.setPouVariables({ pouName, variables: reparsedVars })
 
       // Sync graphical nodes with reclassified variables

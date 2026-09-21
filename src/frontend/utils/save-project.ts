@@ -6,6 +6,8 @@
  */
 
 import type { PLCPou } from '../../middleware/shared/ports/types'
+import { parseVariableDeclarations } from './PLC/variable-declarations'
+import { applyVariablesToText } from './variable-text-edits'
 
 // ---------------------------------------------------------------------------
 // Structural types (avoids store layer import — architecture rule)
@@ -39,7 +41,7 @@ export interface EditorLike {
  * "give me a POU ready to write to disk."
  */
 export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou {
-  let next: PLCPou = pou
+  const next: PLCPou = pou
 
   if (
     editor &&
@@ -48,13 +50,65 @@ export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou
     editor.variable.display === 'code' &&
     editor.variable.code != null
   ) {
-    next = {
+    // The live buffer is the user's most recent statement of what they want,
+    // including edits they have typed but not committed. It is taken verbatim
+    // and NOT reconciled below: the model has not caught up with it yet by
+    // definition, and "reconciling" would delete what they just typed.
+    return stripGraphicalSelections({
       ...next,
       variablesText: editor.variable.code,
-    } as PLCPou & { variablesText?: string }
+    } as PLCPou & { variablesText?: string })
   }
 
-  return stripGraphicalSelections(next)
+  return stripGraphicalSelections(reconcileVariablesTextForSave(next))
+}
+
+/**
+ * Last line of defence before the text is written to disk.
+ *
+ * The store patches `variablesText` on every mutation that goes through its
+ * actions, so in practice the two already agree. This exists for the case they
+ * do not: a mutation added later that forgets to patch, or one that reaches the
+ * variables array by a route nobody anticipated. Because the text is what gets
+ * serialised, a disagreement here is a change the user made and the file never
+ * received — silent data loss, which is worth a cheap check on every save.
+ *
+ * Deliberately NOT applied to a live editor buffer. A buffer can legitimately
+ * be ahead of the model — the user typed a declaration and saved without
+ * blurring — and there is no way to tell that apart from a stale text. Between
+ * dropping something they typed and keeping something the store missed, the
+ * first is worse, so the buffer wins and only the stored text is reconciled.
+ *
+ * Resolution is one-directional and deliberate: the text is PATCHED from the
+ * model, never regenerated. The model holds the newer semantic change; the text
+ * holds the comments and formatting that only it can carry. Patching keeps
+ * both, where regenerating would trade one for the other.
+ */
+function reconcileVariablesTextForSave(pou: PLCPou): PLCPou {
+  const text = pou.variablesText
+  if (text === undefined) return pou
+
+  const variables = pou.interface?.variables ?? []
+  const parsed = parseVariableDeclarations(text)
+  // Unparseable text is preserved verbatim, as it always has been: it is the
+  // user's half-finished work and the code view is where they will fix it.
+  if (parsed.errors.length > 0) return pou
+
+  const describesSameVariables =
+    parsed.variables.length === variables.length &&
+    parsed.variables.every((candidate, index) => {
+      const expected = variables[index]
+      return (
+        candidate.name === expected.name &&
+        candidate.type.value === expected.type.value &&
+        candidate.location === expected.location &&
+        (candidate.initialValue ?? '') === (expected.initialValue ?? '') &&
+        candidate.class === expected.class
+      )
+    })
+
+  if (describesSameVariables) return pou
+  return { ...pou, variablesText: applyVariablesToText(text, variables) }
 }
 
 /**

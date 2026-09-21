@@ -645,10 +645,26 @@ const reconcileVariablesText = (
       const [first] = validation.errors
       return fail(first.message, first.title)
     }
+    // `debug` and `id` are editor metadata: the declaration text has nowhere to
+    // put them, so a re-parse always comes back with `debug: false` and no id.
+    // Replacing wholesale therefore cleared every Debug tick in the POU — tick
+    // two variables, drop a block on the ladder canvas, and the debugger
+    // silently stopped showing them. Carry them across by name.
+    const carried = new Map(currentVariables.map((variable) => [variable.name.toLowerCase(), variable]))
+    const merged = parsed.map((variable) => {
+      const previous = carried.get(variable.name.toLowerCase())
+      if (!previous) return variable
+      return {
+        ...variable,
+        debug: previous.debug ?? false,
+        ...(previous.id !== undefined ? { id: previous.id } : {}),
+      }
+    })
+
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)
-        if (target?.interface) target.interface.variables = parsed
+        if (target?.interface) target.interface.variables = merged
       }),
     )
     return ok()
@@ -698,16 +714,29 @@ const regenerateVariablesText = (pouName: string | undefined, getState: ProjectG
 
   const variables = pou.interface?.variables ?? []
   const context = buildTypeContext(state.project.data.pous, state.project.data.dataTypes, state.libraries)
-  const current = readPouVariablesText(pou)
-  const nextText =
-    current === undefined ? generateIecVariablesToString(variables) : applyVariablesToText(current, variables, context)
-
-  if (nextText !== current) writePouVariablesText(pouName, nextText, getState)
 
   const editorModel =
     state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
-  if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return
-  if (editorModel.variable.display !== 'code') return
+  const variableView =
+    editorModel !== undefined && (editorModel.type === 'plc-textual' || editorModel.type === 'plc-graphical')
+      ? editorModel.variable
+      : undefined
+  const inCodeView = variableView?.display === 'code'
+  const buffer =
+    variableView?.display === 'code' && typeof variableView.code === 'string' ? variableView.code : undefined
+
+  // Patch whichever text is the most current statement of what the user wrote.
+  // The POU's own text normally, but during a commit the POU has not received
+  // it yet and the editor buffer is ahead — patching the model's serialisation
+  // instead would throw away the comment they just typed, which is how this
+  // function used to destroy the buffer mid-commit.
+  const current = readPouVariablesText(pou) ?? buffer
+  const nextText =
+    current === undefined ? generateIecVariablesToString(variables) : applyVariablesToText(current, variables, context)
+
+  if (nextText !== readPouVariablesText(pou)) writePouVariablesText(pouName, nextText, getState)
+
+  if (!inCodeView || nextText === buffer) return
   state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: nextText })
 }
 
@@ -1099,6 +1128,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (pou.interface) pou.interface.variables = variables
         }),
       )
+      // Undo/redo and the external-file reload both land here. Without this the
+      // table reverted and the text did not, and since the text is what gets
+      // written to disk, the undo was silently discarded on the next save.
+      regenerateVariablesText(name, getState)
     },
 
     // -----------------------------------------------------------------------
@@ -1177,6 +1210,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (pou?.interface) pou.interface.variables = variables
         }),
       )
+      regenerateVariablesText(pouName, getState)
       return ok()
     },
     setGlobalVariables: ({ variables }) => {
@@ -1424,6 +1458,16 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           }
         }),
       )
+
+      // Every bound variable's `location` just changed, so every POU's text has
+      // to follow. Without this the producer said `NewAlias` and the text still
+      // said `AT OldAlias`; the text is what gets saved, so on reopen the
+      // variable was bound to an alias no producer declares — unlocated at
+      // compile time, which is the exact failure `renameAlias` exists to
+      // prevent.
+      for (const pou of getState().project.data.pous) {
+        regenerateVariablesText(pou.name, getState)
+      }
 
       return { renamed }
     },
