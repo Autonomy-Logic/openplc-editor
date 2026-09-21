@@ -2871,7 +2871,7 @@ describe('createSharedSlice', () => {
       }
 
       // DOPE-442
-      describe('a project saved before 4.4.0', () => {
+      describe('a project saved before 4.3.0', () => {
         /** A board whose Modbus lived in the VPP screen sections. */
         const legacyBoard = {
           deviceConfiguration: {
@@ -2885,7 +2885,7 @@ describe('createSharedSlice', () => {
         }
 
         it('opens with no Modbus server and leaves the old sections untouched', () => {
-          // 4.4.0 does not carry configuration forward. Nothing is promoted,
+          // 4.3.0 does not carry configuration forward. Nothing is promoted,
           // nothing is rewritten, and the project is not dirtied on open -- the
           // user creates the server again, and until then no Modbus is compiled.
           const data = { ...makeMinimalProjectResponse(), ...legacyBoard }

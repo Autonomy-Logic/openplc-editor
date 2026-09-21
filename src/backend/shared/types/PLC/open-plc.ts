@@ -512,6 +512,15 @@ const OpcUaUserSchema = z.object({
   id: z.string(),
   type: z.enum(['password', 'certificate']),
   username: z.string().nullable(),
+  /** The password, in the clear. Deliberate: how a credential is stored is a
+   *  device property, so the build derives it, and to derive it the build needs
+   *  the password. A project file containing OPC-UA users is therefore a secret
+   *  and must be handled as one. */
+  password: z.string().nullable().optional(),
+  /** Legacy: a pre-hashed credential from a project authored before the build
+   *  took over derivation. Passed through untouched so existing Runtime v4
+   *  projects keep working; it cannot be re-derived for another target, so the
+   *  build warns when one is used on a target that wants a different scheme. */
   passwordHash: z.string().nullable(),
   certificateId: z.string().nullable(),
   role: OpcUaUserRoleSchema,

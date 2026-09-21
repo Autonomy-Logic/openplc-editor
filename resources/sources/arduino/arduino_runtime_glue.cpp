@@ -20,6 +20,7 @@
 #include "debug_dispatch.hpp"
 #include "iec_retain.hpp"
 #include "openplc_retain.h"
+#include "opcua_types.h"
 
 // Placement new, used by runtime_reinit_program() to re-run the program's
 // initializers over storage that already exists. Available on every target the
@@ -76,6 +77,25 @@ static bool    software_stop   = false;
 extern "C" __attribute__((weak)) uint8_t hardwareStateSwitch(void)
 {
     return PLC_SWITCH_RUN;
+}
+
+// Weak default: a board with no resident firmware bootloader cannot honour the
+// Modbus reboot-to-bootloader command (FC 0x4C), so this is a no-op. A HAL whose
+// device has one provides a strong extern "C" override (see openplc.h).
+extern "C" __attribute__((weak)) void hardwareRebootToBootloader(void)
+{
+}
+
+// Weak defaults: a board with no programming lock is never locked, so FC 0x4C
+// is never refused and the prompt is never needed. A HAL whose device has a
+// lock (the LOGO! panel) provides strong extern "C" overrides -- see openplc.h.
+extern "C" __attribute__((weak)) uint8_t hardwareProgrammingLocked(void)
+{
+    return 0;
+}
+
+extern "C" __attribute__((weak)) void hardwarePromptUnlock(void)
+{
 }
 
 extern "C" uint8_t runtime_get_plc_state(void)
@@ -666,3 +686,46 @@ extern "C" uint8_t openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing
 {
     return strucpp::debug::handle_set(arr, elem, forcing != 0, bytes, len);
 }
+
+extern "C" uint8_t openplc_debug_write(uint8_t arr, uint16_t elem,
+                                       const uint8_t* bytes, uint16_t len)
+{
+    return strucpp::debug::handle_write(arr, elem, bytes, len);
+}
+
+extern "C" const void* openplc_debug_ptr(uint8_t arr, uint16_t elem, uint16_t* out_len)
+{
+    return strucpp::debug::handle_ptr(arr, elem, out_len);
+}
+
+// The status macros in arduino_runtime_glue.h exist so the other side of the
+// boundary never has to include debug_dispatch.hpp. This is the one place that
+// sees both, so this is where they are held to each other.
+static_assert(OPENPLC_DEBUG_STATUS_OK == strucpp::debug::STATUS_OK,
+              "OPENPLC_DEBUG_STATUS_OK drifted from strucpp::debug::STATUS_OK");
+static_assert(OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS == strucpp::debug::STATUS_OUT_OF_BOUNDS,
+              "OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS drifted from strucpp::debug::STATUS_OUT_OF_BOUNDS");
+static_assert(OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE == strucpp::debug::STATUS_DATA_TOO_LARGE,
+              "OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE drifted from strucpp::debug::STATUS_DATA_TOO_LARGE");
+
+// Same reasoning for the string wire widths. `modbus_types.h` sizes the Modbus
+// frame from them -- a frame that cannot hold the widest value skips it in
+// silence, which is how a WSTRING read came back empty rather than failing --
+// and that header is plain C++ and cannot include debug_dispatch.hpp. This is
+// again the one place that sees both.
+static_assert(OPENPLC_DEBUG_STRING_WIRE == strucpp::debug::DEBUG_STRING_WIDTH,
+              "OPENPLC_DEBUG_STRING_WIRE drifted from strucpp::debug::DEBUG_STRING_WIDTH");
+// opcua_types.h names the two string tags for plain-C callers (the branch
+// between "scalar" and "{length, data} header" is not a table lookup). This TU
+// is the only place that sees both that header and strucpp's enum, so it is
+// where the duplication is held honest.
+static_assert(OPENPLC_DEBUG_STRING_CAP == strucpp::debug::DEBUG_STRING_CAP,
+              "OPENPLC_DEBUG_STRING_CAP disagrees with strucpp's DEBUG_STRING_CAP");
+
+static_assert(OPCUA_TAG_STRING == strucpp::debug::TAG_STRING,
+              "OPCUA_TAG_STRING in opcua_types.h disagrees with strucpp's TypeTag");
+static_assert(OPCUA_TAG_WSTRING == strucpp::debug::TAG_WSTRING,
+              "OPCUA_TAG_WSTRING in opcua_types.h disagrees with strucpp's TypeTag");
+
+static_assert(OPENPLC_DEBUG_WSTRING_WIRE == strucpp::debug::DEBUG_WSTRING_WIDTH,
+              "OPENPLC_DEBUG_WSTRING_WIRE drifted from strucpp::debug::DEBUG_WSTRING_WIDTH");

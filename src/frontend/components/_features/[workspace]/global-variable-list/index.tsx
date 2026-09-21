@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { PLCGlobalVariable } from '../../../../../middleware/shared/ports/types'
-import { CodeIcon } from '../../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../../assets/icons/interface/StickArrow'
-import { TableIcon } from '../../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { serializeGlobalVariableListToText } from '../../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../../utils/PLC/global-variable-list-text-parser'
 import { InputWithRef } from '../../../_atoms/input'
 import TableActions from '../../../_atoms/table-actions'
+import { ViewModeToggle } from '../../../_atoms/view-mode-toggle'
 import { GlobalVariableListTable } from '../../../_molecules/global-variables-table'
 import { VariablesCodeEditor } from '../../../_organisms/variables-code-editor'
 import { toast } from '../../[app]/toast/use-toast'
@@ -386,33 +385,14 @@ const GlobalVariableListEditor = ({ listName }: GlobalVariableListEditorProps) =
           </div>
         )}
 
-        <div
-          aria-label='Global variable list visualization switch container'
-          className={cn('flex h-fit w-fit items-center justify-center rounded-md', {
-            'ml-auto': display === 'code',
-          })}
-        >
-          <TableIcon
-            aria-label='Global variable list table visualization'
-            onClick={() => handleVisualizationTypeChange('table')}
-            size='md'
-            currentVisible={display === 'table'}
-            className={cn(
-              display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-          <CodeIcon
-            aria-label='Global variable list code visualization'
-            onClick={() => handleVisualizationTypeChange('code')}
-            size='md'
-            currentVisible={display === 'code'}
-            className={cn(
-              display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-        </div>
+        <ViewModeToggle
+          display={display}
+          onDisplayChange={handleVisualizationTypeChange}
+          containerLabel='Global variable list visualization switch container'
+          tableLabel='Global variable list table visualization'
+          codeLabel='Global variable list code visualization'
+          className={cn({ 'ml-auto': display === 'code' })}
+        />
       </div>
 
       <div aria-label='Global variable list content container' className='flex h-full w-full flex-col overflow-hidden'>
