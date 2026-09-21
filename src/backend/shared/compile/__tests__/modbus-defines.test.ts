@@ -5,7 +5,7 @@ import { DEBUG_SLAVE, generateModbusDefines, narrowModbusTransports, selectModbu
  *
  * One rule underneath every case here: the project's `PLCServer` says WHAT is
  * served, and the board's package says what it is served OVER. Nothing reads a
- * pre-4.4.0 project's `modbus_rtu` / `modbus_tcp` sections -- 4.4.0 does not
+ * pre-4.3.0 project's `modbus_rtu` / `modbus_tcp` sections -- 4.3.0 does not
  * carry configuration forward, and a project from before it creates its server
  * again.
  */
@@ -32,9 +32,22 @@ describe('DEBUG_SLAVE', () => {
 })
 
 describe('generateModbusDefines', () => {
-  it('emits nothing without a server, because nothing else states what is served', () => {
+  it('emits nothing without a server AND without a network', () => {
     expect(generateModbusDefines({})).toBe('')
-    expect(generateModbusDefines({ serial: { baud_rate: '19200' }, network: { enabled: true } })).toBe('')
+  })
+
+  it('brings the link up with no server at all, but serves no Modbus over it', () => {
+    // The network is not Modbus's to gate. It carries the debugger, the
+    // ethernet upload, discovery, OPC-UA and S7Comm, and a project may want all
+    // of those with no Modbus server anywhere. This used to emit '' -- which on
+    // a board reached only over Ethernet produced a device that booted and
+    // could never be spoken to again.
+    const out = generateModbusDefines({ serial: { baud_rate: '19200' }, network: { enabled: true } })
+    expect(out).toContain('#define OPLC_NET_ENABLED')
+    expect(out).toContain('#define MBTCP_ETHERNET')
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('#define MBTCP\n')
+    expect(out).not.toContain('#define MBSERIAL')
   })
 
   it('emits nothing for a server that exists but is switched off', () => {
@@ -211,6 +224,34 @@ describe('generateModbusDefines', () => {
       )
     })
 
+    it('falls back to the only carrier the board declares, not to Ethernet', () => {
+      // A project that switched the network on without opening the Interface
+      // dropdown used to compile MBTCP_ETHERNET regardless of the board, which
+      // on a Wi-Fi-only ESP32 is ETH.begin() against a PHY that is not there:
+      // it compiles, links, and never gets an address.
+      const out = generateModbusDefines({ network: { enabled: true } }, 'Serial', tcpServer, ['Wi-Fi'])
+      expect(out).toContain('#define MBTCP_WIFI')
+      expect(out).not.toContain('MBTCP_ETHERNET')
+    })
+
+    it('keeps Ethernet for a board that declares both carriers', () => {
+      // Two answers means the board has not answered; Ethernet stays the
+      // historical default rather than a coin toss.
+      expect(
+        generateModbusDefines({ network: { enabled: true } }, 'Serial', tcpServer, ['Ethernet', 'Wi-Fi']),
+      ).toContain('#define MBTCP_ETHERNET')
+    })
+
+    it('lets an explicit choice beat the board declaration', () => {
+      const out = generateModbusDefines(
+        { network: { enabled: true, interface: 'Ethernet' as const } },
+        'Serial',
+        tcpServer,
+        ['Wi-Fi'],
+      )
+      expect(out).toContain('#define MBTCP_ETHERNET')
+    })
+
     it('passes an already-formatted MAC or IP through untouched', () => {
       // Escape hatch for shapes the formatter would mangle.
       const state = { network: { enabled: true, mac_address: '0xAA,0xBB,0xCC,0xDD,0xEE,0xFF', ip_address: 'DHCP' } }
@@ -286,7 +327,7 @@ describe('selectModbusServer', () => {
  * Deleting the server has to stop Modbus. It did not, for one release of this
  * branch: the emitter fell back to the board's screen sections, which nothing
  * ever cleared, so a board kept serving a configuration the user had removed.
- * That fallback is gone with the rest of the pre-4.4.0 compatibility.
+ * That fallback is gone with the rest of the pre-4.3.0 compatibility.
  */
 describe('a server the user deleted', () => {
   it('stops Modbus, whatever the board screens still hold', () => {
@@ -295,7 +336,14 @@ describe('a server the user deleted', () => {
       serial: { baud_rate: '19200', enable_rs485_en_pin: true, rs485_en_pin: '17' },
       network: { enabled: true, wifi_ssid: 'planta' },
     }
-    expect(generateModbusDefines(leftovers, 'Serial', server)).toBe('')
+    const out = generateModbusDefines(leftovers, 'Serial', server)
+    // No Modbus, in any of its forms...
+    expect(out).not.toContain('#define MODBUS_ENABLED')
+    expect(out).not.toContain('#define MBSERIAL')
+    expect(out).not.toContain('#define MBTCP_PORT')
+    // ...but the network the project still asks for stays up. Deleting a Modbus
+    // server is not a request to take the board off the network.
+    expect(out).toContain('#define OPLC_NET_ENABLED')
   })
 })
 

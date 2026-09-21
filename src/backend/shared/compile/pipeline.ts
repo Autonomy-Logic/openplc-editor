@@ -20,6 +20,9 @@
  * `emit` callback (progress events).  No disk I/O, no globals.
  */
 
+import { buildOpcUaRuntimeConfig, generateOpcUaHeaderContent } from '../../../frontend/utils/opcua'
+import type { S7CommSlaveConfigLike } from '../../../frontend/utils/s7comm'
+import { generateS7CommHeaderContent } from '../../../frontend/utils/s7comm'
 import { isVersionAtLeast } from '../../../frontend/utils/semver'
 import type {
   CompilerPlatformPort,
@@ -48,6 +51,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // (plural `configurations`) and converts at the pipeline entry — see C1
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
+import { materialiseOpcUaCredentials } from './opcua-credentials'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
@@ -55,6 +59,7 @@ import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
+import { selectThirdPartyLibraries } from './third-party-libraries'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -130,6 +135,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Exact Arduino core version to install/verify before linking a prebuilt
    *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
   coreVersion?: string
+  /** Upload transport for arduino-cli targets. Absent/"serial" (default):
+   *  serial-port upload. "ethernet": network upload, with the device IP passed
+   *  as arduino-cli's `--port`. From `target.uploadMethod`. */
+  uploadMethod?: 'serial' | 'ethernet'
   /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
    *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
    *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
@@ -229,6 +238,12 @@ export interface RunCompilePipelineArgs {
    *  fall back to its legacy `devices/configuration.json` disk
    *  read.  Ignored entirely on simulator + runtime-v3/v4 branches. */
   communicationPort?: string
+  /** Device IP for a board whose VPP declares `uploadMethod: "ethernet"` — the
+   *  ethernet counterpart of `communicationPort`, and handled the same way: the
+   *  caller's value (the CLI's `--host`, the store's in the GUI) is preferred
+   *  by the adapter over the project file's persisted `runtimeIpAddress`, which
+   *  lags whatever the user just asked for. Absent on every serial board. */
+  runtimeIpAddress?: string
   /** Optional cache hook for the strucpp debug-map.json bytes — the
    *  debugger reads these out of memory to map debug variable
    *  addresses without re-reading the file.  Called once per
@@ -399,6 +414,7 @@ async function runCompilePipelineInner(
     arduinoCliParallel,
     deviceContext,
     communicationPort,
+    runtimeIpAddress,
     cacheDebugData,
     vppModbusState,
     persistentStorage,
@@ -617,8 +633,22 @@ async function runCompilePipelineInner(
     let confs
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
+      // Derive each OPC-UA user's stored credential for this target, once,
+      // before anything consumes `servers`. This is the point that knows both
+      // the project and the target, and the storage format is a device property.
+      // See ./opcua-credentials.ts.
+      const opcuaCredentialServers = await materialiseOpcUaCredentials(
+        processedData.servers,
+        targetCapabilities.opcua,
+        (message) => emit({ stage: 'confs', message, level: 'warning' }),
+      )
+
       confs = generateRuntimeConfs({
-        servers: processedData.servers as never,
+        // generateRuntimeConfs declares a stricter inline server shape than
+        // PLCServer (bufferMapping required, etc.); the cast bridges that
+        // cross-module difference, not the credentials type which is now
+        // concrete.
+        servers: opcuaCredentialServers as never,
         remoteDevices: processedData.remoteDevices as never,
         instances: processedData.configuration.resource.instances.map(
           (inst: { name: string; task: string; program: string }) => ({
@@ -926,7 +956,13 @@ async function runCompilePipelineInner(
   // returns false.
   emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
   const libInstall = await port.installArduinoLib(
-    { libId: '', extraLibraries: boardEntry.extra_libraries ?? [] },
+    {
+      libId: '',
+      extraLibraries: boardEntry.extra_libraries ?? [],
+      // Capability-driven, not board-name-driven: a target gets the OPC-UA stack
+      // because it declares `opcuaServer`.
+      thirdPartyLibraries: selectThirdPartyLibraries(targetCapabilities),
+    },
     makePlatformLog(emit, 'lib-install'),
   )
   if (!libInstall.ok) {
@@ -951,8 +987,30 @@ async function runCompilePipelineInner(
     // "is the server on the default port" test always compared against `Serial`
     // too. Harmless only for as long as every package declares `Serial`.
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
+    ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
   })
+
+  // A board reached only over Ethernet must never be handed an image with no
+  // network. The firmware brings the link up on OPLC_NET_ENABLED, so its
+  // absence here is the difference between a device that can be reflashed and
+  // one that boots fine and is gone: no debugger, no upload, no discovery, and
+  // nothing on the wire to say why. This was a warning ("Modbus TCP ... was
+  // left out of the build") and the build continued -- which is how a LOGO! got
+  // bricked from a project whose only fault was having no Modbus server.
+  //
+  // Refusing is safe precisely BECAUSE it is recoverable: the user turns the
+  // Network screen on and builds again. Shipping the image is the unrecoverable
+  // direction.
+  if (boardEntry.uploadMethod === 'ethernet' && !definesH.includes('#define OPLC_NET_ENABLED')) {
+    return bailError(
+      emit,
+      'validate',
+      'This board is programmed over Ethernet, so a build with the network disabled could never be ' +
+        'reached again — not by the debugger, the uploader, or Search. Enable the Network screen for ' +
+        'this device and build again.',
+    )
+  }
 
   // VPP config header — emitted only for arduino-cli targets whose
   // capabilities flip `vppIo: true` (Arduino Opta + future P1AM).
@@ -963,6 +1021,91 @@ async function runCompilePipelineInner(
   // and the firmware skeleton's placeholder `vpp_config.h` stays in
   // place (drivers can still `#include "vpp_config.h"` unconditionally).
   const vppConfigH = targetCapabilities.vppIo ? generateVppConfigContent({ vendorScreenData }) : undefined
+
+  // OPC-UA config header, emitted only for baremetal targets whose VPP flips
+  // `opcuaServer: true`. Reuses the same resolved address space the Runtime v4
+  // branch hands to `generateRuntimeConfs`, so a variable resolves to one
+  // `(arr, elem)` pair whichever runtime is built. A project with no enabled
+  // server still gets a disabled header, because the runtime includes it always.
+  // The in-process simulator runs USER LOGIC ONLY. It has no Ethernet and no
+  // serial peripheral, so no server it could be handed is reachable — the same
+  // reason Python function blocks are dropped for it.
+  //
+  // It still declares `opcuaServer` / `s7Server` / `modbusTcpServer` in
+  // hals.json, and that is deliberate: those flags keep the server options
+  // offered in the UI so a project authored for Runtime v4 is not stripped of
+  // its configuration while someone simulates it. They answer "may the UI
+  // offer a server?", never "can this firmware host one?".
+  //
+  // Modbus was already excluded this way. OPC-UA and S7 were not, and OPC-UA
+  // failed loudly: `opcua_config.h` came out with `OPCUA_ENABLED 1`, which put
+  // `#include <open62541.h>` in front of a compiler whose library set has no
+  // such header, so every simulator build of a project with an enabled OPC-UA
+  // server died at the preprocessor.
+  const targetHostsServers = !targetCapabilities.isInProcessSimulator
+
+  let opcuaConfigH: string | undefined
+  if (targetCapabilities.opcuaServer && targetCapabilities.opcua && targetHostsServers) {
+    try {
+      // Same derivation as the Runtime v4 branch: the credential this device
+      // stores is this device's property, and here is where the target is known.
+      const opcuaCredentialServers = await materialiseOpcUaCredentials(
+        processedData.servers,
+        targetCapabilities.opcua,
+        (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      )
+      const resolvedOpcUa = buildOpcUaRuntimeConfig(
+        opcuaCredentialServers,
+        debugMapJson,
+        processedData.configuration.resource.instances.map((inst: { name: string; task: string; program: string }) => ({
+          name: inst.name,
+          task: inst.task,
+          program: inst.program,
+        })),
+        (message: string) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      )
+      opcuaConfigH = generateOpcUaHeaderContent({
+        resolved: resolvedOpcUa,
+        profile: targetCapabilities.opcua,
+        buildEpochSeconds: Math.floor(Date.now() / 1000),
+        warn: (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      })
+    } catch (error) {
+      return bailError(
+        emit,
+        'firmware-bundle',
+        `Error generating OPC-UA config header: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  // S7Comm config header, emitted only for baremetal targets whose VPP flips
+  // `s7Server: true`. A project with no enabled S7 server still gets a disabled
+  // header rather than none, because the runtime includes it unconditionally.
+  let s7commConfigH: string | undefined
+  if (targetCapabilities.s7Server && targetCapabilities.s7 && targetHostsServers) {
+    try {
+      // Filter on ENABLED, like the OPC-UA lookup in generate-opcua-config —
+      // otherwise a disabled first S7 server hides an enabled second one, and
+      // the build ships the disabled config.
+      const s7Server = (processedData.servers ?? []).find(
+        (server: { protocol?: string; s7commSlaveConfig?: { server?: { enabled?: boolean } } }) =>
+          server.protocol === 's7comm' && server.s7commSlaveConfig?.server?.enabled,
+      ) as { s7commSlaveConfig?: S7CommSlaveConfigLike } | undefined
+
+      s7commConfigH = generateS7CommHeaderContent({
+        config: s7Server?.s7commSlaveConfig ?? null,
+        profile: targetCapabilities.s7,
+        warn: (message) => emit({ stage: 'firmware-bundle', message, level: 'warning' }),
+      })
+    } catch (error) {
+      return bailError(
+        emit,
+        'firmware-bundle',
+        `Error generating S7Comm config header: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
 
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
@@ -975,6 +1118,8 @@ async function runCompilePipelineInner(
     cBlocks,
     definesH,
     vppConfigH,
+    opcuaConfigH,
+    s7commConfigH,
     firmwareSkeleton,
   })
 
@@ -1049,6 +1194,15 @@ async function runCompilePipelineInner(
       // caller didn't supply one (editor: fall back to the disk-
       // persisted value in `devices/configuration.json`).
       port: communicationPort ?? '',
+      // Upload transport declared by the board's VPP target. Default "serial";
+      // "ethernet" makes the editor pass the device IP as --port.
+      uploadMethod: boardEntry.uploadMethod,
+      // The address the caller asked for -- `openplc-cli --host`, or the
+      // store's value in the GUI. The adapter prefers it over the project
+      // file's persisted `runtimeIpAddress`, which is how a serial port has
+      // always worked and is what makes `--host` mean anything: it reached the
+      // pipeline all along and stopped here.
+      ...(runtimeIpAddress ? { ipAddress: runtimeIpAddress } : {}),
     },
     makePlatformLog(emit, 'upload'),
   )
