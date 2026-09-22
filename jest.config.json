@@ -23,7 +23,7 @@
     "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/configs/mocks/fileMock.js",
     "\\.(css|less|sass|scss)$": "identity-obj-proxy",
     "^monaco-editor$": "<rootDir>/configs/mocks/monaco-editor-mock.js",
-    "^@chevrotain/(cst-dts-gen|gast|regexp-to-ast|utils)$": "<rootDir>/node_modules/@chevrotain/$1/lib/src/api.js"
+    "^strucpp$": "<rootDir>/node_modules/strucpp/dist/parser-bundle.cjs"
   },
   "testEnvironment": "jsdom",
   "workerIdleMemoryLimit": "1GB",
@@ -44,7 +44,7 @@
     "src/backend/shared/print/__tests__/fixtures/"
   ],
   "transformIgnorePatterns": [
-    "node_modules/(?!(strucpp|chevrotain|@chevrotain|lodash-es|regexp-to-ast)/)"
+    "node_modules/(?!strucpp)"
   ],
   "transform": {
     "\\.(ts|tsx|js|jsx)$": [

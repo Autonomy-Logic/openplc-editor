@@ -127,7 +127,14 @@ function buildStructure(source: string, starts: number[], name: string, definiti
   for (const field of fields) {
     if (!isRecord(field)) continue
     const names = Array.isArray(field.names) ? field.names : []
-    const nameSpans = Array.isArray(field.nameSpans) ? field.nameSpans : []
+    // One span per declared name, as the parser reports them. The field's name
+    // is read back through its span because the AST folds case, so a field
+    // without one cannot be named at all — an empty name is not a degraded
+    // answer, it is a wrong one.
+    const nameSpans = Array.isArray(field.nameSpans) ? field.nameSpans.filter(isSpanShape) : []
+    if (nameSpans.length !== names.length) {
+      return { error: `data type "${name}" has a field this editor cannot read` }
+    }
     const typeNode = isRecord(field.type) ? field.type : undefined
     if (!typeNode) continue
 
@@ -139,10 +146,8 @@ function buildStructure(source: string, starts: number[], name: string, definiti
     // A field naming several variables is one declaration in the text and
     // several fields in the model, exactly as in a VAR block.
     names.forEach((_folded, index) => {
-      const span: StrucppSpan | undefined = nameSpans[index]
-      const fieldName = span ? sliceSpan(source, starts, span) : ''
       variable.push({
-        name: fieldName,
+        name: sliceSpan(source, starts, nameSpans[index]),
         type: classifyType(typeText, FIELD_TYPE_CONTEXT),
         // A structure field's initial value is wrapped, unlike a variable's.
         ...(initialValue !== '' ? { initialValue: { simpleValue: { value: initialValue } } } : {}),
