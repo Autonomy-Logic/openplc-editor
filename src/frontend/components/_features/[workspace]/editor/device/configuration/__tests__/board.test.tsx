@@ -1,5 +1,6 @@
 import { openPLCStoreBase } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
+import type { PackagePort } from '@root/middleware/shared/ports/package-port'
 import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import { PlatformProvider } from '@root/middleware/shared/providers'
@@ -41,6 +42,7 @@ const VPP_BOARD_NAME = 'Acme SLM-RP4'
 function renderBoard(
   selectedDevice: SelectedDevice | null,
   capabilities: PlatformPorts['capabilities'] = WEB_CAPABILITIES,
+  packages?: PackagePort,
 ) {
   const { deviceActions } = openPLCStoreBase.getState()
   deviceActions.setAvailableOptions({
@@ -66,6 +68,7 @@ function renderBoard(
     versionControl: stubPort(),
     navigation: stubPort(),
     library: stubPort(),
+    packages,
     capabilities,
   }
   render(
@@ -187,6 +190,28 @@ describe('Board device list', () => {
       openPLCStoreBase.getState().deviceActions.setDeviceBoard('Vanished SLM-RP4')
       renderBoard(null, EDITOR_CAPABILITIES)
       expect(screen.queryByText(/Not available on the selected vPLC/)).toBeNull()
+    })
+  })
+
+  describe('VPP pin drift', () => {
+    it('treats an authoritative vpp:null as "no package", not a reason to fall back to the local pin', async () => {
+      const { deviceActions } = openPLCStoreBase.getState()
+      deviceActions.setDeviceBoard(VPP_BOARD_NAME)
+      deviceActions.setVppPackagePin(VPP_BOARD_NAME, {
+        packageId: 'com.acme.backplane',
+        version: '1.0.0',
+        contentHash: 'sha256:recorded',
+      })
+      // A stale local pin that, if consulted at all, matches the recording and
+      // would report no drift — the bug this proves fixed is falling back to it.
+      const getPackagePin = jest.fn(() =>
+        Promise.resolve({ packageId: 'com.acme.backplane', version: '1.0.0', contentHash: 'sha256:recorded' }),
+      )
+
+      renderBoard({ ...holder, vpp: null }, WEB_CAPABILITIES, stubPort<PackagePort>({ getPackagePin }))
+
+      expect(await screen.findByText(/is not installed/)).toBeTruthy()
+      expect(getPackagePin).not.toHaveBeenCalled()
     })
   })
 })

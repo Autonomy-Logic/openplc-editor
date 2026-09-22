@@ -280,9 +280,8 @@ const Board = memo(function () {
     // that vPLC runs, and the browser's copy is only what it managed to fetch.
     // Fall back to the loaded package when no vPLC is the target — the desktop,
     // and a host that reports no binding.
-    const authoritative = targetVpp
-      ? Promise.resolve<VppPackagePin | null>(targetVpp)
-      : packages.getPackagePin(vppPackageId)
+    const authoritative =
+      targetVpp !== undefined ? Promise.resolve<VppPackagePin | null>(targetVpp) : packages.getPackagePin(vppPackageId)
     void authoritative.then((installed) => {
       if (cancelled) return
       const recorded = recordedPins?.[deviceBoard]
