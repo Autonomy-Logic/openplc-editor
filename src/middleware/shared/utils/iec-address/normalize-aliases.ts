@@ -17,7 +17,7 @@
  * console report without any of them going out of step.
  */
 
-import { isLegalIdentifier } from '../../../../frontend/utils/keywords'
+import { aliasRejectionReason, validateAliasName } from './alias-registry'
 
 /** One alias that has to change, and what it has to change to. */
 export interface AliasRename {
@@ -39,9 +39,9 @@ export interface AliasRename {
 export function normalizeAliasName(alias: string, taken: ReadonlySet<string>): string {
   let candidate = alias.trim().replace(/[^A-Za-z0-9_]/g, '_')
   if (candidate === '' || /^[0-9]/.test(candidate)) candidate = `_${candidate}`
-  // A reserved word is a legal-looking identifier the compiler will not accept,
+  // A reserved word is a legal-looking identifier the parser will not accept,
   // so it needs the same treatment as an illegal character.
-  if (!isLegalIdentifier(candidate)[0]) candidate = `${candidate}_alias`
+  if (!validateAliasName(candidate).ok) candidate = `${candidate}_alias`
 
   if (!taken.has(candidate.toLowerCase())) return candidate
   for (let suffix = 2; ; suffix++) {
@@ -61,15 +61,14 @@ export function planAliasNormalization(aliases: readonly string[]): AliasRename[
   const renames: AliasRename[] = []
   // Legal aliases are reserved up front so a repaired one cannot collide with
   // a name that was already fine and is staying put.
-  const taken = new Set(aliases.filter((alias) => isLegalIdentifier(alias)[0]).map((a) => a.toLowerCase()))
+  const taken = new Set(aliases.filter((alias) => validateAliasName(alias).ok).map((a) => a.toLowerCase()))
 
   for (const alias of aliases) {
     if (alias.trim() === '') continue
-    const [legal, reason] = isLegalIdentifier(alias)
-    if (legal) continue
+    if (validateAliasName(alias).ok) continue
     const to = normalizeAliasName(alias, taken)
     taken.add(to.toLowerCase())
-    renames.push({ from: alias, to, reason })
+    renames.push({ from: alias, to, reason: aliasRejectionReason(alias) })
   }
 
   return renames

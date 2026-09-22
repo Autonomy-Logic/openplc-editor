@@ -120,17 +120,15 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
     state.projectActions.regenerateGlobalVariableListText(listName)
   }
 
+  // `regenerateVariablesText` patches the POU's declaration text in place and
+  // carries the result into an open code buffer. It is called rather than
+  // serialising the model over the top, which was two defects at once: the
+  // stored `variablesText` kept the OLD type name, so a toggle to code view and
+  // back brought it straight back and the compile failed, and the buffer was
+  // replaced with `generateIecVariablesToString(...)`, which is precisely the
+  // comment loss this change exists to remove.
   for (const pouName of affectedPous) {
-    const model = state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
-    if (!model || (model.type !== 'plc-textual' && model.type !== 'plc-graphical')) continue
-    if (model.variable.display !== 'code') continue
-    const pou = state.project.data.pous.find((p) => p.name === pouName)
-    /* istanbul ignore next -- defensive: a pou-variable reference implies the POU exists */
-    if (!pou) continue
-    state.editorActions.updateModelVariablesForName(pouName, {
-      display: 'code',
-      code: generateIecVariablesToString(pou.interface?.variables ?? []),
-    })
+    state.projectActions.regeneratePouVariablesText(pouName)
   }
 }
 
@@ -1514,6 +1512,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
+
+      if (aliasRepairs.length > 0) {
+        // A legacy-alias repair changed the project, so it is marked unsaved —
+        // all of it, not the files the repair happened to touch, and here
+        // rather than where the repair runs, because the registry above is
+        // built afterwards and starts everything saved.
+        //
+        // All of it, because one rename spans the producer that declares the
+        // alias and every POU that binds it. Saving one without the other is
+        // worse than not saving at all: the pin mapping takes the new name, the
+        // declaration keeps the old one, and on the next open there is nothing
+        // left to repair from — the binding is simply orphaned.
+        getState().fileActions.setAllToUnsaved()
+      }
 
       // Open the default tab for the project type:
       //   - Library projects: the manifest (`library.json`) — it's

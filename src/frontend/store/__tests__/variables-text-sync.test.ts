@@ -90,6 +90,45 @@ describe('every writer keeps the text in step with the model', () => {
     expect(textOf('Removed')).toContain('(* mine *)')
   })
 
+  it('rearrangeVariables patches the text', () => {
+    // The only local mutator that did not. The table showed the new order, the
+    // text kept the old one, and the next toggle to code view and back — which
+    // re-parses the text — put the rows back where they were.
+    seed('Reordered', 'VAR\n  (* mine *)\n  a : INT;\n  b : BOOL;\nEND_VAR', [variable('a'), variable('b', 'BOOL')])
+
+    getState().projectActions.rearrangeVariables({
+      scope: 'local',
+      associatedPou: 'Reordered',
+      rowId: 0,
+      newIndex: 1,
+    })
+
+    expect(varsOf('Reordered').map((v) => v.name)).toEqual(['b', 'a'])
+    expect(textOf('Reordered')).toBe('VAR\n  (* mine *)\n  b : BOOL;\n  a : INT;\nEND_VAR')
+  })
+
+  it('a data type rename reaches the text', () => {
+    // `propagateDatatypeRename` rewrites `variable.type` on every POU, and the
+    // shared slice follows it with this call for each affected POU. Without it
+    // the table showed the new type name and the text kept the old one, so the
+    // next toggle to code view brought the old one back and the compile failed
+    // on a type that no longer exists.
+    expect(
+      getState().projectActions.createDatatype({
+        data: { name: 'MotorDef', derivation: 'structure', variable: [] },
+      }).ok,
+    ).toBe(true)
+    seed('Typed', 'VAR\n  (* mine *)\n  m : MotorDef;\nEND_VAR', [
+      { ...variable('m'), type: { definition: 'user-data-type', value: 'MotorDef' } },
+    ])
+
+    getState().projectActions.propagateDatatypeRename('MotorDef', 'DriveDef')
+    getState().projectActions.regeneratePouVariablesText('Typed')
+
+    expect(varsOf('Typed')[0].type.value).toBe('DriveDef')
+    expect(textOf('Typed')).toBe('VAR\n  (* mine *)\n  m : DriveDef;\nEND_VAR')
+  })
+
   it('renameAlias patches the text of every bound variable', () => {
     // The producer said the new name and the text still said the old one, so on
     // reopen the variable was bound to an alias nothing declares — unlocated at

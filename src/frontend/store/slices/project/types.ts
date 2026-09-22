@@ -135,6 +135,16 @@ export type ProjectActions = {
    * leaving a stale one behind.
    */
   setPouVariablesText: (name: string, text: string, unparsed?: boolean) => void
+  /**
+   * Patch a POU's declaration text to match its variables, and carry the result
+   * into an open code buffer.
+   *
+   * The same step every variable mutation in this slice runs, exposed for the
+   * cascades that live outside it — a data type rename reaches POU variables
+   * through `propagateDatatypeRename`, and the text has to follow or the old
+   * type name comes back on the next toggle to code view.
+   */
+  regeneratePouVariablesText: (name: string) => void
   clearPouVariablesText: (name: string) => void
   updatePouName: (oldName: string, newName: string) => void
   applyPouSnapshot: (name: string, variables: PLCVariable[], body: PLCBody) => void

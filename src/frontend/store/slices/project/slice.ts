@@ -1458,6 +1458,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (scope === 'global-variable-list') clearGlobalVariableListText(slice.project.data, associatedList)
         }),
       )
+      // Reordering is a change to the declarations like any other, and the text
+      // is what the file holds. Without this the table showed the new order, the
+      // text kept the old one, and the next toggle to code view and back —
+      // which re-parses the text — put the rows back where they were.
+      if (scope === 'local') regenerateVariablesText(associatedPou, getState)
     },
 
     /**
@@ -1776,6 +1781,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
     reconcileDatatypeText: (name) => reconcileDatatypeText(name, getState, setState),
     regenerateDatatypeText: (name) => regenerateDatatypeText(name, getState),
+    regeneratePouVariablesText: (name) => regenerateVariablesText(name, getState),
     setUnparsedDataTypeFiles: (files) => {
       setState(
         produce((slice: ProjectSlice) => {

@@ -176,8 +176,15 @@ export const extractVariablesSection = (
   )
   if (lastEndVarIndex === -1) return { text: '', bodyStartIndex }
 
+  // Back up over the INDENTATION in front of the keyword, and no further. The
+  // line is taken so the user's indentation survives the round trip, but a POU
+  // may be written `PROGRAM main VAR` on one line, and taking that whole line
+  // put the header inside the declarations: the POU failed to parse, opened as
+  // an unparsed fallback, and the next save wrote its header twice.
   const lineStart = content.lastIndexOf('\n', varStartIndex) + 1
-  return { text: content.slice(lineStart, lastEndVarIndex), bodyStartIndex: lastEndVarIndex }
+  const indent = content.slice(lineStart, varStartIndex)
+  const from = /^[ \t]*$/.test(indent) ? lineStart : varStartIndex
+  return { text: content.slice(from, lastEndVarIndex), bodyStartIndex: lastEndVarIndex }
 }
 
 export const parseTextualPouFromString = (content: string, language: string, type: string): PLCPou => {

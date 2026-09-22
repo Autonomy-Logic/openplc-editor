@@ -8,6 +8,7 @@
  * Renamed, never dropped: a variable bound to a deleted alias resolves to
  * unlocated at compile time, which is a silent wrong answer.
  */
+import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import { useOpenPLCStore } from '../index'
 
 const getState = () => useOpenPLCStore.getState()
@@ -136,5 +137,49 @@ describe('normalizeProjectAliases', () => {
   it('ignores pins with no alias at all', () => {
     seedPins([{ address: '%QX0.0' }, { address: '%QX0.1', alias: '' }])
     expect(getState().projectActions.normalizeProjectAliases().repairs).toEqual([])
+  })
+})
+
+/**
+ * What a repair leaves behind for the user to save.
+ *
+ * The repair rewrites memory only. Nothing was marked unsaved, so the project
+ * could sit there repaired and unsaved, and saving ONE file — the device tab on
+ * its own — wrote the new alias to the pin mapping while the POU kept
+ * `AT Motor Start`. On the next open there is nothing left to repair from: the
+ * binding is simply orphaned.
+ */
+describe('a repaired project is marked unsaved', () => {
+  const PROJECT_JSON = JSON.stringify({
+    meta: { name: 'P', type: 'plc-project' },
+    data: { dataTypes: [], pous: [], configuration: { resource: { tasks: [], instances: [], globalVariables: [] } } },
+  })
+
+  const openWith = (alias: string, declarations: string) => {
+    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    const parsed = parseProjectFiles(
+      '/p',
+      PROJECT_JSON,
+      JSON.stringify({ deviceBoard: 'uno', communicationPort: '', compileOnly: false }),
+      JSON.stringify([{ pin: '0', pinType: 'digitalOutput', address: '%QX0.0', alias }]),
+      [{ relativePath: 'pous/programs/main.st', content: `PROGRAM main\n${declarations}\n\n;\n\nEND_PROGRAM` }],
+      [],
+      [],
+    )
+    getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+  }
+
+  const allSaved = () => Object.values(getState().files).every((file) => file.saved)
+
+  it('marks everything unsaved when it repairs an alias', () => {
+    openWith('Motor Start', 'VAR\n  bound : BOOL AT Motor Start;\nEND_VAR')
+
+    expect(allSaved()).toBe(false)
+  })
+
+  it('leaves a project it did not touch saved', () => {
+    openWith('Motor_Start', 'VAR\n  bound : BOOL AT Motor_Start;\nEND_VAR')
+
+    expect(allSaved()).toBe(true)
   })
 })

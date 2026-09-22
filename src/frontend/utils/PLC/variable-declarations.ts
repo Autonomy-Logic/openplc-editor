@@ -63,6 +63,15 @@ export interface ParsedDeclaration {
     documentation?: Span
     /** Which comment form carries the documentation, so an edit can keep it. */
     documentationKind?: CommentKind
+    /**
+     * The comment INCLUDING its delimiters.
+     *
+     * Clearing the Documentation cell has to take the whole comment: writing an
+     * empty string into the inner span left `(**)` and `//` behind. Changing the
+     * text may have to take it too, when what the user typed cannot live inside
+     * the delimiters it currently has.
+     */
+    documentationOuter?: Span
   }
 }
 
@@ -169,6 +178,98 @@ export function blockCommentEnd(source: string, open: number): number {
   return -1
 }
 
+/**
+ * The offset just past the string literal opening at `open`.
+ *
+ * IEC escapes a quote two ways and STruC++'s own token accepts both: `$'` and a
+ * doubled `''`. A scanner that knows neither ends the literal early, and from
+ * there every quote in the file pairs the wrong way — which is how a `//`
+ * inside `'http://x'` came to be read as a comment.
+ */
+export function stringLiteralEnd(source: string, open: number): number {
+  const quote = source[open]
+  let index = open + 1
+  while (index < source.length) {
+    const char = source[index]
+    // `$` escapes whatever follows, including the quote and another `$`.
+    if (char === '$') {
+      index += 2
+      continue
+    }
+    if (char === quote) {
+      if (source[index + 1] === quote) {
+        index += 2
+        continue
+      }
+      return index + 1
+    }
+    index += 1
+  }
+  return source.length
+}
+
+/**
+ * `source` with every comment and string literal blanked to spaces, the same
+ * length and the same line breaks.
+ *
+ * For the passes that look for a keyword in the text rather than in the AST.
+ * Stripping `(*…*)` line by line with a regex missed a comment that spans
+ * lines, and nothing at all protected a string: `'use: STRING[5]'` made
+ * `refineErrors` report a STRING-length error against a line that had none, in
+ * place of the real error somewhere else in the block.
+ */
+export function blankTrivia(source: string): string {
+  const out = source.split('')
+  const blank = (from: number, to: number) => {
+    for (let index = from; index < to && index < out.length; index++) {
+      if (out[index] !== '\n' && out[index] !== '\r') out[index] = ' '
+    }
+  }
+
+  let index = 0
+  while (index < source.length) {
+    if (source.startsWith('(*', index)) {
+      const close = blockCommentEnd(source, index)
+      const end = close === -1 ? source.length : close
+      blank(index, end)
+      index = end
+      continue
+    }
+    if (source.startsWith('//', index)) {
+      const newline = source.indexOf('\n', index)
+      const end = newline === -1 ? source.length : newline
+      blank(index, end)
+      index = end
+      continue
+    }
+    const char = source[index]
+    if (char === "'" || char === '"') {
+      const end = stringLiteralEnd(source, index)
+      // The quotes stay: a blanked literal is still a literal, and the passes
+      // that read this text are looking for keywords, not for quotes.
+      blank(index + 1, end - 1)
+      index = end
+      continue
+    }
+    index += 1
+  }
+
+  return out.join('')
+}
+
+/**
+ * The line ending the file is written with.
+ *
+ * Text inserted into a CRLF file with a bare `\n` leaves it with mixed endings
+ * — and every tool downstream, git included, then sees a change on lines nobody
+ * touched.
+ */
+export function lineEndingOf(source: string): string {
+  const newline = source.indexOf('\n')
+  if (newline === -1) return '\n'
+  return source[newline - 1] === '\r' ? '\r\n' : '\n'
+}
+
 /** Character offset of the start of each 1-indexed line. */
 function lineStarts(source: string): number[] {
   const starts = [0]
@@ -215,30 +316,42 @@ function toSpan(starts: number[], span: StrucppSpan, wrapperLines: number): Span
  * legitimately cross lines to find — ran on into the NEXT declaration. That
  * declaration then fell inside the first one's `lineSpan`, and deleting the
  * first variable from the table silently deleted its neighbour with it.
+ *
+ * A string literal is skipped, for the reason it is skipped everywhere else in
+ * this file: an opener inside one is not an opener. Two declarations may share
+ * a line, so the scan for the first one's comment runs over the second one's
+ * text — and `a : INT; url : STRING := 'http://x';` gave `a` the documentation
+ * `x';`, which `normalizeOneVariablePerLine` then wrote into the user's file as
+ * `a : INT; //x';`.
  */
 export function trailingComment(
   source: string,
   from: number,
-): { inner: Span; kind: CommentKind; end: number } | undefined {
-  const lineEnd = source.indexOf('\n', from)
-  const limit = lineEnd === -1 ? source.length : lineEnd
-  const rest = source.slice(from, limit)
+): { inner: Span; kind: CommentKind; outer: Span } | undefined {
+  const newline = source.indexOf('\n', from)
+  const limit = newline === -1 ? source.length : newline
+  // A CRLF file's `\r` belongs to the line ending, not to the comment. Inside
+  // the span it was read as part of the text and dropped on the next edit,
+  // leaving that one line with a bare `\n`.
+  const lineEnd = source[limit - 1] === '\r' ? limit - 1 : limit
 
-  const block = rest.indexOf('(*')
-  const line = rest.indexOf('//')
-
-  if (block !== -1 && (line === -1 || block < line)) {
-    // A block comment is the one thing here allowed to span lines, so its
-    // closer is searched for in the whole source rather than in `rest` — and
-    // through any comment nested inside it.
-    const close = blockCommentEnd(source, from + block)
-    if (close !== -1) {
-      return { inner: { start: from + block + 2, end: close - 2 }, kind: 'block', end: close }
+  for (let index = from; index < lineEnd; index++) {
+    const char = source[index]
+    if (char === "'" || char === '"') {
+      index = stringLiteralEnd(source, index) - 1
+      continue
     }
-  }
-
-  if (line !== -1) {
-    return { inner: { start: from + line + 2, end: limit }, kind: 'line', end: limit }
+    if (source.startsWith('(*', index)) {
+      // A block comment is the one thing here allowed to span lines, so its
+      // closer is searched for in the whole source rather than to the end of
+      // this line — and through any comment nested inside it.
+      const close = blockCommentEnd(source, index)
+      if (close === -1) return undefined
+      return { inner: { start: index + 2, end: close - 2 }, kind: 'block', outer: { start: index, end: close } }
+    }
+    if (source.startsWith('//', index)) {
+      return { inner: { start: index + 2, end: lineEnd }, kind: 'line', outer: { start: index, end: lineEnd } }
+    }
   }
 
   return undefined
@@ -440,7 +553,11 @@ const BLOCK_QUALIFIERS = new Set(['CONSTANT', 'RETAIN', 'NON_RETAIN', 'PERSISTEN
  */
 function refineErrors(source: string, errors: ParseError[]): ParseError[] {
   if (errors.length === 0) return errors
-  const lines = source.split('\n')
+  // Read from the text with its comments and strings blanked, not from the raw
+  // source: both recognisers below look for a keyword, and a keyword inside a
+  // comment or a literal is not one. Blanking preserves offsets and line
+  // breaks, so the spans reported still address the caller's own string.
+  const lines = blankTrivia(source).split('\n')
   const starts = lineStarts(source)
 
   const at = (index: number, message: string): ParseError => ({
@@ -450,9 +567,7 @@ function refineErrors(source: string, errors: ParseError[]): ParseError[] {
   })
 
   for (let index = 0; index < lines.length; index++) {
-    // Strip any trailing comment: a qualifier check must not read `(* RETAIN *)`
-    // as a qualifier, and a STRING check must not fire on one mentioned in prose.
-    const line = lines[index].replace(/\(\*[\s\S]*?\*\)/g, ' ').replace(/\/\/.*$/, '')
+    const line = lines[index]
 
     // A header and NOTHING else: `VAR_GLOBAL CONSTANT` is a qualifier list,
     // `VAR_INPUT x : BOOL;` is a declaration sharing the line and `VAR END_VAR`
@@ -489,6 +604,28 @@ function refineErrors(source: string, errors: ParseError[]): ParseError[] {
   }
 
   return errors
+}
+
+/**
+ * Can this text be written after `AT` and read back as the same one thing?
+ *
+ * Asked of the parser rather than of a word list. The editor kept its own list
+ * of names to refuse — `isLegalIdentifier`, which also holds every standard
+ * function name — and it did not match what STruC++ accepts: `Max`, `Step`,
+ * `TP`, `Left`, `Time` and `Limit` all parse perfectly well as an `AT` operand,
+ * and every existing pin called one of them was renamed on open for nothing.
+ * The parser is the only authority on this, and it is already here.
+ *
+ * The round trip is checked, not just the absence of errors: `a; b : INT` would
+ * parse as two declarations, so the test is that exactly one variable comes
+ * back and its location is the text that went in.
+ */
+export function isReadableAtOperand(operand: string): boolean {
+  const trimmed = operand.trim()
+  if (trimmed === '' || trimmed !== operand) return false
+  const probe = parseVariableDeclarations(`VAR\n  __alias_probe AT ${operand} : BOOL;\nEND_VAR`, {})
+  if (probe.errors.length > 0 || probe.variables.length !== 1) return false
+  return probe.variables[0].location === operand && probe.variables[0].name === '__alias_probe'
 }
 
 /**
@@ -576,6 +713,15 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
     const headerEnd = Math.min(headerNewline === -1 ? blockSpan.end : headerNewline, firstDeclarationStart)
 
     const declarations: ParsedDeclaration[] = []
+    /**
+     * Line starts whose trailing comment is already spoken for.
+     *
+     * Two declarations can share a line, and each one's scan runs to the end of
+     * it, so both found the same comment: the table showed one note twice, and
+     * a patch queued two edits over one span. The comment goes to the FIRST
+     * declaration on the line — the one the user wrote it after.
+     */
+    const commentedLines = new Set<number>()
 
     for (const declaration of block.declarations) {
       // STruC++ spans the declaration inclusive of its `;`. The model's span
@@ -596,7 +742,9 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
         : undefined
       const initialText = initialSpan ? source.slice(initialSpan.start, initialSpan.end).trim() : ''
 
-      const comment = trailingComment(source, declFull.end)
+      const rawLineStart = source.lastIndexOf('\n', declFull.start - 1) + 1
+      const comment = commentedLines.has(rawLineStart) ? undefined : trailingComment(source, declFull.end)
+      if (comment) commentedLines.add(rawLineStart)
       const documentation = comment ? source.slice(comment.inner.start, comment.inner.end).trim() : ''
 
       // The declaration's line, CLAMPED to the inside of the block.
@@ -607,7 +755,7 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
       // the first took `VAR_INPUT` with it and left the file unparseable, in the
       // text that gets written to disk.
       const lineStart = Math.max(source.lastIndexOf('\n', declSpan.start - 1) + 1, headerEnd)
-      const consumedTo = comment ? comment.end : declFull.end
+      const consumedTo = comment ? comment.outer.end : declFull.end
       const nextNewline = source.indexOf('\n', consumedTo)
       const lineEnd = Math.min(nextNewline === -1 ? source.length : nextNewline + 1, endVarStart)
       const lineSpan = { start: lineStart, end: Math.max(lineEnd, declFull.end) }
@@ -641,7 +789,13 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
             type: typeSpan,
             ...(locationSpan ? { location: locationSpan } : {}),
             ...(initialSpan ? { initialValue: initialSpan } : {}),
-            ...(comment ? { documentation: comment.inner, documentationKind: comment.kind } : {}),
+            ...(comment
+              ? {
+                  documentation: comment.inner,
+                  documentationKind: comment.kind,
+                  documentationOuter: comment.outer,
+                }
+              : {}),
           },
         })
         variables.push(variable)
@@ -691,6 +845,7 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
   const parsed = parseVariableDeclarations(source, context)
   if (parsed.errors.length > 0) return source
 
+  const newline = lineEndingOf(source)
   const edits: Array<{ span: Span; replacement: string }> = []
 
   for (const block of parsed.blocks) {
@@ -732,17 +887,11 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
 
       const lines = group.map((declaration) => {
         const { variable } = declaration
-        // The comment belongs to the declaration that carries it. The line
-        // reader hands the same trailing comment to every declaration on the
-        // line, so each rewritten line keeps the words the user wrote rather
-        // than losing them to whichever declaration happened to come last.
-        const documentation = declaration.fields.documentation
-        const trailing = documentation
-          ? source.slice(
-              documentation.start - 2,
-              declaration.fields.documentationKind === 'line' ? documentation.end : documentation.end + 2,
-            )
-          : ''
+        // The comment belongs to the declaration that carries it — the first on
+        // the line, which is the one the user wrote it after — so it follows
+        // that declaration onto its own line and the others get none.
+        const outer = declaration.fields.documentationOuter
+        const trailing = outer ? source.slice(outer.start, outer.end) : ''
 
         let text = `${declarationIndent}${variable.name} : ${source.slice(declaration.fields.type.start, declaration.fields.type.end).trim()}`
         if (variable.location) text += ` AT ${variable.location}`
@@ -754,9 +903,12 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
 
       // A keyword sharing the line is put back on one of its own, which is what
       // makes the line spans above unambiguous for every later pass.
-      const head = headerShares ? `${blockIndent}${headerText}\n` : ''
-      const tail = endVarShares ? `${blockIndent}END_VAR\n` : ''
-      edits.push({ span: { start: lineStart, end: lineEnd }, replacement: `${head}${lines.join('\n')}\n${tail}` })
+      const head = headerShares ? `${blockIndent}${headerText}${newline}` : ''
+      const tail = endVarShares ? `${blockIndent}END_VAR${newline}` : ''
+      edits.push({
+        span: { start: lineStart, end: lineEnd },
+        replacement: `${head}${lines.join(newline)}${newline}${tail}`,
+      })
     }
   }
 

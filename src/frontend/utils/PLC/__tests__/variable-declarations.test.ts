@@ -418,9 +418,13 @@ describe('normalizeOneVariablePerLine', () => {
     )
   })
 
-  it('gives each declaration on a shared line its own comment', () => {
-    expect(normalizeOneVariablePerLine('VAR\n  a : INT; b : INT; (* about b *)\nEND_VAR', context)).toContain(
-      'b : INT; (* about b *)',
+  // One comment ends the line, so it belongs to ONE declaration: the first on
+  // that line, which is the one the user wrote it after. Handing it to every
+  // declaration on the line showed the same note in two rows of the table and
+  // queued two edits over one span.
+  it('gives a shared line\u2019s comment to the first declaration on it', () => {
+    expect(normalizeOneVariablePerLine('VAR\n  a : INT; b : INT; (* about a *)\nEND_VAR', context)).toBe(
+      'VAR\n  a : INT; (* about a *)\n  b : INT;\nEND_VAR',
     )
   })
 
@@ -498,5 +502,25 @@ describe('the two refined messages', () => {
 
   it('does not fire the STRING rewrite on prose mentioning it', () => {
     expect(firstError('VAR\n  a : ; (* not a STRING[10] *)\nEND_VAR')).not.toMatch(/length is not supported on STRING/)
+  })
+
+  // Both recognisers read the source with its comments and strings blanked, not
+  // line by line with a regex: a comment that spans lines was only half removed,
+  // and nothing at all protected a literal.
+  it.each([
+    {
+      label: 'a STRING length inside a string literal',
+      text: "VAR\n  s : STRING := 'use: STRING[5]';\n  b : ;\nEND_VAR",
+    },
+    { label: 'a qualifier inside a string literal', text: "VAR\n  s : STRING := 'RETIAN';\n  b : ;\nEND_VAR" },
+    { label: 'a qualifier inside a comment spanning lines', text: 'VAR (* RETIAN\n  spans *)\n  b : ;\nEND_VAR' },
+    {
+      label: 'a STRING length inside a comment spanning lines',
+      text: 'VAR\n  (* STRING[5]\n   spans *)\n  b : ;\nEND_VAR',
+    },
+  ])('keeps the real error when trivia mentions one — $label', ({ text }) => {
+    const message = firstError(text)
+    expect(message).not.toMatch(/length is not supported on STRING/)
+    expect(message).not.toMatch(/Unknown variable block qualifier/)
   })
 })

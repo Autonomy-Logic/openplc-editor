@@ -22,24 +22,81 @@
 import type { PLCVariable } from '../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from './generate-iec-variables-to-string'
 import type { ParsedBlock, ParsedDeclaration, ParseResult, Span, TypeContext } from './PLC/variable-declarations'
-import { normalizeOneVariablePerLine, parseVariableDeclarations } from './PLC/variable-declarations'
+import { lineEndingOf, normalizeOneVariablePerLine, parseVariableDeclarations } from './PLC/variable-declarations'
 
 interface TextEdit {
   span: Span
   replacement: string
 }
 
-/** Apply edits right to left so each span still addresses the original text. */
+/**
+ * Apply edits right to left so each span still addresses the original text.
+ *
+ * Two edits can share an offset, because two clauses can be ADDED to one
+ * declaration that had neither: `AT` and `:=` are both inserted where the type
+ * ends. Applying right to left, whichever runs last ends up leftmost, so the
+ * tie is broken on the order the caller queued them — which is the order they
+ * have to appear in. Without it, adding a location and an initial value in one
+ * patch wrote `a : BOOL := TRUE AT %QX0.0;`, which does not parse, and the next
+ * patch fell back to regenerating the block and took the comments with it.
+ */
 function applyEdits(text: string, edits: TextEdit[]): string {
-  const ordered = [...edits].sort((a, b) => b.span.start - a.span.start)
+  const ordered = edits
+    .map((edit, index) => ({ edit, index }))
+    .sort((a, b) => b.edit.span.start - a.edit.span.start || b.index - a.index)
   let out = text
-  for (const edit of ordered) {
+  for (const { edit } of ordered) {
     out = out.slice(0, edit.span.start) + edit.replacement + out.slice(edit.span.end)
   }
   return out
 }
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+
+/**
+ * Can this text sit inside `(* … *)` and still be one comment?
+ *
+ * The Documentation cell is free text and it is spliced between delimiters, so
+ * a `*)` in it closed the comment early — `see *) here` became
+ * `(* see *) here *)`, which does not parse — and a lone `(*` opened a nested
+ * one that swallowed the rest of the file. Block comments nest in IEC, so the
+ * test is that the openers and closers balance and never close below zero.
+ */
+const fitsBlockComment = (text: string): boolean => {
+  let depth = 0
+  for (let index = 0; index < text.length - 1; index++) {
+    if (text.startsWith('(*', index)) {
+      depth += 1
+      index += 1
+      continue
+    }
+    if (text.startsWith('*)', index)) {
+      depth -= 1
+      if (depth < 0) return false
+      index += 1
+    }
+  }
+  return depth === 0
+}
+
+/**
+ * Can this text keep the comment form it is already in?
+ *
+ * A line comment holds anything that is not a line break, and the model's
+ * documentation is flattened to one line, so the only form with a rule is the
+ * block one.
+ */
+const fitsCommentKind = (text: string, kind: 'block' | 'line' | undefined): boolean =>
+  kind === 'line' ? true : fitsBlockComment(text)
+
+/**
+ * The documentation as a comment, in the form that can hold it.
+ *
+ * The block form is preferred — it is what the editor has always written and it
+ * survives a reflow — but text the block form cannot hold goes in a line
+ * comment, which has no closing delimiter to collide with.
+ */
+const renderComment = (text: string): string => (fitsBlockComment(text) ? `(* ${text} *)` : `// ${text}`)
 
 /** Documentation as one line, which is the only shape the model can hold. */
 const flattenDocumentation = (value: string | undefined): string => (value ?? '').replace(/(\r\n|\n|\r)/gm, ' ').trim()
@@ -227,20 +284,35 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
   // prevent, committed by the file itself.
   const nextDocumentation = flattenDocumentation(variable.documentation)
   const documentationSpan = declaration.fields.documentation
-  if (documentationSpan) {
+  const documentationOuter = declaration.fields.documentationOuter
+  if (documentationSpan && documentationOuter) {
     if (flattenDocumentation(text.slice(documentationSpan.start, documentationSpan.end)) !== nextDocumentation) {
-      // Replace the comment's inner text and keep its delimiters, so a `//`
-      // comment stays a `//` comment and a block comment stays a block one.
-      // A line comment has no closing delimiter to pad away from, so only the
-      // block form gets the trailing space.
-      const padded =
-        declaration.fields.documentationKind === 'line' ? ` ${nextDocumentation}` : ` ${nextDocumentation} `
-      edits.push({ span: documentationSpan, replacement: nextDocumentation === '' ? '' : padded })
+      if (nextDocumentation === '') {
+        // The WHOLE comment goes, and the space in front of it with it. Writing
+        // an empty string into the inner span left `(**)` behind, and `//` on a
+        // line of its own — a comment the user did not write and cannot see the
+        // text of.
+        let start = documentationOuter.start
+        while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start -= 1
+        edits.push({ span: { start, end: documentationOuter.end }, replacement: '' })
+      } else if (fitsCommentKind(nextDocumentation, declaration.fields.documentationKind)) {
+        // Replace the comment's inner text and keep its delimiters, so a `//`
+        // comment stays a `//` comment and a block comment stays a block one.
+        // A line comment has no closing delimiter to pad away from, so only the
+        // block form gets the trailing space.
+        const padded =
+          declaration.fields.documentationKind === 'line' ? ` ${nextDocumentation}` : ` ${nextDocumentation} `
+        edits.push({ span: documentationSpan, replacement: padded })
+      } else {
+        // What the user typed cannot live in the delimiters the comment has, so
+        // the delimiters change with it rather than the text being mangled.
+        edits.push({ span: documentationOuter, replacement: renderComment(nextDocumentation) })
+      }
     }
   } else if (nextDocumentation !== '') {
     edits.push({
       span: { start: declaration.span.end + 1, end: declaration.span.end + 1 },
-      replacement: ` (* ${nextDocumentation} *)`,
+      replacement: ` ${renderComment(nextDocumentation)}`,
     })
   }
 
@@ -329,6 +401,10 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
   //    the same class and flag, or open a new block after everything.
   const additions = nextVariables.filter((_, index) => !matched.has(index))
   if (additions.length > 0) {
+    // Whatever the file is written with. A `\n` inserted into a CRLF file left
+    // it with mixed endings, so every tool downstream reported a change on the
+    // lines around the one that was actually edited.
+    const newline = lineEndingOf(source)
     const byBlock = new Map<string, PLCVariable[]>()
     for (const variable of additions) {
       const key = blockKey(variable)
@@ -353,15 +429,15 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
         // unparseable result was saved.
         const sharesLine = beforeEndVar.trim() !== ''
         const at = sharesLine ? block.endVarSpan.start : endVarLineStart
-        const rendered = variables.map((variable) => `${renderDeclaration(variable, indent)}\n`).join('')
-        edits.push({ span: { start: at, end: at }, replacement: sharesLine ? `\n${rendered}` : rendered })
+        const rendered = variables.map((variable) => `${renderDeclaration(variable, indent)}${newline}`).join('')
+        edits.push({ span: { start: at, end: at }, replacement: sharesLine ? `${newline}${rendered}` : rendered })
       } else {
         // No block of this class yet. Serialising just these variables gives a
         // correctly-shaped `VAR … END_VAR` pair without disturbing the rest.
-        const appended = generateIecVariablesToString(variables)
+        const appended = generateIecVariablesToString(variables).replace(/\n/g, newline)
         edits.push({
           span: { start: source.length, end: source.length },
-          replacement: `${source.endsWith('\n') ? '' : '\n'}${appended}\n`,
+          replacement: `${source.endsWith('\n') ? '' : newline}${appended}${newline}`,
         })
       }
     }

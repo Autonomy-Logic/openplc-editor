@@ -240,6 +240,31 @@ describe('an alias has to be an IEC identifier (DOPE-650)', () => {
     expect(validateAliasName('VAR').ok).toBe(false)
   })
 
+  it('refuses a %% location, which is the other thing the field can hold', () => {
+    expect(validateAliasName('%QX0.0').ok).toBe(false)
+  })
+
+  // Which words are reserved is the parser's to say, and it says fewer than the
+  // editor's identifier list did. That list also holds every standard function
+  // name, so an existing pin called `Max` or `Step` was renamed on open although
+  // STruC++ reads either one as an `AT` operand perfectly well.
+  it.each(['Max', 'Min', 'Step', 'TP', 'Left', 'Time', 'Limit', 'Move', 'Abs', 'Sel', 'Mux'])(
+    'accepts %s, which STruC++ reads as an AT operand',
+    (alias) => {
+      expect(validateAliasName(alias)).toEqual({ ok: true })
+    },
+  )
+
+  it.each(['SET', 'Set', 'VAR', 'IF', 'THEN', 'ARRAY'])('still refuses %s, which it does not', (alias) => {
+    expect(validateAliasName(alias).ok).toBe(false)
+  })
+
+  it('refuses a name that would smuggle a second declaration in', () => {
+    // The operand is spliced into the file verbatim, so the check is that it
+    // reads back as ONE thing.
+    expect(validateAliasName('a; b : INT').ok).toBe(false)
+  })
+
   it('rejects a malformed name through validateAliasEdit, before any collision check', () => {
     // The shape is wrong whether or not the name is taken, and "already in use"
     // would be a confusing thing to say about `Motor Start`.

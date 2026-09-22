@@ -72,3 +72,25 @@ describe('planAliasNormalization', () => {
     expect(describeAliasRename(rename)).toContain('Variables bound to it were updated')
   })
 })
+
+/**
+ * What the repair leaves alone.
+ *
+ * It renames what the parser cannot read back, and nothing else. It used to
+ * consult the editor's identifier list, which also holds every standard
+ * function name, so opening a project silently renamed pins called `Max`,
+ * `Step` or `Limit` — names STruC++ reads as an `AT` operand without complaint.
+ */
+describe('a project whose aliases the parser accepts is not touched', () => {
+  it.each(['Max', 'Min', 'Step', 'TP', 'Left', 'Time', 'Limit', 'Move', 'Sel'])('leaves %s alone', (alias) => {
+    expect(planAliasNormalization([alias])).toEqual([])
+  })
+
+  it('still repairs the ones it cannot read', () => {
+    expect(planAliasNormalization(['Max', 'Motor Start', 'relay-1', 'Set'])).toEqual([
+      { from: 'Motor Start', to: 'Motor_Start', reason: 'contains illegal characters' },
+      { from: 'relay-1', to: 'relay_1', reason: 'contains illegal characters' },
+      { from: 'Set', to: 'Set_alias', reason: 'is a reserved word' },
+    ])
+  })
+})
