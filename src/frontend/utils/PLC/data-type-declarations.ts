@@ -21,7 +21,7 @@ import { parse } from 'strucpp'
 
 import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable, PLCVariableType } from '../../../middleware/shared/ports/types'
-import { classifyType } from './variable-declarations'
+import { blockCommentEnd, classifyType } from './variable-declarations'
 
 /**
  * A structure field's type is classified the same way a variable's is —
@@ -76,8 +76,13 @@ function trailingDocumentation(source: string, starts: number[], span: StrucppSp
   const lineEnd = source.indexOf('\n', from)
   const rest = source.slice(from, lineEnd === -1 ? source.length : lineEnd)
 
-  const block = /\(\*([\s\S]*?)\*\)/.exec(rest)
-  if (block) return block[1].trim()
+  const opener = rest.indexOf('(*')
+  if (opener !== -1) {
+    // Nesting-aware, like the variables next door: `(* a (* b *) c *)` is one
+    // comment, and a lazy `*)` match cut it at the inner one.
+    const close = blockCommentEnd(rest, opener)
+    if (close !== -1) return rest.slice(opener + 2, close - 2).trim()
+  }
   const line = /\/\/(.*)$/.exec(rest)
   if (line) return line[1].trim()
   return ''

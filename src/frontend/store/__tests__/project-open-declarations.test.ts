@@ -84,6 +84,41 @@ describe('opening a project', () => {
     expect(pou.variablesText).toBe('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
   })
 
+  it('repairs a legacy illegal alias everywhere it is used, and loads the POU into the table', () => {
+    // An alias like `Motor Start` is two identifiers to STruC++, so the POU's
+    // declarations do not parse and its variable list is empty — which is
+    // exactly why a cascade over the model found nothing to cascade. The
+    // producer took its new name and the declaration kept the old one.
+    openPLCStoreBase.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    const parsed = parseProjectFiles(
+      '/p',
+      PROJECT_JSON,
+      JSON.stringify({ deviceBoard: 'TestBoard', communicationPort: '', compileOnly: false }),
+      JSON.stringify([{ pin: '0', pinType: 'digitalOutput', address: '%QX0.0', alias: 'Motor Start' }]),
+      [
+        {
+          relativePath: 'pous/programs/main.st',
+          content: 'PROGRAM main\nVAR\n  X : BOOL AT Motor Start;\nEND_VAR\n\n;\n\nEND_PROGRAM',
+        },
+      ],
+      [],
+      [],
+    )
+    openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+
+    const state = openPLCStoreBase.getState()
+    const pou = state.project.data.pous.find((candidate) => candidate.name === 'main')
+    expect((state.deviceDefinitions.pinMapping.pinsByBoard['TestBoard'] ?? []).map((pin) => pin.alias)).toEqual([
+      'Motor_Start',
+    ])
+    expect(pou?.variablesText).toBe('VAR\n  X : BOOL AT Motor_Start;\nEND_VAR')
+    expect(pou?.interface?.variables.map((variable) => [variable.name, variable.location])).toEqual([
+      ['X', 'Motor_Start'],
+    ])
+    // Repaired, so it belongs in the table — not in the code view for fixing.
+    expect(pou?.variablesTextUnparsed).toBeUndefined()
+  })
+
   it('splits a line holding two declarations, so a later delete cannot take both', () => {
     const pou = openWith('VAR\n  a : INT; b : INT;\nEND_VAR')
     expect(pou.variablesText).toBe('VAR\n  a : INT;\n  b : INT;\nEND_VAR')

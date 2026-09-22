@@ -10,6 +10,7 @@
  * new one is added, it belongs in this list — the invariant is only as good as
  * the last writer someone remembered.
  */
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../index'
 
 const getState = () => useOpenPLCStore.getState()
@@ -27,7 +28,7 @@ const variable = (name: string, type = 'INT', location = '') => ({
   debug: false,
 })
 
-const seed = (name: string, text: string, variables: ReturnType<typeof variable>[]) => {
+const seed = (name: string, text: string, variables: PLCVariable[]) => {
   expect(getState().pouActions.create({ type: 'program', name, language: 'st' }).ok).toBe(true)
   getState().projectActions.setPouVariablesText(name, text)
   getState().projectActions.setPouVariables({ pouName: name, variables })
@@ -213,5 +214,43 @@ describe('an open code view is the newest thing the user wrote', () => {
     })
 
     expect(textOf('Undone')).toBe('VAR\n  (* kept *)\n  a : INT;\n  c : BOOL;\nEND_VAR')
+  })
+})
+
+describe('the implicit reconcile refuses only what would make the fold-in wrong', () => {
+  beforeEach(() => {
+    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+  })
+
+  const openCodeView = (name: string, code: string) => {
+    getState().editorActions.updateModelVariablesForName(name, { display: 'code', code })
+  }
+
+  it('lets an unrelated edit through when another declaration is already invalid', () => {
+    // A located VAR_OUTPUT is invalid, and the user may well have inherited it.
+    // Refusing every later edit because of it blocked the POU entirely, citing a
+    // variable they never touched and cannot reach from the table.
+    const code = 'VAR_OUTPUT\n  Q1 : BOOL AT %QX0.0;\nEND_VAR\nVAR\n  spare : BOOL;\nEND_VAR'
+    const located: PLCVariable = { ...variable('Q1'), class: 'output', location: '%QX0.0' }
+    seed('Legacy', code, [located, variable('spare', 'BOOL')])
+    openCodeView('Legacy', code)
+
+    expect(getState().projectActions.deleteVariable({ scope: 'local', associatedPou: 'Legacy', rowId: 1 }).ok).toBe(
+      true,
+    )
+  })
+
+  it('still refuses a duplicate name, which would make the match ambiguous', () => {
+    const code = 'VAR\n  a : INT;\n  a : DINT;\nEND_VAR'
+    seed('Dup', code, [variable('a'), variable('b')])
+    openCodeView('Dup', code)
+
+    const response = getState().projectActions.createVariable({
+      scope: 'local',
+      associatedPou: 'Dup',
+      data: variable('c', 'BOOL'),
+    })
+    expect(response.ok).toBe(false)
+    expect(response.title).toBe('Variable already exists')
   })
 })

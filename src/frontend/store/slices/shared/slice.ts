@@ -1268,6 +1268,43 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().modalActions.openModal('missing-libraries')
       }
 
+      // Set device definitions.
+      //
+      // Before the alias repair below, because the board's pins are one of the
+      // producers that declare aliases — repairing with no pins loaded finds
+      // nothing to repair. Nothing between here and the POU passes reads the
+      // device, so bringing it forward only makes that dependency explicit.
+      if (data.deviceConfiguration || data.devicePinMapping) {
+        getState().deviceActions.setDeviceDefinitions({
+          configuration: data.deviceConfiguration,
+          pinMapping: data.devicePinMapping,
+        })
+      }
+
+      // Repair I/O aliases saved before they had to be IEC identifiers.
+      //
+      // `AT <alias>` is read back by STruC++ as an identifier, so a project
+      // carrying `Motor Start` or `relay-1` cannot be re-read — the editor
+      // accepted those names before the rule existed (DOPE-650). They are
+      // renamed here rather than dropped, and every variable bound to the old
+      // name follows, because dropping would leave those variables unlocated
+      // at compile time with nothing to show for it.
+      //
+      // Runs after the device definitions load, since pins are one of the
+      // producers, and before the variables are read anywhere.
+      const aliasRepairs = getState().projectActions.normalizeProjectAliases().repairs
+      for (const repair of aliasRepairs) {
+        getState().consoleActions.addLog({ level: 'warning', message: describeAliasRename(repair) })
+      }
+
+      // Runs BEFORE the reclassify pass below, not after. A project carrying an
+      // illegal alias cannot be parsed while it still carries it: the POU's
+      // declarations fail, its variable list comes back empty, and a cascade
+      // that walks `interface.variables` then has nothing to walk. The producer
+      // got its new name, the declaration text kept the old one, and the binding
+      // was orphaned — the precise outcome this repair exists to prevent. With
+      // the repair first, the text is legal by the time anything reads it and
+      // the POU loads into the table instead of the code view.
       // Reclassify ALL POUs' variables with full context.
       // The text parser can't determine type definitions accurately since it doesn't have
       // the full project context. Re-parse with pous, dataTypes, and libraries to correctly
@@ -1283,8 +1320,14 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
 
         const reclassContext = buildTypeContext(pous, reclassDataTypes, reclassLibraries)
 
-        pous.forEach((pou) => {
+        pous.forEach((payloadPou) => {
           try {
+            // Read from the STORE, not from the loader's payload. The alias
+            // repair above rewrites `variablesText` in the store; taking the
+            // payload's copy here wrote the pre-repair text straight back over
+            // it, so a legacy project was repaired and then un-repaired within
+            // the same load.
+            const pou = getState().project.data.pous.find((c) => c.name === payloadPou.name) ?? payloadPou
             /* istanbul ignore next -- defensive: interface may be undefined */
             const vars = pou.interface?.variables ?? []
             // Reclassify from the POU's OWN text, not from a re-serialisation of
@@ -1321,9 +1364,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
               return
             }
 
-            if (normalized !== undefined && normalized !== stored) {
-              getState().projectActions.setPouVariablesText(pou.name, normalized)
-            }
+            // Always rewritten on success, even when the bytes are unchanged:
+            // this is also what clears a POU the LOADER marked unparsed but the
+            // alias repair above has since made readable. Without it the mark
+            // outlived the problem and the POU still opened in the code view.
+            const settled = normalized ?? stored
+            if (settled !== undefined) getState().projectActions.setPouVariablesText(pou.name, settled, false)
             getState().projectActions.setPouVariables({
               pouName: pou.name,
               variables: carryEditorMetadata(vars, reparsedVariables),
@@ -1332,9 +1378,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             // Unparseable declarations are the one thing the code view exists
             // for: keep the user's bytes and open it there, rather than leaving
             // the POU with whatever the loader managed to salvage.
-            const stored = pou.variablesText
-            if (stored !== undefined) getState().projectActions.setPouVariablesText(pou.name, stored, true)
-            console.error(`[Reclassify] Failed to reclassify variables for POU "${pou.name}":`, err)
+            const current = getState().project.data.pous.find((c) => c.name === payloadPou.name)
+            const stored = current?.variablesText
+            if (stored !== undefined) getState().projectActions.setPouVariablesText(payloadPou.name, stored, true)
+            console.error(`[Reclassify] Failed to reclassify variables for POU "${payloadPou.name}":`, err)
           }
         })
       }
@@ -1381,30 +1428,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             console.error('[SYNC] Error during node sync:', err)
           }
         }
-      }
-
-      // Set device definitions
-      if (data.deviceConfiguration || data.devicePinMapping) {
-        getState().deviceActions.setDeviceDefinitions({
-          configuration: data.deviceConfiguration,
-          pinMapping: data.devicePinMapping,
-        })
-      }
-
-      // Repair I/O aliases saved before they had to be IEC identifiers.
-      //
-      // `AT <alias>` is read back by STruC++ as an identifier, so a project
-      // carrying `Motor Start` or `relay-1` cannot be re-read — the editor
-      // accepted those names before the rule existed (DOPE-650). They are
-      // renamed here rather than dropped, and every variable bound to the old
-      // name follows, because dropping would leave those variables unlocated
-      // at compile time with nothing to show for it.
-      //
-      // Runs after the device definitions load, since pins are one of the
-      // producers, and before the variables are read anywhere.
-      const aliasRepairs = getState().projectActions.normalizeProjectAliases().repairs
-      for (const repair of aliasRepairs) {
-        getState().consoleActions.addLog({ level: 'warning', message: describeAliasRename(repair) })
       }
 
       // Restore debug flags from debugVariables

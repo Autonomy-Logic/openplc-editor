@@ -351,6 +351,42 @@ describe('round-trip stability', () => {
   })
 })
 
+describe('removing a clause is anchored on the parser, not on counting characters', () => {
+  it('survives text whose uppercase form is longer than the original', () => {
+    // `toUpperCase()` is not length-preserving — `ß` becomes `SS` — so a
+    // case-insensitive search over the uppercased text returned indices into a
+    // longer string, and the splice landed in the wrong place. One German
+    // comment above the declaration was enough to write `x : BOOL at ;` to disk.
+    const text = 'VAR\n  (* Maß für Größe *)\n  x : BOOL at Alias1;\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).map((variable) => ({ ...variable, location: '' })),
+      ),
+    ).toBe('VAR\n  (* Maß für Größe *)\n  x : BOOL;\nEND_VAR')
+  })
+
+  it('removes an initial value that follows a location', () => {
+    const text = 'VAR\n  z : INT AT %MW0 := 7;\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).map((variable) => ({ ...variable, initialValue: null })),
+      ),
+    ).toBe('VAR\n  z : INT AT %MW0;\nEND_VAR')
+  })
+
+  it('keeps a comment written inside the clause', () => {
+    const text = 'VAR\n  x : BOOL (* why *) AT Alias1;\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).map((variable) => ({ ...variable, location: '' })),
+      ),
+    ).toContain('(* why *)')
+  })
+})
+
 describe('resolveLocationsInText, for the LSP stub', () => {
   it('drops the clause once for a declaration naming several variables', () => {
     // One `ParsedDeclaration` per name, all sharing the location span, so the

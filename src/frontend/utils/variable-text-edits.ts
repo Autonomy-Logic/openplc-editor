@@ -109,24 +109,19 @@ function matchDeclarations(
     return true
   }
 
+  // Matched by name, then by position among what is left. There was an `id`
+  // pass in front of these that could never fire: a declaration's identity here
+  // comes from `parseVariableDeclarations`, which builds its variables from the
+  // text and has no id to give them, so the comparison was always
+  // `undefined === something`.
+  //
   // Every pass is confined to the variable's own VAR block, for the reason the
-  // positional pass below already states: moving a variable between classes is
-  // a move, not an edit. Without the check here, changing a variable's class in
-  // the table matched it to its OLD declaration by id or name, and
-  // `editsForDeclaration` patches fields only — nothing moved the line out of
-  // the block it was sitting in, so the class silently reverted on reload while
-  // the table went on showing the new one.
-  nextVariables.forEach((variable, index) => {
-    if (!variable.id) return
-    claim(
-      index,
-      declarations.find(
-        (d) =>
-          d.variable.id !== undefined && d.variable.id === variable.id && blockKey(d.variable) === blockKey(variable),
-      ),
-    )
-  })
-
+  // positional pass below states: moving a variable between classes is a move,
+  // not an edit. Without the check, changing a variable's class in the table
+  // matched it to its OLD declaration and `editsForDeclaration` patches fields
+  // only — nothing moved the line out of the block it was sitting in, so the
+  // class silently reverted on reload while the table went on showing the new
+  // one.
   nextVariables.forEach((variable, index) => {
     if (matched.has(index)) return
     claim(
@@ -185,7 +180,7 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
   const locationSpan = declaration.fields.location
   if (locationSpan && nextLocation === '') {
     // Drop the whole ` AT <loc>` clause, not just its operand.
-    edits.push({ span: { start: findClauseStart(text, locationSpan, 'AT'), end: locationSpan.end }, replacement: '' })
+    edits.push({ span: clauseSpan(text, declaration, locationSpan, 'AT'), replacement: '' })
   } else if (locationSpan && at(locationSpan) !== nextLocation) {
     edits.push({ span: locationSpan, replacement: nextLocation })
   } else if (!locationSpan && nextLocation !== '') {
@@ -198,7 +193,7 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
   const nextInitial = variable.initialValue ?? ''
   const initialSpan = declaration.fields.initialValue
   if (initialSpan && nextInitial === '') {
-    edits.push({ span: { start: findClauseStart(text, initialSpan, ':='), end: initialSpan.end }, replacement: '' })
+    edits.push({ span: clauseSpan(text, declaration, initialSpan, ':='), replacement: '' })
   } else if (initialSpan && at(initialSpan) !== nextInitial) {
     edits.push({ span: initialSpan, replacement: nextInitial })
   } else if (!initialSpan && nextInitial !== '') {
@@ -228,27 +223,39 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
 }
 
 /**
- * Start of the ` AT ` / ` := ` keyword preceding `operand`, so removing the
- * clause takes the keyword and its leading whitespace with it and does not
- * leave `x : BOOL AT ;` behind.
+ * The whole `AT <operand>` / `:= <operand>` clause, as a span to delete.
+ *
+ * Anchored on STruC++'s own spans rather than on a search through the text. A
+ * clause can only sit between its operand and whichever span precedes it — the
+ * type, or the name when the address is written before the colon — so the
+ * keyword is looked for in that window and nowhere else.
+ *
+ * Two bugs came out of searching the whole text instead. `lastIndexOf('AT')`
+ * matched the first two letters of an alias called `ATTIC_LIGHT` and left
+ * `x : BOOL AT;` behind. Searching `text.toUpperCase()` to make it
+ * case-insensitive — IEC keywords are, and STruC++ accepts `at` — then broke
+ * the offsets outright, because uppercasing is not length-preserving: one `ß`
+ * in a comment above the declaration made every index point into a longer
+ * string, and clearing the location spliced at the wrong place. A window that
+ * starts at a span the parser gave us has neither problem.
  */
-function findClauseStart(text: string, operand: Span, keyword: string): number {
-  // Searched strictly BEFORE the operand. `lastIndexOf(keyword, operand.start)`
-  // accepts a match AT `operand.start`, so an alias that itself begins with the
-  // keyword's letters matched instead of the real clause: clearing the location
-  // of `x : BOOL AT ATTIC_LIGHT;` removed only `ATTIC_LIGHT` and left
-  // `x : BOOL AT;` — a syntax error on the next load. An alias is free text
-  // that round-trips whatever the user wrote, so this is reachable.
-  //
-  // Matched case-insensitively, because IEC keywords are and STruC++ accepts
-  // `x : BOOL at %QX0.0;`. Searching for the literal `AT` found nothing there,
-  // so clearing the location removed only the operand and left `x : BOOL at ;`
-  // — which nothing can parse, in the text that gets written to disk.
-  const before = text.toUpperCase().lastIndexOf(keyword.toUpperCase(), Math.max(0, operand.start - keyword.length))
-  if (before === -1) return operand.start
-  let start = before
+function clauseSpan(text: string, declaration: ParsedDeclaration, operand: Span, keyword: string): Span {
+  const anchors = [declaration.fields.name.end, declaration.fields.type.end]
+  if (declaration.fields.location) anchors.push(declaration.fields.location.end)
+
+  const preceding = anchors.filter((end) => end <= operand.start)
+  /* istanbul ignore next -- the name always precedes any clause; the guard keeps the reduce total */
+  const anchor = preceding.length > 0 ? Math.max(...preceding) : operand.start
+
+  // Case-insensitive over the window only. A regex leaves the subject string
+  // alone, so an index into the window is an index into the text.
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const found = new RegExp(escaped, 'i').exec(text.slice(anchor, operand.start))
+  if (!found) return { start: operand.start, end: operand.end }
+
+  let start = anchor + found.index
   while (start > 0 && /[ \t]/.test(text[start - 1])) start--
-  return start
+  return { start, end: operand.end }
 }
 
 /**
@@ -326,6 +333,12 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
 
   const patched = edits.length > 0 ? applyEdits(source, edits) : source
 
+  // Nothing spliced means the spans still describe `patched`, so the ordering
+  // pass can work off the scan already in hand. That is the common case — most
+  // mutations change one field or none — and it saves a whole parse of the
+  // block on every table edit.
+  if (edits.length === 0) return reorderDeclarations(patched, nextVariables, context, scanned)
+
   // 4. Order. Handled after the field edits, by moving whole declaration lines
   //    between the slots they already occupy, so comments sitting on their own
   //    lines stay where the user put them rather than following a variable
@@ -355,8 +368,13 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
  * exists to remove. Leaving the order alone loses nothing, and the duplicate is
  * still reported by the validator.
  */
-function reorderDeclarations(text: string, nextVariables: PLCVariable[], context: TypeContext): string {
-  const scanned = parseVariableDeclarations(text, context)
+function reorderDeclarations(
+  text: string,
+  nextVariables: PLCVariable[],
+  context: TypeContext,
+  reuse?: ParseResult,
+): string {
+  const scanned = reuse ?? parseVariableDeclarations(text, context)
   if (scanned.errors.length > 0) return text
 
   const edits: TextEdit[] = []
@@ -444,7 +462,7 @@ export function resolveLocationsInText(
       if (resolved === current) continue
       edits.push(
         resolved === ''
-          ? { span: { start: findClauseStart(text, span, 'AT'), end: span.end }, replacement: '' }
+          ? { span: clauseSpan(text, declaration, span, 'AT'), replacement: '' }
           : { span, replacement: resolved },
       )
     }

@@ -366,6 +366,23 @@ describe('a whole POU is recognised behind its documentation', () => {
   })
 })
 
+describe('block comments nest', () => {
+  // `(* a (* b *) c *)` is ONE comment and STruC++ reads it that way, so a scan
+  // that stopped at the first `*)` reported a truncated comment.
+  it('reads a trailing comment that contains another comment', () => {
+    const result = parseVariableDeclarations('VAR\n  x : INT; (* outer (* inner *) tail *)\nEND_VAR', context)
+    expect(result.errors).toEqual([])
+    expect(result.variables[0].documentation).toBe('outer (* inner *) tail')
+  })
+
+  it('recognises a POU behind documentation that contains another comment', () => {
+    const source = '(* outer (* inner *) tail *)\nPROGRAM Main\nVAR\n  a : INT;\nEND_VAR\n;\nEND_PROGRAM'
+    const result = parseVariableDeclarations(source, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+})
+
 describe('a whole POU of any kind', () => {
   // `isWholePou` accepts all three keywords, but only a PROGRAM landed in the
   // AST branch that was read: a whole FUNCTION_BLOCK came back with no errors

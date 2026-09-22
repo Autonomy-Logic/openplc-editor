@@ -638,13 +638,23 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
-    // The same gate the table applies and the code view's explicit commit
-    // applies. An implicit reconcile must not be the one path that lets an
-    // invalid declaration into the store (DOPE-650).
+    // This is the IMPLICIT fold-in: it runs at the start of an ordinary table
+    // mutation, on whatever the code view happens to hold. It refuses only what
+    // would make the fold-in itself wrong — a duplicate name, which makes the
+    // match between text and model ambiguous and lets one declaration overwrite
+    // another.
+    //
+    // Everything else the validator checks is a property of the declaration the
+    // user is looking at, not of this edit. Refusing those here meant a legacy
+    // POU carrying one bad declaration — a located VAR_OUTPUT, say — blocked
+    // every other edit in the POU, citing a variable the user never touched and
+    // could not reach from the table. The full set is still gated where the user
+    // asked for that text to be taken: the code view's explicit commit, the
+    // project load, and the reload from disk.
     const validation = validateVariableSet(parsed)
     if (!validation.ok) {
-      const [first] = validation.errors
-      return fail(first.message, first.title)
+      const duplicate = validation.errors.find((error) => error.title === 'Variable already exists')
+      if (duplicate) return fail(duplicate.message, duplicate.title)
     }
     // `debug` and `id` are editor metadata: the declaration text has nowhere to
     // put them, so a re-parse always comes back with `debug: false` and no id.
@@ -699,6 +709,25 @@ const reconcileVariablesText = (
  * "no text yet", which is the one case that has to be serialised from the
  * model rather than patched.
  */
+/**
+ * Rewrite `AT <oldAlias>` to `AT <newAlias>` in a POU's declaration text.
+ *
+ * The one repair that cannot go through the parser, because it exists for text
+ * the parser cannot read: an alias like `Motor Start` is two identifiers to
+ * STruC++, so the POU's declarations fail, its variable list comes back empty,
+ * and a cascade over the model has nothing to walk. The binding lives only in
+ * the text until the name is legal again.
+ *
+ * Deliberately narrow — it matches the `AT` keyword, the alias exactly as the
+ * producer spells it, and a clause terminator behind it, so it cannot touch a
+ * variable that merely shares the name or a mention inside a comment that is
+ * not a location.
+ */
+const renameAliasInText = (text: string, oldAlias: string, newAlias: string): string => {
+  const escaped = oldAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
+  return text.replace(new RegExp(`(\\bAT\\s+)${escaped}(?=\\s*(?:;|:=))`, 'gi'), `$1${newAlias}`)
+}
+
 const readPouVariablesText = (pou: PLCPou): string | undefined => pou.variablesText
 
 const writePouVariablesText = (pouName: string, text: string, getState: ProjectGetState): void => {
@@ -1497,6 +1526,21 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // prevent.
       for (const pouName of touched) {
         regenerateVariablesText(pouName, getState)
+      }
+
+      // A POU the cascade could not reach, because its declarations do not
+      // parse and its variable list is therefore empty. That is precisely the
+      // project this repair exists for, so the rename has to reach the text
+      // itself — otherwise the producer takes its new name and the declaration
+      // is left bound to a name no producer holds.
+      for (const pou of getState().project.data.pous) {
+        if (touched.has(pou.name)) continue
+        const text = pou.variablesText
+        if (text === undefined) continue
+        const rewritten = renameAliasInText(text, trimmedOld, trimmedNew)
+        if (rewritten !== text) {
+          getState().projectActions.setPouVariablesText(pou.name, rewritten, pou.variablesTextUnparsed)
+        }
       }
 
       return { renamed }

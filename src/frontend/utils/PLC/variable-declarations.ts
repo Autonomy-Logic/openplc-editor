@@ -126,9 +126,9 @@ function isWholePou(source: string): boolean {
   for (;;) {
     while (index < source.length && /\s/.test(source[index])) index++
     if (source.startsWith('(*', index)) {
-      const close = source.indexOf('*)', index + 2)
+      const close = blockCommentEnd(source, index)
       if (close === -1) break
-      index = close + 2
+      index = close
       continue
     }
     if (source.startsWith('//', index)) {
@@ -140,6 +140,32 @@ function isWholePou(source: string): boolean {
     break
   }
   return /^(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w/i.test(source.slice(index))
+}
+
+/**
+ * The offset just past the `*)` that closes the block comment opening at
+ * `open`, or -1 when nothing closes it.
+ *
+ * Counts nesting, because IEC block comments nest and STruC++ reads them that
+ * way: `(* outer (* inner *) tail *)` is ONE comment. Taking the first `*)`
+ * cut it at `inner`, so the Documentation column showed a truncated comment and
+ * a POU whose leading documentation nested was not recognised as a POU at all.
+ */
+export function blockCommentEnd(source: string, open: number): number {
+  let depth = 0
+  for (let index = open; index < source.length - 1; index++) {
+    if (source.startsWith('(*', index)) {
+      depth += 1
+      index += 1
+      continue
+    }
+    if (source.startsWith('*)', index)) {
+      depth -= 1
+      if (depth === 0) return index + 2
+      index += 1
+    }
+  }
+  return -1
 }
 
 /** Character offset of the start of each 1-indexed line. */
@@ -199,10 +225,11 @@ function trailingComment(source: string, from: number): { inner: Span; kind: Com
 
   if (block !== -1 && (line === -1 || block < line)) {
     // A block comment is the one thing here allowed to span lines, so its
-    // closer is searched for in the whole source rather than in `rest`.
-    const close = source.indexOf('*)', from + block + 2)
+    // closer is searched for in the whole source rather than in `rest` — and
+    // through any comment nested inside it.
+    const close = blockCommentEnd(source, from + block)
     if (close !== -1) {
-      return { inner: { start: from + block + 2, end: close }, kind: 'block', end: close + 2 }
+      return { inner: { start: from + block + 2, end: close - 2 }, kind: 'block', end: close }
     }
   }
 
