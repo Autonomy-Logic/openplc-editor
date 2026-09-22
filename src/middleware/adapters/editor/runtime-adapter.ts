@@ -15,6 +15,7 @@
  *     whether a session is active (for isReadyForDebug).
  */
 
+import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import { openPLCStoreBase } from '../../../frontend/store'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
@@ -36,7 +37,6 @@ import type {
   WhoAmIResult,
 } from '../../shared/ports/runtime-port'
 import type { SerialPort, Unsubscribe } from '../../shared/ports/types'
-import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 
 /**
  * Ask the main process for the stored project on `ipAddress`, unpacked.

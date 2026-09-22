@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
 import { existsSync, promises as fs } from 'node:fs'
-import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
 import os from 'node:os'
@@ -171,11 +171,10 @@ import {
   type CppPouData as CppPouDataHeader,
   generateCBlocksHeader,
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
-import { validatePathId } from '@root/backend/shared/utils/path-safety'
 import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { buildVppPluginFiles } from '@root/backend/shared/utils/vpp/build-vpp-plugin-files'
-import type { VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { buildModuleConfigEntries } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
+import type { VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp, dialog } from 'electron'

@@ -37,6 +37,7 @@
  *   - runtimeLogout()
  */
 
+import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -48,7 +49,6 @@ import type {
   EtherCATValidateResponse,
   NetworkInterface,
 } from './ethercat-types'
-import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import type { PlcStatus, RuntimeLogEntry, SerialPort, TimingStats, Unsubscribe } from './types'
 
 export interface LoginParams {

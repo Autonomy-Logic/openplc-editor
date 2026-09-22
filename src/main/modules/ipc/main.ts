@@ -88,11 +88,11 @@ import {
   getProjectPath,
 } from '../../../backend/editor/utils'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
+import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
   interpretPluginCommandResponse,
   type PluginCommandOutcome,
 } from '../../../backend/shared/utils/vpp/screen-actions'
-import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
 
 /** Why a channel could not be handed out. */
