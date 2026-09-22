@@ -149,7 +149,7 @@ export interface UploadRuntimeV4Args {
   /** File map the runtime extracts on the device.  Already
    *  composed by `composeRuntimeV4Bundle`; the pipeline passes it
    *  straight through. */
-  bundle: Record<string, string>
+  bundle: RuntimeV4Bundle
   /** Discriminated device context; see `PlatformDeviceContext`. */
   context: PlatformDeviceContext
   /**
@@ -277,6 +277,16 @@ export interface CheckRuntimeVersionResult {
   minEditorVersion?: string | null
 }
 
+/**
+ * Path → content of a runtime-v4 upload bundle.
+ *
+ * Text for everything the compile pipeline composes; `Uint8Array` exists for
+ * VPP plugin payloads, which may be precompiled objects (`hal.provisioning
+ * === 'prebuilt'`). Routing those through a JS string would corrupt them, and
+ * the corruption would only surface as a link failure on the device.
+ */
+export type RuntimeV4Bundle = Record<string, string | Uint8Array>
+
 /** VPP (Vendor Plugin Package) runtime-v4 packaging.  Boards that
  *  come from an installed `.vpp` package ship a vendor I/O driver
  *  alongside the program — the driver's source files, a generated
@@ -300,7 +310,7 @@ export interface PackageVppPluginResult {
    *  bundle.  Errors that should abort the upload are reported via
    *  `errors[]`; soft skips emit log lines via the `log` callback
    *  and return an empty record without errors. */
-  files: Record<string, string>
+  files: RuntimeV4Bundle
   errors?: StructuredCompileError[]
   /**
    * `package.minRuntimeVersion` from the manifest of the VPP this
@@ -416,7 +426,7 @@ export interface CompilerPlatformPort {
 
 export interface MaterializeRuntimeV4BundleArgs {
   /** Path → file content, as composed by `composeRuntimeV4Bundle`. */
-  bundle: Record<string, string>
+  bundle: RuntimeV4Bundle
 }
 
 export interface MaterializeRuntimeV4BundleResult {

@@ -220,6 +220,29 @@ the "Export Project as XML" feature.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
+**Pre-build gates.** `handleBuild`
+(`src/frontend/components/_organisms/workspace-activity-bar/default.tsx`) refuses
+before the pre-build save, the compile and the upload when the project's board
+comes from a vendor package (`BoardInfo.vpp`) and the selected vPLC reports
+`backplaneAccess: false` — only one vPLC per Device may drive the local backplane
+I/O, and the runtime does not enforce it. The rule is `evaluateVppBackplaneGate`
+(`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`, byte-identical on
+openplc-web), shared with the board list so both refuse in the same words.
+`evaluatePreBuildPlcGate` beside it is the older gate that asks to stop a running
+PLC, and runs after this one.
+
+`handleMd5Verification` in the same file asks the gate a second time. An MD5
+mismatch inside a debug session offers to upload the current project and compiles
+with `compileOnly: false` itself — the one upload that does not go through
+`handleBuild` — so the refusal lands ahead of that offer rather than after it.
+
+A target that reports no flag is not gated, and in the editor that is permanent:
+`EDITOR_CAPABILITIES.hasOrchestratorDevices` is `false` and
+`createEditorOrchestratorAdapter` lists no orchestrators, so nothing ever reaches
+`deviceActions.setSelectedDevice` and `backplaneAccess` is always `undefined`.
+The gate is therefore inert here — it exists so the shared surface stays
+byte-identical with openplc-web, where the flag is real.
+
 ### Debugging
 
 - **Protocol:** Custom Modbus PDU (function codes 0x41-0x45) for variable read/write

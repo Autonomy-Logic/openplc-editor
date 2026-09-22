@@ -1676,6 +1676,33 @@ describe('createDeviceSlice', () => {
       store.getState().deviceActions.setSelectedDevice(null)
       expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
     })
+
+    it.each([true, false])('keeps backplaneAccess=%s as the picker read it', (backplaneAccess) => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'orch-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'dev-1',
+        deviceName: 'Test Device',
+        backplaneAccess,
+      })
+      expect(store.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess)
+    })
+
+    it('leaves backplaneAccess absent when the picker never set it', () => {
+      // Absence is the "host predates the field" case and must stay
+      // distinguishable from an explicit `false`, which is a refusal.
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'orch-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'dev-1',
+        deviceName: 'Test Device',
+      })
+      const selected = store.getState().runtimeConnection.selectedDevice
+      expect(selected).not.toBeNull()
+      expect(selected && 'backplaneAccess' in selected).toBe(false)
+    })
   })
 
   // -----------------------------------------------------------------------

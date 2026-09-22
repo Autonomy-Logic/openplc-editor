@@ -107,7 +107,13 @@ export interface PlatformCapabilities {
 
   // --- Packages ---
 
-  /** True if the app supports installing/managing VPP board packages. */
+  /**
+   * True if the app can install, browse and remove VPP board packages.
+   *
+   * Desktop only. On web a vPLC runs the package it was created with, chosen
+   * in the host's creation wizard, and the browser only reads it — so there is
+   * no catalog to browse and nothing to install into (VPP_CONTRACTS C6 §8.1.1).
+   */
   hasPackageManager: boolean
 
   // --- EtherCAT ---

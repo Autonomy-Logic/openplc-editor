@@ -25,6 +25,7 @@ import type {
   CompilerPlatformPort,
   PlatformDeviceContext,
   PlatformLog,
+  RuntimeV4Bundle,
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
@@ -560,7 +561,7 @@ async function runCompilePipelineInner(
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
     const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
     const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
-    const bundle = composeRuntimeV4Bundle({
+    const bundle: RuntimeV4Bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
       strucppFiles: strucppFilesMap,
