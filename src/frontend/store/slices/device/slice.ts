@@ -873,6 +873,10 @@ function mergeDeviceConfigWithDefaults(
     // every selector falling back to `?? {}` returns a fresh literal that
     // triggers an infinite Zustand re-render loop (blank device screen).
     selectedPlatformOptions: provided.selectedPlatformOptions ?? defaults.selectedPlatformOptions,
+    // Must merge — otherwise every project load drops the saved pin and
+    // board.tsx's drift detection sees a blank slate instead of the real
+    // prior pin, so a project with a VPP board always opens as if unpinned.
+    vppPackagePinsByBoard: provided.vppPackagePinsByBoard ?? defaults.vppPackagePinsByBoard,
   }
 }
 
