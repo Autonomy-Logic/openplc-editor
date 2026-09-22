@@ -1,31 +1,33 @@
 /**
  * DOPE-652 / GitHub #977 - external file changes must keep reaching the editor.
  *
- * The bug: an ST POU and the STruC++ LSP model sync share one Monaco model, so a
- * disk-driven reload wrote through `updatePou` -> `setValue` -> an `onChange` that
- * `@monaco-editor/react` does not suppress, and the POU was flagged unsaved. From
- * then on `handleExternalChange` refused to reload it, because it only reloads a
- * file that is still saved, and the sync was dead for the rest of the session.
+ * An ST POU's body editor and the STruC++ LSP model sync are bound to the same
+ * `pou://` model, so a disk-driven reload wrote through to the editor's own model
+ * and surfaced as a user edit, flagging the POU unsaved. The file watcher only
+ * reloads a POU that is still saved, so the sync then stopped for good.
  *
- * Running this suite requires a production build plus the preload at the path a
+ * Running this suite needs a production build plus the preload at the path a
  * NON-packaged app looks for it; see "Electron e2e" in CLAUDE.md. No CI workflow
  * runs Playwright today, so this is a local check.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
 
-// The project and the Electron profile are both generated under the OS temp dir, so the
-// suite is self-contained and leaves nothing behind in the working tree.
-const FIXTURE = join(tmpdir(), 'openplc-e2e-external-file-sync', 'project')
-const POU_FILE = join(FIXTURE, 'pous', 'programs', 'main.st')
-const IL_FILE = join(FIXTURE, 'pous', 'programs', 'side.il')
-const USER_DATA = join(tmpdir(), 'openplc-e2e-external-file-sync', 'userdata')
+const ROOT = join(tmpdir(), 'openplc-e2e-external-file-sync')
 
-const body = (marker: number) => `PROGRAM main
+// Each test gets its own project directory and its own Electron profile, keyed by
+// the test title, so nothing is shared across tests and they can run in parallel
+// and be reported independently. Nothing is written inside the working tree.
+let FIXTURE = ''
+let USER_DATA = ''
+let ST_FILE = ''
+let IL_FILE = ''
+
+const stBody = (marker: number) => `PROGRAM main
   VAR
     counter : INT;
     marker : INT;
@@ -37,7 +39,7 @@ marker := ${marker};
 END_PROGRAM
 `
 
-const il = (n: number) => `PROGRAM side
+const ilBody = (n: number) => `PROGRAM side
   VAR
     ilCounter : INT;
   END_VAR
@@ -49,16 +51,10 @@ ST ilCounter
 END_PROGRAM
 `
 
-// `playwright.config.ts` sets `fullyParallel: true`, which would otherwise spread these
-// tests across workers: each would launch its own Electron and fight over the same
-// fixture directory. They also run in sequence by design, each one leaving the app in
-// the state the next expects.
-test.describe.configure({ mode: 'serial' })
-
 let app: ElectronApplication
 let page: Page
 
-/** Write the minimal on-disk project this suite drives. */
+/** Write the minimal on-disk project this suite drives, at its initial state. */
 function writeFixture(): void {
   mkdirSync(join(FIXTURE, 'devices'), { recursive: true })
   mkdirSync(join(FIXTURE, 'pous', 'programs'), { recursive: true })
@@ -102,13 +98,12 @@ function writeFixture(): void {
     'utf-8',
   )
   writeFileSync(join(FIXTURE, 'devices', 'pin-mapping.json'), '{}', 'utf-8')
-  writeFileSync(POU_FILE, body(1), 'utf-8')
-  writeFileSync(IL_FILE, il(1), 'utf-8')
+  writeFileSync(ST_FILE, stBody(1), 'utf-8')
+  writeFileSync(IL_FILE, ilBody(1), 'utf-8')
 }
 
-test.beforeAll(async () => {
-  writeFixture()
-
+/** Seed the recent-projects list so the start screen offers the fixture. */
+function writeRecentProjects(): void {
   const history = join(USER_DATA, 'User', 'History')
   mkdirSync(history, { recursive: true })
   writeFileSync(
@@ -129,18 +124,12 @@ test.beforeAll(async () => {
     'utf-8',
   )
   writeFileSync(join(history, 'libraries.json'), '[]', 'utf-8')
+}
 
-  app = await electron.launch({
-    args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${USER_DATA}`],
-    // NOT development: `resolveHtmlPath` would point the window at http://localhost:1212,
-    // the webpack dev server, which is not running against a production build.
-    env: { ...process.env, NODE_ENV: 'production' },
-  })
-  page = await mainWindow()
-  await page.waitForLoadState('domcontentloaded')
-})
-
-/** The app opens a splash window first, so `firstWindow()` races it. Pick the real one by URL. */
+/**
+ * The app opens a splash window first, so `firstWindow()` races it and returns a
+ * page that closes moments later. Pick the real one by URL.
+ */
 async function mainWindow(): Promise<Page> {
   const deadline = Date.now() + 60000
   while (Date.now() < deadline) {
@@ -156,103 +145,121 @@ async function mainWindow(): Promise<Page> {
   throw new Error('main window never appeared')
 }
 
-test.afterAll(async () => {
-  await app?.close()
-})
+/**
+ * Every open tab keeps its Monaco editor mounted, hidden with `display: none`,
+ * so the body has to be read from the visible one.
+ */
+const visibleBody = () => page.locator('.view-lines:visible').first()
 
-/** Poll the Monaco viewport until it shows `marker := <n>;`, or time out. */
-async function waitForMarker(n: number, timeoutMs = 10000): Promise<string> {
+/** Poll the visible editor until it shows `needle`. Returns the last text either way. */
+async function waitForText(needle: string, timeoutMs = 10000): Promise<string> {
   const deadline = Date.now() + timeoutMs
   let last = ''
   while (Date.now() < deadline) {
-    last = (await page.locator('.view-lines:visible').first().innerText()).replace(/ /g, ' ')
-    if (last.includes(`marker := ${n};`)) return last
+    last = (await visibleBody().innerText()).replace(/ /g, ' ')
+    if (last.includes(needle)) return last
     await page.waitForTimeout(400)
   }
   return last
 }
 
-test('external edits keep syncing and do not dirty the ST POU', async () => {
-  test.setTimeout(180000)
-  await page.getByText('external-file-sync', { exact: true }).first().click()
+/** Open the fixture from the start screen and open one POU's tab. */
+async function openPou(pouName: string): Promise<void> {
+  await page.getByText('external-file-sync', { exact: true }).first().click({ timeout: 30000 })
+  await page.getByText(pouName, { exact: true }).first().click({ timeout: 30000 })
+}
 
-  // Workspace is up once the project tree offers the POU.
-  await page.getByText('main', { exact: true }).first().click({ timeout: 20000 })
+test.beforeEach(async ({}, testInfo) => {
+  const slug = testInfo.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+  FIXTURE = join(ROOT, slug, 'project')
+  USER_DATA = join(ROOT, slug, 'userdata')
+  ST_FILE = join(FIXTURE, 'pous', 'programs', 'main.st')
+  IL_FILE = join(FIXTURE, 'pous', 'programs', 'side.il')
 
-  const initial = await waitForMarker(1)
-  expect(initial, 'editor should show the on-disk body on open').toContain('marker := 1;')
+  writeFixture()
+  writeRecentProjects()
 
-  // Criterion 1: first external edit lands.
-  writeFileSync(POU_FILE, body(2), 'utf-8')
-  expect(await waitForMarker(2), 'first external edit must reach the editor').toContain('marker := 2;')
-
-  // Criterion 2: the sync must not latch off. This is what fails without the guard,
-  // because the first reload flags the POU unsaved and `handleExternalChange` then
-  // refuses to reload a file that is no longer saved.
-  writeFileSync(POU_FILE, body(3), 'utf-8')
-  expect(await waitForMarker(3), 'second external edit must reach the editor').toContain('marker := 3;')
-
-  writeFileSync(POU_FILE, body(4), 'utf-8')
-  expect(await waitForMarker(4), 'third external edit must reach the editor').toContain('marker := 4;')
-
-  expect(readFileSync(POU_FILE, 'utf-8')).toContain('marker := 4;')
+  app = await electron.launch({
+    args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${USER_DATA}`],
+    // NOT development: `resolveHtmlPath` would point the window at the webpack dev
+    // server on localhost:1212, which is not running against a production build.
+    env: { ...process.env, NODE_ENV: 'production' },
+  })
+  page = await mainWindow()
+  await page.waitForLoadState('domcontentloaded')
 })
 
-test('typing marks the POU dirty, which correctly suspends the disk sync', async () => {
-  test.setTimeout(180000)
-  // The dirty flag is not rendered anywhere we can assert on, but it is observable
-  // through its own consequence: `handleExternalChange` only reloads a file that is
-  // still saved. So a real user edit must make the next external edit NOT land.
-  await page.locator('.view-lines:visible').first().click()
-  await page.keyboard.type('(* local edit *)')
-  await page.waitForTimeout(500)
+test.afterEach(async () => {
+  await app?.close()
+})
 
-  writeFileSync(POU_FILE, body(9), 'utf-8')
-  const after = await waitForMarker(9, 6000)
-  // Guard against a vacuous pass: the editor must still be showing a real body.
+test('ST: consecutive external edits all reach the editor', async () => {
+  test.setTimeout(120000)
+  await openPou('main')
+  expect(await waitForText('marker := 1;'), 'editor should show the on-disk body on open').toContain('marker := 1;')
+
+  writeFileSync(ST_FILE, stBody(2), 'utf-8')
+  expect(await waitForText('marker := 2;'), 'first external edit must reach the editor').toContain('marker := 2;')
+
+  // The one that regressed: without the guard the first reload flags the POU
+  // unsaved, and `handleExternalChange` then refuses to reload it ever again.
+  writeFileSync(ST_FILE, stBody(3), 'utf-8')
+  expect(await waitForText('marker := 3;'), 'second external edit must reach the editor').toContain('marker := 3;')
+
+  writeFileSync(ST_FILE, stBody(4), 'utf-8')
+  expect(await waitForText('marker := 4;'), 'third external edit must reach the editor').toContain('marker := 4;')
+})
+
+test('ST: a typed edit does mark the POU dirty, which suspends the disk sync', async () => {
+  test.setTimeout(120000)
+  await openPou('main')
+  await waitForText('marker := 1;')
+
+  await visibleBody().click()
+  await page.keyboard.type('(* local edit *)')
+  // Observe the keystrokes landing rather than sleeping: on a slow renderer the
+  // disk write below could otherwise be processed first.
+  await expect(visibleBody()).toContainText('(* local edit *)')
+
+  writeFileSync(ST_FILE, stBody(9), 'utf-8')
+  const after = await waitForText('marker := 9;', 6000)
+
+  // Guard against a vacuous pass: a blank editor would satisfy the negative
+  // assertion on its own.
   expect(after, 'editor should still show the typed text').toContain('(* local edit *)')
-  expect(after, 'editor should still show the last synced marker').toContain('marker := 4;')
+  expect(after, 'editor should still show the body it had').toContain('marker := 1;')
   expect(after, 'a dirty POU must not be overwritten from disk').not.toContain('marker := 9;')
 })
 
-test('reopening the tab picks up the on-disk body and leaves it saved', async () => {
-  test.setTimeout(180000)
-  // Close the tab, discarding the local edit from the previous test.
+test('ST: reopening a tab picks up the on-disk body and leaves it saved', async () => {
+  test.setTimeout(120000)
+  await openPou('main')
+  await waitForText('marker := 1;')
+
+  // The POU is untouched, so closing raises no save dialog.
   const tab = page.locator('div.group', { hasText: 'main' }).first()
   await tab.hover()
   await tab.locator('svg').last().click()
-  const discard = page.getByRole('button', { name: /don't save|discard|no/i }).first()
-  if (await discard.isVisible().catch(() => false)) await discard.click()
+  await expect(visibleBody()).toHaveCount(0)
 
-  writeFileSync(POU_FILE, body(5), 'utf-8')
-  await page.getByText('main', { exact: true }).first().click({ timeout: 20000 })
-  expect(await waitForMarker(5), 'reopened tab must show the on-disk body').toContain('marker := 5;')
+  writeFileSync(ST_FILE, stBody(5), 'utf-8')
+  await page.getByText('main', { exact: true }).first().click({ timeout: 30000 })
+  expect(await waitForText('marker := 5;'), 'reopened tab must show the on-disk body').toContain('marker := 5;')
 
-  // Still saved, so a further external edit must land.
-  writeFileSync(POU_FILE, body(6), 'utf-8')
-  expect(await waitForMarker(6), 'reopened tab must stay saved and keep syncing').toContain('marker := 6;')
+  // Still saved, so a further external edit must land. This is what the
+  // mount-time guard protects.
+  writeFileSync(ST_FILE, stBody(6), 'utf-8')
+  expect(await waitForText('marker := 6;'), 'reopened tab must stay saved and keep syncing').toContain('marker := 6;')
 })
 
-test('an IL POU is unaffected: external edits land and keep landing', async () => {
-  test.setTimeout(180000)
-  await page.getByText('side', { exact: true }).first().click({ timeout: 20000 })
+test('IL: unaffected, external edits land and keep landing', async () => {
+  test.setTimeout(120000)
+  await openPou('side')
+  expect(await waitForText('ADD 1'), 'IL body should load from disk').toContain('ADD 1')
 
-  const waitForAdd = async (n: number, timeoutMs = 10000) => {
-    const deadline = Date.now() + timeoutMs
-    let last = ''
-    while (Date.now() < deadline) {
-      last = (await page.locator('.view-lines:visible').first().innerText()).replace(/\u00a0/g, ' ')
-      if (last.includes(`ADD ${n}`)) return last
-      await page.waitForTimeout(400)
-    }
-    return last
-  }
+  writeFileSync(IL_FILE, ilBody(2), 'utf-8')
+  expect(await waitForText('ADD 2'), 'first external IL edit must land').toContain('ADD 2')
 
-  expect(await waitForAdd(1), 'IL body should load from disk').toContain('ADD 1')
-
-  writeFileSync(IL_FILE, il(2), 'utf-8')
-  expect(await waitForAdd(2), 'first external IL edit must land').toContain('ADD 2')
-
-  writeFileSync(IL_FILE, il(3), 'utf-8')
-  expect(await waitForAdd(3), 'IL sync must not latch off either').toContain('ADD 3')
+  writeFileSync(IL_FILE, ilBody(3), 'utf-8')
+  expect(await waitForText('ADD 3'), 'IL sync must not latch off either').toContain('ADD 3')
 })
