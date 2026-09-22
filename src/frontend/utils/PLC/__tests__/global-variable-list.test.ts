@@ -98,6 +98,10 @@ describe('global variable list — POU externals', () => {
   })
 })
 
+// The error strings below are STruC++'s own. This parser used to have a regex of its
+// own and a hand-written message for each shape; the compiler now decides what a GVL
+// is, so it decides what is wrong with one too — and unlike the old messages, its
+// report carries the line.
 describe('global variable list — text form', () => {
   it('writes the address BEFORE the colon, as IEC and the CODESYS importer do', () => {
     // A round-trip test alone cannot catch this: a serializer and parser that agree with
@@ -145,15 +149,15 @@ describe('global variable list — text form', () => {
     const result = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL\nEND_VAR', 'GVL')
 
     expect(result.globalVariableList).toBeUndefined()
-    expect(result.error).toMatch(/missing semicolon/)
+    expect(result.error).toMatch(/Expected `Semicolon`/)
   })
 
   it('requires the VAR_GLOBAL wrapper', () => {
-    expect(parseGlobalVariableListFromText('A : BOOL;', 'GVL').error).toMatch(/must start with VAR_GLOBAL/)
+    expect(parseGlobalVariableListFromText('A : BOOL;', 'GVL').error).toMatch(/while parsing a statement/)
   })
 
   it('requires END_VAR to close the block', () => {
-    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;', 'GVL').error).toMatch(/must end with END_VAR/)
+    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;', 'GVL').error).toMatch(/Expected `END_VAR`/)
   })
 
   it('reports an empty declaration', () => {
@@ -161,18 +165,18 @@ describe('global variable list — text form', () => {
   })
 
   it('reports a missing colon distinctly from a missing semicolon', () => {
-    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A BOOL;\nEND_VAR', 'GVL').error).toMatch(/missing colon/)
+    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A BOOL;\nEND_VAR', 'GVL').error).toMatch(/Expected `Colon`/)
   })
 
   it('rejects a member named after an IEC keyword', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  IF : BOOL;\nEND_VAR', 'GVL').error).toMatch(
-      /invalid variable name/,
+      /Expected `END_VAR`, found `IF`/,
     )
   })
 
   it('rejects a type it cannot resolve', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : NOT_A_TYPE_?;\nEND_VAR', 'GVL').error).toMatch(
-      /cannot parse|unknown type/,
+      /unexpected character/,
     )
   })
 
@@ -331,18 +335,18 @@ describe('global variable list — CODESYS declaration forms', () => {
   it('catches a block reopened before it closed', () => {
     expect(
       parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;\nVAR_GLOBAL\n  B : INT;\nEND_VAR', 'GVL').error,
-    ).toMatch(/opened again before END_VAR/)
+    ).toMatch(/Expected `END_VAR`, found `VAR_GLOBAL`/)
   })
 
   it('catches a stray END_VAR', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;\nEND_VAR\nEND_VAR', 'GVL').error).toMatch(
-      /END_VAR without a matching VAR_GLOBAL/,
+      /Expected `END_PROGRAM`, found `END_VAR`/,
     )
   })
 
   it('reports a declaration sitting outside any block', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;\nEND_VAR\n  B : INT;', 'GVL').error).toMatch(
-      /outside a VAR_GLOBAL/,
+      /while parsing a statement/,
     )
   })
 })

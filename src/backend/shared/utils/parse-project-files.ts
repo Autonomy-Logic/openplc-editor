@@ -11,12 +11,14 @@
 import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-declarations'
 import {
   detectLanguageFromExtension,
-  findGraphicalBodyStartIndex,
-  findLastEndVarIndex,
+  extractDocumentation,
+  extractVariablesSection,
   isGraphicalBodyShape,
+  matchPouHeader,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
+  POU_END_KEYWORDS,
 } from '../../../frontend/utils/PLC/pou-text-parser'
 import type { RawProjectFile } from '../../../middleware/shared/ports/project-port'
 import type {
@@ -212,47 +214,24 @@ function mergeDataTypes(
  * (read-project.ts:190-315), adapted to return the flat port format.
  */
 function createFallbackPou(content: string, language: string, pouType: string, pouName: string): FallbackPou {
-  // 1. Extract documentation from leading (* ... *) comment
-  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
-  const documentation = docMatch ? docMatch[1].trim() : ''
-  const remainingContent = docMatch ? content.slice(docMatch[0].length) : content
+  // 1. Documentation, header and declarations, through the same helpers the
+  //    successful path uses. They were written out a second time here and had
+  //    already drifted: this copy sliced the declarations from the `VAR`
+  //    keyword rather than from the start of its line, so a POU that failed to
+  //    parse came back re-indented on the next save while the others did not.
+  const { documentation, remainingContent } = extractDocumentation(content)
 
-  // 2. Find POU declaration to determine where body starts
-  const pouTypeKeywords: Record<string, string> = {
-    program: 'PROGRAM',
-    function: 'FUNCTION',
-    'function-block': 'FUNCTION_BLOCK',
-  }
-  const typeKeyword = pouTypeKeywords[pouType]
-  const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
-  const declarationMatch = remainingContent.match(declarationRegex)
-  let bodyStartIndex = declarationMatch ? declarationMatch[0].length : 0
+  const header = matchPouHeader(remainingContent, pouType)
+  const section = extractVariablesSection(remainingContent, header ? header.text.length : 0, {
+    boundAtGraphicalBody: language === 'ld' || language === 'fbd',
+  })
+  // An empty block, not an empty string: this text is what the code view opens
+  // on, and it has to be something the user can add a declaration to.
+  const variablesText = section.text === '' ? 'VAR\nEND_VAR' : section.text
+  const bodyStartIndex = section.bodyStartIndex
 
-  // 3. Extract raw VAR blocks as variablesText
-  const varStartIndex = remainingContent.search(
-    /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
-  )
-  let variablesText = 'VAR\nEND_VAR'
-  if (varStartIndex !== -1) {
-    // Graphical bodies bound the scan at the JSON, for the reason spelled out on
-    // `findLastEndVarIndex`: without it this fallback repeats the very failure it
-    // exists to recover from (DOPE-592).
-    const bodyStart =
-      language === 'ld' || language === 'fbd' ? findGraphicalBodyStartIndex(remainingContent, varStartIndex) : -1
-    const lastEnd = findLastEndVarIndex(remainingContent, varStartIndex, bodyStart === -1 ? undefined : bodyStart)
-    if (lastEnd !== -1) {
-      variablesText = remainingContent.slice(varStartIndex, lastEnd)
-      bodyStartIndex = lastEnd
-    }
-  }
-
-  // 4. Extract body content
-  const endKeywords: Record<string, string> = {
-    program: 'END_PROGRAM',
-    function: 'END_FUNCTION',
-    'function-block': 'END_FUNCTION_BLOCK',
-  }
-  const endKeyword = endKeywords[pouType]
+  // 2. Extract body content
+  const endKeyword = POU_END_KEYWORDS[pouType]
   let bodyValue: unknown
 
   if (language === 'ld' || language === 'fbd') {

@@ -19,22 +19,8 @@
 
 import { parse } from 'strucpp'
 
-import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCStructureVariable, PLCVariableType } from '../../../middleware/shared/ports/types'
-import { blockCommentEnd, classifyType } from './variable-declarations'
-
-/**
- * A structure field's type is classified the same way a variable's is —
- * elementary, inline array, or a user data type. Function-block instances are
- * not resolved here: a STRUCT field cannot be one, so there is no project
- * context to consult.
- */
-const FIELD_TYPE_CONTEXT = {
-  resolveBaseType: (name: string) => {
-    const check = baseTypeSchema.safeParse(name.toUpperCase())
-    return check.success ? check.data : undefined
-  },
-}
+import { blockCommentEnd, classifyType, ELEMENTARY_TYPE_CONTEXT } from './variable-declarations'
 
 export interface ParseDataTypeResult {
   dataType?: PLCDataType
@@ -116,8 +102,9 @@ function elementType(source: string, starts: number[], definition: StrucppNode):
     : typeof definition.elementTypeName === 'string'
       ? definition.elementTypeName
       : 'INT'
-  const base = FIELD_TYPE_CONTEXT.resolveBaseType(text)
-  return base !== undefined ? { definition: 'base-type', value: base } : { definition: 'user-data-type', value: text }
+  // Same classification the rest of the file uses, so an element type and a
+  // field type cannot disagree about what counts as elementary.
+  return classifyType(text, ELEMENTARY_TYPE_CONTEXT)
 }
 
 /** `0..3` for one dimension, read from the source so symbolic bounds survive. */
@@ -153,7 +140,7 @@ function buildStructure(source: string, starts: number[], name: string, definiti
     names.forEach((_folded, index) => {
       variable.push({
         name: sliceSpan(source, starts, nameSpans[index]),
-        type: classifyType(typeText, FIELD_TYPE_CONTEXT),
+        type: classifyType(typeText, ELEMENTARY_TYPE_CONTEXT),
         // A structure field's initial value is wrapped, unlike a variable's.
         ...(initialValue !== '' ? { initialValue: { simpleValue: { value: initialValue } } } : {}),
         ...(documentation !== '' ? { documentation } : {}),

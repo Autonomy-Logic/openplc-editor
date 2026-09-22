@@ -33,6 +33,7 @@
 
 import { parse } from 'strucpp'
 
+import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { DEBUG_STRING_CAP } from '../variable-sizes'
 
@@ -619,6 +620,21 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
   }
 
   return { blocks, variables, errors }
+}
+
+/**
+ * The context to classify types against when the caller has no project.
+ *
+ * Elementary types resolve; anything else is a user data type, which is the
+ * right answer for a `.dt` field or a global variable list member referring to
+ * a type declared elsewhere in the project. Shared so the three text parsers
+ * cannot drift on what counts as a base type.
+ */
+export const ELEMENTARY_TYPE_CONTEXT: TypeContext = {
+  resolveBaseType: (name: string) => {
+    const check = baseTypeSchema.safeParse(name.toUpperCase())
+    return check.success ? check.data : undefined
+  },
 }
 
 /**

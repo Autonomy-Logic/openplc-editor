@@ -7,7 +7,7 @@ import { getLanguageFromExtension } from './pou-file-extensions'
  * @param content - The content to extract documentation from
  * @returns Object with documentation and remaining content
  */
-const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
+export const extractDocumentation = (content: string): { documentation: string; remainingContent: string } => {
   const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
   if (docMatch) {
     return {
@@ -110,23 +110,88 @@ export const findLastEndVarIndex = (content: string, startIndex: number, stopAtI
  * @returns Parsed PLCPou object
  * @throws Error if parsing fails
  */
+/**
+ * The keyword a POU of each kind opens and closes with.
+ *
+ * One copy. These maps, the header regex built from them and the scan for the
+ * start of the VAR section were written out four times — three times in this
+ * file and again in the loader's fallback — and they had already drifted: the
+ * fallback sliced the declarations from the `VAR` keyword rather than from the
+ * start of its line, so the indentation fix (DOPE-650) reached three of the four
+ * paths and a POU that failed to parse still came back re-indented.
+ */
+export const POU_TYPE_KEYWORDS: Record<string, string> = {
+  program: 'PROGRAM',
+  function: 'FUNCTION',
+  'function-block': 'FUNCTION_BLOCK',
+}
+
+export const POU_END_KEYWORDS: Record<string, string> = {
+  program: 'END_PROGRAM',
+  function: 'END_FUNCTION',
+  'function-block': 'END_FUNCTION_BLOCK',
+}
+
+export interface PouHeaderMatch {
+  /** The matched header text, whose length is where the body may start. */
+  text: string
+  name: string
+  /** Present for a FUNCTION, which declares what it returns. */
+  returnType?: string
+}
+
+/** `PROGRAM Main` / `FUNCTION Add : INT` at the head of `content`. */
+export const matchPouHeader = (content: string, pouType: string): PouHeaderMatch | undefined => {
+  const keyword = POU_TYPE_KEYWORDS[pouType]
+  if (!keyword) return undefined
+  const match = content.match(new RegExp(`^\\s*(${keyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i'))
+  if (!match) return undefined
+  return { text: match[0], name: match[1 + 1], ...(match[3] ? { returnType: match[3] } : {}) }
+}
+
+/**
+ * The POU's declaration text and where its body starts.
+ *
+ * The text runs from the start of the LINE holding the first `VAR` keyword to
+ * the last `END_VAR`, because it is written back to the file verbatim: slicing
+ * at the keyword dropped the indentation in front of it and re-indented every
+ * POU in the project on the first save.
+ *
+ * `boundAtGraphicalBody` stops the `END_VAR` scan at the JSON body of a ladder
+ * or FBD POU, for the reason spelled out on `findLastEndVarIndex`.
+ */
+export const extractVariablesSection = (
+  content: string,
+  bodyStartIndex: number,
+  options: { boundAtGraphicalBody?: boolean } = {},
+): { text: string; bodyStartIndex: number } => {
+  const varStartIndex = content.search(/\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i)
+  if (varStartIndex === -1) return { text: '', bodyStartIndex }
+
+  const graphicalBodyStart = options.boundAtGraphicalBody ? findGraphicalBodyStartIndex(content, varStartIndex) : -1
+  const lastEndVarIndex = findLastEndVarIndex(
+    content,
+    varStartIndex,
+    graphicalBodyStart === -1 ? undefined : graphicalBodyStart,
+  )
+  if (lastEndVarIndex === -1) return { text: '', bodyStartIndex }
+
+  const lineStart = content.lastIndexOf('\n', varStartIndex) + 1
+  return { text: content.slice(lineStart, lastEndVarIndex), bodyStartIndex: lastEndVarIndex }
+}
+
 export const parseTextualPouFromString = (content: string, language: string, type: string): PLCPou => {
   try {
     const { documentation, remainingContent } = extractDocumentation(content)
 
-    const pouTypeKeywords = {
-      program: 'PROGRAM',
-      function: 'FUNCTION',
-      'function-block': 'FUNCTION_BLOCK',
-    }
-
-    const typeKeyword = pouTypeKeywords[type as keyof typeof pouTypeKeywords]
+    const typeKeyword = POU_TYPE_KEYWORDS[type]
     if (!typeKeyword) {
       throw new Error(formatParseError(`Unsupported POU type: ${type}`))
     }
 
-    const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
-    const declarationMatch = remainingContent.match(declarationRegex)
+    const declarationMatch = remainingContent.match(
+      new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i'),
+    )
 
     if (!declarationMatch) {
       throw new Error(formatParseError(`Could not find ${typeKeyword} declaration`))
@@ -139,40 +204,15 @@ export const parseTextualPouFromString = (content: string, language: string, typ
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
     }
 
-    const varStartIndex = remainingContent.search(
-      /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
-    )
-
-    let variablesString = ''
-    let bodyStartIndex = declarationMatch[0].length
-
-    if (varStartIndex !== -1) {
-      const varSectionStart = varStartIndex
-      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
-
-      if (lastEndVarIndex !== -1) {
-        // From the start of the LINE holding the keyword, not the keyword
-        // itself. `search` finds `VAR`, so slicing there dropped the two spaces
-        // in front of it — and since this text is now written back verbatim, a
-        // load/save round trip re-indented the first block header of every POU
-        // file in the project (DOPE-650).
-        const lineStart = remainingContent.lastIndexOf('\n', varSectionStart) + 1
-        variablesString = remainingContent.slice(lineStart, lastEndVarIndex)
-        bodyStartIndex = lastEndVarIndex
-      }
-    }
+    const section = extractVariablesSection(remainingContent, declarationMatch[0].length)
+    const variablesString = section.text
+    const bodyStartIndex = section.bodyStartIndex
 
     const variables = variablesString.trim()
       ? parseIecStringToVariables(variablesString).map((v) => ({ ...v, debug: false }))
       : []
 
-    const endKeywords = {
-      program: 'END_PROGRAM',
-      function: 'END_FUNCTION',
-      'function-block': 'END_FUNCTION_BLOCK',
-    }
-
-    const endKeyword = endKeywords[type as keyof typeof endKeywords]
+    const endKeyword = POU_END_KEYWORDS[type]
     const endKeywordRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
     const endMatch = remainingContent.slice(bodyStartIndex).search(endKeywordRegex)
 
@@ -225,19 +265,14 @@ export const parseHybridPouFromString = (content: string, language: string, type
   try {
     const { documentation, remainingContent } = extractDocumentation(content)
 
-    const pouTypeKeywords = {
-      program: 'PROGRAM',
-      function: 'FUNCTION',
-      'function-block': 'FUNCTION_BLOCK',
-    }
-
-    const typeKeyword = pouTypeKeywords[type as keyof typeof pouTypeKeywords]
+    const typeKeyword = POU_TYPE_KEYWORDS[type]
     if (!typeKeyword) {
       throw new Error(formatParseError(`Unsupported POU type: ${type}`))
     }
 
-    const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
-    const declarationMatch = remainingContent.match(declarationRegex)
+    const declarationMatch = remainingContent.match(
+      new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i'),
+    )
 
     if (!declarationMatch) {
       throw new Error(formatParseError(`Could not find ${typeKeyword} declaration`))
@@ -250,40 +285,16 @@ export const parseHybridPouFromString = (content: string, language: string, type
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
     }
 
-    const varStartIndex = remainingContent.search(
-      /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
-    )
-
-    let variablesString = ''
-    let bodyStartIndex = declarationMatch[0].length
-
-    if (varStartIndex !== -1) {
-      const varSectionStart = varStartIndex
-      const lastEndVarIndex = findLastEndVarIndex(remainingContent, varSectionStart)
-
-      if (lastEndVarIndex !== -1) {
-        // From the start of the LINE holding the keyword, not the keyword
-        // itself. `search` finds `VAR`, so slicing there dropped the two spaces
-        // in front of it — and since this text is now written back verbatim, a
-        // load/save round trip re-indented the first block header of every POU
-        // file in the project (DOPE-650).
-        const lineStart = remainingContent.lastIndexOf('\n', varSectionStart) + 1
-        variablesString = remainingContent.slice(lineStart, lastEndVarIndex)
-        bodyStartIndex = lastEndVarIndex
-      }
-    }
+    const section = extractVariablesSection(remainingContent, declarationMatch[0].length)
+    const variablesString = section.text
+    const bodyStartIndex = section.bodyStartIndex
 
     const variables = variablesString.trim()
       ? parseIecStringToVariables(variablesString).map((v) => ({ ...v, debug: false }))
       : []
 
     // Strip the trailing END keyword from the body content, matching how textual/graphical parsers handle it
-    const endKeywords: Record<string, string> = {
-      program: 'END_PROGRAM',
-      function: 'END_FUNCTION',
-      'function-block': 'END_FUNCTION_BLOCK',
-    }
-    const endKeyword = endKeywords[type]
+    const endKeyword = POU_END_KEYWORDS[type]
     let bodyContent = remainingContent.slice(bodyStartIndex).trim()
     /* istanbul ignore next -- defensive: type already validated above */
     if (endKeyword) {
@@ -335,19 +346,14 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
   try {
     const { documentation, remainingContent } = extractDocumentation(content)
 
-    const pouTypeKeywords: Record<string, string> = {
-      program: 'PROGRAM',
-      function: 'FUNCTION',
-      'function-block': 'FUNCTION_BLOCK',
-    }
-
-    const typeKeyword = pouTypeKeywords[type]
+    const typeKeyword = POU_TYPE_KEYWORDS[type]
     if (!typeKeyword) {
       throw new Error(formatParseError(`Unsupported POU type: ${type}`))
     }
 
-    const declarationRegex = new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i')
-    const declarationMatch = remainingContent.match(declarationRegex)
+    const declarationMatch = remainingContent.match(
+      new RegExp(`^\\s*(${typeKeyword})\\s+(\\w+)(?:\\s*:\\s*(\\w+))?`, 'i'),
+    )
 
     if (!declarationMatch) {
       throw new Error(formatParseError(`Could not find ${typeKeyword} declaration`))
@@ -360,45 +366,17 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
     }
 
-    const varStartIndex = remainingContent.search(
-      /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
-    )
-
-    let variablesString = ''
-    let bodyStartIndex = declarationMatch[0].length
-
-    if (varStartIndex !== -1) {
-      const varSectionStart = varStartIndex
-      const bodyStart = findGraphicalBodyStartIndex(remainingContent, varSectionStart)
-      const lastEndVarIndex = findLastEndVarIndex(
-        remainingContent,
-        varSectionStart,
-        bodyStart === -1 ? undefined : bodyStart,
-      )
-
-      if (lastEndVarIndex !== -1) {
-        // From the start of the LINE holding the keyword, not the keyword
-        // itself. `search` finds `VAR`, so slicing there dropped the two spaces
-        // in front of it — and since this text is now written back verbatim, a
-        // load/save round trip re-indented the first block header of every POU
-        // file in the project (DOPE-650).
-        const lineStart = remainingContent.lastIndexOf('\n', varSectionStart) + 1
-        variablesString = remainingContent.slice(lineStart, lastEndVarIndex)
-        bodyStartIndex = lastEndVarIndex
-      }
-    }
+    const section = extractVariablesSection(remainingContent, declarationMatch[0].length, {
+      boundAtGraphicalBody: true,
+    })
+    const variablesString = section.text
+    const bodyStartIndex = section.bodyStartIndex
 
     const variables: PLCVariable[] = variablesString.trim()
       ? parseIecStringToVariables(variablesString).map((v) => ({ ...v, debug: false }))
       : []
 
-    const endKeywords: Record<string, string> = {
-      program: 'END_PROGRAM',
-      function: 'END_FUNCTION',
-      'function-block': 'END_FUNCTION_BLOCK',
-    }
-
-    const endKeyword = endKeywords[type]
+    const endKeyword = POU_END_KEYWORDS[type]
     const endKeywordRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
     const endMatch = remainingContent.slice(bodyStartIndex).search(endKeywordRegex)
 
