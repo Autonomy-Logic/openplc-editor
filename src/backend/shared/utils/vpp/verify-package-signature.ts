@@ -4,15 +4,18 @@
  * Counterpart to the signing side in the openplc-packages repo
  * (`scripts/lib/package-signing.ts`). Everything the two MUST agree on —
  * canonicalization, the file-set comparison, the manifest identity check —
- * lives in `package-verification-core.ts`, which the browser verifier drives
- * too, so the desktop and the web app cannot decide differently about the same
- * package. This file supplies only what is filesystem- and Node-specific:
- * walking the extracted tree, hashing files, and the Ed25519 primitive.
+ * lives in `package-verification-core.ts`. This file drives that core the same
+ * way the browser verifier (`verify-vpp-archive.ts`) does — including the
+ * manifest identity check — so the desktop and the web app cannot decide
+ * differently about the same package; it supplies only what is filesystem-
+ * and Node-specific: walking the extracted tree, hashing files, and the
+ * Ed25519 primitive.
  *
  * Verification fails closed: a missing/garbled signature, an unknown key, a
- * bad signature, or ANY file mismatch (extra, missing, or altered) rejects the
- * package. This runs at the import trust boundary before the package's fields
- * are used as paths or its HAL/plugin code is ever compiled.
+ * bad signature, ANY file mismatch (extra, missing, or altered), or a manifest
+ * that disagrees with the signed identity rejects the package. This runs at
+ * the import trust boundary before the package's fields are used as paths or
+ * its HAL/plugin code is ever compiled.
  */
 
 import { createHash, verify as cryptoVerify } from 'node:crypto'
@@ -22,11 +25,13 @@ import { join, relative, sep } from 'node:path'
 import {
   canonicalize,
   isSafePackageEntryPath,
+  MANIFEST_FILENAME,
   resolveSignatureMaterial,
   SIGNATURE_FILENAME,
   type SignatureVerification,
   type TrustedKeys,
   verifyFileSet,
+  verifyManifestIdentity,
 } from './package-verification-core'
 
 export { canonicalize, SIGNATURE_FILENAME }
@@ -64,7 +69,10 @@ function sha256File(path: string): string {
 
 /**
  * Verify the Ed25519 signature embedded in `<extractedDir>/signature.json`
- * against the bytes of every file in the package.
+ * against the bytes of every file in the package, then confirm
+ * `<extractedDir>/manifest.json` names the same package the signature does —
+ * without this, a package validly signed as A could ship a manifest claiming
+ * to be B.
  *
  * Synchronous by contract: the desktop calls it on the import path and again
  * when a project opens, and both are decision points that must not proceed
@@ -118,5 +126,19 @@ export function verifyPackageSignature(extractedDir: string, trustedKeys: Truste
     }
   }
 
-  return verifyFileSet(payload, actualHashes)
+  const fileSet = verifyFileSet(payload, actualHashes)
+  if (!fileSet.valid) return fileSet
+
+  // 3) The file set matching the signature only proves manifest.json's BYTES
+  // are what was signed — not that its declared identity is what the caller
+  // thinks it imported. Refuse a package signed as A that ships a manifest
+  // naming B.
+  let manifestJson: unknown
+  try {
+    manifestJson = JSON.parse(readFileSync(join(extractedDir, MANIFEST_FILENAME), 'utf-8'))
+  } catch {
+    return { valid: false, error: 'Package has no readable manifest.json' }
+  }
+
+  return verifyManifestIdentity(payload, manifestJson)
 }

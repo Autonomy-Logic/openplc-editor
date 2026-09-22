@@ -25,7 +25,7 @@ const sha256 = (s: string): string =>
 
 /** Files written into every fixture package (relative path -> contents). */
 const DEFAULT_FILES: Record<string, string> = {
-  'manifest.json': '{"formatVersion":"1.0"}',
+  'manifest.json': JSON.stringify({ package: { id: 'com.test.pkg', version: '1.0.0' } }),
   'hal/arduino/hal.cpp': 'void hardwareInit() {}',
   'assets/logo.png': 'PNGDATA',
 }
@@ -223,6 +223,30 @@ describe('verifyPackageSignature', () => {
     const fakeStat = { isDirectory: () => false, isFile: () => false } as unknown as Stats
     jest.spyOn(fs, 'lstatSync').mockReturnValue(fakeStat)
     expect(verifyPackageSignature(dir, TRUSTED).error).toMatch(/Failed to read package contents/i)
+  })
+
+  it('rejects a package whose manifest declares an identity different from the signed payload', () => {
+    // The signature is computed over these exact files (including this
+    // manifest), so the signature itself is valid and the file set matches —
+    // only the manifest's declared identity disagrees with what was signed.
+    // This is what proves the identity check, not the signature check, is
+    // what refuses the package.
+    buildPackage(dir, {
+      files: {
+        ...DEFAULT_FILES,
+        'manifest.json': JSON.stringify({ package: { id: 'com.evil.pkg', version: '1.0.0' } }),
+      },
+    })
+    const result = verifyPackageSignature(dir, TRUSTED)
+    expect(result.valid).toBe(false)
+    expect(result.error).toMatch(/manifest/i)
+  })
+
+  it('rejects a package with no manifest.json', () => {
+    buildPackage(dir, { files: { 'hal/arduino/hal.cpp': DEFAULT_FILES['hal/arduino/hal.cpp'] } })
+    const result = verifyPackageSignature(dir, TRUSTED)
+    expect(result.valid).toBe(false)
+    expect(result.error).toMatch(/manifest\.json is missing or unreadable/i)
   })
 })
 
