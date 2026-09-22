@@ -350,3 +350,82 @@ describe('global variable list — CODESYS declaration forms', () => {
     )
   })
 })
+
+/**
+ * A `{` is a pragma only where a pragma can be written. The blanking pass runs over
+ * the caller's own string and every span the parser reports addresses it, so blanking
+ * one brace too many does not fail loudly — it hands back a member whose text has a
+ * hole in it, and a GVL is written back from the model, so the hole reaches the disk.
+ */
+describe('global variable list — what counts as a pragma', () => {
+  it('leaves a brace inside a string initial value alone', () => {
+    const parsed = parseGlobalVariableListFromText("VAR_GLOBAL\n  Fmt : STRING := '{0}';\nEND_VAR", 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].initialValue).toBe("'{0}'")
+  })
+
+  it('leaves a brace inside a comment alone', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; (* see {x} *)\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].documentation).toBe('see {x}')
+  })
+
+  it('leaves a brace inside a line comment alone', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; // see {x}\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].documentation).toBe('see {x}')
+  })
+
+  it('drops a pragma sitting between declarations', () => {
+    const parsed = parseGlobalVariableListFromText(
+      "VAR_GLOBAL\n  A : BOOL;\n  {attribute 'hidden'}\n  B : INT;\nEND_VAR",
+      'GVL',
+    )
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A', 'B'])
+  })
+
+  it('drops a pragma holding a brace of its own', () => {
+    const parsed = parseGlobalVariableListFromText("{attribute 'a' := '{b}'}\nVAR_GLOBAL\n  A : BOOL;\nEND_VAR", 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A'])
+  })
+
+  it('keeps the qualifier when a pragma precedes the header', () => {
+    // The qualifier is read out of the header span, which the blanking pass must not
+    // have shifted.
+    const parsed = parseGlobalVariableListFromText(
+      "{attribute 'qualified_only'}\nVAR_GLOBAL CONSTANT\n  A : BOOL;\nEND_VAR",
+      'GVL',
+    )
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.qualifier).toBe('CONSTANT')
+  })
+
+  it('does not read a qualifier out of the header comment', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL // RETAIN one day\n  A : BOOL;\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.qualifier).toBeUndefined()
+  })
+
+  it('reads a declaration list sharing a line', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; B : INT;\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A', 'B'])
+  })
+
+  it('reads a whole list written on one line', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL A : BOOL; B : INT; END_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A', 'B'])
+  })
+})

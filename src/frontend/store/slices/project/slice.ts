@@ -732,7 +732,12 @@ const reconcileVariablesText = (
  */
 const renameAliasInText = (text: string, oldAlias: string, newAlias: string): string => {
   const escaped = oldAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
-  return text.replace(new RegExp(`(\\bAT\\s+)${escaped}(?=\\s*(?:;|:=))`, 'gi'), `$1${newAlias}`)
+  // The KEYWORD is case-insensitive, the alias is not. The alias registry keys
+  // on the exact name, so a variable bound to `PUMP` does not resolve to a
+  // producer called `Pump` — and the model cascade above matches exactly for
+  // that reason. A case-insensitive rename here rebound occurrences the model
+  // had deliberately left alone, and the two then disagreed.
+  return text.replace(new RegExp(`(\\b[Aa][Tt]\\s+)${escaped}(?=\\s*(?:;|:=))`, 'g'), `$1${newAlias}`)
 }
 
 const readPouVariablesText = (pou: PLCPou): string | undefined => pou.variablesText
@@ -1484,6 +1489,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // cascade — the alias registry is case-sensitive, so `location` has to
       // match the producer alias exactly to resolve at compile time.
       if (trimmedOld === trimmedNew) return { renamed: 0 }
+      // An alias is an identifier; a `%` location is the other kind of value the
+      // same field carries. `validateAliasEdit` refuses a `%` alias at every
+      // producer editor, so a rename naming one is a caller mistake — and acting
+      // on it would rebind every variable manually located at that address.
+      if (trimmedOld.startsWith('%') || trimmedNew.startsWith('%')) return { renamed: 0 }
 
       let renamed = 0
       // Which POUs actually moved. Regenerating every POU's text on every

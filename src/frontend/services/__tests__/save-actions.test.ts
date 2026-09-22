@@ -601,6 +601,13 @@ describe('reloadPouFromDisk', () => {
   const textOf = (name: string) =>
     openPLCStoreBase.getState().project.data.pous.find((pou) => pou.name === name)?.variablesText
 
+  const openEditor = (name: string) =>
+    openPLCStoreBase.getState().editorActions.addModel({
+      type: 'plc-textual',
+      meta: { name, path: `/pous/${name}`, language: 'st', pouType: 'program' },
+      variable: { display: 'table', description: '', classFilter: 'All', selectedRow: '-1' },
+    })
+
   it('takes the declaration text from the file, comments and all', async () => {
     seedTextualPou('Reloaded', 'VAR\n  a : INT;\nEND_VAR')
     const onDisk =
@@ -615,6 +622,44 @@ describe('reloadPouFromDisk', () => {
         .project.data.pous.find((pou) => pou.name === 'Reloaded')
         ?.interface?.variables.map((variable) => variable.name),
     ).toEqual(['a', 'b'])
+  })
+
+  /**
+   * The code view holds the pre-reload text and it parses, so the regenerate that
+   * `applyPouSnapshot` triggers preferred it and patched it straight back over the
+   * text just read from disk — reverting the external edit the reload exists to pick
+   * up. The buffer is the user's newest word only while it is still theirs.
+   */
+  it('replaces an open code-view buffer with the text from disk', async () => {
+    seedTextualPou('ReloadOpen', 'VAR\n  a : INT;\nEND_VAR')
+    openEditor('ReloadOpen')
+    openPLCStoreBase.getState().editorActions.updateModelVariablesForName('ReloadOpen', {
+      display: 'code',
+      code: 'VAR\n  a : INT;\nEND_VAR',
+    })
+    const onDisk = 'PROGRAM ReloadOpen\nVAR\n  (* from disk *)\n  a : DINT;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM'
+
+    await reloadPouFromDisk('ReloadOpen', portReturning(onDisk))
+
+    const model = openPLCStoreBase.getState().editorActions.getEditorFromEditors('ReloadOpen')
+    const variable = model && 'variable' in model ? model.variable : undefined
+    expect(variable && 'code' in variable ? variable.code : undefined).toBe(
+      'VAR\n  (* from disk *)\n  a : DINT;\nEND_VAR',
+    )
+    expect(textOf('ReloadOpen')).toBe('VAR\n  (* from disk *)\n  a : DINT;\nEND_VAR')
+  })
+
+  it('leaves a table-view model alone', async () => {
+    seedTextualPou('ReloadTable', 'VAR\n  a : INT;\nEND_VAR')
+    openEditor('ReloadTable')
+    const onDisk = 'PROGRAM ReloadTable\nVAR\n  a : DINT;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM'
+
+    await reloadPouFromDisk('ReloadTable', portReturning(onDisk))
+
+    const model = openPLCStoreBase.getState().editorActions.getEditorFromEditors('ReloadTable')
+    const variable = model && 'variable' in model ? model.variable : undefined
+    expect(variable?.display).toBe('table')
+    expect(textOf('ReloadTable')).toBe('VAR\n  a : DINT;\nEND_VAR')
   })
 
   it('keeps an invalid set from disk as text and marks it for the code view', async () => {

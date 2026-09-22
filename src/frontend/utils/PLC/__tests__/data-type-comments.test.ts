@@ -50,3 +50,29 @@ describe('a .dt structure accepts comments', () => {
     expect(result.error).toMatch(/Unclosed block comment/)
   })
 })
+
+/**
+ * Which opener wins. The `.dt` view read `(*` before `//` regardless of which came
+ * first, so a line comment mentioning a block opener lost its tail — the same defect
+ * the variables view had, which is why both now share one reader.
+ */
+describe('a .dt field comment is read as the compiler reads it', () => {
+  const documentationOf = (text: string) => fieldsOf(text).map((field) => field.documentation)
+
+  it.each([
+    { label: 'block', line: 'a : INT; (* note *)', want: 'note' },
+    { label: 'line', line: 'a : INT; // note', want: 'note' },
+    { label: 'line comment mentioning a block opener', line: 'a : INT; // use (* x *)', want: 'use (* x *)' },
+    { label: 'block comment mentioning a line opener', line: 'a : INT; (* use // x *)', want: 'use // x' },
+    { label: 'nested block comment', line: 'a : INT; (* outer (* inner *) tail *)', want: 'outer (* inner *) tail' },
+  ])('$label', ({ line, want }) => {
+    expect(documentationOf(`TYPE\n  S : STRUCT\n    ${line}\n  END_STRUCT;\nEND_TYPE`)).toEqual([want])
+  })
+
+  it('reports an unterminated block comment rather than eating the rest of the type', () => {
+    // It swallows END_STRUCT and END_TYPE, so the only honest reading is an error.
+    expect(parseDataTypeFromText('TYPE\n  S : STRUCT\n    a : INT; (* open\n  END_STRUCT;\nEND_TYPE', 'S').error).toBe(
+      'Unclosed block comment',
+    )
+  })
+})

@@ -461,3 +461,42 @@ describe('normalizeOneVariablePerLine', () => {
     expect(normalizeOneVariablePerLine(broken, context)).toBe(broken)
   })
 })
+
+/**
+ * Two messages are rewritten before they reach the user, because the compiler's own
+ * wording is right for a compiler and wrong for a declaration editor. Both rewrites
+ * are recognisers, and a recogniser that matches too much replaces a real error with
+ * a wrong one — which is worse than not rewriting at all.
+ */
+describe('the two refined messages', () => {
+  const firstError = (text: string) => parseVariableDeclarations(text, context).errors[0]?.message
+
+  it('names a mistyped block qualifier', () => {
+    expect(firstError('VAR_INPUT RETIAN\n  a : BOOL;\nEND_VAR')).toMatch(/Unknown variable block qualifier "RETIAN"/)
+  })
+
+  it.each(['CONSTANT', 'RETAIN', 'NON_RETAIN', 'PERSISTENT', 'RETAIN PERSISTENT'])(
+    'accepts the qualifier %s',
+    (qualifier) => {
+      expect(parseVariableDeclarations(`VAR ${qualifier}\n  a : BOOL;\nEND_VAR`, context).errors).toEqual([])
+    },
+  )
+
+  it.each([
+    { label: 'a declaration shares the header line', text: 'VAR_INPUT a : BOOL\nEND_VAR' },
+    { label: 'the block is written on one line', text: 'VAR a : BOOL END_VAR' },
+    { label: 'the block is empty and on one line', text: 'VAR END_VAR\nVAR\n  a : ;\nEND_VAR' },
+  ])('does not read a declaration as a qualifier — $label', ({ text }) => {
+    // The header regex once matched `VAR_INPUT x : BOOL;` too, and reported `x` as a
+    // bad qualifier — burying whatever the real error on the line was.
+    expect(firstError(text)).not.toMatch(/Unknown variable block qualifier/)
+  })
+
+  it('explains that a declared STRING length is not supported', () => {
+    expect(firstError('VAR\n  a : STRING[10];\nEND_VAR')).toMatch(/length is not supported on STRING/)
+  })
+
+  it('does not fire the STRING rewrite on prose mentioning it', () => {
+    expect(firstError('VAR\n  a : ; (* not a STRING[10] *)\nEND_VAR')).not.toMatch(/length is not supported on STRING/)
+  })
+})

@@ -1079,6 +1079,19 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
     // silently reverted on the next save.
     if (parsed.variablesText !== undefined) {
       state.projectActions.setPouVariablesText(pouName, parsed.variablesText, parsed.variablesTextUnparsed === true)
+
+      // An open code view holds the PRE-reload text, and it parses, so the
+      // regenerate that `applyPouSnapshot` triggers would prefer it and patch
+      // it straight back over the text just read from disk — reverting exactly
+      // the external edit this function exists to pick up. The buffer is the
+      // user's newest word only while it is theirs; a reload replaces it.
+      const model = state.editorActions.getEditorFromEditors(pouName)
+      if (model && 'variable' in model && model.variable.display === 'code') {
+        state.editorActions.updateModelVariablesForName(pouName, {
+          display: 'code',
+          code: parsed.variablesText,
+        })
+      }
     }
 
     // Restore body, variables, and documentation

@@ -104,6 +104,77 @@ describe('every writer keeps the text in step with the model', () => {
   })
 })
 
+/**
+ * What `renameAlias` matches in the text has to be what it matches on the model, or
+ * the two disagree in exactly the case the action exists to prevent. An alias is an
+ * identifier the producer owns — matched exactly — while `AT` is an IEC keyword, so
+ * the user may have written it in either case.
+ */
+describe('renameAlias matches the text the way it matches the model', () => {
+  beforeEach(() => {
+    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+  })
+
+  it('leaves an alias that differs only in case alone', () => {
+    // A `gi` rewrite here rebound `AT PUMP` when `Pump` was renamed, while the model
+    // cascade left it — the variable then pointed at a name no producer declares.
+    seed('CaseKept', 'VAR\n  m : BOOL AT PUMP;\nEND_VAR', [variable('m', 'BOOL', 'PUMP')])
+
+    getState().projectActions.renameAlias('Pump', 'Pump_1')
+
+    expect(varsOf('CaseKept')[0].location).toBe('PUMP')
+    expect(textOf('CaseKept')).toContain('AT PUMP')
+  })
+
+  it('renames under a lower-case AT keyword', () => {
+    seed('LowerAt', 'VAR\n  m : BOOL at Pump;\nEND_VAR', [variable('m', 'BOOL', 'Pump')])
+
+    getState().projectActions.renameAlias('Pump', 'Pump_1')
+
+    expect(varsOf('LowerAt')[0].location).toBe('Pump_1')
+    expect(textOf('LowerAt')).toContain('Pump_1')
+    expect(textOf('LowerAt')).not.toMatch(/\bPump;/)
+  })
+
+  it('leaves a longer alias that merely starts the same alone', () => {
+    seed('Prefix', 'VAR\n  m : BOOL AT Pump_Motor;\nEND_VAR', [variable('m', 'BOOL', 'Pump_Motor')])
+
+    getState().projectActions.renameAlias('Pump', 'Pump_1')
+
+    expect(varsOf('Prefix')[0].location).toBe('Pump_Motor')
+    expect(textOf('Prefix')).toContain('AT Pump_Motor')
+  })
+
+  it('leaves the same word in a comment alone', () => {
+    seed('Prose', 'VAR\n  m : BOOL AT Pump; (* the Pump line *)\nEND_VAR', [
+      { ...variable('m', 'BOOL', 'Pump'), documentation: 'the Pump line' },
+    ])
+
+    getState().projectActions.renameAlias('Pump', 'Pump_1')
+
+    expect(textOf('Prose')).toContain('AT Pump_1;')
+    expect(textOf('Prose')).toContain('(* the Pump line *)')
+  })
+
+  it('renames an alias carrying an initial value after it', () => {
+    seed('WithInit', 'VAR\n  m : INT AT Pump := 3;\nEND_VAR', [{ ...variable('m', 'INT', 'Pump'), initialValue: '3' }])
+
+    getState().projectActions.renameAlias('Pump', 'Pump_1')
+
+    expect(varsOf('WithInit')[0].location).toBe('Pump_1')
+    expect(textOf('WithInit')).toContain('AT Pump_1 := 3')
+  })
+
+  it('refuses a rename naming a literal location', () => {
+    seed('Literal', 'VAR\n  m : BOOL AT %QX0.0;\nEND_VAR', [variable('m', 'BOOL', '%QX0.0')])
+
+    expect(getState().projectActions.renameAlias('%QX0.0', 'Pump').renamed).toBe(0)
+
+    expect(varsOf('Literal')[0].location).toBe('%QX0.0')
+    expect(textOf('Literal')).toContain('AT %QX0.0')
+  })
+})
+
 describe('debug flags survive a reconcile', () => {
   beforeEach(() => {
     getState().sharedWorkspaceActions.clearStatesOnCloseProject()

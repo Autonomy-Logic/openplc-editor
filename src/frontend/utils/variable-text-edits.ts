@@ -41,6 +41,9 @@ function applyEdits(text: string, edits: TextEdit[]): string {
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
+/** Documentation as one line, which is the only shape the model can hold. */
+const flattenDocumentation = (value: string | undefined): string => (value ?? '').replace(/(\r\n|\n|\r)/gm, ' ').trim()
+
 /**
  * True when some physical line holds more than one variable.
  *
@@ -55,12 +58,21 @@ const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowe
  * the table can represent anyway, since the Documentation column is the comment
  * at the end of a line.
  */
-function hasCrowdedLine(result: ParseResult): boolean {
+function hasCrowdedLine(result: ParseResult, source: string): boolean {
   for (const block of result.blocks) {
     const seen = new Set<number>()
     for (const declaration of block.declarations) {
-      if (seen.has(declaration.lineSpan.start)) return true
-      seen.add(declaration.lineSpan.start)
+      const lineStart = source.lastIndexOf('\n', declaration.span.start - 1) + 1
+      const newline = source.indexOf('\n', declaration.span.end)
+      const lineEnd = newline === -1 ? source.length : newline
+
+      if (seen.has(lineStart)) return true
+      seen.add(lineStart)
+
+      // A block keyword sharing the line crowds it just as another declaration
+      // does: the passes below move and delete whole lines.
+      if (block.headerSpan.start >= lineStart && block.headerSpan.start < lineEnd) return true
+      if (block.endVarSpan.start >= lineStart && block.endVarSpan.start < lineEnd) return true
     }
   }
   return false
@@ -71,8 +83,11 @@ const parsedBlockKey = (block: ParsedBlock): string => `${block.class ?? 'global
 
 /** The declaration's own indentation, so an inserted sibling lines up with it. */
 function indentOf(text: string, declaration: ParsedDeclaration): string {
-  const lineStart = text.lastIndexOf('\n', declaration.span.start - 1) + 1
-  return text.slice(lineStart, declaration.span.start)
+  // From the declaration's own (clamped) line, so a block keyword sharing the
+  // line is never mistaken for indentation — `VAR_INPUT a : BOOL;` used to
+  // indent an inserted sibling with the string `VAR_INPUT `.
+  const indent = text.slice(declaration.lineSpan.start, declaration.span.start)
+  return /^[ \t]*$/.test(indent) ? indent : '    '
 }
 
 /** Render a declaration for a variable that has no line of its own yet. */
@@ -204,10 +219,16 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
     edits.push({ span: { start: declaration.span.end, end: declaration.span.end }, replacement: ` := ${nextInitial}` })
   }
 
-  const nextDocumentation = (variable.documentation ?? '').replace(/(\r\n|\n|\r)/gm, ' ').trim()
+  // Flattened on BOTH sides before comparing. The parser keeps the newlines a
+  // multi-line comment was written with, and the model's copy is flattened, so
+  // comparing one against the other made every multi-line comment count as
+  // changed — and every patch, including the one the project load performs,
+  // rewrote it onto a single line. That is the comment loss this file exists to
+  // prevent, committed by the file itself.
+  const nextDocumentation = flattenDocumentation(variable.documentation)
   const documentationSpan = declaration.fields.documentation
   if (documentationSpan) {
-    if (text.slice(documentationSpan.start, documentationSpan.end).trim() !== nextDocumentation) {
+    if (flattenDocumentation(text.slice(documentationSpan.start, documentationSpan.end)) !== nextDocumentation) {
       // Replace the comment's inner text and keep its delimiters, so a `//`
       // comment stays a `//` comment and a block comment stays a block one.
       // A line comment has no closing delimiter to pad away from, so only the
@@ -276,7 +297,7 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
   let scanned = parseVariableDeclarations(source, context)
   if (scanned.errors.length > 0) return generateIecVariablesToString(nextVariables)
 
-  if (hasCrowdedLine(scanned)) {
+  if (hasCrowdedLine(scanned, source)) {
     source = normalizeOneVariablePerLine(source, context)
     scanned = parseVariableDeclarations(source, context)
     /* istanbul ignore if -- the normaliser returns its input unchanged when it cannot parse,
@@ -315,14 +336,25 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
     }
 
     for (const [key, variables] of byBlock) {
-      const block = scanned.blocks.find((candidate) => parsedBlockKey(candidate) === key)
+      // The LAST block of that class, not the first. A new variable is appended
+      // to the table, so appending it to the last block of its class is what
+      // keeps the two in the same order; picking the first put it above
+      // declarations the table shows below it, and the next load — which reads
+      // the order from the text — moved the row.
+      const candidates = scanned.blocks.filter((candidate) => parsedBlockKey(candidate) === key)
+      const block = candidates[candidates.length - 1]
       if (block) {
         const indent = block.declarations.length > 0 ? indentOf(source, block.declarations[0]) : '    '
-        const lineStart = source.lastIndexOf('\n', block.endVarSpan.start - 1) + 1
-        edits.push({
-          span: { start: lineStart, end: lineStart },
-          replacement: variables.map((variable) => `${renderDeclaration(variable, indent)}\n`).join(''),
-        })
+        const endVarLineStart = source.lastIndexOf('\n', block.endVarSpan.start - 1) + 1
+        const beforeEndVar = source.slice(endVarLineStart, block.endVarSpan.start)
+        // `END_VAR` may share its line — `VAR a : INT; END_VAR`, or an empty
+        // `VAR END_VAR`. Inserting at the start of that line put the new
+        // declaration in FRONT of the block keyword, outside the block, and the
+        // unparseable result was saved.
+        const sharesLine = beforeEndVar.trim() !== ''
+        const at = sharesLine ? block.endVarSpan.start : endVarLineStart
+        const rendered = variables.map((variable) => `${renderDeclaration(variable, indent)}\n`).join('')
+        edits.push({ span: { start: at, end: at }, replacement: sharesLine ? `\n${rendered}` : rendered })
       } else {
         // No block of this class yet. Serialising just these variables gives a
         // correctly-shaped `VAR … END_VAR` pair without disturbing the rest.

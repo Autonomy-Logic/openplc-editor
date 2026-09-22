@@ -216,7 +216,10 @@ function toSpan(starts: number[], span: StrucppSpan, wrapperLines: number): Span
  * declaration then fell inside the first one's `lineSpan`, and deleting the
  * first variable from the table silently deleted its neighbour with it.
  */
-function trailingComment(source: string, from: number): { inner: Span; kind: CommentKind; end: number } | undefined {
+export function trailingComment(
+  source: string,
+  from: number,
+): { inner: Span; kind: CommentKind; end: number } | undefined {
   const lineEnd = source.indexOf('\n', from)
   const limit = lineEnd === -1 ? source.length : lineEnd
   const rest = source.slice(from, limit)
@@ -287,6 +290,9 @@ export function classifyType(typeText: string, context: TypeContext): PLCVariabl
 // ---------------------------------------------------------------------------
 // Block mapping
 // ---------------------------------------------------------------------------
+
+/** The keyword that closes a VAR block, whose length locates it from the block's end. */
+const END_VAR_KEYWORD = 'END_VAR'
 
 const BLOCK_TO_CLASS: Record<string, PLCVariable['class']> = {
   VAR: 'local',
@@ -448,12 +454,24 @@ function refineErrors(source: string, errors: ParseError[]): ParseError[] {
     // as a qualifier, and a STRING check must not fire on one mentioned in prose.
     const line = lines[index].replace(/\(\*[\s\S]*?\*\)/g, ' ').replace(/\/\/.*$/, '')
 
-    const header = /^\s*VAR(?:_INPUT|_OUTPUT|_IN_OUT|_EXTERNAL|_TEMP|_GLOBAL)?\s+([A-Za-z_]\w*)/i.exec(line)
-    if (header && !BLOCK_QUALIFIERS.has(header[1].toUpperCase())) {
+    // A header and NOTHING else: `VAR_GLOBAL CONSTANT` is a qualifier list,
+    // `VAR_INPUT x : BOOL;` is a declaration sharing the line and `VAR END_VAR`
+    // is an empty block. Matching those as qualifiers replaced the POU's real
+    // error with `Unknown variable block qualifier "x"`, pointing at the one
+    // line that was fine.
+    const header = /^\s*VAR(?:_INPUT|_OUTPUT|_IN_OUT|_EXTERNAL|_TEMP|_GLOBAL)?((?:\s+[A-Za-z_]\w*)*)\s*$/i.exec(line)
+    const words = header
+      ? header[1]
+          .trim()
+          .split(/\s+/)
+          .filter((word) => word !== '')
+      : []
+    const unknown = words.find((word) => !BLOCK_QUALIFIERS.has(word.toUpperCase()) && word.toUpperCase() !== 'END_VAR')
+    if (unknown !== undefined) {
       return [
         at(
           index,
-          `Unknown variable block qualifier "${header[1]}". Expected CONSTANT, RETAIN, NON_RETAIN or PERSISTENT.`,
+          `Unknown variable block qualifier "${unknown}". Expected CONSTANT, RETAIN, NON_RETAIN or PERSISTENT.`,
         ),
       ]
     }
@@ -541,6 +559,22 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
     const blockClass = BLOCK_TO_CLASS[block.blockType.toUpperCase()] ?? 'local'
     const flag = blockFlag(block)
     const blockSpan = toSpan(starts, block.sourceSpan, wrapperLines)
+
+    // Where the block's own keywords sit, worked out before the declarations
+    // because every declaration's line span is clamped inside them.
+    //
+    // `END_VAR` closes the block, so the block span ends exactly at its last
+    // character — no scanning needed. The header ends at the first newline, or
+    // at the first declaration when one shares the header's line, whichever
+    // comes first.
+    const endVarStart = blockSpan.end - END_VAR_KEYWORD.length
+    const firstDeclaration = block.declarations[0]
+    const firstDeclarationStart = firstDeclaration
+      ? toSpan(starts, firstDeclaration.sourceSpan, wrapperLines).start
+      : endVarStart
+    const headerNewline = source.indexOf('\n', blockSpan.start)
+    const headerEnd = Math.min(headerNewline === -1 ? blockSpan.end : headerNewline, firstDeclarationStart)
+
     const declarations: ParsedDeclaration[] = []
 
     for (const declaration of block.declarations) {
@@ -565,10 +599,18 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
       const comment = trailingComment(source, declFull.end)
       const documentation = comment ? source.slice(comment.inner.start, comment.inner.end).trim() : ''
 
-      const lineStart = source.lastIndexOf('\n', declSpan.start - 1) + 1
+      // The declaration's line, CLAMPED to the inside of the block.
+      //
+      // A block keyword may share the line — `VAR_INPUT a : BOOL;` and
+      // `VAR a : INT; END_VAR` are both legal — and the deletion, reorder and
+      // normalise passes all work in whole lines. Unclamped, deleting `a` from
+      // the first took `VAR_INPUT` with it and left the file unparseable, in the
+      // text that gets written to disk.
+      const lineStart = Math.max(source.lastIndexOf('\n', declSpan.start - 1) + 1, headerEnd)
       const consumedTo = comment ? comment.end : declFull.end
       const nextNewline = source.indexOf('\n', consumedTo)
-      const lineSpan = { start: lineStart, end: nextNewline === -1 ? source.length : nextNewline + 1 }
+      const lineEnd = Math.min(nextNewline === -1 ? source.length : nextNewline + 1, endVarStart)
+      const lineSpan = { start: lineStart, end: Math.max(lineEnd, declFull.end) }
       const line = declaration.sourceSpan.startLine - wrapperLines
 
       // One variable per declared name. `a, b : INT;` is two variables that
@@ -606,14 +648,10 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
       })
     }
 
-    // STruC++ spans the whole block; the header and END_VAR are its first and
-    // last lines, which is all a caller needs to insert a declaration.
-    const headerEnd = source.indexOf('\n', blockSpan.start)
-    const endVarStart = source.lastIndexOf('\n', blockSpan.end - 1) + 1
     blocks.push({
       class: blockClass,
       flag,
-      headerSpan: { start: blockSpan.start, end: headerEnd === -1 ? blockSpan.end : headerEnd },
+      headerSpan: { start: blockSpan.start, end: headerEnd },
       endVarSpan: { start: endVarStart, end: blockSpan.end },
       declarations,
     })
@@ -656,20 +694,41 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
   const edits: Array<{ span: Span; replacement: string }> = []
 
   for (const block of parsed.blocks) {
-    // Grouped by the physical LINE, not by the declaration. Two variables can
-    // crowd a line two different ways — `a, b : INT;` and `a : INT; b : INT;` —
-    // and both leave the variables sharing one `lineSpan`, which is what the
-    // deletion and reordering passes work in. Normalising only the first form
-    // left the second one live: deleting `a` from the table took `b` with it.
+    // Grouped by the physical LINE, not by the declaration. A line gets crowded
+    // three ways — `a, b : INT;`, `a : INT; b : INT;`, and a block keyword
+    // sharing it as in `VAR_INPUT a : BOOL;` or `VAR a : INT; END_VAR` — and all
+    // three leave the deletion, reorder and insert passes working in a line that
+    // holds more than the one declaration they mean to touch.
     const byLine = new Map<number, ParsedDeclaration[]>()
     for (const declaration of block.declarations) {
-      byLine.set(declaration.lineSpan.start, [...(byLine.get(declaration.lineSpan.start) ?? []), declaration])
+      const lineStart = source.lastIndexOf('\n', declaration.span.start - 1) + 1
+      byLine.set(lineStart, [...(byLine.get(lineStart) ?? []), declaration])
     }
 
-    for (const group of byLine.values()) {
-      if (group.length < 2) continue
+    const headerText = source.slice(block.headerSpan.start, block.headerSpan.end).trimEnd()
+    const blockIndent = source.slice(source.lastIndexOf('\n', block.headerSpan.start - 1) + 1, block.headerSpan.start)
+    const fallbackIndent = /^[ \t]*$/.test(blockIndent) ? `${blockIndent}  ` : '  '
+
+    for (const [lineStart, group] of byLine) {
       const [first] = group
-      const indent = source.slice(source.lastIndexOf('\n', first.span.start - 1) + 1, first.span.start)
+      const last = group[group.length - 1]
+      // The end of the physical line holding the LAST thing this group consumed.
+      // Searched from one character back, because a consumed span can end exactly
+      // on the next line's first character — and starting the search there ran
+      // the line on into the `END_VAR` below it.
+      const consumedTo = last.fields.documentation ? last.lineSpan.end : last.span.end
+      const nextNewline = source.indexOf('\n', Math.max(lineStart, consumedTo - 1))
+      const lineEnd = nextNewline === -1 ? source.length : nextNewline + 1
+
+      const headerShares = block.headerSpan.start >= lineStart && block.headerSpan.start < lineEnd
+      const endVarShares = block.endVarSpan.start >= lineStart && block.endVarSpan.start < lineEnd
+      if (group.length < 2 && !headerShares && !endVarShares) continue
+
+      // The user's own indentation, unless a block keyword is sitting in it —
+      // `VAR_INPUT a : BOOL;` would otherwise indent the rewritten lines with
+      // the string `VAR_INPUT `.
+      const originalIndent = source.slice(lineStart, first.span.start)
+      const declarationIndent = /^[ \t]*$/.test(originalIndent) ? originalIndent : fallbackIndent
 
       const lines = group.map((declaration) => {
         const { variable } = declaration
@@ -685,7 +744,7 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
             )
           : ''
 
-        let text = `${indent}${variable.name} : ${source.slice(declaration.fields.type.start, declaration.fields.type.end).trim()}`
+        let text = `${declarationIndent}${variable.name} : ${source.slice(declaration.fields.type.start, declaration.fields.type.end).trim()}`
         if (variable.location) text += ` AT ${variable.location}`
         if (variable.initialValue) text += ` := ${variable.initialValue}`
         text += ';'
@@ -693,7 +752,11 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
         return text
       })
 
-      edits.push({ span: first.lineSpan, replacement: `${lines.join('\n')}\n` })
+      // A keyword sharing the line is put back on one of its own, which is what
+      // makes the line spans above unambiguous for every later pass.
+      const head = headerShares ? `${blockIndent}${headerText}\n` : ''
+      const tail = endVarShares ? `${blockIndent}END_VAR\n` : ''
+      edits.push({ span: { start: lineStart, end: lineEnd }, replacement: `${head}${lines.join('\n')}\n${tail}` })
     }
   }
 

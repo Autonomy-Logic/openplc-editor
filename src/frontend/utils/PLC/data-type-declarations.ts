@@ -20,7 +20,7 @@
 import { parse } from 'strucpp'
 
 import type { PLCDataType, PLCStructureVariable, PLCVariableType } from '../../../middleware/shared/ports/types'
-import { blockCommentEnd, classifyType, ELEMENTARY_TYPE_CONTEXT } from './variable-declarations'
+import { classifyType, ELEMENTARY_TYPE_CONTEXT, trailingComment } from './variable-declarations'
 
 export interface ParseDataTypeResult {
   dataType?: PLCDataType
@@ -56,22 +56,18 @@ function sliceSpan(source: string, starts: number[], span: StrucppSpan): string 
   return source.slice(start, end)
 }
 
-/** Comment trailing a field declaration, which the AST discards. */
+/**
+ * Comment trailing a field declaration, which the AST discards.
+ *
+ * The same reader the variables table uses, not a second one: this file had its
+ * own, and so it had its own copy of the bugs — it took `(*` before `//`
+ * whatever their order, so `a : INT; // use (* x *)` documented the field as
+ * `x` instead of `use (* x *)`.
+ */
 function trailingDocumentation(source: string, starts: number[], span: StrucppSpan): string {
   const from = (starts[span.endLine - 1] ?? 0) + span.endCol
-  const lineEnd = source.indexOf('\n', from)
-  const rest = source.slice(from, lineEnd === -1 ? source.length : lineEnd)
-
-  const opener = rest.indexOf('(*')
-  if (opener !== -1) {
-    // Nesting-aware, like the variables next door: `(* a (* b *) c *)` is one
-    // comment, and a lazy `*)` match cut it at the inner one.
-    const close = blockCommentEnd(rest, opener)
-    if (close !== -1) return rest.slice(opener + 2, close - 2).trim()
-  }
-  const line = /\/\/(.*)$/.exec(rest)
-  if (line) return line[1].trim()
-  return ''
+  const comment = trailingComment(source, from)
+  return comment ? source.slice(comment.inner.start, comment.inner.end).trim() : ''
 }
 
 /** `TYPE Name : (); END_TYPE` — an enumeration the user has not filled in yet. */

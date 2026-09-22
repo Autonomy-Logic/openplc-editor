@@ -47,8 +47,87 @@ export interface ParseGlobalVariableListResult {
  * STruC++ cannot lex a `{`, and a GVL written by the CODESYS converter carries them.
  * Replaced with spaces rather than removed so every span the parser reports still
  * addresses the caller's own string.
+ *
+ * Scanned rather than matched, because a brace is only a pragma outside a comment
+ * and outside a string: a plain regex blanked the `{0}` in
+ * `Fmt : STRING := '{0}';` — and a GVL is written back from the model, so the
+ * hollowed-out string went to disk — and emptied `(* see {x} *)` too.
  */
-const blankPragmas = (content: string): string => content.replace(/\{[^}]*\}/g, (match) => ' '.repeat(match.length))
+const blankPragmas = (content: string): string => {
+  const out = content.split('')
+  let index = 0
+  let depth = 0
+
+  /** Index just past the string opening at `from`, whose quote is `content[from]`. */
+  const endOfString = (from: number): number => {
+    const quote = content[from]
+    let at = from + 1
+    while (at < content.length && content[at] !== quote) {
+      // `$` is IEC's escape inside a string, so the next character cannot end it.
+      at += content[at] === '$' ? 2 : 1
+    }
+    return at + 1
+  }
+
+  while (index < content.length) {
+    if (depth > 0) {
+      if (content.startsWith('(*', index)) {
+        depth += 1
+        index += 2
+        continue
+      }
+      if (content.startsWith('*)', index)) {
+        depth -= 1
+        index += 2
+        continue
+      }
+      index += 1
+      continue
+    }
+
+    if (content.startsWith('(*', index)) {
+      depth += 1
+      index += 2
+      continue
+    }
+
+    if (content.startsWith('//', index)) {
+      const newline = content.indexOf('\n', index)
+      index = newline === -1 ? content.length : newline
+      continue
+    }
+
+    const char = content[index]
+    if (char === "'" || char === '"') {
+      index = endOfString(index)
+      continue
+    }
+
+    if (char === '{') {
+      // A pragma's own value is a string, and `{attribute 'a' := '{b}'}` puts a brace
+      // in it. Taking the first `}` ended the pragma inside that string and left its
+      // tail in the text, so the braces are counted and the strings skipped here too.
+      let at = index + 1
+      let braces = 1
+      while (at < content.length && braces > 0) {
+        const inner = content[at]
+        if (inner === "'" || inner === '"') at = endOfString(at)
+        else {
+          if (inner === '{') braces += 1
+          else if (inner === '}') braces -= 1
+          at += 1
+        }
+      }
+      for (let blank = index; blank < at; blank++) out[blank] = ' '
+      index = at
+      continue
+    }
+
+    index += 1
+  }
+
+  return out.join('')
+}
 
 /**
  * The qualifier as the user wrote it, read out of the block's own header line.
