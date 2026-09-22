@@ -131,6 +131,34 @@ describe('validateTypeChange', () => {
       expect(result.affectedNodes).toHaveLength(1)
     })
 
+    it('counts a variable-pin node against its cached pin type', () => {
+      // The validator used to carry its own copy of the expected-type helper,
+      // which had no pin branch and silently reported every pin compatible.
+      const flows = [
+        makeLadderFlow('P1', [
+          makeNode('n1', 'variable', {
+            variable: makeVariable('x'),
+            variant: 'input',
+            block: {
+              id: 'B1',
+              handleId: 'IN1',
+              variableType: { name: 'IN1', class: 'input', type: { definition: 'base-type', value: 'INT' } },
+            },
+          }),
+        ]),
+      ]
+      const result = validateTypeChange(
+        'x',
+        { definition: 'base-type', value: 'INT' },
+        { definition: 'base-type', value: 'BOOL' },
+        flows as never,
+        [],
+      )
+      expect(result.affectedNodes).toHaveLength(1)
+      expect(result.affectedNodes[0].expectedType).toBe('INT')
+      expect(result.affectedNodes[0].isCompatible).toBe(false)
+    })
+
     it('returns empty expectedType for block without variant', () => {
       const flows = [makeLadderFlow('P1', [makeNode('n1', 'block', { variable: makeVariable('x') })])]
       const result = validateTypeChange(

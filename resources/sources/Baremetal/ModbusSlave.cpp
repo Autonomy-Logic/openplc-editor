@@ -17,7 +17,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 
 void mbtask()
 {
-    #ifdef MBTCP
+    #ifdef MB_TCP_ACTIVE
         handle_tcp();
     #endif
     #ifdef MB_SERIAL_ACTIVE

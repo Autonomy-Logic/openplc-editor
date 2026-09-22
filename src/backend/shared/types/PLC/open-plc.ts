@@ -309,10 +309,51 @@ const ModbusSlaveBufferMappingSchema = z.object({
 })
 type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
 
+// Wire transports a Modbus endpoint answers on. Shared by the slave (server)
+// and the master (remote device): the same two wires carry both roles, and the
+// unified server screen is modelled on the master's transport selector.
+const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
+type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
+
+// Modbus RTU parity settings
+const ModbusParitySchema = z.enum(['N', 'E', 'O'])
+type ModbusParity = z.infer<typeof ModbusParitySchema>
+
 const ModbusSlaveConfigSchema = z.object({
   enabled: z.boolean(),
+  /**
+   * Transports this server answers on. RTU and TCP together are ONE server with
+   * two transports, never two servers, so this is a set rather than the single
+   * `transport` the master carries -- a master dials one endpoint, a server
+   * listens on everything it was given.
+   *
+   * Absent means TCP, which is what every project saved before baremetal gained
+   * a real `PLCServer` implies: Runtime v4 serves TCP and nothing else.
+   */
+  transports: z.array(ModbusTransportTypeSchema).optional(),
   networkInterface: z.string(),
-  port: z.number(),
+  // Reaches `#define MBTCP_PORT` verbatim, so it is bounded like every sibling
+  // port in this file. A project file not authored by the screen -- the very
+  // population the migration exists for -- is the only way an unbounded value
+  // could arrive.
+  port: z.number().int().min(1).max(65535),
+  /**
+   * Slave id this server answers to. Meaningful on RTU, where it is the only
+   * addressing there is; on TCP the MBAP unit id is a gateway routing field and
+   * is deliberately not filtered on.
+   *
+   * 1-247 is the addressable range the screen enforces. `0` is the broadcast
+   * address, which a server must never answer on, and 248-255 are reserved.
+   */
+  slaveId: z.number().int().min(1).max(247).optional(),
+  // RTU wiring, mirroring the master's serial half. Absent on a TCP-only
+  // server, and absent on baremetal when the RTU shares the editor's default
+  // port, where the package owns the port's speed.
+  serialPort: z.string().optional(),
+  baudRate: z.number().int().positive().optional(),
+  parity: ModbusParitySchema.optional(),
+  stopBits: z.number().int().min(1).max(2).optional(),
+  dataBits: z.number().int().min(7).max(8).optional(),
   bufferMapping: ModbusSlaveBufferMappingSchema.optional(),
 })
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
@@ -439,6 +480,14 @@ const OpcUaSecurityProfileSchema = z.object({
   securityPolicy: OpcUaSecurityPolicySchema,
   securityMode: OpcUaSecurityModeSchema,
   authMethods: z.array(OpcUaAuthMethodSchema).min(1),
+  /** Role granted to Anonymous sessions on this profile. An anonymous client
+   *  carries no identity, so the role it maps to must be stated explicitly
+   *  rather than inferred. Defaults to the least-privilege 'viewer'
+   *  (read-only); an administrator raises it deliberately to allow anonymous
+   *  writes. Only meaningful when authMethods includes 'Anonymous'. Optional
+   *  for backward compatibility with projects authored before this field —
+   *  those are treated as 'viewer'. */
+  anonymousRole: OpcUaUserRoleSchema.optional(),
 })
 type OpcUaSecurityProfile = z.infer<typeof OpcUaSecurityProfileSchema>
 
@@ -458,6 +507,15 @@ const OpcUaUserSchema = z.object({
   id: z.string(),
   type: z.enum(['password', 'certificate']),
   username: z.string().nullable(),
+  /** The password, in the clear. Deliberate: how a credential is stored is a
+   *  device property, so the build derives it, and to derive it the build needs
+   *  the password. A project file containing OPC-UA users is therefore a secret
+   *  and must be handled as one. */
+  password: z.string().nullable().optional(),
+  /** Legacy: a pre-hashed credential from a project authored before the build
+   *  took over derivation. Passed through untouched so existing Runtime v4
+   *  projects keep working; it cannot be re-derived for another target, so the
+   *  build warns when one is used on a target that wants a different scheme. */
   passwordHash: z.string().nullable(),
   certificateId: z.string().nullable(),
   role: OpcUaUserRoleSchema,
@@ -571,14 +629,6 @@ type ModbusFunctionCode = z.infer<typeof ModbusFunctionCodeSchema>
 
 const ModbusErrorHandlingSchema = z.enum(['keep-last-value', 'set-to-zero'])
 type ModbusErrorHandling = z.infer<typeof ModbusErrorHandlingSchema>
-
-// Modbus transport type: TCP/IP or RTU (serial)
-const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
-type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
-
-// Modbus RTU parity settings
-const ModbusParitySchema = z.enum(['N', 'E', 'O'])
-type ModbusParity = z.infer<typeof ModbusParitySchema>
 
 const ModbusIOPointSchema = z.object({
   id: z.string(),

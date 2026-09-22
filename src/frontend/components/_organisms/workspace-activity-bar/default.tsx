@@ -16,10 +16,12 @@ import {
   useSimulator,
 } from '../../../../middleware/shared/providers'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
+import { useDeviceConnect } from '../../../hooks/use-device-connect'
+import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
 import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { buildDeviceResolverContext, showDeviceDialog } from '../../../services/device-link-resolution'
+import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -98,6 +100,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
+
+  // The two CONNECT actions, both shared with the device Configuration screen so
+  // the debugger's offer runs exactly what the Connect button runs.
+  const deviceConnect = useDeviceConnect(currentBoardInfo)
+  const runtimeConnect = useRuntimeConnect()
+
+  // Web reaches a device through the Orchestrators screen, which SELECTS one;
+  // until it has, there is nothing to connect to. Desktop addresses the device
+  // directly and always has a target once a board is chosen, so this is false
+  // there -- the same predicate, answered differently by the platform rather
+  // than a branch on which platform it is.
+  const needsDeviceSelection = useOpenPLCStore(
+    (state) => capabilities.hasOrchestratorDevices && state.runtimeConnection.selectedDevice === null,
+  )
+
+  // The device the user has CHOSEN, which is not the same as one they have
+  // connected to. Named in the offer below so a mis-click in the Orchestrators
+  // list is visible before it becomes a connection to the wrong machine.
+  const selectedDeviceName = useOpenPLCStore((state) => state.runtimeConnection.selectedDevice?.deviceName ?? null)
+
+  // A chosen device outranks the board target. The board only becomes a runtime
+  // one when a connection is established, so between picking a device and
+  // connecting to it the target still reads as the simulator -- which had the
+  // debugger offering to start the simulator for someone who had just selected
+  // a Runtime v4 device.
+  const offerSimulatorStart = isSimulatorBoard && selectedDeviceName === null
 
   const deviceConnectionStatus = useOpenPLCStore((state) => state.deviceConnection.status)
 
@@ -358,7 +386,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // arduino-cli needs for a direct-USB upload. Release it before the build so
       // the upload can take the port; reconnect afterwards (auto-reconnect).
       const caps = resolveTargetCapabilities(currentBoardInfo)
-      const willUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false) && caps.directUsbUpload
+      const doUpload = !isSimulatorBoard && !(overrides?.compileOnly ?? false)
+      const isEthernetUpload = currentBoardInfo?.uploadMethod === 'ethernet'
+      // Serial handoff (D72): only for a direct-USB upload, never for ethernet.
+      const willUpload = doUpload && caps.directUsbUpload && !isEthernetUpload
       // Release ONLY if the held connection is the serial one arduino-cli needs.
       // A connection over Modbus TCP is untouched, so debugging and run/stop keep
       // working across the upload; disconnecting unconditionally used to throw it
@@ -369,6 +400,21 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           serialWasReleased = await device.releaseSerialPort(
             useOpenPLCStore.getState().deviceDefinitions.configuration.communicationPort ?? null,
           )
+        } catch {
+          // best-effort: never block a build on the handoff.
+        }
+      }
+
+      // Ethernet handoff: the program upload and the debugger's Modbus-TCP status
+      // polls share the one Ethernet link, so leaving the connection up lets the
+      // polls collide with the transfer. Drop it before the build and reconnect
+      // afterwards, only if it was connected here.
+      const willEthUpload = doUpload && isEthernetUpload
+      let ethWasConnected = false
+      if (willEthUpload && useOpenPLCStore.getState().deviceConnection.status === 'connected') {
+        ethWasConnected = true
+        try {
+          await device.disconnect()
         } catch {
           // best-effort: never block a build on the handoff.
         }
@@ -427,19 +473,72 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // Serial handoff (D72): if we released a held device connection for this
-        // upload, reconnect it now that arduino-cli is done with the port.
-        // Silent (no dialogs) — the user just flashed on purpose.
-        if (serialWasReleased && result.success) {
+        // Ethernet handoff: after a successful upload the device is now running at
+        // the program's configured IP (which may differ from the address we just
+        // uploaded to). Advance the connect/upload IP to it, so the reconnect —
+        // and every later upload/connect — targets where the device actually is.
+        if (willEthUpload && result.success) {
+          const cfg = useOpenPLCStore.getState().deviceDefinitions.configuration
+          const vsd = (cfg.vendorScreenData ?? {}) as {
+            modbus_tcp?: { ip_address?: string }
+            network?: { enable_dhcp?: boolean; ip_address?: string }
+          }
+          // Under DHCP the firmware emits MBTCP_IP 0 and the stored ip_address is
+          // stale — the device just took whatever the server handed it, which the
+          // editor cannot know. Advancing to the stored static address would dial
+          // the wrong host, and the `finally` reconnect would follow it there. So
+          // ask the user for the address the device came up on (the modal already
+          // exists — showDeviceInput → debugger-ip-input) rather than guess.
+          if (vsd.network?.enable_dhcp) {
+            const entered = await showDeviceInput(
+              'Device IP address',
+              'This target uses DHCP, so its address is assigned by the network and the editor ' +
+                'cannot know it. Enter the IP the device came up on to reconnect and for later uploads.',
+              cfg.runtimeIpAddress ?? '',
+            )
+            const trimmed = entered?.trim()
+            if (trimmed) {
+              useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(trimmed)
+            }
+          } else {
+            const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
+            if (newIp && newIp !== cfg.runtimeIpAddress) {
+              useOpenPLCStore.getState().deviceActions.setRuntimeIpAddress(newIp)
+            }
+          }
+        }
+        // The device rebooted into the new firmware, so the link we come back to
+        // is a different one -- wait out the bootloader window and the app boot
+        // before `finally` dials it. Only on success: a build that failed never
+        // reached the device.
+        if (ethWasConnected && result.success) {
+          await new Promise((resolve) => setTimeout(resolve, 6000))
+        }
+      } catch (err: unknown) {
+        addLog({ level: 'error', message: `Build error: ${getErrorMessage(err)}` })
+      } finally {
+        // Restore the Ethernet link this handler dropped for the upload, in the
+        // same block that clears the compiling flag -- the teardown happens
+        // before the `try`, so putting the restore inside it meant a throw from
+        // compileProgram (an IPC failure, an adapter throw -- not a
+        // `{ success: false }` return) left the debugger disconnected for good,
+        // with only "Build error: ..." in the console and nothing to say the
+        // connection was gone. Guarded on its own flag, so it is a no-op when
+        // there was nothing to restore.
+        // Restore whichever link this handler dropped for the upload -- serial
+        // OR ethernet, never both. Both live in `finally`, guarded on their own
+        // flag and independent of success: a build that threw (an IPC failure,
+        // an adapter throw) or returned { success: false } still released the
+        // port, so it must still be reconnected, or a USB target is left
+        // disconnected with only "Build error: ..." and nothing to say why.
+        // This is the bug the ethernet handoff already fixed; the serial handoff
+        // had the same shape one branch over.
+        if (serialWasReleased || ethWasConnected) {
           const boardTarget = deviceDefinitions.configuration.deviceBoard
           const spec = currentBoardInfo?.debug
-          // Same candidate resolution Connect uses, so the link comes back the way
-          // the user established it. Only the serial link is ever released for an
-          // upload, but resolving the full list lets the reconnect land on Modbus
-          // TCP if that is what now answers.
-          // `deferPrompts`: this reconnect is silent and automatic (the user just
-          // flashed), so it must never pop an address dialog behind their back. A
-          // DHCP-only target simply stays disconnected until they press Connect.
+          // `deferPrompts`: silent and automatic (the user just flashed), so it
+          // must never pop an address dialog behind their back. A DHCP-only
+          // target simply stays disconnected until they press Connect.
           const candidates = resolveDeviceLinkCandidates(spec, buildDeviceResolverContext(boardTarget), {
             transports: caps.debuggerTransports,
             deferPrompts: true,
@@ -452,9 +551,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             }
           }
         }
-      } catch (err: unknown) {
-        addLog({ level: 'error', message: `Build error: ${getErrorMessage(err)}` })
-      } finally {
         setIsCompiling(false)
       }
     },
@@ -963,11 +1059,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // ---------------------------------------------------------------------------
 
   const handleDebuggerClick = useCallback(async () => {
-    // Simulator targets debug through the Start Simulator button
-    // (compile + load firmware + connect), so the Debugger button
-    // is hidden for them at the JSX level — but guard here too in
-    // case the gate ever flips.
-    if (isSimulatorBoard) return
+    // The simulator guard has MOVED, not gone: it now sits after the
+    // offer-to-start below. Standing here it made the Debugger button a dead
+    // end on a simulator target -- the answer to "I want to debug" was a
+    // disabled button and a tooltip naming a different one. What follows the
+    // offer is the device path (debug compile, MD5 verify, channel connect),
+    // which means nothing for an emulator, so the simulator still stops short
+    // of it.
 
     const { workspace, project, deviceDefinitions: devDefs, consoleActions } = useOpenPLCStore.getState()
 
@@ -1005,7 +1103,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // debug session can start — a device by Connect, a runtime by logging in, the
       // simulator by pressing Start — so the only question left is whether that
       // session exists. Which medium it uses is the connection manager's to know.
-      const isRuntime = isOpenPLCRuntimeTarget(boardInfo)
+      // A device chosen in the Orchestrators list IS a Runtime v4 target -- that
+      // is the only thing an orchestrator serves -- and it counts as one before
+      // the board target catches up. The board only turns into a runtime board
+      // once a connection is established, so deriving this from the board alone
+      // sent a selected-but-unconnected device down the SERIAL connect path and
+      // answered "Could not reach the device on simulator".
+      const isRuntime =
+        isOpenPLCRuntimeTarget(boardInfo) || (capabilities.hasOrchestratorDevices && selectedDeviceName !== null)
 
       // A session the manager holds (a device or the simulator) also OWNS the debug
       // channel, so the session ending ends the debug session — see the drop handler
@@ -1021,17 +1126,85 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         message: `[connection] debug session requested for ${boardTarget}; session is "${sessionStatus}"`,
       })
 
-      // Connect first. Starting a debug session must never establish the connection
-      // itself: connecting is the user's explicit action and reports what it found.
+      // No session yet: OFFER to establish one rather than sending the user away.
+      // Telling someone the debugger needs a connection and leaving them to go
+      // find the button is a worse answer than asking "shall I?" -- the editor
+      // knows the target and already owns every action needed to reach it.
+      //
+      // One flow for desktop and web. The only genuine difference is WHICH
+      // action connects, and that is a property of the target, not of the
+      // platform: the simulator starts, an orchestrator-reached device and a
+      // locally-addressed one both connect. A runtime's connect raises its login
+      // modal, so this is deliberately a modal opening a modal.
       if (sessionStatus !== 'connected') {
-        await showDeviceDialog(
-          'warning',
-          'Connection Required',
-          isRuntime
-            ? 'Connect to the runtime first. The debugger runs over that connection, so it must be established before a debug session can start.'
-            : 'Connect to the device first. The debugger runs over the device connection, so the device must be connected before a debug session can start.',
-          ['OK'],
+        // Nothing selected to connect TO. On web that is a real state (the
+        // Orchestrators screen picks the device); on desktop the UI makes it
+        // unreachable, and it is handled identically anyway rather than
+        // branching on platform.
+        if (!offerSimulatorStart && needsDeviceSelection) {
+          await showDeviceDialog(
+            'warning',
+            'No Device Selected',
+            'Select a device to connect to before starting the debugger. The debugger runs over the ' +
+              'device connection, so there has to be a device for it to run over.',
+            ['OK'],
+          )
+          setIsDebuggerProcessing(false)
+          return
+        }
+
+        // Name the target. "Would you like to connect?" with no name is how a
+        // mis-selection turns into a session on someone else's machine.
+        const targetName =
+          selectedDeviceName ??
+          deviceDefinitions.configuration.runtimeIpAddress ??
+          deviceDefinitions.configuration.communicationPort ??
+          boardTarget
+        const offer = await showDeviceDialog(
+          'question',
+          offerSimulatorStart ? 'Simulator Not Running' : 'Not Connected',
+          offerSimulatorStart
+            ? 'The debugger runs against the running simulator. Would you like to start the simulator now?'
+            : isRuntime
+              ? `The debugger runs over the runtime connection. Would you like to connect to "${targetName}" now?`
+              : `The debugger runs over the device connection. Would you like to connect to "${targetName}" now?`,
+          ['Yes', 'No'],
         )
+        if (offer !== 0) {
+          addLog({ level: 'info', message: 'Debugger session cancelled.' })
+          setIsDebuggerProcessing(false)
+          return
+        }
+
+        setIsDebuggerProcessing(false)
+        if (offerSimulatorStart) {
+          // Same action as the sidebar's Start: it builds, launches the emulator
+          // and — via `pendingSimulatorDebugRef` — attaches the debugger once the
+          // firmware event lands, so the session continues on its own.
+          pendingSimulatorDebugRef.current = true
+          void handleSimulatorControl()
+          return
+        }
+        // Connect, then let the user press Debug again. Connecting is not a
+        // single await for a runtime (its login is a modal the user still has to
+        // fill in), so chaining the session onto it here would either race the
+        // login or need this handler to sit waiting on a status change.
+        if (isRuntime) {
+          void runtimeConnect.connect()
+        } else {
+          void deviceConnect.connect()
+        }
+        return
+      }
+
+      // A RUNNING simulator already carries its debug session: Start attaches it
+      // as the firmware event lands (`simulatorRun.launch({ attachDebugger })`),
+      // and there is no attach-to-an-already-running path to call here. The
+      // button's remaining job for it is the toggle-off handled at the top, so
+      // stop before the device path -- a debug compile, an MD5 verify against
+      // flashed firmware and a channel connect all describe hardware, not an
+      // emulator.
+      if (isSimulatorBoard) {
         setIsDebuggerProcessing(false)
         return
       }
@@ -1166,12 +1339,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               {(isSimulatorBoard ? simulatorRunning : plcStatus === 'RUNNING') ? <StopIcon /> : null}
             </PlayButton>
           </TooltipSidebarWrapperButton>
-          <TooltipSidebarWrapperButton tooltipContent={isSimulatorBoard ? 'Use Start to debug' : 'Debugger'}>
+          {/* Enabled for the simulator too. It used to be disabled with a "Use
+              Start to debug" tooltip, which made the button a dead end: the
+              answer to "I want to debug" was a tooltip telling you to press a
+              different button. The handler now offers to START the simulator,
+              the same way it offers to connect a device, so the one control
+              means the same thing on every target. */}
+          <TooltipSidebarWrapperButton tooltipContent='Debugger'>
             <DebuggerButton
               onClick={() => void handleDebuggerClick()}
-              disabled={isDebuggerProcessing || isSimulatorBoard}
+              disabled={isDebuggerProcessing}
               isActive={isDebuggerVisible}
-              className={cn((isDebuggerProcessing || isSimulatorBoard) && disabledButtonClass)}
+              className={cn(isDebuggerProcessing && disabledButtonClass)}
             />
           </TooltipSidebarWrapperButton>
         </>

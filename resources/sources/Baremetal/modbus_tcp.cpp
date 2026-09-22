@@ -3,31 +3,48 @@ modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
 Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
+#include <string.h>       // memset -- wiping a discarded frame
+
 #include "modbus_tcp.h"
 #include "modbus_pdu.h"   // process_mbpacket
 
-#ifdef MBTCP_ETHERNET
+// The listen port travels with the project's Modbus server. A firmware built
+// before it did -- or by a toolchain that does not emit it -- keeps the IANA
+// default it always listened on.
+#ifndef MBTCP_PORT
+    #define MBTCP_PORT 502
+#endif
+
+#if defined(MBTCP_ETHERNET) && defined(MB_TCP_ACTIVE)
 #ifdef BOARD_ESP32
-    WiFiServer mb_server(502);
+    WiFiServer mb_server(MBTCP_PORT);
 	WiFiClient mb_serverClients[MAX_SRV_CLIENTS];
 #else
-    EthernetServer mb_server(502);
+    EthernetServer mb_server(MBTCP_PORT);
 #endif
     uint8_t mb_mbap[MBAP_SIZE];
-#ifdef BOARD_PORTENTA
+// The Ethernet route's client table. The multi-client block in handle_tcp()
+// is entered for PORTENTA and PICOW alike, so both need the array; declaring it
+// for only one of them is why a Pico W with an Ethernet module failed to
+// compile at modbus_tcp.cpp:137 with 'mb_serverClients' was not declared.
+#if defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
     EthernetClient mb_serverClients[MAX_SRV_CLIENTS];
 #endif
 #endif
 
-#ifdef MBTCP_WIFI
-    WiFiServer mb_server(502);
+#if defined(MBTCP_WIFI) && defined(MB_TCP_ACTIVE)
+    WiFiServer mb_server(MBTCP_PORT);
     uint8_t mb_mbap[MBAP_SIZE];
 #if defined(BOARD_ESP8266) || defined(BOARD_ESP32) || defined(BOARD_PORTENTA) || defined(BOARD_PICOW)
     WiFiClient mb_serverClients[MAX_SRV_CLIENTS];
 #endif
 #endif
 
-#ifdef MBTCP
+// Bringing the link up is the NETWORK's job, not the Modbus server's. It used
+// to live under MBTCP, so a project that enabled the network without serving
+// Modbus TCP compiled a firmware that never configured the interface -- fine on
+// a USB board, fatal on one reached only over Ethernet.
+#if defined(OPLC_NET_ENABLED)
 void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *gateway, uint8_t *subnet)
 {
     #ifdef MBTCP_ETHERNET
@@ -39,6 +56,13 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
                 (ETH.config(ip, gateway, subnet, dns));
 
         #else
+            // The module's chip select, when the board says where it is. Both
+            // libraries default to pin 10 (the Uno shield's wiring), which is
+            // wrong on every board that is not an Uno -- the Pico's SPI0 CS is
+            // 17. Must precede begin(), which is what talks to the chip.
+            #ifdef MBTCP_ETH_CS
+                Ethernet.init(MBTCP_ETH_CS);
+            #endif
             if (ip == NULL)
                 Ethernet.begin(mac);
             else if (dns == NULL)
@@ -67,7 +91,6 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
                 uint8_t secondaryDNS[] = {8, 8, 8, 8};
                 WiFi.config(IPAddress(ip), IPAddress(gateway), IPAddress(subnet), IPAddress(dns), IPAddress(secondaryDNS));
             }
-            mb_server.setNoDelay(true);
         #elif defined(BOARD_PORTENTA)
             if (ip != NULL && subnet != NULL && gateway != NULL)
             {
@@ -96,8 +119,20 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
         }
     #endif
 
-    mb_server.begin();
+}
 
+#endif  // OPLC_NET_ENABLED
+
+#ifdef MB_TCP_ACTIVE
+/** Start listening for Modbus TCP. Separate from the link bring-up above
+ *  because a board can have a network without serving Modbus over it -- the
+ *  debugger, the ethernet upload, OPC-UA and S7Comm all use the same link. */
+void mbtcp_server_begin(void)
+{
+    #if defined(MBTCP_WIFI) && (defined(BOARD_ESP8266) || defined(BOARD_ESP32))
+        mb_server.setNoDelay(true);
+    #endif
+    mb_server.begin();
 }
 
 void handle_tcp()
@@ -267,7 +302,21 @@ void handle_tcp()
                 }
 
                 //Safety check - discard packages that lie about their size
-                if (i != mb_frame_len) return;
+                if (i != mb_frame_len)
+                {
+                    // Wipe what the liar wrote. The bytes are already in
+                    // mb_frame, and process_mbpacket() dispatches on the buffer
+                    // rather than on the read length, so leaving them let a
+                    // SHORT follow-up frame execute on this frame's operands —
+                    // which is how a rejected frame carrying the 0x4C magic
+                    // could arm a later bare reboot request. There is a
+                    // per-FC length guard in process_mbpacket() now too; this
+                    // is the other half, so no stale operand survives the
+                    // request that carried it.
+                    memset(mb_frame, 0, i);
+                    mb_frame_len = 0;
+                    return;
+                }
 
                 //Process packet and write back
                 process_mbpacket();

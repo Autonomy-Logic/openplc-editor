@@ -63,6 +63,9 @@ import { mockInstallFromRemote, mockListRemoteCatalog } from './remote-catalog-m
 const PRODUCTION_CATALOG_URL = 'https://api.autonomylogic.com'
 const CATALOG_BASE_URL = process.env.VPP_CATALOG_URL || PRODUCTION_CATALOG_URL
 
+/** How long the catalog fetch may take before it is abandoned. */
+const CATALOG_FETCH_TIMEOUT_MS = 15_000
+
 /**
  * Local-dev toggle: when `true`, the catalog port methods are served from
  * the static fixture in `remote-catalog-mock.ts` so the Browse Catalog UI
@@ -122,7 +125,13 @@ export function createEditorPackageAdapter(): PackagePort {
     async listRemoteCatalog(): Promise<RemoteCatalog> {
       /* istanbul ignore if -- USE_LOCAL_MOCK is a working-tree-only dev toggle (committed false) */
       if (USE_LOCAL_MOCK) return mockListRemoteCatalog()
-      const response = await fetch(`${CATALOG_BASE_URL}/vpp-catalog/v1/catalog.json`)
+      // A deadline, because this fetch has two callers with the same failure
+      // mode: the catalog browser, where a hung request is a spinner that never
+      // resolves, and the startup prime behind the build's package-update
+      // notice, where it would be a request left open for the session.
+      const response = await fetch(`${CATALOG_BASE_URL}/vpp-catalog/v1/catalog.json`, {
+        signal: AbortSignal.timeout(CATALOG_FETCH_TIMEOUT_MS),
+      })
       if (!response.ok) {
         throw new Error(`Catalog fetch failed: ${response.status} ${response.statusText}`)
       }

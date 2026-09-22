@@ -123,8 +123,12 @@ export interface OrchestratorPort {
    *
    * `kernel` needs an Edge carrying EDGE-631; against an older one the field
    * is simply absent and the header shows less.
+   *
+   * The argument is the orchestrator's AGENT id (the `orchestratorId` column
+   * Edge's /details route resolves by), NOT the device/orchestrator record PK.
+   * Passing the record id 404s — that was RTOP-289.
    */
-  getOrchestratorHostInfo?(orchestratorId: string): Promise<OrchestratorHostInfo | null>
+  getOrchestratorHostInfo?(agentId: string): Promise<OrchestratorHostInfo | null>
 
   /**
    * Ask one orchestrator's agent what its runtimes are advertising.

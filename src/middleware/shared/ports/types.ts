@@ -222,10 +222,31 @@ export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
 export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
 
 // Modbus
+
+/** Wire transports a Modbus endpoint answers on, shared by the slave and the
+ *  master: the same two wires carry both roles. */
+export type ModbusTransport = 'rtu' | 'tcp'
+
+/** Modbus RTU parity, shared by the slave and the master. */
+export type ModbusParity = 'N' | 'E' | 'O'
+
 export interface ModbusSlaveConfig {
   enabled: boolean
+  /** Transports this server answers on. RTU and TCP together are ONE server
+   *  with two transports, never two servers. Absent means TCP, which is what
+   *  every project saved before baremetal gained a real `PLCServer` implies. */
+  transports?: ModbusTransport[]
   networkInterface: string
   port: number
+  /** Meaningful on RTU, where it is the only addressing there is. On TCP the
+   *  MBAP unit id is a gateway routing field and is not filtered on. */
+  slaveId?: number
+  // RTU wiring, mirroring the master's serial half.
+  serialPort?: string
+  baudRate?: number
+  parity?: ModbusParity
+  stopBits?: number
+  dataBits?: number
   bufferMapping?: ModbusBufferMapping
 }
 
@@ -261,7 +282,7 @@ export interface ModbusRemoteTcpConfig {
   port?: number
   serialPort?: string
   baudRate?: number
-  parity?: 'N' | 'E' | 'O'
+  parity?: ModbusParity
   stopBits?: number
   dataBits?: number
   slaveId?: number
@@ -370,12 +391,20 @@ export interface OpcUaSecurityProfile {
   securityPolicy: OpcUaSecurityPolicyType
   securityMode: OpcUaSecurityModeType
   authMethods: OpcUaAuthMethod[]
+  /** Role granted to Anonymous sessions on this profile (viewer/operator/
+   *  engineer). Defaults to viewer (least privilege) when unset. The runtime
+   *  and the baremetal firmware enforce the per-variable matrix against it. */
+  anonymousRole?: 'viewer' | 'operator' | 'engineer'
 }
 
 export interface OpcUaUser {
   id: string
   type: 'password' | 'certificate'
   username: string | null
+  /** Plaintext. See OpcUaUserSchema in backend/shared/types/PLC/open-plc.ts
+   *  for why the build, not the editor, derives the stored credential. */
+  password?: string | null
+  /** Legacy pre-hashed credential; passed through untouched. */
   passwordHash: string | null
   certificateId: string | null
   role: 'viewer' | 'operator' | 'engineer'
@@ -565,7 +594,7 @@ export interface ProjectCapabilities {
   hasPrograms: boolean
   /** Show the Resource entry in the project tree. */
   hasResource: boolean
-  /** Show Device / Configuration / Orchestrators entries. */
+  /** Show Device / Configuration / Edge Devices entries. */
   hasDevices: boolean
   /** Show Server entries (Modbus / OPC-UA servers). */
   hasServers: boolean
@@ -673,6 +702,16 @@ export interface PlatformOption {
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
+  /** Upload transport for arduino-cli targets: "ethernet" (LOGO! 8.2) is
+   *  flashed over the network; absent/"serial" is the default USB path. */
+  uploadMethod?: 'serial' | 'ethernet'
+  /**
+   * The board's fully-qualified name, e.g. `arduino:avr:uno`. The same string
+   * arduino-cli reads `build.mcu` from, which is what selects the firmware's
+   * I/O buffer sizes in `resources/sources/arduino/openplc.h` -- `core` alone
+   * cannot tell an Uno from a Mega. Absent for hals.json targets.
+   */
+  platform?: string
   preview: string
   specs: Record<string, string>
   coreVersion?: string
@@ -707,6 +746,14 @@ export interface BoardInfo {
    *  debugger runs. Mirrors the manifest device's `defaultSerial`. Absent →
    *  `Serial`. */
   defaultSerial?: string
+  /**
+   * TCP carriers this board can actually bring up, mirrored from the manifest
+   * device's `networkInterfaces`. Read by the Network screen's interface
+   * picker via `optionsRef: 'board.networkInterfaces'`. Absent → both Ethernet
+   * and Wi-Fi stay on offer, which is right for any board that takes a W5x00
+   * shield; it is declared only to REMOVE a carrier the firmware can't serve.
+   */
+  networkInterfaces?: string[]
   /**
    * Declarative debug-channel resolver spec carried through from the
    * source catalog (hals.json or VPP manifest).  Consumed by
@@ -850,6 +897,15 @@ export interface PackageManifest {
        * precompiled .a is ABI-locked to it.
        */
       coreVersion?: string
+      /**
+       * Upload transport for arduino-cli targets. Absent/"serial" (default):
+       * `arduino-cli upload --port <serialPort>`. "ethernet": upload over the
+       * network — the editor passes the device IP (configuration
+       * runtimeIpAddress) as arduino-cli's `--port`, and the board's core
+       * platform.txt upload recipe performs the network transfer. Currently
+       * only the Siemens LOGO! 8.2 uses "ethernet". See manifest.schema.json.
+       */
+      uploadMethod?: 'serial' | 'ethernet'
     }
     specs?: Record<string, string>
     hal: {
@@ -932,6 +988,11 @@ export interface PackageManifest {
     /** Name of the default serial port (usually the USB CDC port). Surfaced onto
      *  `BoardInfo.defaultSerial`. Absent → `Serial`. */
     defaultSerial?: string
+    /** TCP carriers this device can bring up. Surfaced onto
+     *  `BoardInfo.networkInterfaces` and consumed by the Network screen via
+     *  `optionsRef: 'board.networkInterfaces'`. Declared only to REMOVE a
+     *  carrier the firmware can't serve. */
+    networkInterfaces?: string[]
     /** Declarative debug-channel resolver spec, consumed by
      *  `backend/shared/hardware/debug-spec.ts`.  Same shape as
      *  the `debug` field on built-in hals.json entries — the
@@ -1288,6 +1349,12 @@ export interface DebugConnectionConfig {
     port?: string
     baudRate?: number
     slaveId?: number
+    /**
+     * An id a board flashed before 4.3.0 may still answer the editor on, tried
+     * only after `slaveId` has gone unanswered. Not a manifest field: the editor
+     * reads it from the project's own legacy screen state, because the packages
+     * no longer declare the screen it lived on.
+     */
     jwtToken?: string
   }
 }

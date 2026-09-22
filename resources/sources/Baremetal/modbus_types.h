@@ -27,10 +27,25 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define COILS           0
 #define INPUTSTATUS     1
 
+// Widest single value the debug READ path can put on the wire. The numbers live
+// on the C-ABI surface (arduino_runtime_glue.h), which is where strucpp's
+// constants are mirrored for callers that cannot include its C++17 headers, and
+// a static_assert there holds them to the real ones.
+#include "arduino_runtime_glue.h"
+// Bytes the DEBUG_GET response spends before its first value.
+#define MB_DEBUG_GET_HEADER    11
+
+// The frame has to hold that header plus the widest value the target can
+// produce, or that value can never be read at all -- it is skipped in silence,
+// and the read returns nothing.
+//
+// The small AVRs keep the 128 they have always had. An `IECWStringVar<254>` is
+// ~1020 bytes of SRAM on its own, more than an ATmega168 has in total, so a
+// WSTRING cannot be declared on those parts and there is nothing here to fix.
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)
     #define MAX_MB_FRAME 128
 #else
-    #define MAX_MB_FRAME 256
+    #define MAX_MB_FRAME (MB_DEBUG_GET_HEADER + OPENPLC_DEBUG_WSTRING_WIRE + 8)  /* 272 */
 #endif
 #define MAX_SRV_CLIENTS 3 //how many clients should be able to connect to TCP server at the same time
 #define MBAP_SIZE       6
@@ -55,6 +70,10 @@ protocol, transport, register and debug layers agree on the same contracts.
 // warning rather than a generic failure. It doesn't collide with Modbus
 // exceptions (0x01-0x04) nor 0x7E/0x81/0x82.
 #define MB_PLC_CTRL_REFUSED_SWITCH       0x86
+// MB_FC_REBOOT_BOOTLOADER only: well-formed but refused because the device's
+// programming lock is engaged. Not an error code, because the editor keeps
+// asking for a few seconds while the user clears the lock at the device.
+#define MB_REFUSED_LOCKED                0x6C
 
 //Modbus registers struct
 struct MBinfo {
@@ -94,6 +113,8 @@ enum {
     MB_FC_DEBUG_WRITE_LICENSE = 0x49, // Debug write license blob to on-device storage
     MB_FC_DEBUG_READ_LICENSE  = 0x4A, // Debug read license blob from on-device storage
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
+    MB_FC_REBOOT_BOOTLOADER   = 0x4C, // Reboot the device into its firmware bootloader (magic-guarded)
+    MB_FC_GET_LOCK_STATE      = 0x4D, // Read the device's programming-lock state (read-only)
 };
 
 //Exception Codes

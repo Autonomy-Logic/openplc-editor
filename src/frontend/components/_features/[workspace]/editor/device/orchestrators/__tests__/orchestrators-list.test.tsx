@@ -1,130 +1,224 @@
-import { openPLCStoreBase } from '@root/frontend/store'
-import type { OrchestratorInfo } from '@root/middleware/shared/ports/orchestrator-port'
-import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
-import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
-import { PlatformProvider } from '@root/middleware/shared/providers'
-import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+/**
+ * Edge Devices screen — the vocabulary this screen displays (EDGE-639/640).
+ *
+ * This screen carries most of the copy the terminology rename changes, and it
+ * had no test at all, so the acceptance criteria for it were something a person
+ * had to remember to look at. What is pinned here is only the wording, and
+ * deliberately: which noun each string uses is a product decision that was made
+ * from what the code does, and it is the kind of decision a later refactor
+ * silently undoes.
+ *
+ * The two nouns are not interchangeable. The list holds Edge Devices, the
+ * platform entity; the rows under each one are vPLCs, the containers running on
+ * it. Both words appear on this screen and swapping them is the specific
+ * mistake this file exists to catch. The parent strings come from
+ * `orchestrators.length` and from the catch around `listOrchestrators()`; the
+ * child strings come from `orchestrator.devices` and from the row click.
+ *
+ * Rendered against a mocked port and store: the real screen needs an Edge
+ * account, a registered Device and an agent, none of which make a useful
+ * regression test for a set of strings.
+ */
+
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+
+const listOrchestrators = vi.fn()
+
+/** Typed so the store's action spies can be read back without a cast. */
+type MockStore = {
+  runtimeConnection: Record<string, unknown>
+  deviceActions: Record<string, ReturnType<typeof vi.fn>>
+  modalActions: Record<string, ReturnType<typeof vi.fn>>
+  deviceDefinitions: Record<string, unknown>
+  deviceAvailableOptions: Record<string, unknown>
+}
+
+let storeState: MockStore
+
+vi.mock('@root/middleware/shared/providers', () => ({
+  useOrchestrator: () => ({ listOrchestrators }),
+  useRuntime: () => ({
+    getUsersInfo: vi.fn().mockResolvedValue({ error: 'not connected' }),
+    setDeviceContext: vi.fn(),
+    clearCredentials: vi.fn(),
+  }),
+  // The screen reads the package port to offer a vendor package's boards. No
+  // port here: these are string tests, and the board rules stay inert without
+  // one, which is the same answer the desktop gives.
+  usePlatform: () => ({ packages: undefined }),
+}))
+
+// Mocked through the @root alias rather than a relative path: Jest resolves a
+// mock path relative to its setup file, not the test, so a relative one fails
+// there while working under Vitest. The alias resolves to the same module in
+// both, which keeps this file identical across the two apps.
+vi.mock('@root/frontend/store', () => {
+  // The screen reads the store both ways: destructured for the actions, and
+  // with a selector for the simulator check.
+  const useOpenPLCStore = (selector?: (state: unknown) => unknown) => (selector ? selector(storeState) : storeState)
+  useOpenPLCStore.getState = () => storeState
+  // The refresh path reads the store outside React, to reconcile the selected
+  // device against a listing that may have changed under it.
+  return { useOpenPLCStore, openPLCStoreBase: { getState: () => storeState } }
+})
+
+// Whether the board is the in-process simulator is decided by board metadata
+// this screen only passes through, and it has its own tests.
+vi.mock('@root/middleware/shared/utils/target-capabilities', () => ({
+  resolveTargetCapabilities: () => ({ isInProcessSimulator: true }),
+}))
 
 import { OrchestratorsList } from '../orchestrators-list'
 
-function stubPort<T extends object>(overrides: Partial<T> = {}): T {
-  return new Proxy(overrides as T, {
-    get(target, prop, receiver) {
-      if (prop in target) return Reflect.get(target, prop, receiver)
-      return typeof prop === 'string' ? () => undefined : undefined
-    },
-  })
-}
-
-const ORCHESTRATOR: OrchestratorInfo = {
-  id: 'orch-1',
-  name: 'Factory floor',
+/** One Edge Device carrying two vPLCs. */
+const edgeDevice = {
+  id: 'edge-1',
   agentId: 'agent-1',
-  description: null,
+  name: 'shop-floor-01',
+  description: 'Line 1 cabinet',
   devices: [
-    { id: 'dev-holder', name: 'Line A', status: 'online', active: true, backplaneAccess: true },
-    { id: 'dev-plain', name: 'Line B', status: 'online', active: true, backplaneAccess: false },
-    { id: 'dev-legacy', name: 'Line C', status: 'online', active: true },
-    { id: 'dev-down', name: 'Line D', status: 'offline', active: false },
+    { id: 'vplc-1', name: 'mixer', status: 'online', active: true },
+    { id: 'vplc-2', name: 'conveyor', status: 'offline', active: true },
   ],
 }
 
-function renderPicker(listOrchestrators = () => Promise.resolve([ORCHESTRATOR])) {
-  const ports: PlatformPorts = {
-    compiler: stubPort(),
-    runtime: stubPort<RuntimePort>({ getUsersInfo: () => Promise.resolve({ hasUsers: true }) }),
-    debugger: stubPort(),
-    simulator: stubPort(),
-    project: stubPort(),
-    device: stubPort(),
-    orchestrator: { listOrchestrators },
-    system: stubPort(),
-    window: stubPort(),
-    accelerator: stubPort(),
-    theme: stubPort(),
-    versionControl: stubPort(),
-    navigation: stubPort(),
-    library: stubPort(),
-    capabilities: WEB_CAPABILITIES,
-  }
-  render(
-    <PlatformProvider ports={ports}>
-      <OrchestratorsList />
-    </PlatformProvider>,
-  )
-}
+const freshStore = (runtimeConnection: Record<string, unknown> = {}): MockStore => ({
+  runtimeConnection: {
+    connectionStatus: 'disconnected',
+    selectedDevice: null,
+    jwtToken: null,
+    plcStatus: null,
+    ...runtimeConnection,
+  },
+  deviceActions: {
+    setDeviceBoard: vi.fn(),
+    setSelectedDevice: vi.fn(),
+    setRuntimeConnectionStatus: vi.fn(),
+    setRuntimeVersion: vi.fn(),
+    clearRuntimeConnection: vi.fn(),
+  },
+  modalActions: { openModal: vi.fn() },
+  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Simulator' } },
+  deviceAvailableOptions: { availableBoards: new Map() },
+})
 
-/** Expand the orchestrator, then click the row carrying `deviceName`. */
-async function selectDevice(deviceName: string) {
-  fireEvent.click(await screen.findByText('Factory floor'))
-  fireEvent.click(await screen.findByText(deviceName))
-}
+beforeEach(() => {
+  vi.clearAllMocks()
+  storeState = freshStore()
+  listOrchestrators.mockResolvedValue([])
+})
 
-async function connect() {
-  fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-  await waitFor(() => expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).not.toBeNull())
-  return openPLCStoreBase.getState().runtimeConnection.selectedDevice
-}
+/**
+ * The whole screen as text. Used for the sweep at the foot of this file: the
+ * point there is that the old vocabulary is absent, which is a statement about
+ * everything rendered rather than about one node.
+ */
+const visibleText = () => document.body.textContent ?? ''
 
-describe('OrchestratorsList', () => {
-  beforeEach(() => {
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
+describe('the strings that name the parent entity', () => {
+  it('titles the screen Edge Devices', async () => {
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByText('Edge Devices')).toBeTruthy())
   })
 
-  afterEach(() => {
-    cleanup()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
+  it('says what to select, naming the vPLC and where it lives', async () => {
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByText('Select a vPLC from your Edge Devices to connect to.')).toBeTruthy())
   })
 
-  it('carries backplaneAccess=true into the selected device', async () => {
-    renderPicker()
-    await selectDevice('Line A')
-    expect(await connect()).toMatchObject({ deviceId: 'dev-holder', backplaneAccess: true })
+  it('labels the refresh control for a screen reader', async () => {
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByLabelText('Refresh Edge Devices')).toBeTruthy())
   })
 
-  it('carries backplaneAccess=false into the selected device', async () => {
-    renderPicker()
-    await selectDevice('Line B')
-    expect(await connect()).toMatchObject({ deviceId: 'dev-plain', backplaneAccess: false })
+  it('says what it is loading before the list arrives', () => {
+    // Never resolves, so the loading branch is the one on screen.
+    listOrchestrators.mockReturnValue(new Promise(() => {}))
+    render(<OrchestratorsList />)
+    expect(screen.getByText('Loading Edge Devices...')).toBeTruthy()
   })
 
-  it('stores no backplaneAccess at all when the host did not report it', async () => {
-    // A host predating the field must not be recorded as one that answered no.
-    renderPicker()
-    await selectDevice('Line C')
-    const selected = await connect()
-    expect(selected?.deviceId).toBe('dev-legacy')
-    expect(selected && 'backplaneAccess' in selected).toBe(false)
+  it('names the parent in the empty state, which fires on an empty list', async () => {
+    // The empty state is `orchestrators.length === 0`, so it describes the
+    // parent list and not the vPLCs under it.
+    listOrchestrators.mockResolvedValue([])
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByText('No Edge Devices found.')).toBeTruthy())
+    expect(screen.getByText('Register an Edge Device in the Autonomy Edge platform to see it here.')).toBeTruthy()
   })
 
-  it('marks only the device that holds the backplane', async () => {
-    renderPicker()
-    fireEvent.click(await screen.findByText('Factory floor'))
-    const badges = await screen.findAllByText('Backplane I/O')
-    expect(badges).toHaveLength(1)
-    expect(badges[0].closest('div')?.textContent).toContain('Line A')
+  it('names the parent when the list fails to load', async () => {
+    // Set in the catch around `listOrchestrators()`, so this too is about the
+    // parent list rather than about any vPLC.
+    listOrchestrators.mockRejectedValue(new Error('edge unreachable'))
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByText('Failed to load Edge Devices. Please try again.')).toBeTruthy())
+  })
+})
+
+describe('the strings that name the child entity', () => {
+  it('counts the children of an Edge Device as vPLCs', async () => {
+    listOrchestrators.mockResolvedValue([edgeDevice])
+    render(<OrchestratorsList />)
+    // Reads `orchestrator.devices.length`, which is the vPLC count.
+    await waitFor(() => expect(screen.getByText('2 vPLCs')).toBeTruthy())
   })
 
-  it.each([true, false, undefined])('refreshes a connected permission to %s', async (backplaneAccess) => {
-    let current = ORCHESTRATOR
-    renderPicker(() => Promise.resolve([current]))
-    await selectDevice(backplaneAccess === true ? 'Line B' : 'Line A')
-    await connect()
-    act(() => openPLCStoreBase.getState().deviceActions.setRuntimeConnectionStatus('connected'))
-    current = { ...ORCHESTRATOR, devices: ORCHESTRATOR.devices.map((device) => ({ ...device, backplaneAccess })) }
-    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
-    await waitFor(() =>
-      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess),
+  it('uses the singular for an Edge Device with one vPLC', async () => {
+    listOrchestrators.mockResolvedValue([{ ...edgeDevice, devices: [edgeDevice.devices[0]] }])
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByText('1 vPLC')).toBeTruthy())
+  })
+
+  it('names the vPLC in the switch confirmation, which is reached from a child row', async () => {
+    // Connected to one vPLC, then a different one is clicked: the only path to
+    // this modal, and the reason its wording is vPLC and not Device.
+    storeState = freshStore({
+      connectionStatus: 'connected',
+      jwtToken: 'jwt',
+      selectedDevice: {
+        orchestratorId: 'edge-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'vplc-1',
+        deviceName: 'mixer',
+      },
+    })
+    listOrchestrators.mockResolvedValue([edgeDevice])
+    render(<OrchestratorsList />)
+
+    await waitFor(() => expect(screen.getByText('2 vPLCs')).toBeTruthy())
+    await userEvent.click(screen.getByText('conveyor'))
+
+    await waitFor(() => expect(screen.getByText('Switch vPLC')).toBeTruthy())
+    expect(screen.getByText(/you must disconnect from the current vPLC first\./)).toBeTruthy()
+  })
+})
+
+describe('the old vocabulary', () => {
+  // One assertion per state the screen can be in, because a leftover string
+  // would sit in whichever branch was not re-read.
+  it.each([
+    ['an empty list', () => listOrchestrators.mockResolvedValue([])],
+    ['a populated list', () => listOrchestrators.mockResolvedValue([edgeDevice])],
+    ['a failed load', () => listOrchestrators.mockRejectedValue(new Error('edge unreachable'))],
+  ])('is absent with %s', async (_name, arrange) => {
+    arrange()
+    render(<OrchestratorsList />)
+    // Waits for the fetch to settle, so this reads the resolved state rather
+    // than the loading one.
+    await waitFor(() => expect(screen.queryByText('Loading Edge Devices...')).toBeNull())
+    expect(visibleText()).not.toMatch(/orchestrator/i)
+  })
+
+  it('is absent from the accessible labels too', async () => {
+    listOrchestrators.mockResolvedValue([edgeDevice])
+    render(<OrchestratorsList />)
+    await waitFor(() => expect(screen.getByText('2 vPLCs')).toBeTruthy())
+    const labelled = Array.from(document.querySelectorAll('[aria-label]')).map(
+      (el) => el.getAttribute('aria-label') ?? '',
     )
-    if (backplaneAccess === undefined) {
-      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).not.toHaveProperty('backplaneAccess')
-    }
-  })
-
-  it('still refuses to select an inactive device', async () => {
-    renderPicker()
-    await selectDevice('Line D')
-    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+    expect(labelled.length).toBeGreaterThan(0)
+    for (const label of labelled) expect(label).not.toMatch(/orchestrator/i)
   })
 })

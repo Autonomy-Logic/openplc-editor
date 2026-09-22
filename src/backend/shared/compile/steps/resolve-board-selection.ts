@@ -68,6 +68,8 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       // come from the VPP manifest via BoardBuildInfo; absent for source boards.
       ...(boardInfo.precompiledLibraryDir ? { precompiledLibraryDir: boardInfo.precompiledLibraryDir } : {}),
       ...(boardInfo.coreVersion ? { coreVersion: boardInfo.coreVersion } : {}),
+      // Upload transport ("ethernet" for the LOGO! 8.2; serial otherwise).
+      ...(boardInfo.uploadMethod ? { uploadMethod: boardInfo.uploadMethod } : {}),
       // Vendor board-manager index, so a core outside arduino-cli's built-in
       // list can be auto-installed.  The resolver fills this from the VPP
       // manifest's `target.boardManagerUrl` (or hals.json `board_manager_url`);
@@ -80,6 +82,14 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       // false, which silently disables `vpp_config.h` emission for
       // every VPP arduino-cli target (Opta, future P1AM VPP).
       compiler: boardInfo.compiler,
+      // What the board can serve Modbus OVER. `resolveModbusServerProfile` reads
+      // these to decide which transports are on offer, and the pipeline calls it
+      // with exactly the same inputs the screen uses — dropping them here is
+      // what left the emitter compiling `MBTCP` for boards with no carrier.
+      ...(boardInfo.vppScreenNames ? { vppScreenNames: boardInfo.vppScreenNames } : {}),
+      ...(boardInfo.serialPorts ? { serialPorts: boardInfo.serialPorts } : {}),
+      ...(boardInfo.defaultSerial ? { defaultSerial: boardInfo.defaultSerial } : {}),
+      ...(boardInfo.networkInterfaces ? { networkInterfaces: boardInfo.networkInterfaces } : {}),
       ...(boardInfo.source === 'vpp' ? { vpp: true } : {}),
       ...(boardInfo.capabilities ? { capabilities: boardInfo.capabilities } : {}),
     } as unknown as BoardHalsBuildEntry
