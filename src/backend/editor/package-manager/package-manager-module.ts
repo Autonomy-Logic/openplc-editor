@@ -14,7 +14,11 @@ import type { VppDeviceMatch } from '../../shared/hardware/find-vpp-device'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import type { VppPackagePin } from '../../shared/types/PLC/devices/configuration'
 import { validatePathId } from '../../shared/utils/path-safety'
-import { canonicalize, SIGNATURE_FILENAME } from '../../shared/utils/vpp/package-verification-core'
+import {
+  contentHashOfPayload,
+  parseSignatureFile,
+  SIGNATURE_FILENAME,
+} from '../../shared/utils/vpp/package-verification-core'
 import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { logger } from '../services/logger-service'
@@ -293,14 +297,19 @@ class PackageManagerModule {
 
       const signaturePath = join(info.path, SIGNATURE_FILENAME)
       assertPathContained(info.path, signaturePath, 'package signature path')
-      const parsed: unknown = JSON.parse(readFileSync(signaturePath, 'utf-8'))
-      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-      const { signature: _detached, ...payload } = parsed as Record<string, unknown>
+      const raw: unknown = JSON.parse(readFileSync(signaturePath, 'utf-8'))
+      const parsed = parseSignatureFile(raw)
+      if (!parsed) return null
+      const { payload } = parsed
+      // The file must actually attest to THIS registry entry — otherwise a
+      // malformed/mismatched signature.json (even `{}`-adjacent shapes that
+      // still parse) would yield a pin for a package it never signed.
+      if (payload.packageId !== packageId || payload.version !== info.version) return null
 
       return {
         packageId,
         version: info.version,
-        contentHash: `sha256:${createHash('sha256').update(canonicalize(payload), 'utf-8').digest('hex')}`,
+        contentHash: contentHashOfPayload(payload, (bytes) => createHash('sha256').update(bytes).digest('hex')),
       }
     } catch {
       return null
