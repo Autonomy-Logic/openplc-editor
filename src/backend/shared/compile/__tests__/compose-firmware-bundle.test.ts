@@ -230,12 +230,62 @@ describe('composeFirmwareBundle — OpenPLCUserLib.h stub', () => {
     })
     expect(out['src/OpenPLCUserLib.h']).toContain('#pragma once')
   })
+
+  it('writes the discovery anchor beside the sketch when libDeps is set', () => {
+    const out = composeFirmwareBundle({
+      firmwareSkeleton: {},
+      strucppFiles: {},
+      cBlocks: { header: '', code: 'void x() {}', libDeps: '#include <Adafruit_NeoPixel.h>\n' },
+      definesH: '',
+    })
+    expect(out['examples/Baremetal/c_blocks_libdeps.cpp']).toContain('#include <Adafruit_NeoPixel.h>')
+  })
+
+  it('writes no anchor when the project declares no library includes', () => {
+    const out = composeFirmwareBundle({
+      firmwareSkeleton: {},
+      strucppFiles: {},
+      cBlocks: { header: '', code: 'void x() {}', libDeps: null },
+      definesH: '',
+    })
+    expect(out['examples/Baremetal/c_blocks_libdeps.cpp']).toBeUndefined()
+  })
 })
 
 describe('buildCBlocksFromPous', () => {
   it('returns the empty-file sentinel + null code for empty input', () => {
     const result = buildCBlocksFromPous([])
-    expect(result).toEqual({ header: '// Empty file\n', code: null })
+    expect(result).toEqual({ header: '// Empty file\n', code: null, libDeps: null })
+  })
+
+  it('lifts the angle-bracket includes a block declares into libDeps', () => {
+    const result = buildCBlocksFromPous([
+      {
+        name: 'neo',
+        variables: [],
+        code: '#include <Arduino.h>\n  #include <Adafruit_NeoPixel.h>\n#include "local.h"\nvoid setup() {}\n',
+      },
+    ])
+    expect(result.libDeps).toContain('#include <Adafruit_NeoPixel.h>')
+    expect(result.libDeps).toContain('#include <Arduino.h>')
+    // A quoted include names a file beside the user's source, which does not
+    // exist beside the sketch.
+    expect(result.libDeps).not.toContain('local.h')
+  })
+
+  it('repeats an include shared by two blocks only once', () => {
+    const pou = (name: string) => ({
+      name,
+      variables: [],
+      code: '#include <Adafruit_NeoPixel.h>\nvoid setup() {}\n',
+    })
+    const result = buildCBlocksFromPous([pou('a'), pou('b')])
+    expect(result.libDeps?.match(/Adafruit_NeoPixel\.h/g)).toHaveLength(1)
+  })
+
+  it('leaves libDeps null when no block includes anything', () => {
+    const result = buildCBlocksFromPous([{ name: 'plain', variables: [], code: 'void setup() {}\n' }])
+    expect(result.libDeps).toBeNull()
   })
 
   it('returns generated header + code when POUs are present', () => {

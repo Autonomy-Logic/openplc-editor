@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
@@ -188,6 +189,7 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
+import { UserService } from '../services/user-service'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
@@ -1522,6 +1524,51 @@ class CompilerModule {
     }
   }
 
+  /**
+   * `-I` for every Arduino library the editor can see.
+   *
+   * The pre-compile drives g++ itself, so it gets no library include path from
+   * arduino-cli's discovery — which is why a C++ block that `#include`s an
+   * Arduino library fails at `fatal error: <header>: No such file or directory`
+   * before the link is ever reached.
+   *
+   * Two roots, and both are needed: the editor's own library directory holds
+   * what it installed (GLOBAL_LIBRARIES, per-board, third-party), the
+   * sketchbook holds what the user installed through the Arduino IDE. Both
+   * layouts are covered — 1.0 keeps headers at the library root, 1.5 under
+   * `src/`.
+   *
+   * Missing directories are skipped rather than reported: a machine that never
+   * had the Arduino IDE has no sketchbook, and that is not an error.
+   */
+  async #libraryIncludeArgs(): Promise<string[]> {
+    const roots = [
+      join(electronApp.getPath('userData'), 'arduino', 'user', 'libraries'),
+      UserService.defaultUserLibrariesPath(),
+    ]
+
+    const args: string[] = []
+    const seen = new Set<string>()
+    for (const root of roots) {
+      let entries: Dirent[]
+      try {
+        entries = await readdir(root, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        const libDir = join(root, entry.name)
+        for (const candidate of [libDir, join(libDir, 'src')]) {
+          if (seen.has(candidate)) continue
+          seen.add(candidate)
+          args.push(`-I${candidate}`)
+        }
+      }
+    }
+    return args
+  }
+
   // Pre-compile every .cpp under `<compilationPath>/src/` (excluding the
   // board HAL `arduino.cpp`) with the board's toolchain at -std=gnu++17 and
   // archive into `libOpenPLCUserLib.a`. Keeps the gnu++17 + exceptions
@@ -1627,12 +1674,17 @@ class CompilerModule {
     // core's implicit gnu++11.
     const extraIncludeFlags = extraCxxFlags.filter((flag) => flag.startsWith('-I'))
     const extraNonIncludeFlags = extraCxxFlags.filter((flag) => !flag.startsWith('-I'))
+
+    // Last, so a library can never shadow a core or generated header.
+    const libraryIncludeFlags = await this.#libraryIncludeArgs()
+
     const includeArgs = [
       ...extraIncludeFlags,
       `-I${corePath}`,
       ...(variantPath ? [`-I${variantPath}`] : []),
       `-I${srcDir}`,
       `-I${baremetalDir}`,
+      ...libraryIncludeFlags,
     ]
     const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
 

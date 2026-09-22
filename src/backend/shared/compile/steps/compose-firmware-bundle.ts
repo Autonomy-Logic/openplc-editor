@@ -54,6 +54,10 @@ export interface ComposeFirmwareBundleInput {
   cBlocks: {
     header: string
     code: string | null
+    /** `#include` lines lifted from the user's C++ blocks, emitted as a
+     *  symbol-free TU next to the sketch. `null` / absent when the project
+     *  declares no C/C++ POUs, or none of them includes anything. */
+    libDeps?: string | null
   }
   /** Pre-authored `defines.h` content.  Caller invokes the shared
    *  `generateDefinesContent` to produce this — the composer keeps
@@ -108,6 +112,44 @@ export type CBlocksCodePou = CppPouDataCode
  * `cBlocks` input shape" case.  Caller can either use this or hand
  * the composer the pre-rendered strings directly.
  */
+/**
+ * The `#include <...>` lines the user wrote in their C++ blocks, as a
+ * translation unit of nothing else.
+ *
+ * arduino-cli decides which libraries to build by walking the SKETCH tree for
+ * includes. The user's block is compiled on the other side of the pre-compile
+ * seam, so arduino-cli never sees what it asks for: the header resolves (the
+ * pre-compile is given the library include paths) and the link then fails on
+ * every symbol the library defines. Restating the includes in a file arduino-cli
+ * does compile is what puts the library back on the link line.
+ *
+ * Only angle-bracket includes: a quoted one names a file next to the user's
+ * source, which does not exist beside the sketch.
+ */
+function extractLibraryIncludes(originalCppPous: CppPouDataCode[]): string | null {
+  const seen = new Set<string>()
+  for (const pou of originalCppPous) {
+    for (const match of pou.code.matchAll(/^[ \t]*#[ \t]*include[ \t]*<([^>]+)>/gm)) {
+      seen.add(match[1].trim())
+    }
+  }
+  if (seen.size === 0) return null
+
+  const lines = Array.from(seen).map((header) => `#include <${header}>`)
+  return `// Auto-generated. Declares nothing; defines nothing.
+//
+// Every include here was written by the user inside a C++ block. That block is
+// compiled into the pre-compiled archive, out of arduino-cli's sight, so this
+// file is how arduino-cli learns which libraries the firmware needs — it
+// discovers them here, compiles their sources, and links them.
+//
+// Compiled at the core's own C++ standard, like the rest of the sketch. Safe
+// because it pulls in no strucpp header and emits no symbol of its own.
+
+${lines.join('\n')}
+`
+}
+
 export function buildCBlocksFromPous(
   originalCppPous: CppPouDataCode[],
   userTypeNames: Iterable<string> = [],
@@ -116,7 +158,7 @@ export function buildCBlocksFromPous(
     // Editor's behaviour: leave the static `c_blocks.h` baseline
     // in place (`null` here means the composer skips the write).
     // Static `c_blocks_code.cpp` likewise stays untouched.
-    return { header: '// Empty file\n', code: null }
+    return { header: '// Empty file\n', code: null, libDeps: null }
   }
   const headers: CppPouDataHeader[] = originalCppPous.map((pou) => ({
     name: pou.name,
@@ -125,6 +167,7 @@ export function buildCBlocksFromPous(
   return {
     header: generateCBlocksHeader(headers, userTypeNames),
     code: generateCBlocksCode(originalCppPous, userTypeNames),
+    libDeps: extractLibraryIncludes(originalCppPous),
   }
 }
 
@@ -137,6 +180,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * Layout produced (paths relative to project root):
  *  - `examples/Baremetal/Baremetal.ino`              — from skeleton
  *  - `src/c_blocks_code.cpp`                         — written when `cBlocks.code !== null`
+ *  - `examples/Baremetal/c_blocks_libdeps.cpp`       — written when `cBlocks.libDeps` is set
  *  - `examples/Baremetal/modules/...`                — from skeleton (Arduino library helpers)
  *  - `src/arduino.cpp`                               — from skeleton (HAL adapter, simulator-specific)
  *  - `src/openplc_retain.h`                          — mirrored from `examples/Baremetal/` (vendor-facing contract)
@@ -200,6 +244,13 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // compiles at the core's standard and cannot collide with this one.
   if (cBlocks.code !== null) {
     files['src/c_blocks_code.cpp'] = cBlocks.code
+  }
+
+  // The library-discovery anchor, beside the sketch so arduino-cli compiles it.
+  // See `extractLibraryIncludes`. Absent when no block includes anything, so a
+  // project that needs no library gains no file.
+  if (cBlocks.libDeps) {
+    files['examples/Baremetal/c_blocks_libdeps.cpp'] = cBlocks.libDeps
   }
 
   // defines.h is the authored output of the shared
