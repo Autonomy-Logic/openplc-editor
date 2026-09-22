@@ -6,8 +6,7 @@ import { buildVppPluginFiles, type VppDevice } from '../build-vpp-plugin-files'
 
 const sha256Hex = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex')
 const text = (value: string): Uint8Array => new TextEncoder().encode(value)
-const read = (files: Record<string, Uint8Array>, path: string): string =>
-  new TextDecoder().decode(files[path])
+const read = (files: Record<string, Uint8Array>, path: string): string => new TextDecoder().decode(files[path])
 
 const SIGNATURE = {
   formatVersion: '1.0',

@@ -47,17 +47,14 @@ describe('vendor screen renderer allowlists', () => {
     expect(screen.getByText('Baud rate')).toBeTruthy()
   })
 
-  it.each(['file', 'script', 'color', 'textarea', ''])(
-    'renders nothing for the unknown field type %j',
-    (type) => {
-      renderSection({
-        layout: 'form',
-        fields: [{ id: 'hostile', label: 'Should not appear', type }],
-      })
+  it.each(['file', 'script', 'color', 'textarea', ''])('renders nothing for the unknown field type %j', (type) => {
+    renderSection({
+      layout: 'form',
+      fields: [{ id: 'hostile', label: 'Should not appear', type }],
+    })
 
-      expect(screen.queryByText('Should not appear')).toBeNull()
-    },
-  )
+    expect(screen.queryByText('Should not appear')).toBeNull()
+  })
 
   it('does not persist a value for a field it refused to render', () => {
     renderSection({
@@ -80,7 +77,10 @@ describe('vendor screen renderer allowlists', () => {
   it('ignores a field with no usable id', () => {
     renderSection({
       layout: 'form',
-      fields: [{ label: 'No id', type: 'text' }, { id: 'ok', label: 'Fine', type: 'text' }],
+      fields: [
+        { label: 'No id', type: 'text' },
+        { id: 'ok', label: 'Fine', type: 'text' },
+      ],
     })
 
     expect(screen.queryByText('No id')).toBeNull()

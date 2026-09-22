@@ -144,7 +144,12 @@ describe('VPP bundle parity — desktop writer vs shared builder', () => {
 
     // The same inputs openplc-web hands the builder, out of a verified archive.
     const packageFiles = new Map<string, Uint8Array>()
-    for (const rel of ['hal/plugin/config_template.json', 'hal/plugin/main.cpp', 'hal/plugin/Makefile', 'hal/plugin/nested/driver.c']) {
+    for (const rel of [
+      'hal/plugin/config_template.json',
+      'hal/plugin/main.cpp',
+      'hal/plugin/Makefile',
+      'hal/plugin/nested/driver.c',
+    ]) {
       packageFiles.set(rel, Uint8Array.from(readFileSync(join(pkgDir, ...rel.split('/')))))
     }
     const expected = await buildVppPluginFiles({

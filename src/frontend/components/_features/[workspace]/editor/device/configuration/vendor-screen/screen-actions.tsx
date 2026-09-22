@@ -27,10 +27,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  *     decides, not the status code.
  */
 
-type ActionState =
-  | { status: 'idle' }
-  | { status: 'running' }
-  | { status: 'done'; outcome: PluginCommandOutcome }
+type ActionState = { status: 'idle' } | { status: 'running' } | { status: 'done'; outcome: PluginCommandOutcome }
 
 export interface VppScreenActionsProps {
   /** Raw `actions` from the screen section. */

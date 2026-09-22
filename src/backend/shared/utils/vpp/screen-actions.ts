@@ -110,9 +110,7 @@ function sanitizeParams(params: Record<string, unknown>): Record<string, unknown
   return out
 }
 
-export type PluginCommandOutcome =
-  | { ok: true; data: Record<string, unknown> }
-  | { ok: false; error: string }
+export type PluginCommandOutcome = { ok: true; data: Record<string, unknown> } | { ok: false; error: string }
 
 /**
  * Read `POST /api/plugin-command`'s answer.

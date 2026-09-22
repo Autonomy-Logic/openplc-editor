@@ -29,15 +29,7 @@ const FIELDS_PREFIX = 'fields.'
 export const MAX_VISIBLE_DEPTH = 16
 
 /** Every operator the evaluator understands. Anything else hides the field. */
-const LEAF_OPERATORS = new Set([
-  'equals',
-  'not-equals',
-  'in',
-  'exists',
-  'not-exists',
-  'greater-than',
-  'less-than',
-])
+const LEAF_OPERATORS = new Set(['equals', 'not-equals', 'in', 'exists', 'not-exists', 'greater-than', 'less-than'])
 
 /**
  * Resolve a `visible` clause to a boolean.

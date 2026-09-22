@@ -6,7 +6,11 @@ const PACKAGE_ID = 'com.synergy-logic.slm-rp4'
 
 /** A vPLC that holds the backplane and runs `packageId`, unless told otherwise. */
 function vplc(overrides: Partial<Parameters<typeof vppGateStateFor>[0]['target'] & object> = {}) {
-  return { backplaneAccess: true, vpp: { packageId: PACKAGE_ID, version: '1.0.0', contentHash: 'sha256:x' }, ...overrides }
+  return {
+    backplaneAccess: true,
+    vpp: { packageId: PACKAGE_ID, version: '1.0.0', contentHash: 'sha256:x' },
+    ...overrides,
+  }
 }
 
 describe('evaluateVppBackplaneGate', () => {
@@ -25,14 +29,20 @@ describe('evaluateVppBackplaneGate', () => {
 
   it('allows a vendor board on the vPLC that runs its package', () => {
     expect(
-      evaluateVppBackplaneGate(vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: PACKAGE_ID } }, target: vplc() })),
+      evaluateVppBackplaneGate(
+        vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: PACKAGE_ID } }, target: vplc() }),
+      ),
     ).toEqual({ kind: 'allow' })
   })
 
   it('refuses a vendor board on a vPLC that answered no to the backplane', () => {
     expect(
       evaluateVppBackplaneGate(
-        vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: PACKAGE_ID } }, target: vplc({ backplaneAccess: false }) }),
+        vppGateStateFor({
+          vplcProvidesVendorBoards: true,
+          board: { vpp: { packageId: PACKAGE_ID } },
+          target: vplc({ backplaneAccess: false }),
+        }),
       ),
     ).toEqual({ kind: 'refuse', reason: NO_BACKPLANE })
   })
@@ -49,7 +59,11 @@ describe('evaluateVppBackplaneGate', () => {
 
   it('refuses a vendor board from another package, naming the one the vPLC runs', () => {
     const verdict = evaluateVppBackplaneGate(
-      vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: 'com.other.board' } }, target: vplc() })
+      vppGateStateFor({
+        vplcProvidesVendorBoards: true,
+        board: { vpp: { packageId: 'com.other.board' } },
+        target: vplc(),
+      }),
     )
     expect(verdict.kind).toBe('refuse')
     expect(verdict).toMatchObject({ reason: expect.stringContaining(PACKAGE_ID) })
@@ -58,7 +72,11 @@ describe('evaluateVppBackplaneGate', () => {
 
   it('refuses a vendor board on a vPLC created without a package', () => {
     const verdict = evaluateVppBackplaneGate(
-      vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: PACKAGE_ID } }, target: { backplaneAccess: true, vpp: null } }),
+      vppGateStateFor({
+        vplcProvidesVendorBoards: true,
+        board: { vpp: { packageId: PACKAGE_ID } },
+        target: { backplaneAccess: true, vpp: null },
+      }),
     )
     expect(verdict.kind).toBe('refuse')
     expect(verdict).toMatchObject({ reason: expect.stringContaining('without a vendor package') })
@@ -67,13 +85,17 @@ describe('evaluateVppBackplaneGate', () => {
   // A host predating the field says nothing about the binding, and silence must
   // not read as "no package".
   it('allows a vendor board when the host answered neither question', () => {
-    expect(evaluateVppBackplaneGate(vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: PACKAGE_ID } }, target: {} }))).toEqual(
-      { kind: 'allow' },
-    )
+    expect(
+      evaluateVppBackplaneGate(
+        vppGateStateFor({ vplcProvidesVendorBoards: true, board: { vpp: { packageId: PACKAGE_ID } }, target: {} }),
+      ),
+    ).toEqual({ kind: 'allow' })
   })
 
   it('refuses a board the project names that this vPLC does not have', () => {
-    const verdict = evaluateVppBackplaneGate(vppGateStateFor({ vplcProvidesVendorBoards: true, board: undefined, boardName: 'SLM-RP4', target: vplc() }))
+    const verdict = evaluateVppBackplaneGate(
+      vppGateStateFor({ vplcProvidesVendorBoards: true, board: undefined, boardName: 'SLM-RP4', target: vplc() }),
+    )
     expect(verdict.kind).toBe('refuse')
     expect(verdict).toMatchObject({ reason: expect.stringContaining('SLM-RP4') })
   })
@@ -93,7 +115,11 @@ describe('evaluateVppBackplaneGate', () => {
 
   it('ignores every vPLC fact for a board no vendor package provides', () => {
     for (const target of [null, {}, vplc(), vplc({ backplaneAccess: false })]) {
-      expect(evaluateVppBackplaneGate(vppGateStateFor({ vplcProvidesVendorBoards: true, board: {}, boardName: 'Uno', target }))).toEqual({
+      expect(
+        evaluateVppBackplaneGate(
+          vppGateStateFor({ vplcProvidesVendorBoards: true, board: {}, boardName: 'Uno', target }),
+        ),
+      ).toEqual({
         kind: 'allow',
       })
     }

@@ -189,5 +189,4 @@ describe('Board device list', () => {
       expect(screen.queryByText(/Not available on the selected vPLC/)).toBeNull()
     })
   })
-
 })

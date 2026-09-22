@@ -14,7 +14,9 @@ describe('parseScreenActions', () => {
   })
 
   it.each(['discover', 'discover_modules', 'test', 'status'])('keeps the %s plugin command', (command: string) => {
-    const actions = parseScreenActions([{ id: command, label: command, type: 'plugin-command', command, plugin: 'synergy' }])
+    const actions = parseScreenActions([
+      { id: command, label: command, type: 'plugin-command', command, plugin: 'synergy' },
+    ])
 
     expect(actions).toEqual([
       { kind: 'plugin-command', id: command, label: command, plugin: 'synergy', command, params: {} },
@@ -31,7 +33,9 @@ describe('parseScreenActions', () => {
   })
 
   it('drops a plugin command with no plugin to route to', () => {
-    expect(parseScreenActions([{ id: 'd', label: 'Discover', type: 'plugin-command', command: 'discover' }])).toEqual([])
+    expect(parseScreenActions([{ id: 'd', label: 'Discover', type: 'plugin-command', command: 'discover' }])).toEqual(
+      [],
+    )
   })
 
   it.each([
@@ -108,7 +112,10 @@ describe('interpretPluginCommandResponse', () => {
     expect(interpretPluginCommandResponse(status, { modules: [] })).toMatchObject({ ok: false })
   })
 
-  it.each([null, 'plain text', [1, 2, 3]] as unknown[])('treats the unreadable body %j as a failure', (body: unknown) => {
-    expect(interpretPluginCommandResponse(200, body)).toMatchObject({ ok: false })
-  })
+  it.each([null, 'plain text', [1, 2, 3]] as unknown[])(
+    'treats the unreadable body %j as a failure',
+    (body: unknown) => {
+      expect(interpretPluginCommandResponse(200, body)).toMatchObject({ ok: false })
+    },
+  )
 })

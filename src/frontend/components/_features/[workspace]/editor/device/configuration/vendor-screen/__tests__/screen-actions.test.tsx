@@ -89,7 +89,9 @@ describe('VppScreenActions', () => {
   it('does not hang when the device never answers', async () => {
     // The adapter bounds the call; the panel's job is to reflect the rejection
     // it gets back rather than stay in "running" for ever.
-    renderActions(recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: false, error: 'The device did not answer in time.' })))
+    renderActions(
+      recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: false, error: 'The device did not answer in time.' })),
+    )
 
     fireEvent.click(screen.getByRole('button', { name: 'Status' }))
 

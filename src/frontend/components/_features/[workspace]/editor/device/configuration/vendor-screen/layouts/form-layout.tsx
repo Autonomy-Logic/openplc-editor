@@ -51,15 +51,7 @@ const TEXT_INPUT_CLASS =
  * behaviour — falling back to a text input — meant an unrecognised type still
  * produced a value the device would be configured with.
  */
-const SUPPORTED_FIELD_TYPES = new Set([
-  'boolean',
-  'number',
-  'select',
-  'password',
-  'ip-address',
-  'mac-address',
-  'text',
-])
+const SUPPORTED_FIELD_TYPES = new Set(['boolean', 'number', 'select', 'password', 'ip-address', 'mac-address', 'text'])
 
 // Anchor-less HTML5 patterns for the formatted text types. The schema's
 // per-field `validation` (when present) is more specific and wins via the
@@ -74,9 +66,7 @@ type FormLayoutProps = {
 
 function FormLayout({ section }: FormLayoutProps) {
   const declared = (section.fields ?? []) as FieldDef[]
-  const fields = declared.filter(
-    (field) => typeof field?.id === 'string' && SUPPORTED_FIELD_TYPES.has(field.type),
-  )
+  const fields = declared.filter((field) => typeof field?.id === 'string' && SUPPORTED_FIELD_TYPES.has(field.type))
 
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)

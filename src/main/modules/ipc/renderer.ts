@@ -414,9 +414,7 @@ const rendererProcessBridge = {
   uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('packages:uninstall', packageId),
   getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
-  getPackagePin: (
-    packageId: string,
-  ): Promise<{ packageId: string; version: string; contentHash: string } | null> =>
+  getPackagePin: (packageId: string): Promise<{ packageId: string; version: string; contentHash: string } | null> =>
     ipcRenderer.invoke('packages:get-pin', packageId),
   verifyInstalledPackageSignatures: (): Promise<string[]> => ipcRenderer.invoke('packages:verify-signatures'),
   onOpenPackageManager: (callback: () => void) => {

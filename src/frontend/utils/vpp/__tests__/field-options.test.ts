@@ -52,17 +52,14 @@ describe('resolveFieldOptions', () => {
   })
 
   describe('hostile optionsRef', () => {
-    it.each(['__proto__', 'constructor', 'prototype'])(
-      'refuses to resolve a path through %s',
-      (segment) => {
-        // `optionsRef` is a vendor-package string. A path through the
-        // prototype chain would offer the user whatever it found there and
-        // then write it into the generated plugin config.
-        expect(resolveFieldOptions({ optionsRef: `board.${segment}` }, { board: { serialPorts: ['Serial'] } })).toEqual(
-          [],
-        )
-      },
-    )
+    it.each(['__proto__', 'constructor', 'prototype'])('refuses to resolve a path through %s', (segment) => {
+      // `optionsRef` is a vendor-package string. A path through the
+      // prototype chain would offer the user whatever it found there and
+      // then write it into the generated plugin config.
+      expect(resolveFieldOptions({ optionsRef: `board.${segment}` }, { board: { serialPorts: ['Serial'] } })).toEqual(
+        [],
+      )
+    })
 
     it('resolves own properties only, not inherited ones', () => {
       const board = Object.create({ inherited: ['Serial'] }) as Record<string, unknown>

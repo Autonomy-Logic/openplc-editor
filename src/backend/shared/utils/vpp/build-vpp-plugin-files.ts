@@ -22,11 +22,7 @@
 
 import type { PackageManifest, VppModuleDefinition } from '../../../../middleware/shared/ports/types'
 import { generateVendorPluginConfig } from './generate-vendor-plugin-config'
-import {
-  describeVppPinDrift,
-  type InstalledVppIdentity,
-  type VppPackagePin,
-} from './vpp-package-pin'
+import { describeVppPinDrift, type InstalledVppIdentity, type VppPackagePin } from './vpp-package-pin'
 
 /** Files the editor turns into something else and the runtime must not receive. */
 const EXCLUDED_PLUGIN_FILES = new Set(['config_template.json', 'requirements.txt'])

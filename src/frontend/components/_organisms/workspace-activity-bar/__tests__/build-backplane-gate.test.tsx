@@ -203,9 +203,7 @@ describe('Build — backplane gate', () => {
 
     chooseBuildOption('Build and upload')
 
-    await waitFor(() =>
-      expect(loggedMessages().some((message) => message.includes('com.other.board'))).toBe(true),
-    )
+    await waitFor(() => expect(loggedMessages().some((message) => message.includes('com.other.board'))).toBe(true))
     expect(compileProgram).not.toHaveBeenCalled()
   })
 
@@ -234,5 +232,4 @@ describe('Build — backplane gate', () => {
     await waitFor(() => expect(compileProgram).toHaveBeenCalled())
     expect(loggedMessages()).not.toContain(REFUSAL)
   })
-
 })
