@@ -205,6 +205,9 @@ type CompileArduinoProgramArgs = {
   cleanBuild?: boolean
 }
 
+/** Marks a VPP builder failure (CRA E2: must fail closed) so the degrade-and-continue catch below rethrows it instead of swallowing it. */
+class VppPackagingFailure extends Error {}
+
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
@@ -2437,7 +2440,8 @@ class CompilerModule {
       const pluginEntryRelPath = matchingDevice.hal?.pluginEntry
       if (pluginEntryRelPath) {
         const isPrebuilt = matchingDevice.hal?.provisioning === 'prebuilt'
-        const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath : path.dirname(pluginEntryRelPath)
+        // Strip trailing slashes as the shared builder does, or a doubled "/" here disagrees with its bundle.
+        const pluginDirRelPath = isPrebuilt ? pluginEntryRelPath.replace(/\/+$/, '') : path.dirname(pluginEntryRelPath)
         const pluginSourceDir = join(matchingPackagePath, pluginDirRelPath)
         try {
           assertPathContained(matchingPackagePath, pluginSourceDir, 'matchingDevice.hal.pluginEntry')
@@ -2510,7 +2514,7 @@ class CompilerModule {
       for (const warning of built.warnings) handleOutputData(warning, 'info')
       for (const message of built.errors) handleOutputData(message, 'error')
       if (built.errors.length > 0) {
-        throw new Error(built.errors[0])
+        throw new VppPackagingFailure(built.errors[0])
       }
 
       // A previous build's tree must not survive into this one: a file the
@@ -2541,6 +2545,8 @@ class CompilerModule {
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       handleOutputData(`Failed VPP plugin packaging: ${errorMessage}`, 'error')
+      // CRA E2: a packaging failure must abort the build, not just log and continue.
+      if (error instanceof VppPackagingFailure) throw error
     }
   }
 
