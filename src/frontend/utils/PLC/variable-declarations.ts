@@ -34,6 +34,7 @@
 import { parse } from 'strucpp'
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import { DEBUG_STRING_CAP } from '../variable-sizes'
 
 /** Half-open character range `[start, end)` into the parsed source. */
 export interface Span {
@@ -117,7 +118,28 @@ const WRAPPER_TAIL = '\n;\nEND_PROGRAM\n'
  * callers working off one entry point.
  */
 function isWholePou(source: string): boolean {
-  return /^\s*(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w/i.test(source)
+  // Leading trivia is skipped first: a POU file normally opens with its
+  // documentation comment, and testing the raw start meant
+  // `(* docs *)\nPROGRAM Main` was taken for a bare run of VAR blocks and
+  // wrapped inside a synthetic PROGRAM — a nested POU STruC++ then refused.
+  let index = 0
+  for (;;) {
+    while (index < source.length && /\s/.test(source[index])) index++
+    if (source.startsWith('(*', index)) {
+      const close = source.indexOf('*)', index + 2)
+      if (close === -1) break
+      index = close + 2
+      continue
+    }
+    if (source.startsWith('//', index)) {
+      const lineEnd = source.indexOf('\n', index)
+      if (lineEnd === -1) break
+      index = lineEnd + 1
+      continue
+    }
+    break
+  }
+  return /^(PROGRAM|FUNCTION_BLOCK|FUNCTION)\s+\w/i.test(source.slice(index))
 }
 
 /** Character offset of the start of each 1-indexed line. */
@@ -155,10 +177,17 @@ function toSpan(starts: number[], span: StrucppSpan, wrapperLines: number): Span
 /**
  * The comment trailing a declaration, if any.
  *
- * Scans from just past the `;` to the end of that line. Deliberately tiny: it
- * looks for one comment opener in one line of already-parsed text, so it cannot
- * repeat the mistake the scanner made, where a hand-rolled comment pass ran
- * over the whole file and mistook a `//` inside a string literal for one.
+ * Deliberately tiny: it looks for one comment opener on one line of
+ * already-parsed text, so it cannot repeat the mistake the scanner made, where
+ * a hand-rolled comment pass ran over the whole file and mistook a `//` inside
+ * a string literal for one.
+ *
+ * Whichever opener comes FIRST on the line owns the rest of it. Testing for
+ * `(*` unconditionally meant the `(*` inside `// see (* note` was read as a
+ * block opener, and the hunt for its `*)` — which a genuine block comment may
+ * legitimately cross lines to find — ran on into the NEXT declaration. That
+ * declaration then fell inside the first one's `lineSpan`, and deleting the
+ * first variable from the table silently deleted its neighbour with it.
  */
 function trailingComment(source: string, from: number): { inner: Span; kind: CommentKind; end: number } | undefined {
   const lineEnd = source.indexOf('\n', from)
@@ -166,14 +195,17 @@ function trailingComment(source: string, from: number): { inner: Span; kind: Com
   const rest = source.slice(from, limit)
 
   const block = rest.indexOf('(*')
-  if (block !== -1) {
+  const line = rest.indexOf('//')
+
+  if (block !== -1 && (line === -1 || block < line)) {
+    // A block comment is the one thing here allowed to span lines, so its
+    // closer is searched for in the whole source rather than in `rest`.
     const close = source.indexOf('*)', from + block + 2)
     if (close !== -1) {
       return { inner: { start: from + block + 2, end: close }, kind: 'block', end: close + 2 }
     }
   }
 
-  const line = rest.indexOf('//')
   if (line !== -1) {
     return { inner: { start: from + line + 2, end: limit }, kind: 'line', end: limit }
   }
@@ -272,6 +304,124 @@ interface StrucppVarBlock {
   declarations: StrucppDeclaration[]
 }
 
+// ---------------------------------------------------------------------------
+// Reading the parser's result
+// ---------------------------------------------------------------------------
+
+/**
+ * STruC++ is a typed dependency, but a type assertion over its result proves
+ * nothing at runtime: every field dereferenced below sits OUTSIDE the `try`, so
+ * one unexpected shape — a version skew, a recovery path that emits a partial
+ * node — would throw straight through the "never throws" contract this function
+ * advertises, and the caller would lose the user's text with it.
+ *
+ * So the result is read as `unknown` and checked. Anything that does not match
+ * comes back as a parse error, which callers already handle by keeping the text
+ * and showing the code view.
+ */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isSpanShape = (value: unknown): value is StrucppSpan =>
+  isRecord(value) &&
+  typeof value.startLine === 'number' &&
+  typeof value.endLine === 'number' &&
+  typeof value.startCol === 'number' &&
+  typeof value.endCol === 'number'
+
+const isDeclarationShape = (value: unknown): value is StrucppDeclaration =>
+  isRecord(value) &&
+  isSpanShape(value.sourceSpan) &&
+  Array.isArray(value.names) &&
+  isRecord(value.type) &&
+  isSpanShape(value.type.sourceSpan)
+
+const isVarBlockShape = (value: unknown): value is StrucppVarBlock =>
+  isRecord(value) &&
+  typeof value.blockType === 'string' &&
+  isSpanShape(value.sourceSpan) &&
+  Array.isArray(value.declarations) &&
+  value.declarations.every(isDeclarationShape)
+
+const isRawError = (value: unknown): value is { message: string; line?: number; column?: number } =>
+  isRecord(value) && typeof value.message === 'string'
+
+/** The VAR blocks of the single program the wrapper produces, or undefined if the shape is wrong. */
+function readVarBlocks(ast: unknown): StrucppVarBlock[] | undefined {
+  if (!isRecord(ast)) return []
+  const programs = ast.programs
+  if (programs === undefined) return []
+  if (!Array.isArray(programs)) return undefined
+  const [program] = programs
+  if (program === undefined) return []
+  if (!isRecord(program)) return undefined
+  const blocks = program.varBlocks
+  if (blocks === undefined) return []
+  if (!Array.isArray(blocks) || !blocks.every(isVarBlockShape)) return undefined
+  return blocks
+}
+
+// ---------------------------------------------------------------------------
+// Error refinement — two cases STruC++ reports accurately but unhelpfully
+// ---------------------------------------------------------------------------
+
+const BLOCK_QUALIFIERS = new Set(['CONSTANT', 'RETAIN', 'NON_RETAIN', 'PERSISTENT'])
+
+/**
+ * Replace a raw parser error with the one the user can act on.
+ *
+ * STruC++ recovers from a bad token by resynchronising, which is right for a
+ * compiler and wrong for a declaration editor: a mistyped VAR qualifier is
+ * reported as `Expected Colon, found identifier A` against the NEXT line, which
+ * is the one line in the block that has nothing wrong with it. The old regex
+ * parser named the qualifier and pointed at the right line, and losing that was
+ * a regression this restores. Both cases are recognised from the source, not
+ * from the parser's wording, so a change in STruC++ phrasing cannot break them.
+ *
+ * Only two are handled, deliberately. They are the two the old parser had
+ * specific messages for; everything else keeps STruC++'s own report.
+ */
+function refineErrors(source: string, errors: ParseError[]): ParseError[] {
+  if (errors.length === 0) return errors
+  const lines = source.split('\n')
+  const starts = lineStarts(source)
+
+  const at = (index: number, message: string): ParseError => ({
+    message,
+    line: index + 1,
+    span: { start: starts[index] ?? 0, end: (starts[index] ?? 0) + lines[index].length },
+  })
+
+  for (let index = 0; index < lines.length; index++) {
+    // Strip any trailing comment: a qualifier check must not read `(* RETAIN *)`
+    // as a qualifier, and a STRING check must not fire on one mentioned in prose.
+    const line = lines[index].replace(/\(\*[\s\S]*?\*\)/g, ' ').replace(/\/\/.*$/, '')
+
+    const header = /^\s*VAR(?:_INPUT|_OUTPUT|_IN_OUT|_EXTERNAL|_TEMP|_GLOBAL)?\s+([A-Za-z_]\w*)/i.exec(line)
+    if (header && !BLOCK_QUALIFIERS.has(header[1].toUpperCase())) {
+      return [
+        at(
+          index,
+          `Unknown variable block qualifier "${header[1]}". Expected CONSTANT, RETAIN, NON_RETAIN or PERSISTENT.`,
+        ),
+      ]
+    }
+
+    const lengthQualified = /:\s*(?:ARRAY\s*\[[^\]]*\]\s+OF\s+)?(W?STRING)\s*\[/i.exec(line)
+    if (lengthQualified) {
+      const keyword = lengthQualified[1].toUpperCase()
+      return [
+        at(
+          index,
+          `A declared length is not supported on ${keyword} — use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`,
+        ),
+      ]
+    }
+  }
+
+  return errors
+}
+
 /**
  * Parse `source` — a bare run of `VAR … END_VAR` blocks.
  *
@@ -289,18 +439,37 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
   const wrapperLines = isWholePou(source) ? 0 : 1
   const wrapped = wrapperLines === 0 ? source : `${WRAPPER_HEAD}${source}${WRAPPER_TAIL}`
 
-  let ast: { programs?: Array<{ varBlocks?: StrucppVarBlock[] }> } | undefined
+  const wholeSource = { start: 0, end: source.length }
+  let varBlocks: StrucppVarBlock[] | undefined
   let rawErrors: Array<{ message: string; line?: number; column?: number }> = []
   try {
-    const result = parse(wrapped) as {
-      ast?: { programs?: Array<{ varBlocks?: StrucppVarBlock[] }> }
-      errors?: Array<{ message: string; line?: number; column?: number }>
+    const result: unknown = parse(wrapped)
+    if (!isRecord(result)) {
+      return {
+        blocks: [],
+        variables: [],
+        errors: [{ message: 'The parser returned no result.', line: 1, span: wholeSource }],
+      }
     }
-    ast = result.ast
-    rawErrors = result.errors ?? []
+    rawErrors = Array.isArray(result.errors) ? result.errors.filter(isRawError) : []
+    varBlocks = readVarBlocks(result.ast)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { blocks: [], variables: [], errors: [{ message, line: 1, span: { start: 0, end: source.length } }] }
+    return { blocks: [], variables: [], errors: [{ message, line: 1, span: wholeSource }] }
+  }
+
+  if (varBlocks === undefined) {
+    return {
+      blocks: [],
+      variables: [],
+      errors: [
+        {
+          message: 'The parser returned declarations in a shape this editor cannot read.',
+          line: 1,
+          span: wholeSource,
+        },
+      ],
+    }
   }
 
   const errors: ParseError[] = rawErrors.map((error) => {
@@ -310,10 +479,14 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
     return { message: error.message, line, span: { start, end: lineEnd === -1 ? source.length : lineEnd } }
   })
 
+  if (errors.length > 0) {
+    return { blocks: [], variables: [], errors: refineErrors(source, errors) }
+  }
+
   const blocks: ParsedBlock[] = []
   const variables: PLCVariable[] = []
 
-  for (const block of ast?.programs?.[0]?.varBlocks ?? []) {
+  for (const block of varBlocks) {
     const blockClass = BLOCK_TO_CLASS[block.blockType.toUpperCase()] ?? 'local'
     const flag = blockFlag(block)
     const blockSpan = toSpan(starts, block.sourceSpan, wrapperLines)

@@ -21,8 +21,8 @@
 
 import type { PLCVariable } from '../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from './generate-iec-variables-to-string'
-import type { ParsedBlock, ParsedDeclaration, Span, TypeContext } from './PLC/variable-declarations'
-import { parseVariableDeclarations } from './PLC/variable-declarations'
+import type { ParsedBlock, ParsedDeclaration, ParseResult, Span, TypeContext } from './PLC/variable-declarations'
+import { normalizeOneVariablePerLine, parseVariableDeclarations } from './PLC/variable-declarations'
 
 interface TextEdit {
   span: Span
@@ -40,6 +40,28 @@ function applyEdits(text: string, edits: TextEdit[]): string {
 }
 
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+
+/**
+ * True when some declaration names more than one variable (`a, b : INT;`).
+ *
+ * Those variables share one physical declaration, so they share its `lineSpan`
+ * — and the deletion pass below works in whole lines. Deleting `a` therefore
+ * took `b` with it. Rather than teach the deletion pass to rewrite a name list
+ * (and collide with the field edits queued against the very same span in the
+ * same commit), the text is normalised to one variable per line first, which is
+ * the form the table can represent anyway.
+ */
+function hasCoDeclaredNames(result: ParseResult): boolean {
+  for (const block of result.blocks) {
+    const seen = new Set<string>()
+    for (const declaration of block.declarations) {
+      const key = `${declaration.span.start}:${declaration.span.end}`
+      if (seen.has(key)) return true
+      seen.add(key)
+    }
+  }
+  return false
+}
 
 const blockKey = (variable: PLCVariable): string => `${variable.class ?? 'global'}\u0000${variable.flag ?? ''}`
 const parsedBlockKey = (block: ParsedBlock): string => `${block.class ?? 'global'}\u0000${block.flag ?? ''}`
@@ -84,11 +106,21 @@ function matchDeclarations(
     return true
   }
 
+  // Every pass is confined to the variable's own VAR block, for the reason the
+  // positional pass below already states: moving a variable between classes is
+  // a move, not an edit. Without the check here, changing a variable's class in
+  // the table matched it to its OLD declaration by id or name, and
+  // `editsForDeclaration` patches fields only — nothing moved the line out of
+  // the block it was sitting in, so the class silently reverted on reload while
+  // the table went on showing the new one.
   nextVariables.forEach((variable, index) => {
     if (!variable.id) return
     claim(
       index,
-      declarations.find((d) => d.variable.id !== undefined && d.variable.id === variable.id),
+      declarations.find(
+        (d) =>
+          d.variable.id !== undefined && d.variable.id === variable.id && blockKey(d.variable) === blockKey(variable),
+      ),
     )
   })
 
@@ -96,7 +128,9 @@ function matchDeclarations(
     if (matched.has(index)) return
     claim(
       index,
-      declarations.find((d) => !taken.has(d) && sameName(d.variable.name, variable.name)),
+      declarations.find(
+        (d) => !taken.has(d) && sameName(d.variable.name, variable.name) && blockKey(d.variable) === blockKey(variable),
+      ),
     )
   })
 
@@ -196,7 +230,13 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
  * leave `x : BOOL AT ;` behind.
  */
 function findClauseStart(text: string, operand: Span, keyword: string): number {
-  const before = text.lastIndexOf(keyword, operand.start)
+  // Searched strictly BEFORE the operand. `lastIndexOf(keyword, operand.start)`
+  // accepts a match AT `operand.start`, so an alias that itself begins with the
+  // keyword's letters matched instead of the real clause: clearing the location
+  // of `x : BOOL AT ATTIC_LIGHT;` removed only `ATTIC_LIGHT` and left
+  // `x : BOOL AT;` — a syntax error on the next load. An alias is free text
+  // that round-trips whatever the user wrote, so this is reachable.
+  const before = text.lastIndexOf(keyword, Math.max(0, operand.start - keyword.length))
   if (before === -1) return operand.start
   let start = before
   while (start > 0 && /[ \t]/.test(text[start - 1])) start--
@@ -213,8 +253,17 @@ function findClauseStart(text: string, operand: Span, keyword: string): number {
  * would be worse than reformatting it.
  */
 export function applyVariablesToText(text: string, nextVariables: PLCVariable[], context: TypeContext = {}): string {
-  const scanned = parseVariableDeclarations(text, context)
+  let source = text
+  let scanned = parseVariableDeclarations(source, context)
   if (scanned.errors.length > 0) return generateIecVariablesToString(nextVariables)
+
+  if (hasCoDeclaredNames(scanned)) {
+    source = normalizeOneVariablePerLine(source, context)
+    scanned = parseVariableDeclarations(source, context)
+    /* istanbul ignore if -- the normaliser returns its input unchanged when it cannot parse,
+       and the parse above already succeeded; this guards the re-parse only */
+    if (scanned.errors.length > 0) return generateIecVariablesToString(nextVariables)
+  }
 
   const declarations = scanned.blocks.flatMap((block) => block.declarations)
   const matched = matchDeclarations(declarations, nextVariables)
@@ -225,7 +274,7 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
   // 1. Fields that changed on a declaration that survived.
   nextVariables.forEach((variable, index) => {
     const declaration = matched.get(index)
-    if (declaration) edits.push(...editsForDeclaration(text, declaration, variable))
+    if (declaration) edits.push(...editsForDeclaration(source, declaration, variable))
   })
 
   // 2. Declarations with no variable left: take the whole line, so no blank
@@ -249,8 +298,8 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
     for (const [key, variables] of byBlock) {
       const block = scanned.blocks.find((candidate) => parsedBlockKey(candidate) === key)
       if (block) {
-        const indent = block.declarations.length > 0 ? indentOf(text, block.declarations[0]) : '    '
-        const lineStart = text.lastIndexOf('\n', block.endVarSpan.start - 1) + 1
+        const indent = block.declarations.length > 0 ? indentOf(source, block.declarations[0]) : '    '
+        const lineStart = source.lastIndexOf('\n', block.endVarSpan.start - 1) + 1
         edits.push({
           span: { start: lineStart, end: lineStart },
           replacement: variables.map((variable) => `${renderDeclaration(variable, indent)}\n`).join(''),
@@ -260,14 +309,14 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
         // correctly-shaped `VAR … END_VAR` pair without disturbing the rest.
         const appended = generateIecVariablesToString(variables)
         edits.push({
-          span: { start: text.length, end: text.length },
-          replacement: `${text.endsWith('\n') ? '' : '\n'}${appended}\n`,
+          span: { start: source.length, end: source.length },
+          replacement: `${source.endsWith('\n') ? '' : '\n'}${appended}\n`,
         })
       }
     }
   }
 
-  const patched = edits.length > 0 ? applyEdits(text, edits) : text
+  const patched = edits.length > 0 ? applyEdits(source, edits) : source
 
   // 4. Order. Handled after the field edits, by moving whole declaration lines
   //    between the slots they already occupy, so comments sitting on their own

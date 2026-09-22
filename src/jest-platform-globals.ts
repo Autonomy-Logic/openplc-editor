@@ -18,13 +18,17 @@
 import { webcrypto } from 'node:crypto'
 import { TextDecoder, TextEncoder } from 'node:util'
 
-const scope = globalThis as unknown as Record<string, unknown>
+// Defined through `globalThis` directly rather than through a cast: the point
+// is to install a global that is missing, and asserting a type over the global
+// object hides the very absence being tested for.
+if (typeof globalThis.TextEncoder === 'undefined') {
+  Object.defineProperty(globalThis, 'TextEncoder', { value: TextEncoder, writable: true, configurable: true })
+}
+if (typeof globalThis.TextDecoder === 'undefined') {
+  Object.defineProperty(globalThis, 'TextDecoder', { value: TextDecoder, writable: true, configurable: true })
+}
 
-if (typeof scope.TextEncoder === 'undefined') scope.TextEncoder = TextEncoder
-if (typeof scope.TextDecoder === 'undefined') scope.TextDecoder = TextDecoder
-
-const existingCrypto = scope.crypto as { subtle?: unknown } | undefined
-if (!existingCrypto || typeof existingCrypto.subtle === 'undefined') {
+if (typeof globalThis.crypto?.subtle === 'undefined') {
   Object.defineProperty(globalThis, 'crypto', {
     value: webcrypto,
     writable: true,

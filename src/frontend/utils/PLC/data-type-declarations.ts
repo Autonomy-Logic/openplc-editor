@@ -87,7 +87,21 @@ function trailingDocumentation(source: string, starts: number[], span: StrucppSp
 const EMPTY_ENUM_REGEX = /^\s*TYPE\s+([A-Za-z_]\w*)\s*:\s*\(\s*\)\s*;\s*END_TYPE\s*$/i
 
 const isRecord = (value: unknown): value is StrucppNode =>
-  typeof value === 'object' && value !== null && 'kind' in value
+  typeof value === 'object' && value !== null && !Array.isArray(value) && 'kind' in value
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** A node carries a usable span, which every `sliceSpan` below depends on. */
+const isSpanShape = (value: unknown): value is StrucppSpan =>
+  isPlainObject(value) &&
+  typeof value.startLine === 'number' &&
+  typeof value.endLine === 'number' &&
+  typeof value.startCol === 'number' &&
+  typeof value.endCol === 'number'
+
+const isParserMessage = (value: unknown): value is { message: string } =>
+  isPlainObject(value) && typeof value.message === 'string'
 
 /** The element type of an array definition, as the user spelled it. */
 function elementType(source: string, starts: number[], definition: StrucppNode): PLCVariableType {
@@ -194,12 +208,23 @@ function buildArray(
  * is what the project tree and every reference use.
  */
 export function parseDataTypeFromText(content: string, expectedName?: string): ParseDataTypeResult {
-  let ast: { types?: unknown[] } | undefined
+  // Read as `unknown` and checked, not asserted: the traversal below sits
+  // outside the `try`, so an unexpected shape would throw past this function
+  // and take the user's `.dt` text with it. An assertion proves nothing at
+  // runtime; these checks do.
+  let types: unknown[] | undefined
   let errors: Array<{ message: string }> = []
   try {
-    const result = parse(content) as { ast?: { types?: unknown[] }; errors?: Array<{ message: string }> }
-    ast = result.ast
-    errors = result.errors ?? []
+    const result: unknown = parse(content)
+    if (!isPlainObject(result)) return { error: 'The parser returned no result.' }
+    errors = Array.isArray(result.errors) ? result.errors.filter(isParserMessage) : []
+    const ast = result.ast
+    if (ast !== undefined && !isPlainObject(ast)) return { error: 'The parser returned an unreadable result.' }
+    const declared = isPlainObject(ast) ? ast.types : undefined
+    if (declared !== undefined && !Array.isArray(declared)) {
+      return { error: 'The parser returned an unreadable result.' }
+    }
+    types = declared ?? []
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
   }
@@ -212,17 +237,28 @@ export function parseDataTypeFromText(content: string, expectedName?: string): P
     // an empty POU: refuse it at build time, not while it is being authored.
     const empty = EMPTY_ENUM_REGEX.exec(content)
     if (empty) {
-      return { dataType: { name: empty[1], derivation: 'enumerated', values: [], initialValue: '' } }
+      // The filename-to-type contract applies here too. This return used to
+      // skip the check at the bottom of the function, so `datatypes/Foo.dt`
+      // holding `TYPE Bar : (); END_TYPE` loaded as `Bar` from a file named for
+      // `Foo` — and the next save wrote it back under the wrong name.
+      if (expectedName !== undefined && empty[1].toLowerCase() !== expectedName.toLowerCase()) {
+        return {
+          error: `declared type name "${empty[1]}" does not match the expected name "${expectedName}" — rename the data type via the project tree instead`,
+        }
+      }
+      return {
+        dataType: { name: expectedName ?? empty[1], derivation: 'enumerated', values: [], initialValue: '' },
+      }
     }
     return { error: errors[0].message }
   }
 
-  const types = (ast?.types ?? []).filter(isRecord)
-  if (types.length === 0) return { error: 'the TYPE block declares no data type' }
-  if (types.length > 1) return { error: 'a .dt file must declare exactly one data type' }
+  const declarations = types.filter(isRecord).filter((node) => isSpanShape(node.sourceSpan))
+  if (declarations.length === 0) return { error: 'the TYPE block declares no data type' }
+  if (declarations.length > 1) return { error: 'a .dt file must declare exactly one data type' }
 
   const starts = lineStarts(content)
-  const declaration = types[0]
+  const declaration = declarations[0]
   const name = sliceSpan(content, starts, declaration.sourceSpan).trim().split(/[\s:]/)[0]
   const definition = isRecord(declaration.definition) ? declaration.definition : undefined
   if (!definition) return { error: `data type "${name}" has no definition` }

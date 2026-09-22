@@ -101,6 +101,38 @@ describe('normalizeProjectAliases', () => {
     expect(aliasesOf()).toEqual(['Motor_Start', 'relay_1'])
   })
 
+  it('gives two producers sharing one illegal alias a name each', () => {
+    // The plan deliberately hands out `Motor_Start` and `Motor_Start2` so the
+    // two do not end up sharing a name again. Keying the replacements by the
+    // old name collapsed them: both pins became `Motor_Start2` — a duplicate
+    // alias, which the registry then resolves first-wins, silently shadowing
+    // one pin.
+    seedPins([
+      { address: '%QX0.0', alias: 'Motor Start' },
+      { address: '%QX0.1', alias: 'Motor Start' },
+    ])
+    getState().projectActions.normalizeProjectAliases()
+
+    expect(aliasesOf()).toEqual(['Motor_Start', 'Motor_Start2'])
+  })
+
+  it('keeps a variable bound to a shared illegal alias on a name a producer holds', () => {
+    // The variable cannot say which of the two it meant, so it follows the
+    // first — the same first-wins rule the registry resolves duplicates by.
+    // Cascading the second rename afterwards moved it onto a name neither pin
+    // held any more, leaving it orphaned with nothing reported.
+    seedPins([
+      { address: '%QX0.0', alias: 'Motor Start' },
+      { address: '%QX0.1', alias: 'Motor Start' },
+    ])
+    seedPouWithLocation('Shared', 'Motor Start')
+
+    getState().projectActions.normalizeProjectAliases()
+
+    expect(locationOf('Shared')).toBe('Motor_Start')
+    expect(aliasesOf()).toContain('Motor_Start')
+  })
+
   it('ignores pins with no alias at all', () => {
     seedPins([{ address: '%QX0.0' }, { address: '%QX0.1', alias: '' }])
     expect(getState().projectActions.normalizeProjectAliases().repairs).toEqual([])

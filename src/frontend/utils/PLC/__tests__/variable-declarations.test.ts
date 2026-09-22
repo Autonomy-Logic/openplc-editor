@@ -268,11 +268,16 @@ describe('spans address the caller source', () => {
     const [declaration] = block.declarations
     const at = (span: { start: number; end: number }) => source.slice(span.start, span.end)
 
+    const { location, initialValue, documentation } = declaration.fields
+    // Narrowed rather than asserted: an absent span is a real failure of the
+    // parser, and `!` would report it as an unreadable TypeError instead.
+    if (!location || !initialValue || !documentation) throw new Error('declaration is missing an optional span')
+
     expect(at(declaration.fields.name)).toBe('counter')
     expect(at(declaration.fields.type)).toBe('INT')
-    expect(at(declaration.fields.location!)).toBe('%MW0')
-    expect(at(declaration.fields.initialValue!)).toBe('7')
-    expect(at(declaration.fields.documentation!).trim()).toBe('how many')
+    expect(at(location)).toBe('%MW0')
+    expect(at(initialValue)).toBe('7')
+    expect(at(documentation).trim()).toBe('how many')
   })
 
   it('spans the block header and END_VAR', () => {
@@ -308,6 +313,56 @@ describe('errors', () => {
     const result = parse('VAR\nEND_VAR')
     expect(result.errors).toEqual([])
     expect(result.variables).toEqual([])
+  })
+})
+
+describe('errors a user can act on', () => {
+  it('names a bad VAR qualifier, on the line it is written', () => {
+    // STruC++ resynchronises after the bad token and reports against the NEXT
+    // line — the one line in the block with nothing wrong with it.
+    const [error] = parseVariableDeclarations('VAR FOO\n  a : INT;\nEND_VAR', context).errors
+    expect(error.message).toBe(
+      'Unknown variable block qualifier "FOO". Expected CONSTANT, RETAIN, NON_RETAIN or PERSISTENT.',
+    )
+    expect(error.line).toBe(1)
+  })
+
+  it('explains a declared STRING length instead of pointing at the bracket', () => {
+    const [error] = parseVariableDeclarations('VAR\n  s : STRING[20];\nEND_VAR', context).errors
+    expect(error.message).toContain('A declared length is not supported on STRING')
+    expect(error.line).toBe(2)
+  })
+
+  it('explains it for a WSTRING inside an array too', () => {
+    const [error] = parseVariableDeclarations('VAR\n  s : ARRAY [0..3] OF WSTRING[20];\nEND_VAR', context).errors
+    expect(error.message).toContain('A declared length is not supported on WSTRING')
+  })
+
+  it('leaves a legal qualifier and a qualifier named in a comment alone', () => {
+    expect(parseVariableDeclarations('VAR RETAIN\n  a : INT;\nEND_VAR', context).errors).toEqual([])
+    expect(parseVariableDeclarations('VAR (* RETAIN later *)\n  a : INT;\nEND_VAR', context).errors).toEqual([])
+  })
+
+  it("keeps the parser's own report for anything else", () => {
+    const [error] = parseVariableDeclarations('VAR\n  a : ;\nEND_VAR', context).errors
+    expect(error.message).not.toContain('qualifier')
+    expect(error.message).not.toContain('declared length')
+  })
+})
+
+describe('a whole POU is recognised behind its documentation', () => {
+  it('does not wrap a POU that opens with a block comment', () => {
+    // Wrapping it produced a POU nested in a POU, which STruC++ rejects — so a
+    // documented POU came back with no variables at all.
+    const source = '(* documentation *)\nPROGRAM Main\nVAR\n  a : INT;\nEND_VAR\n;\nEND_PROGRAM'
+    const result = parseVariableDeclarations(source, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+
+  it('does not wrap a POU that opens with line comments', () => {
+    const source = '// notes\n// more notes\nPROGRAM Main\nVAR\n  a : INT;\nEND_VAR\n;\nEND_PROGRAM'
+    expect(parseVariableDeclarations(source, context).errors).toEqual([])
   })
 })
 

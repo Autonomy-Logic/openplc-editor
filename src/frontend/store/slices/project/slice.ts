@@ -54,6 +54,7 @@ import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variabl
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { parseVariableDeclarations } from '../../../utils/PLC/variable-declarations'
 import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
@@ -698,8 +699,7 @@ const reconcileVariablesText = (
  * "no text yet", which is the one case that has to be serialised from the
  * model rather than patched.
  */
-const readPouVariablesText = (pou: PLCPou): string | undefined =>
-  (pou as PLCPou & { variablesText?: string }).variablesText
+const readPouVariablesText = (pou: PLCPou): string | undefined => pou.variablesText
 
 const writePouVariablesText = (pouName: string, text: string, getState: ProjectGetState): void => {
   getState().projectActions.setPouVariablesText(pouName, text)
@@ -726,15 +726,28 @@ const regenerateVariablesText = (pouName: string | undefined, getState: ProjectG
     variableView?.display === 'code' && typeof variableView.code === 'string' ? variableView.code : undefined
 
   // Patch whichever text is the most current statement of what the user wrote.
-  // The POU's own text normally, but during a commit the POU has not received
-  // it yet and the editor buffer is ahead — patching the model's serialisation
-  // instead would throw away the comment they just typed, which is how this
-  // function used to destroy the buffer mid-commit.
-  const current = readPouVariablesText(pou) ?? buffer
+  //
+  // The open code-view buffer when there is one, because it is what the user is
+  // looking at and it is ahead of the POU in exactly the window that matters:
+  // `commitCode` calls `setPouVariables` BEFORE `setPouVariablesText`, so during
+  // a commit the POU still holds the pre-edit text. Reading the POU first meant
+  // the comment the user had just typed was patched out and then pushed back
+  // over the buffer below — the very destruction the old comment here claimed
+  // this line prevented, which `?? buffer` never actually did (the POU's text is
+  // `undefined` only for a POU never yet serialised).
+  //
+  // A buffer mid-keystroke may not parse. `applyVariablesToText` falls back to a
+  // canonical re-serialisation when it cannot scan, which would silently discard
+  // the user's formatting, so an unparseable buffer is skipped and the POU's own
+  // text is patched instead.
+  const stored = readPouVariablesText(pou)
+  const usableBuffer =
+    buffer !== undefined && parseVariableDeclarations(buffer, context).errors.length === 0 ? buffer : undefined
+  const current = usableBuffer ?? stored
   const nextText =
     current === undefined ? generateIecVariablesToString(variables) : applyVariablesToText(current, variables, context)
 
-  if (nextText !== readPouVariablesText(pou)) writePouVariablesText(pouName, nextText, getState)
+  if (nextText !== stored) writePouVariablesText(pouName, nextText, getState)
 
   if (!inCodeView || nextText === buffer) return
   state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: nextText })
@@ -1055,18 +1068,21 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
      * is written on every change rather than only while the text fails to
      * parse, which was the old contract.
      */
-    setPouVariablesText: (name, text) => {
+    setPouVariablesText: (name, text, unparsed = false) => {
       setState(
         produce((slice: ProjectSlice) => {
-          const pou = slice.project.data.pous.find((p) => p.name === name) as { variablesText?: string } | undefined
-          if (pou) pou.variablesText = text
+          const pou = slice.project.data.pous.find((p) => p.name === name)
+          if (!pou) return
+          pou.variablesText = text
+          if (unparsed) pou.variablesTextUnparsed = true
+          else delete pou.variablesTextUnparsed
         }),
       )
     },
     clearPouVariablesText: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
-          const pou = slice.project.data.pous.find((p) => p.name === name) as { variablesText?: string } | undefined
+          const pou = slice.project.data.pous.find((p) => p.name === name)
           if (pou) delete pou.variablesText
         }),
       )
@@ -2257,9 +2273,22 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       const plan = planAliasNormalization(aliases)
       if (plan.length === 0) return { repairs: [] }
 
-      const rename = new Map(plan.map((entry) => [entry.from, entry.to]))
-      const remap = (alias: string | undefined): string | undefined =>
-        alias !== undefined && rename.has(alias) ? rename.get(alias) : alias
+      // Two producers can carry the SAME illegal alias, and the plan gives each
+      // its own replacement (`Motor_Start`, `Motor_Start2`) precisely so they do
+      // not both land on one name. Keying a Map by `from` collapsed those two
+      // entries and rewrote both producers to the second replacement — leaving a
+      // duplicate alias behind and, because the cascade below still walked the
+      // full plan, moving every bound variable onto `Motor_Start`, a name no
+      // producer held any more. Replacements are handed out in plan order
+      // instead, which is the order the aliases were collected in just above.
+      const queued = new Map<string, string[]>()
+      for (const entry of plan) queued.set(entry.from, [...(queued.get(entry.from) ?? []), entry.to])
+      const remap = (alias: string | undefined): string | undefined => {
+        if (alias === undefined) return alias
+        const pending = queued.get(alias)
+        if (pending === undefined || pending.length === 0) return alias
+        return pending.shift()
+      }
 
       setState(
         produce((slice: ProjectSliceRoot) => {
@@ -2283,7 +2312,16 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // Cascade after the producers are written, so a variable that already
       // held the new name (impossible today, but cheap to be safe about) is
       // not renamed twice.
+      //
+      // Only the FIRST replacement for a given name cascades. A variable bound
+      // to an alias two producers shared cannot say which one it meant — that
+      // ambiguity is why the registry resolves duplicates first-wins — so it
+      // follows the first, and cascading the second afterwards would move it
+      // again, onto a producer it was never bound to.
+      const cascaded = new Set<string>()
       for (const entry of plan) {
+        if (cascaded.has(entry.from)) continue
+        cascaded.add(entry.from)
         getState().projectActions.renameAlias(entry.from, entry.to)
       }
 

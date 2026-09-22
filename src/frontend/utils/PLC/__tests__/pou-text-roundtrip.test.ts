@@ -6,9 +6,10 @@
  * first time a project is saved — noise in every user's git history, and it
  * undercuts the promise that the text is preserved.
  */
+import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import { parseTextualPouFromString } from '../pou-text-parser'
 
-const textOf = (pou: unknown) => (pou as { variablesText?: string }).variablesText
+const textOf = (pou: PLCPou) => pou.variablesText
 
 describe('the stored declaration text keeps the block indentation', () => {
   it('starts at the line holding VAR, not at the keyword', () => {
@@ -41,6 +42,6 @@ describe('the stored declaration text keeps the block indentation', () => {
       'st',
       'program',
     )
-    expect((pou as { variablesTextUnparsed?: boolean }).variablesTextUnparsed).toBeUndefined()
+    expect(pou.variablesTextUnparsed).toBeUndefined()
   })
 })

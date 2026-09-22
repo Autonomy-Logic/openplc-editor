@@ -141,6 +141,30 @@ describe('parseDataTypeFromText tolerance', () => {
   })
 })
 
+describe('an enumeration with no members yet', () => {
+  // `E : ();` is what the UI produces the moment a user adds an enumeration and
+  // before they type a value into it. STruC++ refuses it — correctly, it cannot
+  // compile — so the editor accepts it as work in progress.
+  it('is accepted while it is being written', () => {
+    const result = parseDataTypeFromText('TYPE State : (); END_TYPE', 'State')
+    expect(result.error).toBeUndefined()
+    expect(result.dataType).toEqual({ name: 'State', derivation: 'enumerated', values: [], initialValue: '' })
+  })
+
+  it('is still held to the name its file claims', () => {
+    // This path used to return before the name check, so `datatypes/Foo.dt`
+    // holding `TYPE Bar : (); END_TYPE` loaded as `Bar` — and the next save
+    // wrote the type back under a name the tree never showed.
+    const result = parseDataTypeFromText('TYPE Bar : (); END_TYPE', 'Foo')
+    expect(result.dataType).toBeUndefined()
+    expect(result.error).toContain('does not match the expected name')
+  })
+
+  it("takes the file's spelling when the two differ only in case", () => {
+    expect(parseDataTypeFromText('TYPE state : (); END_TYPE', 'State').dataType?.name).toBe('State')
+  })
+})
+
 describe('parseDataTypeFromText errors', () => {
   // These used to assert hand-written hints ("missing END_STRUCT", "invalid
   // enumeration value"). The parser is STruC++ now, so the wording is the

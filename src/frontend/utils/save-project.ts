@@ -6,6 +6,7 @@
  */
 
 import type { PLCPou } from '../../middleware/shared/ports/types'
+import type { TypeContext } from './PLC/variable-declarations'
 import { parseVariableDeclarations } from './PLC/variable-declarations'
 import { applyVariablesToText } from './variable-text-edits'
 
@@ -40,7 +41,7 @@ export interface EditorLike {
  * site. Folding them together makes the contract single-source-of-truth:
  * "give me a POU ready to write to disk."
  */
-export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou {
+export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined, context: TypeContext = {}): PLCPou {
   const next: PLCPou = pou
 
   if (
@@ -54,13 +55,12 @@ export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou
     // including edits they have typed but not committed. It is taken verbatim
     // and NOT reconciled below: the model has not caught up with it yet by
     // definition, and "reconciling" would delete what they just typed.
-    return stripGraphicalSelections({
-      ...next,
-      variablesText: editor.variable.code,
-    } as PLCPou & { variablesText?: string })
+    // No cast: `variablesText` is a field of `PLCPou`, so an intersection here
+    // would only hide a rename of it from the compiler.
+    return stripGraphicalSelections({ ...next, variablesText: editor.variable.code })
   }
 
-  return stripGraphicalSelections(reconcileVariablesTextForSave(next))
+  return stripGraphicalSelections(reconcileVariablesTextForSave(next, context))
 }
 
 /**
@@ -84,15 +84,25 @@ export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined): PLCPou
  * holds the comments and formatting that only it can carry. Patching keeps
  * both, where regenerating would trade one for the other.
  */
-function reconcileVariablesTextForSave(pou: PLCPou): PLCPou {
+function reconcileVariablesTextForSave(pou: PLCPou, context: TypeContext = {}): PLCPou {
   const text = pou.variablesText
   if (text === undefined) return pou
 
   const variables = pou.interface?.variables ?? []
-  const parsed = parseVariableDeclarations(text)
+  // The context matters: without it `classifyType` cannot resolve a base type,
+  // so `x : bool;` parses as the user data type `bool` while the model holds
+  // the canonical `BOOL`, and the comparison below reported a difference on
+  // every save of a lower-case declaration.
+  const parsed = parseVariableDeclarations(text, context)
   // Unparseable text is preserved verbatim, as it always has been: it is the
   // user's half-finished work and the code view is where they will fix it.
   if (parsed.errors.length > 0) return pou
+
+  // `documentation` is compared the way the patcher writes it — newlines
+  // flattened, trimmed — so a documentation-only drift is caught (it is the
+  // exact drift this function exists to catch) without reporting a difference
+  // for a comment that is already byte-correct.
+  const flatten = (documentation: string | undefined) => (documentation ?? '').replace(/(\r\n|\n|\r)/gm, ' ').trim()
 
   const describesSameVariables =
     parsed.variables.length === variables.length &&
@@ -100,15 +110,19 @@ function reconcileVariablesTextForSave(pou: PLCPou): PLCPou {
       const expected = variables[index]
       return (
         candidate.name === expected.name &&
-        candidate.type.value === expected.type.value &&
+        // IEC type names are case-insensitive and the model holds the canonical
+        // spelling, so folding the case here is what keeps `bool` from counting
+        // as a difference against `BOOL` on every single save.
+        candidate.type.value.toUpperCase() === expected.type.value.toUpperCase() &&
         candidate.location === expected.location &&
         (candidate.initialValue ?? '') === (expected.initialValue ?? '') &&
-        candidate.class === expected.class
+        candidate.class === expected.class &&
+        flatten(candidate.documentation) === flatten(expected.documentation)
       )
     })
 
   if (describesSameVariables) return pou
-  return { ...pou, variablesText: applyVariablesToText(text, variables) }
+  return { ...pou, variablesText: applyVariablesToText(text, variables, context) }
 }
 
 /**

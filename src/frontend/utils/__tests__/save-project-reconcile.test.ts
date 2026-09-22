@@ -66,3 +66,22 @@ describe('sanitizePou reconciles the text against the model', () => {
     expect(sanitizePou(bare as PLCPou, undefined).variablesText).toBeUndefined()
   })
 })
+
+describe('what counts as a disagreement', () => {
+  it('does not count a lower-case type name as one', () => {
+    // The model holds the canonical `BOOL`; the text holds what the user wrote.
+    // Comparing them exactly made every save of a lower-case declaration run a
+    // full reconcile pass against text that was already correct.
+    const text = 'VAR\n  flag : bool;\nEND_VAR'
+    expect(sanitizePou(pou(text, [variable('flag', 'BOOL')]), undefined).variablesText).toBe(text)
+  })
+
+  it('counts a documentation change as one', () => {
+    // Documentation lives in the text as the trailing comment and nowhere else,
+    // so a model that has moved on from it is exactly the drift this backstop
+    // exists to catch — and it was not being compared at all.
+    const text = 'VAR\n  a : INT; (* old *)\nEND_VAR'
+    const moved = { ...variable('a'), documentation: 'new' }
+    expect(sanitizePou(pou(text, [moved]), undefined).variablesText).toBe('VAR\n  a : INT; (* new *)\nEND_VAR')
+  })
+})

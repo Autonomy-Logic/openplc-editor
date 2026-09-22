@@ -13,11 +13,12 @@
 
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort, RawProjectFile, WriteProjectFiles } from '../../middleware/shared/ports/project-port'
-import type { PLCDataType, PLCPou } from '../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
 import { openPLCStoreBase } from '../store'
 import type { LadderFlowType } from '../store/slices/ladder'
+import { validateVariableSet } from '../store/slices/project/validation/variables'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
-import { parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
 import { notifyNoWritePermission } from '../utils/notify-no-write-permission'
@@ -26,6 +27,7 @@ import { serializeDataTypeToText } from '../utils/PLC/data-type-serializer'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../utils/PLC/pou-text-parser'
 import { serializePouToText } from '../utils/PLC/pou-text-serializer'
+import { carryEditorMetadata } from '../utils/PLC/variable-metadata'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
@@ -101,7 +103,11 @@ function buildPouSpec(pou: PLCPou, state: StoreState): ProjectFileSpec {
   const folder = getFolderFromPouType(pou.pouType)
   const ext = getExtensionFromLanguage(pou.body.language)
   const editorModel = state.editorActions.getEditorFromEditors(pou.name)
-  const sanitized = sanitizePou(pou, editorModel ?? undefined)
+  const sanitized = sanitizePou(
+    pou,
+    editorModel ?? undefined,
+    buildTypeContext(state.project.data.pous, state.project.data.dataTypes, state.libraries),
+  )
   return {
     path: `pous/${folder}/${pou.name}${ext}`,
     content: serializePouToText(sanitized),
@@ -1066,6 +1072,15 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
       ? parseGraphicalPouFromString(result.content, language, pou.pouType)
       : parseTextualPouFromString(result.content, language, pou.pouType)
 
+    // The file's own declaration text comes first, because it is the thing that
+    // just changed. `applyPouSnapshot` patches whatever text the POU already
+    // holds, so without this the in-memory text from before the external edit
+    // survived and the comments and formatting the user changed on disk were
+    // silently reverted on the next save.
+    if (parsed.variablesText !== undefined) {
+      state.projectActions.setPouVariablesText(pouName, parsed.variablesText, parsed.variablesTextUnparsed === true)
+    }
+
     // Restore body, variables, and documentation
     state.projectActions.applyPouSnapshot(pouName, parsed.interface?.variables ?? [], parsed.body)
     if (parsed.documentation !== undefined) {
@@ -1092,15 +1107,34 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
       // that only the text carries, and this runs on an external-file reload,
       // where the text is the thing that just changed (DOPE-650).
       const iecString = freshPou.variablesText ?? generateIecVariablesToString(vars)
-      const reparsedVars = parseIecStringToVariables(
-        iecString,
-        freshState.project.data.pous,
-        freshState.project.data.dataTypes,
-        freshState.libraries,
-      )
-      // `setPouVariables` carries `debug` across and patches the text, so the
-      // reclassify cannot silently clear a Debug tick or desync the two.
-      freshState.projectActions.setPouVariables({ pouName, variables: reparsedVars })
+
+      // The same gate the table and the code view apply. A file edited outside
+      // the editor can hold a variable set the editor would never have let the
+      // user build — two variables of the same name, a location that does not
+      // fit the type — and reclassify used to write it straight into the store.
+      // A refusal is not a failed reload: the text is kept and marked, so the
+      // POU opens in the code view with the user's own bytes to repair. Same
+      // answer whether the declarations are refused or will not parse at all.
+      let reparsedVars: PLCVariable[] = vars
+      try {
+        const candidate = parseIecStringToVariables(
+          iecString,
+          freshState.project.data.pous,
+          freshState.project.data.dataTypes,
+          freshState.libraries,
+        )
+        if (validateVariableSet(candidate).ok) {
+          reparsedVars = carryEditorMetadata(vars, candidate)
+          freshState.projectActions.setPouVariables({ pouName, variables: reparsedVars })
+        } else if (freshPou.variablesText !== undefined) {
+          freshState.projectActions.setPouVariablesText(pouName, freshPou.variablesText, true)
+        }
+      } catch (err) {
+        if (freshPou.variablesText !== undefined) {
+          freshState.projectActions.setPouVariablesText(pouName, freshPou.variablesText, true)
+        }
+        console.error(`[Reload] Could not read the declarations of POU "${pouName}":`, err)
+      }
 
       // Sync graphical nodes with reclassified variables
       if (language === 'ld') {

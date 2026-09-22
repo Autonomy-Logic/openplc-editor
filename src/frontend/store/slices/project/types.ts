@@ -125,7 +125,16 @@ export type ProjectActions = {
   deletePou: (name: string) => void
   updatePouDocumentation: (name: string, documentation: string) => void
   updatePouReturnType: (name: string, returnType: string) => void
-  setPouVariablesText: (name: string, text: string) => void
+  /**
+   * Store a POU's declaration text.
+   *
+   * `unparsed` records whether that text is known NOT to parse — the loader's
+   * verdict, which decides whether the POU opens in the code view so the user
+   * can repair it. Every other caller writes a text that came out of a
+   * successful parse or patch, so the default clears the mark rather than
+   * leaving a stale one behind.
+   */
+  setPouVariablesText: (name: string, text: string, unparsed?: boolean) => void
   clearPouVariablesText: (name: string) => void
   updatePouName: (oldName: string, newName: string) => void
   applyPouSnapshot: (name: string, variables: PLCVariable[], body: PLCBody) => void

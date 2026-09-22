@@ -120,6 +120,86 @@ describe('an edit leaves everything it did not touch alone', () => {
   })
 })
 
+describe('a declaration must never take its neighbour with it', () => {
+  // Every case here deleted a variable the user had not touched. They are the
+  // reason DOPE-650's own machinery could not be trusted: the table said one
+  // thing, the file said another, and the file is what ships.
+
+  it('deletes only the named variable when a line comment mentions a block opener', () => {
+    // `(*` inside a `//` comment was read as a block-comment opener, and the
+    // hunt for its `*)` ran into the next declaration — which then sat inside
+    // the first one's line span.
+    const text = 'VAR\n  a : INT; // see (* note\n  b : INT; (* real *)\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).filter((variable) => variable.name !== 'a'),
+      ),
+    ).toBe('VAR\n  b : INT; (* real *)\nEND_VAR')
+  })
+
+  it('reads the documentation of a line comment that mentions a block opener', () => {
+    const text = 'VAR\n  a : INT; // use (* literal *)\nEND_VAR'
+    expect(modelOf(text)[0].documentation).toBe('use (* literal *)')
+  })
+
+  it('still takes a genuine multi-line trailing block comment with the declaration', () => {
+    const text = 'VAR\n  a : INT; (* long\n     explanation *)\n  b : INT;\nEND_VAR'
+    expect(modelOf(text)[0].documentation).toBe('long\n     explanation')
+    expect(
+      apply(
+        text,
+        modelOf(text).filter((variable) => variable.name !== 'a'),
+      ),
+    ).toBe('VAR\n  b : INT;\nEND_VAR')
+  })
+
+  it('keeps the survivor when one of two co-declared names is deleted', () => {
+    // `a, b : INT;` is one declaration and two variables, so both shared its
+    // line span and deleting either blanked the line.
+    const text = 'VAR\n  a, b : INT;\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).filter((variable) => variable.name !== 'a'),
+      ),
+    ).toBe('VAR\n  b : INT;\nEND_VAR')
+  })
+
+  it('normalises a co-declared line to one variable per line, keeping its comment', () => {
+    const text = 'VAR\n  a, b : INT; (* both *)\nEND_VAR'
+    expect(apply(text, modelOf(text))).toBe('VAR\n  a : INT; (* both *)\n  b : INT; (* both *)\nEND_VAR')
+  })
+})
+
+describe('a class change is a move, not an edit', () => {
+  it('moves the declaration into the block of its new class', () => {
+    // Matched by name to its OLD declaration, the change was applied as a field
+    // edit — and no field on the line carries the class, so the declaration
+    // stayed in `VAR` and the class silently reverted on the next load.
+    const text = 'VAR\n  a : INT;\nEND_VAR\nVAR_OUTPUT\n  q : BOOL;\nEND_VAR'
+    const out = apply(
+      text,
+      modelOf(text).map((variable) => (variable.name === 'a' ? { ...variable, class: 'output' as const } : variable)),
+    )
+    expect(modelOf(out).map((variable) => `${variable.name}:${variable.class}`)).toEqual(['a:output', 'q:output'])
+  })
+})
+
+describe('clearing a clause whose operand starts with its keyword', () => {
+  it('removes the whole AT clause when the alias begins with "AT"', () => {
+    // `lastIndexOf('AT', operand.start)` matched the alias's own first two
+    // letters, so only the operand went and `x : BOOL AT;` was written to disk.
+    const text = 'VAR\n  x : BOOL AT ATTIC_LIGHT;\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).map((variable) => ({ ...variable, location: '' })),
+      ),
+    ).toBe('VAR\n  x : BOOL;\nEND_VAR')
+  })
+})
+
 describe('adding and removing declarations', () => {
   it('inserts a new variable before END_VAR, at the block indentation', () => {
     const model = modelOf(RICH)

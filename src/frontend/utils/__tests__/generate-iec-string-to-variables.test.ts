@@ -1,4 +1,4 @@
-import type { LibraryState } from '../../../middleware/shared/ports/library-types'
+import type { LibraryState, SystemLibrary, SystemLibraryPou } from '../../../middleware/shared/ports/library-types'
 import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import { validateVariableSet } from '../../store/slices/project/validation/variables'
 import {
@@ -6,6 +6,31 @@ import {
   findDuplicateVariableName,
   parseIecStringToVariables,
 } from '../generate-iec-string-to-variables'
+
+/**
+ * Fully-typed library fixtures.
+ *
+ * `as unknown as LibraryState['libraries']` was hiding the contract: a field
+ * added to `SystemLibraryPou` would leave these fixtures compiling against a
+ * shape the production code no longer sees.
+ */
+const libraryPou = (name: string): SystemLibraryPou => ({
+  name,
+  type: 'function-block',
+  language: 'st',
+  variables: [],
+  body: '',
+  documentation: '',
+})
+
+const systemLibrary = (name: string, pous: SystemLibraryPou[]): SystemLibrary => ({
+  name,
+  author: '',
+  version: '1.0.0',
+  stPath: '',
+  cPath: '',
+  pous,
+})
 
 describe('parseIecStringToVariables — the throwing facade', () => {
   // The parsing itself is STruC++'s and is covered in
@@ -66,9 +91,9 @@ describe('buildTypeContext — the classification the compiler cannot make', () 
 
   it('classifies a system library function block as derived', () => {
     const libraries = {
-      system: [{ pous: [{ name: 'TON', type: 'function-block' }] }],
+      system: [systemLibrary('Standard', [libraryPou('TON')])],
       user: [],
-    } as unknown as LibraryState['libraries']
+    } satisfies LibraryState['libraries']
     expect(typeOf('t : TON;', [], libraries)).toEqual({ definition: 'derived', value: 'TON' })
   })
 
@@ -76,7 +101,7 @@ describe('buildTypeContext — the classification the compiler cannot make', () 
     const libraries = {
       system: [],
       user: [{ name: 'MyLibFb', type: 'function-block' }],
-    } as unknown as LibraryState['libraries']
+    } satisfies LibraryState['libraries']
     expect(typeOf('x : MyLibFb;', [], libraries)).toEqual({ definition: 'derived', value: 'MyLibFb' })
   })
 

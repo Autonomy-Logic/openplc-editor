@@ -6,7 +6,7 @@ import { isValidIecIdentifier } from '../../../../middleware/shared/utils/etherc
 import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { hasLegacyInOutOutputHandle } from '../../../utils/graphical/in-out-pin-rules'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
@@ -14,10 +14,13 @@ import { isLegalIdentifier } from '../../../utils/keywords'
 import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { restampFlowBlockVariants } from '../../../utils/PLC/restamp-block-variants'
+import { normalizeOneVariablePerLine } from '../../../utils/PLC/variable-declarations'
+import { carryEditorMetadata } from '../../../utils/PLC/variable-metadata'
 import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
+import { validateVariableSet } from '../project/validation/variables'
 import type { TabsProps } from '../tabs'
 import {
   CreateEditorObjectFromTab,
@@ -1278,18 +1281,50 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           libraries: reclassLibraries,
         } = reclassState
 
+        const reclassContext = buildTypeContext(pous, reclassDataTypes, reclassLibraries)
+
         pous.forEach((pou) => {
           try {
             /* istanbul ignore next -- defensive: interface may be undefined */
             const vars = pou.interface?.variables ?? []
-            const iecString = generateIecVariablesToString(vars)
+            // Reclassify from the POU's OWN text, not from a re-serialisation of
+            // the model: the text is what the file holds and what the table is a
+            // view of (DOPE-650), and a round trip through
+            // `generateIecVariablesToString` throws away the comments it carries.
+            //
+            // Normalised on the way in, so `a, b : INT;` — legal IEC that STruC++
+            // reads but the table cannot show, because the Documentation column
+            // is the comment at the end of the line — becomes one declaration per
+            // line before anything else looks at it.
+            const stored = pou.variablesText
+            const normalized = stored !== undefined ? normalizeOneVariablePerLine(stored, reclassContext) : undefined
+            const iecString = normalized ?? generateIecVariablesToString(vars)
             const reparsedVariables = parseIecStringToVariables(iecString, pous, reclassDataTypes, reclassLibraries)
+
+            // The same gate the table and the code view apply. A hand-edited or
+            // externally-written project file can hold a variable set the editor
+            // would never have produced; it used to be written straight into the
+            // store. Refusing it is not a failed load — the text is kept and
+            // marked, and the POU opens in the code view for the user to fix.
+            const validation = validateVariableSet(reparsedVariables)
+            if (!validation.ok) {
+              if (stored !== undefined) getState().projectActions.setPouVariablesText(pou.name, stored, true)
+              return
+            }
+
+            if (normalized !== undefined && normalized !== stored) {
+              getState().projectActions.setPouVariablesText(pou.name, normalized)
+            }
             getState().projectActions.setPouVariables({
               pouName: pou.name,
-              variables: reparsedVariables,
+              variables: carryEditorMetadata(vars, reparsedVariables),
             })
           } catch (err) {
-            /* istanbul ignore next -- defensive: reclassify errors should not break project open */
+            // Unparseable declarations are the one thing the code view exists
+            // for: keep the user's bytes and open it there, rather than leaving
+            // the POU with whatever the loader managed to salvage.
+            const stored = pou.variablesText
+            if (stored !== undefined) getState().projectActions.setPouVariablesText(pou.name, stored, true)
             console.error(`[Reclassify] Failed to reclassify variables for POU "${pou.name}":`, err)
           }
         })
