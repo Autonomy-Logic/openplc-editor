@@ -403,7 +403,17 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           const newBodyValue = typeof parsedPou.body.value === 'string' ? parsedPou.body.value : ''
 
           setLocalText(newBodyValue)
-          updatePou({ name, content: { language, value: newBodyValue } })
+          // `updatePou` notifies the STruC++ model sync synchronously, and for an ST POU that
+          // sync owns the very model this editor is bound to, so it calls `setValue` on it.
+          // @monaco-editor/react only guards the edits it makes itself, so `onChange` fires and
+          // `handleWriteInPou` would mark the POU unsaved. The saved-state gate in
+          // `handleExternalChange` would then stop every later sync (DOPE-652).
+          isSyncingModelRef.current = true
+          try {
+            updatePou({ name, content: { language, value: newBodyValue } })
+          } finally {
+            isSyncingModelRef.current = false
+          }
         }
       } catch (err) {
         console.error('[Monaco FileWatch] Failed to reload file:', err)
@@ -960,7 +970,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
             const currentBodyValue = typeof currentPou.body.value === 'string' ? currentPou.body.value : ''
             if (newBodyValue !== currentBodyValue) {
               setLocalText(newBodyValue)
-              updatePou({ name, content: { language, value: newBodyValue } })
+              // Same guard as `reloadFromDisk`: the store write reaches this editor's own
+              // Monaco model through the STruC++ model sync, and an unguarded `onChange`
+              // would mark a POU unsaved that only ever changed on disk (DOPE-652).
+              isSyncingModelRef.current = true
+              try {
+                updatePou({ name, content: { language, value: newBodyValue } })
+              } finally {
+                isSyncingModelRef.current = false
+              }
             }
           }
         } catch (err) {
