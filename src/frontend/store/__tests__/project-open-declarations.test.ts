@@ -84,6 +84,26 @@ describe('opening a project', () => {
     expect(pou.variablesText).toBe('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
   })
 
+  it('splits a line holding two declarations, so a later delete cannot take both', () => {
+    const pou = openWith('VAR\n  a : INT; b : INT;\nEND_VAR')
+    expect(pou.variablesText).toBe('VAR\n  a : INT;\n  b : INT;\nEND_VAR')
+  })
+
+  it('refuses two variables bound to one location, and says which', () => {
+    // The table has always refused it; the text has to refuse it the same way.
+    // What was missing was the reason: the POU opened in the code view looking
+    // as though the editor had broken the file.
+    const pou = openWith('VAR\n  a : BOOL AT Motor_Start;\n  b : BOOL AT Motor_Start;\nEND_VAR')
+
+    expect(pou.variablesTextUnparsed).toBe(true)
+    const reported = openPLCStoreBase
+      .getState()
+      .logs.map((log) => log.message)
+      .join('\n')
+    expect(reported).toContain('main')
+    expect(reported).toContain('Location already exists — Please make sure that the location is unique.')
+  })
+
   it('keeps declarations that do not parse as text, for the same reason', () => {
     const pou = openWith('VAR\n  a : ;\nEND_VAR')
 

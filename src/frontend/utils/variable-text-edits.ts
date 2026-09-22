@@ -42,22 +42,25 @@ function applyEdits(text: string, edits: TextEdit[]): string {
 const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
 
 /**
- * True when some declaration names more than one variable (`a, b : INT;`).
+ * True when some physical line holds more than one variable.
  *
- * Those variables share one physical declaration, so they share its `lineSpan`
- * — and the deletion pass below works in whole lines. Deleting `a` therefore
- * took `b` with it. Rather than teach the deletion pass to rewrite a name list
- * (and collide with the field edits queued against the very same span in the
- * same commit), the text is normalised to one variable per line first, which is
- * the form the table can represent anyway.
+ * Two forms do it — `a, b : INT;` and `a : INT; b : INT;` — and both leave the
+ * variables sharing one `lineSpan`, which is the unit the deletion and
+ * reordering passes below work in. Deleting `a` therefore took `b` with it, and
+ * reordering spliced two edits into the same line against pre-edit offsets.
+ *
+ * Rather than teach those passes to rewrite part of a line (and collide with
+ * the field edits queued against the very same span in the same commit), the
+ * text is normalised to one declaration per line first — which is the only form
+ * the table can represent anyway, since the Documentation column is the comment
+ * at the end of a line.
  */
-function hasCoDeclaredNames(result: ParseResult): boolean {
+function hasCrowdedLine(result: ParseResult): boolean {
   for (const block of result.blocks) {
-    const seen = new Set<string>()
+    const seen = new Set<number>()
     for (const declaration of block.declarations) {
-      const key = `${declaration.span.start}:${declaration.span.end}`
-      if (seen.has(key)) return true
-      seen.add(key)
+      if (seen.has(declaration.lineSpan.start)) return true
+      seen.add(declaration.lineSpan.start)
     }
   }
   return false
@@ -236,7 +239,12 @@ function findClauseStart(text: string, operand: Span, keyword: string): number {
   // of `x : BOOL AT ATTIC_LIGHT;` removed only `ATTIC_LIGHT` and left
   // `x : BOOL AT;` — a syntax error on the next load. An alias is free text
   // that round-trips whatever the user wrote, so this is reachable.
-  const before = text.lastIndexOf(keyword, Math.max(0, operand.start - keyword.length))
+  //
+  // Matched case-insensitively, because IEC keywords are and STruC++ accepts
+  // `x : BOOL at %QX0.0;`. Searching for the literal `AT` found nothing there,
+  // so clearing the location removed only the operand and left `x : BOOL at ;`
+  // — which nothing can parse, in the text that gets written to disk.
+  const before = text.toUpperCase().lastIndexOf(keyword.toUpperCase(), Math.max(0, operand.start - keyword.length))
   if (before === -1) return operand.start
   let start = before
   while (start > 0 && /[ \t]/.test(text[start - 1])) start--
@@ -257,7 +265,7 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
   let scanned = parseVariableDeclarations(source, context)
   if (scanned.errors.length > 0) return generateIecVariablesToString(nextVariables)
 
-  if (hasCoDeclaredNames(scanned)) {
+  if (hasCrowdedLine(scanned)) {
     source = normalizeOneVariablePerLine(source, context)
     scanned = parseVariableDeclarations(source, context)
     /* istanbul ignore if -- the normaliser returns its input unchanged when it cannot parse,
@@ -418,10 +426,19 @@ export function resolveLocationsInText(
   if (scanned.errors.length > 0) return text
 
   const edits: TextEdit[] = []
+  // One edit per location span. A declaration naming several variables is
+  // reported once per name, and every one of those carries the SAME location
+  // span, so an unguarded loop queued the same edit twice — and `applyEdits`
+  // works in original offsets, so the second splice landed in text the first
+  // had already changed. Dropping an alias off `a, b : BOOL AT Ghost;` took the
+  // semicolon and `END_VAR` with it. Unlike `applyVariablesToText` this runs on
+  // whatever text it is handed, including a file that has never been normalised.
+  const seen = new Set<number>()
   for (const block of scanned.blocks) {
     for (const declaration of block.declarations) {
       const span = declaration.fields.location
-      if (!span) continue
+      if (!span || seen.has(span.start)) continue
+      seen.add(span.start)
       const current = text.slice(span.start, span.end)
       const resolved = resolve(current)
       if (resolved === current) continue

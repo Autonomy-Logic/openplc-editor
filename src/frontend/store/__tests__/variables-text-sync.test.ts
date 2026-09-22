@@ -179,6 +179,23 @@ describe('an open code view is the newest thing the user wrote', () => {
     expect(textOf('Half')).toBe('VAR\n  a : INT;\nEND_VAR')
   })
 
+  it('leaves the half-typed buffer alone when a writer that cannot refuse runs', () => {
+    // An undo, or an alias cascade on project open, has no user to refuse to.
+    // The stored text still follows the model, but pushing that text over the
+    // editor would delete the line the user is in the middle of typing.
+    seed('Typing', 'VAR\n  a : INT;\nEND_VAR', [variable('a')])
+    const halfTyped = 'VAR\n  a : INT;\n  b :'
+    getState().editorActions.updateModelVariablesForName('Typing', { display: 'code', code: halfTyped })
+
+    getState().projectActions.applyPouSnapshot('Typing', [variable('a'), variable('c', 'BOOL')], {
+      language: 'st',
+      value: '',
+    })
+
+    expect(bufferOf('Typing')).toBe(halfTyped)
+    expect(textOf('Typing')).toBe('VAR\n  a : INT;\n  c : BOOL;\nEND_VAR')
+  })
+
   it('falls back to the stored text when a writer that cannot refuse meets an unparseable buffer', () => {
     // Undo goes through `applyPouSnapshot`, which has no user to report a
     // syntax error to. Patching the half-typed buffer would hand

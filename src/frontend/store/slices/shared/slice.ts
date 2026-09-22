@@ -1309,6 +1309,15 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             const validation = validateVariableSet(reparsedVariables)
             if (!validation.ok) {
               if (stored !== undefined) getState().projectActions.setPouVariablesText(pou.name, stored, true)
+              // Say which declaration is refused. Opening the POU in the code
+              // view with no reason given reads as "the editor broke my file",
+              // and the commonest cause — two variables bound to one location,
+              // which the table has always refused — is invisible otherwise.
+              const [firstError] = validation.errors
+              getState().consoleActions.addLog({
+                level: 'error',
+                message: `POU "${pou.name}": ${firstError.title.replace(/\.$/, '')} — ${firstError.message} The declarations are shown as text so they can be corrected.`,
+              })
               return
             }
 

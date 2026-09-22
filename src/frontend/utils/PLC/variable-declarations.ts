@@ -340,7 +340,10 @@ const isDeclarationShape = (value: unknown): value is StrucppDeclaration =>
   value.nameSpans.length === value.names.length &&
   value.nameSpans.every(isSpanShape) &&
   isRecord(value.type) &&
-  isSpanShape(value.type.sourceSpan)
+  isSpanShape(value.type.sourceSpan) &&
+  // An address the editor cannot locate is an address it would silently drop,
+  // and then re-add as a second `AT` clause on the next patch.
+  (value.address === undefined || value.address === '' || isSpanShape(value.addressSpan))
 
 const isVarBlockShape = (value: unknown): value is StrucppVarBlock =>
   isRecord(value) &&
@@ -352,19 +355,33 @@ const isVarBlockShape = (value: unknown): value is StrucppVarBlock =>
 const isRawError = (value: unknown): value is { message: string; line?: number; column?: number } =>
   isRecord(value) && typeof value.message === 'string'
 
-/** The VAR blocks of the single program the wrapper produces, or undefined if the shape is wrong. */
+/**
+ * The VAR blocks of the POU the source describes, or undefined if the shape is
+ * wrong.
+ *
+ * All three kinds, because `isWholePou` accepts all three: a whole
+ * FUNCTION_BLOCK lands in `functionBlocks`, not `programs`, and reading only
+ * `programs` returned an empty list with no error — a POU that silently
+ * declared nothing. The wrapper produces a program, so that is the usual case;
+ * the other two are the whole-POU callers.
+ */
 function readVarBlocks(ast: unknown): StrucppVarBlock[] | undefined {
   if (!isRecord(ast)) return []
-  const programs = ast.programs
-  if (programs === undefined) return []
-  if (!Array.isArray(programs)) return undefined
-  const [program] = programs
-  if (program === undefined) return []
-  if (!isRecord(program)) return undefined
-  const blocks = program.varBlocks
-  if (blocks === undefined) return []
-  if (!Array.isArray(blocks) || !blocks.every(isVarBlockShape)) return undefined
-  return blocks
+
+  const collected: StrucppVarBlock[] = []
+  for (const key of ['programs', 'functionBlocks', 'functions'] as const) {
+    const pous = ast[key]
+    if (pous === undefined) continue
+    if (!Array.isArray(pous)) return undefined
+    const [pou] = pous
+    if (pou === undefined) continue
+    if (!isRecord(pou)) return undefined
+    const blocks = pou.varBlocks
+    if (blocks === undefined) continue
+    if (!Array.isArray(blocks) || !blocks.every(isVarBlockShape)) return undefined
+    collected.push(...blocks)
+  }
+  return collected
 }
 
 // ---------------------------------------------------------------------------
@@ -596,28 +613,35 @@ export function normalizeOneVariablePerLine(source: string, context: TypeContext
   const edits: Array<{ span: Span; replacement: string }> = []
 
   for (const block of parsed.blocks) {
-    // Declarations are emitted once per name, so group them back by span.
-    const byDeclaration = new Map<string, ParsedDeclaration[]>()
+    // Grouped by the physical LINE, not by the declaration. Two variables can
+    // crowd a line two different ways — `a, b : INT;` and `a : INT; b : INT;` —
+    // and both leave the variables sharing one `lineSpan`, which is what the
+    // deletion and reordering passes work in. Normalising only the first form
+    // left the second one live: deleting `a` from the table took `b` with it.
+    const byLine = new Map<number, ParsedDeclaration[]>()
     for (const declaration of block.declarations) {
-      const key = `${declaration.span.start}:${declaration.span.end}`
-      byDeclaration.set(key, [...(byDeclaration.get(key) ?? []), declaration])
+      byLine.set(declaration.lineSpan.start, [...(byLine.get(declaration.lineSpan.start) ?? []), declaration])
     }
 
-    for (const group of byDeclaration.values()) {
+    for (const group of byLine.values()) {
       if (group.length < 2) continue
       const [first] = group
       const indent = source.slice(source.lastIndexOf('\n', first.span.start - 1) + 1, first.span.start)
-      const trailing = first.fields.documentation
-        ? source.slice(
-            first.fields.documentation.start - 2,
-            first.fields.documentationKind === 'line'
-              ? first.fields.documentation.end
-              : first.fields.documentation.end + 2,
-          )
-        : ''
 
       const lines = group.map((declaration) => {
         const { variable } = declaration
+        // The comment belongs to the declaration that carries it. The line
+        // reader hands the same trailing comment to every declaration on the
+        // line, so each rewritten line keeps the words the user wrote rather
+        // than losing them to whichever declaration happened to come last.
+        const documentation = declaration.fields.documentation
+        const trailing = documentation
+          ? source.slice(
+              documentation.start - 2,
+              declaration.fields.documentationKind === 'line' ? documentation.end : documentation.end + 2,
+            )
+          : ''
+
         let text = `${indent}${variable.name} : ${source.slice(declaration.fields.type.start, declaration.fields.type.end).trim()}`
         if (variable.location) text += ` AT ${variable.location}`
         if (variable.initialValue) text += ` := ${variable.initialValue}`

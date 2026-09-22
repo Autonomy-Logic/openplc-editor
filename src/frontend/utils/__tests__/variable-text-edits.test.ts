@@ -172,6 +172,40 @@ describe('a declaration must never take its neighbour with it', () => {
   })
 })
 
+it('keeps the survivor when two separate declarations share a line', () => {
+  // `a : INT; b : INT;` is two declarations on one physical line, so both
+  // carried the same line span and deleting either blanked the line. The
+  // co-declared guard did not see it: the names are not co-declared, the
+  // LINE is crowded.
+  const text = 'VAR\n  a : INT; b : INT;\nEND_VAR'
+  expect(
+    apply(
+      text,
+      modelOf(text).filter((variable) => variable.name !== 'a'),
+    ),
+  ).toBe('VAR\n  b : INT;\nEND_VAR')
+})
+
+it('does not mangle a shared line when the order changes', () => {
+  // Order-dependent: `c, a, b` used to delete `c` and leave a stray
+  // `; b : INT;` behind, while other orders came out clean.
+  const text = 'VAR\n  a : INT; b : INT;\n  c : INT;\nEND_VAR'
+  const model = modelOf(text)
+  const pick = (names: string[]) => names.map((name) => model.find((variable) => variable.name === name)!)
+  for (const order of [
+    ['c', 'a', 'b'],
+    ['b', 'c', 'a'],
+    ['c', 'b', 'a'],
+  ]) {
+    const out = apply(text, pick(order))
+    expect(
+      modelOf(out)
+        .map((variable) => variable.name)
+        .sort(),
+    ).toEqual(['a', 'b', 'c'])
+  }
+})
+
 describe('a class change is a move, not an edit', () => {
   it('moves the declaration into the block of its new class', () => {
     // Matched by name to its OLD declaration, the change was applied as a field
@@ -187,6 +221,19 @@ describe('a class change is a move, not an edit', () => {
 })
 
 describe('clearing a clause whose operand starts with its keyword', () => {
+  it('removes a lower-case AT clause too', () => {
+    // IEC keywords are case-insensitive and STruC++ accepts `at`. Searching for
+    // the literal `AT` found nothing, so only the operand went and the text was
+    // left as `x : BOOL at ;` — unparseable, in the artifact that gets saved.
+    const text = 'VAR\n  x : BOOL at Alias1;\nEND_VAR'
+    expect(
+      apply(
+        text,
+        modelOf(text).map((variable) => ({ ...variable, location: '' })),
+      ),
+    ).toBe('VAR\n  x : BOOL;\nEND_VAR')
+  })
+
   it('removes the whole AT clause when the alias begins with "AT"', () => {
     // `lastIndexOf('AT', operand.start)` matched the alias's own first two
     // letters, so only the operand went and `x : BOOL AT;` was written to disk.
@@ -305,6 +352,14 @@ describe('round-trip stability', () => {
 })
 
 describe('resolveLocationsInText, for the LSP stub', () => {
+  it('drops the clause once for a declaration naming several variables', () => {
+    // One `ParsedDeclaration` per name, all sharing the location span, so the
+    // same removal was queued twice and spliced against pre-edit offsets — it
+    // took the semicolon and END_VAR with it.
+    const text = 'VAR\n  a, b : BOOL AT Ghost;\nEND_VAR'
+    expect(resolveLocationsInText(text, () => '', context)).toBe('VAR\n  a, b : BOOL;\nEND_VAR')
+  })
+
   const aliases = new Map([
     ['Motor_Start', '%IX0.0'],
     ['relay_1', '%QX0.1'],

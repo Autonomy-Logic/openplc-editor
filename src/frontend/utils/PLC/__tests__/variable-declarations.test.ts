@@ -366,7 +366,47 @@ describe('a whole POU is recognised behind its documentation', () => {
   })
 })
 
+describe('a whole POU of any kind', () => {
+  // `isWholePou` accepts all three keywords, but only a PROGRAM landed in the
+  // AST branch that was read: a whole FUNCTION_BLOCK came back with no errors
+  // and no variables, a POU that silently declared nothing.
+  it('reads the declarations of a FUNCTION_BLOCK', () => {
+    const source = 'FUNCTION_BLOCK FB\nVAR\n  a : INT;\nEND_VAR\n;\nEND_FUNCTION_BLOCK'
+    const result = parseVariableDeclarations(source, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+
+  it('reads the declarations of a FUNCTION', () => {
+    const source = 'FUNCTION F : INT\nVAR\n  a : INT;\nEND_VAR\n;\nEND_FUNCTION'
+    const result = parseVariableDeclarations(source, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+})
+
 describe('normalizeOneVariablePerLine', () => {
+  it('splits two declarations that share a line', () => {
+    // The other way a line gets crowded. Normalising only `a, b : INT;` left
+    // this form sharing one line span, and the deletion pass works in lines —
+    // so deleting `a` from the table took `b` with it.
+    expect(normalizeOneVariablePerLine('VAR\n  a : INT; b : INT;\nEND_VAR', context)).toBe(
+      'VAR\n  a : INT;\n  b : INT;\nEND_VAR',
+    )
+  })
+
+  it('splits a line that crowds both ways at once', () => {
+    expect(normalizeOneVariablePerLine('VAR\n  a, b : INT; c, d : INT;\nEND_VAR', context)).toBe(
+      'VAR\n  a : INT;\n  b : INT;\n  c : INT;\n  d : INT;\nEND_VAR',
+    )
+  })
+
+  it('gives each declaration on a shared line its own comment', () => {
+    expect(normalizeOneVariablePerLine('VAR\n  a : INT; b : INT; (* about b *)\nEND_VAR', context)).toContain(
+      'b : INT; (* about b *)',
+    )
+  })
+
   // The Documentation column is the comment at the end of a line, so two
   // variables sharing a line have one comment between them. The short form is
   // accepted and rewritten rather than refused.
