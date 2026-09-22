@@ -47,6 +47,12 @@ npx jest --config jest.config.json --collectCoverage --ci   # ci-unit-tests
 ```
 
 `prettier --check` only reports; fix with `npx prettier --write <files>`.
+
+`npm run setup:strucpp` installs the **pinned** STruC++ from its GitHub release
+and overwrites whatever is in `node_modules/strucpp`. So a locally patched build
+(testing an unreleased parser change) is wiped by the very command CI runs, and
+the suite must be run again afterwards: a test config that points at a file only
+the patched install has passes locally and fails all 425 suites in CI.
 The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared`)
 is byte-identical with **openplc-web** — mirror any change and run the check suite
 in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).

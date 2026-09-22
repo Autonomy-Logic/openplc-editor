@@ -304,6 +304,54 @@ interface StrucppVarBlock {
   declarations: StrucppDeclaration[]
 }
 
+/**
+ * The span of each declared name, in declaration order.
+ *
+ * Read from the parser when it reports them and derived from the source when it
+ * does not. A build of STruC++ without `nameSpans` used to fall back to a
+ * zero-width span at the start of the declaration, and an edit against a
+ * zero-width span INSERTS: renaming `a` wrote `aa : INT;`. Corrupting a name
+ * because the parser is a version older than expected is precisely the class of
+ * failure this whole change removes, so the spans are recovered instead.
+ *
+ * The names are the comma-separated identifiers between the start of the
+ * declaration and its `:`, which is all a declaration head can hold.
+ */
+function nameSpansIn(source: string, declSpan: Span, count: number): Span[] {
+  const colon = source.indexOf(':', declSpan.start)
+  const headEnd = colon === -1 || colon > declSpan.end ? declSpan.end : colon
+  const head = source.slice(declSpan.start, headEnd)
+  const spans: Span[] = []
+  const identifier = /[A-Za-z_]\w*/g
+  for (let match = identifier.exec(head); match !== null; match = identifier.exec(head)) {
+    spans.push({ start: declSpan.start + match.index, end: declSpan.start + match.index + match[0].length })
+  }
+  return spans.length === count ? spans : []
+}
+
+/**
+ * The span of the `AT` operand, derived from the source when the parser does not
+ * report one.
+ *
+ * Without it a located declaration looks unlocated, and the patcher then ADDS
+ * the clause the text already has — `a : INT AT %QX0.0 AT %QX0.0;`. Same
+ * reasoning as the names above.
+ */
+function addressSpanIn(source: string, declSpan: Span, typeEnd: number): Span | undefined {
+  const at = /\bAT\s+/iy
+  for (let index = typeEnd; index < declSpan.end; index++) {
+    at.lastIndex = index
+    const match = at.exec(source.slice(0, declSpan.end))
+    if (!match) continue
+    const start = index + match[0].length
+    const operand = /[%A-Za-z_][\w.%]*/y
+    operand.lastIndex = start
+    const found = operand.exec(source.slice(0, declSpan.end))
+    return found ? { start, end: start + found[0].length } : undefined
+  }
+  return undefined
+}
+
 // ---------------------------------------------------------------------------
 // Reading the parser's result
 // ---------------------------------------------------------------------------
@@ -503,7 +551,15 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
       const typeSpan = toSpan(starts, declaration.type.sourceSpan, wrapperLines)
       const typeText = source.slice(typeSpan.start, typeSpan.end).trim()
 
-      const locationSpan = declaration.addressSpan ? toSpan(starts, declaration.addressSpan, wrapperLines) : undefined
+      // `addressSpan` and `nameSpans` came with the STruC++ build that reads an
+      // alias as the `AT` operand. Both are derived from the source when a build
+      // without them is installed, because the alternative is not a missing
+      // feature but a corrupted declaration — see the two helpers above.
+      const locationSpan = declaration.addressSpan
+        ? toSpan(starts, declaration.addressSpan, wrapperLines)
+        : typeof declaration.address === 'string' && declaration.address !== ''
+          ? addressSpanIn(source, declSpan, typeSpan.end)
+          : undefined
       const locationText = locationSpan ? source.slice(locationSpan.start, locationSpan.end) : ''
 
       const initialSpan = declaration.initialValue
@@ -523,10 +579,16 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
       // One variable per declared name. `a, b : INT;` is two variables that
       // happen to share a line; the model has no way to say otherwise, and the
       // text is normalised to match.
+      const derivedNameSpans =
+        declaration.nameSpans?.length === declaration.names.length
+          ? undefined
+          : nameSpansIn(source, declSpan, declaration.names.length)
+
       declaration.names.forEach((_folded, index) => {
-        const nameSpan = declaration.nameSpans?.[index]
-          ? toSpan(starts, declaration.nameSpans[index], wrapperLines)
-          : { start: declSpan.start, end: declSpan.start }
+        const reported = declaration.nameSpans?.[index]
+        const nameSpan = reported
+          ? toSpan(starts, reported, wrapperLines)
+          : (derivedNameSpans?.[index] ?? { start: declSpan.start, end: declSpan.start })
         const name = source.slice(nameSpan.start, nameSpan.end)
 
         const variable: PLCVariable = {
