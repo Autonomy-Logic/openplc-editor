@@ -627,8 +627,15 @@ const reconcileVariablesText = (
 
   const pou = state.project.data.pous.find((p) => p.name === pouName)
   const currentVariables = pou?.interface?.variables ?? []
-  // Buffer is a verbatim serialisation of the current variables —
-  // user hasn't typed since the last sync, nothing to reconcile.
+  // Nothing typed since the last sync, so there is nothing to fold in.
+  //
+  // Against the POU's own text first, because that is what the buffer holds now
+  // (DOPE-650): it used to be a re-canonicalisation of the model, and comparing
+  // only against that left this early-out unreachable the moment the buffer
+  // started carrying the user's formatting — so every table edit paid for a
+  // parse it did not need. The serialisation is still compared for a POU that
+  // has no text yet.
+  if (code === pou?.variablesText) return ok()
   if (code === generateIecVariablesToString(currentVariables)) return ok()
 
   try {

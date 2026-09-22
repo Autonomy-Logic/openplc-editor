@@ -220,6 +220,28 @@ describe('a class change is a move, not an edit', () => {
   })
 })
 
+describe('a rename in one block does not spoil a rename in another', () => {
+  it('keeps both lines in place, alignment and comment syntax included', () => {
+    // The positional pass walked one cursor across every block and consumed the
+    // candidates it rejected on the block check, so renaming a local and an
+    // input in the same commit left the second unmatched — deleted and
+    // re-appended from the model, which loses the user's alignment and rewrites
+    // a `//` comment as a block one.
+    const text = 'VAR_INPUT\n  i      : INT;   // hand aligned\n  keep : BOOL;\nEND_VAR\nVAR\n  l : INT;\nEND_VAR'
+    const model = modelOf(text)
+    const named = (name: string) => model.find((variable) => variable.name === name)!
+    const out = apply(text, [
+      { ...named('l'), name: 'renamedLocal' },
+      { ...named('i'), name: 'renamedInput' },
+      named('keep'),
+    ])
+
+    expect(out).toBe(
+      'VAR_INPUT\n  renamedInput      : INT;   // hand aligned\n  keep : BOOL;\nEND_VAR\nVAR\n  renamedLocal : INT;\nEND_VAR',
+    )
+  })
+})
+
 describe('clearing a clause whose operand starts with its keyword', () => {
   it('removes a lower-case AT clause too', () => {
     // IEC keywords are case-insensitive and STruC++ accepts `at`. Searching for

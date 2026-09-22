@@ -133,19 +133,23 @@ function matchDeclarations(
   })
 
   // Positional pass, pairing the leftovers in order: this is the rename case.
+  //
+  // Only within the variable's own block: moving a variable between classes is a
+  // move, not an edit, and splicing it in place would leave it under the wrong
+  // VAR keyword. That check used to sit inside a walk over one shared cursor,
+  // which CONSUMED a candidate it rejected — so a rename in one block could eat
+  // the declaration belonging to a rename in another, and the second variable
+  // fell through to delete-and-append. The line came back re-rendered from the
+  // model: hand alignment gone, and a `//` comment rewritten as `(* … *)`.
+  // Taking the first unclaimed candidate from the same block cannot do that, and
+  // leftovers are in document order, so it pairs positionally as before.
   const leftoverDeclarations = declarations.filter((d) => !taken.has(d))
-  let cursor = 0
   nextVariables.forEach((variable, index) => {
     if (matched.has(index)) return
-    while (cursor < leftoverDeclarations.length) {
-      const candidate = leftoverDeclarations[cursor++]
-      // Only pair within the same block: moving a variable between classes is
-      // a move, not an edit, and splicing it in place would leave it under the
-      // wrong VAR keyword.
-      if (blockKey(candidate.variable) !== blockKey(variable)) continue
-      claim(index, candidate)
-      return
-    }
+    claim(
+      index,
+      leftoverDeclarations.find((d) => !taken.has(d) && blockKey(d.variable) === blockKey(variable)),
+    )
   })
 
   return matched
