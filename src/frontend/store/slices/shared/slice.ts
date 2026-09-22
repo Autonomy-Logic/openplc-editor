@@ -1529,11 +1529,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       }
 
-      // For POUs with unparseable variables (variablesText present, variables empty),
-      // pre-create editor models in code mode so the raw text is displayed when opened.
-      pous.forEach((pou) => {
-        const pouWithText = pou as typeof pou & { variablesText?: string; variablesTextUnparsed?: boolean }
+      // A POU whose declarations could not be read opens in the code view, on
+      // the user's own bytes, so they can repair it.
+      //
+      // Read from the STORE, not from the response payload: the reclassify pass
+      // above is what discovers a set the validator refuses — a file holding two
+      // variables of the same name parses fine, so the loader has no way to flag
+      // it — and it marks the POU in the store. Iterating the payload here meant
+      // that verdict never reached the editor model, and the POU opened on an
+      // empty table with its declarations nowhere in sight.
+      pous.forEach((payloadPou) => {
+        const pouWithText =
+          getState().project.data.pous.find((candidate) => candidate.name === payloadPou.name) ?? payloadPou
         if (pouWithText.variablesTextUnparsed === true && pouWithText.variablesText) {
+          const pou = pouWithText
           const language = pou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
           const model = createEditorObjectForPou(pou.name, pou.pouType, language)
           // Switch to code mode with the raw variable text

@@ -12,6 +12,8 @@
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import { openPLCStoreBase } from '../index'
 
+const editorFor = (name: string) => openPLCStoreBase.getState().editorActions.getEditorFromEditors(name)
+
 const PROJECT_JSON = JSON.stringify({
   meta: { name: 'P', type: 'plc-project' },
   data: { dataTypes: [], pous: [], configuration: { resource: { tasks: [], instances: [], globalVariables: [] } } },
@@ -55,6 +57,21 @@ describe('opening a project', () => {
 
     expect(pou.variablesText).toBe('VAR\n  a : INT; (* both *)\n  b : INT; (* both *)\nEND_VAR')
     expect(pou.interface?.variables.map((variable) => variable.name)).toEqual(['a', 'b'])
+  })
+
+  it("opens a POU the validator refused in the code view, on the user's own bytes", () => {
+    // The refusal is discovered during the reclassify pass — a file with two
+    // variables of the same name parses fine, so the loader cannot flag it —
+    // and the block that pre-creates code-view models used to read the loader's
+    // payload rather than the store, so the verdict never reached the editor
+    // and the POU opened on an empty table.
+    openWith('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
+
+    const editor = editorFor('main')
+    expect(editor && 'variable' in editor && editor.variable).toEqual({
+      display: 'code',
+      code: 'VAR\n  a : INT;\n  a : DINT;\nEND_VAR',
+    })
   })
 
   it('keeps an invalid variable set as text and marks it for the code view', () => {
