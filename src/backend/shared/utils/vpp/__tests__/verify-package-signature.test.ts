@@ -246,7 +246,7 @@ describe('verifyPackageSignature', () => {
     buildPackage(dir, { files: { 'hal/arduino/hal.cpp': DEFAULT_FILES['hal/arduino/hal.cpp'] } })
     const result = verifyPackageSignature(dir, TRUSTED)
     expect(result.valid).toBe(false)
-    expect(result.error).toMatch(/manifest\.json is missing or unreadable/i)
+    expect(result.error).toMatch(/no readable manifest\.json/i)
   })
 })
 
