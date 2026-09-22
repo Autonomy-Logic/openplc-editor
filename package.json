@@ -20,6 +20,7 @@
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
+    "compile:matrix": "ts-node scripts/compile-matrix.ts",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "setup:strucpp": "ts-node scripts/download-binaries.ts --strucpp-only",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
