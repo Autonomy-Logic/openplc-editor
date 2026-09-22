@@ -23,8 +23,22 @@ const ORCHESTRATOR: OrchestratorInfo = {
   agentId: 'agent-1',
   description: null,
   devices: [
-    { id: 'dev-holder', name: 'Line A', status: 'online', active: true, backplaneAccess: true },
-    { id: 'dev-plain', name: 'Line B', status: 'online', active: true, backplaneAccess: false },
+    {
+      id: 'dev-holder',
+      name: 'Line A',
+      status: 'online',
+      active: true,
+      backplaneAccess: true,
+      vpp: { packageId: 'com.vendor.a', version: '1.0.0', contentHash: 'sha256:aaa' },
+    },
+    {
+      id: 'dev-plain',
+      name: 'Line B',
+      status: 'online',
+      active: true,
+      backplaneAccess: false,
+      vpp: { packageId: 'com.vendor.b', version: '2.0.0', contentHash: 'sha256:bbb' },
+    },
     { id: 'dev-legacy', name: 'Line C', status: 'online', active: true },
     { id: 'dev-down', name: 'Line D', status: 'offline', active: false },
   ],
@@ -126,5 +140,25 @@ describe('OrchestratorsList', () => {
     renderPicker()
     await selectDevice('Line D')
     expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull()
+  })
+
+  it('carries backplaneAccess and vpp of the confirmed device immediately, not just on next refresh', async () => {
+    renderPicker()
+    await selectDevice('Line A')
+    await connect()
+    act(() => openPLCStoreBase.getState().deviceActions.setRuntimeConnectionStatus('connected'))
+
+    // Switching device while connected to a different one opens the confirm modal.
+    fireEvent.click(await screen.findByText('Line B'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Disconnect and Switch' }))
+
+    await waitFor(() =>
+      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice?.deviceId).toBe('dev-plain'),
+    )
+    expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).toMatchObject({
+      deviceId: 'dev-plain',
+      backplaneAccess: false,
+      vpp: { packageId: 'com.vendor.b', version: '2.0.0', contentHash: 'sha256:bbb' },
+    })
   })
 })

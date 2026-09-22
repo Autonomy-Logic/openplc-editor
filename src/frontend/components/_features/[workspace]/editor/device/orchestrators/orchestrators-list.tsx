@@ -411,13 +411,13 @@ const OrchestratorsList = () => {
     // still null (handleDisconnect had just cleared it). The debugger reads the
     // store, so it reported "No Device Selected", and on a simulator-named board
     // that turned into an offer to start the simulator instead.
+    //
+    // The FULL object, not a hand-picked subset: a partial copy used to drop
+    // `backplaneAccess` and `vpp`, so until the next manual refresh the backplane
+    // build gate read an explicit `backplaneAccess: false` as "not reported"
+    // rather than "confirmed false" and let a build through it should have blocked.
     setSelectedDevice(pendingDeviceSwitch)
-    deviceActions.setSelectedDevice({
-      orchestratorId: pendingDeviceSwitch.orchestratorId,
-      orchestratorAgentId: pendingDeviceSwitch.orchestratorAgentId,
-      deviceId: pendingDeviceSwitch.deviceId,
-      deviceName: pendingDeviceSwitch.deviceName,
-    })
+    deviceActions.setSelectedDevice(pendingDeviceSwitch)
     setPendingDeviceSwitch(null)
     setConnectionError(null)
   }, [pendingDeviceSwitch, handleDisconnect, deviceActions])
