@@ -103,6 +103,16 @@ function readU32BE(buf: Uint8Array, offset: number): number {
 // Status code helper
 // ---------------------------------------------------------------------------
 
+const MODBUS_EXCEPTION_SLAVE_FAILURE = 0x04
+
+// Firmware that runs out of frame answers GET_LIST with this exception; callers treat it as out of memory.
+export function isGetListOverflowException(functionCode: number, exceptionCode: number): boolean {
+  return (
+    functionCode === (ModbusFunctionCode.DEBUG_GET_LIST as number) + 0x80 &&
+    exceptionCode === MODBUS_EXCEPTION_SLAVE_FAILURE
+  )
+}
+
 function statusError(code: number): string {
   if (code === ModbusDebugResponse.ERROR_OUT_OF_BOUNDS) return 'ERROR_OUT_OF_BOUNDS'
   if (code === ModbusDebugResponse.ERROR_OUT_OF_MEMORY) return 'ERROR_OUT_OF_MEMORY'
@@ -275,6 +285,10 @@ export function parseGetListResponse(data: Uint8Array): DebugTransportResult {
 
   const fc = readU8(data, 0)
   const status = readU8(data, 1)
+
+  if (isGetListOverflowException(fc, status)) {
+    return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+  }
 
   if (fc !== ModbusFunctionCode.DEBUG_GET_LIST) {
     return { success: false, error: 'Function code mismatch' }
