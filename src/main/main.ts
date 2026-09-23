@@ -6,6 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
@@ -18,7 +19,10 @@ import { ensureCliShimInstalled, shimStatePath } from '../backend/editor/cli-shi
 import { CompilerModule } from '../backend/editor/compiler'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
+import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
+import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-window'
 import { HardwareModule } from '../backend/editor/hardware'
+import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
@@ -266,7 +270,36 @@ const createMainWindow = async () => {
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    void shell.openExternal(edata.url)
+    // Provider sign-in must NOT go to the system browser: its cookie jar is unreadable from here.
+    const provider = edgeOAuthProviderFromUrl(edata.url)
+
+    if (provider) {
+      void runOAuthFlow(provider)
+        .then((outcome) => {
+          if (outcome.status !== 'tokens') {
+            // Cancelled, declined or timed out: the renderer re-checks on focus.
+            return undefined
+          }
+
+          return adoptProviderTokens({
+            accessToken: outcome.accessToken,
+            refreshToken: outcome.refreshToken,
+          })
+        })
+        .catch((error: unknown) => {
+          log.error(`[edge-account] provider sign-in failed: ${getErrorMessage(error)}`)
+        })
+
+      return { action: 'deny' }
+    }
+
+    // Only web links leave the app: a `file:` or custom-scheme URL would run whatever the OS registers for it.
+    if (isWebUrl(edata.url)) {
+      void shell.openExternal(edata.url)
+    } else {
+      log.warn(`[main] refused to open external URL with scheme ${edata.url.split(':')[0] || '(none)'}`)
+    }
+
     return { action: 'deny' }
   })
 
@@ -408,6 +441,12 @@ app
   .whenReady()
   .then(() => {
     void createMainWindow()
+    // Last session's cloud builds. The cloud is the source of truth for those
+    // projects, so nothing here survives a restart; best-effort, since a scratch
+    // directory that will not delete is no reason to refuse to start.
+    void clearCloudBuildRoot().catch((error: unknown) =>
+      logger.warn('Could not clear the cloud build scratch directory: ' + getErrorMessage(error)),
+    )
     // Put `openplc-cli` on PATH, once. After the window, so a slow filesystem
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.

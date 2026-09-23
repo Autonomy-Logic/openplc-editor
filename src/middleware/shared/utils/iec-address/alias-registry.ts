@@ -13,6 +13,7 @@
  * is recorded in `duplicateAliases`.
  */
 
+import { isReadableAtOperand } from '../../../../frontend/utils/PLC/variable-declarations'
 import type { AddressPool, SourceRef } from './address-pool'
 
 export interface AliasEntry {
@@ -76,7 +77,51 @@ export function isAliasNameAvailable(registry: AliasRegistry, alias: string, ign
  *  callers can render a precise error message (e.g.  "alias 'relay_1'
  *  is already used by slot 2 channel O3").
  */
-export type AliasEditValidation = { ok: true } | { ok: false; conflict: AliasEntry }
+export type AliasEditValidation = { ok: true } | { ok: false; conflict: AliasEntry } | { ok: false; reason: string }
+
+/** True when the rejection is a name collision rather than a malformed name. */
+export function isAliasConflict(validation: AliasEditValidation): validation is { ok: false; conflict: AliasEntry } {
+  return validation.ok === false && 'conflict' in validation
+}
+
+/**
+ * Why an alias cannot be written after `AT`, for the message. The verdict
+ * itself comes from the parser; this only says it in English.
+ */
+export function aliasRejectionReason(alias: string): string {
+  if (alias.trim() === '') return 'is empty'
+  if (alias.trim() !== alias) return 'has leading or trailing whitespace'
+  if (alias.startsWith('%')) return 'is an address, not a name'
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(alias)) return 'contains illegal characters'
+  return 'is a reserved word'
+}
+
+/**
+ * An alias has to be a plain IEC identifier — one word, no spaces, no
+ * punctuation, not a word the parser reserves.
+ *
+ * It is not a label. A variable bound to an alias is written to disk as
+ * `AT <alias>`, and that text is parsed by STruC++, which reads the operand as
+ * an identifier. `AT Motor Start` cannot be read back as one thing, and
+ * `AT relay-1` is an expression. Before this rule the editor accepted both and
+ * then could not re-read its own file (DOPE-650).
+ *
+ * Which words are reserved is asked of the parser, not of a list kept here. The
+ * list this used to consult — `isLegalIdentifier` — also holds every standard
+ * function name, so `Max`, `Step`, `TP`, `Left`, `Time` and `Limit` were
+ * refused although STruC++ reads every one of them as an `AT` operand, and an
+ * existing pin called any of them was renamed on open for no reason at all.
+ *
+ * A `%` location is a legal operand but not an alias: the field holds one or
+ * the other, and a producer names channels.
+ */
+export function validateAliasName(alias: string): { ok: true } | { ok: false; reason: string } {
+  if (!alias.startsWith('%') && isReadableAtOperand(alias)) return { ok: true }
+  return {
+    ok: false,
+    reason: `"${alias}" ${aliasRejectionReason(alias)}. An I/O alias must be a single word made of letters, digits and underscores, starting with a letter or underscore — it is used as a name in the generated code.`,
+  }
+}
 
 /**
  * Human-readable description of a `SourceRef`, for use inside error
@@ -159,10 +204,37 @@ export function validateAliasEdit(
   ignoring: SourceRef,
 ): AliasEditValidation {
   if (!alias || alias.trim().length === 0) return { ok: true }
+
+  // Shape first: a malformed name is wrong whether or not it collides, and
+  // "already in use" would be a confusing thing to say about `Motor Start`.
+  const named = validateAliasName(alias)
+  if (!named.ok) return named
+
   const entry = registry.byAlias.get(alias)
   if (!entry) return { ok: true }
   if (entry.source.kind === ignoring.kind && entry.source.ref === ignoring.ref) {
     return { ok: true }
   }
   return { ok: false, conflict: entry }
+}
+
+/**
+ * Title and description for a rejected alias edit.
+ *
+ * Two different refusals reach the same place: a name that is not a legal IEC
+ * identifier, and a legal name already taken by another channel. Saying "alias
+ * already in use" about `Motor Start` would send the user looking for the
+ * channel that has it.
+ */
+export function describeAliasRejection(
+  validation: Exclude<AliasEditValidation, { ok: true }>,
+  alias: string,
+): { title: string; description: string } {
+  if (isAliasConflict(validation)) {
+    return {
+      title: 'Alias already in use',
+      description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
+    }
+  }
+  return { title: 'Alias name is invalid', description: validation.reason }
 }

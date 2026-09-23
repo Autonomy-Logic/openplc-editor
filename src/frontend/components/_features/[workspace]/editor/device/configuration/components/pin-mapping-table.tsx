@@ -5,7 +5,7 @@ import type { DevicePin } from '@root/middleware/shared/ports/types'
 import {
   buildAddressPool,
   buildAliasRegistry,
-  describeSource,
+  describeAliasRejection,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -77,12 +77,9 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
       const registry = buildAliasRegistry(pool)
       const validation = validateAliasEdit(registry, value, sourceRef)
       if (!validation.ok) {
-        toast({
-          title: 'Alias already in use',
-          description: `"${value}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
-          variant: 'fail',
-        })
-        return { ok: false, title: 'Alias already in use', message: 'Pin alias collides with another producer.' }
+        const rejection = describeAliasRejection(validation, value)
+        toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
+        return { ok: false, title: rejection.title, message: rejection.description }
       }
 
       // Cascade the rename onto bound variables: any variable whose

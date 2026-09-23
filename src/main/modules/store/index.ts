@@ -51,6 +51,16 @@ export const store = new Store<TStoreType>({
         },
       },
     },
+    // Deliberately absent from `defaults`: no key at all is the signed-out state.
+    edge_session: {
+      type: 'object',
+      properties: {
+        refreshToken: {
+          type: 'string',
+        },
+      },
+      required: ['refreshToken'],
+    },
   },
   defaults: {
     last_projects: [],

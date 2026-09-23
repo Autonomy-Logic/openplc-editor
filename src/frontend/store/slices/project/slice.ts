@@ -5,6 +5,7 @@ import { StateCreator } from 'zustand'
 import type {
   ModbusIOPoint,
   OpcUaServerConfig,
+  PLCPou,
   PLCServer,
   PLCVariable,
   S7CommLogging,
@@ -15,11 +16,12 @@ import {
   type AddressPool,
   buildAddressPool,
   buildAliasRegistry,
-  describeSource,
+  describeAliasRejection,
   nextFreeAddress,
   resolveProjectAliases,
   validateAliasEdit,
 } from '../../../../middleware/shared/utils/iec-address'
+import { planAliasNormalization } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import {
   buildAliasIndex,
   channelKey,
@@ -41,25 +43,23 @@ import {
   resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
-import {
-  duplicateVariableNameMessage,
-  findDuplicateVariableName,
-  parseIecStringToVariables,
-} from '../../../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { clampIOGroupLength } from '../../../utils/modbus/io-group'
+import { parseDataTypeFromText } from '../../../utils/PLC/data-type-declarations'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
-import { parseDataTypeFromText } from '../../../utils/PLC/data-type-text-parser'
 import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variable-list-references'
 import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-variable-list-serializer'
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
+import { parseVariableDeclarations } from '../../../utils/PLC/variable-declarations'
+import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
-import { createVariableValidation, updateVariableValidation } from './validation/variables'
+import { createVariableValidation, updateVariableValidation, validateVariableSet } from './validation/variables'
 
 const ok = (data?: unknown): ProjectResponse => ({ ok: true, data })
 const fail = (message: string, title?: string): ProjectResponse => ({ ok: false, message, title })
@@ -113,6 +113,7 @@ const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
       securityPolicy: 'None',
       securityMode: 'None',
       authMethods: ['Anonymous'],
+      anonymousRole: 'viewer',
     },
   ],
   security: {
@@ -626,8 +627,15 @@ const reconcileVariablesText = (
 
   const pou = state.project.data.pous.find((p) => p.name === pouName)
   const currentVariables = pou?.interface?.variables ?? []
-  // Buffer is a verbatim serialisation of the current variables —
-  // user hasn't typed since the last sync, nothing to reconcile.
+  // Nothing typed since the last sync, so there is nothing to fold in.
+  //
+  // Against the POU's own text first, because that is what the buffer holds now
+  // (DOPE-650): it used to be a re-canonicalisation of the model, and comparing
+  // only against that left this early-out unreachable the moment the buffer
+  // started carrying the user's formatting — so every table edit paid for a
+  // parse it did not need. The serialisation is still compared for a POU that
+  // has no text yet.
+  if (code === pou?.variablesText) return ok()
   if (code === generateIecVariablesToString(currentVariables)) return ok()
 
   try {
@@ -637,12 +645,44 @@ const reconcileVariablesText = (
       state.project.data.dataTypes,
       state.libraries,
     )
-    const duplicate = findDuplicateVariableName(parsed)
-    if (duplicate) return fail(duplicateVariableNameMessage(duplicate), 'Variable already exists')
+    // This is the IMPLICIT fold-in: it runs at the start of an ordinary table
+    // mutation, on whatever the code view happens to hold. It refuses only what
+    // would make the fold-in itself wrong — a duplicate name, which makes the
+    // match between text and model ambiguous and lets one declaration overwrite
+    // another.
+    //
+    // Everything else the validator checks is a property of the declaration the
+    // user is looking at, not of this edit. Refusing those here meant a legacy
+    // POU carrying one bad declaration — a located VAR_OUTPUT, say — blocked
+    // every other edit in the POU, citing a variable the user never touched and
+    // could not reach from the table. The full set is still gated where the user
+    // asked for that text to be taken: the code view's explicit commit, the
+    // project load, and the reload from disk.
+    const validation = validateVariableSet(parsed)
+    if (!validation.ok) {
+      const duplicate = validation.errors.find((error) => error.title === 'Variable already exists')
+      if (duplicate) return fail(duplicate.message, duplicate.title)
+    }
+    // `debug` and `id` are editor metadata: the declaration text has nowhere to
+    // put them, so a re-parse always comes back with `debug: false` and no id.
+    // Replacing wholesale therefore cleared every Debug tick in the POU — tick
+    // two variables, drop a block on the ladder canvas, and the debugger
+    // silently stopped showing them. Carry them across by name.
+    const carried = new Map(currentVariables.map((variable) => [variable.name.toLowerCase(), variable]))
+    const merged = parsed.map((variable) => {
+      const previous = carried.get(variable.name.toLowerCase())
+      if (!previous) return variable
+      return {
+        ...variable,
+        debug: previous.debug ?? false,
+        ...(previous.id !== undefined ? { id: previous.id } : {}),
+      }
+    })
+
     setState(
       produce((slice: ProjectSlice) => {
         const target = slice.project.data.pous.find((p) => p.name === pouName)
-        if (target?.interface) target.interface.variables = parsed
+        if (target?.interface) target.interface.variables = merged
       }),
     )
     return ok()
@@ -652,17 +692,111 @@ const reconcileVariablesText = (
   }
 }
 
+/**
+ * Fold a variables mutation back into the declaration text.
+ *
+ * The text is the source of truth (DOPE-650), so this PATCHES it rather than
+ * regenerating it. It used to call `generateIecVariablesToString` over the
+ * whole model and overwrite the buffer, which meant the first cell edit after
+ * the user typed a comment deleted that comment, along with their blank lines
+ * and alignment. `applyVariablesToText` splices only the fields that changed.
+ *
+ * It also no longer returns early when the editor is in table display. Under
+ * the old contract the text existed only while it failed to parse, so there
+ * was nothing to keep current outside code mode; now it is the artifact that
+ * gets written to disk, and a table edit that did not reach it would be lost
+ * on save.
+ */
+/**
+ * A POU's declaration text, the artifact the project file actually stores.
+ *
+ * Optional on the type because it is absent only for a POU built in memory
+ * this session and never yet serialised; everything loaded from disk has it,
+ * because the loader keeps the block it read (DOPE-650). `undefined` means
+ * "no text yet", which is the one case that has to be serialised from the
+ * model rather than patched.
+ */
+/**
+ * Rewrite `AT <oldAlias>` to `AT <newAlias>` in a POU's declaration text.
+ *
+ * The one repair that cannot go through the parser, because it exists for text
+ * the parser cannot read: an alias like `Motor Start` is two identifiers to
+ * STruC++, so the POU's declarations fail, its variable list comes back empty,
+ * and a cascade over the model has nothing to walk. The binding lives only in
+ * the text until the name is legal again.
+ *
+ * Deliberately narrow — it matches the `AT` keyword, the alias exactly as the
+ * producer spells it, and a clause terminator behind it, so it cannot touch a
+ * variable that merely shares the name or a mention inside a comment that is
+ * not a location.
+ */
+const renameAliasInText = (text: string, oldAlias: string, newAlias: string): string => {
+  const escaped = oldAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
+  // The KEYWORD is case-insensitive, the alias is not. The alias registry keys
+  // on the exact name, so a variable bound to `PUMP` does not resolve to a
+  // producer called `Pump` — and the model cascade above matches exactly for
+  // that reason. A case-insensitive rename here rebound occurrences the model
+  // had deliberately left alone, and the two then disagreed.
+  return text.replace(new RegExp(`(\\b[Aa][Tt]\\s+)${escaped}(?=\\s*(?:;|:=))`, 'g'), `$1${newAlias}`)
+}
+
+const readPouVariablesText = (pou: PLCPou): string | undefined => pou.variablesText
+
+const writePouVariablesText = (pouName: string, text: string, getState: ProjectGetState): void => {
+  getState().projectActions.setPouVariablesText(pouName, text)
+}
+
 const regenerateVariablesText = (pouName: string | undefined, getState: ProjectGetState): void => {
   /* istanbul ignore if -- same callsite guarantees as reconcileVariablesText */
   if (!pouName) return
   const state = getState()
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  if (!pou) return
+
+  const variables = pou.interface?.variables ?? []
+  const context = buildTypeContext(state.project.data.pous, state.project.data.dataTypes, state.libraries)
+
   const editorModel =
     state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
-  if (!editorModel || (editorModel.type !== 'plc-textual' && editorModel.type !== 'plc-graphical')) return
-  if (editorModel.variable.display !== 'code') return
-  const pou = state.project.data.pous.find((p) => p.name === pouName)
-  const newText = generateIecVariablesToString(pou?.interface?.variables ?? [])
-  state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: newText })
+  const variableView =
+    editorModel !== undefined && (editorModel.type === 'plc-textual' || editorModel.type === 'plc-graphical')
+      ? editorModel.variable
+      : undefined
+  const inCodeView = variableView?.display === 'code'
+  const buffer =
+    variableView?.display === 'code' && typeof variableView.code === 'string' ? variableView.code : undefined
+
+  // Patch whichever text is the most current statement of what the user wrote.
+  //
+  // The open code-view buffer when there is one, because it is what the user is
+  // looking at and it is ahead of the POU in exactly the window that matters:
+  // `commitCode` calls `setPouVariables` BEFORE `setPouVariablesText`, so during
+  // a commit the POU still holds the pre-edit text. Reading the POU first meant
+  // the comment the user had just typed was patched out and then pushed back
+  // over the buffer below — the very destruction the old comment here claimed
+  // this line prevented, which `?? buffer` never actually did (the POU's text is
+  // `undefined` only for a POU never yet serialised).
+  //
+  // A buffer mid-keystroke may not parse. `applyVariablesToText` falls back to a
+  // canonical re-serialisation when it cannot scan, which would silently discard
+  // the user's formatting, so an unparseable buffer is skipped and the POU's own
+  // text is patched instead.
+  const stored = readPouVariablesText(pou)
+  const usableBuffer =
+    buffer !== undefined && parseVariableDeclarations(buffer, context).errors.length === 0 ? buffer : undefined
+  const current = usableBuffer ?? stored
+  const nextText =
+    current === undefined ? generateIecVariablesToString(variables) : applyVariablesToText(current, variables, context)
+
+  if (nextText !== stored) writePouVariablesText(pouName, nextText, getState)
+
+  if (!inCodeView || nextText === buffer) return
+  // A buffer that does not parse is a declaration the user is still typing. The
+  // stored text above is kept current either way, but pushing it over the buffer
+  // would delete the half-written line they are looking at — which is what an
+  // undo, or an alias cascade on project open, used to do to them mid-keystroke.
+  if (buffer !== undefined && usableBuffer === undefined) return
+  state.editorActions.updateModelVariablesForName(pouName, { display: 'code', code: nextText })
 }
 
 // Same contract as the variables pair above, for the `.dt` code view.
@@ -974,10 +1108,27 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         }),
       )
     },
+    /**
+     * Record the POU's declaration text. This is the artifact the project file
+     * stores and the thing the variables table is a view of (DOPE-650), so it
+     * is written on every change rather than only while the text fails to
+     * parse, which was the old contract.
+     */
+    setPouVariablesText: (name, text, unparsed = false) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const pou = slice.project.data.pous.find((p) => p.name === name)
+          if (!pou) return
+          pou.variablesText = text
+          if (unparsed) pou.variablesTextUnparsed = true
+          else delete pou.variablesTextUnparsed
+        }),
+      )
+    },
     clearPouVariablesText: (name) => {
       setState(
         produce((slice: ProjectSlice) => {
-          const pou = slice.project.data.pous.find((p) => p.name === name) as { variablesText?: string } | undefined
+          const pou = slice.project.data.pous.find((p) => p.name === name)
           if (pou) delete pou.variablesText
         }),
       )
@@ -1039,6 +1190,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (pou.interface) pou.interface.variables = variables
         }),
       )
+      // Undo/redo and the external-file reload both land here. Without this the
+      // table reverted and the text did not, and since the text is what gets
+      // written to disk, the undo was silently discarded on the next save.
+      regenerateVariablesText(name, getState)
     },
 
     // -----------------------------------------------------------------------
@@ -1117,6 +1272,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (pou?.interface) pou.interface.variables = variables
         }),
       )
+      regenerateVariablesText(pouName, getState)
       return ok()
     },
     setGlobalVariables: ({ variables }) => {
@@ -1302,6 +1458,11 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (scope === 'global-variable-list') clearGlobalVariableListText(slice.project.data, associatedList)
         }),
       )
+      // Reordering is a change to the declarations like any other, and the text
+      // is what the file holds. Without this the table showed the new order, the
+      // text kept the old one, and the next toggle to code view and back —
+      // which re-parses the text — put the rows back where they were.
+      if (scope === 'local') regenerateVariablesText(associatedPou, getState)
     },
 
     /**
@@ -1333,8 +1494,19 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // cascade — the alias registry is case-sensitive, so `location` has to
       // match the producer alias exactly to resolve at compile time.
       if (trimmedOld === trimmedNew) return { renamed: 0 }
+      // An alias is an identifier; a `%` location is the other kind of value the
+      // same field carries. `validateAliasEdit` refuses a `%` alias at every
+      // producer editor, so a rename naming one is a caller mistake — and acting
+      // on it would rebind every variable manually located at that address.
+      if (trimmedOld.startsWith('%') || trimmedNew.startsWith('%')) return { renamed: 0 }
 
       let renamed = 0
+      // Which POUs actually moved. Regenerating every POU's text on every
+      // rename made a project-open repair O(aliases x POUs) parses — 20 legacy
+      // aliases over 50 POUs measured 1.2s of parsing on the UI thread before
+      // the workspace was interactive. A POU whose variables did not change has
+      // nothing to fold into its text.
+      const touched = new Set<string>()
       const cascade = (variable: PLCVariable): PLCVariable => {
         // `location` is the binding: a variable bound to this alias holds the
         // alias NAME in `location`. Manual literal locations start with `%`
@@ -1353,7 +1525,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             /* istanbul ignore if -- schema guarantees `interface.variables`; defensive */
             if (!pou.interface?.variables) continue
             for (let i = 0; i < pou.interface.variables.length; i++) {
-              pou.interface.variables[i] = cascade(pou.interface.variables[i])
+              const before = pou.interface.variables[i]
+              const after = cascade(before)
+              if (after !== before) touched.add(pou.name)
+              pou.interface.variables[i] = after
             }
           }
           const globals = slice.project.data.configurations.resource.globalVariables
@@ -1364,6 +1539,31 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           }
         }),
       )
+
+      // Every bound variable's `location` just changed, so every POU's text has
+      // to follow. Without this the producer said `NewAlias` and the text still
+      // said `AT OldAlias`; the text is what gets saved, so on reopen the
+      // variable was bound to an alias no producer declares — unlocated at
+      // compile time, which is the exact failure `renameAlias` exists to
+      // prevent.
+      for (const pouName of touched) {
+        regenerateVariablesText(pouName, getState)
+      }
+
+      // A POU the cascade could not reach, because its declarations do not
+      // parse and its variable list is therefore empty. That is precisely the
+      // project this repair exists for, so the rename has to reach the text
+      // itself — otherwise the producer takes its new name and the declaration
+      // is left bound to a name no producer holds.
+      for (const pou of getState().project.data.pous) {
+        if (touched.has(pou.name)) continue
+        const text = pou.variablesText
+        if (text === undefined) continue
+        const rewritten = renameAliasInText(text, trimmedOld, trimmedNew)
+        if (rewritten !== text) {
+          getState().projectActions.setPouVariablesText(pou.name, rewritten, pou.variablesTextUnparsed)
+        }
+      }
 
       return { renamed }
     },
@@ -1581,6 +1781,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     },
     reconcileDatatypeText: (name) => reconcileDatatypeText(name, getState, setState),
     regenerateDatatypeText: (name) => regenerateDatatypeText(name, getState),
+    regeneratePouVariablesText: (name) => regenerateVariablesText(name, getState),
     setUnparsedDataTypeFiles: (files) => {
       setState(
         produce((slice: ProjectSlice) => {
@@ -2113,6 +2314,100 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
+    /**
+     * Repair I/O aliases saved before they had to be identifiers (DOPE-650).
+     *
+     * `AT <alias>` is read back by STruC++ as an identifier, so `Motor Start`
+     * and `relay-1` are not names it can read. The editor used to accept them,
+     * so projects carrying them exist and must keep working: they are renamed
+     * on load, and every variable bound to the old name follows through
+     * `renameAlias`.
+     *
+     * Renamed rather than dropped. Dropping the alias would leave its bound
+     * variables pointing at a name no producer declares, which resolves to
+     * unlocated at compile time — a silent wrong answer, and the precise
+     * failure the alias machinery exists to prevent.
+     *
+     * Returns the repairs so the caller can report them; an untouched project
+     * returns an empty list and nothing is written.
+     */
+    normalizeProjectAliases: () => {
+      const live = getState()
+      const board = live.deviceDefinitions.configuration.deviceBoard
+      const pins = live.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
+      const vppEntries = readVppEntries(live)
+      const remoteDevices = live.project.data.remoteDevices ?? []
+
+      const aliases: string[] = [
+        ...pins.map((pin) => pin.alias ?? ''),
+        ...vppEntries.map((entry) => entry.alias ?? ''),
+        ...remoteDevices.flatMap((device) => [
+          ...(device.modbusTcpConfig?.ioGroups ?? []).flatMap((group) =>
+            (group.ioPoints ?? []).map((point) => point.alias ?? ''),
+          ),
+          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) =>
+            (slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
+          ),
+        ]),
+      ].filter((alias) => alias.trim() !== '')
+
+      const plan = planAliasNormalization(aliases)
+      if (plan.length === 0) return { repairs: [] }
+
+      // Two producers can carry the SAME illegal alias, and the plan gives each
+      // its own replacement (`Motor_Start`, `Motor_Start2`) precisely so they do
+      // not both land on one name. Keying a Map by `from` collapsed those two
+      // entries and rewrote both producers to the second replacement — leaving a
+      // duplicate alias behind and, because the cascade below still walked the
+      // full plan, moving every bound variable onto `Motor_Start`, a name no
+      // producer held any more. Replacements are handed out in plan order
+      // instead, which is the order the aliases were collected in just above.
+      const queued = new Map<string, string[]>()
+      for (const entry of plan) queued.set(entry.from, [...(queued.get(entry.from) ?? []), entry.to])
+      const remap = (alias: string | undefined): string | undefined => {
+        if (alias === undefined) return alias
+        const pending = queued.get(alias)
+        if (pending === undefined || pending.length === 0) return alias
+        return pending.shift()
+      }
+
+      setState(
+        produce((slice: ProjectSliceRoot) => {
+          for (const pin of slice.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []) {
+            pin.alias = remap(pin.alias)
+          }
+          for (const entry of readVppEntries(slice)) {
+            entry.alias = remap(entry.alias)
+          }
+          for (const device of slice.project.data.remoteDevices ?? []) {
+            for (const group of device.modbusTcpConfig?.ioGroups ?? []) {
+              for (const point of group.ioPoints ?? []) point.alias = remap(point.alias)
+            }
+            for (const slave of device.ethercatConfig?.devices ?? []) {
+              for (const channel of slave.channelMappings ?? []) channel.alias = remap(channel.alias)
+            }
+          }
+        }),
+      )
+
+      // Cascade after the producers are written, so a variable that already
+      // held the new name (impossible today, but cheap to be safe about) is
+      // not renamed twice.
+      //
+      // Only the FIRST replacement for a given name cascades. A variable bound
+      // to an alias two producers shared cannot say which one it meant — that
+      // ambiguity is why the registry resolves duplicates first-wins — so it
+      // follows the first, and cascading the second afterwards would move it
+      // again, onto a producer it was never bound to.
+      const cascaded = new Set<string>()
+      for (const entry of plan) {
+        if (cascaded.has(entry.from)) continue
+        cascaded.add(entry.from)
+        getState().projectActions.renameAlias(entry.from, entry.to)
+      }
+
+      return { repairs: plan }
+    },
     recalculateIecAddresses: () => {
       // Central, capability-scoped recalculation via the IEC address
       // registry. Build the registry from live producer state (VPP + Modbus
@@ -2255,11 +2550,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       const registry = buildAliasRegistry(buildModbusProducerPool(live))
       const validation = validateAliasEdit(registry, alias, sourceRef)
       if (!validation.ok) {
-        return {
-          ok: false,
-          title: 'Alias already in use',
-          message: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
-        }
+        const rejection = describeAliasRejection(validation, alias)
+        return { ok: false, title: rejection.title, message: rejection.description }
       }
 
       // Phase 2 — capture the old alias and cascade rename onto
