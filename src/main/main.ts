@@ -6,6 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+import { hasOpenEditSessions, releaseAllEditSessions } from '@root/backend/editor/edge-edit-sessions'
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
@@ -396,8 +397,24 @@ app.on('before-quit', () => {
  * Emitted when all windows have been closed and the application will quit. Calling event.preventDefault() will prevent the default
  * behavior, which is terminating the application.
  */
-app.on('will-quit', () => {
+// Edit sessions this editor holds on cloud projects are released before the process
+// ends, so the same project opened elsewhere is not reported as "open in another place"
+// until the server's TTL runs out. Held for at most EDIT_SESSION_RELEASE_BUDGET_MS:
+// a slow network must never keep the editor from quitting.
+const EDIT_SESSION_RELEASE_BUDGET_MS = 1500
+let editSessionsReleased = false
+
+app.on('will-quit', (event) => {
   logger.info('will-quit')
+  if (editSessionsReleased || !hasOpenEditSessions()) {
+    return
+  }
+  editSessionsReleased = true
+  event.preventDefault()
+  void Promise.race([
+    releaseAllEditSessions(),
+    new Promise<void>((resolve) => setTimeout(resolve, EDIT_SESSION_RELEASE_BUDGET_MS)),
+  ]).finally(() => app.quit())
 })
 
 /**

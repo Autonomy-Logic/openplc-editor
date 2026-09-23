@@ -22,6 +22,7 @@ import {
   streamAiCompletion,
   warmAi,
 } from '@root/backend/editor/edge-ai'
+import { closeEditSession, heartbeatEditSession, openEditSession } from '@root/backend/editor/edge-edit-sessions'
 import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
 import {
   listCloudProjectsInFolder,
@@ -80,6 +81,7 @@ import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
+import type { EditSessionBeat, EditSessionOpened } from '@root/middleware/shared/ports/edit-session-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -115,6 +117,7 @@ import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from '
 import { unlink, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { platform } from 'process'
+import { z } from 'zod'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/editor/hardware/debug-channel-factory'
@@ -154,6 +157,14 @@ import {
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
+
+// Only 'desktop': this process is the desktop editor, whatever the renderer claims.
+const EditSessionClientSchema = z.object({
+  kind: z.literal('desktop'),
+  label: z.string().trim().min(1).max(120),
+})
+
+const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 /** Why a channel could not be handed out. */
 interface ChannelUnavailable {
@@ -817,6 +828,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    this.registerHandle('edge-edit-session:open', this.handleEdgeEditSessionOpen)
+    this.registerHandle('edge-edit-session:heartbeat', this.handleEdgeEditSessionHeartbeat)
+    this.registerHandle('edge-edit-session:close', this.handleEdgeEditSessionClose)
     this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
     this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
     this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
@@ -1358,6 +1372,52 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     return saveCloudFile(filePath, content)
+  }
+
+  // Edit sessions (EDGE-652). Arguments cross IPC, so they are checked, not trusted:
+  // an id that is not a non-empty string would be interpolated into the URL.
+
+  handleEdgeEditSessionOpen = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    client: unknown,
+  ): Promise<EditSessionOpened> => {
+    const parsed = EditSessionClientSchema.safeParse(client)
+
+    if (!isNonEmptyString(projectId) || !parsed.success) {
+      return Promise.resolve({ status: 'unavailable' })
+    }
+
+    return openEditSession(projectId, parsed.data)
+  }
+
+  handleEdgeEditSessionHeartbeat = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    sessionId: unknown,
+  ): Promise<EditSessionBeat> => {
+    if (!isNonEmptyString(projectId) || !isNonEmptyString(sessionId)) {
+      return Promise.resolve({ status: 'unknown' })
+    }
+
+    return heartbeatEditSession(projectId, sessionId)
+  }
+
+  handleEdgeEditSessionClose = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    sessionId: unknown,
+    closedBySessionId: unknown,
+  ): Promise<boolean> => {
+    if (
+      !isNonEmptyString(projectId) ||
+      !isNonEmptyString(sessionId) ||
+      (closedBySessionId !== undefined && !isNonEmptyString(closedBySessionId))
+    ) {
+      return Promise.resolve(false)
+    }
+
+    return closeEditSession(projectId, sessionId, closedBySessionId)
   }
 
   // Validate before building a URL: a non-string id interpolates as `undefined`. And `undefined`

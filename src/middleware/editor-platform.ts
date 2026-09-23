@@ -9,6 +9,7 @@ import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { editorEdgeAccountPort } from './adapters/editor/edge-account-adapter'
+import { editorEditSessionPort } from './adapters/editor/edit-session-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
@@ -85,6 +86,7 @@ export const editorPorts: PlatformPorts = {
   stlibSource: createEditorStlibSourceAdapter(),
   // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
   edgeAccount: editorEdgeAccountPort,
+  editSession: editorEditSessionPort,
   // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
   ai: createEditorAIAdapter({
     // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.

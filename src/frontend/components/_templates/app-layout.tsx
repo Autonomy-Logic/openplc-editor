@@ -37,6 +37,7 @@ import { SaveChangesFileModal } from '../_organisms/modals/save-changes-file-mod
 import { SaveChangesModal } from '../_organisms/modals/save-changes-modal'
 import { asSaveChangesModalData } from '../_organisms/modals/save-changes-modal-data'
 import { ServerIpMismatchModal } from '../_organisms/modals/server-ip-mismatch-modal'
+import { ProjectEditSessionGuard } from '../_organisms/project-edit-session-guard'
 import { TitleBar } from '../_organisms/title-bar'
 import { AcceleratorHandler } from './accelerator-handler'
 
@@ -178,6 +179,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['page-setup']?.open === true && <PageSetupModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AboutModal />
+          <ProjectEditSessionGuard />
           <AcceleratorHandler />
         </main>
       </div>
