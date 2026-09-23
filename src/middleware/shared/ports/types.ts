@@ -311,6 +311,10 @@ export interface OpcUaSecurityProfile {
   securityPolicy: OpcUaSecurityPolicyType
   securityMode: OpcUaSecurityModeType
   authMethods: OpcUaAuthMethod[]
+  /** Role granted to Anonymous sessions on this profile (viewer/operator/
+   *  engineer). Defaults to viewer (least privilege) when unset. The runtime
+   *  and the baremetal firmware enforce the per-variable matrix against it. */
+  anonymousRole?: 'viewer' | 'operator' | 'engineer'
 }
 
 export interface OpcUaUser {

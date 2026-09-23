@@ -30,6 +30,52 @@ npm run test:e2e         # Playwright E2E tests
 npm run validate:arch    # Architecture layer dependency validation
 ```
 
+## Verify before pushing (CI parity)
+
+CI runs these commands directly — NOT `npm run lint` / `npm run format`, which
+AUTO-FIX and so pass locally while CI's `--check` still fails. Tests run under
+**Jest** (not Vitest), and both `tsc` and `jest` import the `strucpp` package,
+so it must be installed first or they fail with `TS2307: Cannot find module
+'strucpp'`. Run each exact command (from `.github/workflows/`) green before you push:
+
+```bash
+npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
+npx tsc --noEmit                                   # ci-build:       Build Check
+npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
+npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
+npx jest --config jest.config.json --collectCoverage --ci   # ci-unit-tests
+```
+
+`prettier --check` only reports; fix with `npx prettier --write <files>`.
+The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared`)
+is byte-identical with **openplc-web** — mirror any change and run the check suite
+in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).
+
+## Electron e2e (Playwright)
+
+No CI workflow runs Playwright, so these are local checks. `e2e/` drives the real
+Electron app through `_electron.launch`, and three things bite before any assertion:
+
+```bash
+npm run build                                          # main + renderer
+mkdir -p release/app/configs/dll
+cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
+npx playwright test e2e/<spec>.ts --workers=1
+```
+
+- **The preload copy is required.** `main.ts` picks the preload with `app.isPackaged`,
+  and a suite launching `release/app/dist/main/main.js` directly is NOT packaged, so it
+  looks under `release/app/configs/dll/` - a path `npm run build` never writes. Without
+  it the window renders blank and the only clue is `Cannot read properties of undefined
+  (reading 'onSimulatorStopped')` in the renderer console.
+- **Do not set `NODE_ENV=development`.** `resolveHtmlPath` would point the window at the
+  webpack dev server on `localhost:1212`, which is not running against a built app.
+- **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the
+  one whose URL contains `index.html`.
+
+Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
+body text from `.view-lines:visible`, never `.view-lines` alone.
+
 ## Architecture
 
 ### Layer Overview
