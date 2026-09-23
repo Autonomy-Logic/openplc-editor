@@ -258,6 +258,81 @@ describe('buildCBlocksFromPous', () => {
     expect(result).toEqual({ header: '// Empty file\n', code: null, libDeps: null })
   })
 
+  it('keeps the conditional an include sits under', () => {
+    const result = buildCBlocksFromPous([
+      {
+        name: 'neo',
+        variables: [],
+        code: '#ifdef ARDUINO_ARCH_ESP32\n#include <WiFi.h>\n#endif\nvoid setup() {}\n',
+      },
+    ])
+    // Lifting the include out of its guard is what would break an AVR build
+    // that compiles today.
+    expect(result.libDeps).toContain('#ifdef ARDUINO_ARCH_ESP32')
+    expect(result.libDeps).toContain('#include <WiFi.h>')
+    expect(result.libDeps).toContain('#endif')
+  })
+
+  it('leaves a conditional group empty when its body was all code', () => {
+    const result = buildCBlocksFromPous([
+      {
+        name: 'neo',
+        variables: [],
+        code: '#include <Adafruit_NeoPixel.h>\n#if DEBUG_TRACE\nSerial.println(counter);\n#endif\n',
+      },
+    ])
+    expect(result.libDeps).toContain('#if DEBUG_TRACE\n#endif')
+    expect(result.libDeps).not.toContain('Serial.println')
+  })
+
+  it('carries a define that forms an include name', () => {
+    const result = buildCBlocksFromPous([
+      { name: 'neo', variables: [], code: '#define LIB <Adafruit_NeoPixel.h>\n#include LIB\n' },
+    ])
+    expect(result.libDeps).toContain('#define LIB <Adafruit_NeoPixel.h>')
+    expect(result.libDeps).toContain('#include LIB')
+  })
+
+  it('drops #error, #warning and #pragma', () => {
+    const result = buildCBlocksFromPous([
+      {
+        name: 'neo',
+        variables: [],
+        code: '#include <Adafruit_NeoPixel.h>\n#error "needs wifi"\n#warning "slow"\n#pragma pack(1)\n',
+      },
+    ])
+    // The real translation unit is compiled too and raises them there; here they
+    // could fire on a condition only the pre-compile side can evaluate.
+    expect(result.libDeps).not.toContain('needs wifi')
+    expect(result.libDeps).not.toContain('slow')
+    expect(result.libDeps).not.toContain('pack(1)')
+  })
+
+  it('ignores an include inside a comment', () => {
+    const result = buildCBlocksFromPous([
+      {
+        name: 'neo',
+        variables: [],
+        code: '/*\n#include <Ghost.h>\n*/\n// #include <AlsoGhost.h>\n#include <Adafruit_NeoPixel.h>\n',
+      },
+    ])
+    expect(result.libDeps).not.toContain('Ghost.h')
+    expect(result.libDeps).not.toContain('AlsoGhost.h')
+    expect(result.libDeps).toContain('#include <Adafruit_NeoPixel.h>')
+  })
+
+  it('splices a line continuation before reading directives', () => {
+    const result = buildCBlocksFromPous([{ name: 'neo', variables: [], code: '#include \\\n<Adafruit_NeoPixel.h>\n' }])
+    expect(result.libDeps).toContain('Adafruit_NeoPixel.h')
+  })
+
+  it('returns null when directives exist but none of them is an angle include', () => {
+    const result = buildCBlocksFromPous([
+      { name: 'neo', variables: [], code: '#define X 1\n#ifdef X\n#include "local.h"\n#endif\n' },
+    ])
+    expect(result.libDeps).toBeNull()
+  })
+
   it('lifts the angle-bracket includes a block declares into libDeps', () => {
     const result = buildCBlocksFromPous([
       {
@@ -273,14 +348,19 @@ describe('buildCBlocksFromPous', () => {
     expect(result.libDeps).not.toContain('local.h')
   })
 
-  it('repeats an include shared by two blocks only once', () => {
+  it('transcribes each block separately rather than merging their includes', () => {
     const pou = (name: string) => ({
       name,
       variables: [],
       code: '#include <Adafruit_NeoPixel.h>\nvoid setup() {}\n',
     })
     const result = buildCBlocksFromPous([pou('a'), pou('b')])
-    expect(result.libDeps?.match(/Adafruit_NeoPixel\.h/g)).toHaveLength(1)
+    // Deduplicating would mean lifting includes out of the streams they belong
+    // to, which is what loses their conditions. A repeated include costs
+    // nothing: headers carry their own guards.
+    expect(result.libDeps).toContain('// a')
+    expect(result.libDeps).toContain('// b')
+    expect(result.libDeps?.match(/Adafruit_NeoPixel\.h/g)).toHaveLength(2)
   })
 
   it('leaves libDeps null when no block includes anything', () => {
