@@ -22,7 +22,14 @@ import { BlockVariant } from '../types/block'
 import { validateVariableType } from '../utils'
 import { FBDBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
-import { BlockNode, VariableNode, VariableProps } from './utils'
+import {
+  BlockNode,
+  getVariableNodeWidth,
+  isVariableNameTruncated,
+  resizeVariableNodeToName,
+  VariableNode,
+  VariableProps,
+} from './utils'
 import {
   DEFAULT_VARIABLE_HEIGHT,
   DEFAULT_VARIABLE_WIDTH,
@@ -33,6 +40,8 @@ import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
+  const elementWidth = getVariableNodeWidth(block)
+  const textAreaWidth = elementWidth - (VARIABLE_ELEMENT_SIZE - DEFAULT_VARIABLE_WIDTH)
   const pouName = useBoundPou()
   const updateModelFBD = useOpenPLCStore((state) => state.editorActions.updateModelFBD)
   const updateNode = useOpenPLCStore((state) => state.fbdFlowActions.updateNode)
@@ -371,6 +380,8 @@ const VariableElement = (block: VariableProps) => {
     setIsContextMenuOpen(true)
   }
 
+  const isNameTruncated = isVariableNameTruncated(data.variable?.name ?? '', elementWidth)
+
   const variableType = getVariableType()
   const isBoolVariable = variableType?.toUpperCase() === 'BOOL'
 
@@ -401,13 +412,16 @@ const VariableElement = (block: VariableProps) => {
     updateNode({
       editorName: pouName,
       nodeId: variableNode.id,
-      node: {
-        ...variableNode,
-        data: {
-          ...variableNode.data,
-          variable: variable,
+      node: resizeVariableNodeToName(
+        {
+          ...variableNode,
+          data: {
+            ...variableNode.data,
+            variable: variable,
+          },
         },
-      },
+        variable.name,
+      ),
     })
   }
 
@@ -438,7 +452,7 @@ const VariableElement = (block: VariableProps) => {
           <TooltipTrigger asChild>
             <div
               style={{
-                width: VARIABLE_ELEMENT_SIZE,
+                width: elementWidth,
                 height: VARIABLE_ELEMENT_HEIGHT,
                 ...(debuggerColor
                   ? {
@@ -468,7 +482,7 @@ const VariableElement = (block: VariableProps) => {
               <div
                 className='relative flex items-center'
                 style={{
-                  width: DEFAULT_VARIABLE_WIDTH,
+                  width: textAreaWidth,
                   height: DEFAULT_VARIABLE_HEIGHT,
                 }}
               >
@@ -598,9 +612,14 @@ const VariableElement = (block: VariableProps) => {
               )}
             </div>
           </TooltipTrigger>
-          {inputError && (
+          {(inputError || isNameTruncated) && (
             <TooltipContent>
-              {errorDescription && (
+              {isNameTruncated && (
+                <div className='flex items-center justify-center text-xs'>
+                  <span>{data.variable.name}</span>
+                </div>
+              )}
+              {inputError && errorDescription && (
                 <div className='flex items-center justify-center text-xs'>
                   <span className='text-red-500'>{errorDescription}</span>
                 </div>
