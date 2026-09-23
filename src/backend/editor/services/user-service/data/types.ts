@@ -1,3 +1,84 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+/**
+ * The directory tree the editor owns for arduino-cli, and the one it borrows.
+ *
+ * Both layouts live here, beside the config that declares them, because they
+ * are the same fact: `buildArduinoCliConfig` writes these paths into
+ * `arduino-cli.yaml`, and the pre-compile has to pass the very same ones as
+ * `-I` flags. Spelled in two places they drift, and the failure is a header
+ * missing at compile time rather than anything at startup.
+ *
+ * Pure: the caller supplies the Electron paths, so this module stays free of
+ * `electron` and can be read by anything.
+ */
+export function managedArduinoRoot(userDataPath: string): string {
+  return join(userDataPath, 'arduino')
+}
+
+/** Where arduino-cli installs libraries under the root above. */
+export function managedLibrariesPath(userDataPath: string): string {
+  return join(managedArduinoRoot(userDataPath), 'user', 'libraries')
+}
+
+/**
+ * The Arduino IDE's own sketchbook libraries — the user's, not ours.
+ *
+ * The IDE puts the sketchbook in the home directory on Linux and under
+ * Documents elsewhere. Pointing at a directory that does not exist is the
+ * normal case on a machine that never had the IDE, and harmless.
+ */
+export function defaultSketchbookLibrariesPath(documentsPath: string): string {
+  const sketchbook = process.platform === 'linux' ? join(homedir(), 'Arduino') : join(documentsPath, 'Arduino')
+  return join(sketchbook, 'libraries')
+}
+
+/**
+ * Quote a filesystem path for YAML.
+ *
+ * Single quotes rather than double: a Windows path is full of backslashes, and
+ * YAML's double-quoted style would read them as escapes.
+ */
+function yamlPath(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+/**
+ * The `arduino-cli.yaml` the editor ships, rooted at a directory it owns.
+ *
+ * `directories` is why this is composed at runtime instead of being a constant:
+ * left unset, arduino-cli defaults to `~/.arduino15` (`AppData/Local/Arduino15`,
+ * `~/Library/Arduino15`) and to the user's sketchbook — which are the Arduino
+ * IDE's own directories, not ours. Every core and library the editor installs
+ * would otherwise land in the middle of whatever the user has set up there, and
+ * a pinned core version would change the version their IDE builds against.
+ *
+ * `directories.downloads` is deliberately left out: arduino-cli defaults it to
+ * `{directories.data}/staging`, so it follows along on its own.
+ *
+ * `builtin.libraries` points back at the sketchbook we just moved away from, and
+ * that asymmetry is deliberate. Users install libraries through the Arduino IDE
+ * and call them from C++ blocks here: a display driver, an Ethernet stack for a
+ * W5500. Owning our directories must not cost them that. arduino-cli documents
+ * this key as available to every platform without installation and at the LOWEST
+ * priority, which is exactly the split wanted: their libraries stay reachable,
+ * ours win any name collision, and nothing we install is ever written there.
+ * Cores are untouched by it, which is the other half of the split.
+ *
+ * `userLibraries` pointing at a directory that does not exist is fine and is the
+ * normal case on a machine that never had the Arduino IDE; arduino-cli ignores
+ * it and the build succeeds.
+ */
+export function buildArduinoCliConfig(root: string, userLibraries: string): string {
+  return `directories:
+  data: ${yamlPath(join(root, 'data'))}
+  user: ${yamlPath(join(root, 'user'))}
+  builtin:
+    libraries: ${yamlPath(userLibraries)}
+${ARDUINO_DATA.trimStart()}`
+}
+
 export const ARDUINO_DATA = `
 board_manager:
   additional_urls:
