@@ -20,6 +20,8 @@ export type VariableVisualProps = {
   className?: string
   /** Outer width of the box; defaults to the fixed legacy width */
   width?: number
+  /** Native tooltip, e.g. the full name where the box truncates it */
+  title?: string
   /** Optional slot to replace the default text (e.g. with a HighlightedTextArea) */
   nameSlot?: ReactNode
 }
@@ -35,10 +37,12 @@ export const VariableVisual = ({
   debuggerColor,
   className,
   width = VARIABLE_ELEMENT_SIZE,
+  title,
   nameSlot,
 }: VariableVisualProps) => {
   return (
     <div
+      title={title}
       style={{
         width,
         height: VARIABLE_ELEMENT_HEIGHT,

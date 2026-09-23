@@ -51,14 +51,21 @@ export const getVariableElementWidth = (name: string): number => {
 export const isVariableNameTruncated = (name: string, elementWidth: number): boolean =>
   measureTextWidth(name) > elementWidth - VARIABLE_ELEMENT_INSET
 
-/** Outer width a variable node renders at; falls back to the default for legacy nodes. */
+/**
+ * Outer width a variable node renders at. Falls back to the default for legacy
+ * nodes, and never goes below the minimum: other tools size imported boxes to
+ * their text, which can leave no room for the text area. The stored value is
+ * left untouched.
+ */
 export const getVariableNodeWidth = (node: { width?: number }): number =>
-  node.width && node.width > 0 ? node.width : VARIABLE_ELEMENT_SIZE
+  node.width && node.width > 0 ? Math.max(VARIABLE_ELEMENT_MIN_WIDTH, node.width) : VARIABLE_ELEMENT_SIZE
 
 /**
  * Resize a variable node to fit `name`, keeping the pin that faces a block in
  * place: an input variable grows to the left (its output pin is on the right),
- * output and in-out variables grow to the right.
+ * output and in-out variables grow to the right. An input variable's new left
+ * edge is snapped to the grid, so a box imported with an off-grid width lands
+ * back on it.
  */
 export const resizeVariableNodeToName = (node: VariableNode, name: string): VariableNode => {
   const currentWidth = getVariableNodeWidth(node)
@@ -67,18 +74,24 @@ export const resizeVariableNodeToName = (node: VariableNode, name: string): Vari
   if (delta === 0) return node
 
   const anchorRight = node.data.variant === 'input-variable'
+  const x = anchorRight
+    ? Math.round((node.position.x - delta) / VARIABLE_WIDTH_GRID) * VARIABLE_WIDTH_GRID
+    : node.position.x
+  // How far the right edge, and so the output pin, moves on the canvas.
+  const rightEdgeShift = x + width - (node.position.x + currentWidth)
+
   const shiftOutputHandle = <T extends CustomHandleProps | undefined>(handle: T): T => {
     if (!handle || handle.type !== 'source') return handle
     return {
       ...handle,
-      glbPosition: { ...handle.glbPosition, x: handle.glbPosition.x + (anchorRight ? 0 : delta) },
+      glbPosition: { ...handle.glbPosition, x: handle.glbPosition.x + rightEdgeShift },
       relPosition: { ...handle.relPosition, x: handle.relPosition.x + delta },
     }
   }
 
   return {
     ...node,
-    position: anchorRight ? { ...node.position, x: node.position.x - delta } : node.position,
+    position: { ...node.position, x },
     width,
     measured: { ...node.measured, width },
     data: {

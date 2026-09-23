@@ -58,7 +58,7 @@ export function ReadOnlyFBDVariable({ data, width }: NodeProps) {
 
   return (
     <DiffWrapper status={status}>
-      <VariableVisual variableName={varName} width={getVariableNodeWidth({ width })} />
+      <VariableVisual variableName={varName} width={getVariableNodeWidth({ width })} title={varName || undefined} />
       {renderFBDHandles(data.handles)}
     </DiffWrapper>
   )

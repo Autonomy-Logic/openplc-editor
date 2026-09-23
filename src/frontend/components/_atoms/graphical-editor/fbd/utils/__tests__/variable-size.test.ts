@@ -61,6 +61,10 @@ describe('getVariableNodeWidth', () => {
     expect(getVariableNodeWidth({ width: 0 })).toBe(VARIABLE_ELEMENT_SIZE)
     expect(getVariableNodeWidth({ width: 200 })).toBe(200)
   })
+
+  it('never renders an imported narrow box below the minimum', () => {
+    expect(getVariableNodeWidth({ width: 40 })).toBe(VARIABLE_ELEMENT_MIN_WIDTH)
+  })
 })
 
 describe('resizeVariableNodeToName', () => {
@@ -108,6 +112,20 @@ describe('resizeVariableNodeToName', () => {
     expect(shrunk.position).toEqual(position)
     expect(shrunk.data.outputConnector).toEqual(node.data.outputConnector)
     expect(resizeVariableNodeToName(shrunk, '')).toBe(shrunk)
+  })
+})
+
+describe('resizeVariableNodeToName with an imported off-grid width', () => {
+  it('snaps an input variable back onto the grid and moves its pin with the right edge', () => {
+    const position = { x: 320, y: 160 }
+    const node = { ...buildVariableNode({ id: 'in', position, variant: 'input-variable' }), width: 90 }
+    const resized = resizeVariableNodeToName(node, LONG_NAME)
+    const width = resized.width ?? 0
+
+    expect(resized.position.x % VARIABLE_WIDTH_GRID).toBe(0)
+    expect(resized.data.outputConnector?.glbPosition.x).toBe(
+      (node.data.outputConnector?.glbPosition.x ?? 0) + resized.position.x + width - (position.x + 90),
+    )
   })
 })
 
