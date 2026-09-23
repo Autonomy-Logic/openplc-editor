@@ -41,7 +41,7 @@ export const VARIABLE_ELEMENT_SIZE = 128
 export const VARIABLE_ELEMENT_HEIGHT = 32
 
 // Variable boxes size to their name within these bounds, in steps of the canvas snap grid.
-export const VARIABLE_ELEMENT_MIN_WIDTH = 64
+export { VARIABLE_ELEMENT_MIN_WIDTH } from '../../../../../utils/graphical/fbd-variable-width'
 export const VARIABLE_ELEMENT_MAX_WIDTH = 320
 export const VARIABLE_WIDTH_GRID = 16
 

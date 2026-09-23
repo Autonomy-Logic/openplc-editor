@@ -51,14 +51,9 @@ export const getVariableElementWidth = (name: string): number => {
 export const isVariableNameTruncated = (name: string, elementWidth: number): boolean =>
   measureTextWidth(name) > elementWidth - VARIABLE_ELEMENT_INSET
 
-/**
- * Outer width a variable node renders at. Falls back to the default for legacy
- * nodes, and never goes below the minimum: other tools size imported boxes to
- * their text, which can leave no room for the text area. The stored value is
- * left untouched.
- */
+/** Outer width a variable node renders at; falls back to the default for legacy nodes. */
 export const getVariableNodeWidth = (node: { width?: number }): number =>
-  node.width && node.width > 0 ? Math.max(VARIABLE_ELEMENT_MIN_WIDTH, node.width) : VARIABLE_ELEMENT_SIZE
+  node.width && node.width > 0 ? node.width : VARIABLE_ELEMENT_SIZE
 
 /**
  * Resize a variable node to fit `name`, keeping the pin that faces a block in

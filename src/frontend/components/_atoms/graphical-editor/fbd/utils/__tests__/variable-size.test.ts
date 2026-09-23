@@ -61,10 +61,6 @@ describe('getVariableNodeWidth', () => {
     expect(getVariableNodeWidth({ width: 0 })).toBe(VARIABLE_ELEMENT_SIZE)
     expect(getVariableNodeWidth({ width: 200 })).toBe(200)
   })
-
-  it('never renders an imported narrow box below the minimum', () => {
-    expect(getVariableNodeWidth({ width: 40 })).toBe(VARIABLE_ELEMENT_MIN_WIDTH)
-  })
 })
 
 describe('resizeVariableNodeToName', () => {
