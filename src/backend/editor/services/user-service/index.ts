@@ -2,12 +2,17 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { exec } from 'child_process'
 import { app } from 'electron'
 import { access, constants, mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
-import { homedir } from 'os'
 import { basename, join } from 'path'
 import { promisify } from 'util'
 
 import { reconcileArduinoCliConfig } from './data/arduino-cli-config'
-import { buildArduinoCliConfig, HISTORY_DATA, SETTINGS_DATA } from './data/types'
+import {
+  buildArduinoCliConfig,
+  defaultSketchbookLibrariesPath,
+  HISTORY_DATA,
+  managedArduinoRoot,
+  SETTINGS_DATA,
+} from './data/types'
 import type { ArduinoListOutput } from './types'
 
 /**
@@ -204,15 +209,13 @@ class UserService {
    * piece of work; the default covers a stock install.
    */
   static defaultUserLibrariesPath(): string {
-    const sketchbook =
-      process.platform === 'linux' ? join(homedir(), 'Arduino') : join(app.getPath('documents'), 'Arduino')
-    return join(sketchbook, 'libraries')
+    return defaultSketchbookLibrariesPath(app.getPath('documents'))
   }
 
   async #checkIfArduinoCliConfigExists(): Promise<void> {
     const pathToArduinoCliConfig = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
     const shipped = buildArduinoCliConfig(
-      join(app.getPath('userData'), 'arduino'),
+      managedArduinoRoot(app.getPath('userData')),
       UserService.defaultUserLibrariesPath(),
     )
 

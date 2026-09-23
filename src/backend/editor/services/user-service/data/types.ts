@@ -1,4 +1,38 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
+
+/**
+ * The directory tree the editor owns for arduino-cli, and the one it borrows.
+ *
+ * Both layouts live here, beside the config that declares them, because they
+ * are the same fact: `buildArduinoCliConfig` writes these paths into
+ * `arduino-cli.yaml`, and the pre-compile has to pass the very same ones as
+ * `-I` flags. Spelled in two places they drift, and the failure is a header
+ * missing at compile time rather than anything at startup.
+ *
+ * Pure: the caller supplies the Electron paths, so this module stays free of
+ * `electron` and can be read by anything.
+ */
+export function managedArduinoRoot(userDataPath: string): string {
+  return join(userDataPath, 'arduino')
+}
+
+/** Where arduino-cli installs libraries under the root above. */
+export function managedLibrariesPath(userDataPath: string): string {
+  return join(managedArduinoRoot(userDataPath), 'user', 'libraries')
+}
+
+/**
+ * The Arduino IDE's own sketchbook libraries — the user's, not ours.
+ *
+ * The IDE puts the sketchbook in the home directory on Linux and under
+ * Documents elsewhere. Pointing at a directory that does not exist is the
+ * normal case on a machine that never had the IDE, and harmless.
+ */
+export function defaultSketchbookLibrariesPath(documentsPath: string): string {
+  const sketchbook = process.platform === 'linux' ? join(homedir(), 'Arduino') : join(documentsPath, 'Arduino')
+  return join(sketchbook, 'libraries')
+}
 
 /**
  * Quote a filesystem path for YAML.

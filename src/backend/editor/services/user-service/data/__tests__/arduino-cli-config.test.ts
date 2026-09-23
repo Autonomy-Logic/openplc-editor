@@ -173,7 +173,7 @@ describe('buildArduinoCliConfig', () => {
     return out
   }
 
-  it('roots data and libraries under the directory it is given', () => {
+  it('roots data and user under the directory it is given', () => {
     // Left unset, arduino-cli installs into ~/.arduino15 and the user's
     // sketchbook — the Arduino IDE's own directories.
     expect(dirsOf(SHIPPED)).toEqual({

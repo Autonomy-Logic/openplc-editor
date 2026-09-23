@@ -189,7 +189,7 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
-import { UserService } from '../services/user-service'
+import { defaultSketchbookLibrariesPath, managedLibrariesPath } from '../services/user-service/data/types'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
@@ -1556,8 +1556,8 @@ class CompilerModule {
    */
   async #libraryIncludeArgs(): Promise<string[]> {
     const roots = [
-      join(electronApp.getPath('userData'), 'arduino', 'user', 'libraries'),
-      UserService.defaultUserLibrariesPath(),
+      managedLibrariesPath(electronApp.getPath('userData')),
+      defaultSketchbookLibrariesPath(electronApp.getPath('documents')),
     ]
 
     const args: string[] = []
@@ -1572,7 +1572,13 @@ class CompilerModule {
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
         const libDir = join(root, entry.name)
-        for (const candidate of [libDir, join(libDir, 'src')]) {
+        // `src/` only when it is there: a 1.5-format library keeps its headers
+        // under it, a 1.0-format one at the root. Emitting both unconditionally
+        // doubles the flag count on a sketchbook of a hundred libraries, in the
+        // command line and in every log of it.
+        const srcDir = join(libDir, 'src')
+        const candidates = existsSync(srcDir) ? [libDir, srcDir] : [libDir]
+        for (const candidate of candidates) {
           if (seen.has(candidate)) continue
           seen.add(candidate)
           args.push(`-I${candidate}`)
