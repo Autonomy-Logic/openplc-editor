@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
@@ -10,6 +11,7 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
+import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
@@ -186,6 +188,7 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
+import { defaultSketchbookLibrariesPath, managedLibrariesPath } from '../services/user-service/data/types'
 import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
@@ -228,7 +231,20 @@ class CompilerModule {
   // ############################################################################
   static readonly HOST_PLATFORM = process.platform
   static readonly HOST_ARCHITECTURE = process.arch
-  static readonly DEVELOPMENT_MODE = process.env.NODE_ENV === 'development'
+  /**
+   * Whether the bundled binaries and sources sit beside the checkout rather
+   * than inside an installed app.
+   *
+   * `isPackaged` and not `NODE_ENV`, because webpack writes `NODE_ENV` into the
+   * bundle when it builds it: a production bundle can never answer anything but
+   * "production", however it is launched. That is fine for the app a user
+   * installs and wrong for every headless run from a checkout, where the
+   * production bundle is exactly what gets launched and then looks for
+   * `arduino-cli` inside Electron's own resources, which nothing fills.
+   * `isPackaged` is a fact about the running process, so it answers correctly
+   * in both. `#constructStrucppRuntimeDir` already asks this way.
+   */
+  static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
   // This will later be replaced by platform specific libraries
   static readonly GLOBAL_LIBRARIES = [
     'Arduino_EdgeControl',
@@ -1523,6 +1539,57 @@ class CompilerModule {
     }
   }
 
+  /**
+   * `-I` for every Arduino library the editor can see.
+   *
+   * The pre-compile drives g++ itself, so it gets no library include path from
+   * arduino-cli's discovery — which is why a C++ block that `#include`s an
+   * Arduino library fails at `fatal error: <header>: No such file or directory`
+   * before the link is ever reached.
+   *
+   * Two roots, and both are needed: the editor's own library directory holds
+   * what it installed (GLOBAL_LIBRARIES, per-board, third-party), the
+   * sketchbook holds what the user installed through the Arduino IDE. Both
+   * layouts are covered — 1.0 keeps headers at the library root, 1.5 under
+   * `src/`.
+   *
+   * Missing directories are skipped rather than reported: a machine that never
+   * had the Arduino IDE has no sketchbook, and that is not an error.
+   */
+  async #libraryIncludeArgs(): Promise<string[]> {
+    const roots = [
+      managedLibrariesPath(electronApp.getPath('userData')),
+      defaultSketchbookLibrariesPath(electronApp.getPath('documents')),
+    ]
+
+    const args: string[] = []
+    const seen = new Set<string>()
+    for (const root of roots) {
+      let entries: Dirent[]
+      try {
+        entries = await readdir(root, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        const libDir = join(root, entry.name)
+        // `src/` only when it is there: a 1.5-format library keeps its headers
+        // under it, a 1.0-format one at the root. Emitting both unconditionally
+        // doubles the flag count on a sketchbook of a hundred libraries, in the
+        // command line and in every log of it.
+        const srcDir = join(libDir, 'src')
+        const candidates = existsSync(srcDir) ? [libDir, srcDir] : [libDir]
+        for (const candidate of candidates) {
+          if (seen.has(candidate)) continue
+          seen.add(candidate)
+          args.push(`-I${candidate}`)
+        }
+      }
+    }
+    return args
+  }
+
   // Pre-compile every .cpp under `<compilationPath>/src/` (excluding the
   // board HAL `arduino.cpp`) with the board's toolchain at -std=gnu++17 and
   // archive into `libOpenPLCUserLib.a`. Keeps the gnu++17 + exceptions
@@ -1628,12 +1695,17 @@ class CompilerModule {
     // core's implicit gnu++11.
     const extraIncludeFlags = extraCxxFlags.filter((flag) => flag.startsWith('-I'))
     const extraNonIncludeFlags = extraCxxFlags.filter((flag) => !flag.startsWith('-I'))
+
+    // Last, so a library can never shadow a core or generated header.
+    const libraryIncludeFlags = await this.#libraryIncludeArgs()
+
     const includeArgs = [
       ...extraIncludeFlags,
       `-I${corePath}`,
       ...(variantPath ? [`-I${variantPath}`] : []),
       `-I${srcDir}`,
       `-I${baremetalDir}`,
+      ...libraryIncludeFlags,
     ]
     const trailingFlags = ['-std=gnu++17', '-fno-rtti', ...extraNonIncludeFlags]
 
@@ -2763,7 +2835,9 @@ class CompilerModule {
     }
     const { boardEntry, boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 } = selection
 
-    const normalizedProjectPath = projectPath.replace('project.json', '')
+    // A cloud project is an Edge id, not a directory: without this every path below
+    // would be relative and the build would land in `process.cwd()`.
+    const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
 
@@ -3489,7 +3563,8 @@ class CompilerModule {
 
     const debugResolver = await this.#createBoardInfoResolver()
     const { boardRuntime } = debugResolver.resolve(boardTarget)
-    const normalizedProjectPath = projectPath.replace('project.json', '')
+    // Same reason as the compile path: a cloud project has no directory to build in.
+    const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
     const sourceTargetFolderPath = join(compilationPath, 'src')
 

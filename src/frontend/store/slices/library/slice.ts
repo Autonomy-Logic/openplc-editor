@@ -1,6 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+import { librariesOwningTypes } from '../../../utils/library-usage'
 import type { SharedRootState } from '../shared/types'
 import type { LibraryProjectRef, LibrarySlice } from './types'
 
@@ -130,6 +131,13 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
             state.missingLibraries = state.missingLibraries.filter((m) => m.name !== name)
           }),
         )
+      },
+
+      ensureLibrariesForTypes: (typeNames) => {
+        const { libraries, bundledLibraryNames } = getState()
+        for (const name of librariesOwningTypes(libraries.system, bundledLibraryNames, typeNames)) {
+          getState().libraryActions.enableLibrary(name)
+        }
       },
 
       disableLibrary: (name) => {

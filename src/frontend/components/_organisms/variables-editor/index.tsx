@@ -1,6 +1,7 @@
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
@@ -11,12 +12,9 @@ import { selectEditorForPou } from '../../../store/slices/editor/utils'
 import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
 import type { LadderFlowActions, LadderFlowState } from '../../../store/slices/ladder'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
+import { validateVariableSet } from '../../../store/slices/project/validation/variables'
 import { cn } from '../../../utils/cn'
-import {
-  duplicateVariableNameMessage,
-  findDuplicateVariableName,
-  parseIecStringToVariables,
-} from '../../../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import {
   syncNodesWithVariables as syncNodesWithVariablesUtil,
@@ -28,6 +26,7 @@ import {
   propagateVariableRename,
   type ReferenceImpactAnalysis,
 } from '../../../utils/variable-references'
+import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { InputWithRef } from '../../_atoms/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import TableActions from '../../_atoms/table-actions'
@@ -37,6 +36,23 @@ import { RenameImpactModal } from '../../_molecules/rename-impact-modal'
 import { TypeChangeModal } from '../../_molecules/type-change-modal'
 import { VariablesTable } from '../../_molecules/variables-table'
 import { VariablesCodeEditor } from '../variables-code-editor'
+
+/**
+ * The declaration text to put in the code view.
+ *
+ * The POU's own text when it has one, because that text is the source of
+ * truth (DOPE-650) and is the only thing carrying the user's comments, blank
+ * lines and alignment. Serialising the model is the fallback for a POU that
+ * has never had text — one created in memory this session.
+ *
+ * Every buffer-filling path goes through here. They used to call
+ * `generateIecVariablesToString` directly, which meant simply toggling to code
+ * view replaced the user's declarations with a canonical re-rendering of the
+ * table and dropped every comment, even though the text itself had survived
+ * the load intact.
+ */
+const declarationTextFor = (pou: PLCPou | undefined, variables: PLCVariable[]): string =>
+  pou?.variablesText ?? generateIecVariablesToString(variables)
 
 interface VariablesEditorProps {
   /**
@@ -90,7 +106,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       rearrangeVariables,
       updatePouDocumentation,
       updatePouReturnType,
-      clearPouVariablesText,
+      setPouVariablesText,
       setPouVariables,
       updatePou,
       updateVariable,
@@ -133,7 +149,10 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     ) {
       return editor.variable.code
     }
-    return generateIecVariablesToString(tableData)
+    return declarationTextFor(
+      pous.find((candidate) => candidate.name === editor.meta.name),
+      tableData,
+    )
   })
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -206,9 +225,17 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
 
   useEffect(() => {
     if (editorVariables.display !== 'code') {
-      setEditorCode(generateIecVariablesToString(tableData))
+      // The store patches `variablesText` on every table mutation, so it is
+      // already current here; reading it keeps the comments the model cannot
+      // carry.
+      setEditorCode(
+        declarationTextFor(
+          pous.find((candidate) => candidate.name === editor.meta.name),
+          tableData,
+        ),
+      )
     }
-  }, [tableData, editorVariables.display])
+  }, [tableData, editorVariables.display, editor.meta.name, pous])
 
   // Sync local view state from this instance's own model when the
   // POU is renamed or its display mode toggles (table ↔ code).  Each
@@ -232,7 +259,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       setEditorCode(
         typeof code === 'string' && code.length > 0
           ? code
-          : generateIecVariablesToString(targetPou?.interface?.variables ?? []),
+          : declarationTextFor(targetPou, targetPou?.interface?.variables ?? []),
       )
     } else {
       setEditorVariables({
@@ -769,8 +796,16 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       if (!language) return false
 
       const newVariables = parseIecStringToVariables(editorCode, pous, dataTypes, libraries)
-      const duplicate = findDuplicateVariableName(newVariables)
-      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
+
+      // Same gate the table applies cell by cell. Without it the text path
+      // wrote straight through `setPouVariables`, which never validates, so a
+      // declaration the table refuses was accepted the moment it was typed
+      // instead of picked (DOPE-650).
+      const validation = validateVariableSet(newVariables)
+      if (!validation.ok) {
+        const [first] = validation.errors
+        throw new Error(`${first.title} ${first.message}`)
+      }
 
       const renamedPairs = tableData.flatMap((previousVariable) => {
         const variableStillExists = newVariables.some(
@@ -961,14 +996,36 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
       setParseError(null)
       handleFileAndWorkspaceSavedState(editor.meta.name)
 
-      if (freshPou && 'variablesText' in freshPou) {
-        clearPouVariablesText(editor.meta.name)
-      }
-
-      // A buffer keeping the typed form drifts from the canonical LSP document and loses its colours.
-      const canonical = generateIecVariablesToString(freshVariables)
-      setEditorCode(canonical)
-      lastParsedCodeRef.current = canonical
+      // The text the user wrote IS the declaration (DOPE-650) — record it as
+      // the POU's, rather than clearing it and letting a serialisation of the
+      // model take its place.
+      //
+      // The buffer is deliberately left alone. It used to be replaced with
+      // `generateIecVariablesToString(freshVariables)` so it would match the
+      // synthesised LSP document line for line and keep its colours; that
+      // re-canonicalisation is what deleted every comment the moment the user
+      // clicked away. The LSP stub is now built from this same text
+      // (`serializePouSignatureToSTWithBodyOffset`), so the two agree without
+      // anything having to be rewritten.
+      // Reconcile the typed text against what was actually committed before
+      // storing it. `finalVariables` is not always what the buffer says: when
+      // the user DECLINES a type change in the modal, the old type is restored
+      // in the model while the buffer still carries the new one. Storing the
+      // buffer verbatim would let the declined type win, because this text is
+      // what gets serialised to disk and fed to the LSP stub — the user's "no"
+      // would silently become a yes on the next save (CodeRabbit, PR #1130).
+      //
+      // `applyVariablesToText` returns the text unchanged when nothing differs,
+      // which is the overwhelmingly common case, so the comments and spacing
+      // still survive byte for byte.
+      const committedText = applyVariablesToText(
+        editorCode,
+        finalVariables,
+        buildTypeContext(pous, dataTypes, libraries),
+      )
+      if (committedText !== editorCode) setEditorCode(committedText)
+      setPouVariablesText(editor.meta.name, committedText)
+      lastParsedCodeRef.current = committedText
 
       return true
     } catch (err) {

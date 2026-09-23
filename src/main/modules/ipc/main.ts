@@ -1,11 +1,65 @@
+import {
+  fetchPlanCaption as fetchEdgePlanCaption,
+  fetchUser as fetchEdgeUser,
+  isEncryptionAvailable,
+  signIn as signInToEdge,
+  signOut as signOutOfEdge,
+} from '@root/backend/editor/edge-account/edge-account-service'
+import {
+  type AiStreamHandle,
+  type AiStreamSink,
+  createConversation,
+  deleteConversation,
+  type EdgeAiResult,
+  fetchAiCredits,
+  fetchAiEntitlements,
+  fetchAiUsage,
+  getConversation,
+  listConversations,
+  renameConversation,
+  sendAiTelemetry,
+  streamAiChat,
+  streamAiCompletion,
+  warmAi,
+} from '@root/backend/editor/edge-ai'
+import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
+import {
+  listCloudProjectsInFolder,
+  listRecentCloudProjects,
+  readCloudProject,
+  saveCloudFile,
+  saveCloudProject,
+} from '@root/backend/editor/edge-projects'
+import {
+  applyStash,
+  createBranch,
+  createCommit,
+  createStash,
+  deleteBranch,
+  discardChanges,
+  dropStash,
+  getBranchDiffWithBase,
+  getChanges,
+  getCommitFiles,
+  listBranches,
+  listCommits,
+  listStashes,
+  mergeBranches,
+  popStash,
+  previewSwitchCarry,
+  restoreCommit,
+  switchBranch,
+} from '@root/backend/editor/edge-version-control'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
+import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
 import {
   materializeRetrievedProject,
   pruneRetrievedProjects,
   RETAINED_RETRIEVALS,
 } from '@root/backend/editor/project/materialize-retrieved-project'
+import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import type {
   DebugAnchorResult,
   DebugDeviceIdResult,
@@ -23,7 +77,9 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
 import { RuntimeLogEntry } from '@root/middleware/shared/ports'
+import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
+import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -36,16 +92,24 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  CloudFoldersResult,
+  CloudProjectsResult,
+  RawProjectFiles,
+  UploadProjectResult,
+} from '@root/middleware/shared/ports/project-port'
+import { WriteProjectFilesSchema } from '@root/middleware/shared/ports/project-port'
+import type {
   ListPublicLibrariesArgs,
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
+import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
@@ -102,25 +166,8 @@ interface ChannelUnavailable {
 }
 
 /**
- * What the licensing flow needs from whichever channel carries it: the two
- * license FCs plus the identity read. `DeviceModbusTransport` satisfies it
- * structurally (all three are required there); a debug channel is narrowed into
- * it by `isLicenseChannel`.
- *
- * The identity read is EITHER `getDeviceId` (baremetal, an id derived inside the
- * closed core) OR `getAnchor` (runtime-v4, the raw device-tree serial), never
- * both, and the union is an XOR so the compiler enforces the "never both" half
- * rather than only asserting it in prose.
- *
- * Be clear about what that does and does not buy, because this exact bug got
- * through review once: the XOR stops a transport from declaring BOTH reads. It
- * does NOT protect `isLicenseChannel`, which inspects a `DeviceDebugChannel` at
- * RUNTIME with `typeof`, where both methods are legitimately optional. That
- * guard demanded `getDeviceId` after the WebSocket transport had been renamed
- * to `getAnchor`, cutting off licensing on every runtime-v4 board with `tsc`
- * perfectly clean. What catches that class of mistake is the handler test
- * driving the REST branch through a double that has `getAnchor` and no
- * `getDeviceId` — see device-license.handler.test.ts.
+ * The identity read is EITHER `getDeviceId` (baremetal) OR `getAnchor` (runtime-v4), never
+ * both. `isLicenseChannel` narrows with runtime `typeof`, so renaming either silently breaks licensing.
  */
 type LicenseChannel = LicenseReadWritable &
   (
@@ -129,17 +176,10 @@ type LicenseChannel = LicenseReadWritable &
   )
 
 /**
- * Whether a debug channel can carry the licensing flow: the two licence FCs plus
- * ONE of the two identity reads. The methods are optional on
- * `DeviceDebugChannel` because not every medium implements them; the runtime-v4
- * WebSocket implements `getAnchor`, `readLicense` and `writeLicense`, and a
- * Modbus client implements `getDeviceId` instead. Demanding `getDeviceId` here
- * is what made runtime-v4 licensing unreachable before this was fixed, so the
- * check accepts either half deliberately. Narrows the client ITSELF rather
- * than wrapping it, so the flow talks to the same object every other caller
- * holds — and the transport's own send mutex (the Modbus clients'
- * sendRequestMutex; the debug WebSocket's, since review 2026-08-20) keeps
- * serialising everyone's traffic.
+ * Whether a debug channel can carry the licensing flow: the two licence FCs plus one of
+ * the two identity reads (both optional on `DeviceDebugChannel`, since not every medium
+ * implements them). Narrows the client itself rather than wrapping it, so the flow
+ * keeps using the same object — and the same send mutex — every other caller holds.
  */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
@@ -150,14 +190,9 @@ function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChan
 }
 
 /**
- * Turn a failed identity read into a `check-failed` outcome, carrying the
- * `retryable` flag when the cause set one.
- *
- * `retryable` is only ever written as `false` — absent means retryable, so the
- * common causes (a dropped link, a timeout) keep the retry they have always
- * had. Written as one helper because both handlers must agree: a "Try Again"
- * offered by read-license and withheld by refresh-license for the same board
- * would be worse than either choice.
+ * Turns a failed identity read into a `check-failed` outcome. `retryable` is only ever
+ * written `false` (absent means retryable); shared as one helper so read-license and
+ * refresh-license always agree on whether to offer "Try Again" for the same board.
  */
 function checkFailedOutcome(identity: { error: string; retryable?: boolean }): DeviceLicenseReport['outcome'] {
   return identity.retryable === false
@@ -170,11 +205,7 @@ function matchesMd5(targetMd5: string, expectedMd5: string): boolean {
   return targetMd5.toLowerCase() === expectedMd5.toLowerCase()
 }
 
-/**
- * What `debugger:verify-md5` answers. Named so the success and unavailable paths
- * are typed against ONE shape — inferred separately, the success branch narrowed
- * `success` to the literal `true` and the two stopped being assignable.
- */
+/** What `debugger:verify-md5` answers, named so success/unavailable paths share one type rather than two incompatible inferred ones. */
 interface Md5VerifyReply {
   success: boolean
   match?: boolean
@@ -183,23 +214,40 @@ interface Md5VerifyReply {
   error?: string
 }
 
+interface AiStream {
+  cancel: () => void
+  sender: WebContents
+}
+
 /**
- * Where a project retrieved from a device is unpacked.
- *
- * One definition, used both by the retrieval that writes there and by the read
- * that has to recognise the result: a second spelling of this path would go
- * stale silently, and the only symptom would be retrievals reappearing under
- * Recent.
+ * The telemetry events the renderer may send. `satisfies` only checks one direction: a
+ * renamed/deleted event breaks the build, but a new one must still be added here or it's silently dropped.
  */
+const AI_TELEMETRY_EVENTS = [
+  'completion_requested',
+  'completion_shown',
+  'completion_accepted',
+  'completion_dismissed',
+  'completion_error',
+  'completion_timeout',
+  'completion_empty',
+  'chat_message',
+  'chat_rating',
+  'conversation_created',
+  'conversation_loaded',
+  'conversation_renamed',
+  'conversation_deleted',
+  'acu_exhausted',
+  'upgrade_cta_clicked',
+] as const satisfies readonly AITelemetryEventName[]
+
+function toAiTelemetryEvent(value: unknown): AITelemetryEventName | undefined {
+  return AI_TELEMETRY_EVENTS.find((name) => name === value)
+}
+
 const retrievedProjectsRoot = (): string => join(app.getPath('userData'), 'retrieved-projects')
 
-/** True for the scratch root or anything inside it — the retrieval area, not a
- *  project the user keeps anywhere. `relative` rather than `startsWith`, so a
- *  sibling directory whose name merely begins the same way is not caught by it.
- *
- *  The root ITSELF counts: `relative()` answers '' for it, and excluding that
- *  made the one directory the whole area is named after the one path this
- *  returned false for. */
+/** True for the scratch root (inclusive) or anything inside it; `relative` rather than `startsWith`, so a same-prefixed sibling isn't caught. */
 const isRetrievedProjectPath = (projectPath: string): boolean => {
   const rel = relative(retrievedProjectsRoot(), projectPath)
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
@@ -215,19 +263,8 @@ class MainProcessBridge implements MainIpcModule {
   compilerModule
   hardwareModule
   private registeredHandleChannels: string[] = []
-  // ---------------------------------------------------------------------------
-  // Talking to a baremetal device
-  //
-  // ONE session, owned by `deviceSession`, whatever media it runs over: the
-  // debugger, run/stop and the status poll all borrow that one client.
-  // Nothing else here opens a Modbus client — see `device-link-manager.ts` for
-  // why (in short: three owners meant a run/stop command could open a second
-  // socket the board would not answer).
-  //
-  // The runtime-v4 WebSocket is the one transport that is NOT a device link: it
-  // is a different protocol to a different kind of target, so it keeps its own
-  // client and its own session identity.
-  // ---------------------------------------------------------------------------
+  // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
+  // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
   private readonly deviceSession = new DeviceSessionManager({
     verify: (client, candidate, context) => this.verifyDeviceCandidate(client, candidate, context),
     probe: (client) => this.probeDeviceLink(client),
@@ -238,27 +275,11 @@ class MainProcessBridge implements MainIpcModule {
   /** Classification of the candidate the held link came from. */
   private deviceLinkProbe: DeviceProbeOutcome | null = null
   private debuggerConnectionType: 'tcp' | 'rtu' | 'websocket' | 'simulator' | null = null
-  /**
-   * The runtime REST API, extracted to `backend/editor/runtime` so the headless
-   * CLI makes the same calls rather than carrying its own copy — see that
-   * module's docblock for the two bugs a second copy produced.
-   *
-   * The token-refresh listener is registered in the CONSTRUCTOR, not here. Both
-   * did, briefly: the extraction added this constructor option while #1023's
-   * registration stayed, and since `this.tokens` IS `runtimeApi.tokens` the same
-   * manager notified twice, sending `runtime:token-refreshed` twice per refresh.
-   * Harmless downstream — the renderer's setter is idempotent — but two
-   * registrations for one event is a bug waiting for a listener that is not.
-   * The constructor's does strictly more (it also re-authenticates a held debug
-   * channel), so this one goes.
-   */
+  // The token-refresh listener is registered in the constructor only: `this.tokens` is
+  // `runtimeApi.tokens`, so a second registration would double-fire `runtime:token-refreshed`.
   private runtimeApi = new RuntimeApiClient()
 
-  /**
-   * The runtime bootloader (RTOP-283), on its own port with its own session.
-   * Separate from runtimeApi because the two services share a credential
-   * database, not a token.
-   */
+  // The runtime bootloader, on its own port/session — separate from runtimeApi since the two services share a credential database, not a token.
   private bootloaderApi = new BootloaderApiClient()
   // Address of the runtime this session is authenticated against. Captured at
   // login so the token authority can re-authenticate against the same device.
@@ -344,10 +365,7 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== RUNTIME API HANDLERS =====================
-  // The port and the two timeouts live on `RuntimeApiClient` now, with the eight
-  // call sites that used them. The declarations stayed behind here with zero
-  // references — invisible because `noUnusedLocals` is off, and misleading
-  // because one of them was the `8443` this work claimed to have unified.
+  // The port and the two timeouts live on `RuntimeApiClient`, not here.
 
   handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
 
@@ -421,13 +439,8 @@ class MainProcessBridge implements MainIpcModule {
       // Build the endpoint path with optional include_stats query parameter
       const endpoint = includeStats ? '/api/status?include_stats=true' : '/api/status'
 
-      // strucpp+ runtimes report per-task stats: timing_stats = { tasks: [...] }.
-      // Pre-strucpp runtimes report a flat object: { scan_count, scan_time_min, ... }.
-      // Both shapes can carry an optional plugin_stats map populated by
-      // get_stats hooks on loaded native/VPP plugins. Accept either
-      // task-shape and forward plugin_stats verbatim so the renderer
-      // stays alive when pointed at an older PLC and gets new plugin
-      // metrics without IPC churn.
+      // strucpp+ runtimes report per-task timing_stats = { tasks: [...] }; older ones
+      // report a flat object. Both may carry an optional plugin_stats map, forwarded verbatim either way.
       type PluginStatsField = { label: string; value: string | number | boolean; unit?: string }
       type PluginStatsPayload = { label: string; fields: PluginStatsField[] }
       type PluginStatsMap = Record<string, PluginStatsPayload>
@@ -470,9 +483,7 @@ class MainProcessBridge implements MainIpcModule {
         if (raw && Array.isArray((raw as { tasks?: TaskStats[] }).tasks)) {
           timingStats = raw as { tasks: TaskStats[]; plugin_stats?: PluginStatsMap }
         } else if (raw && typeof (raw as { scan_count?: number }).scan_count === 'number') {
-          // Legacy flat shape — wrap into a single-entry tasks array so
-          // the renderer can iterate uniformly. Forward plugin_stats
-          // verbatim if it was attached at the top level.
+          // Legacy flat shape — wrap into a single-entry tasks array so the renderer can iterate uniformly.
           const flat = raw as Omit<TaskStats, 'name'> & { plugin_stats?: PluginStatsMap }
           const { plugin_stats, ...flatStats } = flat
           timingStats = {
@@ -561,10 +572,6 @@ class MainProcessBridge implements MainIpcModule {
     devices?: DiscoveredRuntime[]
     error?: string
   }> => {
-    // The scan itself lives in `backend/editor/hardware/discover-runtimes` so
-    // the headless CLI runs exactly this code — which interfaces get probed and
-    // how replies are deduplicated is what decides whether a device is found,
-    // and a second copy would drift on precisely those details.
     const senderWebContents = event.sender
     const result = await discoverRuntimes({
       durationMs: opts?.durationMs,
@@ -682,13 +689,8 @@ class MainProcessBridge implements MainIpcModule {
   getRuntimeUsername = (): string | null => this.runtimeApi.tokens.getUsername()
 
   /**
-   * Install the libraries a retrieved project brought with it.
-   *
-   * The archives are re-read from the project's own archive rather than kept
-   * in memory between calls, so installing is always installing what that
-   * project actually carries. Each goes through the same strucpp validation as
-   * a library the user picked by hand -- an archive off a device earns no extra
-   * trust.
+   * Install the libraries a retrieved project brought with it. Each goes through the
+   * same strucpp validation as a library the user picked by hand — an archive off a device earns no extra trust.
    */
   handleInstallRetrievedLibraries = async (
     _event: IpcMainInvokeEvent,
@@ -710,35 +712,14 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Retrieve the stored project and write it to a scratch directory.
-   *
-   * Fetch and unpack are one IPC call because the archive should not sit in the
-   * renderer at all: it is untrusted bytes from a device, and every check that
-   * decides whether it is safe to write lives next to the write. The renderer
-   * gets back a path and a description, never the archive.
-   *
-   * The scratch location is why this works at all -- see
-   * `materialize-retrieved-project` for what depends on the project having a
-   * real path from the moment it is opened.
+   * Retrieve the stored project and write it to a scratch directory. Fetch and unpack
+   * are one IPC call since the archive is untrusted bytes from a device and every write
+   * safety check lives next to the write; the renderer gets a path and description, never the archive.
    */
-  /**
-   * Bundled library archives from the most recent retrievals, keyed by the
-   * project they came with.
-   *
-   * Kept here rather than sent to the renderer so the bytes never leave the
-   * process that validates them, and keyed by project path so installing
-   * always installs what THAT project carried rather than whatever was
-   * retrieved most recently.
-   */
+  /** Bundled library archives from the most recent retrievals, keyed by project path so installing always installs what that project carried. */
   private retrievedLibraries = new Map<string, Array<{ name: string; archive: string }>>()
 
-  /**
-   * Drop every retrieved project's libraries except the one just retrieved.
-   *
-   * The map exists so installing installs what THAT project carried, which only
-   * needs the project currently open. Keeping the rest held the full text of
-   * every library of every retrieval for the life of the session.
-   */
+  /** Drops every retrieved project's libraries except the one just retrieved, to avoid holding every library of every retrieval for the whole session. */
   private forgetRetrievedLibrariesExcept(keep: string): void {
     for (const path of [...this.retrievedLibraries.keys()]) {
       if (path !== keep) this.retrievedLibraries.delete(path)
@@ -761,19 +742,11 @@ class MainProcessBridge implements MainIpcModule {
 
     try {
       const scratchRoot = retrievedProjectsRoot()
-      // Old retrievals go before the new one is written. A retrieved project
-      // deliberately stays in scratch until the user runs Save As, so without
-      // this an engineer who retrieves a project just to look at it leaves a
-      // full copy of its source on disk permanently -- unencrypted, in
-      // userData, accumulating one folder per retrieval.
+      // Old retrievals go before the new one is written — a retrieved project stays in
+      // scratch until Save As, so without this every retrieval accumulates a folder forever.
       await pruneRetrievedProjects(scratchRoot, RETAINED_RETRIEVALS)
-      // Retrievals recorded under Recent before they were excluded from it.
-      // Pruning removes the directories; without this their rows outlive them
-      // and the list keeps one dead entry per retrieval anyone ever made.
-      //
-      // Its own try/catch, outside the retrieve's: a `projects.json` that is
-      // locked or unwritable would otherwise turn tidying up after the feature
-      // into a failed retrieve.
+      // Its own try/catch, outside the retrieve's: a locked/unwritable `projects.json`
+      // must not turn tidying up into a failed retrieve.
       try {
         await this.forgetRetrievedProjectsInHistory()
       } catch (error) {
@@ -828,19 +801,14 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== IPC HANDLER REGISTRATION =====================
 
-  /**
-   * Register an invoke handler and track the channel for cleanup.
-   */
+  /** Registers an invoke handler and tracks the channel for cleanup. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private registerHandle(channel: string, handler: (event: IpcMainInvokeEvent, ...args: any[]) => any) {
     this.registeredHandleChannels.push(channel)
     this.ipcMain.handle(channel, handler)
   }
 
-  /**
-   * Remove all previously registered invoke handlers so they can be
-   * re-registered with fresh references on macOS window reopen.
-   */
+  /** Removes previously registered invoke handlers so they can be re-registered with fresh references on macOS window reopen. */
   private cleanupHandlers() {
     for (const channel of this.registeredHandleChannels) {
       this.ipcMain.removeHandler(channel)
@@ -877,6 +845,51 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
     this.registerHandle('catalog:list', this.handleCatalogList)
+    // All of it runs in the main process: the renderer is not on Edge's origin, so
+    // it can neither inherit a shared-domain cookie nor make the request itself.
+    this.registerHandle('edge-account:fetch-user', this.handleEdgeFetchUser)
+    this.registerHandle('edge-account:fetch-plan-caption', this.handleEdgeFetchPlanCaption)
+    this.registerHandle('edge-account:sign-in', this.handleEdgeSignIn)
+    this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
+    this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
+    this.registerHandle('edge-projects:list-recent', this.handleEdgeProjectsListRecent)
+    this.registerHandle('edge-projects:list-in-folder', this.handleEdgeProjectsListInFolder)
+    this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
+    this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
+    this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
+    this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
+    this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
+    this.registerHandle('edge-vc:create-branch', this.handleEdgeVcCreateBranch)
+    this.registerHandle('edge-vc:delete-branch', this.handleEdgeVcDeleteBranch)
+    this.registerHandle('edge-vc:switch-branch', this.handleEdgeVcSwitchBranch)
+    this.registerHandle('edge-vc:preview-switch-carry', this.handleEdgeVcPreviewSwitchCarry)
+    this.registerHandle('edge-vc:list-commits', this.handleEdgeVcListCommits)
+    this.registerHandle('edge-vc:create-commit', this.handleEdgeVcCreateCommit)
+    this.registerHandle('edge-vc:get-commit-files', this.handleEdgeVcGetCommitFiles)
+    this.registerHandle('edge-vc:restore-commit', this.handleEdgeVcRestoreCommit)
+    this.registerHandle('edge-vc:get-changes', this.handleEdgeVcGetChanges)
+    this.registerHandle('edge-vc:discard-changes', this.handleEdgeVcDiscardChanges)
+    this.registerHandle('edge-vc:list-stashes', this.handleEdgeVcListStashes)
+    this.registerHandle('edge-vc:create-stash', this.handleEdgeVcCreateStash)
+    this.registerHandle('edge-vc:apply-stash', this.handleEdgeVcApplyStash)
+    this.registerHandle('edge-vc:pop-stash', this.handleEdgeVcPopStash)
+    this.registerHandle('edge-vc:drop-stash', this.handleEdgeVcDropStash)
+    this.registerHandle('edge-vc:branch-diff-with-base', this.handleEdgeVcBranchDiffWithBase)
+    this.registerHandle('edge-vc:merge-branches', this.handleEdgeVcMergeBranches)
+    // stream-start/stream-abort are a pair: stream-start answers with an id, and events arrive under it on edge-ai:event/end/error.
+    this.registerHandle('edge-ai:entitlements', this.handleEdgeAiEntitlements)
+    this.registerHandle('edge-ai:usage', this.handleEdgeAiUsage)
+    this.registerHandle('edge-ai:credits', this.handleEdgeAiCredits)
+    this.registerHandle('edge-ai:warm', this.handleEdgeAiWarm)
+    this.registerHandle('edge-ai:telemetry', this.handleEdgeAiTelemetry)
+    this.registerHandle('edge-ai:conversations-list', this.handleEdgeAiConversationsList)
+    this.registerHandle('edge-ai:conversations-get', this.handleEdgeAiConversationsGet)
+    this.registerHandle('edge-ai:conversations-create', this.handleEdgeAiConversationsCreate)
+    this.registerHandle('edge-ai:conversations-rename', this.handleEdgeAiConversationsRename)
+    this.registerHandle('edge-ai:conversations-delete', this.handleEdgeAiConversationsDelete)
+    this.registerHandle('edge-ai:stream-start', this.handleEdgeAiStreamStart)
+    this.registerHandle('edge-ai:stream-abort', this.handleEdgeAiStreamAbort)
     this.registerHandle('catalog:install-many', this.handleCatalogInstallMany)
     this.registerHandle('app:store-retrieve-recent', this.handleStoreRetrieveRecent)
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
@@ -1019,12 +1032,7 @@ class MainProcessBridge implements MainIpcModule {
   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
     this.stopSimulatorAndNotify()
     const response = await this.projectService.createProject(data)
-    // Mirror `handleProjectOpen`: a freshly-created project is the
-    // active project from this point on, so any sandboxed file IPC
-    // that gates on `validateFilePath` (file:read-content, watcher
-    // start/stop) has a project root to compare against.  Skipping
-    // this left newly-created library projects unable to read their
-    // own `library.json` on first mount of the manifest tab.
+    // Mirrors `handleProjectOpen`: sandboxed file IPC gates on `validateFilePath`, which needs a project root to compare against.
     if (response.success && response.data?.meta.path) {
       this.currentProjectPath = response.data.meta.path
     }
@@ -1103,13 +1111,6 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /**
-   * Drop every Recent entry that points into the retrieval scratch root.
-   *
-   * One read and at most one write. `removeProjectFromHistory` re-reads and
-   * rewrites the whole file per call, so looping it over the matches cost N
-   * round trips to remove N rows.
-   */
   private forgetRetrievedProjectsInHistory = async (): Promise<void> => {
     const historyPath = this.projectService.getHistoryProjectsFilePath()
     const history = await this.projectService.readProjectHistory(historyPath)
@@ -1124,11 +1125,7 @@ class MainProcessBridge implements MainIpcModule {
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
         this.currentProjectPath = projectPath
-        // Everything except a retrieval, which is not a project the user has
-        // anywhere yet: it lives in scratch, is pruned behind them, and becomes
-        // a real project only when Save As writes it somewhere they chose.
-        // Listing it under Recent offered them a project that deletes itself,
-        // and one more row per retrieval.
+        // A retrieval lives in scratch and is pruned behind the user, so it must not appear under Recent as if it were a real project.
         if (!isRetrievedProjectPath(projectPath)) {
           await this.projectService.updateProjectHistory(projectPath)
         }
@@ -1246,6 +1243,13 @@ class MainProcessBridge implements MainIpcModule {
 
   // App and system handlers
   handleOpenExternalLink = async (_event: IpcMainInvokeEvent, url: string) => {
+    // `shell.openExternal` hands anything to the OS, so a `file:` or `javascript:` URL
+    // arriving over IPC must not reach it.
+    if (typeof url !== 'string' || !isWebUrl(url)) {
+      logger.warn(`Refused to open a non-web external link: ${String(url).slice(0, 120)}`)
+      return { success: false, error: 'Only http(s) links can be opened.' }
+    }
+
     try {
       await shell.openExternal(url)
       return { success: true }
@@ -1272,25 +1276,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Load every bundled .stlib archive shipped with the app.
-   *
-   * The archives live alongside the strucpp compiler binaries under
-   * `<resources>/strucpp/libs/` — same dev-vs-packaged resolution
-   * Electron uses for any other resource (`process.resourcesPath`
-   * after packaging, the project root in dev). The .stlib files are
-   * synced into that directory by the strucpp build pipeline so they
-   * always travel with the strucpp version the compiler targets.
-   *
-   * Returns the parsed JSON contents in alphabetical filename order so
-   * the renderer-side library tree renders deterministically across
-   * platforms. Errors (missing dir, malformed JSON) propagate back to
-   * the renderer so a startup failure surfaces as a UI error rather
-   * than silently dropping libraries.
+   * Loads bundled .stlib archives from `<resources>/strucpp/libs/`, alphabetically for a
+   * deterministic tree. Errors propagate rather than silently dropping libraries.
    */
-  // Library manager handlers — system-wide IEC 61131-3 library pool
-  // (bundled strucpp libs + user-installed .stlib / CODESYS imports).
-  // Library identity is the strucpp manifest `name` shared with the
-  // project's `libraries[]` field.
   handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
@@ -1322,14 +1310,680 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Catalog browse — proxies to the shared `listPublicLibraries`
-   * client.  Renderer can't hit autonomy-edge directly (CSP /
-   * cross-origin); the main process is the canonical egress.
-   *
-   * Errors are returned in a `{ success: false, error }` envelope
-   * rather than thrown across the IPC boundary so the modal can
-   * surface the failure without trying to read a rejected promise.
+   * Catalog browse, proxied through the shared `listPublicLibraries` client since the
+   * renderer can't hit autonomy-edge directly (CSP / cross-origin). Errors are returned
+   * in a `{ success: false, error }` envelope rather than thrown across the IPC boundary.
    */
+  // ===================== EDGE ACCOUNT =====================
+  // Signing in is optional throughout; no handler here is an error the editor must recover from.
+
+  handleEdgeFetchUser = (_event: IpcMainInvokeEvent): Promise<EdgeUserRead> => fetchEdgeUser()
+
+  handleEdgeFetchPlanCaption = (_event: IpcMainInvokeEvent): Promise<string | null> => fetchEdgePlanCaption()
+
+  handleEdgeSignIn = (
+    _event: IpcMainInvokeEvent,
+    credentials: { email: string; password: string },
+  ): Promise<EdgeSignInOutcome> => {
+    // Validated rather than trusted: this crosses IPC, and a malformed payload must
+    // come back as a failed sign-in instead of throwing inside the handler and
+    // rejecting the invoke with a stack trace the UI cannot render.
+    if (typeof credentials?.email !== 'string' || typeof credentials?.password !== 'string') {
+      return Promise.resolve({ status: 'failed' })
+    }
+
+    return signInToEdge(credentials.email, credentials.password)
+  }
+
+  handleEdgeSignOut = (_event: IpcMainInvokeEvent): Promise<void> => signOutOfEdge()
+
+  handleEdgeIsSessionPersistent = (_event: IpcMainInvokeEvent): Promise<boolean> =>
+    Promise.resolve(isEncryptionAvailable())
+
+  // The cloud round trip. Reads and writes go through the same session the account
+  // handlers use, so a revoked token is renewed once rather than per call site.
+
+  handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectsResult> => {
+    // Clamped rather than trusted: this crosses IPC, and an absurd limit would be
+    // forwarded straight into the API's own bounds check as a 400.
+    const requested = typeof limit === 'number' && Number.isInteger(limit) ? limit : 5
+
+    return listRecentCloudProjects(Math.min(Math.max(requested, 1), 50))
+  }
+
+  handleEdgeProjectsListInFolder = (_event: IpcMainInvokeEvent, folderId: unknown): Promise<CloudProjectsResult> => {
+    // Checked rather than trusted: this crosses IPC. A folder id that is not a
+    // non-empty string reads as "could not list", never as an empty folder.
+    if (typeof folderId !== 'string' || folderId.length === 0) {
+      return Promise.resolve({ status: 'unreachable' })
+    }
+
+    return listCloudProjectsInFolder(folderId)
+  }
+
+  handleEdgeProjectsRead = (_event: IpcMainInvokeEvent, projectId: unknown): Promise<RawProjectFiles> => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      return Promise.resolve({
+        success: false,
+        error: { title: 'Failed to open project', description: 'No project id was given.' },
+      })
+    }
+
+    return readCloudProject(projectId)
+  }
+
+  /**
+   * Takes `unknown` and validates, like the channels either side of it: a TypeScript
+   * annotation on an IPC argument survives nothing, and the backend deletes by
+   * omission, so a missing `pouFiles` would delete every POU in the project.
+   */
+  handleEdgeProjectsSaveProject = (
+    _event: IpcMainInvokeEvent,
+    files: unknown,
+  ): Promise<{ success: boolean; error?: string }> => {
+    const parsed = WriteProjectFilesSchema.safeParse(files)
+
+    if (!parsed.success) {
+      return Promise.resolve({ success: false, error: 'The editor made an invalid save request.' })
+    }
+
+    return saveCloudProject(parsed.data)
+  }
+
+  handleEdgeProjectsSaveFile = (
+    _event: IpcMainInvokeEvent,
+    filePath: unknown,
+    content: unknown,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (typeof filePath !== 'string' || filePath.length === 0) {
+      return Promise.resolve({ success: false, error: 'No file path was given.' })
+    }
+
+    return saveCloudFile(filePath, content)
+  }
+
+  // Validate before building a URL: a non-string id interpolates as `undefined`. And `undefined`
+  // arriving as `null` is the difference between "commit everything" and "commit no files".
+
+  /** Non-empty string, or nothing. */
+  private static vcString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.length > 0 ? value : undefined
+  }
+
+  private static vcRecord(value: unknown): Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value))
+      : {}
+  }
+
+  /** An array of non-empty strings, or nothing — never a partially valid list. */
+  private static vcStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+      return undefined
+    }
+
+    const strings = value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+
+    return strings.length === value.length ? strings : undefined
+  }
+
+  private static readonly VC_BAD_REQUEST = {
+    ok: false,
+    failure: { kind: 'http', status: 400, message: 'The editor made an invalid version-control request.' },
+  } as const satisfies VersionControlResult<never>
+
+  handleEdgeUploadListFolders = (): Promise<CloudFoldersResult> => listCloudFolders()
+
+  /**
+   * Validates before it touches the filesystem: `projectPath` and `parentFolderId` must
+   * be non-empty strings, and `visibility` is narrowed rather than forwarded, since a typo could otherwise publish a project as public.
+   */
+  handleEdgeUploadProject = (_event: IpcMainInvokeEvent, params: unknown): Promise<UploadProjectResult> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const projectPath = MainProcessBridge.vcString(source.projectPath)
+    const parentFolderId = MainProcessBridge.vcString(source.parentFolderId)
+
+    if (!projectPath || !parentFolderId) {
+      return Promise.resolve({
+        status: 'failed',
+        failure: { reason: 'unreadable', message: 'The editor made an invalid upload request.' },
+      })
+    }
+
+    return uploadProjectToCloud({
+      projectPath,
+      parentFolderId,
+      projectName: MainProcessBridge.vcString(source.projectName),
+      // Anything but an explicit 'public' stays private. Guessing in the other direction
+      // would publish someone's work to the world on a malformed value.
+      visibility: source.visibility === 'public' ? 'public' : 'private',
+    })
+  }
+
+  handleEdgeVcBranchDiffWithBase = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    source: unknown,
+    target: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const from = MainProcessBridge.vcString(source)
+    const to = MainProcessBridge.vcString(target)
+
+    return id && from && to ? getBranchDiffWithBase(id, from, to) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcMergeBranches = (_event: IpcMainInvokeEvent, params: unknown): Promise<VersionControlResult<unknown>> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const projectId = MainProcessBridge.vcString(source.projectId)
+    const sourceBranch = MainProcessBridge.vcString(source.sourceBranch)
+    const targetBranch = MainProcessBridge.vcString(source.targetBranch)
+
+    if (!projectId || !sourceBranch || !targetBranch) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // Resolutions decide file CONTENT, so a malformed map is refused rather than partially
+    // forwarded: dropping an entry would merge with the wrong side of a conflict silently.
+    let resolutions: Record<string, string> | undefined
+
+    if (source.resolutions !== undefined) {
+      const record = MainProcessBridge.vcRecord(source.resolutions)
+      const entries = Object.entries(record)
+
+      if (!entries.every(([key, value]) => key.length > 0 && typeof value === 'string')) {
+        return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+      }
+
+      resolutions = Object.fromEntries(entries.map(([key, value]) => [key, String(value)]))
+    }
+
+    return mergeBranches({
+      projectId,
+      sourceBranch,
+      targetBranch,
+      commitMessage: MainProcessBridge.vcString(source.commitMessage),
+      resolutions,
+    })
+  }
+
+  handleEdgeVcListBranches = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? listBranches(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcCreateBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    name: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const branchName = MainProcessBridge.vcString(name)
+
+    return id && branchName ? createBranch(id, branchName) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDeleteBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    branchId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const branch = MainProcessBridge.vcString(branchId)
+
+    return id && branch ? deleteBranch(id, branch) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcSwitchBranch = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    branchName: unknown,
+    strategy: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const name = MainProcessBridge.vcString(branchName)
+
+    if (!id || !name) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // Anything but an explicit 'carry' discards, which is the endpoint's own default and
+    // the safer reading of a malformed value: carrying edits on a guess could move work
+    // onto a branch the user did not mean to touch.
+    return switchBranch(id, name, strategy === 'carry' ? 'carry' : 'discard')
+  }
+
+  handleEdgeVcPreviewSwitchCarry = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    targetBranch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const target = MainProcessBridge.vcString(targetBranch)
+
+    return id && target ? previewSwitchCarry(id, target) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcListCommits = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    options: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    if (!id) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    const source = MainProcessBridge.vcRecord(options)
+    const limit = typeof source.limit === 'number' && Number.isInteger(source.limit) ? source.limit : undefined
+    const offset = typeof source.offset === 'number' && Number.isInteger(source.offset) ? source.offset : undefined
+
+    return listCommits(id, { limit, offset, branch: MainProcessBridge.vcString(source.branch) })
+  }
+
+  handleEdgeVcCreateCommit = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    message: unknown,
+    files: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitMessage = MainProcessBridge.vcString(message)
+
+    // Refused rather than dropped: `vcStringArray` answers undefined for a partially
+    // valid list, and undefined means "all files" to `createCommit`.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return id && commitMessage
+      ? createCommit(id, commitMessage, MainProcessBridge.vcStringArray(files), MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcGetCommitFiles = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    hash: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitHash = MainProcessBridge.vcString(hash)
+
+    return id && commitHash
+      ? getCommitFiles(id, commitHash, MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcRestoreCommit = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    hash: unknown,
+    branch: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const commitHash = MainProcessBridge.vcString(hash)
+
+    return id && commitHash
+      ? restoreCommit(id, commitHash, MainProcessBridge.vcString(branch))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcGetChanges = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    includeContent: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? getChanges(id, includeContent === true) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDiscardChanges = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    files: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    if (!id) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    // A malformed list is refused rather than dropped: silently discarding nothing when
+    // the user asked to discard three files would look like the button is broken, and
+    // silently discarding everything would destroy work.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return discardChanges(id, MainProcessBridge.vcStringArray(files))
+  }
+
+  handleEdgeVcListStashes = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    return id ? listStashes(id) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcCreateStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    message: unknown,
+    files: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+
+    // Same refusal as commit and discard: undefined means "all files" downstream, so a
+    // malformed list would stash the whole project instead of the selection.
+    if (files !== undefined && MainProcessBridge.vcStringArray(files) === undefined) {
+      return Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+    }
+
+    return id
+      ? createStash(id, MainProcessBridge.vcString(message), MainProcessBridge.vcStringArray(files))
+      : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcApplyStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? applyStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcPopStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? popStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  handleEdgeVcDropStash = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    ref: unknown,
+  ): Promise<VersionControlResult<unknown>> => {
+    const id = MainProcessBridge.vcString(projectId)
+    const stashRef = MainProcessBridge.vcString(ref)
+
+    return id && stashRef ? dropStash(id, stashRef) : Promise.resolve(MainProcessBridge.VC_BAD_REQUEST)
+  }
+
+  /**
+   * The live streams, by id — the only thing holding an open upstream request, so
+   * every way a stream can end (finish, fail, abort, window closing) must remove its entry.
+   */
+  private readonly aiStreams = new Map<string, AiStream>()
+
+  /**
+   * Narrows an IPC argument to a request body. Not `vcRecord`, which answers `{}` for
+   * anything unusable — an empty body is well-formed and would 400 from Edge instead of failing locally.
+   */
+  private static aiBody(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value))
+      : undefined
+  }
+
+  /** A count the API will accept, or nothing — never `NaN`, never negative. */
+  private static aiCount(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
+  }
+
+  private static readonly AI_BAD_REQUEST = {
+    ok: false,
+    failure: { kind: 'http', status: 400, message: 'The editor made an invalid AI request.' },
+  } as const satisfies EdgeAiResult<never>
+
+  handleEdgeAiEntitlements = () => fetchAiEntitlements()
+
+  handleEdgeAiUsage = () => fetchAiUsage()
+
+  handleEdgeAiCredits = () => fetchAiCredits()
+
+  /**
+   * Warms the prompt cache; `warmAi` answers nothing, so the result is manufactured
+   * here so every `edge-ai:*` channel answers the same union.
+   */
+  handleEdgeAiWarm = async (): Promise<EdgeAiResult<null>> => {
+    await warmAi()
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Telemetry, refused unless the event is one this build knows — the name becomes an
+   * analytics record, so an unchecked string could create an event name nobody can query out again.
+   */
+  handleEdgeAiTelemetry = async (
+    _event: IpcMainInvokeEvent,
+    name: unknown,
+    data: unknown,
+  ): Promise<EdgeAiResult<null>> => {
+    const telemetryEvent = toAiTelemetryEvent(name)
+
+    if (!telemetryEvent) {
+      // Loud, since the likeliest cause is a new event added to the port's union but not
+      // here — a dropped analytics event is otherwise invisible. Refused, never thrown.
+      logger.warn(`Refused an unknown AI telemetry event: ${typeof name === 'string' ? name : `(${typeof name})`}`)
+
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    await sendAiTelemetry(telemetryEvent, MainProcessBridge.vcRecord(data))
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Lists conversations; every option is narrowed rather than forwarded, since each is
+   * stringified into the query (an object would become `limit=[object Object]`).
+   */
+  handleEdgeAiConversationsList = (_event: IpcMainInvokeEvent, options: unknown) => {
+    const source = MainProcessBridge.vcRecord(options)
+
+    return listConversations({
+      projectId: MainProcessBridge.vcString(source.projectId),
+      limit: MainProcessBridge.aiCount(source.limit),
+      offset: MainProcessBridge.aiCount(source.offset),
+    })
+  }
+
+  handleEdgeAiConversationsGet = (_event: IpcMainInvokeEvent, conversationId: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+
+    return id ? getConversation(id) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsCreate = (_event: IpcMainInvokeEvent, body: unknown) => {
+    const payload = MainProcessBridge.aiBody(body)
+
+    return payload ? createConversation(payload) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsRename = (_event: IpcMainInvokeEvent, conversationId: unknown, body: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+    const payload = MainProcessBridge.aiBody(body)
+
+    return id && payload ? renameConversation(id, payload) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  handleEdgeAiConversationsDelete = (_event: IpcMainInvokeEvent, conversationId: unknown) => {
+    const id = MainProcessBridge.vcString(conversationId)
+
+    return id ? deleteConversation(id) : Promise.resolve(MainProcessBridge.AI_BAD_REQUEST)
+  }
+
+  /**
+   * Opens a stream and answers with the id its events will carry. Generated here, not
+   * accepted from the renderer, since it keys the cancellation map — a reused id would abort someone else's answer.
+   */
+  handleEdgeAiStreamStart = (event: IpcMainInvokeEvent, params: unknown): EdgeAiResult<{ streamId: string }> => {
+    const source = MainProcessBridge.vcRecord(params)
+    const kind = source.kind
+    const body = MainProcessBridge.aiBody(source.body)
+
+    if ((kind !== 'chat' && kind !== 'completion') || !body) {
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    const streamId = randomUUID()
+    const sender = event.sender
+
+    this.watchAiSender(sender)
+
+    // Registered before the request starts: the sink can fire on this same tick, so a
+    // chunk delivered first would be dropped. `cancel` is late-bound for the same reason.
+    let handle: AiStreamHandle | null = null
+    let cancelled = false
+
+    this.aiStreams.set(streamId, {
+      cancel: () => {
+        cancelled = true
+        handle?.cancel()
+      },
+      sender,
+    })
+
+    // `onStatus` is left unimplemented: it's optional/diagnostic, and a refusal already
+    // reaches the consumer as an `edge-ai:error` failure.
+    const sink: AiStreamSink = {
+      // Crosses whole — flattening to text would strip `tool_use`, and the renderer couldn't run a call it never saw.
+      onEvent: (event) => this.sendAiStreamEvent(streamId, 'edge-ai:event', { event }),
+      onEnd: () => {
+        this.sendAiStreamEvent(streamId, 'edge-ai:end', {})
+        this.forgetAiStream(streamId)
+      },
+      onFailure: (failure) => {
+        this.sendAiStreamEvent(streamId, 'edge-ai:error', { failure })
+        this.forgetAiStream(streamId)
+      },
+    }
+
+    try {
+      // The body crosses as-is, narrowed no further: the request shape belongs to the
+      // edge-ai module and its route, not a second copy here.
+      handle = kind === 'chat' ? streamAiChat(body, sink) : streamAiCompletion(body, sink)
+    } catch (error) {
+      // Failures are supposed to arrive through the sink, so a throw here means the
+      // request never started; clean up before reporting, or the entry can never be removed.
+      this.forgetAiStream(streamId)
+
+      return { ok: false, failure: { kind: 'unreachable', message: getErrorMessage(error) } }
+    }
+
+    // An abort that arrived while the request was being opened still has to
+    // land — at that point `cancel` above could only set the flag.
+    if (cancelled) {
+      handle.cancel()
+    }
+
+    return { ok: true, data: { streamId } }
+  }
+
+  /**
+   * Cancels a stream on the renderer's behalf. An id that's no longer live answers as
+   * success, not an error, since stop racing the model finishing is ordinary; cancelling emits no event, since the renderer already knows.
+   */
+  handleEdgeAiStreamAbort = (_event: IpcMainInvokeEvent, streamId: unknown): EdgeAiResult<null> => {
+    const id = MainProcessBridge.vcString(streamId)
+
+    if (!id) {
+      return MainProcessBridge.AI_BAD_REQUEST
+    }
+
+    this.abortAiStream(id)
+
+    return { ok: true, data: null }
+  }
+
+  /**
+   * Pushes one event of a live stream to its window. `send` on a destroyed
+   * `webContents` throws, so a destroyed target ends the stream rather than skipping the frame.
+   */
+  private sendAiStreamEvent(streamId: string, channel: string, payload: Record<string, unknown>) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    if (stream.sender.isDestroyed()) {
+      this.abortAiStream(streamId)
+      return
+    }
+
+    stream.sender.send(channel, { streamId, ...payload })
+  }
+
+  private forgetAiStream(streamId: string) {
+    this.aiStreams.delete(streamId)
+  }
+
+  /** Renderers this bridge is watching; a WeakSet so a closed window's entry goes with it. */
+  private readonly watchedAiSenders = new WeakSet<WebContents>()
+
+  /**
+   * `destroyed` alone misses a reload, which kills the JS context without destroying
+   * `WebContents` — Edge would still charge for an answer nobody reads, so navigation
+   * and process-gone are hooked too.
+   */
+  private watchAiSender(sender: WebContents) {
+    if (this.watchedAiSenders.has(sender)) {
+      return
+    }
+
+    this.watchedAiSenders.add(sender)
+
+    const abortAll = () => this.abortAiStreamsFor(sender)
+
+    sender.on('destroyed', abortAll)
+    sender.on('render-process-gone', abortAll)
+    sender.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) {
+        abortAll()
+      }
+    })
+  }
+
+  private abortAiStreamsFor(sender: WebContents) {
+    for (const [streamId, stream] of this.aiStreams) {
+      if (stream.sender === sender) {
+        this.abortAiStream(streamId)
+      }
+    }
+  }
+
+  /** Forget a stream that has NOT finished, cancelling the request it holds open. */
+  private abortAiStream(streamId: string) {
+    const stream = this.aiStreams.get(streamId)
+
+    if (!stream) {
+      return
+    }
+
+    this.forgetAiStream(streamId)
+    stream.cancel()
+  }
+
   handleCatalogList = async (
     _event: IpcMainInvokeEvent,
     args: ListPublicLibrariesArgs,
@@ -1372,13 +2026,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Put a project on the recent list without reading it — Save As, which
-   * produces a location the user picked without going through an open.
-   *
-   * Still refuses the scratch root: a Save As target is somewhere the user
-   * chose, so a path in there did not come from this flow. Answers in the same
-   * shape as its sibling below, so a caller that wants to know whether the row
-   * was written can find out.
+   * Puts a project on the recent list without reading it (Save As). Still refuses the
+   * scratch root, since a Save As target the user chose can't have come from that flow.
    */
   handleTrackRecentProject = async (_event: unknown, projectPath: unknown) => {
     // `unknown`, then narrowed: a TypeScript annotation on an IPC parameter is
@@ -1405,13 +2054,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /**
-   * Drop a project entry from `projects.json` (recent list).
-   * Disk is untouched — the project's files stay where they are. The
-   * renderer-side use case is the start-screen 3-dot menu's "Remove
-   * from list" action: a no-confirmation no-op as far as data goes,
-   * just hides the entry from the recents view.
-   */
+  /** Drops a project entry from `projects.json` (recent list); disk is untouched. */
   handleRemoveProjectFromRecent = async (_event: unknown, projectPath: string) => {
     try {
       await this.projectService.removeProjectFromHistory(projectPath)
@@ -1422,13 +2065,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /**
-   * Recursively delete a project directory and drop it from the recent
-   * list. The destructive half (`fs.rm`) is gated by the project-
-   * service's `project.json` check — see `deleteProject` there for
-   * the safety rationale. Returns the service's response shape
-   * verbatim so the renderer can surface the failure message.
-   */
+  /** Recursively deletes a project directory and drops it from the recent list; the destructive `fs.rm` is gated by `deleteProject`'s own `project.json` check. */
   handleDeleteProject = async (_event: unknown, projectPath: string) => {
     try {
       return await this.projectService.deleteProject(projectPath)
@@ -1477,15 +2114,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Bridge method consumed by the compiler module and the Library
-   * Project build pipeline.  Resolves project-enabled library names
-   * to parsed `.stlib` archives — bundled libs are always included,
-   * the user-installed subset is filtered by name, and missing-
-   * but-enabled names come back for the caller to surface as a
-   * pre-compile "open the Library Manager" error.  Same call feeds
-   * both the program build (strucpp.compile's `libraries:` option)
-   * and the library build (compileStlib's dependency list) so the
-   * verify pass can't drift from the actual compile.
+   * Resolves enabled library names to parsed `.stlib` archives (bundled libs always
+   * included); missing names come back for the caller to surface. Feeds both builds, so
+   * verify can't drift from the actual compile.
    */
   loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
     this.libraryManagerModule.loadEnabledArchives(enabledNames)
@@ -1530,11 +2161,18 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleWindowReload = () => {
-    // The reload wipes the renderer's store back to 'disconnected', so the
-    // session has to go with the emulator — otherwise main keeps holding an open
-    // simulator session that the reloaded UI has no idea about.
+    // The reload wipes the renderer's store to 'disconnected', so the simulator session
+    // must go with it, or main keeps a session the reloaded UI has no idea about (same
+    // reasoning as `watchAiSender` for an AI stream mid-answer).
     this.stopSimulator()
-    this.mainWindow?.webContents.reload()
+
+    const contents = this.mainWindow?.webContents
+
+    if (contents) {
+      this.abortAiStreamsFor(contents)
+    }
+
+    contents?.reload()
   }
   handleWindowRebuildMenu = () => {
     void this.menuBuilder.buildMenu().catch((error) => {
@@ -1570,10 +2208,8 @@ class MainProcessBridge implements MainIpcModule {
     args: { packageId: string; version: string; downloadUrl: string },
   ) => {
     const { packageId, version, downloadUrl } = args
-    // Download in the main process — the renderer can't reach the install
-    // pipeline directly, and main has clean fs / temp-dir ergonomics. The
-    // VPP catalog backend serves a private S3 bucket through its own API,
-    // so `downloadUrl` always points at the backend (never S3 directly).
+    // Downloaded in main since the renderer can't reach the install pipeline directly;
+    // `downloadUrl` always points at the VPP catalog backend, never S3 directly.
     let tempPath: string | null = null
     try {
       const response = await fetch(downloadUrl)
@@ -1641,8 +2277,15 @@ class MainProcessBridge implements MainIpcModule {
       }
 
       // STruC++ writes debug-map.json alongside generated_debug.cpp.
-      // Consumed by the renderer via parseDebugMap.
-      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      // Consumed by the renderer via parseDebugMap. Resolved through the build
+      // workspace so a cloud project reads the scratch copy the build wrote.
+      const debugMapPath = path.resolve(
+        resolveBuildWorkspace(projectPath),
+        'build',
+        boardTarget,
+        'src',
+        'debug-map.json',
+      )
       const content = await fs.readFile(debugMapPath, 'utf-8')
       return { success: true, content }
     } catch (error) {
@@ -1654,12 +2297,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Confirm the target is running the program that was just built.
-   *
-   * Modbus targets (serial, TCP, simulator) read this over the ONE held device
-   * link, so the check runs on the same connection every later command uses — no
-   * second client, and nothing to reconnect afterwards. Runtime v4 reads it over
-   * its own WebSocket, which is a different protocol to a different target.
+   * Confirms the target is running the program just built, over the one held device
+   * link (Modbus targets) or runtime v4's own WebSocket — never a second client.
    */
   handleDebuggerVerifyMd5 = async (_event: IpcMainInvokeEvent, expectedMd5: string): Promise<Md5VerifyReply> => {
     try {
@@ -1667,12 +2306,8 @@ class MainProcessBridge implements MainIpcModule {
         'verify md5',
         async (client) => {
           const probe = await client.getMd5Hash()
-          // `targetMd5` spelled out rather than spread: `Md5ProbeResult` names the
-          // hash `md5`, so `...probe` silently left the declared `targetMd5`
-          // undefined — and TypeScript does not apply excess-property checks to a
-          // spread, so nothing caught it. The mismatch report then read
-          // "MD5 mismatch. Target: undefined", losing the one value that tells the
-          // user which program is actually on the board.
+          // `targetMd5` spelled out rather than spread: `Md5ProbeResult` names the hash
+          // `md5`, so a spread would silently leave `targetMd5` undefined (no excess-property check catches it).
           return {
             success: true,
             match: matchesMd5(probe.md5, expectedMd5),
@@ -1691,20 +2326,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * FC 0x4b run/stop for a baremetal target.
-   *
-   * Command only — the state is READ from the status poll (FC 0x46), which already
-   * reports it, so there is no second round trip here.
-   *
-   * Goes over the ONE held device link, whatever transport that link runs over.
-   * The transport the DEBUGGER is using is not consulted, and no client is opened:
-   * this is a command to the device, and the connection to it already exists.
-   *
-   * That is precisely what was broken. The old code only recognised an RTU client
-   * as reusable, so with a live Modbus TCP session a Stop fell through to opening a
-   * transient second socket — which an Arduino Modbus TCP server, serving one
-   * client at a time, never answered. The user saw "Failed to stop PLC: Request
-   * timeout" while a working connection sat idle.
+   * FC 0x4b run/stop for a baremetal target. Command only — state is read from the status
+   * poll (FC 0x46). Over the one held device link; never a second client, since an Arduino
+   * Modbus TCP server serves one at a time.
    */
   handleDebuggerPlcControl = async (_event: IpcMainInvokeEvent, action: 'run' | 'stop'): Promise<PlcControlResult> => {
     this.traceDeviceLink(`run/stop: ${action} requested`)
@@ -1729,12 +2353,7 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  /**
-   * Run/stop over a REST control channel. Lives on `RuntimeApiClient` so the
-   * headless CLI gets the same semantics — notably the `ERROR_SWITCH_STOP`
-   * translation, which is the runtime's way of saying a hardware mode switch
-   * refused a start.
-   */
+  /** Run/stop over a REST control channel; lives on `RuntimeApiClient` so the headless CLI shares the same `ERROR_SWITCH_STOP` translation. */
   private restSetPlcState = (address: string, action: 'run' | 'stop'): Promise<PlcControlResult> =>
     this.runtimeApi.setPlcState(address, action)
 
@@ -1755,11 +2374,8 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: 'Debugger not connected' }
     }
 
-    // Every target reads over its session's DEBUG channel — Modbus for a device or
-    // a v3 runtime, the WebSocket for v4. There is nothing to reconnect here: if a
-    // connection dropped, the manager is already reopening it (or has reported it
-    // lost), and `needsReconnect` tells the renderer to stop the session rather
-    // than race it for the medium.
+    // Every target reads over its session's DEBUG channel; if a connection dropped, the
+    // manager is already reopening it, and `needsReconnect` tells the renderer to stop rather than race it for the medium.
     try {
       return await this.withDebugChannel(
         'read variables',
@@ -1797,7 +2413,13 @@ class MainProcessBridge implements MainIpcModule {
       // STruC++ writes the MD5 into debug-map.json alongside the pointer
       // tables. It's the single source of truth the editor and the target
       // agree on (target exposes the same value via FC 0x45).
-      const debugMapPath = path.resolve(projectPath, 'build', boardTarget, 'src', 'debug-map.json')
+      const debugMapPath = path.resolve(
+        resolveBuildWorkspace(projectPath),
+        'build',
+        boardTarget,
+        'src',
+        'debug-map.json',
+      )
       const raw = await fs.readFile(debugMapPath, 'utf-8')
       const parsed = JSON.parse(raw) as { md5?: unknown }
 
@@ -1814,13 +2436,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Read the run/stop state over an already-open client and push it to the
-   * renderer. Throttled, because its two callers tick at very different rates:
-   * the device liveness poll (2.5s) and the debugger's variable poll (fast).
-   *
-   * Both callers use the ONE held connection, so there is no handoff to survive:
-   * a debug session shares the link rather than replacing it, and the Start/Stop
-   * button keeps tracking the device while debugging.
+   * Reads the run/stop state over an already-open client and pushes it to the renderer.
+   * Throttled since its two callers (liveness poll, debugger's variable poll) tick at
+   * very different rates; both share the one held connection.
    */
   private plcStatePushedAt = 0
 
@@ -1844,23 +2462,14 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Start a debug session against a target.
-   *
-   * For a Modbus target there is nothing to open: the session runs over the ONE
-   * held device link, which Connect established and which the status poll keeps
-   * honest. That is what makes serial debugging work at all (the OS will not lock
-   * a port twice), and it is equally right for Modbus TCP (an Arduino TCP server
-   * serves one client). The simulator is the exception only because it is
-   * in-process, so it can bring its own link up on demand.
-   *
-   * Runtime v4 keeps its own WebSocket: different protocol, different target.
+   * For a Modbus target there is nothing to open: it runs over the one held device link (the OS
+   * won't lock a serial port twice, and a TCP Arduino serves one client); runtime v4 keeps its own
+   * WebSocket.
    */
   handleDebuggerConnect = async (_event: IpcMainInvokeEvent): Promise<{ success: boolean; error?: string }> => {
     try {
-      // For a shared session this opens nothing — it is the connection Connect
-      // established, already proven. For a runtime target it opens that target's
-      // own debug channel, which is why the debugger asks for it here rather than
-      // at login: the channel exists only while a session needs it.
+      // For a shared session this opens nothing (already proven by Connect); for a
+      // runtime target it opens that target's own debug channel, only while needed.
       const channel = await this.requireDebug('debug session')
       if ('error' in channel) return { success: false, error: channel.error }
 
@@ -1875,13 +2484,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Stop a debug session: let go of the debug channel, nothing more.
-   *
-   * The SESSION is deliberately untouched — it belongs to Connect (or to the
-   * runtime login), not to the debugger. Closing it here would drop the user's
-   * connection, and the status poll driving the Start/Stop button with it, just
-   * because they stopped debugging. Releasing closes a channel of its own once
-   * nothing holds it, and never closes a channel shared with control.
+   * Stops a debug session: releases the debug channel, nothing more. The session
+   * belongs to Connect/login, not the debugger — closing it here would drop the user's
+   * connection just because they stopped debugging.
    */
   handleDebuggerDisconnect = (_event: IpcMainInvokeEvent): Promise<{ success: boolean }> => {
     this.deviceSession.releaseDebugChannel('debug session')
@@ -1895,10 +2500,8 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Push a link state change to the renderer. */
   private emitDeviceLinkStatus(status: DeviceLinkStatus): void {
-    // `connecting` is not traced. It is a transient the user can already see in the
-    // button, and it repeats once per candidate — on a baud sweep that is five
-    // identical lines around the one outcome worth reading. Every settled state
-    // (connected / disconnected / error) still gets its line.
+    // `connecting` is not traced: it's already visible in the button and repeats once
+    // per candidate on a baud sweep. Every settled state still gets its line.
     if (status.status !== 'connecting') {
       this.traceDeviceLink(
         `status -> ${status.status}${status.descriptor ? ` (${status.transport ?? '?'} ${status.descriptor})` : ''}${
@@ -1910,35 +2513,23 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Diagnostic trace for the device connection, to BOTH sinks on purpose: the
-   * main-process log file keeps it after the fact, and the renderer console puts
-   * it where a user can read and copy it while reproducing something. Connection
-   * problems span two processes and a piece of hardware; without this the only
-   * evidence is "it hangs".
+   * Diagnostic trace for the device connection, to both sinks on purpose: the log file
+   * keeps it, and the renderer console lets a user copy it while reproducing something.
    */
   private traceDeviceLink(message: string): void {
     logger.info(`[link] ${message}`)
     this.mainWindow?.webContents?.send('device:link-log', message)
   }
 
-  /**
-   * Turn resolved channel configs into things the link manager can try.
-   *
-   * Delegates to `debug-channel-factory` — see `toDebugCandidate` above.
-   */
   private toDeviceLinkCandidates = (
     configs: DebugConnectionConfig[],
     opts: { probeBaudRates?: boolean } = {},
   ): DeviceLinkCandidate[] => toDeviceLinkCandidates(configs, opts, this.debugChannelDeps)
 
-  /**
-   * The simulator lives in this process, so the factory is given a way to build
-   * the in-process serial port it answers on.
-   */
+  /** The simulator lives in this process, so the factory needs a way to build the in-process serial port it answers on. */
   private readonly debugChannelDeps = {
     createVirtualSerialPort: () => new VirtualSerialPort(this.simulatorModule),
-    // Read from the TOKEN MANAGER at open time, never from a closure over the
-    // login-time value — see `DebugChannelFactoryDeps.getToken`.
+    // Read from the token manager at open time, never a closure over the login-time value.
     getToken: () => this.runtimeApi.tokens.getToken(),
   }
   /** Consume the classification the last verified candidate produced. */
@@ -1949,11 +2540,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Establish a session with a Runtime v3/v4: control over REST, debug over the
-   * channel its board declares (v3: Modbus TCP on the runtime's address; v4: the
-   * debug WebSocket). Called once the renderer has logged in.
-   *
-   * The debug channel is only DESCRIBED here, not opened — see `acquireDebugChannel`.
+   * Establishes a session with a Runtime v3/v4: control over REST, debug over the
+   * channel its board declares. Called once the renderer has logged in; the debug channel is only described here, not opened.
    */
   handleOpenRuntimeSession = (
     _event: IpcMainInvokeEvent,
@@ -1979,36 +2567,20 @@ class MainProcessBridge implements MainIpcModule {
     }
     return Promise.resolve({ success: true })
   }
-  /**
-   * Turn a resolved channel config into an openable DEBUG channel.
-   *
-   * Delegates to `debug-channel-factory`, shared with the headless CLI so both
-   * build every declared transport from the same code.
-   */
   private toDebugCandidate = (config: DebugConnectionConfig): DeviceDebugCandidate | null =>
     toDebugCandidate(config, this.debugChannelDeps)
 
   /**
-   * Is this freshly opened candidate a device we can work with? Runs the
-   * connect-time classification (`classifyDeviceLink`) and keeps its verdict for
-   * the renderer.
-   *
-   * Only `connected-with-firmware` keeps a candidate. A port that opens but has
-   * no firmware, or an IP that answers something else, therefore falls through to
-   * the next candidate instead of becoming a link that cannot serve a single
-   * command.
+   * Is this freshly opened candidate a device we can work with? Runs the connect-time
+   * classification and keeps its verdict for the renderer; only `connected-with-firmware` keeps a candidate.
    */
   private async verifyDeviceCandidate(
     client: DeviceModbusTransport,
     candidate: DeviceLinkCandidate,
     context: { isLastCandidate: boolean },
   ): Promise<boolean> {
-    // The simulator is in-process: there is no hardware to identify, so the
-    // device-id read is not the right question to ask of it.
-    //
-    // Retried because the session is opened the instant the emulator starts, and
-    // the sketch inside it still has to reach the point where it services Modbus.
-    // Failing here would stop an emulator that was merely still booting.
+    // The simulator is in-process, so a device-id read is the wrong question; retried
+    // since the session opens the instant the emulator starts, before it services Modbus.
     if (candidate.transport === 'simulator') {
       for (let attempt = 0; attempt < MainProcessBridge.SIMULATOR_PROBE_ATTEMPTS; attempt += 1) {
         try {
@@ -2021,16 +2593,9 @@ class MainProcessBridge implements MainIpcModule {
       return false
     }
 
-    // Be patient only with the LAST candidate. The id read is retried because a
-    // board that was just flashed may still be booting — worth ~32s when this is
-    // the only way in, but not while alternatives are waiting: a Modbus TCP
-    // address that no longer answers should not delay the cable that would have
-    // worked. (Measured on a real board: 32.5s to rule out one endpoint.)
-    //
-    // A speculative candidate never gets that patience, whether or not it happens
-    // to be last: it is a baud rate NOBODY configured, and there are several of
-    // them. Spending the patient budget on the final guess would put ~32s at the
-    // end of a sweep whose whole point is to finish quickly.
+    // Patient only with the last candidate: a freshly flashed board may still be
+    // booting, worth ~32s when it's the only way in, but not while alternatives wait.
+    // A speculative candidate (an unconfigured baud guess) never gets that patience.
     const isPatient = !candidate.speculative && (candidate.patient === true || context.isLastCandidate)
     const deviceIdProbe = candidate.speculative
       ? SPECULATIVE_DEVICE_ID_PROBE
@@ -2040,11 +2605,8 @@ class MainProcessBridge implements MainIpcModule {
     const result = await classifyDeviceLink(client, { deviceIdProbe })
     this.deviceLinkProbe = result
     if (result.status !== 'connected-with-firmware') {
-      // Traced only when the endpoint is REJECTED, and then with the budget it was
-      // given: "no firmware after 2 id reads (baud guess)" is a different problem
-      // from "no firmware after 6" on the port the project configured. Announcing
-      // the budget up front, as this used to, put the line before the outcome it
-      // explains and printed it on every success too.
+      // Traced only when rejected, with the budget it was given, since "no firmware
+      // after 2 id reads (baud guess)" is a different problem from "after 6" on a configured port.
       this.traceDeviceLink(
         `  ${candidate.descriptor}: "${result.status}" after up to ${deviceIdProbe.attempts} id read(s)` +
           `${candidate.speculative ? ' (baud guess)' : isPatient ? ' (last configured endpoint, was patient)' : ''}` +
@@ -2059,12 +2621,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Per-tick liveness read, and the ONE place baremetal run/stop state is polled.
-   *
-   * Prefers the status read (FC 0x46) over the device id (0x48): both prove the
-   * firmware is answering, but the status frame also carries the run/stop state
-   * and the mode-switch position — so a switch flipped by hand at the panel shows
-   * up within one interval, with no second timer and no extra traffic.
+   * Per-tick liveness read, and the one place baremetal run/stop state is polled. Prefers
+   * the status read (FC 0x46) over the device id (0x48): status also carries run/stop and
+   * the mode-switch position, at no extra cost.
    */
   private async probeDeviceLink(client: DeviceModbusTransport): Promise<boolean> {
     const descriptor = this.deviceSession.getLink()?.descriptor ?? ''
@@ -2079,11 +2638,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Release the link if it holds `port` — the handoff before an upload takes the
-   * same serial port. A Modbus TCP link is left alone: flashing over USB does not
-   * disturb it, so debugging and run/stop survive an upload.
-   *
-   * Returns whether anything was released, so the caller knows to reconnect.
+   * Releases the link if it holds `port` (the handoff before an upload takes the same
+   * serial port); a Modbus TCP link is left alone. Returns whether anything was released.
    */
   handleDeviceReleaseSerialPort = async (
     _event: IpcMainInvokeEvent,
@@ -2098,13 +2654,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * The channel for this operation family, or a reason there isn't one. Every
-   * device command funnels through here, so "not connected" and "reconnecting"
-   * read the same everywhere instead of each handler inventing its own message —
-   * or, worse, opening its own connection.
-   *
-   * `debug` operations take the debug channel, which for a shared session IS the
-   * control channel and for a runtime target is one of its own.
+   * The channel for this operation family, or why there isn't one — every device command funnels
+   * through here so "not connected"/"reconnecting" read the same everywhere. A shared session's
+   * debug channel IS its control channel.
    */
   private requireControl(what: string): { client: DeviceModbusTransport } | ChannelUnavailable {
     const client = this.deviceClient()
@@ -2114,14 +2666,9 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * The DEBUG channel, opening it if this session's debug medium is one of its own.
-   * Every debug caller passes a distinct `what`, which doubles as the holder name —
-   * so two callers can hold it at once without either closing it on the other.
-   *
-   * A holder acquired here MUST be released, or the channel can never close. Only
-   * the debug session itself is a long-lived holder (acquired by `debugger:connect`,
-   * released by `debugger:disconnect`); every per-command caller goes through
-   * `withDebugChannel`, which releases in a `finally`.
+   * The debug channel, opening it if this session's debug medium is its own. A holder
+   * acquired here MUST be released or the channel never closes — per-command callers
+   * use `withDebugChannel`, which releases in a `finally`.
    */
   private async requireDebug(holder: string): Promise<{ client: DeviceDebugChannel } | ChannelUnavailable> {
     // `holder` may carry a per-call uniqueness suffix (`what#seq`); the trace
@@ -2139,28 +2686,15 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Run one command over the DEBUG channel, holding it only for the duration.
-   *
-   * The holder set is a reference count, and a per-command caller is not a holder
-   * of the channel's LIFETIME — it just needs the channel to exist while it runs.
-   * Registering those callers permanently is what kept a Runtime v3/v4 debug channel
-   * open after the debug session ended: `read variables` is acquired on every poll
-   * tick, so once one had run, `releaseDebugChannel('debug session')` always found
-   * the set non-empty and skipped the close. The user stopped debugging and the
-   * editor held an authenticated debug channel to their PLC until they logged out.
-   *
-   * Releasing here is safe for a BAREMETAL target, where control and debug are the
-   * same channel: `releaseDebugChannel` returns early on `debugCandidate === null`
-   * before touching any client, so it can never disconnect the device out from
-   * under run/stop or the status poll. Only a session whose debug medium is its
-   * own — v3's second Modbus TCP connection, v4's WebSocket — is ever closed.
+   * Runs one command over the debug channel, holding it only for the duration — a
+   * per-command caller is not a holder of the channel's lifetime, so it must release
+   * after, or a Runtime v3/v4 debug channel stays open past its debug session ending.
+   * Safe for baremetal, where `releaseDebugChannel` no-ops when control and debug are the same channel.
    */
   /**
-   * Monotonic suffix for per-command debug holders. The holder set is keyed by
-   * STRING, so two concurrent callers sharing a `what` would be one reference:
-   * the second's release found the set empty and closed the WebSocket under
-   * the first, mid-sequence (review 2026-08-20). Unique keys make the count
-   * honest; `what` stays as the human-readable prefix the trace shows.
+   * Monotonic suffix for per-command debug holders: the holder set is keyed by string,
+   * so two concurrent callers sharing a `what` would be one reference and the second's
+   * release could close the channel mid-sequence under the first.
    */
   private debugHolderSeq = 0
 
@@ -2180,14 +2714,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * Which channel served which command — logged ONCE per distinct combination.
-   *
-   * The question this answers ("did run/stop really ride the same connection as
-   * the debugger?") is answered by the first occurrence. Logging every occurrence
-   * answered it several times a second: the debug poll reads variables
-   * continuously, so an unfiltered trace emitted ~8 identical lines per second
-   * and buried every other message in the console, including the ones explaining
-   * a disconnect.
+   * Which channel served which command — logged once per distinct combination, since
+   * the continuous debug poll would otherwise bury every other console message.
    */
   private tracedChannelUses = new Set<string>()
 
@@ -2209,38 +2737,21 @@ class MainProcessBridge implements MainIpcModule {
     return { error: MainProcessBridge.DEVICE_NOT_CONNECTED, needsReconnect: true }
   }
 
-  /**
-   * The emulator boots in milliseconds, but "milliseconds" is not "instantly", and
-   * its session is opened the instant it starts.
-   */
+  /** The emulator boots in milliseconds, but that's not "instantly" — its session opens the instant it starts. */
   private static readonly SIMULATOR_PROBE_ATTEMPTS = 10
   private static readonly SIMULATOR_PROBE_INTERVAL_MS = 200
 
   /**
-   * Reported when a command arrives and no session exists.
-   *
-   * Short and neutral on purpose. The caller already says which action failed
-   * ("Failed to stop PLC: …", "Could not connect to debug target: …"), so this only
-   * has to supply the reason. It used to explain the reason as well — "the debugger
-   * and run/stop share the device connection" — which was written for a baremetal
-   * board and read as nonsense on a Runtime v4, whose debug channel is its own
-   * WebSocket and shares nothing. Worse, it appeared on a target the user HAD
-   * connected to, so the explanation was not merely irrelevant but wrong.
+   * Reported when a command arrives and no session exists. Short and neutral on
+   * purpose: the caller already says which action failed, and a per-transport
+   * explanation here would be wrong on whichever transport didn't write it.
    */
   private static readonly DEVICE_NOT_CONNECTED = 'not connected to the target'
 
   /**
-   * Open and HOLD the link to a baremetal device (D72).
-   *
-   * `candidates` is the ordered list the renderer resolved from the board's debug
-   * spec — Modbus TCP first when the project enables it, then serial. The manager
-   * tries them in order and keeps the first that both opens and answers, so a
-   * stale DHCP address or an unplugged ethernet shield falls through to the cable
-   * instead of stranding the user on a link that cannot serve a command.
-   *
-   * The classification that used to be this method's job now happens per candidate
-   * (`verifyDeviceCandidate`), because it is also what decides whether a candidate
-   * is worth keeping.
+   * Opens and holds the link to a baremetal device. `candidates` is the ordered list the
+   * renderer resolved from the board's debug spec; keeps the first that both opens and
+   * answers, classified in `verifyDeviceCandidate`.
    */
   handleDeviceConnect = async (
     _event: IpcMainInvokeEvent,
@@ -2289,53 +2800,22 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   // ===================== VPP LICENSING OVER THE HELD LINK =====================
-  //
-  // WHY THESE ARE ON-DEMAND, AND NOT PART OF `device:connect`.
-  //
-  // Two reasons, both learned the hard way. First, `refreshLicense` reaches the
-  // NETWORK: folding it into connect makes every connect to a licensed board wait
-  // on an HTTP round trip that may be rate-limited or time out, and a connect that
-  // hangs looks like a broken cable. Second, a purchase happens AFTER the user has
-  // already been told they are in demo mode — with licensing bolted to connect, the
-  // only way to pick up a licence they just bought is to disconnect and reconnect,
-  // or reflash. Exposing the step means the buy dialog can simply call it again on
-  // the link that is already open.
-  //
-  // CHANNEL CHOICE (`withLicenseChannel`). On baremetal the license FCs are
-  // ordinary frames on the same held Modbus link as run/stop and the status poll,
-  // so they ride the CONTROL channel and queue behind the same mutex. A
-  // REST-controlled runtime (v4) holds no control channel at all — there the SAME
-  // PDUs ride the debug WebSocket, which the runtime answers at the webserver
-  // level, ahead of its is_connected gate, so a device can be activated while the
-  // PLC is stopped. That channel is acquired per call and released in a
-  // `finally`, exactly like every other per-command debug caller.
+  // On-demand, not part of `device:connect`: folding the network round trip in would
+  // make every connect wait on it, and a purchase happens after connect, so the buy
+  // dialog needs to call this again on the already-open link. Baremetal rides the
+  // control channel's frame mutex; runtime v4 rides its own debug WebSocket instead.
 
   /**
-   * True while a COMPOUND licensing sequence is running over the held client.
-   *
-   * The transports already serialise individual FRAMES, and that is not enough
-   * here. `refreshLicense` is read -> HTTP -> write -> read, and two of them
-   * running at once would each see perfectly atomic frames while interleaving a
-   * read and a write of the SAME license — one sequence reading back the other's
-   * blob and drawing a conclusion about it. The frame mutex cannot see the
-   * sequence, so the sequence needs its own guard.
+   * True while a compound licensing sequence runs over the held client. The transports only
+   * serialise individual frames, not `refreshLicense`'s read-HTTP-write-read: two at once
+   * could interleave a read and a write.
    */
   private deviceLicenseSequenceInFlight = false
 
   /**
-   * Read this board's licensing identity over the held link, tagged with which
-   * KIND of value the channel answered (DOPE-589).
-   *
-   * Baremetal answers an id already derived inside the closed license-core;
-   * runtime-v4 answers the raw device-tree anchor and the editor derives from
-   * it. Both arrive as `[FC][status][len][bytes]` on 0x48, which is exactly why
-   * the kind travels in the return value instead of being inferred downstream.
-   *
-   * Read FRESH on every licensing call rather than cached at connect. The
-   * identity IS the device, and a board swapped on the same serial path would
-   * otherwise inherit the previous one's — deciding a license question for
-   * hardware that is no longer there. One extra frame on an operation that already
-   * spends several is not worth that risk.
+   * The licensing identity, tagged with which kind of value the channel answered. Read
+   * fresh every call, never cached at connect: a board swapped on the same serial path
+   * would inherit the previous one's identity.
    */
   private async readLicenseIdentity(
     client: LicenseChannel,
@@ -2344,15 +2824,8 @@ class MainProcessBridge implements MainIpcModule {
     // is checked once; only the NAME of the bytes differs, and that is the whole
     // reason the two are separate methods.
     const settle = (read: { success: boolean; unsupported?: boolean; error?: string }) => {
-      // The target itself said "no identity to license against" (0x85 on 0x48 —
-      // a runtime-v4 host without a device-tree serial). Terminal, so it must
-      // not offer a retry — but it is NOT the 'unsupported' outcome, which
-      // means "this firmware has no licence STORAGE" and whose whole message is
-      // "this hardware supports it, rebuild and upload". Routing an
-      // identity-less host there told the user their x86 box would work if they
-      // rebuilt, which is false and unactionable. It is a check that could not
-      // conclude, with a cause that will not change: check-failed, retryable
-      // false.
+      // The target said "no identity to license against" (0x85 on 0x48) — terminal, no
+      // retry, but distinct from 'unsupported' ("rebuild and upload"), which would wrongly tell an x86 host that rebuilding helps.
       if (read.unsupported) {
         return {
           error:
@@ -2362,18 +2835,13 @@ class MainProcessBridge implements MainIpcModule {
         } as const
       }
       if (!read.success) return { error: read.error ?? 'the device did not answer the identity read' } as const
-      // Liveness evidence for the CONTROL link's poll. On a REST session this
-      // frame rode the debug WebSocket instead — crediting it here is a no-op,
-      // not a lie: a REST session runs no liveness poll (openRestSession never
-      // starts one), so there is no check for this stamp to suppress.
+      // Liveness evidence for the control link's poll; a no-op on a REST session, which runs no liveness poll at all.
       this.deviceSession.noteTraffic()
       return null
     }
 
-    // Exactly one of the two exists on any real channel: the Modbus clients
-    // implement `getDeviceId`, the runtime-v4 WebSocket implements `getAnchor`.
-    // Narrowed on the CHANNEL rather than on the reply, so each branch knows
-    // statically which kind it is holding.
+    // Exactly one of the two exists on any real channel; narrowed on the channel rather
+    // than the reply, so each branch statically knows which kind it holds.
     if (client.getDeviceId) {
       const read = await client.getDeviceId()
       const bad = settle(read)

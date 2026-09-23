@@ -47,6 +47,14 @@ npx jest --config jest.config.json --collectCoverage --ci   # ci-unit-tests
 ```
 
 `prettier --check` only reports; fix with `npx prettier --write <files>`.
+
+`npm run setup:strucpp` installs the **pinned** STruC++ from its GitHub release
+and overwrites whatever is in `node_modules/strucpp`, so a locally patched build
+(testing an unreleased parser change) is wiped by the very command CI runs. Jest
+loads the parser through `dist/parser-bundle.cjs` — STruC++'s ESM chain does not
+survive Jest's CJS transform — so the pinned release has to be one that ships
+that bundle, or every suite fails to load. Run the suite again after
+`setup:strucpp` rather than trusting a run made against a patched install.
 The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared`)
 is byte-identical with **openplc-web** — mirror any change and run the check suite
 in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).

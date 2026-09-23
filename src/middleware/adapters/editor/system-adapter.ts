@@ -35,6 +35,10 @@ const PRODUCTION_EDGE_WEB_URL = 'https://edge.autonomylogic.com'
  */
 const EDGE_WEB_URL = process.env.OPENPLC_EDGE_WEB_URL || PRODUCTION_EDGE_WEB_URL
 
+export function getEdgeWebUrl(): string {
+  return EDGE_WEB_URL
+}
+
 export function createEditorSystemAdapter(): SystemPort {
   return {
     getSystemInfo(): Promise<SystemInfo> {

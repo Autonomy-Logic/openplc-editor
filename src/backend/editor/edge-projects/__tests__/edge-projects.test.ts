@@ -1,0 +1,571 @@
+/**
+ * The cloud round trip, with HTTP stubbed.
+ */
+
+import { z } from 'zod'
+
+import { ApiProjectFilesSchema } from '../../../shared/project/api-envelope'
+import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
+import {
+  listCloudProjectsInFolder,
+  listRecentCloudProjects,
+  readCloudProject,
+  saveCloudFile,
+  saveCloudProject,
+} from '..'
+
+jest.mock('../../edge-account/edge-account-service', () => ({
+  edgeAuthedRequest: jest.fn(),
+}))
+
+const request = jest.mocked(edgeAuthedRequest)
+
+/** What `edgeAuthedRequest` resolves with, so a table of responses is typed as one. */
+type EdgeResponse = Awaited<ReturnType<typeof edgeAuthedRequest>>
+
+function ok(data: unknown): EdgeResponse {
+  return { status: 200, body: JSON.stringify({ data }) }
+}
+
+const SentBodySchema = z.object({
+  files: ApiProjectFilesSchema.passthrough(),
+  deletions: z.array(z.string()).optional(),
+})
+
+/**
+ * The body of the n-th request, validated once here rather than asserted at each
+ * assertion. Validating (rather than casting) is what makes the assertions below mean
+ * something: a save that stopped sending `files` would fail here instead of quietly
+ * reading `undefined` through a cast.
+ */
+function sentBody(callIndex: number): z.infer<typeof SentBodySchema> {
+  const init = request.mock.calls[callIndex]?.[1]
+
+  return SentBodySchema.parse(init && 'json' in init ? init.json : undefined)
+}
+
+/** The envelope shape the API returns under `files`. */
+const FILES = {
+  'project.json': '{"meta":{"name":"Irrigation","type":"plc-project"}}',
+  pous: { programs: { 'main.st': 'x := TRUE;' } },
+  devices: { 'configuration.json': '{}', 'pin-mapping.json': '[]' },
+}
+
+beforeEach(() => {
+  jest.clearAllMocks()
+})
+
+/**
+ * The Open dialog browses one Edge folder at a time, the way Edge's sidebar does.
+ * Same rows, same lock marking as the recent list; only the query differs.
+ */
+describe('listCloudProjectsInFolder', () => {
+  it('asks for that folder, newest first, at the API page cap', async () => {
+    request.mockResolvedValueOnce(ok({ projects: [] })).mockResolvedValueOnce(ok({ projectIds: [] }))
+
+    await listCloudProjectsInFolder('folder-7')
+
+    const query = new URL(request.mock.calls[0][0], 'https://example.test').searchParams
+    expect(query.get('folderId')).toBe('folder-7')
+    expect(query.get('sortBy')).toBe('updatedAt')
+    expect(query.get('sortOrder')).toBe('desc')
+    // 50 is the most the API allows on one page; asking for more is a 400.
+    expect(query.get('limit')).toBe('50')
+  })
+
+  it('marks the locked ones, like the recent list does', async () => {
+    request
+      .mockResolvedValueOnce(
+        ok({ projects: [{ id: 'p1', name: 'Pump', language: 'st', updatedAt: '2026-08-24T00:00:00.000Z' }] }),
+      )
+      .mockResolvedValueOnce(ok({ projectIds: ['p1'] }))
+
+    await expect(listCloudProjectsInFolder('f')).resolves.toEqual({
+      status: 'ok',
+      projects: [expect.objectContaining({ id: 'p1', locked: true })],
+    })
+  })
+})
+
+describe('listRecentCloudProjects', () => {
+  it('asks the server for the newest first, and for no more than the limit', async () => {
+    request.mockResolvedValueOnce(ok({ projects: [] }))
+
+    await listRecentCloudProjects(5)
+
+    const [path] = request.mock.calls[0]
+    const query = new URL(path, 'https://example.test').searchParams
+
+    // Ordering is the server's: the five newest of ten fetched rows are not the five
+    // newest overall, so sorting a truncated page here would be wrong.
+    expect(query.get('limit')).toBe('5')
+    expect(query.get('sortBy')).toBe('updatedAt')
+    expect(query.get('sortOrder')).toBe('desc')
+  })
+
+  it('maps the rows it can use', async () => {
+    request.mockResolvedValueOnce(
+      ok({
+        projects: [
+          { id: 'p1', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z' },
+          { id: 'p2', name: 'No language', language: null, updatedAt: '2026-08-23T10:00:00.000Z' },
+        ],
+      }),
+    )
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({
+      status: 'ok',
+      projects: [
+        { id: 'p1', name: 'Irrigation', language: 'st', updatedAt: '2026-08-24T19:40:51.962Z', locked: false },
+        { id: 'p2', name: 'No language', language: null, updatedAt: '2026-08-23T10:00:00.000Z', locked: false },
+      ],
+    })
+  })
+
+  it('drops rows it cannot open instead of listing them', async () => {
+    request.mockResolvedValueOnce(
+      ok({
+        projects: [
+          { name: 'No id at all', updatedAt: '2026-08-24T00:00:00.000Z' },
+          { id: 'p2', updatedAt: '2026-08-24T00:00:00.000Z' },
+          { id: 'p3', name: 'Fine', updatedAt: '2026-08-24T00:00:00.000Z' },
+          null,
+        ],
+      }),
+    )
+
+    // A card with no id is a card that does nothing when clicked.
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({
+      status: 'ok',
+      projects: [{ id: 'p3', name: 'Fine', language: null, updatedAt: '2026-08-24T00:00:00.000Z', locked: false }],
+    })
+  })
+
+  /**
+   * A project past the plan's private-project limit is read-only on Edge, which
+   * answers 403 to save and commit. The desktop listed it like any other and
+   * only found out on save, so the state has to arrive with the list.
+   */
+  describe('the plan-limit lock', () => {
+    const rows = ok({
+      projects: [
+        { id: 'p1', name: 'Locked', language: 'st', updatedAt: '2026-08-24T00:00:00.000Z' },
+        { id: 'p2', name: 'Fine', language: 'st', updatedAt: '2026-08-23T00:00:00.000Z' },
+      ],
+    })
+
+    it('marks the projects the overflow endpoint names', async () => {
+      request.mockResolvedValueOnce(rows).mockResolvedValueOnce(ok({ projectIds: ['p1'] }))
+
+      const result = await listRecentCloudProjects(5)
+
+      expect(result).toEqual({
+        status: 'ok',
+        projects: [
+          expect.objectContaining({ id: 'p1', locked: true }),
+          expect.objectContaining({ id: 'p2', locked: false }),
+        ],
+      })
+    })
+
+    it('asks the same endpoint the Edge SPA drives its own lock from', async () => {
+      request.mockResolvedValueOnce(rows).mockResolvedValueOnce(ok({ projectIds: [] }))
+
+      await listRecentCloudProjects(5)
+
+      expect(request.mock.calls[1]?.[0]).toBe('/me/overflow')
+    })
+
+    it('still lists the projects when it cannot find out', async () => {
+      request.mockResolvedValueOnce(rows).mockRejectedValueOnce(new Error('offline'))
+
+      const result = await listRecentCloudProjects(5)
+
+      // Not knowing must not cost the user their list, and it fails safe: an
+      // unmarked locked project is still refused by the API.
+      expect(result).toEqual({
+        status: 'ok',
+        projects: [
+          expect.objectContaining({ id: 'p1', locked: false }),
+          expect.objectContaining({ id: 'p2', locked: false }),
+        ],
+      })
+    })
+  })
+
+  it('reports no session when there is no token to use', async () => {
+    request.mockResolvedValueOnce(null)
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'signed-out' })
+  })
+
+  it.each([401, 403])('reports no session when the server answers %i', async (status) => {
+    request.mockResolvedValueOnce({ status, body: '{}' })
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'signed-out' })
+  })
+
+  it('reports unreachable on a transport failure, NOT signed out', async () => {
+    request.mockRejectedValueOnce(new Error('ENOTFOUND'))
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'unreachable' })
+  })
+
+  it('reports unreachable on a 5xx, which says nothing about the session', async () => {
+    request.mockResolvedValueOnce({ status: 503, body: '' })
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'unreachable' })
+  })
+
+  it.each<[string, EdgeResponse]>([
+    ['a payload with no projects array', ok({})],
+    ['an unparseable body', { status: 200, body: 'not json' }],
+  ])('reports an empty account for %s', async (_label, response) => {
+    // The server answered and the session is fine; there is simply nothing to list.
+    request.mockResolvedValueOnce(response)
+
+    await expect(listRecentCloudProjects(5)).resolves.toEqual({ status: 'ok', projects: [] })
+  })
+})
+
+describe('readCloudProject', () => {
+  it('translates the envelope into the shape the filesystem reader returns', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES, capabilities: { canEdit: true } }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.success).toBe(true)
+    expect(result.data?.projectPath).toBe('p1')
+    expect(result.data?.canEdit).toBe(true)
+    expect(result.data?.pouFiles).toEqual([{ relativePath: 'pous/programs/main.st', content: 'x := TRUE;' }])
+  })
+
+  it('sends the build id, so the endpoint does not answer with a hard-refresh stub', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    await readCloudProject('p1')
+
+    expect(request.mock.calls[0][0]).toMatch(/\/projects\/p1\/details\?uncached_version=.+/)
+  })
+
+  it('carries a read-only project through as read-only', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES, capabilities: { canEdit: false } }))
+
+    // Offering a save that the server will refuse is worse than not offering one.
+    await expect(readCloudProject('p1')).resolves.toMatchObject({ data: { canEdit: false } })
+  })
+
+  it('says so plainly when there is no session', async () => {
+    request.mockResolvedValueOnce(null)
+
+    const result = await readCloudProject('p1')
+
+    expect(result.success).toBe(false)
+    expect(result.error?.title).toBe('Not signed in')
+  })
+
+  it('carries the status so a denial is not reported as a broken project', async () => {
+    request.mockResolvedValueOnce({ status: 403, body: '{}' })
+
+    await expect(readCloudProject('p1')).resolves.toMatchObject({
+      success: false,
+      error: { status: 403 },
+    })
+  })
+
+  it('distinguishes unreachable from denied', async () => {
+    request.mockRejectedValueOnce(new Error('ENOTFOUND'))
+
+    const result = await readCloudProject('p1')
+
+    // "You are offline" and "this project is broken" call for completely different things
+    // from the user.
+    expect(result.error?.title).toBe('Could not reach Autonomy Edge')
+  })
+
+  it('fails when the payload carries no files', async () => {
+    request.mockResolvedValueOnce(ok({ capabilities: { canEdit: true } }))
+
+    await expect(readCloudProject('p1')).resolves.toMatchObject({ success: false })
+  })
+
+  it('reports a malformed container instead of opening the project with defaults', async () => {
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, pous: { programs: 'PROGRAM main' } } }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.success).toBe(false)
+    expect(result.error?.description).toContain('cannot read')
+    expect(result.error?.description).toContain('pous.programs')
+  })
+
+  it('reads the servers from where Edge nests them', async () => {
+    request.mockResolvedValueOnce(
+      ok({ files: { ...FILES, devices: { ...FILES.devices, servers: { 'modbus.json': '{"port":502}' } } } }),
+    )
+
+    const result = await readCloudProject('p1')
+
+    expect(result.data?.serverFiles).toEqual([{ relativePath: 'devices/servers/modbus.json', content: '{"port":502}' }])
+    expect(result.data?.deviceConfig).toBe('{}')
+  })
+})
+
+describe('saveCloudFile', () => {
+  it('reads the whole envelope, patches one slot and sends it all back', async () => {
+    request
+      // the mandatory read
+      .mockResolvedValueOnce(ok({ files: structuredClone(FILES) }))
+      // the write
+      .mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await expect(saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')).resolves.toEqual({ success: true })
+
+    const [path] = request.mock.calls[1]
+    expect(path).toBe('/projects/p1/files/save')
+
+    const sent = sentBody(1).files
+
+    // The patched slot changed...
+    expect(sent.pous?.programs['main.st']).toBe('x := FALSE;')
+    // ...and everything else is still there. The backend deletes by omission, so a
+    // partial body would wipe the rest of the project.
+    expect(sent['project.json']).toBe(FILES['project.json'])
+    expect(sent.devices?.['pin-mapping.json']).toBe('[]')
+  })
+
+  it('sends back the keys it does not model, because omission is deletion', async () => {
+    request
+      .mockResolvedValueOnce(ok({ files: { ...structuredClone(FILES), 'README.md': '# Irrigation' } }))
+      .mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
+
+    expect(sentBody(1).files).toMatchObject({ 'README.md': '# Irrigation' })
+  })
+
+  it('keeps the servers, which Edge nests under devices', async () => {
+    const files = {
+      ...structuredClone(FILES),
+      devices: { ...FILES.devices, servers: { 'modbus.json': '{"port":502}' } },
+    }
+    request.mockResolvedValueOnce(ok({ files })).mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/devices/servers/opcua.json', '{"port":4840}')
+
+    const sent = sentBody(1).files
+
+    expect(sent.devices).toEqual({
+      'configuration.json': '{}',
+      'pin-mapping.json': '[]',
+      servers: { 'modbus.json': '{"port":502}', 'opcua.json': '{"port":4840}' },
+    })
+  })
+
+  it('does not invent a project.json the server did not send', async () => {
+    // A brand-new project answers `files: {}`. The web build posts back exactly what it
+    // got plus the patch; the desktop must not add an empty manifest beside it.
+    request.mockResolvedValueOnce(ok({ files: {} })).mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/pous/programs/main.st', 'x := TRUE;')
+
+    const init = request.mock.calls[1]?.[1]
+    const body = init && 'json' in init ? init.json : undefined
+
+    expect(body).toEqual({ files: { pous: { programs: { 'main.st': 'x := TRUE;' } } } })
+  })
+
+  it('refuses to write when the project came back malformed, and says which field', async () => {
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, devices: { 'configuration.json': { board: 'uno' } } } }))
+
+    const result = await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('cannot read')
+    expect(result.error).toContain('devices.configuration.json')
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('serialises a non-string payload', async () => {
+    request.mockResolvedValueOnce(ok({ files: structuredClone(FILES) })).mockResolvedValueOnce({
+      status: 200,
+      body: '{}',
+    })
+
+    await saveCloudFile('p1/devices/configuration.json', { baudRate: 9600 })
+
+    const sent = sentBody(1).files
+
+    expect(JSON.parse(sent.devices?.['configuration.json'] ?? '')).toEqual({ baudRate: 9600 })
+  })
+
+  it('refuses a path with no project id rather than guessing one', async () => {
+    await expect(saveCloudFile('main.st', 'x := TRUE;')).resolves.toMatchObject({ success: false })
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('does not write when the mandatory read failed', async () => {
+    request.mockResolvedValueOnce({ status: 500, body: '{}' })
+
+    const result = await saveCloudFile('p1/pous/programs/main.st', 'x := FALSE;')
+
+    expect(result.success).toBe(false)
+    // One call: the read. Writing after a failed read would send an envelope built from
+    // nothing and delete the project.
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('saveCloudProject', () => {
+  const files = {
+    projectPath: 'p1',
+    projectJson: '{"meta":{"name":"Irrigation"}}',
+    deviceConfig: '{}',
+    pinMapping: '[]',
+    libraryManifest: '',
+    pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'x := TRUE;' }],
+    serverFiles: [],
+    remoteDeviceFiles: [],
+    dataTypeFiles: [],
+    deletions: [],
+  }
+
+  /** The read the save now performs first, so the POST is always the second call. */
+  const serverHas = (extra: Record<string, unknown> = {}) =>
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, ...extra } }))
+
+  it('posts the whole envelope for the project', async () => {
+    serverHas()
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await expect(saveCloudProject(files)).resolves.toEqual({ success: true })
+    expect(request.mock.calls[1][0]).toBe('/projects/p1/files/save')
+  })
+
+  it('keeps a file the envelope does not model', async () => {
+    // The save endpoint deletes by omission and `README.md` has its own endpoint, so it
+    // is never in the generated envelope: building the payload from the store alone
+    // erased it on every full save — closing a dirty project, the pre-build flush, the
+    // assistant's autosave.
+    serverHas({ 'README.md': '# Irrigation\n' })
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudProject(files)
+
+    expect(sentBody(1).files['README.md']).toBe('# Irrigation\n')
+  })
+
+  it('still lets the store win for everything the envelope does model', async () => {
+    serverHas({ pous: { programs: { 'main.st': 'stale', 'gone.st': 'deleted elsewhere' } } })
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudProject(files)
+
+    // The whole container is replaced, so a POU removed in the editor does not come back.
+    expect(sentBody(1).files.pous).toEqual({ programs: { 'main.st': 'x := TRUE;' } })
+  })
+
+  it('omits deletions when there are none, and sends them when there are', async () => {
+    serverHas()
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+    await saveCloudProject(files)
+    expect(sentBody(1).deletions).toBeUndefined()
+
+    serverHas()
+    request.mockResolvedValueOnce({ status: 200, body: '{}' })
+    await saveCloudProject({ ...files, deletions: ['pous/programs/old.st', ''] })
+
+    // The empty entry is dropped: an empty path would ask the backend to delete the
+    // project root.
+    expect(sentBody(3).deletions).toEqual(['pous/programs/old.st'])
+  })
+
+  it('reports a refusal rather than claiming success', async () => {
+    serverHas()
+    request.mockResolvedValueOnce({ status: 403, body: '{}' })
+
+    await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false })
+  })
+
+  it('explains a plan-limit refusal instead of quoting the contract string', async () => {
+    serverHas()
+    request.mockResolvedValueOnce({
+      status: 403,
+      body: JSON.stringify({ error: { message: 'RESOURCE_OVER_LIMIT_AFTER_DOWNGRADE' } }),
+    })
+
+    const result = await saveCloudProject(files)
+
+    expect(result.success).toBe(false)
+    // The API's own word is a contract token, not a sentence to show anyone.
+    expect(result.error).not.toContain('RESOURCE_OVER_LIMIT')
+    expect(result.error).toMatch(/read-only/i)
+  })
+
+  it('does not write at all when the project could not be read first', async () => {
+    request.mockResolvedValueOnce({ status: 500, body: '{}' })
+
+    await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false })
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports no session', async () => {
+    request.mockResolvedValueOnce(null)
+
+    await expect(saveCloudProject(files)).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('Not signed in to Autonomy Edge.'),
+    })
+  })
+
+  it('reports a transport failure instead of throwing', async () => {
+    request.mockRejectedValueOnce(new Error('ECONNRESET'))
+
+    await expect(saveCloudProject(files)).resolves.toMatchObject({ success: false, error: 'ECONNRESET' })
+  })
+})
+
+/** The bytes as loaded, echoed back for files the user didn't touch instead of re-serialized. */
+describe('readCloudProject carries the raw bytes', () => {
+  it('keys the project and device files exactly as the save flow asks for them', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.data?.rawLoadedFiles).toMatchObject({
+      'project.json': FILES['project.json'],
+      'devices/configuration.json': '{}',
+      'devices/pin-mapping.json': '[]',
+    })
+  })
+
+  it('includes every POU under its own relative path', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    const result = await readCloudProject('p1')
+
+    // The same path the parsed `pouFiles` entry carries, because that is the key
+    // `pickContentForSave` looks up.
+    expect(result.data?.rawLoadedFiles?.['pous/programs/main.st']).toBe('x := TRUE;')
+  })
+
+  it('hands back the bytes verbatim, not a re-serialisation', async () => {
+    // Deliberately ugly formatting: the point of the map is that it survives untouched.
+    const ugly = '{\n\t"meta" :   {"name":"Irrigation"}   }'
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, 'project.json': ugly } }))
+
+    const result = await readCloudProject('p1')
+
+    expect(result.data?.rawLoadedFiles?.['project.json']).toBe(ugly)
+  })
+
+  it('leaves out what the save flow never asks about', async () => {
+    request.mockResolvedValueOnce(ok({ files: { ...FILES, 'README.md': '# hi' } }))
+
+    const result = await readCloudProject('p1')
+
+    // A key nobody reads is a key that can only drift. README is not produced by the save
+    // flow, so echoing it would not save it either — that gap is its own problem.
+    expect(result.data?.rawLoadedFiles).not.toHaveProperty('README.md')
+  })
+})

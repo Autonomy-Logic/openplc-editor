@@ -15,7 +15,7 @@ import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import {
   buildAddressPool,
   buildAliasRegistry,
-  describeSource,
+  describeAliasRejection,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -153,11 +153,8 @@ export function useDeviceConfiguration({
       const registry = buildAliasRegistry(pool)
       const validation = validateAliasEdit(registry, alias, sourceRef)
       if (!validation.ok) {
-        toast({
-          title: 'Alias already in use',
-          description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
-          variant: 'fail',
-        })
+        const rejection = describeAliasRejection(validation, alias)
+        toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
         return
       }
 
