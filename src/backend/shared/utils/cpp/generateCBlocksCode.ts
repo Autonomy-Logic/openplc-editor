@@ -71,8 +71,8 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 // \`CONCAT\` for the same reason, one core further along: Zephyr's \`sys/util.h\`
 // defines it as a variadic token-pasting macro, and the IEC standard library
 // declares it as a function template. The macro swallows the declaration and
-// \`iec_string.hpp\` fails with "pasting \")\" and \"s2\" does not give a valid
-// preprocessing token". Any IEC standard name a core happens to use as a macro
+// \`iec_string.hpp\` fails on a token-pasting error it cannot reach past, before any
+// user code is read. Any IEC standard name a core happens to use as a macro
 // lands here; these are the ones met so far.
 #undef CONCAT
 // Energia numbers the GPIO ports as the macros \`PA\` through \`PT\`, each two
