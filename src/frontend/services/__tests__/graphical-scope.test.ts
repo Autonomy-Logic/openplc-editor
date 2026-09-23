@@ -169,6 +169,23 @@ describe('getScopeCompletions', () => {
     expect(asked).toEqual([''])
   })
 
+  it('drills into a member under an anchor that has no direct hit', async () => {
+    setProject([], {
+      globalVariableLists: [{ name: 'GVL', variables: [variable('TON0', 'TON')] }],
+    })
+    withScopedQuery({
+      'GVL.': [{ label: 'TON0', insertText: 'TON0', type: 'TON', kind: FIELD }],
+      'GVL.TON0.': [
+        { label: 'Q', insertText: 'Q', type: 'BOOL', kind: VARIABLE },
+        { label: 'PT', insertText: 'PT', type: 'TIME', kind: VARIABLE },
+      ],
+    })
+
+    const items = await getScopeCompletions('main', 'GVL.', 'BOOL')
+
+    expect(items.map((i) => i.insertText)).toEqual(['GVL.TON0.Q'])
+  })
+
   it('still drills into an instance member for a typed partial', async () => {
     setProject([variable('TON0', 'TON')])
     withScopedQuery({

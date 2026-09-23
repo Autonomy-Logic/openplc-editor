@@ -107,8 +107,8 @@ export async function getScopeCompletions(
   // BOOL). Drill one level into the matching instance/struct variables and
   // surface their compatible members. Gated on "no direct hits" + capped, so
   // the extra LSP round-trips stay rare and bounded.
-  // An empty segment names no instance to drill into.
-  if (!expectedType || direct.length > 0 || !segment.trim()) return direct
+  // Only an unanchored empty box names no instance to drill into; `GVL.` names one.
+  if (!expectedType || direct.length > 0 || (!anchor && !segment.trim())) return direct
 
   const expandable = matching.filter((item) => item.type && isDerivedType(item.type)).slice(0, SCOPE_EXPAND_LIMIT)
   const expanded = await Promise.all(
