@@ -125,6 +125,26 @@ export type ProjectActions = {
   deletePou: (name: string) => void
   updatePouDocumentation: (name: string, documentation: string) => void
   updatePouReturnType: (name: string, returnType: string) => void
+  /**
+   * Store a POU's declaration text.
+   *
+   * `unparsed` records whether that text is known NOT to parse — the loader's
+   * verdict, which decides whether the POU opens in the code view so the user
+   * can repair it. Every other caller writes a text that came out of a
+   * successful parse or patch, so the default clears the mark rather than
+   * leaving a stale one behind.
+   */
+  setPouVariablesText: (name: string, text: string, unparsed?: boolean) => void
+  /**
+   * Patch a POU's declaration text to match its variables, and carry the result
+   * into an open code buffer.
+   *
+   * The same step every variable mutation in this slice runs, exposed for the
+   * cascades that live outside it — a data type rename reaches POU variables
+   * through `propagateDatatypeRename`, and the text has to follow or the old
+   * type name comes back on the next toggle to code view.
+   */
+  regeneratePouVariablesText: (name: string) => void
   clearPouVariablesText: (name: string) => void
   updatePouName: (oldName: string, newName: string) => void
   applyPouSnapshot: (name: string, variables: PLCVariable[], body: PLCBody) => void
@@ -182,6 +202,8 @@ export type ProjectActions = {
    * onto every producer, and reconciles bound variables. Invoked after every
    * producer mutation and on target switch.
    */
+  /** Repair aliases saved before they had to be IEC identifiers; returns what it changed. */
+  normalizeProjectAliases: () => { repairs: Array<{ from: string; to: string; reason: string }> }
   recalculateIecAddresses: () => ProjectResponse
 
   /**

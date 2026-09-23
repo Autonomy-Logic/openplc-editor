@@ -640,7 +640,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
             {message.length}/500
           </span>
         </div>
-        <div className='flex gap-2'>
+        <div className='flex flex-wrap gap-2'>
           <button
             onClick={() => void handleCommit()}
             disabled={!canCommit || isCommitting}

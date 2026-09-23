@@ -49,22 +49,52 @@ const clickAway = async () => {
 /** Legal but non-canonical: no spaces around the colon, single-space indent. */
 const TYPED = 'VAR\n Counter:INT;\nEND_VAR'
 
-describe('VariablesEditor re-canonicalises the buffer after a commit', () => {
+/** What the user actually types: their own spacing, and a comment. */
+const TYPED_WITH_COMMENT = 'VAR\n  (* what it counts *)\n  Counter : INT;\nEND_VAR'
+
+describe('VariablesEditor keeps the buffer the user typed after a commit', () => {
   beforeEach(() => {
     toastMock.mockClear()
     getState().sharedWorkspaceActions.clearStatesOnCloseProject()
   })
 
-  it('replaces the typed text with the canonical serialisation', async () => {
+  it('keeps the typed text instead of replacing it with a serialisation', async () => {
+    // The inverse of what this asserted for DOPE-622. Re-canonicalising the
+    // buffer kept it in step with the synthesised LSP document, but it also
+    // deleted every comment and every column of alignment the user had put
+    // there (DOPE-650). The stub is now built from this same text, so the two
+    // agree without the buffer having to be rewritten.
     seedPou('Main')
     render(<VariablesEditor name='Main' />)
 
     typeInto(TYPED)
     await clickAway()
 
-    const canonical = canonicalOf('Main')
-    expect(canonical).not.toBe(TYPED)
-    expect(bufferText()).toBe(canonical)
+    expect(bufferText()).toBe(TYPED)
+    expect(canonicalOf('Main')).not.toBe(TYPED)
+  })
+
+  it('keeps a comment through a commit', async () => {
+    seedPou('Commented')
+    render(<VariablesEditor name='Commented' />)
+
+    typeInto(TYPED_WITH_COMMENT)
+    await clickAway()
+
+    expect(bufferText()).toBe(TYPED_WITH_COMMENT)
+    expect(bufferText()).toContain('(* what it counts *)')
+  })
+
+  it('records the typed text on the POU, so it survives a save', async () => {
+    seedPou('Persisted')
+    render(<VariablesEditor name='Persisted' />)
+
+    typeInto(TYPED_WITH_COMMENT)
+    await clickAway()
+
+    const pou = getState().project.data.pous.find((candidate) => candidate.name === 'Persisted')
+    expect(pou?.variablesText).toBe(TYPED_WITH_COMMENT)
+    expect(pou?.interface?.variables.map((variable) => variable.name)).toEqual(['Counter'])
   })
 
   it('leaves the typed text alone when the commit fails', async () => {
@@ -77,6 +107,34 @@ describe('VariablesEditor re-canonicalises the buffer after a commit', () => {
 
     expect(bufferText()).toBe(broken)
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Syntax error' }))
+  })
+
+  it('shows the POU\u2019s own declaration text when switching table \u2192 code', () => {
+    // Caught in the browser, not by the suite: the text survived the load, but
+    // toggling to code view re-rendered the buffer from the table and dropped
+    // every comment on the way. Every buffer-filling path reads
+    // `variablesText` now.
+    const withComments = 'VAR\n  (* section header *)\n  Counter : INT;\n  // trailing note\nEND_VAR'
+    expect(getState().pouActions.create({ type: 'program', name: 'FromDisk', language: 'st' }).ok).toBe(true)
+    getState().projectActions.setPouVariablesText('FromDisk', withComments)
+    getState().projectActions.setPouVariables({
+      pouName: 'FromDisk',
+      variables: [
+        {
+          name: 'Counter',
+          class: 'local',
+          type: { definition: 'base-type', value: 'INT' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      ],
+    })
+    getState().editorActions.updateModelVariablesForName('FromDisk', { display: 'code' })
+
+    render(<VariablesEditor name='FromDisk' />)
+
+    expect(bufferText()).toBe(withComments)
   })
 
   it('does not re-commit on the next blur', async () => {
