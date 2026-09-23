@@ -76,27 +76,12 @@ protocol, transport, register and debug layers agree on the same contracts.
 #define MB_REFUSED_LOCKED                0x6C
 
 // Modbus registers struct
-//
-// The *_size fields are uint16_t, not uint8_t: they are populated from the
-// MAX_* process-image macros, and a board with an expansion backplane sizes
-// those well past 255 (a 15-slot P1AM reaches 240 discrete points per
-// direction). As uint8_t the assignment in init_mbregs truncated silently --
-// 256 coils became 0 -- and the register map came up wrong with no
-// diagnostic anywhere (openplc-editor#296).
+// What a Modbus slave is, on this firmware: an id. The register banks that used
+// to live here are gone -- every FC addresses the process image directly, so
+// the values have one home (the IEC program's variables) instead of two, and
+// there is nothing left to keep in step between them.
 struct MBinfo {
     uint8_t slaveid;
-    uint16_t *holding;
-    uint16_t holding_size;
-    uint32_t *dint_memory;
-    uint16_t dint_memory_size;
-    uint64_t *lint_memory;
-    uint16_t lint_memory_size;
-    uint8_t *coils;
-    uint16_t coils_size;
-    uint16_t *input_regs;
-    uint16_t input_regs_size;
-    uint8_t *input_status;
-    uint16_t input_status_size;
 };
 
 //Function Codes

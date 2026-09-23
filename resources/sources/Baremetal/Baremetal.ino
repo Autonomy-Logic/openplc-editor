@@ -252,14 +252,14 @@ void setup()
             modbus.slaveid = DEBUG_SLAVE;
         #endif
 
-        init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
         mapEmptyBuffers();
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
         // variables directly through the strucpp debug table (openplc_debug_*),
-        // so it needs NO operation buffers — init_mbregs()/mapEmptyBuffers() are
-        // deliberately not called here, saving SRAM on small boards.
+        // so it reaches every variable whether or not a slot is bound —
+        // mapEmptyBuffers() is deliberately not called here, saving SRAM on
+        // small boards.
         DEBUG_IFACE.begin(DEBUG_BAUD);
         mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
         modbus.slaveid = DEBUG_SLAVE;
@@ -336,26 +336,21 @@ void setup()
 }
 
 // =============================================================================
-// MAP EMPTY BUFFERS (for Modbus)
+// BACK THE UNBOUND SLOTS
 // =============================================================================
 #ifdef MODBUS_ENABLED
 
-// Backing storage for discrete slots the PLC program did not claim.
-//
-// The analog and memory slots below alias straight into the Modbus banks,
-// which is what makes an unclaimed %QW readable over Modbus. The discrete
-// banks are bit-packed and cannot be aliased that way, so each unclaimed
-// bit needs a byte of its own -- this array is it.
-//
-// One static block rather than a malloc per slot: this used to call
-// malloc(1) once per unbound point, which on a board with a 15-slot
-// expansion backplane is ~480 one-byte allocations, each carrying its own
-// heap header (often 8 bytes, so ~8x the payload) and fragmenting the heap
-// before the program has run a single scan. A flat array costs exactly
-// MAX_DIGITAL_INPUT + MAX_DIGITAL_OUTPUT bytes, needs no allocator, and
-// cannot fail partway through and leave the image half-mapped
-// (openplc-editor#296).
-static IEC_BOOL empty_discrete[MAX_DIGITAL_INPUT + MAX_DIGITAL_OUTPUT] = {};
+// Storage for slots the program declared no variable for -- the image is a
+// table of pointers into program variables, and those slots have none. Keeps
+// a sized-but-undeclared address usable as scratch. Static so an image too big
+// for the board fails at link rather than at runtime.
+static IEC_BOOL empty_bits[MAX_DIGITAL_INPUT + MAX_DIGITAL_OUTPUT] = {};
+static IEC_UINT empty_words[MAX_ANALOG_INPUT + MAX_ANALOG_OUTPUT] = {};
+#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
+static IEC_UINT  empty_memory_words[MAX_MEMORY_WORD] = {};
+static IEC_UDINT empty_memory_dwords[MAX_MEMORY_DWORD] = {};
+static IEC_ULINT empty_memory_lwords[MAX_MEMORY_LWORD] = {};
+#endif
 
 void mapEmptyBuffers()
 {
@@ -363,14 +358,7 @@ void mapEmptyBuffers()
     {
         if (bool_output[i/8][i%8] == NULL)
         {
-            bool_output[i/8][i%8] = &empty_discrete[i];
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
-    {
-        if (int_output[i] == NULL)
-        {
-            int_output[i] = (IEC_UINT *)(modbus.holding + i);
+            bool_output[i/8][i%8] = &empty_bits[i];
         }
     }
     for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
@@ -378,14 +366,21 @@ void mapEmptyBuffers()
         if (bool_input[i/8][i%8] == NULL)
         {
             // Offset past the output half -- one array, two disjoint ranges.
-            bool_input[i/8][i%8] = &empty_discrete[MAX_DIGITAL_OUTPUT + i];
+            bool_input[i/8][i%8] = &empty_bits[MAX_DIGITAL_OUTPUT + i];
+        }
+    }
+    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
+    {
+        if (int_output[i] == NULL)
+        {
+            int_output[i] = &empty_words[i];
         }
     }
     for (int i = 0; i < MAX_ANALOG_INPUT; i++)
     {
         if (int_input[i] == NULL)
         {
-            int_input[i] = (IEC_UINT *)(modbus.input_regs + i);
+            int_input[i] = &empty_words[MAX_ANALOG_OUTPUT + i];
         }
     }
     #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
@@ -393,21 +388,21 @@ void mapEmptyBuffers()
         {
             if (int_memory[i] == NULL)
             {
-                int_memory[i] = (IEC_UINT *)(modbus.holding + MAX_ANALOG_OUTPUT + i);
+                int_memory[i] = &empty_memory_words[i];
             }
         }
         for (int i = 0; i < MAX_MEMORY_DWORD; i++)
         {
             if (dint_memory[i] == NULL)
             {
-                dint_memory[i] = (IEC_UDINT *)(modbus.dint_memory + i);
+                dint_memory[i] = &empty_memory_dwords[i];
             }
         }
         for (int i = 0; i < MAX_MEMORY_LWORD; i++)
         {
             if (lint_memory[i] == NULL)
             {
-                lint_memory[i] = (IEC_ULINT *)(modbus.lint_memory + i);
+                lint_memory[i] = &empty_memory_lwords[i];
             }
         }
     #endif
@@ -416,110 +411,10 @@ void mapEmptyBuffers()
 // =============================================================================
 // MODBUS TASK
 // =============================================================================
+// Nothing to synchronise: the FC handlers address the process image directly.
 void modbusTask()
 {
-    // Sync OpenPLC Buffers with Modbus Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
-    {
-        if (bool_output[i/8][i%8] != NULL)
-        {
-            write_discrete(i, COILS, (bool)*bool_output[i/8][i%8]);
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
-    {
-        if (int_output[i] != NULL)
-        {
-            modbus.holding[i] = *int_output[i];
-        }
-    }
-    for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
-    {
-        if (bool_input[i/8][i%8] != NULL)
-        {
-            write_discrete(i, INPUTSTATUS, (bool)*bool_input[i/8][i%8]);
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_INPUT; i++)
-    {
-        if (int_input[i] != NULL)
-        {
-            modbus.input_regs[i] = *int_input[i];
-        }
-    }
-    #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++)
-        {
-            if (int_memory[i] != NULL)
-            {
-                modbus.holding[i + MAX_ANALOG_OUTPUT] = *int_memory[i];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
-        {
-            if (dint_memory[i] != NULL)
-            {
-                modbus.dint_memory[i] = *dint_memory[i];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
-        {
-            if (lint_memory[i] != NULL)
-            {
-                modbus.lint_memory[i] = *lint_memory[i];
-            }
-        }
-    #endif
-
-    // Read changes from clients
     mbtask();
-
-    // Write changes back to OpenPLC Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
-    {
-        if (bool_output[i/8][i%8] != NULL)
-        {
-            *bool_output[i/8][i%8] = get_discrete(i, COILS);
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
-    {
-        if (int_output[i] != NULL)
-        {
-            *int_output[i] = modbus.holding[i];
-        }
-    }
-    #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++)
-        {
-            if (int_memory[i] != NULL)
-            {
-                *int_memory[i] = modbus.holding[i + MAX_ANALOG_OUTPUT];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
-        {
-            if (dint_memory[i] != NULL)
-            {
-                *dint_memory[i] = modbus.dint_memory[i];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
-        {
-            if (lint_memory[i] != NULL)
-            {
-                *lint_memory[i] = modbus.lint_memory[i];
-            }
-        }
-    #endif
-
-    // The reverse-copies above (COILS → bool_output, holding → int_output,
-    // memory) write located variables' raw storage directly, clobbering any
-    // debugger force. Re-impose forces here so forcing works while STILL
-    // mirroring Modbus client writes into mapped outputs. (Supersedes the open
-    // PR #719, which made forcing work by deleting the digital reverse-copy —
-    // at the cost of Modbus coil mirroring.)
-    runtime_apply_located_forces();
 }
 #endif
 
@@ -548,8 +443,7 @@ void scheduler()
     #if defined(MODBUS_ENABLED)
         modbusTask();
     #elif defined(DEBUGGER_ENABLED)
-        // Debug-only: poll the serial transport for debugger requests. No buffer
-        // sync (modbusTask's mirror loops) because there are no operation buffers.
+        // Debug-only: poll the serial transport for debugger requests.
         mbtask();
     #endif
 
@@ -568,6 +462,10 @@ void scheduler()
     #if S7COMM_ENABLED
         s7commtask(cycle_slack_us());
     #endif
+
+    // Protocol writes go to located storage raw, bypassing IECVar::set() and so
+    // clobbering a force. Re-impose after ALL of them, not just Modbus.
+    runtime_apply_located_forces();
 
     if (!first_cycle)
     {
@@ -619,6 +517,9 @@ void loop()
     #if S7COMM_ENABLED
         s7commtask(cycle_slack_us());
     #endif
+
+    // Same repair as in scheduler(): the inter-cycle service writes raw too.
+    runtime_apply_located_forces();
 
     #ifdef SIMULATOR_MODE
     __asm volatile("sleep");
