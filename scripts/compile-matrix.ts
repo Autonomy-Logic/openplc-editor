@@ -216,11 +216,29 @@ function usedPlatform(output: string): string | undefined {
   return undefined
 }
 
+/** A compiler diagnostic, not the command line that produced it. */
+const DIAGNOSTIC =
+  /(^|[\s/])[^\s/]+\.(c|cc|cpp|cxx|h|hpp|ino|S):\d+(:\d+)?:\s*(fatal\s+)?error:|undefined reference to|ld returned \d+ exit status/i
+
+/**
+ * The lines that say why a build failed.
+ *
+ * Matching `error` anywhere was worse than useless: a compiler invocation for
+ * an ESP32 carries `-Wno-error=...` and runs to several kilobytes, so the eight
+ * slots filled with command lines and the real diagnostic never appeared. This
+ * matches the shape of a diagnostic instead — `file:line:col: error:`, an
+ * undefined reference, or the linker's own verdict — and drops anything that
+ * looks like an invocation.
+ */
 function compileErrors(output: string): string[] {
   const seen = new Set<string>()
   for (const line of output.replace(ANSI, '').split('\n')) {
     const trimmed = line.trim()
-    if (/\b(error|fatal error|undefined reference)\b/i.test(trimmed)) seen.add(trimmed)
+    // An invocation, however many times it says "error", is not a diagnostic.
+    if (/^[^\s]*(gcc|g\+\+|clang|ld|ar|objcopy)(\.exe)?\s/.test(trimmed) || trimmed.length > 400) continue
+    // `ld` and friends prefix their message with their own absolute path, which
+    // on an ESP32 toolchain is longer than the message. Keep the tool's name.
+    if (DIAGNOSTIC.test(trimmed)) seen.add(trimmed.replace(/^\S*\/(ld|collect2|g\+\+|gcc|ar)(\.exe)?:\s*/, '$1: '))
     if (seen.size >= 8) break
   }
   return Array.from(seen)
