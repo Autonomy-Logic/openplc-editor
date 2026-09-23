@@ -1,22 +1,39 @@
 {
   "displayName": "src",
   "rootDir": ".",
-  "roots": ["<rootDir>/src"],
-  "setupFiles": ["<rootDir>/src/jest-vi-shim.ts"],
-  "moduleDirectories": ["node_modules"],
-  "moduleFileExtensions": ["js", "json", "jsx", "ts", "tsx"],
+  "roots": [
+    "<rootDir>/src"
+  ],
+  "setupFiles": [
+    "<rootDir>/src/jest-platform-globals.ts",
+    "<rootDir>/src/jest-vi-shim.ts"
+  ],
+  "moduleDirectories": [
+    "node_modules"
+  ],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "jsx",
+    "ts",
+    "tsx"
+  ],
   "moduleNameMapper": {
     "^@root/(.*)$": "<rootDir>/src/$1",
     "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/configs/mocks/fileMock.js",
     "\\.(css|less|sass|scss)$": "identity-obj-proxy",
-    "^monaco-editor$": "<rootDir>/configs/mocks/monaco-editor-mock.js"
+    "^monaco-editor$": "<rootDir>/configs/mocks/monaco-editor-mock.js",
+    "^strucpp$": "<rootDir>/node_modules/strucpp/dist/parser-bundle.cjs"
   },
   "testEnvironment": "jsdom",
   "workerIdleMemoryLimit": "1GB",
   "testEnvironmentOptions": {
     "url": "http://localhost/"
   },
-  "testMatch": ["<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)", "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"],
+  "testMatch": [
+    "<rootDir>/src/**/?(*.)+(spec|test).(ts|tsx)",
+    "<rootDir>/src/**/__tests__/**/*.(ts|tsx)"
+  ],
   "testPathIgnorePatterns": [
     "/node_modules/",
     "src/frontend/utils/__tests__/notify-no-write-permission.test.ts",
@@ -26,7 +43,9 @@
     "src/backend/shared/library/__tests__/build-pipeline-real-strucpp.test.ts",
     "src/backend/shared/print/__tests__/fixtures/"
   ],
-  "transformIgnorePatterns": ["node_modules/(?!strucpp)"],
+  "transformIgnorePatterns": [
+    "node_modules/(?!strucpp)"
+  ],
   "transform": {
     "\\.(ts|tsx|js|jsx)$": [
       "ts-jest",
@@ -52,7 +71,12 @@
     "!src/jest-vi-shim.ts"
   ],
   "coverageDirectory": "coverage/src",
-  "coverageReporters": ["text", "text-summary", "lcov", "json-summary"],
+  "coverageReporters": [
+    "text",
+    "text-summary",
+    "lcov",
+    "json-summary"
+  ],
   "coverageThreshold": {
     "src/frontend/store/slices/": {
       "branches": 0,

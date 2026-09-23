@@ -170,7 +170,9 @@ describe('DataTypeEditor rename from the code view', () => {
 
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Syntax error' }))
     expect(getState().project.data.dataTypes.map((dataType) => dataType.name)).toEqual(['Motor'])
-    expect(screen.getByText(/missing colon/)).toBeTruthy()
+    // The message is STruC++'s now, not a hand-written hint (DOPE-650): it
+    // names the token the parser wanted and the one it found.
+    expect(screen.getByText(/Expected `Colon`/)).toBeTruthy()
   })
 
   it('renames before switching to the table view', async () => {
