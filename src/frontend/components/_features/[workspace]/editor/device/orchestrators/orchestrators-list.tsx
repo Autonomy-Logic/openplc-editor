@@ -78,7 +78,11 @@ function sameBinding(a: SelectedDevice['vpp'], b: SelectedDevice['vpp']): boolea
   return a.packageId === b.packageId && a.version === b.version && a.contentHash === b.contentHash
 }
 
-function refreshSelection(selection: SelectedDevice | null, orchestrators: OrchestratorInfo[]): SelectedDevice | null {
+/** Exported for direct testing: reconciles a stale selection against a fresh poll. */
+export function refreshSelection(
+  selection: SelectedDevice | null,
+  orchestrators: OrchestratorInfo[],
+): SelectedDevice | null {
   if (!selection) return null
   const device = orchestrators
     .find((item) => item.id === selection.orchestratorId)
