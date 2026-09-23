@@ -59,16 +59,26 @@ export function tokenizeRecipe(recipe: string): string[] {
         }
         i++ // skip closing '
       } else if (ch === '"') {
-        // Double-quoted segment: literal until next double quote.
-        i++
-        while (i < n && recipe[i] !== '"') {
-          token += recipe[i]
-          i++
-        }
-        if (i >= n) {
+        // A double quote either GROUPS the token or is PART OF IT, and which one
+        // depends on where it sits.
+        //
+        // Wrapping the whole token, it groups: `"{source_file}"` and
+        // `"C:\\Path With Spaces\\f.cpp"` must reach the compiler unquoted, or the
+        // spawn looks for a file whose name begins with a quote.
+        //
+        // Anywhere else it is content. stm32duino writes
+        // `-DVARIANT_H="{build.variant_h}"`, and `variant.h` does
+        // `#include VARIANT_H` — the quotes ARE the macro's value, so eating them
+        // leaves `#include variant_BLACKPILL_F411CE.h`, which gcc rejects with
+        // "#include expects \"FILENAME\" or <FILENAME>". Verified against
+        // arduino-cli's own argv, which carries the quotes.
+        const close = recipe.indexOf('"', i + 1)
+        if (close === -1) {
           throw new Error(`tokenizeRecipe: unterminated double quote in recipe near position ${i}`)
         }
-        i++ // skip closing "
+        const wrapsWholeToken = token === '' && (close + 1 >= n || isWhitespace(recipe[close + 1]))
+        token += wrapsWholeToken ? recipe.slice(i + 1, close) : recipe.slice(i, close + 1)
+        i = close + 1
       } else {
         token += ch
         i++
