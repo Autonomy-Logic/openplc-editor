@@ -30,7 +30,7 @@ const catalog = (...entries: RemoteCatalogEntry[]): RemoteCatalog => ({
 
 describe('findPackageUpdate', () => {
   it('reports the newest release when it is ahead of what is installed', () => {
-    expect(findPackageUpdate(catalog(entry()), 'com.openplc.arduino', '1.1.0', '4.4.0')).toEqual({
+    expect(findPackageUpdate(catalog(entry()), 'com.openplc.arduino', '1.1.0', '4.3.0')).toEqual({
       packageName: 'Arduino Boards',
       installedVersion: '1.1.0',
       availableVersion: '1.3.0',
@@ -42,10 +42,10 @@ describe('findPackageUpdate', () => {
     // the editor is too old -- the same `minEditorVersion` floor gates both.
     const versions = [
       { version: '1.3.0', downloadUrl: 'u3', deviceCount: 4, minEditorVersion: '4.5.0' },
-      { version: '1.2.0', downloadUrl: 'u2', deviceCount: 4, minEditorVersion: '4.4.0' },
+      { version: '1.2.0', downloadUrl: 'u2', deviceCount: 4, minEditorVersion: '4.3.0' },
       { version: '1.1.0', downloadUrl: 'u1', deviceCount: 4 },
     ]
-    expect(findPackageUpdate(catalog(entry({ versions })), 'com.openplc.arduino', '1.1.0', '4.4.0')).toEqual({
+    expect(findPackageUpdate(catalog(entry({ versions })), 'com.openplc.arduino', '1.1.0', '4.3.0')).toEqual({
       packageName: 'Arduino Boards',
       installedVersion: '1.1.0',
       availableVersion: '1.2.0',
@@ -54,17 +54,17 @@ describe('findPackageUpdate', () => {
 
   it('says nothing when every release needs a newer editor', () => {
     const versions = [{ version: '2.0.0', downloadUrl: 'u', deviceCount: 4, minEditorVersion: '9.0.0' }]
-    expect(findPackageUpdate(catalog(entry({ versions })), 'com.openplc.arduino', '1.1.0', '4.4.0')).toBeNull()
+    expect(findPackageUpdate(catalog(entry({ versions })), 'com.openplc.arduino', '1.1.0', '4.3.0')).toBeNull()
   })
 
   it('says nothing when the installed version is already the newest, or ahead of it', () => {
-    expect(findPackageUpdate(catalog(entry()), 'com.openplc.arduino', '1.3.0', '4.4.0')).toBeNull()
-    expect(findPackageUpdate(catalog(entry()), 'com.openplc.arduino', '2.0.0', '4.4.0')).toBeNull()
+    expect(findPackageUpdate(catalog(entry()), 'com.openplc.arduino', '1.3.0', '4.3.0')).toBeNull()
+    expect(findPackageUpdate(catalog(entry()), 'com.openplc.arduino', '2.0.0', '4.3.0')).toBeNull()
   })
 
   it('says nothing about a package the catalog does not carry, or with no catalog at all', () => {
-    expect(findPackageUpdate(catalog(entry()), 'com.vendor.private', '1.0.0', '4.4.0')).toBeNull()
-    expect(findPackageUpdate(null, 'com.openplc.arduino', '1.1.0', '4.4.0')).toBeNull()
+    expect(findPackageUpdate(catalog(entry()), 'com.vendor.private', '1.0.0', '4.3.0')).toBeNull()
+    expect(findPackageUpdate(null, 'com.openplc.arduino', '1.1.0', '4.3.0')).toBeNull()
   })
 })
 
@@ -90,7 +90,7 @@ describe('createPackageUpdateNotifier', () => {
     const listRemoteCatalog = jest.fn().mockResolvedValue(catalog(entry()))
     const notifier = createPackageUpdateNotifier(
       { listRemoteCatalog, listInstalled: jest.fn().mockResolvedValue(installed) },
-      '4.4.0',
+      '4.3.0',
     )
 
     await notifier.prime()
@@ -105,7 +105,7 @@ describe('createPackageUpdateNotifier', () => {
     const listInstalled = jest.fn().mockResolvedValue(installed)
     const notifier = createPackageUpdateNotifier(
       { listRemoteCatalog: jest.fn().mockRejectedValue(new Error('ENOTFOUND')), listInstalled },
-      '4.4.0',
+      '4.3.0',
     )
 
     await expect(notifier.prime()).resolves.toBeUndefined()
@@ -118,7 +118,7 @@ describe('createPackageUpdateNotifier', () => {
   it('stays silent before prime has resolved', async () => {
     const notifier = createPackageUpdateNotifier(
       { listRemoteCatalog: jest.fn().mockResolvedValue(catalog(entry())), listInstalled: jest.fn() },
-      '4.4.0',
+      '4.3.0',
     )
     expect(await notifier.notice('com.openplc.arduino')).toBeNull()
   })
@@ -129,7 +129,7 @@ describe('createPackageUpdateNotifier', () => {
         listRemoteCatalog: jest.fn().mockResolvedValue(catalog(entry())),
         listInstalled: jest.fn().mockResolvedValue([]),
       },
-      '4.4.0',
+      '4.3.0',
     )
     await notifier.prime()
     expect(await notifier.notice('com.openplc.arduino')).toBeNull()
@@ -141,7 +141,7 @@ describe('createPackageUpdateNotifier', () => {
         listRemoteCatalog: jest.fn().mockResolvedValue(catalog(entry())),
         listInstalled: jest.fn().mockRejectedValue(new Error('IPC gone')),
       },
-      '4.4.0',
+      '4.3.0',
     )
     await notifier.prime()
     expect(await notifier.notice('com.openplc.arduino')).toBeNull()
@@ -156,7 +156,7 @@ describe('createPackageUpdateNotifier', () => {
       ])
     const notifier = createPackageUpdateNotifier(
       { listRemoteCatalog: jest.fn().mockResolvedValue(catalog(entry())), listInstalled },
-      '4.4.0',
+      '4.3.0',
     )
 
     await notifier.prime()

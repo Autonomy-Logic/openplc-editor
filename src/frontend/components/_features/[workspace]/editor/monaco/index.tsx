@@ -31,6 +31,7 @@ import {
   tableVariablesCompletion,
 } from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
+import { runWithoutDirtying } from './model-sync-guard'
 import { cleanupPythonLSP, initPythonLSP, setupPythonLSPForEditor, updatePythonLspContext } from './python-lsp'
 import { applyThemeNow, ensureOpenplcThemes } from './theme-utils'
 
@@ -403,7 +404,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           const newBodyValue = typeof parsedPou.body.value === 'string' ? parsedPou.body.value : ''
 
           setLocalText(newBodyValue)
-          updatePou({ name, content: { language, value: newBodyValue } })
+          // The body came from disk, so this write must not mark the POU unsaved.
+          runWithoutDirtying(isSyncingModelRef, () => updatePou({ name, content: { language, value: newBodyValue } }))
         }
       } catch (err) {
         console.error('[Monaco FileWatch] Failed to reload file:', err)
@@ -960,7 +962,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
             const currentBodyValue = typeof currentPou.body.value === 'string' ? currentPou.body.value : ''
             if (newBodyValue !== currentBodyValue) {
               setLocalText(newBodyValue)
-              updatePou({ name, content: { language, value: newBodyValue } })
+              // Same as `reloadFromDisk`: the body came from disk, not from the user.
+              runWithoutDirtying(isSyncingModelRef, () =>
+                updatePou({ name, content: { language, value: newBodyValue } }),
+              )
             }
           }
         } catch (err) {

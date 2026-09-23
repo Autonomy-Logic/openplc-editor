@@ -183,6 +183,13 @@ export interface UploadArduinoBoardArgs {
   /** Serial port for upload (e.g. `/dev/cu.usbmodem1101`).  Editor
    *  resolves; web's adapter receives but ignores. */
   port: string
+  /** Upload transport. Absent/"serial" (default): `port` is a serial port.
+   *  "ethernet": the board's core does a network upload; `ipAddress` carries
+   *  the device IP that arduino-cli receives as `--port`. */
+  uploadMethod?: 'serial' | 'ethernet'
+  /** Device IP for `uploadMethod:"ethernet"` (from configuration
+   *  runtimeIpAddress). Ignored for serial uploads. */
+  ipAddress?: string
 }
 
 /** Runtime v3 upload (legacy, editor-only).  Web's adapter MUST
@@ -222,11 +229,25 @@ export interface InstallArduinoCoreArgs {
 
 /** Arduino-CLI library install (editor-only.  Same no-op
  *  contract as core install for web). */
+/** A library installed from a git URL rather than the Arduino index.
+ *  Mirrors `ThirdPartyLibrary` in backend/shared/compile/third-party-libraries.ts,
+ *  restated here so the port does not depend on a backend module. */
+export interface ThirdPartyLibraryRequest {
+  name: string
+  gitUrl: string
+  reason: string
+}
+
 export interface InstallArduinoLibArgs {
   /** Legacy single-library id (kept for the placeholder call sites
    *  that pre-date `extraLibraries`).  Empty string when the caller
    *  is driving the install entirely from `extraLibraries`. */
   libId: string
+  /** Libraries this target needs that are not in the Arduino index, installed
+   *  with `lib install --git-url`. Selected from the target's CAPABILITIES —
+   *  a board that cannot host an OPC-UA server never downloads the OPC-UA
+   *  stack. Web no-ops: its compile service pre-installs everything. */
+  thirdPartyLibraries?: ThirdPartyLibraryRequest[]
   /** Per-board library list.  Sourced from the selected board's
    *  `hals.json` `extra_libraries` (static boards) or its VPP
    *  manifest `hal.extraArduinoLibraries` (VPP boards) — both feed

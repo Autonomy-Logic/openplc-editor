@@ -1,6 +1,14 @@
 import { ARDUINO_CLI_CAPABILITIES, RUNTIME_V4_CAPABILITIES } from '../../target-capabilities'
 import { buildAddressPool } from '../address-pool'
-import { buildAliasRegistry, isAliasNameAvailable, resolveAlias, validateAliasEdit } from '../alias-registry'
+import {
+  buildAliasRegistry,
+  describeAliasRejection,
+  isAliasConflict,
+  isAliasNameAvailable,
+  resolveAlias,
+  validateAliasEdit,
+  validateAliasName,
+} from '../alias-registry'
 
 const v4 = RUNTIME_V4_CAPABILITIES
 const arduino = ARDUINO_CLI_CAPABILITIES
@@ -190,7 +198,7 @@ describe('validateAliasEdit', () => {
   it('rejects a collision with another channel and returns the conflicting entry', () => {
     const result = validateAliasEdit(reg, 'tank', { kind: 'vpp-io', ref: 'slot-2:AI1' })
     expect(result.ok).toBe(false)
-    if (!result.ok) {
+    if (isAliasConflict(result)) {
       expect(result.conflict.alias).toBe('tank')
       expect(result.conflict.address).toBe('%IW0')
       expect(result.conflict.source).toEqual({ kind: 'vpp-io', ref: 'slot-1:AI1' })
@@ -200,5 +208,84 @@ describe('validateAliasEdit', () => {
   it('rejects a collision across producers (pin-mapping vs VPP)', () => {
     const result = validateAliasEdit(reg, 'tank', { kind: 'pin-mapping', ref: '%QX0.0' })
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('an alias has to be an IEC identifier (DOPE-650)', () => {
+  const taken = buildAliasRegistry(
+    buildAddressPool(
+      { vendorIoMapping: { entries: [{ iecAddress: '%IW0', alias: 'tank', slot: 1, channelName: 'AI1' }] } },
+      v4WithVpp,
+    ),
+  )
+  const empty = buildAliasRegistry(buildAddressPool({}, v4WithVpp))
+  const anywhere = { kind: 'vpp-io' as const, ref: 'slot-9:AI9' }
+
+  it('accepts a plain identifier', () => {
+    expect(validateAliasName('Motor_Start')).toEqual({ ok: true })
+  })
+
+  it.each([
+    ['a space', 'Motor Start'],
+    ['a hyphen', 'relay-1'],
+    ['a leading digit', '1st_relay'],
+    ['punctuation', 'relay#1'],
+  ])('refuses %s', (_label, alias) => {
+    const result = validateAliasName(alias)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toContain(alias)
+  })
+
+  it('refuses a reserved word, which would collide with the language', () => {
+    expect(validateAliasName('VAR').ok).toBe(false)
+  })
+
+  it('refuses a %% location, which is the other thing the field can hold', () => {
+    expect(validateAliasName('%QX0.0').ok).toBe(false)
+  })
+
+  // Which words are reserved is the parser's to say, and it says fewer than the
+  // editor's identifier list did. That list also holds every standard function
+  // name, so an existing pin called `Max` or `Step` was renamed on open although
+  // STruC++ reads either one as an `AT` operand perfectly well.
+  it.each(['Max', 'Min', 'Step', 'TP', 'Left', 'Time', 'Limit', 'Move', 'Abs', 'Sel', 'Mux'])(
+    'accepts %s, which STruC++ reads as an AT operand',
+    (alias) => {
+      expect(validateAliasName(alias)).toEqual({ ok: true })
+    },
+  )
+
+  it.each(['SET', 'Set', 'VAR', 'IF', 'THEN', 'ARRAY'])('still refuses %s, which it does not', (alias) => {
+    expect(validateAliasName(alias).ok).toBe(false)
+  })
+
+  it('refuses a name that would smuggle a second declaration in', () => {
+    // The operand is spliced into the file verbatim, so the check is that it
+    // reads back as ONE thing.
+    expect(validateAliasName('a; b : INT').ok).toBe(false)
+  })
+
+  it('rejects a malformed name through validateAliasEdit, before any collision check', () => {
+    // The shape is wrong whether or not the name is taken, and "already in use"
+    // would be a confusing thing to say about `Motor Start`.
+    const result = validateAliasEdit(empty, 'Motor Start', anywhere)
+    expect(result.ok).toBe(false)
+    expect(isAliasConflict(result)).toBe(false)
+  })
+
+  it('still lets an empty alias through — clearing one is how a channel is unnamed', () => {
+    expect(validateAliasEdit(empty, '', anywhere)).toEqual({ ok: true })
+  })
+
+  it('describes the two refusals differently', () => {
+    const malformed = validateAliasEdit(empty, 'Motor Start', anywhere)
+    expect(malformed.ok).toBe(false)
+    if (malformed.ok) return
+    expect(describeAliasRejection(malformed, 'Motor Start').title).toBe('Alias name is invalid')
+
+    const collision = validateAliasEdit(taken, 'tank', { kind: 'vpp-io', ref: 'slot-2:AI1' })
+    expect(collision.ok).toBe(false)
+    if (collision.ok) return
+    expect(describeAliasRejection(collision, 'tank').title).toBe('Alias already in use')
   })
 })

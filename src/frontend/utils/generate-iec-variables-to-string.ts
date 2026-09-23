@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../middleware/shared/ports/types'
+import { parseVariableDeclarations } from './PLC/variable-declarations'
 
 const classToVarBlock: Record<string, string> = {
   local: 'VAR',
@@ -151,5 +152,38 @@ export function getIecVariableLineMap(variables: PLCVariable[]): Map<string, { l
     }
   }
 
+  return map
+}
+
+/**
+ * Where each variable's declaration actually sits in `text`.
+ *
+ * The companion to {@link getIecVariableLineMap}, for the case that text is the
+ * user's own rather than a serialisation of the model. The variables code view
+ * renders `pou.variablesText` now (DOPE-650), so a map computed from the
+ * canonical form is off by however much the user's formatting differs — a
+ * comment line, a blank line, a different order inside a block — and
+ * Go-to-Definition lands on the wrong declaration or past the end.
+ *
+ * Falls back to the canonical walk when the text cannot be parsed, which is the
+ * same answer the caller would have got before.
+ */
+export function getIecVariableLineMapFromText(
+  text: string,
+  variables: PLCVariable[],
+): Map<string, { line: number; column: number }> {
+  const parsed = parseVariableDeclarations(text)
+  if (parsed.errors.length > 0) return getIecVariableLineMap(variables)
+
+  const map = new Map<string, { line: number; column: number }>()
+  for (const block of parsed.blocks) {
+    for (const declaration of block.declarations) {
+      const lineStart = text.lastIndexOf('\n', declaration.fields.name.start - 1) + 1
+      map.set(declaration.variable.name, {
+        line: declaration.line,
+        column: declaration.fields.name.start - lineStart + 1,
+      })
+    }
+  }
   return map
 }

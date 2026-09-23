@@ -65,7 +65,7 @@ const DebuggerIpInputModal = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSubmit()
             }}
-            placeholder='192.168.1.100'
+            placeholder='192.168.0.2'
             className='w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-850 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
             autoFocus
           />

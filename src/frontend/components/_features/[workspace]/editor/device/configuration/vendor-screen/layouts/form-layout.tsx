@@ -6,6 +6,7 @@ import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { useEffect } from 'react'
 
 import type { ScreenSection } from '../index'
 
@@ -83,8 +84,53 @@ function FormLayout({ section }: FormLayoutProps) {
 
   const updateField = (id: string, value: string | number | boolean) => {
     if (persistenceKey === null) return
-    setVendorScreenData(persistenceKey, { ...storedValues, [id]: value })
+    // A `default` the user can see has to be a `default` the build gets.
+    // Above, defaults fill `values` for rendering, but only what someone
+    // actually typed was ever stored -- so a project that switched the
+    // network on without opening the Interface dropdown compiled with no
+    // carrier at all, and a Pico showing "17" for its chip select compiled
+    // against the library's pin 10. Seed every default that is visible after
+    // this edit and has nothing stored yet. Scoped to an edit the user is
+    // already making in this section, so nothing is written behind their
+    // back, and evaluated against the post-edit values so flipping a
+    // section's switch on seeds the fields it reveals.
+    const next = { ...values, [id]: value }
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.id === id || field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, next)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    setVendorScreenData(persistenceKey, { ...storedValues, ...seeded, [id]: value })
   }
+
+  // Persist visible defaults when the screen is SHOWN, not only when the user
+  // edits it. `updateField` seeds defaults on an edit, but a user who opens a
+  // screen, agrees with every default and changes nothing left those defaults
+  // unstored — so the build fell back to the library value (a Pico showing
+  // "17" for chip select compiled against pin 10). Per-board storage already
+  // keeps each target's data in its own bucket, so this writes into the active
+  // board's bucket only. Runs on mount and whenever the section or board
+  // changes; writes nothing when there is nothing new to seed, so it does not
+  // dirty a project just by being viewed once everything is already stored.
+  useEffect(() => {
+    if (persistenceKey === null) return
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, values)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    if (Object.keys(seeded).length > 0) {
+      setVendorScreenData(persistenceKey, { ...storedValues, ...seeded })
+    }
+    // `values`/`storedValues` are derived from the two deps below every render;
+    // depending on them directly would loop. The board key stands in for "the
+    // active bucket changed".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistenceKey, deviceBoard])
 
   return (
     <TooltipProvider>

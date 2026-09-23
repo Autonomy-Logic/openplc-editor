@@ -173,6 +173,33 @@ export interface PLCPou {
   }
   body: PLCBody
   documentation?: string
+  /**
+   * The POU's `VAR … END_VAR` declarations, verbatim, as the user wrote them.
+   *
+   * This is the source of truth for the variables, and `interface.variables`
+   * is the view of it the table renders (DOPE-650). The project file has
+   * always stored the declarations as IEC text; what changed is that the text
+   * is now KEPT rather than discarded the moment it parsed.
+   *
+   * Everything the model cannot carry lives here and only here: comments,
+   * blank lines, alignment, the user's choice of declaration ordering within a
+   * block. A table edit patches this text (`applyVariablesToText`) instead of
+   * regenerating it, so editing one cell no longer deletes the rest.
+   *
+   * Optional only for a POU created in memory this session and not yet
+   * serialised; anything loaded from disk carries it.
+   */
+  variablesText?: string
+  /**
+   * True when {@link variablesText} could not be parsed on load, so the editor
+   * should open this POU's variables in the code view for repair.
+   *
+   * An explicit flag rather than the old inference of "has text but no
+   * variables": every loaded POU carries its text now, and an empty POU
+   * legitimately has no variables, so that test matched a POU with nothing
+   * wrong with it.
+   */
+  variablesTextUnparsed?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -390,12 +417,20 @@ export interface OpcUaSecurityProfile {
   securityPolicy: OpcUaSecurityPolicyType
   securityMode: OpcUaSecurityModeType
   authMethods: OpcUaAuthMethod[]
+  /** Role granted to Anonymous sessions on this profile (viewer/operator/
+   *  engineer). Defaults to viewer (least privilege) when unset. The runtime
+   *  and the baremetal firmware enforce the per-variable matrix against it. */
+  anonymousRole?: 'viewer' | 'operator' | 'engineer'
 }
 
 export interface OpcUaUser {
   id: string
   type: 'password' | 'certificate'
   username: string | null
+  /** Plaintext. See OpcUaUserSchema in backend/shared/types/PLC/open-plc.ts
+   *  for why the build, not the editor, derives the stored credential. */
+  password?: string | null
+  /** Legacy pre-hashed credential; passed through untouched. */
   passwordHash: string | null
   certificateId: string | null
   role: 'viewer' | 'operator' | 'engineer'
@@ -585,7 +620,7 @@ export interface ProjectCapabilities {
   hasPrograms: boolean
   /** Show the Resource entry in the project tree. */
   hasResource: boolean
-  /** Show Device / Configuration / Orchestrators entries. */
+  /** Show Device / Configuration / Edge Devices entries. */
   hasDevices: boolean
   /** Show Server entries (Modbus / OPC-UA servers). */
   hasServers: boolean
@@ -693,6 +728,9 @@ export interface PlatformOption {
 export interface BoardInfo {
   compiler: CompilerType | (string & {})
   core: string
+  /** Upload transport for arduino-cli targets: "ethernet" (LOGO! 8.2) is
+   *  flashed over the network; absent/"serial" is the default USB path. */
+  uploadMethod?: 'serial' | 'ethernet'
   /**
    * The board's fully-qualified name, e.g. `arduino:avr:uno`. The same string
    * arduino-cli reads `build.mcu` from, which is what selects the firmware's
@@ -885,6 +923,15 @@ export interface PackageManifest {
        * precompiled .a is ABI-locked to it.
        */
       coreVersion?: string
+      /**
+       * Upload transport for arduino-cli targets. Absent/"serial" (default):
+       * `arduino-cli upload --port <serialPort>`. "ethernet": upload over the
+       * network — the editor passes the device IP (configuration
+       * runtimeIpAddress) as arduino-cli's `--port`, and the board's core
+       * platform.txt upload recipe performs the network transfer. Currently
+       * only the Siemens LOGO! 8.2 uses "ethernet". See manifest.schema.json.
+       */
+      uploadMethod?: 'serial' | 'ethernet'
     }
     specs?: Record<string, string>
     hal: {
@@ -1317,7 +1364,7 @@ export interface DebugConnectionConfig {
     baudRate?: number
     slaveId?: number
     /**
-     * An id a board flashed before 4.4.0 may still answer the editor on, tried
+     * An id a board flashed before 4.3.0 may still answer the editor on, tried
      * only after `slaveId` has gone unanswered. Not a manifest field: the editor
      * reads it from the project's own legacy screen state, because the packages
      * no longer declare the screen it lived on.

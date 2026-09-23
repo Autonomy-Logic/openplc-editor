@@ -37,6 +37,7 @@
 import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
 import { resolveLocation } from '../../../middleware/shared/utils/iec-address/registry'
 import { generateIecVariablesToString } from '../generate-iec-variables-to-string'
+import { resolveLocationsInText } from '../variable-text-edits'
 import { getEndKeyword, getStartKeyword } from './pou-file-extensions'
 
 const OPAQUE_BODY_PLACEHOLDER = '; (* graphical body — opaque to LSP *)'
@@ -70,6 +71,18 @@ function withResolvedLocations(variables: PLCVariable[], aliasIndex: ReadonlyMap
   return variables.map((variable) =>
     variable.location ? { ...variable, location: resolveLocation(variable.location, aliasIndex) } : variable,
   )
+}
+
+/**
+ * The POU's declaration text with alias locations resolved, or a serialisation
+ * of the model when the POU carries no text yet.
+ */
+function resolveVariablesTextLocations(pou: PLCPou, aliasIndex: ReadonlyMap<string, string>): string {
+  const text = pou.variablesText
+  if (text === undefined) {
+    return generateIecVariablesToString(withResolvedLocations(pou.interface?.variables ?? [], aliasIndex))
+  }
+  return resolveLocationsInText(text, (location) => resolveLocation(location, aliasIndex))
 }
 
 function buildDeclarationLine(pou: PLCPou): string {
@@ -131,7 +144,16 @@ export function serializePouSignatureToSTWithBodyOffset(
   bodyLineOffset: number
 } {
   const declaration = buildDeclarationLine(pou)
-  const variables = generateIecVariablesToString(withResolvedLocations(pou.interface?.variables ?? [], aliasIndex))
+  // The user's own declaration text, with only the alias operands swapped for
+  // the addresses they resolve to (DOPE-650). Serialising from the model
+  // instead would produce a document that no longer matches the code buffer
+  // line for line, and `pouVarsTokenViewport` blanks the semantic tokens for
+  // every line where the two disagree — which is why the buffer used to be
+  // re-canonicalised on commit, deleting the user's comments with it.
+  //
+  // Falls back to serialising the model for a POU that has no text yet (one
+  // created in memory this session and not saved).
+  const variables = resolveVariablesTextLocations(pou, aliasIndex)
   const body = pou.body.language === 'st' ? (pou.body.value as string) : OPAQUE_BODY_PLACEHOLDER
   const endKeyword = getEndKeyword(pou.pouType)
   const prefix = `${declaration}\n${variables}\n`

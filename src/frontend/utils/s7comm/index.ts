@@ -9,3 +9,4 @@ export type {
   S7CommRuntimeSystemAreas,
 } from './generate-s7comm-config'
 export { generateS7CommConfig } from './generate-s7comm-config'
+export * from './generate-s7comm-header'

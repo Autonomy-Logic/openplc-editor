@@ -69,6 +69,20 @@ export interface ComposeFirmwareBundleInput {
    *  skeleton ships a placeholder stub so naive `#include "vpp_config.h"`
    *  in shared HAL code still compiles on non-VPP boards. */
   vppConfigH?: string
+  /** Pre-authored `opcua_config.h` content for baremetal targets whose VPP
+   *  declares `opcuaServer: true`.  Caller invokes
+   *  `generateOpcUaHeaderContent`; absent / undefined when the target cannot
+   *  host an OPC-UA server at all.  Always overwrites `src/opcua_config.h`
+   *  when present — the firmware skeleton ships a stub with
+   *  `OPCUA_ENABLED 0`, so the runtime's OPC-UA translation units
+   *  `#include "opcua_config.h"` unconditionally and compile to nothing on
+   *  every target that has no server. */
+  opcuaConfigH?: string
+  /** Generated `s7comm_config.h`, on the same contract: the firmware skeleton
+   *  ships a stub with `S7COMM_ENABLED 0`, so the S7 translation units
+   *  `#include "s7comm_config.h"` unconditionally and compile to nothing on
+   *  every target that has no server. */
+  s7commConfigH?: string
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -140,7 +154,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton } = input
+  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -204,6 +218,18 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // every board, the per-define content varies.
   if (vppConfigH !== undefined) {
     files['src/vpp_config.h'] = vppConfigH
+  }
+
+  // opcua_config.h — same contract as vpp_config.h above: overwritten when
+  // the target can host an OPC-UA server, otherwise the skeleton's
+  // `OPCUA_ENABLED 0` stub stays and the server compiles out.
+  if (opcuaConfigH !== undefined) {
+    files['src/opcua_config.h'] = opcuaConfigH
+  }
+
+  // s7comm_config.h — identical contract.
+  if (s7commConfigH !== undefined) {
+    files['src/s7comm_config.h'] = s7commConfigH
   }
 
   // OpenPLCUserLib.h stub — Baremetal.ino unconditionally

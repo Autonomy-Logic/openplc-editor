@@ -29,6 +29,11 @@ export interface SpawnDependencies {
   /** argv[0] and the fixed leading args needed to re-enter this program. */
   execPath: string
   execArgs: string[]
+  /** The `userData` dir this process was aligned to (the editor's, or --user-data).
+   *  Forwarded to the spawned daemon so it resolves the SAME installed VPP
+   *  packages the parent's compile/upload saw — otherwise the daemon falls back
+   *  to the default userData and can't find a VPP board (e.g. the LOGO). */
+  userData: string
   /** Runs a compile + upload for the MD5-mismatch path. */
   uploadProgram: (options: {
     projectPath: string
@@ -71,10 +76,13 @@ export function createSessionSpawner(deps: SpawnDependencies) {
     }
 
     // Credentials go over stdin, not argv: argv is world-readable in `ps`.
+    // userData is only a directory path (not a secret), so the env is fine and
+    // avoids threading it through the stdin config schema; the daemon reads it
+    // in its boot branch to align onto the same installed-VPP directory.
     const child = spawn(deps.execPath, [...deps.execArgs, '--cli-daemon'], {
       detached: true,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, OPENPLC_CLI_DAEMON: '1' },
+      env: { ...process.env, OPENPLC_CLI_DAEMON: '1', OPENPLC_USER_DATA: deps.userData },
     })
 
     // A daemon that exits before reading its config closes this pipe, and the

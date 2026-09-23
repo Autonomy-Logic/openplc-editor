@@ -19,7 +19,7 @@ import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import {
   buildAddressPool,
   buildAliasRegistry,
-  describeSource,
+  describeAliasRejection,
   nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
@@ -695,11 +695,8 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const registry = buildAliasRegistry(pool)
     const validation = validateAliasEdit(registry, alias, sourceRef)
     if (!validation.ok) {
-      toast({
-        title: 'Alias already in use',
-        description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
-        variant: 'fail',
-      })
+      const rejection = describeAliasRejection(validation, alias)
+      toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
       return
     }
 

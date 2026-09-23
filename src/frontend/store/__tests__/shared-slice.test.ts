@@ -2887,7 +2887,7 @@ describe('createSharedSlice', () => {
       }
 
       // DOPE-442
-      describe('a project saved before 4.4.0', () => {
+      describe('a project saved before 4.3.0', () => {
         /** A board whose Modbus lived in the VPP screen sections. */
         const legacyBoard = {
           deviceConfiguration: {
@@ -2901,7 +2901,7 @@ describe('createSharedSlice', () => {
         }
 
         it('opens with no Modbus server and leaves the old sections untouched', () => {
-          // 4.4.0 does not carry configuration forward. Nothing is promoted,
+          // 4.3.0 does not carry configuration forward. Nothing is promoted,
           // nothing is rewritten, and the project is not dirtied on open -- the
           // user creates the server again, and until then no Modbus is compiled.
           const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
@@ -3271,6 +3271,9 @@ describe('createSharedSlice', () => {
           body: { language: 'st' as const, value: '' },
           documentation: '',
           variablesText: 'VAR\n  unparseable_stuff;\nEND_VAR',
+          // The loader marks a POU whose declarations it could not parse; the
+          // code view is for those, not for every POU that carries its text.
+          variablesTextUnparsed: true,
         }
         data.projectData.pous.push(pouWithText)
 
@@ -3279,12 +3282,10 @@ describe('createSharedSlice', () => {
         // Check that the editor model was created for UnparseablePou
         const editor = store.getState().editorActions.getEditorFromEditors('UnparseablePou')
         expect(editor).toBeDefined()
-        if (editor && 'variable' in editor) {
-          expect(editor.variable).toEqual({
-            display: 'code',
-            code: 'VAR\n  unparseable_stuff;\nEND_VAR',
-          })
-        }
+        expect(editor && 'variable' in editor && editor.variable).toEqual({
+          display: 'code',
+          code: 'VAR\n  unparseable_stuff;\nEND_VAR',
+        })
       })
 
       it('delivers the raw variable text to the auto-opened main POU (issue #904)', () => {
@@ -3303,6 +3304,7 @@ describe('createSharedSlice', () => {
           body: { language: 'st' as const, value: '' },
           documentation: '',
           variablesText: rawText,
+          variablesTextUnparsed: true,
         }
         data.projectData.pous.length = 0
         data.projectData.pous.push(unparseableMain)

@@ -32,45 +32,11 @@ const ROLE_OPTIONS: { value: UserRole; label: string; description: string }[] = 
   { value: 'engineer', label: 'Engineer', description: 'Full administrative access' },
 ]
 
-// PBKDF2 configuration - matches OpenPLC Runtime's expected format
-// Using PBKDF2 instead of bcrypt for cross-platform compatibility (MSYS2/Windows)
-const PBKDF2_ITERATIONS = 600000 // OWASP recommendation for SHA-256
-const PBKDF2_SALT_LENGTH = 16
-const PBKDF2_HASH_LENGTH = 32 // SHA-256 output length
-
-/**
- * Hash a password using PBKDF2-HMAC-SHA256.
- * Format: pbkdf2:sha256:iterations$base64_salt$base64_hash
- * This format is compatible with OpenPLC Runtime on all platforms.
- */
-const hashPassword = async (password: string): Promise<string> => {
-  // Generate random salt
-  const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_LENGTH))
-
-  // Import password as key material
-  const passwordKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [
-    'deriveBits',
-  ])
-
-  // Derive hash using PBKDF2
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: salt,
-      iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
-    },
-    passwordKey,
-    PBKDF2_HASH_LENGTH * 8, // bits
-  )
-
-  // Convert to base64
-  const saltB64 = btoa(String.fromCharCode(...salt))
-  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(hashBuffer)))
-
-  // Return in format expected by OpenPLC Runtime
-  return `pbkdf2:sha256:${PBKDF2_ITERATIONS}$${saltB64}$${hashB64}`
-}
+// No hashing here, deliberately: how a credential is stored is a property of the
+// target device, and this dialog has no idea what the target is. The password is
+// stored as typed and the build derives whatever the selected target declares
+// via `capabilities.opcua.passwordScheme`. See
+// backend/shared/compile/opcua-credentials.ts.
 
 export const UserModal = ({
   isOpen,
@@ -146,12 +112,20 @@ export const UserModal = ({
 
   const passwordError = useMemo<string | null>(() => {
     if (authType !== 'password') return null
-    // Editing path: an empty password means "keep existing" — not an error.
-    if (isEditing && !password) return null
+    // Editing path: an empty password means "keep existing" — but only when
+    // there IS one to keep. Editing a CERTIFICATE user and switching it to
+    // Password left the exemption standing over a user that had no password and
+    // no hash, and that state is not inert: `deriveOpcUaCredential` returns null
+    // for it, `generate-opcua-header` filters the user out on `password_hash`,
+    // and if it was the last password user `OPCUA_ANONYMOUS_ROLE` flips to
+    // engineer — so a blank field silently traded every credential on the server
+    // for anonymous write access.
+    const hasStoredCredential = Boolean(existingUser?.password) || Boolean(existingUser?.passwordHash)
+    if (isEditing && !password && hasStoredCredential) return null
     if (!password) return 'Password is required'
     if (password.length < 4) return 'Password must be at least 4 characters'
     return null
-  }, [authType, password, isEditing])
+  }, [authType, password, isEditing, existingUser])
 
   const certificateError = useMemo<string | null>(() => {
     if (authType !== 'certificate') return null
@@ -185,20 +159,25 @@ export const UserModal = ({
   const handleSave = useCallback(async () => {
     if (!isValid) return
 
-    let passwordHash: string | null = null
+    let plainPassword: string | null = null
+    let legacyHash: string | null = null
 
     if (authType === 'password' && password) {
-      passwordHash = await hashPassword(password)
-    } else if (authType === 'password' && isEditing && existingUser?.passwordHash) {
-      // Keep existing password hash if not changing
-      passwordHash = existingUser.passwordHash
+      plainPassword = password
+    } else if (authType === 'password' && isEditing) {
+      // Editing without retyping the password: carry forward whichever form
+      // the project already holds. A legacy hash stays a legacy hash — it
+      // cannot be turned back into a password for another target's scheme.
+      plainPassword = existingUser?.password ?? null
+      legacyHash = existingUser?.passwordHash ?? null
     }
 
     const user: OpcUaUser = {
       id: existingUser?.id ?? uuidv4(),
       type: authType,
       username: authType === 'password' ? username.trim() : null,
-      passwordHash: authType === 'password' ? passwordHash : null,
+      password: authType === 'password' ? plainPassword : null,
+      passwordHash: authType === 'password' ? legacyHash : null,
       certificateId: authType === 'certificate' ? certificateId : null,
       role,
     }

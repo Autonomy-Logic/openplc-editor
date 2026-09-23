@@ -225,3 +225,60 @@ describe('parseInstalledPackageManifest — board manager URL', () => {
     expect(parseInstalledPackageManifest(manifest())).not.toBeNull()
   })
 })
+
+describe('PackageManifestSchema — target.uploadMethod', () => {
+  /** A manifest whose single device declares `target.uploadMethod`. */
+  const withUploadMethod = (uploadMethod?: unknown) => ({
+    formatVersion: '1.0',
+    package: { id: 'vendor.board', name: 'Vendor Board', version: '1.0.0' },
+    devices: [
+      {
+        id: 'slm-rp4',
+        name: 'SLM-RP4',
+        ...(uploadMethod === undefined ? {} : { target: { uploadMethod } }),
+      },
+    ],
+  })
+
+  it('accepts a device that declares no uploadMethod', () => {
+    // Overwhelmingly the common case: serial is the default, so only an
+    // ethernet-programmed board says anything at all.
+    expect(PackageManifestSchema.safeParse(withUploadMethod()).success).toBe(true)
+  })
+
+  it.each<[string]>([['serial'], ['ethernet']])('accepts uploadMethod %p', (uploadMethod) => {
+    expect(PackageManifestSchema.safeParse(withUploadMethod(uploadMethod)).success).toBe(true)
+  })
+
+  // `target` is `.passthrough()`, so before this was declared any value rode
+  // through untouched — and `BoardInfoResolver.#fromVppDevice` copies whatever
+  // is here into a field TYPED `'serial' | 'ethernet'`. A typo would therefore
+  // be carried as if it were a member of that union, match 'ethernet' nowhere,
+  // and silently take the serial path — on a board whose only link is Ethernet.
+  it.each<[unknown, string]>([
+    ['etherner', 'a typo'],
+    ['Ethernet', 'the wrong case'],
+    ['usb', 'a transport that is not one of the two'],
+    ['', 'an empty string'],
+    [1, 'a number'],
+    [true, 'a boolean'],
+  ])('rejects uploadMethod %p (%s)', (uploadMethod) => {
+    expect(PackageManifestSchema.safeParse(withUploadMethod(uploadMethod)).success).toBe(false)
+  })
+
+  it('still passes unrelated target keys through untouched', () => {
+    // Constraining one field must not turn `target` into a closed shape: every
+    // other key on it is VPP-defined and the editor must keep carrying it.
+    const parsed = PackageManifestSchema.safeParse({
+      formatVersion: '1.0',
+      package: { id: 'vendor.board', name: 'Vendor Board', version: '1.0.0' },
+      devices: [{ id: 'd', name: 'D', target: { uploadMethod: 'ethernet', core: 'x:y', anything: 42 } }],
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      const target = parsed.data.devices[0].target as Record<string, unknown>
+      expect(target.core).toBe('x:y')
+      expect(target.anything).toBe(42)
+    }
+  })
+})
