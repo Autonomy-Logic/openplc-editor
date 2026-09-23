@@ -38,6 +38,12 @@ describe('tokenizeRecipe', () => {
     ])
   })
 
+  it("strips the quotes when the token opens with one, renesas_uno's shape", () => {
+    // `"-DPROJECT_NAME="/path/x.ino""` is shell concatenation: a quoted prefix,
+    // a bare path and an empty pair. Keeping the quotes hands g++ a filename.
+    expect(tokenizeRecipe('"-DPROJECT_NAME="/tmp/sketch/D.ino""')).toEqual(['-DPROJECT_NAME=/tmp/sketch/D.ino'])
+  })
+
   it('still strips double quotes that wrap a whole token', () => {
     expect(tokenizeRecipe('"/build/src/file.cpp" -o "/build/obj/file.o"')).toEqual([
       '/build/src/file.cpp',

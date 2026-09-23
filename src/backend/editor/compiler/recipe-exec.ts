@@ -45,6 +45,19 @@ export function tokenizeRecipe(recipe: string): string[] {
     if (i >= n) break
 
     let token = ''
+    // Whether double quotes in THIS token group or are part of it, decided by
+    // its first character and fixed for the whole token.
+    //
+    // Grouping, when the token opens with one: `"{source_file}"`, a Windows path
+    // with spaces, and renesas_uno's `"-DPROJECT_NAME="/path/x.ino""`, which is
+    // shell concatenation of a quoted prefix, a bare path and an empty pair.
+    // Those have to reach the compiler unquoted.
+    //
+    // Content, when it does not: stm32duino writes
+    // `-DVARIANT_H="{build.variant_h}"` and `variant.h` does
+    // `#include VARIANT_H`, so the quotes are the macro's value. Eating them
+    // leaves `#include variant_BLACKPILL_F411CE.h`, which gcc rejects.
+    const quotesGroup = recipe[i] === '"'
     while (i < n && !isWhitespace(recipe[i])) {
       const ch = recipe[i]
       if (ch === "'") {
@@ -76,8 +89,7 @@ export function tokenizeRecipe(recipe: string): string[] {
         if (close === -1) {
           throw new Error(`tokenizeRecipe: unterminated double quote in recipe near position ${i}`)
         }
-        const wrapsWholeToken = token === '' && (close + 1 >= n || isWhitespace(recipe[close + 1]))
-        token += wrapsWholeToken ? recipe.slice(i + 1, close) : recipe.slice(i, close + 1)
+        token += quotesGroup ? recipe.slice(i + 1, close) : recipe.slice(i, close + 1)
         i = close + 1
       } else {
         token += ch
