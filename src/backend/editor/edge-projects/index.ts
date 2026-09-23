@@ -94,7 +94,6 @@ async function lockedProjectIds(): Promise<Set<string>> {
 }
 
 async function listCloudProjects(query: URLSearchParams): Promise<CloudProjectsResult> {
-
   let response: { status: number; body: string } | null
 
   try {

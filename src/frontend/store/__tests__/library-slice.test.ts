@@ -366,16 +366,14 @@ describe('ensureLibrariesForTypes', () => {
 
   beforeEach(() => {
     store = makeStore()
-    store
-      .getState()
-      .libraryActions.setSystemLibraries([
-        makeSystemLibrary({ name: 'iec-standard-fb', pous: [{ name: 'TON' }] as SystemLibrary['pous'] }),
-        makeSystemLibrary({
-          name: 'demo-utils',
-          version: '2.1.0',
-          pous: [{ name: 'ANALOGSCALE' }] as SystemLibrary['pous'],
-        }),
-      ])
+    store.getState().libraryActions.setSystemLibraries([
+      makeSystemLibrary({ name: 'iec-standard-fb', pous: [{ name: 'TON' }] as SystemLibrary['pous'] }),
+      makeSystemLibrary({
+        name: 'demo-utils',
+        version: '2.1.0',
+        pous: [{ name: 'ANALOGSCALE' }] as SystemLibrary['pous'],
+      }),
+    ])
     store.getState().libraryActions.setBundledLibraryNames(['iec-standard-fb'])
   })
 

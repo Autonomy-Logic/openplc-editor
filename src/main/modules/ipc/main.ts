@@ -1302,7 +1302,6 @@ class MainProcessBridge implements MainIpcModule {
   // handlers use, so a revoked token is renewed once rather than per call site.
 
   handleEdgeProjectsListRecent = (_event: IpcMainInvokeEvent, limit: unknown): Promise<CloudProjectsResult> => {
-
     // Clamped rather than trusted: this crosses IPC, and an absurd limit would be
     // forwarded straight into the API's own bounds check as a 400.
     const requested = typeof limit === 'number' && Number.isInteger(limit) ? limit : 5

@@ -74,9 +74,7 @@ const OpenCloudProjectModal = ({ open, onOpenChange }: OpenCloudProjectModalProp
 
       setProjects(null)
       setProjects(
-        await project
-          .listCloudProjectsInFolder(folderId)
-          .catch((): CloudProjectsResult => ({ status: 'unreachable' })),
+        await project.listCloudProjectsInFolder(folderId).catch((): CloudProjectsResult => ({ status: 'unreachable' })),
       )
     },
     [project],

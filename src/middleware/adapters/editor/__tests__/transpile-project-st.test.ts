@@ -359,14 +359,21 @@ describe('the transpiler the chat panel is handed', () => {
     expect(programSt).toContain('CONFIGURATION')
   })
 
-  it('answers null — never throws — when a POU cannot be compiled', async () => {
+  it('answers null — never throws — when the project cannot be compiled', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    // A Python POU with no declared variables is a collected per-POU error, not a throw.
+    // An empty POU no longer fails (DOPE-650 emits it), so the failure here is a
+    // triggered task with no source signal, which the configuration emitter refuses.
     const broken = await transpileProjectStInProcess({
       dataTypes: [],
-      pous: [pou({ name: 'Broken', body: { language: 'python', value: 'pass' } })],
-      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+      pous: [pou({ name: 'Main', body: { language: 'st', value: 'x := 1;' } })],
+      configurations: {
+        resource: {
+          tasks: [{ name: 'OnEdge', priority: 0, triggering: 'Interrupt', interval: '' }],
+          instances: [],
+          globalVariables: [],
+        },
+      },
     })
 
     expect(broken).toBeNull()
