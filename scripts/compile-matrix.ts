@@ -22,6 +22,7 @@
  *   --core <id>...        only boards on these cores, e.g. arduino:samd
  *   --arduino-only        skip targets that do not build firmware locally
  *   --clean               pass --clean to every compile
+ *   --no-build            skip the main-process rebuild (you just built it)
  *   --keep-going          do not stop after the first failure (default)
  *   --stop-on-fail        stop at the first failure
  *   --out <file>          JSONL log (default: <project>/compile-matrix.jsonl)
@@ -67,6 +68,7 @@ interface Options {
   arduinoOnly: boolean
   clean: boolean
   stopOnFail: boolean
+  build: boolean
   out?: string
 }
 
@@ -80,6 +82,7 @@ function parseOptions(argv: string[]): Options {
     arduinoOnly: false,
     clean: false,
     stopOnFail: false,
+    build: true,
   }
   const positionals: string[] = []
 
@@ -115,6 +118,9 @@ function parseOptions(argv: string[]): Options {
         break
       case '--clean':
         options.clean = true
+        break
+      case '--no-build':
+        options.build = false
         break
       case '--stop-on-fail':
         options.stopOnFail = true
@@ -225,6 +231,20 @@ async function main(): Promise<void> {
   const logPath = options.out ?? join(options.project, 'compile-matrix.jsonl')
   await mkdir(dirname(logPath), { recursive: true })
   await writeFile(logPath, '')
+
+  // The CLI runs from `release/app/dist/main/main.js`, a build artefact. Running
+  // the matrix against a stale one reports on code that was never compiled — a
+  // green run for a change that is not in the bundle. Rebuilding is a fraction
+  // of what the compiles themselves cost, so it is the default.
+  if (options.build) {
+    process.stderr.write('Rebuilding the main process so the run reflects the working tree\u2026\n')
+    const built = await new Promise<number>((resolvePromise, rejectPromise) => {
+      const child = spawn('npm', ['run', 'build:main'], { stdio: ['ignore', 'ignore', 'inherit'] })
+      child.on('error', rejectPromise)
+      child.on('close', (code) => resolvePromise(code ?? -1))
+    })
+    if (built !== 0) throw new Error(`npm run build:main failed (exit ${built})`)
+  }
 
   if (options.install.length > 0) {
     process.stderr.write(`Installing packages from ${options.install.length} path(s)…\n`)

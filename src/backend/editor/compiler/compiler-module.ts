@@ -229,7 +229,20 @@ class CompilerModule {
   // ############################################################################
   static readonly HOST_PLATFORM = process.platform
   static readonly HOST_ARCHITECTURE = process.arch
-  static readonly DEVELOPMENT_MODE = process.env.NODE_ENV === 'development'
+  /**
+   * Whether the bundled binaries and sources sit beside the checkout rather
+   * than inside an installed app.
+   *
+   * `isPackaged` and not `NODE_ENV`, because webpack writes `NODE_ENV` into the
+   * bundle when it builds it: a production bundle can never answer anything but
+   * "production", however it is launched. That is fine for the app a user
+   * installs and wrong for every headless run from a checkout, where the
+   * production bundle is exactly what gets launched and then looks for
+   * `arduino-cli` inside Electron's own resources, which nothing fills.
+   * `isPackaged` is a fact about the running process, so it answers correctly
+   * in both. `#constructStrucppRuntimeDir` already asks this way.
+   */
+  static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
   // This will later be replaced by platform specific libraries
   static readonly GLOBAL_LIBRARIES = [
     'Arduino_EdgeControl',
