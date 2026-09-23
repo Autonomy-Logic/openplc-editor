@@ -47,6 +47,10 @@ protocol, transport, register and debug layers agree on the same contracts.
 #else
     #define MAX_MB_FRAME (MB_DEBUG_GET_HEADER + OPENPLC_DEBUG_WSTRING_WIRE + 8)  /* 272 */
 #endif
+
+// Responses must leave room for the RTU CRC, or the serial path replaces them with an exception.
+#define MB_CRC_SIZE 2
+#define MB_RESPONSE_CAPACITY (MAX_MB_FRAME - MB_CRC_SIZE)
 #define MAX_SRV_CLIENTS 3 //how many clients should be able to connect to TCP server at the same time
 #define MBAP_SIZE       6
 
