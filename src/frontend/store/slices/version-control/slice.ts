@@ -13,6 +13,8 @@ const initialState: VersionControlSlice['versionControl'] = {
   changedPaths: [],
   pendingChangesCount: 0,
   headContent: null,
+  historyView: null,
+  mergeView: null,
 }
 
 function dedupeByPath(entries: InitialPendingEntry[]): InitialPendingEntry[] {
@@ -48,6 +50,41 @@ const createVersionControlSlice: StateCreator<VersionControlSlice, [], [], Versi
       setState(
         produce<VersionControlSlice>((draft) => {
           draft.versionControl.selectedCommitHash = hash
+        }),
+      ),
+
+    openHistoryView: (view: { commitHash: string; file?: string }) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.historyView = { ...view }
+        }),
+      ),
+
+    closeHistoryView: () =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.historyView = null
+        }),
+      ),
+
+    openMergeView: (view: { sourceBranch: string; targetBranch?: string }) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.mergeView = { ...view }
+        }),
+      ),
+
+    closeMergeView: () =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.mergeView = null
+        }),
+      ),
+
+    setRawLoadedContent: (content: Record<string, string>) =>
+      setState(
+        produce<VersionControlSlice>((draft) => {
+          draft.versionControl.rawLoadedContent = { ...content }
         }),
       ),
 
