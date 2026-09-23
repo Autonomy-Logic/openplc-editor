@@ -3,9 +3,10 @@ import { StateCreator } from 'zustand'
 
 import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
+import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
-import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
+import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { hasLegacyInOutOutputHandle } from '../../../utils/graphical/in-out-pin-rules'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
@@ -13,10 +14,13 @@ import { isLegalIdentifier } from '../../../utils/keywords'
 import { newUuid } from '../../../utils/new-uuid'
 import { findGlobalVariableListReferences } from '../../../utils/PLC/global-variable-list-references'
 import { restampFlowBlockVariants } from '../../../utils/PLC/restamp-block-variants'
+import { normalizeOneVariablePerLine } from '../../../utils/PLC/variable-declarations'
+import { carryEditorMetadata } from '../../../utils/PLC/variable-metadata'
 import { generateUniqueSlaveName, type NameTaken } from '../../../utils/unique-slave-name'
 import type { FBDFlowType } from '../fbd'
 import type { FileSliceDataObject } from '../file'
 import type { LadderFlowType } from '../ladder'
+import { validateVariableSet } from '../project/validation/variables'
 import type { TabsProps } from '../tabs'
 import {
   CreateEditorObjectFromTab,
@@ -116,17 +120,15 @@ function syncAfterDatatypePropagation(state: SharedRootState, impact: DataTypeRe
     state.projectActions.regenerateGlobalVariableListText(listName)
   }
 
+  // `regenerateVariablesText` patches the POU's declaration text in place and
+  // carries the result into an open code buffer. It is called rather than
+  // serialising the model over the top, which was two defects at once: the
+  // stored `variablesText` kept the OLD type name, so a toggle to code view and
+  // back brought it straight back and the compile failed, and the buffer was
+  // replaced with `generateIecVariablesToString(...)`, which is precisely the
+  // comment loss this change exists to remove.
   for (const pouName of affectedPous) {
-    const model = state.editor.meta.name === pouName ? state.editor : state.editors.find((e) => e.meta.name === pouName)
-    if (!model || (model.type !== 'plc-textual' && model.type !== 'plc-graphical')) continue
-    if (model.variable.display !== 'code') continue
-    const pou = state.project.data.pous.find((p) => p.name === pouName)
-    /* istanbul ignore next -- defensive: a pou-variable reference implies the POU exists */
-    if (!pou) continue
-    state.editorActions.updateModelVariablesForName(pouName, {
-      display: 'code',
-      code: generateIecVariablesToString(pou.interface?.variables ?? []),
-    })
+    state.projectActions.regeneratePouVariablesText(pouName)
   }
 }
 
@@ -1264,6 +1266,43 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         getState().modalActions.openModal('missing-libraries')
       }
 
+      // Set device definitions.
+      //
+      // Before the alias repair below, because the board's pins are one of the
+      // producers that declare aliases — repairing with no pins loaded finds
+      // nothing to repair. Nothing between here and the POU passes reads the
+      // device, so bringing it forward only makes that dependency explicit.
+      if (data.deviceConfiguration || data.devicePinMapping) {
+        getState().deviceActions.setDeviceDefinitions({
+          configuration: data.deviceConfiguration,
+          pinMapping: data.devicePinMapping,
+        })
+      }
+
+      // Repair I/O aliases saved before they had to be IEC identifiers.
+      //
+      // `AT <alias>` is read back by STruC++ as an identifier, so a project
+      // carrying `Motor Start` or `relay-1` cannot be re-read — the editor
+      // accepted those names before the rule existed (DOPE-650). They are
+      // renamed here rather than dropped, and every variable bound to the old
+      // name follows, because dropping would leave those variables unlocated
+      // at compile time with nothing to show for it.
+      //
+      // Runs after the device definitions load, since pins are one of the
+      // producers, and before the variables are read anywhere.
+      const aliasRepairs = getState().projectActions.normalizeProjectAliases().repairs
+      for (const repair of aliasRepairs) {
+        getState().consoleActions.addLog({ level: 'warning', message: describeAliasRename(repair) })
+      }
+
+      // Runs BEFORE the reclassify pass below, not after. A project carrying an
+      // illegal alias cannot be parsed while it still carries it: the POU's
+      // declarations fail, its variable list comes back empty, and a cascade
+      // that walks `interface.variables` then has nothing to walk. The producer
+      // got its new name, the declaration text kept the old one, and the binding
+      // was orphaned — the precise outcome this repair exists to prevent. With
+      // the repair first, the text is legal by the time anything reads it and
+      // the POU loads into the table instead of the code view.
       // Reclassify ALL POUs' variables with full context.
       // The text parser can't determine type definitions accurately since it doesn't have
       // the full project context. Re-parse with pous, dataTypes, and libraries to correctly
@@ -1277,19 +1316,70 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
           libraries: reclassLibraries,
         } = reclassState
 
-        pous.forEach((pou) => {
+        const reclassContext = buildTypeContext(pous, reclassDataTypes, reclassLibraries)
+
+        pous.forEach((payloadPou) => {
           try {
+            // Read from the STORE, not from the loader's payload. The alias
+            // repair above rewrites `variablesText` in the store; taking the
+            // payload's copy here wrote the pre-repair text straight back over
+            // it, so a legacy project was repaired and then un-repaired within
+            // the same load.
+            const pou = getState().project.data.pous.find((c) => c.name === payloadPou.name) ?? payloadPou
             /* istanbul ignore next -- defensive: interface may be undefined */
             const vars = pou.interface?.variables ?? []
-            const iecString = generateIecVariablesToString(vars)
+            // Reclassify from the POU's OWN text, not from a re-serialisation of
+            // the model: the text is what the file holds and what the table is a
+            // view of (DOPE-650), and a round trip through
+            // `generateIecVariablesToString` throws away the comments it carries.
+            //
+            // Normalised on the way in, so `a, b : INT;` — legal IEC that STruC++
+            // reads but the table cannot show, because the Documentation column
+            // is the comment at the end of the line — becomes one declaration per
+            // line before anything else looks at it.
+            const stored = pou.variablesText
+            const normalized = stored !== undefined ? normalizeOneVariablePerLine(stored, reclassContext) : undefined
+            const iecString = normalized ?? generateIecVariablesToString(vars)
             const reparsedVariables = parseIecStringToVariables(iecString, pous, reclassDataTypes, reclassLibraries)
+
+            // The same gate the table and the code view apply. A hand-edited or
+            // externally-written project file can hold a variable set the editor
+            // would never have produced; it used to be written straight into the
+            // store. Refusing it is not a failed load — the text is kept and
+            // marked, and the POU opens in the code view for the user to fix.
+            const validation = validateVariableSet(reparsedVariables)
+            if (!validation.ok) {
+              if (stored !== undefined) getState().projectActions.setPouVariablesText(pou.name, stored, true)
+              // Say which declaration is refused. Opening the POU in the code
+              // view with no reason given reads as "the editor broke my file",
+              // and the commonest cause — two variables bound to one location,
+              // which the table has always refused — is invisible otherwise.
+              const [firstError] = validation.errors
+              getState().consoleActions.addLog({
+                level: 'error',
+                message: `POU "${pou.name}": ${firstError.title.replace(/\.$/, '')} — ${firstError.message} The declarations are shown as text so they can be corrected.`,
+              })
+              return
+            }
+
+            // Always rewritten on success, even when the bytes are unchanged:
+            // this is also what clears a POU the LOADER marked unparsed but the
+            // alias repair above has since made readable. Without it the mark
+            // outlived the problem and the POU still opened in the code view.
+            const settled = normalized ?? stored
+            if (settled !== undefined) getState().projectActions.setPouVariablesText(pou.name, settled, false)
             getState().projectActions.setPouVariables({
               pouName: pou.name,
-              variables: reparsedVariables,
+              variables: carryEditorMetadata(vars, reparsedVariables),
             })
           } catch (err) {
-            /* istanbul ignore next -- defensive: reclassify errors should not break project open */
-            console.error(`[Reclassify] Failed to reclassify variables for POU "${pou.name}":`, err)
+            // Unparseable declarations are the one thing the code view exists
+            // for: keep the user's bytes and open it there, rather than leaving
+            // the POU with whatever the loader managed to salvage.
+            const current = getState().project.data.pous.find((c) => c.name === payloadPou.name)
+            const stored = current?.variablesText
+            if (stored !== undefined) getState().projectActions.setPouVariablesText(payloadPou.name, stored, true)
+            console.error(`[Reclassify] Failed to reclassify variables for POU "${payloadPou.name}":`, err)
           }
         })
       }
@@ -1336,14 +1426,6 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             console.error('[SYNC] Error during node sync:', err)
           }
         }
-      }
-
-      // Set device definitions
-      if (data.deviceConfiguration || data.devicePinMapping) {
-        getState().deviceActions.setDeviceDefinitions({
-          configuration: data.deviceConfiguration,
-          pinMapping: data.devicePinMapping,
-        })
       }
 
       // Restore debug flags from debugVariables
@@ -1431,6 +1513,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }
       getState().fileActions.setFiles({ files })
 
+      if (aliasRepairs.length > 0) {
+        // A legacy-alias repair changed the project, so it is marked unsaved —
+        // all of it, not the files the repair happened to touch, and here
+        // rather than where the repair runs, because the registry above is
+        // built afterwards and starts everything saved.
+        //
+        // All of it, because one rename spans the producer that declares the
+        // alias and every POU that binds it. Saving one without the other is
+        // worse than not saving at all: the pin mapping takes the new name, the
+        // declaration keeps the old one, and on the next open there is nothing
+        // left to repair from — the binding is simply orphaned.
+        getState().fileActions.setAllToUnsaved()
+      }
+
       // Open the default tab for the project type:
       //   - Library projects: the manifest (`library.json`) — it's
       //     mandatory for the build and there's no main POU to fall
@@ -1477,11 +1573,20 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         }
       }
 
-      // For POUs with unparseable variables (variablesText present, variables empty),
-      // pre-create editor models in code mode so the raw text is displayed when opened.
-      pous.forEach((pou) => {
-        const pouWithText = pou as typeof pou & { variablesText?: string }
-        if (pouWithText.variablesText && (!pou.interface?.variables || pou.interface.variables.length === 0)) {
+      // A POU whose declarations could not be read opens in the code view, on
+      // the user's own bytes, so they can repair it.
+      //
+      // Read from the STORE, not from the response payload: the reclassify pass
+      // above is what discovers a set the validator refuses — a file holding two
+      // variables of the same name parses fine, so the loader has no way to flag
+      // it — and it marks the POU in the store. Iterating the payload here meant
+      // that verdict never reached the editor model, and the POU opened on an
+      // empty table with its declarations nowhere in sight.
+      pous.forEach((payloadPou) => {
+        const pouWithText =
+          getState().project.data.pous.find((candidate) => candidate.name === payloadPou.name) ?? payloadPou
+        if (pouWithText.variablesTextUnparsed === true && pouWithText.variablesText) {
+          const pou = pouWithText
           const language = pou.body.language as 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
           const model = createEditorObjectForPou(pou.name, pou.pouType, language)
           // Switch to code mode with the raw variable text

@@ -1,0 +1,148 @@
+/**
+ * What opening a project does to a POU's declaration text (DOPE-650).
+ *
+ * The text on disk is the source of truth, so the round trip through
+ * `handleOpenProjectResponse` has to be byte-faithful — except where the editor
+ * deliberately normalises, and there it must say so rather than quietly
+ * reshaping the user's file.
+ *
+ * These run the real loader (`parseProjectFiles`) into the real store, because
+ * every defect they cover lived in the seam between the two.
+ */
+import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import { openPLCStoreBase } from '../index'
+
+const editorFor = (name: string) => openPLCStoreBase.getState().editorActions.getEditorFromEditors(name)
+
+const PROJECT_JSON = JSON.stringify({
+  meta: { name: 'P', type: 'plc-project' },
+  data: { dataTypes: [], pous: [], configuration: { resource: { tasks: [], instances: [], globalVariables: [] } } },
+})
+
+const openWith = (declarations: string) => {
+  openPLCStoreBase.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+  const parsed = parseProjectFiles(
+    '/p',
+    PROJECT_JSON,
+    JSON.stringify({ deviceBoard: 'uno', communicationPort: '', compileOnly: false }),
+    JSON.stringify([]),
+    [{ relativePath: 'pous/programs/main.st', content: `PROGRAM main\n${declarations}\n\na := 1;\n\nEND_PROGRAM` }],
+    [],
+    [],
+  )
+  openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+  const pou = openPLCStoreBase.getState().project.data.pous.find((candidate) => candidate.name === 'main')
+  if (!pou) throw new Error('main was not loaded')
+  return pou
+}
+
+describe('opening a project', () => {
+  it("leaves comments, blank lines and the user's own spelling byte for byte", () => {
+    const declarations = 'VAR\n  (* header *)\n\n  a : INT;  (* how many *)\n  b : bool; // flag\nEND_VAR'
+    const pou = openWith(declarations)
+
+    expect(pou.variablesText).toBe(declarations)
+    expect(pou.variablesTextUnparsed).toBeUndefined()
+    expect(pou.interface?.variables.map((variable) => [variable.name, variable.documentation])).toEqual([
+      ['a', 'how many'],
+      ['b', 'flag'],
+    ])
+  })
+
+  it('normalises a declaration naming several variables, copying its comment', () => {
+    // Legal IEC that STruC++ reads, but the table cannot show it: the
+    // Documentation column IS the comment at the end of the line, and two
+    // variables on one line have one line between them.
+    const pou = openWith('VAR\n  a, b : INT; (* both *)\nEND_VAR')
+
+    expect(pou.variablesText).toBe('VAR\n  a : INT; (* both *)\n  b : INT; (* both *)\nEND_VAR')
+    expect(pou.interface?.variables.map((variable) => variable.name)).toEqual(['a', 'b'])
+  })
+
+  it("opens a POU the validator refused in the code view, on the user's own bytes", () => {
+    // The refusal is discovered during the reclassify pass — a file with two
+    // variables of the same name parses fine, so the loader cannot flag it —
+    // and the block that pre-creates code-view models used to read the loader's
+    // payload rather than the store, so the verdict never reached the editor
+    // and the POU opened on an empty table.
+    openWith('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
+
+    const editor = editorFor('main')
+    expect(editor && 'variable' in editor && editor.variable).toEqual({
+      display: 'code',
+      code: 'VAR\n  a : INT;\n  a : DINT;\nEND_VAR',
+    })
+  })
+
+  it('keeps an invalid variable set as text and marks it for the code view', () => {
+    // A hand-edited file can hold a set the editor would never have produced.
+    // It used to be written into the store unvalidated; now the user gets their
+    // own bytes back in the code view to repair.
+    const pou = openWith('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
+
+    expect(pou.variablesTextUnparsed).toBe(true)
+    expect(pou.variablesText).toBe('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
+  })
+
+  it('repairs a legacy illegal alias everywhere it is used, and loads the POU into the table', () => {
+    // An alias like `Motor Start` is two identifiers to STruC++, so the POU's
+    // declarations do not parse and its variable list is empty — which is
+    // exactly why a cascade over the model found nothing to cascade. The
+    // producer took its new name and the declaration kept the old one.
+    openPLCStoreBase.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    const parsed = parseProjectFiles(
+      '/p',
+      PROJECT_JSON,
+      JSON.stringify({ deviceBoard: 'TestBoard', communicationPort: '', compileOnly: false }),
+      JSON.stringify([{ pin: '0', pinType: 'digitalOutput', address: '%QX0.0', alias: 'Motor Start' }]),
+      [
+        {
+          relativePath: 'pous/programs/main.st',
+          content: 'PROGRAM main\nVAR\n  X : BOOL AT Motor Start;\nEND_VAR\n\n;\n\nEND_PROGRAM',
+        },
+      ],
+      [],
+      [],
+    )
+    openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+
+    const state = openPLCStoreBase.getState()
+    const pou = state.project.data.pous.find((candidate) => candidate.name === 'main')
+    expect((state.deviceDefinitions.pinMapping.pinsByBoard['TestBoard'] ?? []).map((pin) => pin.alias)).toEqual([
+      'Motor_Start',
+    ])
+    expect(pou?.variablesText).toBe('VAR\n  X : BOOL AT Motor_Start;\nEND_VAR')
+    expect(pou?.interface?.variables.map((variable) => [variable.name, variable.location])).toEqual([
+      ['X', 'Motor_Start'],
+    ])
+    // Repaired, so it belongs in the table — not in the code view for fixing.
+    expect(pou?.variablesTextUnparsed).toBeUndefined()
+  })
+
+  it('splits a line holding two declarations, so a later delete cannot take both', () => {
+    const pou = openWith('VAR\n  a : INT; b : INT;\nEND_VAR')
+    expect(pou.variablesText).toBe('VAR\n  a : INT;\n  b : INT;\nEND_VAR')
+  })
+
+  it('refuses two variables bound to one location, and says which', () => {
+    // The table has always refused it; the text has to refuse it the same way.
+    // What was missing was the reason: the POU opened in the code view looking
+    // as though the editor had broken the file.
+    const pou = openWith('VAR\n  a : BOOL AT Motor_Start;\n  b : BOOL AT Motor_Start;\nEND_VAR')
+
+    expect(pou.variablesTextUnparsed).toBe(true)
+    const reported = openPLCStoreBase
+      .getState()
+      .logs.map((log) => log.message)
+      .join('\n')
+    expect(reported).toContain('main')
+    expect(reported).toContain('Location already exists — Please make sure that the location is unique.')
+  })
+
+  it('keeps declarations that do not parse as text, for the same reason', () => {
+    const pou = openWith('VAR\n  a : ;\nEND_VAR')
+
+    expect(pou.variablesTextUnparsed).toBe(true)
+    expect(pou.variablesText).toBe('VAR\n  a : ;\nEND_VAR')
+  })
+})

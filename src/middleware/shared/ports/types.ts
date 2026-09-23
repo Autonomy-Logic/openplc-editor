@@ -173,6 +173,33 @@ export interface PLCPou {
   }
   body: PLCBody
   documentation?: string
+  /**
+   * The POU's `VAR … END_VAR` declarations, verbatim, as the user wrote them.
+   *
+   * This is the source of truth for the variables, and `interface.variables`
+   * is the view of it the table renders (DOPE-650). The project file has
+   * always stored the declarations as IEC text; what changed is that the text
+   * is now KEPT rather than discarded the moment it parsed.
+   *
+   * Everything the model cannot carry lives here and only here: comments,
+   * blank lines, alignment, the user's choice of declaration ordering within a
+   * block. A table edit patches this text (`applyVariablesToText`) instead of
+   * regenerating it, so editing one cell no longer deletes the rest.
+   *
+   * Optional only for a POU created in memory this session and not yet
+   * serialised; anything loaded from disk carries it.
+   */
+  variablesText?: string
+  /**
+   * True when {@link variablesText} could not be parsed on load, so the editor
+   * should open this POU's variables in the code view for repair.
+   *
+   * An explicit flag rather than the old inference of "has text but no
+   * variables": every loaded POU carries its text now, and an empty POU
+   * legitimately has no variables, so that test matched a POU with nothing
+   * wrong with it.
+   */
+  variablesTextUnparsed?: boolean
 }
 
 // ---------------------------------------------------------------------------

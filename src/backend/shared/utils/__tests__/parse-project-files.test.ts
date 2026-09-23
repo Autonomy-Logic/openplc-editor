@@ -212,6 +212,30 @@ describe('parseProjectFiles — fallback POU creation', () => {
     consoleSpy.mockRestore()
   })
 
+  it('marks a fallback POU as unparsed, and a POU that parsed as not', () => {
+    // "has text but no variables" used to be the signal that a POU's
+    // declarations had failed to parse. Every POU carries its text now, so an
+    // empty-but-valid POU matched that signal too and was forced into the code
+    // view on open (DOPE-650). The flag says it explicitly.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pouFiles: RawProjectFile[] = [
+      {
+        relativePath: 'pous/programs/broken.st',
+        content: 'PROGRAM broken\nVAR\n  x : INT;\nEND_VAR\nbody content here',
+      },
+      {
+        relativePath: 'pous/programs/empty.st',
+        content: 'PROGRAM empty\nVAR\nEND_VAR\n\nEND_PROGRAM',
+      },
+    ]
+    const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
+    const byName = (name: string) => result.projectData.pous.find((pou) => pou.name === name)
+    expect(byName('broken')?.variablesTextUnparsed).toBe(true)
+    expect(byName('empty')?.variablesText).toBeDefined()
+    expect(byName('empty')?.variablesTextUnparsed).toBeUndefined()
+    consoleSpy.mockRestore()
+  })
+
   it('derives the fallback name from the basename even for Windows backslash paths', () => {
     // The desktop reader builds relativePaths with path.join → backslashes on
     // Windows. A parse failure must still yield the bare basename, not the whole
@@ -230,7 +254,20 @@ describe('parseProjectFiles — fallback POU creation', () => {
     consoleSpy.mockRestore()
   })
 
-  it('warns and preserves declarations when a PROGRAM has a located interface-class variable (issue #904)', () => {
+  it('loads a located interface-class variable rather than dropping the POU’s table (issue #904, revisited)', () => {
+    // #904 made the loader REFUSE this POU: the variables list came back empty
+    // and a warning pointed at the code view for repair. That cost more than
+    // it bought — the user lost every other variable in the POU and had only
+    // raw text to work from.
+    //
+    // The declaration text is the source of truth now (DOPE-650), so the POU
+    // loads intact: the offending variable is visible in the table with its
+    // location cell locked (the class forbids it), and the rule is still
+    // enforced everywhere it matters — `validateVariableSet` refuses the edit
+    // in both views, and STruC++ refuses the build with a message that names
+    // the variable and the fix: "Variable 'Q1' in VAR_OUTPUT cannot have a
+    // location ('AT %QX0.0'). Only VAR and VAR_GLOBAL declarations may be
+    // located."
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       {
@@ -240,18 +277,13 @@ describe('parseProjectFiles — fallback POU creation', () => {
       },
     ]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
-    // Falls back: the structured variable list is empty, but the raw
-    // declarations survive in variablesText for in-app repair.
+
     expect(result.projectData.pous).toHaveLength(1)
-    expect(result.projectData.pous[0].interface?.variables).toEqual([])
-    expect(result.projectData.pous[0].variablesText).toContain('AT %QX0.0')
-    // The failure is surfaced: names the POU and file, states the offending
-    // rule, and points at the repair path.
-    expect(result.warnings).toBeDefined()
-    const warning = result.warnings!.find((w) => w.includes('pous/programs/main.st'))
-    expect(warning).toContain('POU "main"')
-    expect(warning).toMatch(/Location \("AT"\) is not allowed for variables of class "OUTPUT"/)
-    expect(warning).toContain('code view')
+    const [pou] = result.projectData.pous
+    expect(pou.interface?.variables.map((variable) => variable.name)).toEqual(['Q1', 'latch'])
+    expect(pou.interface?.variables[0].location).toBe('%QX0.0')
+    // The declarations are still preserved verbatim — that half of #904 stands.
+    expect(pou.variablesText).toContain('AT %QX0.0')
     consoleSpy.mockRestore()
   })
 
