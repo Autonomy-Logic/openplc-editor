@@ -78,6 +78,12 @@ export interface ParallelData {
   side: 'open' | 'close'
 }
 
+export interface ExecuteData {
+  /** The user's raw Structured Text snippet. */
+  code: string
+  executionOrder: number
+}
+
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
@@ -174,6 +180,21 @@ export function asParallelData(data: Record<string, unknown>): ParallelData | nu
   const t = data['type']
   if (t !== 'open' && t !== 'close') return null
   return { side: t }
+}
+
+/**
+ * Execute ("ST Block") payload — a graphical element holding a raw ST
+ * snippet.  `code` is the only required field; a node whose `code` is
+ * not a string is malformed and the walker warns rather than guessing.
+ *
+ * The snippet is stored exactly as the user typed it (indentation and
+ * blank lines included); re-indentation happens at emission time, not
+ * here.
+ */
+export function asExecuteData(data: Record<string, unknown>): ExecuteData | null {
+  const code = asString(data['code'])
+  if (code === null) return null
+  return { code, executionOrder: asNumber(data['executionOrder']) ?? 0 }
 }
 
 export function asBlockData(data: Record<string, unknown>): BlockData | null {

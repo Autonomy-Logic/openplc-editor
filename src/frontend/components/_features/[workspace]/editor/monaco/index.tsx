@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCPou } from '../../../../../../middleware/shared/ports/types'
 import { useAI, useCapabilities, useEdgeAccountPort, useProject } from '../../../../../../middleware/shared/providers'
-import { useDebugBoolValuesMap, useDebugNonBoolValuesMap } from '../../../../../hooks/use-debug-value'
+import { useStDebugDecorations } from '../../../../../hooks/use-st-debug-decorations'
 import { registerAIInlineCompletions } from '../../../../../services/ai/inline-completions'
 import { getCppMemberCompletions, projectTypeNamePredicate } from '../../../../../services/cpp-scope'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../../services/save-actions'
@@ -61,48 +61,9 @@ type SnippetController = {
   insert: (snippet: string, options?: unknown) => void
 }
 
-type BlockCommentState = false | 'paren' | 'slash'
-
-function stripLineComments(line: string, state: BlockCommentState): { stripped: string; state: BlockCommentState } {
-  const chars = [...line]
-  let i = 0
-  let s = state
-
-  while (i < chars.length) {
-    if (s) {
-      const endMarker = s === 'paren' ? ')' : '/'
-      if (chars[i] === '*' && chars[i + 1] === endMarker) {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = false
-      } else {
-        chars[i] = ' '
-        i++
-      }
-    } else {
-      if (chars[i] === '/' && chars[i + 1] === '/') {
-        for (let j = i; j < chars.length; j++) chars[j] = ' '
-        break
-      }
-      if (chars[i] === '(' && chars[i + 1] === '*') {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = 'paren'
-      } else if (chars[i] === '/' && chars[i + 1] === '*') {
-        chars[i] = ' '
-        chars[i + 1] = ' '
-        i += 2
-        s = 'slash'
-      } else {
-        i++
-      }
-    }
-  }
-
-  return { stripped: chars.join(''), state: s }
-}
+// ---------------------------------------------------------------------------
+// Module-level flag for initial theme application
+// ---------------------------------------------------------------------------
 
 let didApplyInitialTheme = false
 
@@ -152,9 +113,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     ai: { pendingDiffs },
     aiActions: { updatePendingDiff, updatePendingDiffAcceptedHunks, clearPendingDiff },
   } = useOpenPLCStore()
-  const debugBoolValues = useDebugBoolValuesMap()
-  const debugNonBoolValues = useDebugNonBoolValuesMap()
-
   // Create a unique Monaco path for editor (prevents model caching across projects)
   const uniqueMonacoPath = capabilities.hasLocalFilesystem && projectPath ? `${projectPath}${path}` : path
 
@@ -429,88 +387,28 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return instances.find((inst) => inst.key === selectedKey) || null
   }, [pou, fbSelectedInstance, fbDebugInstances])
 
-  const debugVarKeySet = useMemo(() => {
-    const keys: string[] = []
-    for (const key of debugBoolValues.keys()) keys.push(key)
-    for (const key of debugNonBoolValues.keys()) keys.push(key)
-    return keys.sort().join('\0')
-  }, [debugBoolValues, debugNonBoolValues])
+  // Scanning + decoration live in a shared hook so the Execute ("ST Block")
+  // element renders identical badges without a second copy of the scanner.
+  // `enabled` keeps badges to the active tab and the textual ST/IL surfaces;
+  // `expectedUri` covers the window during a tab switch where
+  // @monaco-editor/react has not swapped the model yet.
+  //
+  // `Uri.parse`, not `Uri.file`: IL hands `uniqueMonacoPath` to
+  // @monaco-editor/react, which builds the model URI with `Uri.parse(path)`.
+  // The two spellings differ, and the guard then rejects IL's own model.
+  const debugDecorationUri = useMemo(() => {
+    if (!editorMounted || !monacoRef.current) return undefined
+    return language === 'st' ? editorModelPath : monacoRef.current.Uri.parse(uniqueMonacoPath).toString()
+  }, [editorMounted, language, editorModelPath, uniqueMonacoPath])
 
-  const debugVarPositions = useMemo(() => {
-    // Active-tab-only: avoids every hidden multi-mounted editor re-scanning and decorating on each poll.
-    if (!isActive) return null
-    if (!isDebuggerVisible || !editorRef.current || !monacoRef.current || (language !== 'st' && language !== 'il'))
-      return null
-
-    const model = editorRef.current.getModel()
-    if (!model) return null
-
-    // Guard against a stale model during tab switches, before @monaco-editor/react swaps it.
-    const expectedUri = language === 'st' ? editorModelPath : monacoRef.current.Uri.file(uniqueMonacoPath).toString()
-    if (model.uri.toString() !== expectedUri) return null
-
-    const prefix = fbInstanceContext
-      ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.`
-      : `${name}:`
-
-    const varNames: string[] = []
-    for (const key of debugBoolValues.keys()) {
-      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
-    }
-    for (const key of debugNonBoolValues.keys()) {
-      if (key.startsWith(prefix)) varNames.push(key.slice(prefix.length))
-    }
-    if (varNames.length === 0) return null
-
-    varNames.sort((a, b) => b.length - a.length)
-
-    const exprPatterns = varNames.map((expr) => {
-      const escaped = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      return { expr, pattern: new RegExp(`\\b${escaped}(?![\\w.\\[])`, 'gi') }
-    })
-
-    const positions: Array<{ expr: string; line: number; startCol: number; endCol: number }> = []
-    let blockCommentState: BlockCommentState = false
-
-    for (let lineNumber = 1; lineNumber <= model.getLineCount(); lineNumber++) {
-      const result = stripLineComments(model.getLineContent(lineNumber), blockCommentState)
-      blockCommentState = result.state
-      const claimed: Array<[number, number]> = []
-
-      for (const { expr, pattern } of exprPatterns) {
-        pattern.lastIndex = 0
-        let match: RegExpExecArray | null
-        while ((match = pattern.exec(result.stripped)) !== null) {
-          const startCol = match.index + 1
-          const endCol = startCol + match[0].length
-          if (claimed.some(([s, e]) => startCol < e && endCol > s)) continue
-          claimed.push([startCol, endCol])
-          positions.push({ expr, line: lineNumber, startCol, endCol })
-          break
-        }
-      }
-    }
-
-    return { prefix, positions }
-  }, [isActive, isDebuggerVisible, debugVarKeySet, language, name, fbInstanceContext, editorMounted, modelVersion])
-
-  useEffect(() => {
-    if (!debugVarPositions || !editorRef.current) return
-
-    const { prefix, positions } = debugVarPositions
-    const decorations: monaco.editor.IModelDeltaDecoration[] = positions.map(({ expr, line, startCol, endCol }) => ({
-      range: new monaco.Range(line, startCol, line, endCol),
-      options: {
-        after: {
-          content: ` = ${debugBoolValues.get(prefix + expr) ?? debugNonBoolValues.get(prefix + expr) ?? '?'} `,
-          inlineClassName: 'debug-inline-value',
-        },
-      },
-    }))
-
-    const collection = editorRef.current.createDecorationsCollection(decorations)
-    return () => collection.clear()
-  }, [debugVarPositions, debugBoolValues, debugNonBoolValues])
+  useStDebugDecorations({
+    editorRef,
+    monacoRef,
+    prefix: fbInstanceContext ? `${fbInstanceContext.programName}:${fbInstanceContext.fbVariableName}.` : `${name}:`,
+    enabled: isActive && isDebuggerVisible && (language === 'st' || language === 'il'),
+    modelVersion,
+    expectedUri: debugDecorationUri,
+  })
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {

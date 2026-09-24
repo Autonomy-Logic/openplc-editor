@@ -113,9 +113,11 @@ export const addNewElement = <T>(
     if ('elementType' in newNode) {
       const elementType = (newNode as { elementType: string }).elementType
 
-      // Blocks cannot be placed on branch handles — the branch layout system
-      // is designed for single-handle elements (contacts/coils) only.
-      if (elementType === 'block') {
+      // Blocks and Execute boxes cannot be placed on branch handles — the
+      // branch layout system is designed for single-handle elements
+      // (contacts/coils) only, and an Execute box is both multi-line tall
+      // and variable-height, which the branch position maths doesn't model.
+      if (elementType === 'block' || elementType === 'execute') {
         return { nodes: removePlaceholderElements(rung.nodes), edges: rung.edges }
       }
       if (isBlockInsideMainParallel(rung, target.blockId)) {

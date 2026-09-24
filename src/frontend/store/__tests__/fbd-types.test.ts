@@ -96,6 +96,7 @@ describe('FBD Zod schemas', () => {
       'comment',
       'connector',
       'connection',
+      'execute',
       'input-variable',
       'output-variable',
       'inout-variable',

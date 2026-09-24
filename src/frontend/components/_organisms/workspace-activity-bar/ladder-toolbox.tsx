@@ -7,6 +7,7 @@ import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/def
 import { BlockButton } from '../../_molecules/workspace-activity-bar/ladder/block'
 import { CoilButton } from '../../_molecules/workspace-activity-bar/ladder/coil'
 import { ContactButton } from '../../_molecules/workspace-activity-bar/ladder/contact'
+import { ExecuteButton } from '../../_molecules/workspace-activity-bar/ladder/execute'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 
 export const LadderToolbox = () => {
@@ -117,6 +118,9 @@ export const LadderToolbox = () => {
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Contact'>
         <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Execute — inline Structured Text'>
+        <ExecuteButton onDragStart={(event) => handleDragStart(event, 'execute')} />
       </TooltipSidebarWrapperButton>
       <DividerActivityBar />
       <TooltipSidebarWrapperButton tooltipContent='Delete selected elements'>

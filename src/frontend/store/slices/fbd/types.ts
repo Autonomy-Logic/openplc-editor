@@ -16,6 +16,7 @@ const zodFBDNodeTypesSchema = z.enum([
   'comment',
   'connector',
   'connection',
+  'execute',
   'input-variable',
   'output-variable',
   'inout-variable',

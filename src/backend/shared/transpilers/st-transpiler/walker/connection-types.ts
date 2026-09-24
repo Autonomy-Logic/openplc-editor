@@ -120,9 +120,12 @@ export function computeConnectionTypes(body: RFBody, ctx: TypeContext): Map<stri
         }
         break
       }
+      // `execute` is electrically a coil: BOOL in on `EN`, BOOL out on `ENO`,
+      // so whatever feeds its EN infers BOOL like any other rung element.
       case 'contact':
       case 'coil':
       case 'parallel':
+      case 'execute':
       case 'powerRail': {
         pt.assign(pt.extractRelated(pinOut(node.id)), 'BOOL')
         pt.types.set(pinIn(node.id), 'BOOL')
