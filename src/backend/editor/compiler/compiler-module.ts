@@ -11,7 +11,11 @@ import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
-import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
+import {
+  isCloudBuild,
+  resolveBuildWorkspace,
+  writeCloudBuildDeviceFiles,
+} from '@root/backend/editor/project/cloud-build-workspace'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
@@ -185,6 +189,7 @@ import { app as electronApp, dialog } from 'electron'
 import JSZip from 'jszip'
 
 import type { ThirdPartyLibraryRequest } from '../../../middleware/shared/ports/compiler-platform-port'
+import type { CompileDeviceFiles } from '../../../middleware/shared/ports/compiler-port'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
@@ -2875,6 +2880,7 @@ class CompilerModule {
       cleanBuild,
       communicationPort,
       vendorScreenData,
+      deviceFiles,
     ] = args as [
       string,
       string,
@@ -2886,6 +2892,7 @@ class CompilerModule {
       boolean | undefined,
       string | null | undefined,
       Record<string, unknown> | undefined,
+      CompileDeviceFiles | null | undefined,
     ]
 
     // VPP integrity gate (DOPE-539). FIRST, before the manifest is read for
@@ -2933,6 +2940,28 @@ class CompilerModule {
     })
     _mainProcessPort.postMessage({ logLevel: 'warning', message: 'Host Hardware Info:' })
     _mainProcessPort.postMessage({ message: this.getHostHardwareInfo() })
+
+    const workspaceSource = projectPath.replace('project.json', '')
+    if (isCloudBuild(workspaceSource)) {
+      if (deviceFiles) {
+        try {
+          await writeCloudBuildDeviceFiles(workspaceSource, deviceFiles)
+        } catch (error) {
+          _mainProcessPort.postMessage({
+            logLevel: 'error',
+            message: `Could not stage the device configuration for this Autonomy Edge project: ${getErrorMessage(error)}\nStopping compilation process.`,
+          })
+          _mainProcessPort.close()
+          return
+        }
+      } else if (!isSimulator) {
+        _mainProcessPort.postMessage({
+          logLevel: 'warning',
+          message:
+            'This Autonomy Edge project reached the build without its device configuration and pin mapping. The firmware will have no I/O pins configured.',
+        })
+      }
+    }
 
     const hasServers = projectData.servers && projectData.servers.length > 0
     const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0

@@ -20,7 +20,7 @@ import {
   injectLibraryBlocks,
 } from '../../../backend/shared/library/inject-library-blocks'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
-import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
+import type { CompileDeviceFiles, CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
 import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
@@ -63,6 +63,8 @@ export type CompileProgramIpcArgs = [
    * `vppIo` capability; non-VPP boards ignore this slot and it is a no-op.
    */
   vendorScreenData: Record<string, unknown> | null,
+  /** Set only for an Autonomy Edge project; the compiler writes these into its build workspace. */
+  deviceFiles: CompileDeviceFiles | null,
 ]
 
 /**
@@ -193,6 +195,7 @@ export async function compileProgramFlow(
       args.cleanBuild ?? false,
       args.communicationPort ?? null,
       args.vendorScreenData ?? null,
+      args.deviceFiles ?? null,
     ]
 
     transport.runCompileProgram(compileArgs, (data: Record<string, unknown>) => {

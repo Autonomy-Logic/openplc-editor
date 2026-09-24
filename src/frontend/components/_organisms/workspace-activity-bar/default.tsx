@@ -24,6 +24,7 @@ import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '.
 import { executeSaveProject } from '../../../services/save-actions'
 import { useOpenPLCStore } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
+import { cloudBuildDeviceFiles } from '../../../utils/cloud-build-device-files'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
 import { isOpenPLCRuntimeTarget } from '../../../utils/device'
@@ -419,6 +420,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             // arduino-cli VPP boards (Arduino Opta, P1AM).  Same
             // store path on editor + web, single source of truth.
             vendorScreenData: deviceDefinitions.configuration.vendorScreenData,
+            deviceFiles: cloudBuildDeviceFiles(projectMeta.path, deviceDefinitions),
           },
           (event) => {
             if (event.plcStatus) {
@@ -963,6 +965,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               isSimulator: false,
               runtimeIpAddress,
               runtimeJwtToken,
+              deviceFiles: cloudBuildDeviceFiles(projectPath, deviceDefinitions),
             },
             (event) => logCompilerEvent(event, consoleActions.addLog),
           )

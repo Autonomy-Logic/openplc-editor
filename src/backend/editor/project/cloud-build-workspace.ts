@@ -32,11 +32,38 @@ export function cloudBuildRoot(): string {
  * projects keep building next to their sources and stay incremental.
  */
 export function resolveBuildWorkspace(projectPath: string): string {
-  if (projectPath.length > 0 && isAbsolute(projectPath)) {
+  if (!isCloudBuild(projectPath)) {
     return projectPath
   }
 
   return join(cloudBuildRoot(), segmentFor(projectPath))
+}
+
+/** True when `projectPath` is an Edge id, so its build runs in the scratch workspace. */
+export function isCloudBuild(projectPath: string): boolean {
+  return !(projectPath.length > 0 && isAbsolute(projectPath))
+}
+
+/**
+ * Write a cloud project's device files where the compiler reads them.
+ *
+ * The compiler reads `devices/*.json` from the build's project directory, and a cloud project's
+ * scratch workspace only ever holds build output. A local project is refused, never overwritten:
+ * its files already sit beside it.
+ */
+export async function writeCloudBuildDeviceFiles(
+  projectPath: string,
+  files: { configuration: string; pinMapping: string },
+): Promise<boolean> {
+  if (!isCloudBuild(projectPath)) {
+    return false
+  }
+
+  const devicesDir = join(resolveBuildWorkspace(projectPath), 'devices')
+  await fs.mkdir(devicesDir, { recursive: true })
+  await fs.writeFile(join(devicesDir, 'configuration.json'), files.configuration, 'utf-8')
+  await fs.writeFile(join(devicesDir, 'pin-mapping.json'), files.pinMapping, 'utf-8')
+  return true
 }
 
 /**

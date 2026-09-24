@@ -52,6 +52,14 @@ export interface CompileProgramArgs {
    *  gates emission on the board's resolved `vppIo` capability;
    *  non-VPP boards ignore this. */
   vendorScreenData?: Record<string, unknown>
+  /** Device files of an Autonomy Edge project, which has no directory the build could read them from. */
+  deviceFiles?: CompileDeviceFiles
+}
+
+/** `devices/configuration.json` and `devices/pin-mapping.json`, serialized exactly as a save writes them. */
+export interface CompileDeviceFiles {
+  configuration: string
+  pinMapping: string
 }
 
 export interface DebugCompileArgs {

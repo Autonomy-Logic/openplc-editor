@@ -225,11 +225,12 @@ describe('createEditorCompilerAdapter', () => {
         // Args layout (verbatim, in order):
         //   projectPath, boardTarget, boardCore, compileOnly,
         //   projectData, runtimeIpAddress, runtimeJwtToken,
-        //   cleanBuild, communicationPort, vendorScreenData.
+        //   cleanBuild, communicationPort, vendorScreenData, deviceFiles.
         // `vendorScreenData` is the 10th slot — threaded through to
         // the shared compile pipeline for `vpp_config.h` emission on
         // arduino-cli VPP boards (Arduino Opta, P1AM).  `null` when
         // the caller didn't supply one (non-VPP build).
+        // `deviceFiles` is the 11th, `null` for every local project.
         [
           '/path/to/project',
           'Arduino Mega',
@@ -241,6 +242,7 @@ describe('createEditorCompilerAdapter', () => {
           false,
           null,
           null,
+          null,
         ],
         expect.any(Function),
       )
@@ -248,6 +250,27 @@ describe('createEditorCompilerAdapter', () => {
       expect(progressEvents).toHaveLength(3)
       expect(progressEvents[0].stage).toBe('xml')
       expect(progressEvents[2].stage).toBe('done')
+    })
+
+    it('passes the device files of an Edge project in the last slot', async () => {
+      const deviceFiles = { configuration: '{"deviceBoard":"ESP32"}', pinMapping: '{"ESP32":[]}' }
+      const promise = adapter.compileProgram(
+        {
+          projectData: mockProjectData,
+          boardTarget: 'Arduino Mega',
+          projectPath: 'cmufky1xt03of06oe9747hv68',
+          deviceFiles,
+        },
+        () => {},
+      )
+
+      await flushMicrotasks()
+      compileCallback!({ closePort: true })
+      await promise
+
+      const [compileArgs] = (window.bridge.runCompileProgram as jest.Mock).mock.calls[0] as [unknown[]]
+      expect(compileArgs).toHaveLength(11)
+      expect(compileArgs[10]).toEqual(deviceFiles)
     })
 
     it('uses null for board core when board not found', async () => {
