@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code when working with the OpenPLC Editor codebase.
 
+## Process entry point
+
+For every tracked feature, bug, investigation, implementation, test or pull request, start with
+`/autonomy:mister`. Mister verifies the Jira task and current documents, reconciles routine task
+drift, checks the stage gates and loads the skill for the next step. Do not begin a parallel
+investigation or implementation before that check.
+
+This file defines repository-specific commands, architecture and code conventions. It is not a
+copy of the company process. When process text here conflicts with the current Mister plugin or
+Confluence template, follow Mister and report this file as stale. Do not reuse instructions or
+assumptions from an earlier Claude conversation. During implementation, use the approved
+implementation plan as the primary context and load the RG or CRA only for a cited constraint or
+unresolved ambiguity.
+
 ## Project Overview
 
 OpenPLC Editor is an **Electron + React** desktop IDE for programming PLCs using IEC 61131-3 languages (Structured Text, Ladder Diagram, Function Block Diagram, Instruction List) plus Python and C++ extensions.
@@ -489,7 +503,7 @@ new alias.
 
 ## Git Workflow
 
-Follow the Workflow section in CONTRIBUTING.md (base branch, branch naming, Conventional Commits). `<type>` maps from the Jira issue type: Story → `feature`, Bug → `bugfix`, Task → `task`, Improvement → `improvement`.
+Follow the Workflow section in CONTRIBUTING.md for validation and commit conventions. For tracked work, Mister owns branch naming: `feature/DOPE-<n>-<kebab-slug>` for demands and `bugfix/DOPE-<n>-<kebab-slug>` for bugs. Non-ticket maintenance uses `chore/`, `ci/` or `docs/`.
 
 ## Issue Tracker
 
