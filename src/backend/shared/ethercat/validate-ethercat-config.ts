@@ -81,17 +81,27 @@ const validateIoMapping = (entries: EthercatRootEntry[], iomappingJson: string):
       errors.push(`EtherCAT I/O mapping master #${i} is '${master.name}' but the bus configuration has '${entry.name}'`)
       return
     }
-    const channelKeys = (entry.config?.slaves ?? []).flatMap((slave) =>
-      (slave.channels ?? []).map((ch) => `${slave.position}:${ch.pdo_entry_index}:${ch.pdo_entry_subindex}`),
+    // An entry may sit in several alternative PDOs of the ESI; only the assigned one reaches the
+    // runtime's layout, so a key found in more than one channel is fine.
+    const channelKeys = new Set(
+      (entry.config?.slaves ?? []).flatMap((slave) =>
+        (slave.channels ?? []).map((ch) => `${slave.position}:${ch.pdo_entry_index}:${ch.pdo_entry_subindex}`),
+      ),
     )
+    const mappedTo = new Map<string, string>()
     for (const ioEntry of master.entries ?? []) {
       const key = `${ioEntry.slave}:${ioEntry.index}:${ioEntry.subindex}`
-      const matches = channelKeys.filter((k) => k === key).length
-      if (matches !== 1) {
+      const where = `(master '${master.name}', slave ${ioEntry.slave}, ${ioEntry.index}:${ioEntry.subindex})`
+      if (!channelKeys.has(key)) {
         errors.push(
-          `EtherCAT I/O mapping entry ${ioEntry.iec_location} (master '${master.name}', slave ${ioEntry.slave}, ` +
-            `${ioEntry.index}:${ioEntry.subindex}) matches ${matches} channel(s) in the bus configuration, expected 1`,
+          `EtherCAT I/O mapping entry ${ioEntry.iec_location} ${where} has no matching channel in the bus configuration`,
         )
+      }
+      const previous = mappedTo.get(key)
+      if (previous !== undefined) {
+        errors.push(`EtherCAT process data entry ${where} is mapped twice: ${previous} and ${ioEntry.iec_location}`)
+      } else {
+        mappedTo.set(key, ioEntry.iec_location)
       }
     }
   })

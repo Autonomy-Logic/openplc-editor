@@ -1,4 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+import { pdoToChannels } from '../esi-parser'
+import { parseESIDeviceFull } from '../esi-parser-main'
 import { validateEthercatConfig } from '../validate-ethercat-config'
+
+const DELTA_ESI = readFileSync(resolve(__dirname, 'fixtures/delta-asda2e.xml'), 'utf-8')
 
 const makeMaster = (name: string, networkInterface: string) => ({
   name,
@@ -160,11 +167,11 @@ describe('validateEthercatConfig', () => {
       const errors = validateEthercatConfig(bus, io)
       expect(errors).toHaveLength(1)
       expect(errors[0]).toContain('%IX0.0')
-      expect(errors[0]).toContain('matches 0 channel(s)')
+      expect(errors[0]).toContain('has no matching channel')
     })
 
-    it('reports an entry that matches more than one channel', () => {
-      const dup = toJson([
+    it('accepts an entry that appears in several alternative PDOs', () => {
+      const alt = toJson([
         withSlaves('bus_a', 'eth0', [
           slave(1, [
             ['0x6000', 1],
@@ -175,9 +182,44 @@ describe('validateEthercatConfig', () => {
       const io = mapping([
         { name: 'bus_a', entries: [{ slave: 1, index: '0x6000', subindex: 1, iec_location: '%IX0.0' }] },
       ])
-      const errors = validateEthercatConfig(dup, io)
+      expect(validateEthercatConfig(alt, io)).toEqual([])
+    })
+
+    it('accepts the Delta ASDA-A2-E statusword, which four exclusive TxPDOs declare', () => {
+      const parsed = parseESIDeviceFull(DELTA_ESI, 0)
+      const channels = pdoToChannels(parsed.device!).filter((ch) => ch.entryIndex.toLowerCase() === '0x6041')
+      expect(new Set(channels.map((ch) => ch.pdoIndex)).size).toBe(4)
+      const deltaBus = toJson([
+        withSlaves('bus_a', 'eth0', [
+          {
+            position: 1,
+            channels: channels.map((ch) => ({
+              pdo_entry_index: ch.entryIndex,
+              pdo_entry_subindex: parseInt(ch.entrySubIndex.replace(/^#x/i, '0x'), 16),
+            })),
+          },
+        ]),
+      ])
+      const io = mapping([
+        { name: 'bus_a', entries: [{ slave: 1, index: channels[0].entryIndex, subindex: 0, iec_location: '%IW0' }] },
+      ])
+      expect(validateEthercatConfig(deltaBus, io)).toEqual([])
+    })
+
+    it('reports a process data entry mapped to two locations', () => {
+      const io = mapping([
+        {
+          name: 'bus_a',
+          entries: [
+            { slave: 1, index: '0x6000', subindex: 1, iec_location: '%IX0.0' },
+            { slave: 1, index: '0x6000', subindex: 1, iec_location: '%IX0.1' },
+          ],
+        },
+        { name: 'bus_b', entries: [] },
+      ])
+      const errors = validateEthercatConfig(bus, io)
       expect(errors).toHaveLength(1)
-      expect(errors[0]).toContain('matches 2 channel(s)')
+      expect(errors[0]).toContain('mapped twice: %IX0.0 and %IX0.1')
     })
 
     it('resolves entries only inside their own master', () => {
