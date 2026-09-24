@@ -1546,19 +1546,35 @@ class CompilerModule {
    * Arduino library fails at `fatal error: <header>: No such file or directory`
    * before the link is ever reached.
    *
-   * Two roots, and both are needed: the editor's own library directory holds
-   * what it installed (GLOBAL_LIBRARIES, per-board, third-party), the
-   * sketchbook holds what the user installed through the Arduino IDE. Both
-   * layouts are covered — 1.0 keeps headers at the library root, 1.5 under
-   * `src/`.
+   * Three roots, because a library reaches a board from three directions. The
+   * editor's own directory holds what it installed (GLOBAL_LIBRARIES,
+   * per-board, third-party). The platform ships its own, beside the core —
+   * `Wire` and `SPI` everywhere, `BluetoothSerial`, `BLE` and `WiFi` on an
+   * ESP32. Nobody installs those: they arrive with the platform, which is why
+   * a block could not `#include <Wire.h>`, the most used library in the
+   * ecosystem. The sketchbook holds what the user installed through the
+   * Arduino IDE.
+   *
+   * The sketchbook stays ahead of the platform, and that is not arduino-cli's
+   * order — it ranks a platform's library above `directories.builtin`. It does
+   * so only as a tiebreak, though: it first matches a library's NAME against
+   * the header being resolved, which a flat `-I` list cannot express. Zephyr
+   * ships `libraries/stubs/Arduino_RouterBridge.h`, a header whose whole body
+   * is an `#error` telling the user to install the real library; arduino-cli
+   * skips it on the name and takes the sketchbook's, and putting the platform
+   * first here is what makes the Uno Q build hit the tombstone instead.
+   *
+   * Both library layouts are covered: 1.0 keeps headers at the library root,
+   * 1.5 under `src/`.
    *
    * Missing directories are skipped rather than reported: a machine that never
    * had the Arduino IDE has no sketchbook, and that is not an error.
    */
-  async #libraryIncludeArgs(): Promise<string[]> {
+  async #libraryIncludeArgs(platformPath: string | undefined): Promise<string[]> {
     const roots = [
       managedLibrariesPath(electronApp.getPath('userData')),
       defaultSketchbookLibrariesPath(electronApp.getPath('documents')),
+      ...(platformPath ? [join(platformPath, 'libraries')] : []),
     ]
 
     const args: string[] = []
@@ -1696,7 +1712,7 @@ class CompilerModule {
     const extraNonIncludeFlags = extraCxxFlags.filter((flag) => !flag.startsWith('-I'))
 
     // Last, so a library can never shadow a core or generated header.
-    const libraryIncludeFlags = await this.#libraryIncludeArgs()
+    const libraryIncludeFlags = await this.#libraryIncludeArgs(tcProps.properties['runtime.platform.path'])
 
     const includeArgs = [
       ...extraIncludeFlags,
