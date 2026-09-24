@@ -7,13 +7,10 @@ import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
+import { validateVariableSet } from '../../../store/slices/project/validation/variables'
 import { newGlobalNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
-import {
-  duplicateVariableNameMessage,
-  findDuplicateVariableName,
-  parseIecStringToVariables,
-} from '../../../utils/generate-iec-string-to-variables'
+import { parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import TableActions from '../../_atoms/table-actions'
 import { ViewModeToggle } from '../../_atoms/view-mode-toggle'
@@ -352,8 +349,15 @@ const GlobalVariablesEditor = () => {
       pushToHistory(editor.meta.name)
 
       const newVariables = parseIecStringToVariables(editorCode)
-      const duplicate = findDuplicateVariableName(newVariables)
-      if (duplicate) throw new Error(`Variable already exists: ${duplicateVariableNameMessage(duplicate)}`)
+
+      // Same gate the table applies cell by cell — see the matching call in
+      // the POU variables editor.
+      const validation = validateVariableSet(newVariables)
+      if (!validation.ok) {
+        const [first] = validation.errors
+        title = first.title
+        throw new Error(first.message)
+      }
 
       // The text is where a global gets a new name, so the namespace gate sits
       // here; the setter below also serves undo, which must never be refused.

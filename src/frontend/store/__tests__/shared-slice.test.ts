@@ -48,20 +48,11 @@ describe('createSharedSlice', () => {
     store = makeStore()
   })
 
-  // =========================================================================
-  // Initial state
-  // =========================================================================
   it('should have empty undoRedo state initially', () => {
     expect(store.getState().undoRedo).toEqual({})
   })
 
-  // =========================================================================
-  // pouActions
-  // =========================================================================
   describe('pouActions', () => {
-    // -----------------------------------------------------------------------
-    // create
-    // -----------------------------------------------------------------------
     describe('create', () => {
       it('creates an ST program and updates all slices', () => {
         const result = store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
@@ -69,29 +60,22 @@ describe('createSharedSlice', () => {
 
         const state = store.getState()
 
-        // Project slice: POU was added
         expect(state.project.data.pous).toHaveLength(1)
         expect(state.project.data.pous[0].name).toBe('Main')
         expect(state.project.data.pous[0].pouType).toBe('program')
 
-        // Editor slice: model added to editors and set as current
         expect(state.editor.type).toBe('plc-textual')
         expect(state.editor.meta.name).toBe('Main')
 
-        // File slice: file entry created
         expect(state.files['Main']).toBeDefined()
         expect(state.files['Main'].type).toBe('program')
         expect(state.files['Main'].isNew).toBe(true)
 
-        // Tabs slice: tab added and selected
         expect(state.tabs).toHaveLength(1)
         expect(state.tabs[0].name).toBe('Main')
         expect(state.selectedTab).toBe('Main')
 
-        // Library slice: a program is NOT a library block. It is instantiated by
-        // the Resource, never called from another POU, and project load excludes
-        // programs when rebuilding `libraries.user` -- so registering one here
-        // would put it in the block pickers until the next reopen (DOPE-606).
+        // A program is never registered as a library block (excluded from libraries.user).
         expect(state.libraries.user).toHaveLength(0)
       })
 
@@ -103,7 +87,6 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous[0].pouType).toBe('function-block')
         expect(state.editor.type).toBe('plc-graphical')
 
-        // function-block maps to 'function-block' library type
         expect(state.libraries.user[0].type).toBe('function-block')
       })
 
@@ -157,9 +140,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // deleteRequest
-    // -----------------------------------------------------------------------
     describe('deleteRequest', () => {
       it('opens the confirm-delete-element modal with pou elementType', () => {
         store.getState().pouActions.deleteRequest('Main')
@@ -169,9 +149,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // delete
-    // -----------------------------------------------------------------------
     describe('delete', () => {
       beforeEach(() => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
@@ -195,7 +172,6 @@ describe('createSharedSlice', () => {
       })
 
       it('clears editor if current editor matches deleted POU', () => {
-        // Main should be the current editor after create
         expect(store.getState().editor.meta.name).toBe('Main')
 
         store.getState().pouActions.delete('Main')
@@ -206,20 +182,15 @@ describe('createSharedSlice', () => {
 
       it('does not clear editor if a different POU is deleted', () => {
         store.getState().pouActions.create({ type: 'function', name: 'Func1', language: 'st' })
-        // Func1 is now the current editor
         expect(store.getState().editor.meta.name).toBe('Func1')
 
         store.getState().pouActions.delete('Main')
-        // Func1 should still be the current editor
         expect(store.getState().editor.meta.name).toBe('Func1')
         expect(store.getState().project.data.pous).toHaveLength(1)
         expect(store.getState().project.data.pous[0].name).toBe('Func1')
       })
     })
 
-    // -----------------------------------------------------------------------
-    // rename
-    // -----------------------------------------------------------------------
     describe('rename', () => {
       beforeEach(() => {
         store.getState().pouActions.create({ type: 'program', name: 'OldName', language: 'st' })
@@ -257,16 +228,12 @@ describe('createSharedSlice', () => {
       })
 
       it('updates editor name if current editor matches old name', () => {
-        // OldName is the current editor
         expect(store.getState().editor.meta.name).toBe('OldName')
         store.getState().pouActions.rename('OldName', 'NewName')
         expect(store.getState().editor.meta.name).toBe('NewName')
       })
     })
 
-    // -----------------------------------------------------------------------
-    // duplicate
-    // -----------------------------------------------------------------------
     describe('duplicate', () => {
       beforeEach(() => {
         store.getState().pouActions.create({ type: 'program', name: 'Source', language: 'st' })
@@ -281,7 +248,6 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous[1].name).toBe('Copy')
         expect(state.project.data.pous[1].pouType).toBe('program')
 
-        // Editor model added but not set as current (no tab opened)
         expect(state.files['Copy']).toBeDefined()
         expect(state.files['Copy'].isNew).toBe(true)
       })
@@ -311,10 +277,8 @@ describe('createSharedSlice', () => {
       })
 
       it('duplicates a function and preserves returnType', () => {
-        // Create a function source
         store.getState().pouActions.create({ type: 'function', name: 'FuncSrc', language: 'st' })
 
-        // Update its returnType via projectActions
         store.getState().projectActions.updatePouReturnType('FuncSrc', 'INT')
 
         const result = store.getState().pouActions.duplicate('FuncSrc', 'FuncCopy')
@@ -323,7 +287,6 @@ describe('createSharedSlice', () => {
         const copyPou = store.getState().project.data.pous.find((p) => p.name === 'FuncCopy')
         expect(copyPou).toBeDefined()
         expect(copyPou!.pouType).toBe('function')
-        // The returnType is copied from the source's interface
         expect(copyPou!.interface?.returnType).toBe('INT')
       })
 
@@ -355,9 +318,7 @@ describe('createSharedSlice', () => {
       })
 
       it('duplicates a POU that has no interface variables (null branch)', () => {
-        // Create a POU and then manually strip its interface.variables
         store.getState().pouActions.create({ type: 'program', name: 'NoVarsPou', language: 'st' })
-        // Manually set the POU interface to have no variables (undefined)
         const pous = store.getState().project.data.pous.map((p) => {
           if (p.name === 'NoVarsPou') {
             return { ...p, interface: undefined, documentation: undefined }
@@ -371,15 +332,12 @@ describe('createSharedSlice', () => {
 
         const copyPou = store.getState().project.data.pous.find((p) => p.name === 'NoVarsCopy')
         expect(copyPou).toBeDefined()
-        // With no source variables, the copy should have empty variables
         expect(copyPou!.interface?.variables).toEqual([])
-        // With undefined documentation, should default to ''
         expect(copyPou!.documentation).toBe('')
       })
 
       it('duplicates a function and copies returnType from interface', () => {
         store.getState().pouActions.create({ type: 'function', name: 'FnSrc', language: 'st' })
-        // FnSrc has default returnType 'BOOL', update to 'DINT'
         store.getState().projectActions.updatePouReturnType('FnSrc', 'DINT')
 
         const result = store.getState().pouActions.duplicate('FnSrc', 'FnDup')
@@ -393,7 +351,6 @@ describe('createSharedSlice', () => {
 
       it('duplicates a function with undefined returnType (falls back to BOOL)', () => {
         store.getState().pouActions.create({ type: 'function', name: 'FnNoRet', language: 'st' })
-        // Manually strip the interface returnType from the POU
         const pous = store.getState().project.data.pous.map((p) => {
           if (p.name === 'FnNoRet') {
             return { ...p, interface: { variables: p.interface?.variables ?? [], returnType: undefined } }
@@ -414,7 +371,6 @@ describe('createSharedSlice', () => {
 
       it('returns error when duplicate createPou fails (name collision at project level)', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Source', language: 'st' })
-        // Create a POU directly at the project level that will collide
         store.getState().projectActions.createPou({
           type: 'program',
           data: {
@@ -426,8 +382,6 @@ describe('createSharedSlice', () => {
           },
         })
 
-        // Try to duplicate Source to CollideName -- the shared duplicate checks for
-        // existing POU by name first, so this should fail at that check
         const result = store.getState().pouActions.duplicate('Source', 'CollideName')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('POU name already exists')
@@ -435,13 +389,7 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // datatypeActions
-  // =========================================================================
   describe('datatypeActions', () => {
-    // -----------------------------------------------------------------------
-    // create
-    // -----------------------------------------------------------------------
     describe('create', () => {
       it('creates an array data type and updates all slices', () => {
         const result = store.getState().datatypeActions.create({ name: 'IntArray', derivation: 'array' })
@@ -452,15 +400,12 @@ describe('createSharedSlice', () => {
         expect(state.project.data.dataTypes[0].name).toBe('IntArray')
         expect(state.project.data.dataTypes[0].derivation).toBe('array')
 
-        // Editor model set as current
         expect(state.editor.type).toBe('plc-datatype')
         expect(state.editor.meta.name).toBe('IntArray')
 
-        // File entry
         expect(state.files['IntArray']).toBeDefined()
         expect(state.files['IntArray'].type).toBe('data-type')
 
-        // Tab
         expect(state.tabs).toHaveLength(1)
         expect(state.selectedTab).toBe('IntArray')
       })
@@ -508,9 +453,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // deleteRequest
-    // -----------------------------------------------------------------------
     describe('deleteRequest', () => {
       it('opens the confirm-delete-element modal with datatype elementType', () => {
         store.getState().datatypeActions.deleteRequest('IntArray')
@@ -520,9 +462,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // delete
-    // -----------------------------------------------------------------------
     describe('delete', () => {
       beforeEach(() => {
         store.getState().datatypeActions.create({ name: 'IntArray', derivation: 'array' })
@@ -547,7 +486,6 @@ describe('createSharedSlice', () => {
 
       it('does not clear editor if a different data type is deleted', () => {
         store.getState().datatypeActions.create({ name: 'Other', derivation: 'structure' })
-        // Other is now current editor
         expect(store.getState().editor.meta.name).toBe('Other')
 
         store.getState().datatypeActions.delete('IntArray')
@@ -555,9 +493,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // rename
-    // -----------------------------------------------------------------------
     describe('rename', () => {
       beforeEach(() => {
         store.getState().datatypeActions.create({ name: 'OldDT', derivation: 'structure' })
@@ -626,8 +561,7 @@ describe('createSharedSlice', () => {
       })
 
       it('rejects a case-only rename of the type itself', async () => {
-        // Writing olddt.dt then deleting OldDT.dt is the same file
-        // where the filesystem folds case — the type would vanish.
+        // Case-only rename would delete and recreate the same file on case-folding filesystems.
         const result = await store.getState().datatypeActions.rename('OldDT', 'olddt')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
@@ -652,7 +586,6 @@ describe('createSharedSlice', () => {
       })
 
       it('updates editor name when renaming the current editor', async () => {
-        // OldDT is the current editor
         expect(store.getState().editor.meta.name).toBe('OldDT')
         const result = await store.getState().datatypeActions.rename('OldDT', 'RenamedDT')
         expect(result.ok).toBe(true)
@@ -660,9 +593,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // rename with references (impact modal)
-    // -----------------------------------------------------------------------
     describe('rename with references (impact modal)', () => {
       const directRef = (name: string, typeName: string): PLCVariable => ({
         name,
@@ -715,8 +645,7 @@ describe('createSharedSlice', () => {
         store.getState().workspaceActions.setEditingState('saved')
       })
 
-      // The variables view of a POU model — active editor or stored model,
-      // same preference order the propagation sync uses.
+      // Active editor or stored model, same preference order the propagation sync uses.
       const getVariableView = (name: string) => {
         const state = store.getState()
         const model = state.editor.meta.name === name ? state.editor : state.editorActions.getEditorFromEditors(name)
@@ -741,7 +670,6 @@ describe('createSharedSlice', () => {
           ['Chassis', 1],
           ['Bank', 1],
         ])
-        // Nothing renamed while the modal is open.
         expect(store.getState().project.data.dataTypes.map((d) => d.name)).toEqual(['OldDT', 'Chassis', 'Bank'])
 
         store.getState().datatypeActions.respondToPendingRename(true)
@@ -776,7 +704,6 @@ describe('createSharedSlice', () => {
         const bank = state.project.data.dataTypes.find((d) => d.name === 'Bank')
         expect(bank?.derivation === 'array' && bank.baseType.value).toBe('NewDT')
 
-        // The type itself was renamed and the old file queued for deletion.
         expect(state.project.data.dataTypes.map((d) => d.name)).toEqual(['NewDT', 'Chassis', 'Bank'])
         expect(state.pendingDeletions).toContain('datatypes/OldDT.dt')
       })
@@ -866,7 +793,6 @@ describe('createSharedSlice', () => {
       })
 
       it('regenerates the code-mode variables buffer when the affected POU is the active editor', async () => {
-        // pouActions.create left Main as the active editor.
         expect(store.getState().editor.meta.name).toBe('Main')
         store.getState().editorActions.updateModelVariablesForName('Main', {
           display: 'code',
@@ -1084,9 +1010,7 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
     // duplicate
-    // -----------------------------------------------------------------------
     describe('duplicate', () => {
       beforeEach(() => {
         store.getState().datatypeActions.create({ name: 'SourceDT', derivation: 'array' })
@@ -1144,9 +1068,6 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // One identifier namespace across POUs, data types and global variable lists
-  // =========================================================================
   describe('element name namespace', () => {
     const seedPou = (name: string) => store.getState().pouActions.create({ type: 'program', name, language: 'st' })
     const seedDatatype = (name: string) => store.getState().datatypeActions.create({ name, derivation: 'structure' })
@@ -1199,10 +1120,7 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.pous[0].name).toBe('Pump')
       })
 
-      /**
-       * `updatePouName` queues the old path for deletion unconditionally, so a no-op
-       * rename that reached it would mark the POU's own file deleted on the next save.
-       */
+      // Guards against `updatePouName` queueing the POU's own file for deletion.
       it('treats a rename onto the exact same name as a no-op', () => {
         seedPou('Pump')
         const result = store.getState().pouActions.rename('Pump', 'Pump')
@@ -1261,10 +1179,7 @@ describe('createSharedSlice', () => {
     })
 
     describe('globalVariableListActions', () => {
-      /**
-       * The pair collides whichever half exists first: `GVL`'s generated struct takes
-       * `GVL_TYPE`, which is already the instance name of the other list.
-       */
+      // `GVL`'s generated struct name `GVL_TYPE` may already be another list's instance name.
       it('refuses a create whose derived type name another list already holds', () => {
         seedList('GVL_TYPE')
         const result = store.getState().globalVariableListActions.create('GVL')
@@ -1294,10 +1209,7 @@ describe('createSharedSlice', () => {
         expect(result.message).toBe('"Pump" is already the name of a POU')
       })
 
-      /**
-       * An unreadable `.dt` is echoed to disk verbatim on save, so the type it declares
-       * stays in the build and the list's generated struct would declare it a second time.
-       */
+      // An unreadable .dt is echoed back verbatim on save, so its type stays in the build.
       describe('with an unreadable datatypes/GVL_TYPE.dt on disk', () => {
         const seedGhostTypeFile = () =>
           store
@@ -1336,11 +1248,7 @@ describe('createSharedSlice', () => {
       })
     })
 
-    /**
-     * The bundled archives are always in the build, so their symbols are taken before
-     * the user creates anything: reusing one emits a duplicate declaration that only
-     * surfaces as a C++ error in a generated file.
-     */
+    // Bundled library symbols are reserved before the user creates anything.
     describe('against library symbols', () => {
       const librarySymbol = (name: string, type: 'function' | 'function-block') => ({
         name,
@@ -1461,10 +1369,7 @@ describe('createSharedSlice', () => {
         })
       })
 
-      /**
-       * The gate is entry-point only: a project saved before it existed still opens,
-       * and the offending element can still be renamed out of the collision.
-       */
+      // The gate is entry-point only: an existing project with a colliding name still opens.
       it('still opens a project that already carries a colliding name', () => {
         const projectData: PLCProjectData = {
           dataTypes: [],
@@ -1490,9 +1395,6 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // serverActions
-  // =========================================================================
   describe('serverActions', () => {
     function addServer(name: string) {
       store.getState().projectActions.createServer({
@@ -1507,9 +1409,6 @@ describe('createSharedSlice', () => {
       })
     }
 
-    // -----------------------------------------------------------------------
-    // deleteRequest
-    // -----------------------------------------------------------------------
     describe('create', () => {
       it('rejects a server name that is not a valid IEC identifier', () => {
         const result = store.getState().serverActions.create({ name: 'bad name', protocol: 'modbus-tcp' })
@@ -1526,9 +1425,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // delete
-    // -----------------------------------------------------------------------
     describe('delete', () => {
       beforeEach(() => {
         addServer('Server1')
@@ -1545,7 +1441,6 @@ describe('createSharedSlice', () => {
       })
 
       it('clears editor if current editor matches deleted server', () => {
-        // Set the server as current editor
         store.getState().editorActions.setEditor({
           type: 'plc-server',
           meta: { name: 'Server1', protocol: 'modbus-tcp' },
@@ -1569,9 +1464,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // rename
-    // -----------------------------------------------------------------------
     describe('rename', () => {
       beforeEach(() => {
         addServer('OldServer')
@@ -1613,9 +1505,6 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // remoteDeviceActions
-  // =========================================================================
   describe('remoteDeviceActions', () => {
     function addRemoteDevice(name: string) {
       store.getState().projectActions.createRemoteDevice({
@@ -1633,9 +1522,6 @@ describe('createSharedSlice', () => {
       })
     }
 
-    // -----------------------------------------------------------------------
-    // deleteRequest
-    // -----------------------------------------------------------------------
     describe('create', () => {
       it('rejects a remote device name that is not a valid IEC identifier', () => {
         const result = store.getState().remoteDeviceActions.create({ name: 'bad name', protocol: 'modbus-tcp' })
@@ -1652,9 +1538,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // delete
-    // -----------------------------------------------------------------------
     describe('delete', () => {
       beforeEach(() => {
         addRemoteDevice('Device1')
@@ -1694,7 +1577,6 @@ describe('createSharedSlice', () => {
       })
 
       it('cascades to EtherCAT children so their tabs, editors and files are removed', () => {
-        // Set up an EtherCAT bus with two configured slave devices.
         store.getState().projectActions.createRemoteDevice({
           data: { name: 'eth', protocol: 'ethercat' },
         })
@@ -1705,7 +1587,6 @@ describe('createSharedSlice', () => {
             { id: 'slave-2', name: 'EL1008' },
           ] as never,
         })
-        // Register renderer-side state the UI would have created for each child.
         for (const child of ['EK1100', 'EL1008']) {
           store
             .getState()
@@ -1729,9 +1610,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // rename
-    // -----------------------------------------------------------------------
     describe('rename', () => {
       beforeEach(() => {
         addRemoteDevice('OldDevice')
@@ -1780,9 +1658,6 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // ethercatDeviceActions
-  // =========================================================================
   describe('ethercatDeviceActions', () => {
     function addEthercatBus(name: string, slaves: Array<{ id: string; name: string }>) {
       store.getState().projectActions.createRemoteDevice({
@@ -1804,9 +1679,6 @@ describe('createSharedSlice', () => {
       }
     }
 
-    // -----------------------------------------------------------------------
-    // delete
-    // -----------------------------------------------------------------------
     describe('delete', () => {
       beforeEach(() => {
         addEthercatBus('bus1', [{ id: 'slave-1', name: 'EK1100' }])
@@ -1849,9 +1721,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // rename
-    // -----------------------------------------------------------------------
     describe('rename', () => {
       beforeEach(() => {
         addEthercatBus('bus1', [
@@ -1928,24 +1797,17 @@ describe('createSharedSlice', () => {
         const bad = store.getState().ethercatDeviceActions.rename('bus3', 'axis-1', 'ASDA-A2-E')
         expect(bad.ok).toBe(false)
         expect(bad.message).toContain('valid axis name')
-        // A valid identifier is accepted.
         const good = store.getState().ethercatDeviceActions.rename('bus3', 'axis-1', 'Y_Axis')
         expect(good.ok).toBe(true)
       })
     })
   })
 
-  // =========================================================================
-  // snapshotActions
-  // =========================================================================
   describe('snapshotActions', () => {
     const snapshot1 = { variables: [], body: 'body-v1', globalVariables: [] }
     const snapshot2 = { variables: [], body: 'body-v2', globalVariables: [] }
     const snapshot3 = { variables: [], body: 'body-v3', globalVariables: [] }
 
-    // -----------------------------------------------------------------------
-    // pushToHistory
-    // -----------------------------------------------------------------------
     describe('pushToHistory', () => {
       it('creates history entry for a POU that has none', () => {
         store.getState().snapshotActions.pushToHistory('Main', snapshot1)
@@ -1966,16 +1828,13 @@ describe('createSharedSlice', () => {
       })
 
       it('clears future when a new snapshot is pushed', () => {
-        // Manually set up a state with future entries by pushing and undoing
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         store.getState().snapshotActions.pushToHistory('Main', snapshot1)
         store.getState().snapshotActions.pushToHistory('Main', snapshot2)
         store.getState().snapshotActions.undo('Main')
 
-        // Future should have an entry now
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
 
-        // Push a new snapshot - future should be cleared
         store.getState().snapshotActions.pushToHistory('Main', snapshot3)
         expect(store.getState().undoRedo['Main'].future).toEqual([])
       })
@@ -1986,7 +1845,6 @@ describe('createSharedSlice', () => {
         }
         const history = store.getState().undoRedo['Main']
         expect(history.past).toHaveLength(50)
-        // The oldest entries should have been shifted out
         expect(history.past[0].body).toBe('v5')
         expect(history.past[49].body).toBe('v54')
       })
@@ -2002,9 +1860,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // renameHistory
-    // -----------------------------------------------------------------------
     describe('renameHistory', () => {
       it('moves the undo/redo bucket to the new key', () => {
         store.getState().snapshotActions.pushToHistory('Old', snapshot1)
@@ -2019,9 +1874,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // undo
-    // -----------------------------------------------------------------------
     describe('undo', () => {
       beforeEach(() => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
@@ -2035,12 +1887,9 @@ describe('createSharedSlice', () => {
       })
 
       it('does nothing if past is empty', () => {
-        // Create history with empty past
         store.getState().snapshotActions.pushToHistory('Main', snapshot1)
         store.getState().snapshotActions.undo('Main')
-        // Past is now empty
         expect(store.getState().undoRedo['Main'].past).toHaveLength(0)
-        // Another undo should be a no-op
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().undoRedo['Main'].past).toHaveLength(0)
       })
@@ -2074,7 +1923,6 @@ describe('createSharedSlice', () => {
       })
 
       it('undo falls back to empty array when POU has no interface', () => {
-        // Manually strip the POU interface to test the ?? [] fallback
         const pous = store.getState().project.data.pous.map((p) => {
           if (p.name === 'Main') {
             return { ...p, interface: undefined }
@@ -2092,7 +1940,6 @@ describe('createSharedSlice', () => {
 
         store.getState().snapshotActions.undo('Main')
 
-        // The current snapshot saved to future should have empty variables (fallback)
         const history = store.getState().undoRedo['Main']
         expect(history.future).toHaveLength(1)
         expect(history.future[0].variables).toEqual([])
@@ -2114,7 +1961,6 @@ describe('createSharedSlice', () => {
         expect(history.past).toHaveLength(0)
         expect(history.future).toHaveLength(1)
 
-        // The POU should now have the snapshot's body applied
         const pou = store.getState().project.data.pous.find((p) => p.name === 'Main')
         expect(pou!.body.value).toBe('old-body')
         expect(pou!.interface!.variables).toEqual(snapshotWithVars.variables)
@@ -2136,38 +1982,29 @@ describe('createSharedSlice', () => {
       })
 
       it('undo does not touch globals when snapshot has no globalVariables', () => {
-        // Set up some global variables
         const existingGlobals = [
           { name: 'GV1', type: { definition: 'base-type' as const, value: 'BOOL' }, location: '', documentation: '' },
         ]
         store.getState().projectActions.setGlobalVariables({ variables: existingGlobals })
 
-        // Push a snapshot without globalVariables field
         store.getState().snapshotActions.pushToHistory('Main', {
           variables: [],
           body: 'old-body',
-          // No globalVariables field
         })
 
         store.getState().snapshotActions.undo('Main')
 
-        // Globals should remain untouched
         expect(store.getState().project.data.configurations.resource.globalVariables).toEqual(existingGlobals)
       })
 
       it('does nothing if POU does not exist in project', () => {
         store.getState().snapshotActions.pushToHistory('Ghost', snapshot1)
-        // Should not throw - but since the POU doesn't exist, undo returns early
-        // after reading the last past entry but before popping it
+        // Undo early-returns after reading the last past entry but before popping it.
         store.getState().snapshotActions.undo('Ghost')
-        // Past is not consumed because the POU lookup fails and returns early
         expect(store.getState().undoRedo['Ghost'].past).toHaveLength(1)
       })
     })
 
-    // -----------------------------------------------------------------------
-    // redo
-    // -----------------------------------------------------------------------
     describe('redo', () => {
       beforeEach(() => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
@@ -2175,19 +2012,16 @@ describe('createSharedSlice', () => {
 
       it('does nothing if there is no future', () => {
         store.getState().snapshotActions.redo('Main')
-        // No errors, state unchanged
         expect(store.getState().undoRedo['Main']).toBeUndefined()
       })
 
       it('does nothing if future is empty', () => {
         store.getState().snapshotActions.pushToHistory('Main', snapshot1)
         store.getState().snapshotActions.redo('Main')
-        // Future is already empty, should be a no-op
         expect(store.getState().undoRedo['Main'].past).toHaveLength(1)
       })
 
       it('redo falls back to empty array when POU has no interface', () => {
-        // Push and undo first to get a future entry
         store.getState().snapshotActions.pushToHistory('Main', {
           variables: [],
           body: 'snapshot-body',
@@ -2195,7 +2029,6 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
 
-        // Strip the POU interface
         const pous = store.getState().project.data.pous.map((p) => {
           if (p.name === 'Main') {
             return { ...p, interface: undefined }
@@ -2204,23 +2037,19 @@ describe('createSharedSlice', () => {
         })
         store.getState().projectActions.setPous(pous)
 
-        // Redo should work and save the current state (with no interface) to past
         store.getState().snapshotActions.redo('Main')
         const history = store.getState().undoRedo['Main']
         expect(history.future).toHaveLength(0)
-        // The snapshot saved to past should have empty variables (fallback from ?? [])
         const lastPast = history.past[history.past.length - 1]
         expect(lastPast.variables).toEqual([])
       })
 
       it('redo does not touch globals when future snapshot has no globalVariables field', () => {
-        // Set globals
         const existingGlobals = [
           { name: 'GV1', type: { definition: 'base-type' as const, value: 'BOOL' }, location: '', documentation: '' },
         ]
         store.getState().projectActions.setGlobalVariables({ variables: existingGlobals })
 
-        // Directly inject a future entry without globalVariables into undoRedo
         store.setState({
           undoRedo: {
             Main: {
@@ -2233,9 +2062,7 @@ describe('createSharedSlice', () => {
 
         store.getState().snapshotActions.redo('Main')
 
-        // Globals should be untouched (snapshot had no globalVariables)
         expect(store.getState().project.data.configurations.resource.globalVariables).toEqual(existingGlobals)
-        // Body should be restored
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('redo-body')
       })
 
@@ -2253,20 +2080,17 @@ describe('createSharedSlice', () => {
 
         store.getState().snapshotActions.pushToHistory('Main', snapshotA)
         store.getState().snapshotActions.pushToHistory('Main', snapshotB)
-        // Undo once to move snapshotB to future
         store.getState().snapshotActions.undo('Main')
 
         expect(store.getState().undoRedo['Main'].past).toHaveLength(1)
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
 
-        // Redo
         store.getState().snapshotActions.redo('Main')
 
         const history = store.getState().undoRedo['Main']
         expect(history.future).toHaveLength(0)
         expect(history.past).toHaveLength(2) // snapshotA + current state saved
 
-        // The POU should have the redo'd body
         const pou = store.getState().project.data.pous.find((p) => p.name === 'Main')
         expect(pou!.body.value).toBe(store.getState().undoRedo['Main'].future.length === 0 ? pou!.body.value : 'body-B')
       })
@@ -2284,24 +2108,16 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.pushToHistory('Main', snapshotWithGlobals)
         store.getState().snapshotActions.undo('Main')
 
-        // Clear globals to verify redo restores them
         store.getState().projectActions.setGlobalVariables({ variables: [] })
         expect(store.getState().project.data.configurations.resource.globalVariables).toEqual([])
-
-        // Redo to get the future entry (which was the state before undo) applied
-        // Actually the future holds the "current state at time of undo" which had empty body
-        // The undo already applied the snapshotWithGlobals, so current has those globals
-        // Let's test a proper redo flow
       })
 
       it('undo then redo restores original state', () => {
-        // Modify the POU body first
         store.getState().projectActions.updatePou({
           name: 'Main',
           content: { language: 'st', value: 'current-body' },
         })
 
-        // Push a snapshot representing a previous state
         const previousSnapshot = {
           variables: [],
           body: 'previous-body',
@@ -2309,11 +2125,9 @@ describe('createSharedSlice', () => {
         }
         store.getState().snapshotActions.pushToHistory('Main', previousSnapshot)
 
-        // Undo: restores previous-body, saves current-body to future
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('previous-body')
 
-        // Redo: restores current-body from future
         store.getState().snapshotActions.redo('Main')
         const pouAfterRedo = store.getState().project.data.pous.find((p) => p.name === 'Main')
         expect(pouAfterRedo!.body.value).toBe('current-body')
@@ -2327,16 +2141,12 @@ describe('createSharedSlice', () => {
       })
 
       it('redo does nothing when POU no longer exists (deleted after undo)', () => {
-        // Set up: create POU, push snapshot, undo, then delete the POU
         store.getState().snapshotActions.pushToHistory('Main', snapshot1)
         store.getState().snapshotActions.undo('Main')
-        // Future should have an entry
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
-        // Delete the POU
         store.getState().pouActions.delete('Main')
-        // Redo should be a no-op because POU doesn't exist
+        // Redo early-returns before popping future, since the POU no longer exists.
         store.getState().snapshotActions.redo('Main')
-        // Future should still have the entry (early return before popping)
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
       })
 
@@ -2345,32 +2155,27 @@ describe('createSharedSlice', () => {
           { name: 'GV1', type: { definition: 'base-type' as const, value: 'INT' }, location: '', documentation: '' },
         ]
 
-        // Set body and globals, then push snapshot
         store.getState().projectActions.updatePou({
           name: 'Main',
           content: { language: 'st', value: 'body-with-globals' },
         })
         store.getState().projectActions.setGlobalVariables({ variables: globalVars })
 
-        // Push snapshot of state before the globals were set
         store.getState().snapshotActions.pushToHistory('Main', {
           variables: [],
           body: 'old-body',
           globalVariables: [],
         })
 
-        // Undo: restores old-body, saves current state (with globalVars) to future
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().project.data.configurations.resource.globalVariables).toEqual([])
 
-        // Redo: restores the future snapshot which has globalVariables
         store.getState().snapshotActions.redo('Main')
         expect(store.getState().project.data.configurations.resource.globalVariables).toEqual(globalVars)
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('body-with-globals')
       })
 
       it('multiple undo/redo cycles work correctly', () => {
-        // Set up a sequence of body changes with snapshots
         store.getState().projectActions.updatePou({
           name: 'Main',
           content: { language: 'st', value: 'v1' },
@@ -2383,30 +2188,22 @@ describe('createSharedSlice', () => {
         })
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
 
-        // Current body is v2, past has [v0, v1]
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v2')
 
-        // Undo: restore v1, future gets v2-state
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v1')
 
-        // Undo: restore v0, future gets v1-state
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v0')
 
-        // Redo: restore v1-state
         store.getState().snapshotActions.redo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v1')
 
-        // Redo: restore v2-state
         store.getState().snapshotActions.redo('Main')
         expect(store.getState().project.data.pous.find((p) => p.name === 'Main')!.body.value).toBe('v2')
       })
     })
 
-    // -----------------------------------------------------------------------
-    // undo / redo for data types
-    // -----------------------------------------------------------------------
     describe('undo/redo for data types', () => {
       const edited = {
         name: 'Colors',
@@ -2518,8 +2315,7 @@ describe('createSharedSlice', () => {
 
         store.getState().snapshotActions.undo('Palette')
 
-        // Content reverts, but the name stays pinned to the current key so
-        // tabs/files/editors (already rekeyed by the rename) don't desync.
+        // Name stays pinned to the current key so already-rekeyed tabs/files/editors don't desync.
         const dataType = store.getState().project.data.dataTypes.find((d) => d.name === 'Palette')
         expect(dataType).toEqual({ ...initial, name: 'Palette' })
       })
@@ -2546,18 +2342,10 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // sharedWorkspaceActions
-  // =========================================================================
   describe('sharedWorkspaceActions', () => {
-    // -----------------------------------------------------------------------
-    // handleFileAndWorkspaceSavedState
-    // -----------------------------------------------------------------------
     describe('handleFileAndWorkspaceSavedState', () => {
       it('marks a saved file as unsaved', () => {
-        // Create a POU to get a file
         store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
-        // File should be new (isNew: true), mark it as saved first
         store.getState().fileActions.updateFile({ name: 'TestPou', saved: true })
         expect(store.getState().fileActions.getSavedState({ name: 'TestPou' })).toBe(true)
 
@@ -2603,9 +2391,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // forceCloseFile
-    // -----------------------------------------------------------------------
     describe('forceCloseFile', () => {
       it('removes the tab and selects the previous tab', () => {
         store.getState().pouActions.create({ type: 'program', name: 'PouA', language: 'st' })
@@ -2615,12 +2400,10 @@ describe('createSharedSlice', () => {
 
         expect(result).toEqual({ success: true })
         expect(store.getState().tabs.find((t) => t.name === 'PouB')).toBeUndefined()
-        // PouA should be selected
         expect(store.getState().editor.meta.name).toBe('PouA')
       })
 
       it('falls back to CreateEditorObjectFromTab when editor not in editors array', () => {
-        // Add a tab directly without a corresponding editor model
         store.getState().tabsActions.updateTabs({
           name: 'OrphanTab',
           elementType: { type: 'program', language: 'st' },
@@ -2630,7 +2413,6 @@ describe('createSharedSlice', () => {
         const result = store.getState().sharedWorkspaceActions.forceCloseFile('ToClose')
 
         expect(result).toEqual({ success: true })
-        // OrphanTab should be selected via CreateEditorObjectFromTab fallback
         expect(store.getState().editor.meta.name).toBe('OrphanTab')
       })
 
@@ -2644,8 +2426,7 @@ describe('createSharedSlice', () => {
       })
 
       it('selects a diff-viewer next tab with a null project-tree leaf', () => {
-        // A diff-viewer tab has no project-tree leaf to highlight, so when it
-        // becomes the active tab after a close its leaf type must be null.
+        // A diff-viewer tab has no project-tree leaf, so its leaf type must be null when active.
         store.getState().tabsActions.updateTabs({
           name: 'Diff: pous/programs/Main.st',
           elementType: { type: 'diff-viewer', filePath: 'pous/programs/Main.st' },
@@ -2659,37 +2440,21 @@ describe('createSharedSlice', () => {
       })
 
       it('does not resurrect the closed model in editors[]', () => {
-        // Multi-mount keeps every open POU's editor model in `editors[]`.
-        // `forceCloseFile` removes the active model from `editors[]`
-        // BEFORE handing off to `setEditor` for the next tab.  If
-        // `setEditor` ever started snapshotting the *outgoing* editor
-        // back into `editors[]` unconditionally, the freshly-closed
-        // model would reappear and the user would see a "closed" tab
-        // pop back on the next focus switch.  Lock the invariant here.
+        // forceCloseFile must remove the active model from editors[] before setEditor runs
+        // for the next tab, or the closed model reappears on the next focus switch.
         store.getState().pouActions.create({ type: 'program', name: 'A', language: 'st' })
         store.getState().pouActions.create({ type: 'program', name: 'B', language: 'st' })
-        // A becomes active (creation flips active to the new one), then
-        // we explicitly switch to A for the regression scenario.
         store.getState().editorActions.setEditor(store.getState().editorActions.getEditorFromEditors('A')!)
         expect(store.getState().editor.meta.name).toBe('A')
 
         store.getState().sharedWorkspaceActions.forceCloseFile('A')
 
         expect(store.getState().editors.find((e) => e.meta.name === 'A')).toBeUndefined()
-        // And the next tab took over cleanly.
         expect(store.getState().editor.meta.name).toBe('B')
       })
     })
 
-    // -----------------------------------------------------------------------
-    // openRetrievedProject
-    // -----------------------------------------------------------------------
     describe('openRetrievedProject', () => {
-      // The shared tail of both platforms' retrieve adapters: the desktop
-      // unpacks an archive to a scratch directory and reads it back, web parses
-      // the same archive in memory, and from here on they are the same two
-      // steps. Written per platform, the desktop's copy shipped without the
-      // load and web's marked the project ephemeral twice.
       it('loads the project and marks it as having no location yet', () => {
         store.getState().sharedWorkspaceActions.openRetrievedProject({
           meta: { name: 'Irrigation Controller', type: 'plc-project', path: '/scratch/retrieved/irrigation' },
@@ -2702,21 +2467,12 @@ describe('createSharedSlice', () => {
         })
 
         expect(store.getState().project.meta.name).toBe('Irrigation Controller')
-        // What stops the next Save writing into a scratch directory the app
-        // prunes behind the user: it points them at Save As instead.
+        // Ephemeral: points the next Save at Save As instead of a scratch dir the app prunes.
         expect(store.getState().workspace.isEphemeralProject).toBe(true)
       })
     })
 
-    // -----------------------------------------------------------------------
-    // hasUnsavedChanges
-    // -----------------------------------------------------------------------
     describe('hasUnsavedChanges', () => {
-      // The rule `closeProject` applies, asked on its own by a caller that has
-      // to replace the project rather than close it -- retrieving from a
-      // device. The point of sharing it is that the two cannot drift: a caller
-      // that re-derived the condition would start discarding work silently the
-      // day the rule changed.
       it('is true while the editing state is unsaved', () => {
         store.getState().workspaceActions.setEditingState('unsaved')
 
@@ -2749,9 +2505,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // closeProject
-    // -----------------------------------------------------------------------
     describe('closeProject', () => {
       it('opens save-changes modal when there are unsaved changes', () => {
         store.getState().workspaceActions.setEditingState('unsaved')
@@ -2760,7 +2513,6 @@ describe('createSharedSlice', () => {
 
         const modalState = store.getState().modalActions.getModalState('save-changes-project')
         expect(modalState.open).toBe(true)
-        // Caller should defer host navigation until the modal resolves.
         expect(result).toEqual({ pendingConfirmation: true })
       })
 
@@ -2771,17 +2523,12 @@ describe('createSharedSlice', () => {
 
         const result = store.getState().sharedWorkspaceActions.closeProject()
 
-        // State should be cleared
         expect(store.getState().tabs).toHaveLength(0)
         expect(store.getState().project.data.pous).toHaveLength(0)
-        // Caller should navigate to the host immediately.
         expect(result).toEqual({ pendingConfirmation: false })
       })
     })
 
-    // -----------------------------------------------------------------------
-    // clearStatesOnCloseProject
-    // -----------------------------------------------------------------------
     describe('clearStatesOnCloseProject', () => {
       it('resets all slice states', () => {
         store.getState().pouActions.create({ type: 'program', name: 'TestPou', language: 'st' })
@@ -2796,9 +2543,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // closeFile
-    // -----------------------------------------------------------------------
     describe('closeFile', () => {
       it('shows save-changes modal when file has unsaved changes', () => {
         store.getState().pouActions.create({ type: 'program', name: 'UnsavedPou', language: 'st' })
@@ -2822,9 +2566,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // handleOpenProjectResponse
-    // -----------------------------------------------------------------------
     describe('handleOpenProjectResponse', () => {
       function makeMinimalProjectResponse() {
         return {
@@ -2900,7 +2641,6 @@ describe('createSharedSlice', () => {
         })
       })
 
-      // DOPE-592
       it('opens EMPTY and read-only when a POU is unrecoverable, and says why on the Console', () => {
         const data = {
           ...makeMinimalProjectResponse(),
@@ -2909,9 +2649,7 @@ describe('createSharedSlice', () => {
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
         const state = store.getState()
-        // The workspace must actually OPEN. `meta.path` is what moves the app
-        // off the start screen, and on the desktop build it is the only
-        // trigger — without it the user never sees the Console below.
+        // `meta.path` is what moves the desktop app off the start screen to show the Console.
         expect(state.project.meta.path).toBe('/test/path')
         // No content: a blank canvas would look like a legitimate empty diagram.
         expect(state.project.data.pous).toHaveLength(0)
@@ -2921,6 +2659,18 @@ describe('createSharedSlice', () => {
         const errors = state.logs.filter((log) => log.level === 'error')
         expect(errors.some((log) => log.message.includes('pous/programs/main.ld'))).toBe(true)
         expect(errors.some((log) => log.message.includes('read-only'))).toBe(true)
+      })
+
+      it('stashes the raw loaded files for the save flow, and clears them on a reopen without any', () => {
+        const rawLoadedFiles = { 'project.json': '{"meta":{}}', 'pous/programs/main.st': 'PROGRAM main\nEND_PROGRAM' }
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse({
+          ...makeMinimalProjectResponse(),
+          rawLoadedFiles,
+        })
+        expect(store.getState().versionControl.rawLoadedContent).toEqual(rawLoadedFiles)
+
+        store.getState().sharedWorkspaceActions.handleOpenProjectResponse(makeMinimalProjectResponse())
+        expect(store.getState().versionControl.rawLoadedContent).toEqual({})
       })
 
       it('still opens normally when the failure is only a recoverable warning', () => {
@@ -2942,13 +2692,11 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous).toHaveLength(1)
         expect(state.project.data.pous[0].name).toBe('main')
 
-        // Main POU should be opened in a tab
         expect(state.tabs).toHaveLength(1)
         expect(state.tabs[0].name).toBe('main')
         expect(state.selectedTab).toBe('main')
         expect(state.editor.meta.name).toBe('main')
 
-        // Files should be registered
         expect(state.files['main']).toBeDefined()
         expect(state.files['main'].saved).toBe(true)
         expect(state.files['Resource']).toBeDefined()
@@ -2971,7 +2719,6 @@ describe('createSharedSlice', () => {
         expect(state.files['Broken']).toEqual({ type: 'data-type', filePath: 'Broken', saved: true })
         expect(state.files['']).toBeUndefined()
         expect(state.tabs.map((tab) => tab.name)).toEqual(['main', 'Broken'])
-        // Focus stays on the auto-opened POU.
         expect(state.selectedTab).toBe('main')
 
         const model = state.editors.find((editor) => editor.meta.name === 'Broken')
@@ -2998,7 +2745,6 @@ describe('createSharedSlice', () => {
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(withCollisions)
 
         const state = store.getState()
-        // The POU keeps its own registry entry, tab and model.
         expect(state.files['main'].type).toBe('program')
         expect(state.tabs.map((tab) => tab.name)).toEqual(['main'])
         expect(state.editors.every((editor) => editor.type !== 'plc-datatype')).toBe(true)
@@ -3082,7 +2828,6 @@ describe('createSharedSlice', () => {
         const userLibs = store.getState().libraries.user
         expect(userLibs.some((l) => l.name === 'MyFunc')).toBe(true)
         expect(userLibs.some((l) => l.name === 'MyFB')).toBe(true)
-        // Programs should NOT be in the library
         expect(userLibs.some((l) => l.name === 'main')).toBe(false)
       })
 
@@ -3137,7 +2882,6 @@ describe('createSharedSlice', () => {
 
       it('does not open a tab when there is no main program POU', () => {
         const data = makeMinimalProjectResponse()
-        // Replace the main POU with a function
         data.projectData.pous = [
           {
             name: 'Helper',
@@ -3150,7 +2894,6 @@ describe('createSharedSlice', () => {
 
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
-        // No tab should be opened
         expect(store.getState().tabs).toHaveLength(0)
       })
 
@@ -3196,7 +2939,6 @@ describe('createSharedSlice', () => {
           global: ['NonExistent'],
         }
 
-        // Should not throw
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
         const globalVars = store.getState().project.data.configurations.resource.globalVariables
@@ -3211,7 +2953,6 @@ describe('createSharedSlice', () => {
           },
         }
 
-        // Should not throw
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
       })
 
@@ -3223,17 +2964,14 @@ describe('createSharedSlice', () => {
           },
         }
 
-        // Should not throw
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
       })
 
       it('handles project with no debugVariables', () => {
         const data = makeMinimalProjectResponse()
-        // No debugVariables field at all
 
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
-        // Should succeed without errors
         expect(store.getState().project.data.pous).toHaveLength(1)
       })
 
@@ -3247,7 +2985,6 @@ describe('createSharedSlice', () => {
 
       it('pre-creates editor model for POU with variablesText and no variables', () => {
         const data = makeMinimalProjectResponse()
-        // Add a POU with variablesText but empty variables
         const pouWithText = {
           name: 'UnparseablePou',
           pouType: 'program' as const,
@@ -3255,29 +2992,25 @@ describe('createSharedSlice', () => {
           body: { language: 'st' as const, value: '' },
           documentation: '',
           variablesText: 'VAR\n  unparseable_stuff;\nEND_VAR',
+          // The loader marks a POU whose declarations it could not parse; the
+          // code view is for those, not for every POU that carries its text.
+          variablesTextUnparsed: true,
         }
         data.projectData.pous.push(pouWithText)
 
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
-        // Check that the editor model was created for UnparseablePou
         const editor = store.getState().editorActions.getEditorFromEditors('UnparseablePou')
         expect(editor).toBeDefined()
-        if (editor && 'variable' in editor) {
-          expect(editor.variable).toEqual({
-            display: 'code',
-            code: 'VAR\n  unparseable_stuff;\nEND_VAR',
-          })
-        }
+        expect(editor && 'variable' in editor && editor.variable).toEqual({
+          display: 'code',
+          code: 'VAR\n  unparseable_stuff;\nEND_VAR',
+        })
       })
 
       it('delivers the raw variable text to the auto-opened main POU (issue #904)', () => {
-        // The reporter's exact scenario: "main" itself carries the
-        // unparseable variables. The auto-open block adds and activates a
-        // default table-mode model for it BEFORE the code-mode pass runs —
-        // addModel no-ops on the duplicate and setEditor early-returns on
-        // the active editor, so the raw text must flow through
-        // updateModelVariablesForName to reach the active editor.
+        // setEditor early-returns on the already-active editor, so the raw text must flow
+        // through updateModelVariablesForName instead.
         const rawText = 'VAR_OUTPUT\n  Q1 : BOOL AT %QX0.0;\nEND_VAR'
         const data = makeMinimalProjectResponse()
         const unparseableMain = {
@@ -3287,16 +3020,15 @@ describe('createSharedSlice', () => {
           body: { language: 'st' as const, value: '' },
           documentation: '',
           variablesText: rawText,
+          variablesTextUnparsed: true,
         }
         data.projectData.pous.length = 0
         data.projectData.pous.push(unparseableMain)
 
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
-        // main was auto-opened and is the active editor
         const state = store.getState()
         expect(state.editor.meta.name).toBe('main')
-        // The active editor must show the preserved declarations in code view
         expect('variable' in state.editor && state.editor.variable).toEqual({
           display: 'code',
           code: rawText,
@@ -3305,12 +3037,10 @@ describe('createSharedSlice', () => {
 
       it('does not create code-mode model for POU with variables (non-empty)', () => {
         const data = makeMinimalProjectResponse()
-        // main has variables, so no variablesText processing should occur
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
         const editorModel = store.getState().editorActions.getEditorFromEditors('main')
         expect(editorModel).toBeDefined()
-        // Should be in table mode (not code mode)
         if (editorModel && 'variable' in editorModel) {
           expect(editorModel.variable.display).toBe('table')
         }
@@ -3331,16 +3061,12 @@ describe('createSharedSlice', () => {
 
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
-        // After open, all flows should have updated = false
         const ldFlows = store.getState().ladderFlows.filter((f) => f.name === 'LdPou')
         ldFlows.forEach((flow) => {
           expect(flow.updated).toBe(false)
         })
       })
 
-      // -----------------------------------------------------------------------
-      // canEdit → workspace.canEdit (persist-permission gate)
-      // -----------------------------------------------------------------------
       it('sets workspace.canEdit=false when backend canEdit is false', () => {
         const data = { ...makeMinimalProjectResponse(), canEdit: false }
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
@@ -3364,9 +3090,6 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // serverActions.create
-  // =========================================================================
   describe('serverActions (create)', () => {
     it('creates a server and updates all slices', () => {
       const result = store.getState().serverActions.create({ name: 'MyServer', protocol: 'modbus-tcp' })
@@ -3390,9 +3113,6 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // remoteDeviceActions.create
-  // =========================================================================
   describe('remoteDeviceActions (create)', () => {
     it('creates a remote device and updates all slices', () => {
       const result = store.getState().remoteDeviceActions.create({ name: 'MyDevice', protocol: 'modbus-tcp' })
@@ -3416,13 +3136,7 @@ describe('createSharedSlice', () => {
     })
   })
 
-  // =========================================================================
-  // snapshotActions (additional coverage)
-  // =========================================================================
   describe('snapshotActions (additional)', () => {
-    // -----------------------------------------------------------------------
-    // markSaved / markAllSaved
-    // -----------------------------------------------------------------------
     describe('markSaved', () => {
       it('sets savedAtDepth to current past length', () => {
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'v1' })
@@ -3463,57 +3177,47 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // pushToHistory savedAtDepth branches
-    // -----------------------------------------------------------------------
     describe('pushToHistory savedAtDepth', () => {
       it('nullifies savedAtDepth when saved state was in the future (discarded)', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
 
-        // Push 3 snapshots
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v3' })
 
-        // Mark saved at depth 3
         store.getState().snapshotActions.markSaved('Main')
         expect(store.getState().undoRedo['Main'].savedAtDepth).toBe(3)
 
-        // Undo twice to move past length to 1
         store.getState().snapshotActions.undo('Main')
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().undoRedo['Main'].past).toHaveLength(1)
 
-        // Push a new snapshot - savedAtDepth (3) > past.length (1), so it should be nullified
+        // savedAtDepth (3) > past.length (1) after this push, so it is nullified.
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'new' })
         expect(store.getState().undoRedo['Main'].savedAtDepth).toBeNull()
       })
 
       it('adjusts savedAtDepth when history exceeds max size', () => {
-        // Push MAX_HISTORY_SIZE + 5 entries with savedAtDepth set early
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'initial' })
         store.getState().snapshotActions.markSaved('P1')
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(1)
 
-        // Push 54 more (total 55 > 50 max)
         for (let i = 0; i < 54; i++) {
           store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: `v${i}` })
         }
 
-        // savedAtDepth was 1, after 5 shifts it should become 1 - 5 = -4 -> null
+        // 55 entries > 50 max shifts savedAtDepth by 5: 1 - 5 = -4 -> null.
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBeNull()
       })
 
       it('adjusts savedAtDepth without going negative when saved state is recent', () => {
-        // Fill history to 48 entries
         for (let i = 0; i < 48; i++) {
           store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: `v${i}` })
         }
         store.getState().snapshotActions.markSaved('P1')
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(48)
 
-        // Push 3 more -> total 51, only the 51st causes a shift
-        // savedAtDepth = 48 - 1 = 47
+        // 51 total, only the 51st causes a shift: savedAtDepth = 48 - 1 = 47.
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'a' })
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'b' })
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'c' })
@@ -3522,9 +3226,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // undo/redo with ladder and FBD flows
-    // -----------------------------------------------------------------------
     describe('undo with ladder flow', () => {
       it('restores ladder flow snapshot on undo', () => {
         store.getState().pouActions.create({ type: 'program', name: 'LdPou', language: 'ld' })
@@ -3537,7 +3238,6 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.pushToHistory('LdPou', ladderSnapshot)
         store.getState().snapshotActions.undo('LdPou')
 
-        // The snapshot was applied; verify history was modified
         const history = store.getState().undoRedo['LdPou']
         expect(history.past).toHaveLength(0)
         expect(history.future).toHaveLength(1)
@@ -3545,7 +3245,6 @@ describe('createSharedSlice', () => {
 
       it('saves current ladder flow to future when undoing with flow in store', () => {
         store.getState().pouActions.create({ type: 'program', name: 'LdPou', language: 'ld' })
-        // Add a ladder flow so it exists in the store during undo
         store.getState().ladderFlowActions.addLadderFlow({ name: 'LdPou', rungs: [] } as never)
 
         const ladderSnapshot = {
@@ -3559,7 +3258,6 @@ describe('createSharedSlice', () => {
         const history = store.getState().undoRedo['LdPou']
         expect(history.past).toHaveLength(0)
         expect(history.future).toHaveLength(1)
-        // The future snapshot should contain the saved ladder flow
         expect(history.future[0].ladderFlow).toBeDefined()
       })
     })
@@ -3583,7 +3281,6 @@ describe('createSharedSlice', () => {
 
       it('saves current FBD flow to future when undoing with flow in store', () => {
         store.getState().pouActions.create({ type: 'program', name: 'FbdPou', language: 'fbd' })
-        // Add an FBD flow so it exists in the store during undo
         store.getState().fbdFlowActions.addFBDFlow({
           name: 'FbdPou',
           rung: { comment: '', edges: [], nodes: [], selectedNodes: [] },
@@ -3601,7 +3298,6 @@ describe('createSharedSlice', () => {
         const history = store.getState().undoRedo['FbdPou']
         expect(history.past).toHaveLength(0)
         expect(history.future).toHaveLength(1)
-        // The future snapshot should contain the saved FBD flow
         expect(history.future[0].fbdFlow).toBeDefined()
       })
     })
@@ -3609,10 +3305,8 @@ describe('createSharedSlice', () => {
     describe('redo with ladder flow', () => {
       it('applies ladder flow from future snapshot on redo', () => {
         store.getState().pouActions.create({ type: 'program', name: 'LdPou', language: 'ld' })
-        // Also add a ladder flow so it exists in the store
         store.getState().ladderFlowActions.addLadderFlow({ name: 'LdPou', rungs: [] } as never)
 
-        // Manually inject a future entry that has a ladderFlow
         store.setState({
           undoRedo: {
             LdPou: {
@@ -3640,14 +3334,12 @@ describe('createSharedSlice', () => {
     describe('redo with FBD flow', () => {
       it('applies FBD flow from future snapshot on redo', () => {
         store.getState().pouActions.create({ type: 'program', name: 'FbdPou', language: 'fbd' })
-        // Also add an FBD flow so it exists in the store
         store.getState().fbdFlowActions.addFBDFlow({
           name: 'FbdPou',
           rung: { comment: '', edges: [], nodes: [], selectedNodes: [] },
           updated: false,
         } as never)
 
-        // Manually inject a future entry that has an fbdFlow
         store.setState({
           undoRedo: {
             FbdPou: {
@@ -3676,27 +3368,20 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // -----------------------------------------------------------------------
-    // undo/redo savedAtDepth checks
-    // -----------------------------------------------------------------------
     describe('undo savedAtDepth', () => {
       it('marks file as saved when undo returns to saved depth', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         store.getState().fileActions.updateFile({ name: 'Main', saved: true })
 
-        // Push one snapshot and mark saved
+        // savedAtDepth is pinned at 1; undoing from past.length 2 back to 1 must re-mark saved.
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
         store.getState().snapshotActions.markSaved('Main')
-        // savedAtDepth = 1, past.length = 1
 
-        // Push another snapshot - now past.length = 2
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
         store.getState().fileActions.updateFile({ name: 'Main', saved: false })
 
-        // Undo once: past.length goes from 2 to 1, which equals savedAtDepth (1)
         store.getState().snapshotActions.undo('Main')
 
-        // File should be marked as saved
         expect(store.getState().fileActions.getSavedState({ name: 'Main' })).toBe(true)
       })
     })
@@ -3706,18 +3391,15 @@ describe('createSharedSlice', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         store.getState().fileActions.updateFile({ name: 'Main', saved: true })
 
-        // Push two snapshots
+        // savedAtDepth is pinned at 2; redoing from past.length 1 back to 2 must re-mark saved.
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
 
-        // Mark saved at depth 2
         store.getState().snapshotActions.markSaved('Main')
 
-        // Undo once: past.length = 1, saved not at depth
         store.getState().snapshotActions.undo('Main')
         store.getState().fileActions.updateFile({ name: 'Main', saved: false })
 
-        // Redo: past.length goes back to 2, which equals savedAtDepth (2)
         store.getState().snapshotActions.redo('Main')
 
         expect(store.getState().fileActions.getSavedState({ name: 'Main' })).toBe(true)

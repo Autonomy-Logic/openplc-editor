@@ -20,13 +20,16 @@
  */
 
 import type { PLCVariable } from '../../middleware/shared/ports/types'
+import { openPLCStoreBase } from '../store'
 import type { BoundBlockPin } from '../utils/PLC/validate-variable-type'
 import {
   getVariableRestrictionType,
   resolveNewVariableType,
   validateVariableType,
 } from '../utils/PLC/validate-variable-type'
-import { getScopedQueryApi, isValueCompletionKind, splitExpression } from './st-lsp'
+import { collectDeclaredRoots, rootIdentifierOf } from './project-scope-roots'
+// The leaf, not the `st-lsp` barrel: the barrel pulls ESM-only LSP packages that Jest cannot transform.
+import { getScopedQueryApi, isValueCompletionKind, splitExpression } from './st-lsp/scoped-query'
 
 /** Max instance/struct variables to drill into when a type-filtered search has no direct hits. */
 const SCOPE_EXPAND_LIMIT = 8
@@ -72,9 +75,19 @@ export async function getScopeCompletions(
   if (!api) return []
 
   const { anchor, segment } = splitExpression(value)
+  // Library symbols share the scope; only what the project declared may bind.
+  const roots = collectDeclaredRoots(openPLCStoreBase.getState().project.data, pouName)
+  if (anchor && !roots.has(rootIdentifierOf(anchor))) return []
+
   const items = await api.completeInScope(pouName, anchor)
   const needle = segment.toLowerCase()
-  const matching = items.filter((item) => isValueCompletionKind(item.kind) && item.label.toLowerCase().includes(needle))
+  const matching = items.filter(
+    (item) =>
+      isValueCompletionKind(item.kind) &&
+      item.label.toLowerCase().includes(needle) &&
+      // Under an anchor the root was checked above; bare labels are the root.
+      (anchor !== '' || roots.has(rootIdentifierOf(item.label))),
+  )
 
   const direct = matching
     .filter((item) => {
@@ -94,7 +107,8 @@ export async function getScopeCompletions(
   // BOOL). Drill one level into the matching instance/struct variables and
   // surface their compatible members. Gated on "no direct hits" + capped, so
   // the extra LSP round-trips stay rare and bounded.
-  if (!expectedType || direct.length > 0) return direct
+  // Only an unanchored empty box names no instance to drill into; `GVL.` names one.
+  if (!expectedType || direct.length > 0 || (!anchor && !segment.trim())) return direct
 
   const expandable = matching.filter((item) => item.type && isDerivedType(item.type)).slice(0, SCOPE_EXPAND_LIMIT)
   const expanded = await Promise.all(
