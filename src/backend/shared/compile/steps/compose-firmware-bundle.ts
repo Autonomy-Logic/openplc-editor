@@ -34,6 +34,7 @@ import type { CppPouData as CppPouDataCode } from '../../utils/cpp/generateCBloc
 import { generateCBlocksCode } from '../../utils/cpp/generateCBlocksCode'
 import type { CppPouData as CppPouDataHeader } from '../../utils/cpp/generateCBlocksHeader'
 import { generateCBlocksHeader } from '../../utils/cpp/generateCBlocksHeader'
+import { directiveStream } from '../../utils/cpp/preprocessor-directives'
 
 export interface ComposeFirmwareBundleInput {
   /** Strucpp emitted artefacts (key = filename at zip root, value
@@ -107,156 +108,26 @@ export type CBlocksHeaderPou = CppPouDataHeader
 /** Per-POU code metadata used by `generateCBlocksCode`. */
 export type CBlocksCodePou = CppPouDataCode
 
-/** Conditional and macro directives travel to the anchor; everything else does not. */
-const KEPT_DIRECTIVES = new Set([
-  'if',
-  'ifdef',
-  'ifndef',
-  'elif',
-  'elifdef',
-  'elifndef',
-  'else',
-  'endif',
-  'define',
-  'undef',
-])
-
 /**
- * Splice line continuations and strip comments, in that order — the order the
- * C++ standard itself uses, and the reason `/* ... *\/` spanning a `\`-ended
- * line is handled correctly.
- */
-function stripCommentsAndSplice(source: string): string {
-  const spliced = source.replace(/\\\r?\n/g, '')
-
-  let out = ''
-  let index = 0
-  type Mode = 'code' | 'line' | 'block' | 'string' | 'char'
-  let mode: Mode = 'code'
-
-  while (index < spliced.length) {
-    const char = spliced[index]
-    const next = spliced[index + 1]
-
-    if (mode === 'code') {
-      if (char === '/' && next === '/') {
-        mode = 'line'
-        index += 2
-      } else if (char === '/' && next === '*') {
-        mode = 'block'
-        index += 2
-      } else {
-        if (char === '"') mode = 'string'
-        else if (char === "'") mode = 'char'
-        out += char
-        index += 1
-      }
-    } else if (mode === 'line') {
-      if (char === '\n') {
-        mode = 'code'
-        out += char
-      }
-      index += 1
-    } else if (mode === 'block') {
-      // Newlines are kept so directives keep their own lines.
-      if (char === '\n') out += char
-      if (char === '*' && next === '/') {
-        mode = 'code'
-        index += 2
-      } else {
-        index += 1
-      }
-    } else {
-      // Inside a string or char literal: copied verbatim, escapes included, so
-      // a `//` or `/*` in a literal is not mistaken for a comment.
-      if (char === '\\') {
-        out += char + (next ?? '')
-        index += 2
-        continue
-      }
-      if ((mode === 'string' && char === '"') || (mode === 'char' && char === "'")) mode = 'code'
-      out += char
-      index += 1
-    }
-  }
-  return out
-}
-
-/**
- * The preprocessor skeleton of the user's C++ blocks: every directive they
- * wrote, with all the code between removed.
+ * The anchor arduino-cli reads to learn which libraries the firmware needs.
  *
- * arduino-cli decides which libraries to build by walking the SKETCH tree for
- * includes. The user's block is compiled on the other side of the pre-compile
- * seam, so arduino-cli never sees what it asks for: the header resolves (the
- * pre-compile is given the library include paths) and the link then fails on
- * every symbol the library defines. Restating the directives in a file
- * arduino-cli does compile is what puts the library back on the link line.
+ * One `// <block>` comment per C++ POU followed by that block's directive
+ * stream, so a reader can see at a glance which conditions gate which library.
+ * See `preprocessor-directives.ts` for what travels and what does not.
  *
- * Why the whole directive stream rather than the `#include` lines alone: an
- * include is only reached when its enclosing conditions hold. Lifting
- *
- *     #ifdef ARDUINO_ARCH_ESP32
- *     #include <WiFi.h>
- *     #endif
- *
- * as a bare `#include <WiFi.h>` breaks an AVR build that compiles today.
- * Copying the stream instead of interpreting it means the conditions are
- * evaluated by the compiler, for the board actually selected, rather than
- * guessed here — and it carries `#define`s along, so an include whose name is
- * formed by a macro still resolves.
- *
- * A conditional group whose body was all code becomes an empty `#if`/`#endif`
- * pair. That is deliberate: pruning it would mean deciding whether anything
- * inside still matters, which is the evaluation this exists to avoid.
- *
- * Dropped on the way:
- *
- * - **code** — anything not starting with `#`. The anchor must emit no symbol.
- * - **`#include "..."`** — names a file beside the user's source, which does
- *   not exist beside the sketch.
- * - **`#error` / `#warning`** — the real translation unit is compiled too and
- *   raises them there. Here they could also fire spuriously, on a condition
- *   that reads a macro only the pre-compile side has.
- * - **`#pragma`** — no effect on a file with no code.
- *
- * What it still cannot see: a library reached through a quoted project header,
- * and a condition that tests a macro from `generated.hpp` or from the
- * variable-binding defines, neither of which may cross to this side. Both are
- * gone once the project declares its libraries instead of us deriving them.
- * Every one of those failures is a build that does not compile or does not
- * link — never a firmware that runs and misbehaves, because this file defines
- * nothing.
+ * `null` when no block includes anything: an anchor made only of conditionals
+ * would be a file that exists for nothing.
  */
 function extractLibraryIncludes(originalCppPous: CppPouDataCode[]): string | null {
   const blocks: string[] = []
   let sawInclude = false
 
   for (const pou of originalCppPous) {
-    const kept: string[] = []
-    for (const line of stripCommentsAndSplice(pou.code).split('\n')) {
-      const directive = /^[ \t]*#[ \t]*([A-Za-z_]+)\b(.*)$/.exec(line)
-      if (directive === null) continue
-
-      const [, name, rest] = directive
-      if (name === 'include') {
-        const angle = /^[ \t]*<[^>]+>/.exec(rest)
-        // A macro-formed include (`#include LIB`) is kept as well: the `#define`
-        // that builds it travelled here too, so the compiler resolves it.
-        const quoted = /^[ \t]*"/.test(rest)
-        if (angle !== null || (!quoted && rest.trim().length > 0)) {
-          sawInclude = true
-          kept.push(`#include${rest}`)
-        }
-        continue
-      }
-      if (KEPT_DIRECTIVES.has(name)) kept.push(`#${name}${rest}`)
-    }
-    if (kept.length > 0) blocks.push(`// ${pou.name}\n${kept.join('\n')}`)
+    const { lines, hasInclude } = directiveStream(pou.code)
+    if (hasInclude) sawInclude = true
+    if (lines.length > 0) blocks.push(`// ${pou.name}\n${lines.join('\n')}`)
   }
 
-  // No include anywhere means no library to discover, and an anchor made only of
-  // conditionals and defines would be a file that exists for nothing.
   if (!sawInclude) return null
 
   return `// Auto-generated. Declares nothing; defines nothing.
@@ -268,8 +139,7 @@ function extractLibraryIncludes(originalCppPous: CppPouDataCode[]): string | nul
 // here, compiles their sources, and links them.
 //
 // The conditions are copied, not evaluated: an empty \`#if\`/\`#endif\` pair means
-// the code it guarded had no include in it. \`#error\`, \`#warning\`, \`#pragma\` and
-// quoted includes are left out on purpose.
+// the code it guarded had no include in it.
 //
 // Compiled at the core's own C++ standard, like the rest of the sketch. Safe
 // because it pulls in no strucpp header and emits no symbol of its own.
