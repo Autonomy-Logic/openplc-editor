@@ -292,8 +292,6 @@ async function writeEnvelope(
   const response = await edgeAuthedRequest(`/projects/${encodeURIComponent(projectId)}/files/save`, {
     method: 'POST',
     json: { files, ...(deletions.length > 0 ? { deletions } : {}) },
-    // Names the edit session this save comes from, so Autonomy Edge refuses it
-    // while the project is open in another place (EDGE-652).
     headers: editSessionHeadersFor(projectId),
   })
 

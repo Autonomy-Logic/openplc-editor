@@ -40,9 +40,14 @@ describe('toEditSessionOpened', () => {
   })
 
   it('is unavailable on a server without edit sessions, or any failure', () => {
-    expect(toEditSessionOpened(404, { message: 'Cannot POST' })).toEqual({ status: 'unavailable' })
-    expect(toEditSessionOpened(403, null)).toEqual({ status: 'unavailable' })
-    expect(toEditSessionOpened(201, { data: { session: {} } })).toEqual({ status: 'unavailable' })
+    expect(toEditSessionOpened(404, { message: 'Cannot POST' })).toEqual({ status: 'unavailable', permanent: false })
+    expect(toEditSessionOpened(503, null)).toEqual({ status: 'unavailable', permanent: false })
+    expect(toEditSessionOpened(201, { data: { session: {} } })).toEqual({ status: 'unavailable', permanent: false })
+  })
+
+  it('marks as permanent the refusals retrying cannot fix', () => {
+    expect(toEditSessionOpened(403, null)).toEqual({ status: 'unavailable', permanent: true })
+    expect(toEditSessionOpened(400, null)).toEqual({ status: 'unavailable', permanent: true })
   })
 })
 
@@ -85,6 +90,15 @@ describe('editSessionRefusalMessage', () => {
   it('turns each refusal code into a sentence for the user', () => {
     expect(editSessionRefusalMessage(409, body('PROJECT_EDIT_SESSION_CONFLICT'))).toBe(EDIT_SESSION_CONFLICT_MESSAGE)
     expect(editSessionRefusalMessage(409, body('PROJECT_EDIT_SESSION_CLOSED'))).toBe(EDIT_SESSION_CLOSED_MESSAGE)
+  })
+
+  it('reads the code from the body, not from anywhere in the text', () => {
+    const elsewhere = JSON.stringify({
+      statusCode: 409,
+      error: { code: 'OTHER', message: 'PROJECT_EDIT_SESSION_CONFLICT' },
+    })
+    expect(editSessionRefusalMessage(409, elsewhere)).toBeNull()
+    expect(editSessionRefusalMessage(409, 'not json')).toBeNull()
   })
 
   it('leaves every other failure alone', () => {

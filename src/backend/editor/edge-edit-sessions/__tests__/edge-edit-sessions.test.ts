@@ -1,8 +1,3 @@
-/**
- * Edit sessions held by the desktop main process, and how they ride along on a
- * save (EDGE-652). HTTP is stubbed at the same seam the cloud project tests use.
- */
-
 import {
   EDIT_SESSION_CLOSED_MESSAGE,
   EDIT_SESSION_CONFLICT_MESSAGE,
@@ -55,12 +50,10 @@ const writeFiles = {
   deletions: [],
 }
 
-/** The headers the n-th request was sent with. */
 const headersOf = (callIndex: number) => request.mock.calls[callIndex]?.[1]?.headers
 
 beforeEach(async () => {
   jest.clearAllMocks()
-  // Module state survives between tests; start every test with no session held.
   request.mockResolvedValue({ status: 200, body: '{}' })
   await releaseAllEditSessions()
   jest.clearAllMocks()
@@ -91,16 +84,16 @@ describe('openEditSession', () => {
   it('is unavailable, and attaches nothing, against a server without edit sessions', async () => {
     request.mockResolvedValueOnce({ status: 404, body: '{"message":"Cannot POST"}' })
 
-    await expect(openEditSession('p1', DESKTOP)).resolves.toEqual({ status: 'unavailable' })
+    await expect(openEditSession('p1', DESKTOP)).resolves.toEqual({ status: 'unavailable', permanent: false })
     expect(editSessionHeadersFor('p1')).toEqual({})
   })
 
   it('is unavailable when signed out or offline', async () => {
     request.mockResolvedValueOnce(null)
-    await expect(openEditSession('p1', DESKTOP)).resolves.toEqual({ status: 'unavailable' })
+    await expect(openEditSession('p1', DESKTOP)).resolves.toEqual({ status: 'unavailable', permanent: false })
 
     request.mockRejectedValueOnce(new Error('ENOTFOUND'))
-    await expect(openEditSession('p1', DESKTOP)).resolves.toEqual({ status: 'unavailable' })
+    await expect(openEditSession('p1', DESKTOP)).resolves.toEqual({ status: 'unavailable', permanent: false })
   })
 })
 
@@ -194,13 +187,26 @@ describe('closing', () => {
     expect(editSessionHeadersFor('p1')).toEqual({ 'X-Edit-Session-Id': 'mine' })
   })
 
-  it('stops attaching a session the server forgot, so saves are not refused as closed', async () => {
+  it('keeps attaching a session the server forgot, so saves fail safe until a new one opens', async () => {
     request.mockResolvedValueOnce(opened('mine'))
     await openEditSession('p1', DESKTOP)
     request.mockResolvedValueOnce({ status: 404, body: '{}' })
 
     await expect(heartbeatEditSession('p1', 'mine')).resolves.toEqual({ status: 'gone' })
-    expect(editSessionHeadersFor('p1')).toEqual({})
+    expect(editSessionHeadersFor('p1')).toEqual({ 'X-Edit-Session-Id': 'mine' })
+
+    request.mockResolvedValueOnce(opened('fresh'))
+    await openEditSession('p1', DESKTOP)
+    expect(editSessionHeadersFor('p1')).toEqual({ 'X-Edit-Session-Id': 'fresh' })
+  })
+
+  it('keeps attaching its session when closing itself fails', async () => {
+    request.mockResolvedValueOnce(opened('mine'))
+    await openEditSession('p1', DESKTOP)
+    request.mockResolvedValueOnce({ status: 500, body: '{}' })
+
+    await expect(closeEditSession('p1', 'mine')).resolves.toBe(false)
+    expect(editSessionHeadersFor('p1')).toEqual({ 'X-Edit-Session-Id': 'mine' })
   })
 
   it('waits on quit for a close already on the wire', async () => {
@@ -209,7 +215,6 @@ describe('closing', () => {
     let answer: (response: EdgeResponse) => void = () => undefined
     request.mockImplementationOnce(() => new Promise<EdgeResponse>((resolve) => (answer = resolve)))
 
-    // The window's unload closes its session; the app quits right after.
     void closeEditSession('p1', 'mine')
     expect(hasOpenEditSessions()).toBe(true)
     let released = false

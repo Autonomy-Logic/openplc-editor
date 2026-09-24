@@ -9,19 +9,6 @@ import { useOpenPLCStore } from '../../../store'
 import { describeEditSessionClient } from '../../../utils/describe-edit-session-client'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
-/**
- * One project, one place (EDGE-652).
- *
- * Mounted once in the app layout. While an editable cloud project is open it
- * holds this place's edit session, and when the same project is open anywhere
- * else with the same account it shows a warning that cannot be dismissed
- * until the user closes all but one session. Autonomy Edge refuses saves in
- * the meantime, so nothing is overwritten while the warning is up.
- *
- * Renders its own dialog instead of going through the modal store:
- * `closeModal()` closes every modal at once, and this one must stay up until
- * the conflict is actually resolved.
- */
 export function ProjectEditSessionGuard() {
   const port = useEditSession()
   const navigation = useNavigation()
@@ -31,10 +18,10 @@ export function ProjectEditSessionGuard() {
   const projectName = useOpenPLCStore(useCallback((s) => s.project.meta.name, []))
   const canEdit = useOpenPLCStore(useCallback((s) => s.workspace.canEdit, []))
   const isEphemeral = useOpenPLCStore(useCallback((s) => s.workspace.isEphemeralProject, []))
-  const { clearStatesOnCloseProject } = useOpenPLCStore(useCallback((s) => s.sharedWorkspaceActions, []))
+  const { clearStatesOnCloseProject, hasUnsavedChanges } = useOpenPLCStore(
+    useCallback((s) => s.sharedWorkspaceActions, []),
+  )
 
-  // Read-only viewers cannot save, so they cannot overwrite anything. Partner
-  // integration sessions keep their own save path.
   const projectId = canEdit && !isEphemeral && isRemoteProjectPath(projectPath) ? projectPath : null
 
   const client = useMemo(
@@ -46,6 +33,7 @@ export function ProjectEditSessionGuard() {
 
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  const [confirmingCloseThis, setConfirmingCloseThis] = useState(false)
 
   const leaveProject = useCallback(() => {
     clearStatesOnCloseProject()
@@ -64,9 +52,19 @@ export function ProjectEditSessionGuard() {
     if (state.phase !== 'active') {
       return
     }
+    if (!confirmingCloseThis && hasUnsavedChanges()) {
+      setConfirmingCloseThis(true)
+      return
+    }
+    setConfirmingCloseThis(false)
     setBusySessionId(state.sessionId)
-    await closeThisSession()
+    setFailed(false)
+    const closed = await closeThisSession()
     setBusySessionId(null)
+    if (!closed) {
+      setFailed(true)
+      return
+    }
     leaveProject()
   }
 
@@ -86,21 +84,16 @@ export function ProjectEditSessionGuard() {
       busySessionId={busySessionId}
       currentSessionId={state.sessionId}
       failed={failed}
+      confirmingCloseThis={confirmingCloseThis}
       onCloseOther={(id) => void handleCloseOther(id)}
       onCloseThis={() => void handleCloseThis()}
+      onCancelCloseThis={() => setConfirmingCloseThis(false)}
     />
   )
 }
 
-// Neither dialog can be dismissed by Escape or a click outside: the only ways
-// out are the actions that actually resolve the situation.
 const blockDismiss = (event: Event) => event.preventDefault()
 
-/**
- * Focus the dialog itself on open, not its first button. Radix focuses the
- * first focusable element by default, which in the conflict dialog is "Close
- * this one": a stray Enter would close this session and leave the project.
- */
 function useDialogFocus() {
   const ref = useRef<HTMLDivElement>(null)
   const onOpenAutoFocus = (event: Event) => {
@@ -117,8 +110,10 @@ interface ConflictDialogProps {
   otherSessions: EditSessionSummary[]
   busySessionId: string | null
   failed: boolean
+  confirmingCloseThis?: boolean
   onCloseOther(sessionId: string): void
   onCloseThis(): void
+  onCancelCloseThis?(): void
 }
 
 export function ConflictDialog({
@@ -128,8 +123,10 @@ export function ConflictDialog({
   otherSessions,
   busySessionId,
   failed,
+  confirmingCloseThis = false,
   onCloseOther,
   onCloseThis,
+  onCancelCloseThis,
 }: ConflictDialogProps) {
   const total = otherSessions.length + 1
   const busy = busySessionId !== null
@@ -192,6 +189,34 @@ export function ConflictDialog({
             />
           ))}
         </ul>
+
+        {confirmingCloseThis && (
+          <div
+            role='alertdialog'
+            aria-label='Discard unsaved changes'
+            className='flex flex-col gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950'
+          >
+            <p className='text-sm text-red-700 dark:text-red-300'>
+              This window has changes that were not saved. Closing it discards them.
+            </p>
+            <div className='flex justify-end gap-2'>
+              <button
+                type='button'
+                onClick={onCancelCloseThis}
+                className='cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800'
+              >
+                Keep this window
+              </button>
+              <button
+                type='button'
+                onClick={onCloseThis}
+                className='cursor-pointer rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700'
+              >
+                Close and discard changes
+              </button>
+            </div>
+          </div>
+        )}
 
         {failed && (
           <p role='alert' className='text-sm text-red-600 dark:text-red-400'>

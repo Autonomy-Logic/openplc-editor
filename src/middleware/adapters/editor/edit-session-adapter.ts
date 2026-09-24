@@ -1,28 +1,30 @@
-/**
- * Desktop EditSessionPort. The main process holds the sessions and attaches
- * them to saves; this side only asks, and checks what comes back over IPC,
- * where a TypeScript annotation establishes nothing.
- *
- * Preload and renderer bundles can skew, so a missing channel answers as
- * "unavailable", which leaves the editor behaving as it did before sessions.
- */
-
 import {
   EditSessionBeatSchema,
   EditSessionOpenedSchema,
   type EditSessionPort,
 } from '../../shared/ports/edit-session-port'
 
+async function close(projectId: string, sessionId: string, closedBySessionId?: string): Promise<boolean> {
+  if (typeof window.bridge.edgeEditSessionClose !== 'function') {
+    return false
+  }
+  try {
+    return (await window.bridge.edgeEditSessionClose(projectId, sessionId, closedBySessionId)) === true
+  } catch {
+    return false
+  }
+}
+
 export const editorEditSessionPort: EditSessionPort = {
   async open(projectId, client) {
     if (typeof window.bridge.edgeEditSessionOpen !== 'function') {
-      return { status: 'unavailable' }
+      return { status: 'unavailable', permanent: true }
     }
     try {
       const parsed = EditSessionOpenedSchema.safeParse(await window.bridge.edgeEditSessionOpen(projectId, client))
-      return parsed.success ? parsed.data : { status: 'unavailable' }
+      return parsed.success ? parsed.data : { status: 'unavailable', permanent: false }
     } catch {
-      return { status: 'unavailable' }
+      return { status: 'unavailable', permanent: false }
     }
   },
 
@@ -38,19 +40,9 @@ export const editorEditSessionPort: EditSessionPort = {
     }
   },
 
-  async close(projectId, sessionId, closedBySessionId) {
-    if (typeof window.bridge.edgeEditSessionClose !== 'function') {
-      return false
-    }
-    try {
-      return (await window.bridge.edgeEditSessionClose(projectId, sessionId, closedBySessionId)) === true
-    } catch {
-      return false
-    }
-  },
+  close,
 
   release(projectId, sessionId) {
-    // The main process outlives the renderer, so an ordinary close is as good as a beacon here.
-    void this.close(projectId, sessionId)
+    void close(projectId, sessionId)
   },
 }

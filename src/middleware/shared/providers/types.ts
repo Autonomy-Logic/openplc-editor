@@ -41,7 +41,6 @@ export interface PlatformPorts {
   ai?: AIPort
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
-  // Cloud projects only. Absent means "no guard": the project is edited as it was before edit sessions (EDGE-652).
   editSession?: EditSessionPort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort

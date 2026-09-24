@@ -15,6 +15,7 @@ const desktop: EditSessionSummary = {
 function renderConflict(overrides: Partial<Parameters<typeof ConflictDialog>[0]> = {}) {
   const onCloseOther = jest.fn()
   const onCloseThis = jest.fn()
+  const onCancelCloseThis = jest.fn()
   render(
     <ConflictDialog
       projectName='Bottling line'
@@ -25,6 +26,7 @@ function renderConflict(overrides: Partial<Parameters<typeof ConflictDialog>[0]>
       failed={false}
       onCloseOther={onCloseOther}
       onCloseThis={onCloseThis}
+      onCancelCloseThis={onCancelCloseThis}
       {...overrides}
     />,
   )
@@ -70,6 +72,20 @@ describe('ConflictDialog', () => {
     renderConflict({ failed: true })
 
     expect(screen.getByRole('alert').textContent).toMatch(/could not be closed/)
+  })
+
+  it('asks before discarding unsaved changes in this window', () => {
+    const onCloseThis = jest.fn()
+    const onCancelCloseThis = jest.fn()
+    renderConflict({ confirmingCloseThis: true, onCloseThis, onCancelCloseThis })
+
+    expect(screen.getByRole('alertdialog', { name: 'Discard unsaved changes' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep this window' }))
+    expect(onCancelCloseThis).toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close and discard changes' }))
+    expect(onCloseThis).toHaveBeenCalled()
   })
 
   it('cannot be dismissed with Escape', () => {

@@ -1,10 +1,5 @@
 import type { EditSessionClientKind } from '../../middleware/shared/ports/edit-session-port'
 
-/**
- * How this place is named to the user when the same project is open elsewhere:
- * "Chrome on macOS", "OpenPLC Editor on Windows". Only good enough to tell two
- * places apart; it is never used to decide anything.
- */
 export function describeEditSessionClient(
   isNativeApplication: boolean,
   userAgent: string,
@@ -31,7 +26,6 @@ function operatingSystemOf(ua: string): string | null {
   return null
 }
 
-// Order matters: every Chromium browser also says "Chrome", and Chrome also says "Safari".
 function browserOf(ua: string): string | null {
   if (/Edg\//.test(ua)) return 'Edge'
   if (/OPR\//.test(ua)) return 'Opera'

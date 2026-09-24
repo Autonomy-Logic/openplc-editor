@@ -52,7 +52,7 @@ describe('useProjectEditSession', () => {
   })
 
   it('stays idle when the server has no edit sessions, so the editor works as before', async () => {
-    const { port } = makePort({ status: 'unavailable' })
+    const { port } = makePort({ status: 'unavailable', permanent: false })
     const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
 
     await waitFor(() => expect(port.open).toHaveBeenCalledWith('p1', CLIENT))
@@ -102,7 +102,6 @@ describe('useProjectEditSession', () => {
     })
     await waitFor(() => expect(result.current.state).toEqual({ phase: 'closed-elsewhere', sessionId: 'mine' }))
 
-    // No more heartbeats after that.
     const beatsSoFar = port.heartbeat.mock.calls.length
     await act(async () => {
       await jest.advanceTimersByTimeAsync(0)
@@ -154,7 +153,6 @@ describe('useProjectEditSession', () => {
 
     rerender({ projectId: null })
 
-    // `release`: leaving the project can navigate the page away, and a plain request would be cancelled.
     expect(port.release).toHaveBeenCalledWith('p1', 'mine')
     expect(result.current.state).toEqual({ phase: 'idle' })
   })
@@ -195,7 +193,6 @@ describe('useProjectEditSession', () => {
     const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
     await waitFor(() => expect(result.current.state.phase).toBe('active'))
 
-    // Slow beat starts, then the user closes another place, which beats again at once.
     await act(async () => {
       await jest.advanceTimersByTimeAsync(0)
       await jest.advanceTimersByTimeAsync(20_000)
@@ -204,7 +201,6 @@ describe('useProjectEditSession', () => {
       await result.current.closeOtherSession('desktop-session')
     })
     await waitFor(() => expect(port.heartbeat).toHaveBeenCalledTimes(2))
-    // The slow answer still lists the closed place; it must not come back on screen.
     await act(async () => {
       answerSlow({ status: 'active', otherSessions: [desktop] })
     })
@@ -213,7 +209,7 @@ describe('useProjectEditSession', () => {
   })
 
   it('tries again later when the session could not be opened', async () => {
-    const { port } = makePort({ status: 'unavailable' })
+    const { port } = makePort({ status: 'unavailable', permanent: false })
     renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
     await waitFor(() => expect(port.open).toHaveBeenCalledTimes(1))
 
@@ -223,6 +219,89 @@ describe('useProjectEditSession', () => {
     })
 
     await waitFor(() => expect(port.open).toHaveBeenCalledTimes(2))
+  })
+
+  it('does not retry a refusal that retrying cannot fix', async () => {
+    const { port } = makePort({ status: 'unavailable', permanent: true })
+    renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(port.open).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0)
+      await jest.advanceTimersByTimeAsync(10 * 60_000)
+    })
+
+    expect(port.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits longer after each failed retry', async () => {
+    const { port } = makePort({ status: 'unavailable', permanent: false })
+    renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(port.open).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0)
+      await jest.advanceTimersByTimeAsync(30_000)
+    })
+    await waitFor(() => expect(port.open).toHaveBeenCalledTimes(2))
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0)
+      await jest.advanceTimersByTimeAsync(30_000)
+    })
+    expect(port.open).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(30_000)
+    })
+    await waitFor(() => expect(port.open).toHaveBeenCalledTimes(3))
+  })
+
+  it('shows nothing from the previous project while the next one opens', async () => {
+    const { port } = makePort({
+      status: 'opened',
+      sessionId: 'mine',
+      otherSessions: [desktop],
+      heartbeatIntervalMs: 20_000,
+    })
+    const { result, rerender } = renderHook(
+      ({ projectId }: { projectId: string }) => useProjectEditSession({ port, projectId, client: CLIENT }),
+      { initialProps: { projectId: 'p1' } },
+    )
+    await waitFor(() => expect(result.current.state.phase).toBe('active'))
+    port.open.mockImplementationOnce(() => new Promise<EditSessionOpened>(() => undefined))
+
+    rerender({ projectId: 'p2' })
+
+    expect(result.current.state).toEqual({ phase: 'idle' })
+  })
+
+  it('reports a failed close of this session, and keeps it', async () => {
+    const { port } = makePort()
+    port.close.mockResolvedValueOnce(false)
+    const { result, unmount } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(result.current.state.phase).toBe('active'))
+
+    let closed = true
+    await act(async () => {
+      closed = await result.current.closeThisSession()
+    })
+
+    expect(closed).toBe(false)
+    unmount()
+    expect(port.release).toHaveBeenCalledWith('p1', 'mine')
+  })
+
+  it('does not release again a session it already closed', async () => {
+    const { port } = makePort()
+    const { result, unmount } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(result.current.state.phase).toBe('active'))
+
+    await act(async () => {
+      await result.current.closeThisSession()
+    })
+    unmount()
+
+    expect(port.close).toHaveBeenCalledTimes(1)
+    expect(port.release).not.toHaveBeenCalled()
   })
 
   it('releases its session when the page goes away', async () => {

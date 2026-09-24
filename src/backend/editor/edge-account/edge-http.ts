@@ -48,7 +48,6 @@ export interface EdgeRequestInit {
   raw?: { body: Buffer; contentType: string }
   accessToken?: string | null
   timeoutMs?: number
-  /** Extra request headers. Cannot override Accept, User-Agent, Content-Type, Content-Length or Authorization. */
   headers?: Record<string, string>
 }
 

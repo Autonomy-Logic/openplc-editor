@@ -158,7 +158,6 @@ import { SimulatorModule } from '../../../backend/shared/simulator/simulator-mod
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
 
-// Only 'desktop': this process is the desktop editor, whatever the renderer claims.
 const EditSessionClientSchema = z.object({
   kind: z.literal('desktop'),
   label: z.string().trim().min(1).max(120),
@@ -1374,9 +1373,6 @@ class MainProcessBridge implements MainIpcModule {
     return saveCloudFile(filePath, content)
   }
 
-  // Edit sessions (EDGE-652). Arguments cross IPC, so they are checked, not trusted:
-  // an id that is not a non-empty string would be interpolated into the URL.
-
   handleEdgeEditSessionOpen = (
     _event: IpcMainInvokeEvent,
     projectId: unknown,
@@ -1385,7 +1381,7 @@ class MainProcessBridge implements MainIpcModule {
     const parsed = EditSessionClientSchema.safeParse(client)
 
     if (!isNonEmptyString(projectId) || !parsed.success) {
-      return Promise.resolve({ status: 'unavailable' })
+      return Promise.resolve({ status: 'unavailable', permanent: true })
     }
 
     return openEditSession(projectId, parsed.data)

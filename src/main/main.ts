@@ -397,10 +397,6 @@ app.on('before-quit', () => {
  * Emitted when all windows have been closed and the application will quit. Calling event.preventDefault() will prevent the default
  * behavior, which is terminating the application.
  */
-// Edit sessions this editor holds on cloud projects are released before the process
-// ends, so the same project opened elsewhere is not reported as "open in another place"
-// until the server's TTL runs out. Held for at most EDIT_SESSION_RELEASE_BUDGET_MS:
-// a slow network must never keep the editor from quitting.
 const EDIT_SESSION_RELEASE_BUDGET_MS = 1500
 let editSessionsReleased = false
 
