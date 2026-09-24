@@ -15,6 +15,8 @@
  * State carried via `WalkerState` (defined in `walker.ts`).
  */
 
+import { edgeTriggerInstanceName } from '@root/frontend/utils/PLC/edge-trigger-instance'
+
 import type { CoilModifier, ContactModifier } from './modifier-types'
 import type { Location, ProgramChunk } from './path-tree'
 import type { TriggerVar } from './trigger-var'
@@ -71,11 +73,15 @@ function addTrigger(
   varInfo: Location,
 ): ProgramChunk[] {
   ensureTriggerVarSection(state)
-  let i = 1
-  let name = `${edge}${i}`
-  while (state.declaredVars.has(name)) {
-    i++
+  // varInfo is [pou, element, localId, ...]; a node-derived name lets the debugger map the contact to its trigger.
+  let name = edgeTriggerInstanceName(edge, varInfo[2])
+  if (name === null || state.declaredVars.has(name)) {
+    let i = 1
     name = `${edge}${i}`
+    while (state.declaredVars.has(name)) {
+      i++
+      name = `${edge}${i}`
+    }
   }
   state.declaredVars.add(name)
   state.triggerVars.push({ name, type: edge })

@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '../../../store'
+import type { RungLadderState } from '../../../store/slices/ladder'
 import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
@@ -62,11 +63,17 @@ export const LadderToolbox = () => {
     }
   }
 
+  // The stored selection tracks which nodes are selected; their current data lives in rung.nodes.
+  const currentSelectedNodes = (rung: RungLadderState) => {
+    const selectedIds = new Set((rung.selectedNodes || []).map((node) => node.id))
+    return rung.nodes.filter((node) => selectedIds.has(node.id))
+  }
+
   const handleRemoveNodes = () => {
-    const allNodesToRemove = flow?.rungs.flatMap((rung) => rung.selectedNodes || []) || []
+    const allNodesToRemove = flow?.rungs.flatMap(currentSelectedNodes) || []
 
     flow?.rungs.forEach((rung) => {
-      const selectedNodes = rung.selectedNodes || []
+      const selectedNodes = currentSelectedNodes(rung)
       if (selectedNodes.length === 0) return
 
       const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)
