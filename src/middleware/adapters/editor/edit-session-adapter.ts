@@ -16,12 +16,14 @@ async function close(projectId: string, sessionId: string, closedBySessionId?: s
 }
 
 export const editorEditSessionPort: EditSessionPort = {
-  async open(projectId, client) {
+  async open(projectId, client, previousSessionId) {
     if (typeof window.bridge.edgeEditSessionOpen !== 'function') {
       return { status: 'unavailable', permanent: true }
     }
     try {
-      const parsed = EditSessionOpenedSchema.safeParse(await window.bridge.edgeEditSessionOpen(projectId, client))
+      const parsed = EditSessionOpenedSchema.safeParse(
+        await window.bridge.edgeEditSessionOpen(projectId, client, previousSessionId),
+      )
       return parsed.success ? parsed.data : { status: 'unavailable', permanent: false }
     } catch {
       return { status: 'unavailable', permanent: false }

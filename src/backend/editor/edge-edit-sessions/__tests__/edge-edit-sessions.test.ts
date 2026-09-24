@@ -1,6 +1,7 @@
 import {
   EDIT_SESSION_CLOSED_MESSAGE,
   EDIT_SESSION_CONFLICT_MESSAGE,
+  EDIT_SESSION_STALE_MESSAGE,
 } from '../../../../middleware/shared/ports/edit-session-port'
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
 import { saveCloudProject } from '../../edge-projects'
@@ -73,12 +74,22 @@ describe('openEditSession', () => {
     const result = await openEditSession('p1', DESKTOP)
 
     expect(request.mock.calls[0][0]).toBe('/projects/p1/edit-sessions')
-    expect(request.mock.calls[0][1]).toMatchObject({
-      method: 'POST',
-      json: { clientKind: 'desktop', clientLabel: 'OpenPLC Editor on macOS' },
-    })
+    expect(request.mock.calls[0][1]).toMatchObject({ method: 'POST' })
+    expect(request.mock.calls[0][1]?.json).toEqual({ clientKind: 'desktop', clientLabel: 'OpenPLC Editor on macOS' })
     expect(result).toMatchObject({ status: 'opened', sessionId: 'mine', otherSessions: [{ id: 'web-session' }] })
     expect(editSessionHeadersFor('p1')).toEqual({ 'X-Edit-Session-Id': 'mine' })
+  })
+
+  it('names the session it continues, so the server can tell whether this copy is out of date', async () => {
+    request.mockResolvedValueOnce(opened('mine'))
+
+    await openEditSession('p1', DESKTOP, 'previous')
+
+    expect(request.mock.calls[0][1]?.json).toEqual({
+      clientKind: 'desktop',
+      clientLabel: 'OpenPLC Editor on macOS',
+      previousSessionId: 'previous',
+    })
   })
 
   it('is unavailable, and attaches nothing, against a server without edit sessions', async () => {
@@ -136,6 +147,20 @@ describe('saving with an edit session', () => {
     await expect(saveCloudProject(writeFiles)).resolves.toEqual({
       success: false,
       error: EDIT_SESSION_CLOSED_MESSAGE,
+    })
+  })
+
+  it('tells the user when this copy is older than a save made from another place', async () => {
+    request
+      .mockResolvedValueOnce({ status: 200, body: JSON.stringify({ data: { files: FILES } }) })
+      .mockResolvedValueOnce({
+        status: 409,
+        body: JSON.stringify({ statusCode: 409, error: { code: 'PROJECT_EDIT_SESSION_STALE' } }),
+      })
+
+    await expect(saveCloudProject(writeFiles)).resolves.toEqual({
+      success: false,
+      error: EDIT_SESSION_STALE_MESSAGE,
     })
   })
 

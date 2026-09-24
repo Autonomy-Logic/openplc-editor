@@ -20,11 +20,20 @@ const desktop: EditSessionSummary = {
 }
 
 function makePort(
-  opened: EditSessionOpened = { status: 'opened', sessionId: 'mine', otherSessions: [], heartbeatIntervalMs: 20_000 },
+  opened: EditSessionOpened = {
+    status: 'opened',
+    sessionId: 'mine',
+    stale: false,
+    otherSessions: [],
+    heartbeatIntervalMs: 20_000,
+  },
 ) {
   const beats: EditSessionBeat[] = []
   const port = {
-    open: jest.fn((_projectId: string, _client: { kind: 'web' | 'desktop'; label: string }) => Promise.resolve(opened)),
+    open: jest.fn(
+      (_projectId: string, _client: { kind: 'web' | 'desktop'; label: string }, _previousSessionId?: string) =>
+        Promise.resolve(opened),
+    ),
     heartbeat: jest.fn((_projectId: string, _sessionId: string) =>
       Promise.resolve(beats.shift() ?? ({ status: 'active', otherSessions: [] } as EditSessionBeat)),
     ),
@@ -55,7 +64,7 @@ describe('useProjectEditSession', () => {
     const { port } = makePort({ status: 'unavailable', permanent: false })
     const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
 
-    await waitFor(() => expect(port.open).toHaveBeenCalledWith('p1', CLIENT))
+    await waitFor(() => expect(port.open).toHaveBeenCalledWith('p1', CLIENT, undefined))
     expect(result.current.state).toEqual({ phase: 'idle' })
   })
 
@@ -63,6 +72,7 @@ describe('useProjectEditSession', () => {
     const { port } = makePort({
       status: 'opened',
       sessionId: 'mine',
+      stale: false,
       otherSessions: [desktop],
       heartbeatIntervalMs: 20_000,
     })
@@ -122,12 +132,14 @@ describe('useProjectEditSession', () => {
     })
 
     await waitFor(() => expect(port.open).toHaveBeenCalledTimes(2))
+    expect(port.open).toHaveBeenLastCalledWith('p1', CLIENT, 'mine')
   })
 
   it('closes another session from this one, then refreshes the list at once', async () => {
     const { port } = makePort({
       status: 'opened',
       sessionId: 'mine',
+      stale: false,
       otherSessions: [desktop],
       heartbeatIntervalMs: 20_000,
     })
@@ -169,10 +181,11 @@ describe('useProjectEditSession', () => {
     })
 
     await waitFor(() => expect(port.open).toHaveBeenCalledTimes(2))
+    expect(port.open).toHaveBeenLastCalledWith('p1', CLIENT, 'mine')
     expect(result.current.state.phase).toBe('active')
   })
 
-  it('keeps the session when the page only goes into the back/forward cache', async () => {
+  it('releases the session when the page goes into the back/forward cache, and takes it back on return', async () => {
     const { port } = makePort()
     const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
     await waitFor(() => expect(result.current.state.phase).toBe('active'))
@@ -180,8 +193,84 @@ describe('useProjectEditSession', () => {
     const cached = new Event('pagehide')
     Object.defineProperty(cached, 'persisted', { value: true })
     window.dispatchEvent(cached)
+    expect(port.release).toHaveBeenCalledWith('p1', 'mine')
 
-    expect(port.release).not.toHaveBeenCalled()
+    const restored = new Event('pageshow')
+    Object.defineProperty(restored, 'persisted', { value: true })
+    await act(async () => {
+      window.dispatchEvent(restored)
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    expect(port.open).toHaveBeenCalledTimes(2)
+    expect(port.open).toHaveBeenLastCalledWith('p1', CLIENT, 'mine')
+  })
+
+  it('does not open again on a page show that is not a return from the back/forward cache', async () => {
+    const { port } = makePort()
+    const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(result.current.state.phase).toBe('active'))
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pageshow'))
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    expect(port.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns when the server says this copy is older than a save made elsewhere', async () => {
+    const { port, beats } = makePort()
+    beats.push({ status: 'stale', otherSessions: [] })
+    const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(result.current.state.phase).toBe('active'))
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0)
+      await jest.advanceTimersByTimeAsync(20_000)
+    })
+
+    await waitFor(() => expect(result.current.state).toEqual({ phase: 'stale', sessionId: 'mine', otherSessions: [] }))
+  })
+
+  it('opens already warning when the session it continues was older than a save made elsewhere', async () => {
+    const { port } = makePort({
+      status: 'opened',
+      sessionId: 'mine',
+      stale: true,
+      otherSessions: [],
+      heartbeatIntervalMs: 20_000,
+    })
+    const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+
+    await waitFor(() => expect(result.current.state).toEqual({ phase: 'stale', sessionId: 'mine', otherSessions: [] }))
+  })
+
+  it('starts a fresh session, without the stale one behind it, after the project was reloaded', async () => {
+    const { port } = makePort({
+      status: 'opened',
+      sessionId: 'mine',
+      stale: true,
+      otherSessions: [],
+      heartbeatIntervalMs: 20_000,
+    })
+    const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(result.current.state.phase).toBe('stale'))
+    port.open.mockResolvedValueOnce({
+      status: 'opened',
+      sessionId: 'fresh',
+      stale: false,
+      otherSessions: [],
+      heartbeatIntervalMs: 20_000,
+    })
+
+    await act(async () => {
+      await result.current.startFresh()
+    })
+
+    expect(port.release).toHaveBeenCalledWith('p1', 'mine')
+    expect(port.open).toHaveBeenLastCalledWith('p1', CLIENT, undefined)
+    expect(result.current.state).toEqual({ phase: 'active', sessionId: 'fresh', otherSessions: [] })
   })
 
   it('drops the answer of an older heartbeat that lands after a newer one', async () => {
@@ -259,6 +348,7 @@ describe('useProjectEditSession', () => {
     const { port } = makePort({
       status: 'opened',
       sessionId: 'mine',
+      stale: false,
       otherSessions: [desktop],
       heartbeatIntervalMs: 20_000,
     })

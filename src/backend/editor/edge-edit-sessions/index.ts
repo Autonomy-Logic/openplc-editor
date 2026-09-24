@@ -28,11 +28,16 @@ export function editSessionHeadersFor(projectId: string): Record<string, string>
 export async function openEditSession(
   projectId: string,
   client: { kind: EditSessionClientKind; label: string },
+  previousSessionId?: string,
 ): Promise<EditSessionOpened> {
   try {
     const response = await edgeAuthedRequest(editSessionsPath(projectId), {
       method: 'POST',
-      json: { clientKind: client.kind, clientLabel: client.label },
+      json: {
+        clientKind: client.kind,
+        clientLabel: client.label,
+        ...(previousSessionId ? { previousSessionId } : {}),
+      },
     })
     if (!response) {
       return { status: 'unavailable', permanent: false }

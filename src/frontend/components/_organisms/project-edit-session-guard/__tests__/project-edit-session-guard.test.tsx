@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals'
 import { fireEvent, render, screen } from '@testing-library/react'
 
 import type { EditSessionSummary } from '../../../../../middleware/shared/ports/edit-session-port'
-import { ClosedElsewhereDialog, ConflictDialog } from '..'
+import { ClosedElsewhereDialog, ConflictDialog, StaleCopyDialog } from '..'
 
 const desktop: EditSessionSummary = {
   id: 'desktop-session',
@@ -94,6 +94,39 @@ describe('ConflictDialog', () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
 
     expect(screen.getByText('This project is open in more than one place')).toBeTruthy()
+  })
+})
+
+describe('StaleCopyDialog', () => {
+  it('explains that this copy is out of date and reloads it on request', () => {
+    const onReload = jest.fn()
+    render(<StaleCopyDialog projectName='Bottling line' reloading={false} failed={false} onReload={onReload} />)
+
+    expect(screen.getByText('This project changed in another place')).toBeTruthy()
+    expect(screen.getByText(/saving it is blocked/)).toBeTruthy()
+    expect(screen.getByText(/not saved will be lost/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload project' }))
+    expect(onReload).toHaveBeenCalledTimes(1)
+  })
+
+  it('disables the reload while it runs, and says when it failed', () => {
+    const onReload = jest.fn()
+    const { rerender } = render(
+      <StaleCopyDialog projectName='Bottling line' reloading failed={false} onReload={onReload} />,
+    )
+    expect(screen.getByRole('button', { name: 'Reloading…' }).hasAttribute('disabled')).toBe(true)
+
+    rerender(<StaleCopyDialog projectName='Bottling line' reloading={false} failed onReload={onReload} />)
+    expect(screen.getByRole('alert').textContent).toMatch(/could not be reloaded/)
+  })
+
+  it('cannot be dismissed with Escape', () => {
+    render(<StaleCopyDialog projectName='Bottling line' reloading={false} failed={false} onReload={jest.fn()} />)
+
+    fireEvent.keyDown(screen.getByTestId('project-edit-session-stale'), { key: 'Escape' })
+
+    expect(screen.getByTestId('project-edit-session-stale')).toBeTruthy()
   })
 })
 

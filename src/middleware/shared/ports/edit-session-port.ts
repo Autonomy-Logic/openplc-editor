@@ -14,6 +14,7 @@ export type EditSessionOpened =
   | {
       status: 'opened'
       sessionId: string
+      stale: boolean
       otherSessions: EditSessionSummary[]
       heartbeatIntervalMs: number
     }
@@ -22,11 +23,16 @@ export type EditSessionOpened =
 export type EditSessionBeat =
   | { status: 'active'; otherSessions: EditSessionSummary[] }
   | { status: 'closed'; byOtherSession: boolean }
+  | { status: 'stale'; otherSessions: EditSessionSummary[] }
   | { status: 'gone' }
   | { status: 'unknown' }
 
 export interface EditSessionPort {
-  open(projectId: string, client: { kind: EditSessionClientKind; label: string }): Promise<EditSessionOpened>
+  open(
+    projectId: string,
+    client: { kind: EditSessionClientKind; label: string },
+    previousSessionId?: string,
+  ): Promise<EditSessionOpened>
 
   heartbeat(projectId: string, sessionId: string): Promise<EditSessionBeat>
 
@@ -37,11 +43,15 @@ export interface EditSessionPort {
 
 export const PROJECT_EDIT_SESSION_CONFLICT = 'PROJECT_EDIT_SESSION_CONFLICT'
 export const PROJECT_EDIT_SESSION_CLOSED = 'PROJECT_EDIT_SESSION_CLOSED'
+export const PROJECT_EDIT_SESSION_STALE = 'PROJECT_EDIT_SESSION_STALE'
 
 export const EDIT_SESSION_CONFLICT_MESSAGE =
   'This project is open in more than one place. Close the other sessions to save it here.'
 export const EDIT_SESSION_CLOSED_MESSAGE =
   'This editing session is no longer active, so the project was not saved here. Reopen the project to keep editing.'
+
+export const EDIT_SESSION_STALE_MESSAGE =
+  'This project was saved from another place after this copy was loaded, so it was not saved here. Reload the project to get the latest version.'
 
 export const MIN_EDIT_SESSION_HEARTBEAT_INTERVAL_MS = 5_000
 
@@ -66,6 +76,8 @@ export function editSessionRefusalMessage(status: number, body: string): string 
       return EDIT_SESSION_CONFLICT_MESSAGE
     case PROJECT_EDIT_SESSION_CLOSED:
       return EDIT_SESSION_CLOSED_MESSAGE
+    case PROJECT_EDIT_SESSION_STALE:
+      return EDIT_SESSION_STALE_MESSAGE
     default:
       return null
   }
@@ -83,6 +95,7 @@ export const EditSessionSummarySchema = z.object({
 
 export const EditSessionOpenResponseSchema = z.object({
   session: z.object({ id: z.string().min(1) }),
+  stale: z.boolean().optional(),
   otherSessions: z.array(EditSessionSummarySchema),
   heartbeatIntervalMs: z.number().int().positive(),
 })
@@ -90,12 +103,14 @@ export const EditSessionOpenResponseSchema = z.object({
 export const EditSessionHeartbeatResponseSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('active'), otherSessions: z.array(EditSessionSummarySchema) }),
   z.object({ status: z.literal('closed'), closedReason: z.string().nullish() }),
+  z.object({ status: z.literal('stale'), otherSessions: z.array(EditSessionSummarySchema) }),
 ])
 
 export const EditSessionOpenedSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('opened'),
     sessionId: z.string().min(1),
+    stale: z.boolean(),
     otherSessions: z.array(EditSessionSummarySchema),
     heartbeatIntervalMs: z.number().int().positive(),
   }),
@@ -105,6 +120,7 @@ export const EditSessionOpenedSchema = z.discriminatedUnion('status', [
 export const EditSessionBeatSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('active'), otherSessions: z.array(EditSessionSummarySchema) }),
   z.object({ status: z.literal('closed'), byOtherSession: z.boolean() }),
+  z.object({ status: z.literal('stale'), otherSessions: z.array(EditSessionSummarySchema) }),
   z.object({ status: z.literal('gone') }),
   z.object({ status: z.literal('unknown') }),
 ]) satisfies z.ZodType<EditSessionBeat>
@@ -120,6 +136,7 @@ export function toEditSessionOpened(status: number, body: unknown): EditSessionO
   return {
     status: 'opened',
     sessionId: parsed.data.session.id,
+    stale: parsed.data.stale ?? false,
     otherSessions: parsed.data.otherSessions,
     heartbeatIntervalMs: parsed.data.heartbeatIntervalMs,
   }
@@ -136,16 +153,21 @@ export function toEditSessionBeat(status: number, body: unknown): EditSessionBea
   if (!parsed.success) {
     return { status: 'unknown' }
   }
-  return parsed.data.status === 'active'
-    ? { status: 'active', otherSessions: parsed.data.otherSessions }
-    : { status: 'closed', byOtherSession: parsed.data.closedReason === 'closed_by_other_session' }
+  switch (parsed.data.status) {
+    case 'active':
+      return { status: 'active', otherSessions: parsed.data.otherSessions }
+    case 'stale':
+      return { status: 'stale', otherSessions: parsed.data.otherSessions }
+    case 'closed':
+      return { status: 'closed', byOtherSession: parsed.data.closedReason === 'closed_by_other_session' }
+  }
 }
 
+const EnvelopeSchema = z.object({ data: z.unknown() })
+
 function unwrapData(body: unknown): unknown {
-  if (body !== null && typeof body === 'object' && 'data' in body) {
-    return (body as { data: unknown }).data
-  }
-  return body
+  const envelope = EnvelopeSchema.safeParse(body)
+  return envelope.success && envelope.data.data !== undefined ? envelope.data.data : body
 }
 
 export function editSessionsPath(projectId: string, sessionId?: string, action?: 'heartbeat' | 'close'): string {

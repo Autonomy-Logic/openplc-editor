@@ -3,6 +3,7 @@ import { describe, expect, it } from '@jest/globals'
 import {
   EDIT_SESSION_CLOSED_MESSAGE,
   EDIT_SESSION_CONFLICT_MESSAGE,
+  EDIT_SESSION_STALE_MESSAGE,
   editSessionRefusalMessage,
   editSessionsPath,
   toEditSessionBeat,
@@ -30,9 +31,16 @@ describe('toEditSessionOpened', () => {
     expect(toEditSessionOpened(201, { statusCode: 201, data: openBody })).toEqual({
       status: 'opened',
       sessionId: 'mine0000000000000000000a',
+      stale: false,
       otherSessions: [expect.objectContaining({ id: other.id, clientKind: 'desktop' })],
       heartbeatIntervalMs: 20000,
     })
+  })
+
+  it('reports a session that continues a copy older than a save made elsewhere', () => {
+    expect(toEditSessionOpened(201, { data: { ...openBody, stale: true } })).toEqual(
+      expect.objectContaining({ status: 'opened', stale: true }),
+    )
   })
 
   it('also reads an unwrapped body', () => {
@@ -55,6 +63,13 @@ describe('toEditSessionBeat', () => {
   it('reports the other live sessions', () => {
     expect(toEditSessionBeat(200, { data: { status: 'active', otherSessions: [other] } })).toEqual({
       status: 'active',
+      otherSessions: [expect.objectContaining({ id: other.id })],
+    })
+  })
+
+  it('reports a copy that is older than a save made elsewhere', () => {
+    expect(toEditSessionBeat(200, { data: { status: 'stale', otherSessions: [other] } })).toEqual({
+      status: 'stale',
       otherSessions: [expect.objectContaining({ id: other.id })],
     })
   })
@@ -90,6 +105,7 @@ describe('editSessionRefusalMessage', () => {
   it('turns each refusal code into a sentence for the user', () => {
     expect(editSessionRefusalMessage(409, body('PROJECT_EDIT_SESSION_CONFLICT'))).toBe(EDIT_SESSION_CONFLICT_MESSAGE)
     expect(editSessionRefusalMessage(409, body('PROJECT_EDIT_SESSION_CLOSED'))).toBe(EDIT_SESSION_CLOSED_MESSAGE)
+    expect(editSessionRefusalMessage(409, body('PROJECT_EDIT_SESSION_STALE'))).toBe(EDIT_SESSION_STALE_MESSAGE)
   })
 
   it('reads the code from the body, not from anywhere in the text', () => {

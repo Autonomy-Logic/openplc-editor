@@ -14,6 +14,7 @@ const MAX_OPEN_RETRY_MS = 5 * 60_000
 export type ProjectEditSessionState =
   | { phase: 'idle' }
   | { phase: 'active'; sessionId: string; otherSessions: EditSessionSummary[] }
+  | { phase: 'stale'; sessionId: string; otherSessions: EditSessionSummary[] }
   | { phase: 'closed-elsewhere'; sessionId: string }
 
 export interface UseProjectEditSessionArgs {
@@ -26,6 +27,7 @@ export interface UseProjectEditSessionResult {
   state: ProjectEditSessionState
   closeOtherSession(sessionId: string): Promise<boolean>
   closeThisSession(): Promise<boolean>
+  startFresh(): Promise<void>
 }
 
 export function useProjectEditSession({
@@ -36,6 +38,7 @@ export function useProjectEditSession({
   const [state, setState] = useState<ProjectEditSessionState>({ phase: 'idle' })
   const sessionRef = useRef<string | null>(null)
   const beatNowRef = useRef<() => void>(() => undefined)
+  const startFreshRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const { kind, label } = client
 
@@ -49,6 +52,7 @@ export function useProjectEditSession({
     let timer: ReturnType<typeof setTimeout> | null = null
     let intervalMs = DEFAULT_INTERVAL_MS
     let sessionId: string | null = null
+    let resumeFrom: string | undefined
     let stopped = false
     let generation = 0
     let opening = false
@@ -68,13 +72,21 @@ export function useProjectEditSession({
       }
     }
 
+    const forgetSession = () => {
+      if (sessionId) {
+        resumeFrom = sessionId
+      }
+      sessionId = null
+      sessionRef.current = null
+    }
+
     const open = async () => {
       if (opening || disposed || stopped) {
         return
       }
       opening = true
       const mine = ++generation
-      const opened = await port.open(projectId, { kind, label }).finally(() => {
+      const opened = await port.open(projectId, { kind, label }, resumeFrom).finally(() => {
         opening = false
       })
       if (disposed) {
@@ -100,10 +112,15 @@ export function useProjectEditSession({
         return
       }
       retryMs = OPEN_RETRY_MS
+      resumeFrom = undefined
       sessionId = opened.sessionId
       sessionRef.current = opened.sessionId
       intervalMs = Math.max(opened.heartbeatIntervalMs, MIN_EDIT_SESSION_HEARTBEAT_INTERVAL_MS)
-      setState({ phase: 'active', sessionId: opened.sessionId, otherSessions: opened.otherSessions })
+      setState({
+        phase: opened.stale ? 'stale' : 'active',
+        sessionId: opened.sessionId,
+        otherSessions: opened.otherSessions,
+      })
       schedule(beat, intervalMs)
     }
 
@@ -126,6 +143,10 @@ export function useProjectEditSession({
           setState({ phase: 'active', sessionId: current, otherSessions: result.otherSessions })
           schedule(beat, intervalMs)
           return
+        case 'stale':
+          setState({ phase: 'stale', sessionId: current, otherSessions: result.otherSessions })
+          schedule(beat, intervalMs)
+          return
         case 'closed':
           if (result.byOtherSession) {
             stopped = true
@@ -133,13 +154,11 @@ export function useProjectEditSession({
             setState({ phase: 'closed-elsewhere', sessionId: current })
             return
           }
-          sessionId = null
-          sessionRef.current = null
+          forgetSession()
           await open()
           return
         case 'gone':
-          sessionId = null
-          sessionRef.current = null
+          forgetSession()
           await open()
           return
         case 'unknown':
@@ -157,21 +176,41 @@ export function useProjectEditSession({
       void beat()
     }
 
+    startFreshRef.current = async () => {
+      clearTimer()
+      if (sessionId) {
+        port.release(projectId, sessionId)
+      }
+      sessionId = null
+      sessionRef.current = null
+      resumeFrom = undefined
+      stopped = false
+      await open()
+    }
+
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
         beatNowRef.current()
       }
     }
 
-    const onPageHide = (event: PageTransitionEvent) => {
-      if (!event.persisted && sessionId) {
+    const onPageHide = () => {
+      clearTimer()
+      if (sessionId) {
         port.release(projectId, sessionId)
-        sessionId = null
+      }
+      forgetSession()
+    }
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && !sessionId && !stopped) {
+        void open()
       }
     }
 
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
     void open()
 
     return () => {
@@ -179,7 +218,9 @@ export function useProjectEditSession({
       clearTimer()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
       beatNowRef.current = () => undefined
+      startFreshRef.current = () => Promise.resolve()
       if (sessionId && sessionRef.current === sessionId) {
         port.release(projectId, sessionId)
       }
@@ -212,5 +253,7 @@ export function useProjectEditSession({
     return closed
   }, [port, projectId])
 
-  return { state, closeOtherSession, closeThisSession }
+  const startFresh = useCallback(() => startFreshRef.current(), [])
+
+  return { state, closeOtherSession, closeThisSession, startFresh }
 }

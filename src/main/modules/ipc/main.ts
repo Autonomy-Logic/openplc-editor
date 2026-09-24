@@ -1377,14 +1377,19 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     projectId: unknown,
     client: unknown,
+    previousSessionId: unknown,
   ): Promise<EditSessionOpened> => {
     const parsed = EditSessionClientSchema.safeParse(client)
 
-    if (!isNonEmptyString(projectId) || !parsed.success) {
+    if (
+      !isNonEmptyString(projectId) ||
+      !parsed.success ||
+      (previousSessionId !== undefined && !isNonEmptyString(previousSessionId))
+    ) {
       return Promise.resolve({ status: 'unavailable', permanent: true })
     }
 
-    return openEditSession(projectId, parsed.data)
+    return openEditSession(projectId, parsed.data, previousSessionId)
   }
 
   handleEdgeEditSessionHeartbeat = (

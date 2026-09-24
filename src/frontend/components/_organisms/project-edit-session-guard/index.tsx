@@ -1,8 +1,8 @@
-import { useCallback, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import type { EditSessionSummary } from '../../../../middleware/shared/ports/edit-session-port'
 import { isRemoteProjectPath } from '../../../../middleware/shared/ports/types'
-import { useCapabilities, useEditSession, useNavigation } from '../../../../middleware/shared/providers'
+import { useCapabilities, useEditSession, useNavigation, useProject } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { useProjectEditSession } from '../../../hooks/use-project-edit-session'
 import { useOpenPLCStore } from '../../../store'
@@ -11,6 +11,7 @@ import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
 export function ProjectEditSessionGuard() {
   const port = useEditSession()
+  const projectPort = useProject()
   const navigation = useNavigation()
   const { isNativeApplication } = useCapabilities()
 
@@ -18,7 +19,7 @@ export function ProjectEditSessionGuard() {
   const projectName = useOpenPLCStore(useCallback((s) => s.project.meta.name, []))
   const canEdit = useOpenPLCStore(useCallback((s) => s.workspace.canEdit, []))
   const isEphemeral = useOpenPLCStore(useCallback((s) => s.workspace.isEphemeralProject, []))
-  const { clearStatesOnCloseProject, hasUnsavedChanges } = useOpenPLCStore(
+  const { clearStatesOnCloseProject, hasUnsavedChanges, handleOpenProjectResponse } = useOpenPLCStore(
     useCallback((s) => s.sharedWorkspaceActions, []),
   )
 
@@ -29,11 +30,25 @@ export function ProjectEditSessionGuard() {
     [isNativeApplication],
   )
 
-  const { state, closeOtherSession, closeThisSession } = useProjectEditSession({ port, projectId, client })
+  const { state, closeOtherSession, closeThisSession, startFresh } = useProjectEditSession({
+    port,
+    projectId,
+    client,
+  })
 
   const [busySessionId, setBusySessionId] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [confirmingCloseThis, setConfirmingCloseThis] = useState(false)
+  const [reloading, setReloading] = useState(false)
+  const [reloadFailed, setReloadFailed] = useState(false)
+
+  const sessionKey =
+    state.phase === 'active' || state.phase === 'stale'
+      ? `${state.phase}:${state.otherSessions.map((s) => s.id).join(',')}`
+      : state.phase
+  useEffect(() => {
+    setFailed(false)
+  }, [sessionKey])
 
   const leaveProject = useCallback(() => {
     clearStatesOnCloseProject()
@@ -68,8 +83,40 @@ export function ProjectEditSessionGuard() {
     leaveProject()
   }
 
+  const handleReload = async () => {
+    if (!projectId) {
+      return
+    }
+    setReloading(true)
+    setReloadFailed(false)
+    try {
+      const result = await projectPort.openProjectByPath(projectId)
+      if (!result.success || !result.data) {
+        setReloadFailed(true)
+        return
+      }
+      handleOpenProjectResponse(result.data)
+      await startFresh()
+    } catch {
+      setReloadFailed(true)
+    } finally {
+      setReloading(false)
+    }
+  }
+
   if (state.phase === 'closed-elsewhere') {
     return <ClosedElsewhereDialog projectName={projectName} onLeave={leaveProject} />
+  }
+
+  if (state.phase === 'stale') {
+    return (
+      <StaleCopyDialog
+        projectName={projectName}
+        reloading={reloading}
+        failed={reloadFailed}
+        onReload={() => void handleReload()}
+      />
+    )
   }
 
   if (state.phase !== 'active' || state.otherSessions.length === 0) {
@@ -260,6 +307,60 @@ function SessionRow({ label, kind, detail, actionLabel, busy, disabled, onAction
         {busy ? 'Closing…' : actionLabel}
       </button>
     </li>
+  )
+}
+
+interface StaleCopyDialogProps {
+  projectName: string
+  reloading: boolean
+  failed: boolean
+  onReload(): void
+}
+
+export function StaleCopyDialog({ projectName, reloading, failed, onReload }: StaleCopyDialogProps) {
+  const focus = useDialogFocus()
+  const descriptionId = useId()
+
+  return (
+    <Modal open>
+      <ModalContent
+        ref={focus.ref}
+        onOpenAutoFocus={focus.onOpenAutoFocus}
+        aria-describedby={descriptionId}
+        onEscapeKeyDown={blockDismiss}
+        onPointerDownOutside={blockDismiss}
+        onInteractOutside={blockDismiss}
+        className='h-fit w-[460px] select-none gap-5 px-8 py-6'
+        data-testid='project-edit-session-stale'
+      >
+        <div className='flex flex-col items-center gap-3 text-center'>
+          <WarningIcon className='h-14 w-14 stroke-amber-500' />
+          <ModalTitle className='text-base font-bold text-gray-700 dark:text-neutral-100'>
+            This project changed in another place
+          </ModalTitle>
+        </div>
+        <div id={descriptionId} className='flex flex-col gap-3 text-center text-sm text-gray-600 dark:text-neutral-300'>
+          <p>
+            While this window was away, <strong>{projectName || 'this project'}</strong> was saved from another place.
+            This copy is out of date, so saving it is blocked: it would overwrite that work.
+          </p>
+          <p>Reload to get the latest version. Changes made here that were not saved will be lost.</p>
+        </div>
+        {failed && (
+          <p role='alert' className='text-center text-sm text-red-600 dark:text-red-400'>
+            The project could not be reloaded. Try again in a moment.
+          </p>
+        )}
+        <button
+          type='button'
+          onClick={onReload}
+          disabled={reloading}
+          className='w-full cursor-pointer rounded-lg bg-brand px-4 py-2 text-center text-sm font-medium text-white hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
+        >
+          {reloading ? 'Reloading…' : 'Reload project'}
+        </button>
+      </ModalContent>
+    </Modal>
   )
 }
 
