@@ -41,6 +41,7 @@ import { runEsi } from './commands/esi'
 import { runInstallCli } from './commands/install-cli'
 import { runInstallSkill } from './commands/install-skill'
 import { runKeywords } from './commands/keywords'
+import { runPackages } from './commands/packages'
 import { runRuntime } from './commands/runtime'
 import { runSkill } from './commands/skill'
 import { runDaemonFromStdin } from './daemon-entry'
@@ -93,7 +94,7 @@ const BOOLEAN_FLAGS = [
   'all',
 ] as const
 
-const COMMANDS_WITH_SUBCOMMANDS = ['debug'] as const
+const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'packages'] as const
 
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
@@ -104,6 +105,8 @@ Usage
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
+  openplc-cli packages list                                 (boards --target accepts, and their pins)
+  openplc-cli packages install <file.vpp|dir>...            (same checks as the GUI: schema + signature)
   openplc-cli runtime info --host <address>                 (version and capabilities; no login)
   openplc-cli skill   [--list] [--name <skill>]            (the agent skill this build ships)
   openplc-cli keywords [--names-only]                       (names an identifier may not take)
@@ -233,6 +236,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runEsi(args, reporter)).exitCode
     case 'install-cli':
       return (await runInstallCli(args, reporter)).exitCode
+    case 'packages':
+      return (await runPackages(args, reporter)).exitCode
     case 'apply':
       return (await runApply(args, reporter)).exitCode
     case 'describe':

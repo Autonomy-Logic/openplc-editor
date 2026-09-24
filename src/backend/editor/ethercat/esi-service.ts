@@ -4,6 +4,7 @@ import { basename, dirname, join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
 import { parseESILight } from '../../shared/ethercat/esi-parser-main'
+import { resolveProjectDataDir } from '../project/cloud-project-data'
 // Straight from the module, not the `../utils` barrel: the barrel re-exports
 // `path-picker`, which imports `electron`. The CLI reaches this service, and a
 // CI runner installing with `--ignore-scripts` has no Electron binary — the
@@ -88,7 +89,10 @@ class ESIService {
    */
   private getEsiDir(projectPath: string): string {
     const basePath = basename(projectPath) === 'project.json' ? dirname(projectPath) : projectPath
-    return join(basePath, this.ESI_DIR)
+    // A cloud project is an Edge id, not a directory: joining on it directly wrote
+    // the repository into `process.cwd()`. ESI is never part of the project
+    // envelope, so its copy has to outlive a restart on this machine.
+    return join(resolveProjectDataDir(basePath), this.ESI_DIR)
   }
 
   /**
