@@ -27,6 +27,22 @@ const makeArrayVar = (name: string, cls: 'input' | 'output', baseType: string, d
 })
 
 describe('generateCBlocksCode', () => {
+  it('hoists the block includes above the variable-binding macros', () => {
+    const variables: PLCVariable[] = [makeScalarVar('connected', 'output', 'BOOL')]
+    const code = '#include <BluetoothSerial.h>\nvoid setup() { }\nvoid loop() { connected = true; }'
+    const result = generateCBlocksCode([{ name: 'B', code, variables }])
+
+    // A header included after the macros is rewritten by them: the library's own
+    // `bool connected(int)` became `bool (*(vars->CONNECTED))(int)`.
+    expect(result.indexOf('#include <BluetoothSerial.h>')).toBeLessThan(result.indexOf('#define connected'))
+  })
+
+  it('emits no hoist section for a block that declares no directives', () => {
+    const variables: PLCVariable[] = [makeScalarVar('x', 'input', 'INT')]
+    const result = generateCBlocksCode([{ name: 'B', code: 'void loop() { }', variables }])
+    expect(result).not.toContain('hoisted above the bindings')
+  })
+
   it('returns empty string for empty pous array', () => {
     const result = generateCBlocksCode([])
     expect(result).toBe('')

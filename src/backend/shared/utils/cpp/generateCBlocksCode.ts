@@ -1,6 +1,7 @@
 import { cBlockExternalVariables, cBlockInterfaceVariables } from '../../../../frontend/utils/cpp/block-interface'
 import { isArrayVariable, multiDimensionalContainerType } from '../../../../frontend/utils/PLC/array-codegen-helpers'
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import { directiveStream } from './preprocessor-directives'
 
 type CppPouData = {
   name: string
@@ -236,9 +237,24 @@ const processUserCode = (pou: CppPouData): string => {
   const interfaceVariables = [...cBlockInterfaceVariables(pou.variables), ...cBlockExternalVariables(pou.variables)]
 
   // The struct and the two entry-point declarations come from c_blocks.h, which
-  // the baseline includes. Only the name-binding macros and the user's own body
-  // are emitted here.
-  let processedCode = `// ${pou.name.toUpperCase()} — Variables Table names bound to the interface struct\n`
+  // the baseline includes. Only the user's includes, the name-binding macros
+  // and the user's own body are emitted here.
+  //
+  // The includes come FIRST, ahead of the macros, and the order is the point.
+  // Every macro below renames a Variables Table entry, and a header included
+  // after them is rewritten too: a block with an output named `connected` turned
+  // `BluetoothSerial.h`'s `bool connected(int timeout = 0)` into
+  // `bool (*(vars->CONNECTED))(int timeout = 0)`. Hoisted here, a library header
+  // reads as its author wrote it. The user's own copy stays where they put it —
+  // a second pass over a guarded header costs nothing.
+  let processedCode = ''
+  const { lines: userDirectives } = directiveStream(pou.code)
+  if (userDirectives.length > 0) {
+    processedCode += `// ${pou.name.toUpperCase()} — what the block includes, hoisted above the bindings\n`
+    processedCode += `${userDirectives.join('\n')}\n\n`
+  }
+
+  processedCode += `// ${pou.name.toUpperCase()} — Variables Table names bound to the interface struct\n`
 
   interfaceVariables.forEach((variable) => {
     processedCode += generateDefine(variable)
