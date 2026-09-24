@@ -7,7 +7,8 @@ This file provides guidance to Claude Code when working with the OpenPLC Editor 
 For every tracked feature, bug, investigation, implementation, test or pull request, start with
 `/autonomy:mister`. Mister verifies the Jira task and current documents, reconciles routine task
 drift, checks the stage gates and loads the skill for the next step. Do not begin a parallel
-investigation or implementation before that check.
+investigation or implementation before that check. If Mister or a required connected service is
+unavailable, report the missing dependency; do not invent Jira, Confluence, approval or branch state.
 
 This file defines repository-specific commands, architecture and code conventions. It is not a
 copy of the company process. When process text here conflicts with the current Mister plugin or
