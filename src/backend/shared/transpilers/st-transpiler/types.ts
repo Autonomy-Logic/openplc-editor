@@ -1,19 +1,7 @@
 /**
- * Minimal IR consumed by the JSON-fed transpiler.
- *
- * Decoupled from both `middleware/shared/ports/types.ts` (port shape,
- * what the renderer store holds) and `backend/shared/types/PLC/open-plc.ts`
- * (schema shape, what `project.json` persists).  Callers project their
- * own shape into `TranspileProject` via the adapter helpers
- * (`from-schema.ts` here for the editor's IPC payload; openplc-web
- * ships a `transpile-from-port.ts` under middleware for its port-shape
- * renderer payload).
- *
- * Carries ONLY the fields the transpiler actually reads — no
- * `servers`, no `remoteDevices`, no `libraries`, no `debugVariables`.
- * That makes the surface small, the projections cheap, and the
- * transpiler stable when the renderer eventually migrates between
- * shapes (only the adapters change; this IR doesn't).
+ * Minimal IR consumed by the JSON-fed transpiler, decoupled from both the port shape and the
+ * `project.json` schema shape via adapter helpers (`from-schema.ts`, `../transpile-from-port.ts`).
+ * Carries only the fields the transpiler reads — no `servers`, `remoteDevices`, `libraries`, etc.
  */
 
 /* ─────────────────────────── project ────────────────────────────────────── */
@@ -51,19 +39,8 @@ export interface TranspilePouInterface {
 }
 
 /**
- * Body payload — discriminated by `language`:
- *
- *   - Textual ('st' | 'il' | 'python' | 'cpp') carry `value: string`
- *     (raw source) — the transpiler emits the IEC text directly.
- *
- *   - Graphical ('ld' | 'fbd') carry the raw React Flow body
- *     (`{ rungs: [...] }` for LD, `{ rung: {...} }` for FBD) that the
- *     editor stores on disk under `pous/<type>s/<name>.{ld,fbd}`.
- *     The walker in `./walker/` consumes this shape directly — no
- *     PLCOpen XML intermediate.
- *
- *   The plain-object shape is structured-clonable so the IR rides
- *   the worker boundary verbatim.
+ * Body payload, discriminated by `language`: textual languages carry raw source `value: string`;
+ * graphical ('ld'/'fbd') carry the raw React Flow body the walker in `./walker/` consumes directly.
  */
 export type TranspileBody =
   | {
@@ -93,12 +70,8 @@ export interface TranspileVariable {
   initialValue?: string
   documentation?: string
   /**
-   * IEC block qualifier. Absent = plain `VAR` (IEC's NON_RETAIN default).
-   *
-   * IEC puts the qualifier on the var *block*, not on the declaration, so this
-   * is a bucketing key for emission rather than something printed per line —
-   * see `computeInterface`, which groups by class × located × flag and opens a
-   * `VAR CONSTANT` / `VAR RETAIN` block per group.
+   * IEC block qualifier (absent = plain `VAR`). IEC puts the qualifier on the var *block*, so
+   * this is a bucketing key for `computeInterface`'s emission, not a per-line annotation.
    */
   flag?: TranspileVariableFlag
 }
@@ -108,12 +81,7 @@ export type TranspileVariableFlag = 'constant' | 'retain'
 
 /* ──────────────────────────── variable type ─────────────────────────────── */
 
-/**
- * - `base-type`        — elementary IEC type (`BOOL`, `INT`, `STRING`, …)
- * - `array`            — `ARRAY [a..b, …] OF T`
- * - `derived` /
- *   `user-data-type`   — referenced data-type name (struct/enum/subrange)
- */
+/** `base-type` = elementary IEC type; `array` = `ARRAY [a..b, …] OF T`; `derived`/`user-data-type` = referenced data-type name. */
 export type TranspileVariableType =
   | { definition: 'base-type'; value: string }
   | { definition: 'derived' | 'user-data-type'; value: string }

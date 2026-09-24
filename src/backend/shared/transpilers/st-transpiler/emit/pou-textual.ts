@@ -48,8 +48,15 @@ interface InterfaceEntry {
  * `PouProgramGenerator.GenerateProgram` (PLCGenerator.py:2414) for the
  * textual body path.
  *
- * Throws `Error` when the POU has no interface or no body — same
- * guards Python uses.
+ * An empty POU is emitted, not refused.  This used to throw on a POU
+ * with no variables and again on one with no body — guards inherited
+ * from matiec/xml2st, where they were real.  STruC++ accepts every
+ * empty shape (`PROGRAM p END_PROGRAM`, an empty FUNCTION_BLOCK, an
+ * empty FUNCTION) and emits `// Empty program body` for it, so the
+ * guards only blocked a build the compiler would have taken — and did
+ * it on a project whose POUs the user had merely not filled in yet
+ * (DOPE-650).  Throws only on a body language this emitter cannot
+ * handle, which is an internal dispatch error.
  */
 export function generateTextualPou(pou: TranspilePou, project: TranspileProject, indent = 2): ProgramChunk[] {
   const tagName = computePouName(pou.name)
@@ -77,9 +84,6 @@ export function generateTextualPou(pou: TranspilePou, project: TranspileProject,
   program.push(['\n', []])
 
   const iface = computeInterface(pou.interface.variables)
-  if (iface.length === 0) {
-    throw new Error(`No variable defined in "${pou.name}" POU`)
-  }
 
   let varNumber = 0
   for (const entry of iface) {
@@ -129,10 +133,9 @@ export function generateTextualPou(pou: TranspilePou, project: TranspileProject,
     throw new Error(`generateTextualPou called with non-textual body "${pou.body.language}"`)
   }
   const bodyText = pou.body.value
-  if (bodyText.length === 0) {
-    throw new Error(`No body defined in "${pou.name}" POU`)
+  if (bodyText.length > 0) {
+    program.push([reIndentText(bodyText, indent), [tagName, 'body', indent]])
   }
-  program.push([reIndentText(bodyText, indent), [tagName, 'body', indent]])
 
   program.push([`END_${kindKeyword}\n\n`, []])
   return program

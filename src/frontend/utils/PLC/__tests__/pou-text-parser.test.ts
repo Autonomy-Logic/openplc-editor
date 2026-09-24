@@ -719,3 +719,35 @@ describe('findLastEndVarIndex with an upper bound', () => {
     expect(findLastEndVarIndex(content, 0, 5)).toBe(-1)
   })
 })
+
+/**
+ * What counts as the declarations, when the POU header shares their line.
+ *
+ * The section runs from the start of the VAR line so the user's indentation
+ * survives the round trip — but a file written `PROGRAM main VAR` on one line
+ * put the header inside the declarations. The POU then failed to parse, opened
+ * as an unparsed fallback, and the next save wrote its header twice.
+ */
+describe('extractVariablesSection and the POU header', () => {
+  const textOf = (content: string) => parseTextualPouFromString(content, 'st', 'program')
+
+  it('leaves a header sharing the VAR line out of the declarations', () => {
+    const pou = textOf('PROGRAM main VAR\n  a : INT;\nEND_VAR\n  a := 1;\nEND_PROGRAM\n')
+
+    expect(pou.variablesText).toBe('VAR\n  a : INT;\nEND_VAR')
+    expect(pou.interface?.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+
+  it('keeps the indentation when the VAR line holds only indentation', () => {
+    const pou = textOf('PROGRAM main\n    VAR\n      a : INT;\n    END_VAR\n  a := 1;\nEND_PROGRAM\n')
+
+    expect(pou.variablesText).toBe('    VAR\n      a : INT;\n    END_VAR')
+  })
+
+  it('reads a whole POU written on one line', () => {
+    const pou = textOf('PROGRAM main VAR a : INT; END_VAR a := 1; END_PROGRAM\n')
+
+    expect(pou.variablesText).toBe('VAR a : INT; END_VAR')
+    expect(pou.interface?.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+})

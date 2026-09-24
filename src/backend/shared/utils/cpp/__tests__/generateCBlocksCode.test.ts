@@ -200,10 +200,12 @@ describe('generateCBlocksCode', () => {
     // No #define / #undef for variables (the only `#define`s in the
     // baseline now are the Arduino min/max macro guards).
     expect(result).not.toMatch(/^#define\s+\w+\s+\(/m)
-    // Strip the baseline's Arduino macro scrubbing (`#undef min` / `max` / `abs`
-    // — see baseline) before asserting no per-variable undefs.
+    // Strip the baseline's macro scrubbing before asserting no per-variable
+    // undefs: Arduino's lowercase helpers, the capitalised IEC standard names a
+    // core may define as macros (`MIN`, `MAX`, `CONCAT`), and Energia's port
+    // letters. All of them are the baseline's, not this POU's.
     const withoutArduinoUndefs = result.replace(
-      /^#undef\s+(min|max|abs|round|PA|PB|PC|PD|PE|PF|PG|PH|PJ|PK|PL|PM|PN|PP|PQ|PR|PS|PT)\s*$/gm,
+      /^#undef\s+(min|max|abs|round|MIN|MAX|CONCAT|PA|PB|PC|PD|PE|PF|PG|PH|PJ|PK|PL|PM|PN|PP|PQ|PR|PS|PT)\s*$/gm,
       '',
     )
     expect(withoutArduinoUndefs).not.toMatch(/^#undef\s+\w+\s*$/m)

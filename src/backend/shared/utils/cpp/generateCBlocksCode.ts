@@ -64,6 +64,21 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 // header fails to parse. Undef'd here because the include that trips over it is
 // in this preamble. \`std::round\` / \`::round\` from <cmath> remain available.
 #undef round
+// \`MIN\` and \`MAX\` in capitals, which the IEC standard library declares as
+// variadic templates (\`MAX(a, b, c)\`) while several cores define them as
+// two-argument macros — ST's USB device library does, and it sits on the include
+// path every STM32, mbed and rp2040 recipe builds. The macro wins, and
+// \`iec_std_lib.hpp\` fails with "macro MAX passed 3 arguments, but takes just 2"
+// before any user code is read. Same reasoning as the lowercase pair above.
+#undef MIN
+#undef MAX
+// \`CONCAT\` for the same reason, one core further along: Zephyr's \`sys/util.h\`
+// defines it as a variadic token-pasting macro, and the IEC standard library
+// declares it as a function template. The macro swallows the declaration and
+// \`iec_string.hpp\` fails on a token-pasting error it cannot reach past, before any
+// user code is read. Any IEC standard name a core happens to use as a macro
+// lands here; these are the ones met so far.
+#undef CONCAT
 // Energia numbers the GPIO ports as the macros \`PA\` through \`PT\`, each two
 // letters a PLC program is likely to want. \`PT\` is the preset-time input of
 // every IEC standard timer, so a project holding a TON, TOF or TP expanded the

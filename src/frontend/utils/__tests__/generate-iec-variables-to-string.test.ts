@@ -1,6 +1,10 @@
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
-import { generateIecVariablesToString, getIecVariableLineMap } from '../generate-iec-variables-to-string'
+import {
+  generateIecVariablesToString,
+  getIecVariableLineMap,
+  getIecVariableLineMapFromText,
+} from '../generate-iec-variables-to-string'
 
 const makeVariable = (overrides: Partial<PLCVariable> & Pick<PLCVariable, 'name'>): PLCVariable => ({
   name: overrides.name,
@@ -234,5 +238,43 @@ describe('getIecVariableLineMap', () => {
     const out = generateIecVariablesToString(vars)
     expect(out).toBe(input)
     expect(parseIecStringToVariables(out)).toEqual(vars)
+  })
+})
+
+describe('getIecVariableLineMapFromText', () => {
+  // The code view shows the user's own text now (DOPE-650), so a map computed
+  // from the canonical serialisation is off by whatever the user's formatting
+  // adds — and Go-to-Definition in the Python editor lands on the wrong line.
+  const variables = [
+    makeVariable({ name: 'speed' }),
+    makeVariable({ name: 'enabled', type: { definition: 'base-type', value: 'BOOL' } }),
+  ]
+
+  it('points at the declaration as the user wrote it, comments and all', () => {
+    const text = [
+      '  VAR',
+      '    (* how fast the conveyor runs *)',
+      '',
+      '    speed : INT;',
+      '        enabled : BOOL;',
+      '  END_VAR',
+    ].join('\n')
+
+    const map = getIecVariableLineMapFromText(text, variables)
+    expect(map.get('speed')).toEqual({ line: 4, column: 5 })
+    expect(map.get('enabled')).toEqual({ line: 5, column: 9 })
+  })
+
+  it('does not follow the model order when the text orders them differently', () => {
+    const text = ['  VAR', '    enabled : BOOL;', '    speed : INT;', '  END_VAR'].join('\n')
+
+    const map = getIecVariableLineMapFromText(text, variables)
+    expect(map.get('enabled')?.line).toBe(2)
+    expect(map.get('speed')?.line).toBe(3)
+  })
+
+  it('falls back to the canonical walk when the text does not parse', () => {
+    const map = getIecVariableLineMapFromText('  VAR\n    speed : ;\n  END_VAR', variables)
+    expect(map).toEqual(getIecVariableLineMap(variables))
   })
 })

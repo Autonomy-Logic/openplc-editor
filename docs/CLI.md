@@ -14,6 +14,8 @@ a parallel implementation.
 | Debug                         | `openplc-cli debug open …`         |
 | Start / Stop                  | `openplc-cli debug start` / `stop` |
 | Variable poll, force dialog   | `openplc-cli debug read` / `force` |
+| Add package from file…        | `openplc-cli packages install`     |
+| Device dropdown contents      | `openplc-cli packages list`        |
 
 ## Installing
 
@@ -173,9 +175,81 @@ error, 5 a connection problem, 7 the device refusing — rather than on log text
 
 The CLI creates the editor's user-data scaffolding itself (settings, history, the
 arduino-cli config), so a fresh container needs no warm-up step. Board packages
-are a different matter: a target from an installed `.vpp` package is only
-available if that package is installed in the image's user-data directory, which
-`--user-data <dir>` can point at a prepared one.
+are a different matter: a target from a `.vpp` package is only available once
+that package is installed in the user-data directory the run uses. Either point
+`--user-data <dir>` at a prepared one, or install into it with `packages install`
+(below).
+
+## Board packages
+
+Which targets `--target` accepts is decided by the `.vpp` packages installed in
+the user-data directory the run uses, plus the boards bundled with the editor.
+
+```sh
+openplc-cli packages list
+openplc-cli packages install <file.vpp | directory>...
+```
+
+`list` prints one row per board — the name to pass to `--target`, the package it
+came from, which compiler it goes through, its core, and the core version its
+manifest pins. A board with no package behind it shows `(built-in)`. The pinned
+version is read from the device's own manifest rather than from the editor's
+installed-core record, which only knows the bundled boards.
+
+`install` takes files or a directory of them, and runs the same
+`importFromFile` the GUI's "Add from file…" runs: manifest schema check and
+Ed25519 signature verification included. There is no flag to skip either — a
+package the editor would refuse must not become installable by scripting it. A
+directory contributes its own `.vpp` entries, sorted, so a rerun repeats the
+same order. Every file is attempted even after one fails, and the exit code
+still reports failure, so a partial install cannot read as done.
+
+There is no catalog download here. `installFromRemote` belongs to the renderer,
+so a production package has to be fetched from the catalog by other means and
+handed to `install` as a file.
+
+### Compiling one project against many boards
+
+`scripts/compile-matrix.ts` (`npm run compile:matrix`) is the loop around
+`compile`: it asks `packages list` what exists, filters it, and runs one compile
+per board.
+
+```sh
+npm run compile:matrix -- <project> [options]
+```
+
+| Option              | Meaning                                                      |
+| ------------------- | ------------------------------------------------------------ |
+| `--user-data <dir>` | which editor state, and therefore which packages, to build against |
+| `--install <path>`  | `.vpp` files or directories to install first; repeatable      |
+| `--board <name>`    | only this board; repeatable, exact name                       |
+| `--package <id>`    | only boards from this package; repeatable                     |
+| `--core <id>`       | only boards on this core, e.g. `arduino:samd`; repeatable     |
+| `--arduino-only`    | skip targets that do not build firmware locally               |
+| `--clean`           | pass `--clean` to every compile                               |
+| `--stop-on-fail`    | stop at the first failure instead of running the rest         |
+| `--no-build`        | skip the main-process rebuild                                 |
+| `--out <file>`      | JSONL log; defaults to `<project>/compile-matrix.jsonl`       |
+
+With no filter it takes every installed board, sequentially. That is the honest
+default and an expensive one — arduino-cli already saturates every core per
+build, so running two at once would not be faster and would race on the shared
+data directory.
+
+It rebuilds the main process first, because the CLI runs from a build artefact
+and a run against a stale one reports on code that was never compiled.
+
+Each board yields a JSONL line with the pinned version, the version arduino-cli
+reports it actually used, the outcome, the duration, and the first compiler
+error lines when it failed. A build that compiled against a version other than
+the pin is reported as **DRIFT** and fails the run: a pin in a manifest is a
+request, and only `Used platform` in the build output says what happened.
+
+Two things it is not. It does not replace per-board coverage with one board per
+core: of the four boards that failed the 51-board sweep, all four failed for
+device-specific reasons — an FQBN option, a vendor HAL, a package flag — while
+every other board on the same core passed. And it is not a unit test; nothing in
+the jest suite compiles anything, which is why this exists.
 
 ## Output contract
 
@@ -381,6 +455,7 @@ point of naming a timeout is that the default was wrong for this run.
 | `--keep-going`         | `exec`                     | run the remaining lines after one fails                                                             |
 | `--force`              | `create`                   | overwrite an existing destination                                                                   |
 | `--clean`              | `compile`, `upload`        | discard the build directory first                                                                   |
+| `--user-data <dir>`    | any command                | which editor state to use: settings, arduino-cli config, installed packages                         |
 | `-y`, `--yes`          | `upload`                   | skip the confirmation                                                                               |
 | `--create-user`        | `upload`, `debug open`     | permission to create the FIRST user on a fresh runtime v4, using the credentials you already passed |
 

@@ -7,11 +7,11 @@
  *   1. `prepareXmlForLibraryBuild(project, manifest)` — synthesizes
  *      a stub main program / task / instance into a transient
  *      PLCProject (the on-disk project remains untouched) and runs
- *      the canonical XmlGenerator on it.  the ST transpiler rejects programless
- *      projects, so the stub is mandatory; the stub's POU body is
- *      intentionally non-empty (`LocalVar := 3;` against a single
- *      INT local) because some ST-transpiler codepaths also reject empty
- *      program bodies.
+ *      the canonical XmlGenerator on it.  A library project declares
+ *      no program of its own, and strucpp's verification path assumes
+ *      one, so the stub is mandatory.  Its body is non-empty for
+ *      readability only — the transpiler stopped refusing empty POUs
+ *      in DOPE-650.
  *
  *   2. *(the in-process ST transpiler runs on the project and
  *      produces `program.st`.)*
@@ -148,15 +148,15 @@ const STUB_INSTANCE_NAME = '__openplc_library_stub_instance__'
 
 /**
  * Build a transient PLCProject with a stub main program added on
- * top of the library's POUs / data types.  The stub is what
- * satisfies the ST transpiler (and strucpp's main-program assumption later in
- * the verification path).  Caller drops the stub's per-POU output
- * before handing the remaining sources to compileStlib.
+ * top of the library's POUs / data types.  The stub satisfies
+ * strucpp's main-program assumption in the verification path.  Caller
+ * drops the stub's per-POU output before handing the remaining
+ * sources to compileStlib.
  *
- * The stub's body is non-empty (`LocalVar := 3;`) because the ST transpiler
- * has been observed to reject programs with completely empty bodies
- * — a single trivial assignment + a single INT local is the smallest
- * shape that gets accepted across transpiler versions.
+ * The body (`LocalVar := 3;`) is a deliberate no-op rather than an
+ * empty one: an empty POU compiles fine since DOPE-650, but a stub
+ * that reads as a stub is easier to recognise if it ever leaks into
+ * output the user sees.
  */
 function stubProgramFor(project: PLCProject): PLCProject {
   return {
