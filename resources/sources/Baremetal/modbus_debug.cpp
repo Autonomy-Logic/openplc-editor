@@ -61,9 +61,9 @@ void debugInfo()
 {
     uint8_t arrCount = openplc_debug_array_count();
 
-    // Cap at what the Modbus frame can hold: 3 header bytes + 2 bytes/array.
+    // Cap at what the Modbus frame can hold: 4 header bytes + 2 bytes/array.
     // Realistic projects have <=10 arrays, so this is never a real limit.
-    uint8_t maxArrs = (MAX_MB_FRAME - 3) / 2;
+    uint8_t maxArrs = (MB_RESPONSE_CAPACITY - 4) / 2;
     if (arrCount > maxArrs) arrCount = maxArrs;
 
     mb_frame[1] = MB_FC_DEBUG_INFO;
@@ -180,7 +180,7 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
         // variable's bytes AS another and display a confidently wrong value.
         // Absent beats wrong, so this stays until the framing itself can say
         // "skipped" -- see the compact-string work (DOPE-645).
-        if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
+        if ((11 + responseSize + varSize) > MB_RESPONSE_CAPACITY) break;
         if (varSize == 0) {
             // No readable bytes for this entry (out of bounds). Skip gracefully
             // to keep the scan progressing.
@@ -279,7 +279,7 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
             lastReqIdx = i;
             continue;
         }
-        if ((response_idx + varSize) > MAX_MB_FRAME) break;
+        if ((response_idx + varSize) > MB_RESPONSE_CAPACITY) break;
 
         uint16_t n = openplc_debug_read(arr, elem, &mb_frame[response_idx]);
         if (n == 0)
@@ -473,7 +473,7 @@ void debugGetVersion()
     uint16_t i = 0;
     for (i = 0; ver[i] != '\0'; i++)
     {
-        if ((uint16_t)(3 + i) >= MAX_MB_FRAME) break; // never overrun the frame
+        if ((uint16_t)(3 + i) >= MB_RESPONSE_CAPACITY) break; // never overrun the frame
         mb_frame[3 + i] = (uint8_t)ver[i];
     }
     mb_frame_len = 3 + i;
@@ -501,7 +501,7 @@ void debugGetDeviceId()
     mb_frame[1] = MB_FC_DEBUG_GET_DEVICE_ID;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MAX_MB_FRAME - 4));
+    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MB_RESPONSE_CAPACITY - 4));
     mb_frame[3] = (uint8_t)idLen;
     mb_frame_len = 4 + (int)idLen;
 }
@@ -567,12 +567,12 @@ void debugWriteLicense(uint16_t len, const uint8_t *blob)
 // there is no malloc on AVR. READ carries no request payload, so writing at [5]
 // cannot clobber an input. `out_len` is unknown until after the read, and the len
 // field lives at [3..4] — BEFORE the blob — so filling it afterwards never
-// overlaps the blob bytes. A 98-byte blob fits MAX_MB_FRAME comfortably.
+// overlaps the blob bytes. A 98-byte blob fits MB_RESPONSE_CAPACITY comfortably.
 void debugReadLicense(void)
 {
     size_t out_len = 0;
     lic_store_status_t st =
-        license_store_read(&mb_frame[5], MAX_MB_FRAME - 5, &out_len);
+        license_store_read(&mb_frame[5], MB_RESPONSE_CAPACITY - 5, &out_len);
 
     mb_frame[1] = MB_FC_DEBUG_READ_LICENSE;
     mb_frame[2] = lic_status_to_mb(st);
