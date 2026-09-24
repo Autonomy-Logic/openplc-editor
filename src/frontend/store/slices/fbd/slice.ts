@@ -1,8 +1,27 @@
-import { addEdge } from '@xyflow/react'
+import { addEdge, type Node } from '@xyflow/react'
 import { produce } from 'immer'
+import { isEqual, omit } from 'lodash'
 import { StateCreator } from 'zustand'
 
-import { FBDFlowSlice, FBDFlowState } from './types'
+import { FBDFlowSlice, FBDFlowState, FBDRungState } from './types'
+
+// Interaction state React Flow and the boxes toggle while the user clicks
+// around, plus `measured`, which React Flow re-measures on every mount and can
+// come out a pixel different (a font still loading, for one).
+const UI_ONLY_NODE_KEYS = ['selected', 'draggable', 'dragging', 'measured'] as const
+
+const isSameDiagramContent = (a: Node, b: Node): boolean =>
+  isEqual(omit(a, UI_ONLY_NODE_KEYS), omit(b, UI_ONLY_NODE_KEYS))
+
+// A flow that failed validation can reach here without a node list; keeping it
+// as-is (not coerced to []) makes it compare unequal, so it still counts as an edit.
+const diagramContentOf = (rung: FBDRungState) => ({
+  ...omit(rung, ['nodes', 'selectedNodes']),
+  nodes: Array.isArray(rung.nodes) ? rung.nodes.map((node) => omit(node, UI_ONLY_NODE_KEYS)) : rung.nodes,
+})
+
+const isSameRungContent = (a: FBDRungState, b: FBDRungState): boolean =>
+  isEqual(diagramContentOf(a), diagramContentOf(b))
 
 export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice> = (setState) => ({
   fbdFlows: [],
@@ -97,8 +116,11 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           const flow = fbdFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
+          // The canvas pushes its local copy here on every change, selecting
+          // a node and the mount-time re-measure included.
+          const isEdit = !isSameRungContent(flow.rung, rung)
           flow.rung = rung
-          flow.updated = true
+          if (isEdit) flow.updated = true
         }),
       )
     },
@@ -149,8 +171,12 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           const nodeIndex = flow.rung.nodes.findIndex((n) => n.id === nodeId)
           if (nodeIndex === -1) return
 
+          const previous = flow.rung.nodes[nodeIndex]
           flow.rung.nodes[nodeIndex] = node
-          flow.updated = true
+          // The boxes commit on blur and lock dragging on focus, so merely
+          // clicking into one and out again lands here. Only a change to what
+          // the diagram says is an edit.
+          if (!isSameDiagramContent(previous, node)) flow.updated = true
         }),
       )
     },

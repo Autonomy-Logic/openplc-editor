@@ -422,6 +422,8 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+          // The comment box submits on blur, so leaving it untouched lands here too.
+          if ((rung.comment ?? '') === comment) return
 
           rung.comment = comment
           flow.updated = true
