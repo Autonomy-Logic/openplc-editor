@@ -8,8 +8,9 @@
  * emptied at boot with the rest of the cloud build root.
  */
 
+import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 
 import { iterateWriteProjectFiles } from '@root/backend/shared/project/iterate-write-project-files'
 
@@ -33,6 +34,24 @@ export interface CloudProjectFiles {
   dataTypeFiles: RawProjectFile[]
 }
 
+let sequence = 0
+/** When each project last took a save, so an older read cannot overwrite it. */
+const lastSaveApplied = new Map<string, number>()
+/** One working-copy operation at a time per project, so a refresh never interleaves with a save. */
+const queues = new Map<string, Promise<unknown>>()
+
+/** Called before a project read is sent; pass the result to `materializeCloudProject`. */
+export function beginCloudProjectRead(): number {
+  return ++sequence
+}
+
+/** Run `task` after every earlier operation on the same project has settled. */
+function exclusive<T>(projectId: string, task: () => Promise<T>): Promise<T> {
+  const run = (queues.get(projectId) ?? Promise.resolve()).catch(() => undefined).then(task)
+  queues.set(projectId, run)
+  return run
+}
+
 /**
  * The working-copy directory of a cloud project.
  *
@@ -47,68 +66,103 @@ function workingCopyDir(projectId: string): string {
   return resolveBuildWorkspace(projectId)
 }
 
-function isInside(dir: string, filePath: string): boolean {
-  const rel = relative(resolve(dir), resolve(filePath))
-  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)
-}
-
-/** Paths come from the API, so one that escapes the working copy is refused, never written. */
+/**
+ * Resolve a project-relative path from the API inside `dir`.
+ *
+ * Any `.`/`..`/empty segment is refused, even one that stays inside the copy: a remote-device
+ * named `../pin-mapping.json` would otherwise overwrite the pin mapping.
+ */
 function insidePath(dir: string, relativePath: string): string {
-  const target = join(dir, relativePath)
-  if (!isInside(dir, target)) {
-    throw new Error(`Refusing a project file outside the working copy: ${relativePath}`)
+  const segments = relativePath.split(/[\\/]/)
+  if (isAbsolute(relativePath) || segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    throw new Error(`Refusing a project file outside its place in the working copy: ${relativePath}`)
   }
 
-  return target
+  return join(dir, ...segments)
 }
 
-async function writeFiles(dir: string, files: WriteProjectFiles): Promise<void> {
-  for (const entry of iterateWriteProjectFiles(files)) {
-    const target = insidePath(dir, entry.relativePath)
+/** Every write target of `files` under `dir`, all validated before any is used. */
+function plannedWrites(dir: string, files: WriteProjectFiles): Array<{ target: string; content: string }> {
+  return Array.from(iterateWriteProjectFiles(files), (entry) => ({
+    target: insidePath(dir, entry.relativePath),
+    content: entry.content,
+  }))
+}
+
+/** Write already-validated targets. */
+async function writeAll(writes: Array<{ target: string; content: string }>): Promise<void> {
+  for (const { target, content } of writes) {
     await fs.mkdir(dirname(target), { recursive: true })
-    await fs.writeFile(target, entry.content, 'utf-8')
+    await fs.writeFile(target, content, 'utf-8')
   }
 }
 
-/** Replace the working copy with the files Edge just sent. */
-export async function materializeCloudProject(project: CloudProjectFiles): Promise<void> {
-  const dir = workingCopyDir(project.projectPath)
-  const files: WriteProjectFiles = {
-    projectPath: project.projectPath,
-    projectJson: project.projectJson,
-    deviceConfig: project.deviceConfig,
-    pinMapping: project.pinMapping,
-    libraryManifest: project.libraryManifest.length > 0 ? project.libraryManifest : undefined,
-    pouFiles: project.pouFiles,
-    serverFiles: project.serverFiles,
-    remoteDeviceFiles: project.remoteDeviceFiles,
-    dataTypeFiles: project.dataTypeFiles,
-    deletions: [],
-  }
+/**
+ * Replace the working copy with the files Edge just sent.
+ *
+ * The new copy is staged beside the old one and swapped in only once it is complete, so a
+ * failed refresh leaves the previous copy usable. Returns false when a save landed after
+ * `readStartedAt`, since this read then carries an older version than the copy already has.
+ */
+export function materializeCloudProject(project: CloudProjectFiles, readStartedAt?: number): Promise<boolean> {
+  return exclusive(project.projectPath, async () => {
+    if (readStartedAt !== undefined && (lastSaveApplied.get(project.projectPath) ?? 0) > readStartedAt) {
+      return false
+    }
 
-  // Every path is checked before anything is removed, so a hostile envelope leaves the old copy intact.
-  for (const entry of iterateWriteProjectFiles(files)) insidePath(dir, entry.relativePath)
+    const dir = workingCopyDir(project.projectPath)
+    const files: WriteProjectFiles = {
+      projectPath: project.projectPath,
+      projectJson: project.projectJson,
+      deviceConfig: project.deviceConfig,
+      pinMapping: project.pinMapping,
+      libraryManifest: project.libraryManifest.length > 0 ? project.libraryManifest : undefined,
+      pouFiles: project.pouFiles,
+      serverFiles: project.serverFiles,
+      remoteDeviceFiles: project.remoteDeviceFiles,
+      dataTypeFiles: project.dataTypeFiles,
+      deletions: [],
+    }
 
-  await fs.mkdir(dir, { recursive: true })
-  for (const name of await fs.readdir(dir)) {
-    if (!KEPT_ON_REFRESH.has(name)) await fs.rm(join(dir, name), { recursive: true, force: true })
-  }
+    const staging = `${dir}.staging-${randomUUID()}`
+    try {
+      await writeAll(plannedWrites(staging, files))
+    } catch (error) {
+      await fs.rm(staging, { recursive: true, force: true })
+      throw error
+    }
 
-  await writeFiles(dir, files)
+    await fs.mkdir(dir, { recursive: true })
+    for (const name of await fs.readdir(dir)) {
+      if (!KEPT_ON_REFRESH.has(name)) await fs.rm(join(dir, name), { recursive: true, force: true })
+    }
+    for (const name of await fs.readdir(staging)) {
+      await fs.rename(join(staging, name), join(dir, name))
+    }
+    await fs.rm(staging, { recursive: true, force: true })
+    return true
+  })
 }
 
-/** Mirror a project save Edge accepted, deletions included. */
-export async function applyCloudProjectSave(files: WriteProjectFiles): Promise<void> {
-  const dir = workingCopyDir(files.projectPath)
-  const deletions = files.deletions.filter((path) => path.length > 0).map((path) => insidePath(dir, path))
+/** Mirror a project save Edge accepted, deletions included; every path is checked before the first write. */
+export function applyCloudProjectSave(files: WriteProjectFiles): Promise<void> {
+  return exclusive(files.projectPath, async () => {
+    const dir = workingCopyDir(files.projectPath)
+    const writes = plannedWrites(dir, files)
+    const deletions = files.deletions.filter((path) => path.length > 0).map((path) => insidePath(dir, path))
 
-  await writeFiles(dir, files)
-  for (const target of deletions) await fs.rm(target, { force: true })
+    lastSaveApplied.set(files.projectPath, ++sequence)
+    await writeAll(writes)
+    for (const target of deletions) await fs.rm(target, { force: true })
+  })
 }
 
 /** Mirror a single-file save Edge accepted. */
-export async function applyCloudFileSave(projectId: string, relativePath: string, content: string): Promise<void> {
-  const target = insidePath(workingCopyDir(projectId), relativePath)
-  await fs.mkdir(dirname(target), { recursive: true })
-  await fs.writeFile(target, content, 'utf-8')
+export function applyCloudFileSave(projectId: string, relativePath: string, content: string): Promise<void> {
+  return exclusive(projectId, async () => {
+    const target = insidePath(workingCopyDir(projectId), relativePath)
+
+    lastSaveApplied.set(projectId, ++sequence)
+    await writeAll([{ target, content }])
+  })
 }

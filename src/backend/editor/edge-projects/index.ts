@@ -23,7 +23,12 @@ import {
 } from '../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
-import { applyCloudFileSave, applyCloudProjectSave, materializeCloudProject } from '../project/cloud-working-copy'
+import {
+  applyCloudFileSave,
+  applyCloudProjectSave,
+  beginCloudProjectRead,
+  materializeCloudProject,
+} from '../project/cloud-working-copy'
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
@@ -213,6 +218,8 @@ function rawLoadedFilesFrom(raw: {
 }
 
 export async function readCloudProject(projectId: string): Promise<RawProjectFiles> {
+  const readStartedAt = beginCloudProjectRead()
+
   try {
     const response = await edgeAuthedRequest(detailsPath(projectId))
 
@@ -261,7 +268,7 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
 
     // The build reads the project from disk. A pending PLCopen import has no project yet; its first save writes it.
     if (raw.pendingPlcopenSource === undefined) {
-      await materializeCloudProject(raw).catch(reportWorkingCopyFailure)
+      await materializeCloudProject(raw, readStartedAt).catch(reportWorkingCopyFailure)
     }
 
     return {

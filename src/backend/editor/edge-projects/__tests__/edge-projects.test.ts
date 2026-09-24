@@ -20,7 +20,8 @@ jest.mock('../../edge-account/edge-account-service', () => ({
 }))
 
 jest.mock('../../project/cloud-working-copy', () => ({
-  materializeCloudProject: jest.fn(() => Promise.resolve()),
+  beginCloudProjectRead: jest.fn(() => 7),
+  materializeCloudProject: jest.fn(() => Promise.resolve(true)),
   applyCloudProjectSave: jest.fn(() => Promise.resolve()),
   applyCloudFileSave: jest.fn(() => Promise.resolve()),
 }))
@@ -602,6 +603,7 @@ describe('local working copy', () => {
 
     expect(materializeCloudProject).toHaveBeenCalledWith(
       expect.objectContaining({ projectPath: 'p1', pinMapping: '[]', projectJson: FILES['project.json'] }),
+      7,
     )
   })
 

@@ -12,6 +12,7 @@ import { resolveBuildWorkspace } from '../cloud-build-workspace'
 import {
   applyCloudFileSave,
   applyCloudProjectSave,
+  beginCloudProjectRead,
   type CloudProjectFiles,
   materializeCloudProject,
 } from '../cloud-working-copy'
@@ -73,10 +74,56 @@ describe('materializeCloudProject', () => {
 
     await expect(
       materializeCloudProject(project({ pouFiles: [{ relativePath: '../../escaped.st', content: 'x' }] })),
-    ).rejects.toThrow(/outside the working copy/)
+    ).rejects.toThrow(/outside its place in the working copy/)
 
     expect(read('pous/programs/main.ld')).toBe('PROGRAM main')
     expect(existsSync(join(copy(), '..', '..', 'escaped.st'))).toBe(false)
+  })
+
+  it('refuses a path that stays inside the copy but leaves its own folder', async () => {
+    await expect(
+      materializeCloudProject(
+        project({ remoteDeviceFiles: [{ relativePath: 'devices/remote/../pin-mapping.json', content: '[]' }] }),
+      ),
+    ).rejects.toThrow(/outside its place/)
+  })
+
+  it('keeps the previous copy when writing the new one fails', async () => {
+    await materializeCloudProject(project())
+
+    // Passes validation, then fails on disk: `pous/programs/main.ld` cannot be both a file and a folder.
+    const broken = project({
+      pouFiles: [
+        { relativePath: 'pous/programs/main.ld', content: 'new' },
+        { relativePath: 'pous/programs/main.ld/inner.st', content: 'x' },
+      ],
+    })
+    await expect(materializeCloudProject(broken)).rejects.toThrow()
+
+    expect(read('pous/programs/main.ld')).toBe('PROGRAM main')
+    expect(read('devices/pin-mapping.json')).toBe(project().pinMapping)
+    expect(readdirSync(join(copy(), '..')).filter((name) => name.includes('.staging-'))).toEqual([])
+  })
+
+  it('drops a read that started before a save it would overwrite', async () => {
+    await materializeCloudProject(project())
+    const staleRead = beginCloudProjectRead()
+    await applyCloudFileSave(ID, 'devices/pin-mapping.json', 'saved')
+
+    await expect(materializeCloudProject(project(), staleRead)).resolves.toBe(false)
+    expect(read('devices/pin-mapping.json')).toBe('saved')
+
+    await expect(materializeCloudProject(project(), beginCloudProjectRead())).resolves.toBe(true)
+    expect(read('devices/pin-mapping.json')).toBe(project().pinMapping)
+  })
+
+  it('runs a save that arrives mid-refresh after the refresh, not inside it', async () => {
+    const refresh = materializeCloudProject(project())
+    const save = applyCloudFileSave(ID, 'pous/programs/main.ld', 'PROGRAM main (saved)')
+
+    await Promise.all([refresh, save])
+
+    expect(read('pous/programs/main.ld')).toBe('PROGRAM main (saved)')
   })
 
   it('refuses a local project path, so it can never clear the user project', async () => {
@@ -121,9 +168,25 @@ describe('applyCloudProjectSave', () => {
     await materializeCloudProject(project())
 
     await expect(applyCloudProjectSave(save({ deletions: ['../../../victim'] }))).rejects.toThrow(
-      /outside the working copy/,
+      /outside its place in the working copy/,
     )
     expect(read('pous/programs/main.ld')).toBe('PROGRAM main')
+  })
+
+  it('checks every write before the first one, so a bad path leaves the copy untouched', async () => {
+    await materializeCloudProject(project())
+
+    await expect(
+      applyCloudProjectSave(
+        save({
+          deletions: [],
+          dataTypeFiles: [{ relativePath: 'datatypes/../../escaped.dt', content: 'x' }],
+        }),
+      ),
+    ).rejects.toThrow(/outside its place/)
+
+    expect(read('pous/programs/main.ld')).toBe('PROGRAM main')
+    expect(read('devices/pin-mapping.json')).toBe(project().pinMapping)
   })
 
   it('refuses a local project path', async () => {
@@ -144,6 +207,8 @@ describe('applyCloudFileSave', () => {
   })
 
   it('refuses a path that escapes the copy', async () => {
-    await expect(applyCloudFileSave(ID, '../outside.json', '{}')).rejects.toThrow(/outside the working copy/)
+    await expect(applyCloudFileSave(ID, '../outside.json', '{}')).rejects.toThrow(
+      /outside its place in the working copy/,
+    )
   })
 })
