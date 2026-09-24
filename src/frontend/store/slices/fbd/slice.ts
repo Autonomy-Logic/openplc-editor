@@ -15,9 +15,11 @@ const isSameDiagramContent = (a: Node, b: Node): boolean =>
 
 // A flow that failed validation can reach here without a node list; keeping it
 // as-is (not coerced to []) makes it compare unequal, so it still counts as an edit.
+// Selecting a wire is interaction state too.
 const diagramContentOf = (rung: FBDRungState) => ({
-  ...omit(rung, ['nodes', 'selectedNodes']),
+  ...omit(rung, ['nodes', 'edges', 'selectedNodes']),
   nodes: Array.isArray(rung.nodes) ? rung.nodes.map((node) => omit(node, UI_ONLY_NODE_KEYS)) : rung.nodes,
+  edges: Array.isArray(rung.edges) ? rung.edges.map((edge) => omit(edge, ['selected'])) : rung.edges,
 })
 
 const isSameRungContent = (a: FBDRungState, b: FBDRungState): boolean =>

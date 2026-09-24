@@ -189,6 +189,30 @@ describe('createFBDFlowSlice', () => {
     expect(flow.updated).toBe(false)
   })
 
+  it('setRung does not mark the flow modified when a wire is selected', () => {
+    const edge = makeEdge({ id: 'e1' })
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setRung({ editorName: 'editor-1', rung: makeRung({ edges: [edge] }) })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.setRung({
+      editorName: 'editor-1',
+      rung: makeRung({ edges: [{ ...edge, selected: true }] }),
+    })
+
+    expect(store.getState().fbdFlows[0].rung.edges[0].selected).toBe(true)
+    expect(store.getState().fbdFlows[0].updated).toBe(false)
+  })
+
+  it('setRung marks the flow modified when a wire is added', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.setRung({ editorName: 'editor-1', rung: makeRung({ edges: [makeEdge()] }) })
+
+    expect(store.getState().fbdFlows[0].updated).toBe(true)
+  })
+
   it('setRung marks the flow modified when a node moves', () => {
     const node = makeNode({ id: 'n1' })
     store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })

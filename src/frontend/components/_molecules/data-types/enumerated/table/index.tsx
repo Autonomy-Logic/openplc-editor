@@ -77,10 +77,14 @@ const EnumeratedTable = ({
   )
 
   const handleBlur = (rowIndex: number) => {
-    captureAndPush(editor.meta.name)
     const prevRows = [...values]
 
     const inputElement = document.getElementById(`description-input-${rowIndex}`) as HTMLInputElement
+    // Runs on every blur: an unchanged value must not even leave an undo entry behind.
+    // An empty one still falls through, so an abandoned new row is removed as before.
+    const untouched = inputElement?.value.trim()
+    if (untouched && prevRows[rowIndex]?.description === untouched) return prevRows
+    captureAndPush(editor.meta.name)
     if (inputElement) {
       const inputValue = inputElement.value.trim()
 
