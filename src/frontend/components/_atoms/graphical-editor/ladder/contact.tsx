@@ -8,6 +8,7 @@ import { forceDebugVariable, releaseDebugVariable } from '../../../../services/d
 import { isExpressionValidForType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from '../../../../utils/PLC/edge-trigger-instance'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { VariablesBlockAutoComplete } from './autocomplete'
@@ -29,6 +30,9 @@ const Contact = (block: ContactProps) => {
   const getCompositeKey = useDebugCompositeKey()
   const compositeKey = getCompositeKey(data.variable.name)
   const { value: debugValue, isForced, forcedValue, debugIndex } = useDebugValue(compositeKey)
+  const edgeTriggerType = edgeTriggerTypeForVariant(data.variant)
+  const edgeTriggerName = edgeTriggerType ? edgeTriggerInstanceName(edgeTriggerType, data.numericId) : null
+  const { value: edgeOutputValue } = useDebugValue(edgeTriggerName ? getCompositeKey(`${edgeTriggerName}.Q`) : '')
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
   const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
@@ -100,11 +104,15 @@ const Contact = (block: ContactProps) => {
   const debuggerStrokeColor = (() => {
     if (!isDebuggerVisible || !data.variable.name || wrongVariable) return undefined
     if (debugValue === undefined) return undefined
+    if (isForced) return forcedValue ? '#80C000' : '#4080FF'
 
-    const isTrue = debugValue === '1' || debugValue.toUpperCase() === 'TRUE'
+    // An edge contact passes power only in the scan its trigger fires, so it shows the trigger, never the variable.
+    const shownValue = edgeTriggerType ? edgeOutputValue : debugValue
+    if (shownValue === undefined) return undefined
+
+    const isTrue = shownValue === '1' || shownValue.toUpperCase() === 'TRUE'
     const displayState = data.variant === 'negated' ? !isTrue : isTrue
 
-    if (isForced) return forcedValue ? '#80C000' : '#4080FF'
     return displayState ? '#00FF00' : '#0464FB'
   })()
 
