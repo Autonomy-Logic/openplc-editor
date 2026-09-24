@@ -206,6 +206,53 @@ describe('useProjectEditSession', () => {
     expect(port.open).toHaveBeenLastCalledWith('p1', CLIENT, 'mine')
   })
 
+  it('drops a session that finished opening after the page went into the back/forward cache', async () => {
+    const { port } = makePort()
+    let finishOpen: (opened: EditSessionOpened) => void = () => undefined
+    port.open.mockImplementationOnce(() => new Promise<EditSessionOpened>((resolve) => (finishOpen = resolve)))
+    const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(port.open).toHaveBeenCalledTimes(1))
+
+    const cached = new Event('pagehide')
+    Object.defineProperty(cached, 'persisted', { value: true })
+    window.dispatchEvent(cached)
+    await act(async () => {
+      finishOpen({ status: 'opened', sessionId: 'late', stale: false, otherSessions: [], heartbeatIntervalMs: 20_000 })
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    expect(port.release).toHaveBeenCalledWith('p1', 'late')
+    expect(result.current.state).toEqual({ phase: 'idle' })
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(60_000)
+    })
+    expect(port.heartbeat).not.toHaveBeenCalled()
+    expect(port.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens again when the page came back before a superseded open finished', async () => {
+    const { port } = makePort()
+    let finishOpen: (opened: EditSessionOpened) => void = () => undefined
+    port.open.mockImplementationOnce(() => new Promise<EditSessionOpened>((resolve) => (finishOpen = resolve)))
+    const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))
+    await waitFor(() => expect(port.open).toHaveBeenCalledTimes(1))
+
+    const cached = new Event('pagehide')
+    Object.defineProperty(cached, 'persisted', { value: true })
+    window.dispatchEvent(cached)
+    const restored = new Event('pageshow')
+    Object.defineProperty(restored, 'persisted', { value: true })
+    window.dispatchEvent(restored)
+    await act(async () => {
+      finishOpen({ status: 'opened', sessionId: 'late', stale: false, otherSessions: [], heartbeatIntervalMs: 20_000 })
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    expect(port.close).toHaveBeenCalledWith('p1', 'late')
+    expect(port.open).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(result.current.state).toEqual({ phase: 'active', sessionId: 'mine', otherSessions: [] }))
+  })
+
   it('does not open again on a page show that is not a return from the back/forward cache', async () => {
     const { port } = makePort()
     const { result } = renderHook(() => useProjectEditSession({ port, projectId: 'p1', client: CLIENT }))

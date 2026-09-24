@@ -56,6 +56,7 @@ export function useProjectEditSession({
     let stopped = false
     let generation = 0
     let opening = false
+    let hidden = false
     let retryMs = OPEN_RETRY_MS
 
     const clearTimer = () => {
@@ -97,7 +98,14 @@ export function useProjectEditSession({
       }
       if (mine !== generation) {
         if (opened.status === 'opened') {
-          void port.close(projectId, opened.sessionId)
+          if (hidden) {
+            port.release(projectId, opened.sessionId)
+          } else {
+            void port.close(projectId, opened.sessionId)
+          }
+        }
+        if (!hidden && !sessionId && !stopped) {
+          void open()
         }
         return
       }
@@ -196,6 +204,8 @@ export function useProjectEditSession({
 
     const onPageHide = () => {
       clearTimer()
+      hidden = true
+      generation++
       if (sessionId) {
         port.release(projectId, sessionId)
       }
@@ -203,7 +213,11 @@ export function useProjectEditSession({
     }
 
     const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted && !sessionId && !stopped) {
+      if (!event.persisted) {
+        return
+      }
+      hidden = false
+      if (!sessionId && !stopped) {
         void open()
       }
     }
