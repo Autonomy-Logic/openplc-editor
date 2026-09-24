@@ -4,13 +4,17 @@
  * Several editors committed on blur or pushed interaction state through the same
  * store actions as edits, so opening a project and clicking around put the unsaved
  * asterisk on tabs nobody had changed: the POU description field, the ladder rung
- * comment, the FBD variable and connection boxes, selecting an FBD node, React
- * Flow's mount-time re-measure, and a VPP screen seeding its field defaults.
+ * comment, the FBD variable and connection boxes, selecting an FBD node or wire,
+ * React Flow's mount-time re-measure, a VPP screen seeding its field defaults, and
+ * the struct, enum and array data type cells.
  *
  * The suite authors content through the UI and saves it, relaunches, then opens
  * every element, focuses and blurs every field, opens every select, selects every
- * FBD node, and asserts no tab picked up the asterisk. It also checks that a real
- * edit still marks the tab and that "Don't Save" on close leaves the file alone.
+ * FBD and ladder node, and asserts no tab picked up the asterisk. The project
+ * covers every POU language, the three data type kinds, a server and a remote
+ * device. It also checks that real edits still mark the tab (ladder, FBD, POU
+ * description, an array dimension edited without selecting its row, the VPP
+ * screen) and that "Don't Save" on close leaves the file alone.
  *
  * The VPP case needs a board from a vendor package. The ESP32 run copies the
  * packages installed in the local editor profile (~/.config/open-plc-editor) and
@@ -48,12 +52,27 @@ function writeFixture({ fixture, userData }: Paths, board: string): void {
   rmSync(join(fixture, '..'), { recursive: true, force: true })
   mkdirSync(join(fixture, 'devices', 'servers'), { recursive: true })
   mkdirSync(join(fixture, 'pous', 'programs'), { recursive: true })
+  mkdirSync(join(fixture, 'pous', 'function-blocks'), { recursive: true })
+  mkdirSync(join(fixture, 'devices', 'remote'), { recursive: true })
   writeFileSync(
     join(fixture, 'project.json'),
     JSON.stringify({
       meta: { name: 'dirty-flag', type: 'plc-project' },
       data: {
-        dataTypes: [],
+        dataTypes: [
+          {
+            name: 'TANK',
+            derivation: 'structure',
+            variable: [{ name: 'LEVEL', type: { definition: 'base-type', value: 'INT' } }],
+          },
+          { name: 'MODE', derivation: 'enumerated', values: [{ description: 'AUTO' }, { description: 'MANUAL' }] },
+          {
+            name: 'LEVELS',
+            derivation: 'array',
+            baseType: { definition: 'base-type', value: 'INT' },
+            dimensions: [{ dimension: '1..8' }],
+          },
+        ],
         pous: [],
         configuration: {
           resource: {
@@ -86,6 +105,26 @@ function writeFixture({ fixture, userData }: Paths, board: string): void {
     }),
   )
   writeFileSync(join(fixture, 'pous', 'programs', 'stmain.st'), `PROGRAM stmain\n${vars}\na := b;\n\nEND_PROGRAM\n`)
+  writeFileSync(
+    join(fixture, 'pous', 'programs', 'ilmain.il'),
+    'PROGRAM ilmain\n  VAR\n    c : INT;\n  END_VAR\n\nLD c\nADD 1\nST c\n\nEND_PROGRAM\n',
+  )
+  writeFileSync(
+    join(fixture, 'pous', 'function-blocks', 'pyfb.py'),
+    'FUNCTION_BLOCK pyfb\n  VAR_INPUT\n    x : INT;\n  END_VAR\n\ndef block_init():\n    pass\n\ndef block_loop():\n    pass\nEND_FUNCTION_BLOCK\n',
+  )
+  writeFileSync(
+    join(fixture, 'pous', 'function-blocks', 'cppfb.cpp'),
+    'FUNCTION_BLOCK cppfb\n  VAR_INPUT\n    x : INT;\n  END_VAR\n\nvoid setup() {}\n\nvoid loop() {}\nEND_FUNCTION_BLOCK\n',
+  )
+  writeFileSync(
+    join(fixture, 'devices', 'remote', 'REMOTE.json'),
+    JSON.stringify({
+      name: 'REMOTE',
+      protocol: 'modbus-tcp',
+      modbusTcpConfig: { transport: 'tcp', host: '192.168.1.60', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] },
+    }),
+  )
   writeFileSync(
     join(fixture, 'pous', 'programs', 'ldmain.ld'),
     `PROGRAM ldmain\n${vars}\n${JSON.stringify({ name: 'ldmain', rungs: [] })}\nEND_PROGRAM\n`,
@@ -163,7 +202,18 @@ const save = (app: ElectronApplication) =>
 const tabLabels = async (page: Page) =>
   (await page.locator('[role="tab"]').allInnerTexts()).map((label) => label.trim())
 
-const tab = (page: Page, name: string) => page.locator('[role="tab"]', { hasText: name }).first()
+// Exact and case-sensitive: `hasText` alone would let "Modbus" match the "MODBUS" server tab.
+const tab = (page: Page, name: string) =>
+  page
+    .locator('[role="tab"]')
+    .filter({ has: page.getByText(new RegExp(`^(\\* )?${name}$`)) })
+    .first()
+
+/** innerText, not textContent: some tab icons carry an SVG <title> ("Array Icon") in their text. */
+const expectTabLabel = (page: Page, name: string, unsaved: boolean) =>
+  expect
+    .poll(() => tab(page, name).innerText(), { timeout: 10000 })
+    .toMatch(new RegExp(`^${unsaved ? '\\* ' : ''}${name}`))
 
 async function expectNoUnsavedTab(page: Page, step: string): Promise<void> {
   const unsaved = (await tabLabels(page)).filter((label) => label.startsWith('*'))
@@ -203,11 +253,11 @@ async function authorContent(paths: Paths): Promise<void> {
   }
 
   // A real edit must still mark the tab.
-  await expect(tab(page, 'ldmain')).toHaveText(/^\* ldmain/)
-  await expect(tab(page, 'fbdmain')).toHaveText(/^\* fbdmain/)
+  await expectTabLabel(page, 'ldmain', true)
+  await expectTabLabel(page, 'fbdmain', true)
 
   await save(app)
-  await expect(tab(page, 'fbdmain')).toHaveText(/^fbdmain/, { timeout: 10000 })
+  await expectTabLabel(page, 'fbdmain', false)
   await app.close()
 }
 
@@ -216,12 +266,11 @@ async function touchEveryField(page: Page): Promise<void> {
   const fields = page.locator('input:visible, textarea:visible')
   const fieldCount = Math.min(await fields.count(), 25)
   for (let i = 0; i < fieldCount; i++) {
-    await fields
-      .nth(i)
-      .focus()
-      .catch(() => undefined)
+    const field = fields.nth(i)
+    await field.focus().catch(() => undefined)
     await page.waitForTimeout(150)
-    await page.keyboard.press('Tab')
+    // Blur programmatically: a Tab keypress inside Monaco inserts indentation, which is a real edit.
+    await field.evaluate((element) => (element as HTMLElement).blur()).catch(() => undefined)
     await page.waitForTimeout(150)
   }
   const selects = page.locator('button[role="combobox"]:visible')
@@ -237,7 +286,7 @@ async function touchEveryField(page: Page): Promise<void> {
   await page.waitForTimeout(1500)
 }
 
-async function sweep(board: string, slug: string): Promise<void> {
+async function sweep(board: string, slug: string, expectVpp = false): Promise<void> {
   const paths = pathsFor(slug)
   writeFixture(paths, board)
   await authorContent(paths)
@@ -248,13 +297,28 @@ async function sweep(board: string, slug: string): Promise<void> {
     await page.waitForTimeout(5000)
     await expectNoUnsavedTab(page, 'opening the project')
 
-    for (const name of ['ldmain', 'fbdmain', 'stmain', 'Resource', 'Configuration', 'MODBUS']) {
-      await page.getByText(name, { exact: true }).first().click({ timeout: 15000 })
+    const elements = ['ldmain', 'fbdmain', 'stmain', 'ilmain', 'pyfb', 'cppfb', 'TANK', 'MODE', 'LEVELS']
+    for (const name of [...elements, 'Global Variables', 'Resource', 'Configuration', 'MODBUS', 'REMOTE']) {
+      const item = page.getByText(name, { exact: true }).first()
+      await item.scrollIntoViewIfNeeded({ timeout: 15000 })
+      await item.click({ timeout: 15000 })
       await page.waitForTimeout(3000)
       await expectNoUnsavedTab(page, `opening ${name}`)
     }
 
-    for (const name of ['ldmain', 'fbdmain', 'Resource', 'Configuration', 'MODBUS']) {
+    for (const name of [
+      'ldmain',
+      'fbdmain',
+      'stmain',
+      'pyfb',
+      'TANK',
+      'MODE',
+      'LEVELS',
+      'Resource',
+      'Configuration',
+      'MODBUS',
+      'REMOTE',
+    ]) {
       await tab(page, name).click({ timeout: 5000 })
       await page.waitForTimeout(1000)
       await touchEveryField(page)
@@ -262,13 +326,29 @@ async function sweep(board: string, slug: string): Promise<void> {
     }
 
     // The VPP Modbus screen only exists on a vendor-package board.
-    const vppModbus = page.getByText('Modbus', { exact: true }).first()
-    if (await vppModbus.isVisible()) {
+    if (expectVpp) {
+      const vppModbus = page.getByText('Modbus', { exact: true }).first()
+      await vppModbus.scrollIntoViewIfNeeded({ timeout: 15000 })
       await vppModbus.click()
       await page.waitForTimeout(2000)
       await touchEveryField(page)
       await expectNoUnsavedTab(page, 'opening the board Modbus screen and touching its fields')
     }
+
+    await tab(page, 'ldmain').click({ timeout: 5000 })
+    await page.waitForTimeout(1000)
+    const ladderNodes = page.locator('.react-flow__node:visible')
+    const ladderNodeCount = await ladderNodes.count()
+    for (let i = 0; i < ladderNodeCount; i++) {
+      await ladderNodes
+        .nth(i)
+        .click({ position: { x: 2, y: 2 }, timeout: 3000 })
+        .catch(() => undefined)
+      await page.waitForTimeout(300)
+    }
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(1500)
+    await expectNoUnsavedTab(page, 'selecting every ladder node')
 
     await tab(page, 'fbdmain').click({ timeout: 5000 })
     await page.waitForTimeout(1000)
@@ -285,6 +365,33 @@ async function sweep(board: string, slug: string): Promise<void> {
       .click({ position: { x: 5, y: 5 } })
     await page.waitForTimeout(1500)
     await expectNoUnsavedTab(page, 'selecting every FBD node')
+
+    // Editing an array dimension without clicking its row first used to rebuild
+    // the rows from a stale, empty snapshot. It must mark the tab and keep the row.
+    await tab(page, 'LEVELS').click({ timeout: 5000 })
+    const dimension = page.locator('#dimension-input-0:visible')
+    await dimension.fill('1..9')
+    await dimension.evaluate((element) => (element as HTMLElement).blur())
+    await expectTabLabel(page, 'LEVELS', true)
+    await expect(dimension).toHaveValue('1..9')
+
+    // A real edit to the POU description still marks the tab.
+    await tab(page, 'stmain').click({ timeout: 5000 })
+    const description = page.locator('input#description:visible').first()
+    await description.click()
+    await page.keyboard.type('edited')
+    await page.keyboard.press('Tab')
+    await expectTabLabel(page, 'stmain', true)
+
+    if (expectVpp) {
+      // A real change on the board Modbus screen still marks it. (Switching it back does
+      // not clear the mark: turning a section on seeds the fields it reveals, so the
+      // stored data did change.) ToggleSwitch is an sr-only checkbox inside a <label>.
+      await page.getByText('Modbus', { exact: true }).first().click()
+      await page.waitForTimeout(1500)
+      await page.locator('label:has(> input[type="checkbox"]):visible').first().click()
+      await expectTabLabel(page, 'Modbus', true)
+    }
   } finally {
     await app.close()
   }
@@ -301,7 +408,7 @@ test('Nano ESP32 (VPP): opening and clicking around marks no tab unsaved', async
     'needs the Arduino vendor package installed locally',
   )
   test.setTimeout(300000)
-  await sweep('Arduino Nano ESP32', 'nano-esp32')
+  await sweep('Arduino Nano ESP32', 'nano-esp32', true)
 })
 
 test("Don't Save on close leaves the file on disk untouched", async () => {
@@ -317,7 +424,7 @@ test("Don't Save on close leaves the file on disk untouched", async () => {
     await page.getByText('stmain', { exact: true }).first().click({ timeout: 30000 })
     await page.locator('.view-lines:visible').first().click()
     await page.keyboard.type('(* discard me *)')
-    await expect(tab(page, 'stmain')).toHaveText(/^\* stmain/)
+    await expectTabLabel(page, 'stmain', true)
 
     await tab(page, 'stmain').hover()
     await tab(page, 'stmain').locator('svg').last().click()
