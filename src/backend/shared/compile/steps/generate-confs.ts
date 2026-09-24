@@ -1,7 +1,7 @@
 /**
  * Author the runtime v4 conf/* JSON strings (Modbus slave + master,
  * S7Comm, OPC-UA, EtherCAT) from a project's `servers`,
- * `remoteDevices`, and program metadata.
+ * `remoteDevices`, program metadata, and the target runtime version.
  *
  * Editor-canonical behaviour — every output string is byte-identical
  * to what the editor's `compileProgram` used to author inline in the
@@ -39,8 +39,9 @@ import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
-import { generateEthercatConfig } from '../../ethercat/generate-ethercat-config'
+import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
 import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
+import { isEtherdogCapableRuntime } from '../../firmware/runtime-version-gate'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 import { generateModbusMasterConfig } from '../../utils/modbus/generate-modbus-master-config'
 
@@ -75,6 +76,10 @@ export interface GenerateConfsInput {
    *  are rethrown.  Each adapter wires its native log channel
    *  through this callback. */
   log: (message: string, level: 'info' | 'warning' | 'error') => void
+  /** Version the target runtime reports, or null when unknown (compile
+   *  only, no device).  Picks the EtherCAT file format; see
+   *  `isEtherdogCapableRuntime`. */
+  runtimeVersion: string | null
 }
 
 /**
@@ -88,10 +93,18 @@ export interface GenerateConfsOutput {
   s7Comm: string | null
   opcUa: string | null
   /** EtherCAT is gated on `validateEthercatConfig`; this function
-   *  throws BEFORE returning when validation fails.  Successful
-   *  return guarantees either `null` (no devices) or a string that
-   *  passed validation. */
+   *  throws BEFORE returning when validation fails.
+   *
+   *  Legacy runtimes: `ethercat` is `conf/ethercat.json`, `''` when the
+   *  project has no EtherCAT (the file was always written), and the two
+   *  split fields are null.
+   *
+   *  EtherDOG runtimes: `ethercat` is null; `ethercatBusconfig` and
+   *  `ethercatIomapping` are both set, or both null when the project has
+   *  no EtherCAT. */
   ethercat: string | null
+  ethercatBusconfig: string | null
+  ethercatIomapping: string | null
 }
 
 /**
@@ -146,11 +159,23 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   // compile before the composer runs.  Validation failures throw a
   // plain `Error` — caller's try/catch wraps it with the runtime-v4
   // "Stopping compilation process" log line, matching the editor.
-  const ethercat = generateEthercatConfig(remoteDevices)
-  const ethercatErrors = validateEthercatConfig(ethercat)
+  let ethercat: string | null = null
+  let ethercatBusconfig: string | null = null
+  let ethercatIomapping: string | null = null
+  let ethercatErrors: string[]
+  if (isEtherdogCapableRuntime(input.runtimeVersion)) {
+    const configs = generateEtherdogConfigs(remoteDevices)
+    ethercatBusconfig = configs?.busconfig ?? null
+    ethercatIomapping = configs?.iomapping ?? null
+    ethercatErrors = validateEthercatConfig(ethercatBusconfig, ethercatIomapping)
+  } else {
+    const legacy = generateEthercatConfig(remoteDevices)
+    ethercat = legacy ?? ''
+    ethercatErrors = validateEthercatConfig(legacy)
+  }
   if (ethercatErrors.length > 0) {
     throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
   }
 
-  return { modbusSlave, modbusMaster, s7Comm, opcUa, ethercat }
+  return { modbusSlave, modbusMaster, s7Comm, opcUa, ethercat, ethercatBusconfig, ethercatIomapping }
 }

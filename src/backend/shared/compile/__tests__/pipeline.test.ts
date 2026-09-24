@@ -64,6 +64,8 @@ jest.mock('../steps/generate-confs', () => ({
     s7Comm: '',
     opcUa: null,
     ethercat: '',
+    ethercatBusconfig: null,
+    ethercatIomapping: null,
   })),
 }))
 
@@ -836,6 +838,36 @@ describe('runCompilePipeline — runtime v4 path', () => {
     expect(passedInstances).toEqual([{ name: 'main0', task: 'MainTask', program: 'main' }])
   })
 
+  it('probes the runtime before the confs and hands its version to generateRuntimeConfs', async () => {
+    const port = makePort({ checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: 'v4.3.0' }) })
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(port.checkRuntimeVersion).toHaveBeenCalledTimes(1)
+    expect(mockedConfs.mock.calls[0][0].runtimeVersion).toBe('v4.3.0')
+    const stages = events.map((e) => e.stage)
+    expect(stages.indexOf('runtime-version')).toBeLessThan(stages.indexOf('confs'))
+  })
+
+  it('hands a null runtime version to generateRuntimeConfs on compile-only and deviceless builds', async () => {
+    const v4 = { isSimulator: false, isRuntimeV4: true, boardRuntime: 'openplc-compiler' }
+    await runCompilePipeline(
+      makeArgs({ ...v4, compileOnly: true, deviceContext: deviceContextFixture }),
+      makePort(),
+      captureEvents().emit,
+    )
+    await runCompilePipeline(makeArgs({ ...v4, deviceContext: undefined }), makePort(), captureEvents().emit)
+    expect(mockedConfs.mock.calls.map((call) => call[0].runtimeVersion)).toEqual([null, null])
+  })
+
   it('aborts the v4 upload when packageVppPlugin reports errors', async () => {
     const port = makePort({
       packageVppPlugin: jest.fn().mockResolvedValue({
@@ -1262,7 +1294,15 @@ describe('runCompilePipeline — side effects', () => {
     mockedConfs.mockImplementationOnce((input) => {
       input.log('dropped variable foo because bar', 'error')
       input.log('opcua found 5 nodes', 'info')
-      return { modbusSlave: '', modbusMaster: '', s7Comm: '', opcUa: null, ethercat: '' }
+      return {
+        modbusSlave: '',
+        modbusMaster: '',
+        s7Comm: '',
+        opcUa: null,
+        ethercat: '',
+        ethercatBusconfig: null,
+        ethercatIomapping: null,
+      }
     })
     const port = makePort()
     const { events, emit } = captureEvents()

@@ -122,4 +122,88 @@ describe('validateEthercatConfig', () => {
       expect(errors[0]).toContain('not an array')
     })
   })
+
+  describe('I/O mapping validation', () => {
+    const withSlaves = (name: string, networkInterface: string, slaves: unknown[]) => {
+      const entry = makeMaster(name, networkInterface)
+      return { ...entry, config: { ...entry.config, slaves } }
+    }
+    const slave = (position: number, keys: [string, number][]) => ({
+      position,
+      channels: keys.map(([index, subindex]) => ({ pdo_entry_index: index, pdo_entry_subindex: subindex })),
+    })
+    const bus = toJson([
+      withSlaves('bus_a', 'eth0', [slave(1, [['0x6000', 1]]), slave(2, [['0x7000', 1]])]),
+      withSlaves('bus_b', 'eth1', [slave(1, [['0x6000', 1]])]),
+    ])
+    const mapping = (masters: unknown[]) => JSON.stringify({ version: 1, masters })
+
+    it('returns no errors when every entry resolves to one channel', () => {
+      const io = mapping([
+        {
+          name: 'bus_a',
+          entries: [
+            { slave: 1, index: '0x6000', subindex: 1, iec_location: '%IX0.0' },
+            { slave: 2, index: '0x7000', subindex: 1, iec_location: '%QX0.0' },
+          ],
+        },
+        { name: 'bus_b', entries: [] },
+      ])
+      expect(validateEthercatConfig(bus, io)).toEqual([])
+    })
+
+    it('reports an entry that matches no channel', () => {
+      const io = mapping([
+        { name: 'bus_a', entries: [{ slave: 3, index: '0x6000', subindex: 1, iec_location: '%IX0.0' }] },
+        { name: 'bus_b', entries: [] },
+      ])
+      const errors = validateEthercatConfig(bus, io)
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toContain('%IX0.0')
+      expect(errors[0]).toContain('matches 0 channel(s)')
+    })
+
+    it('reports an entry that matches more than one channel', () => {
+      const dup = toJson([
+        withSlaves('bus_a', 'eth0', [
+          slave(1, [
+            ['0x6000', 1],
+            ['0x6000', 1],
+          ]),
+        ]),
+      ])
+      const io = mapping([
+        { name: 'bus_a', entries: [{ slave: 1, index: '0x6000', subindex: 1, iec_location: '%IX0.0' }] },
+      ])
+      const errors = validateEthercatConfig(dup, io)
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toContain('matches 2 channel(s)')
+    })
+
+    it('resolves entries only inside their own master', () => {
+      const io = mapping([
+        { name: 'bus_a', entries: [] },
+        { name: 'bus_b', entries: [{ slave: 2, index: '0x7000', subindex: 1, iec_location: '%QX0.0' }] },
+      ])
+      expect(validateEthercatConfig(bus, io)).toHaveLength(1)
+    })
+
+    it('reports a master count or name that does not match the bus configuration', () => {
+      expect(validateEthercatConfig(bus, mapping([{ name: 'bus_a', entries: [] }]))[0]).toContain('1 master(s)')
+      const renamed = mapping([
+        { name: 'bus_b', entries: [] },
+        { name: 'bus_a', entries: [] },
+      ])
+      expect(validateEthercatConfig(bus, renamed)[0]).toContain("is 'bus_b'")
+    })
+
+    it('reports an unparseable or shapeless I/O mapping', () => {
+      expect(validateEthercatConfig(bus, '{not json')[0]).toContain('Failed to parse generated EtherCAT I/O mapping')
+      expect(validateEthercatConfig(bus, '{}')[0]).toContain('no masters array')
+    })
+
+    it('reports an I/O mapping without a bus configuration', () => {
+      expect(validateEthercatConfig(null, mapping([]))).toHaveLength(1)
+    })
+  })
 })

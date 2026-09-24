@@ -36,7 +36,15 @@ jest.mock('../../firmware/runtime-version-gate', () => ({
   describeIncompatibleRuntime: jest.fn((v: string | null) => `Runtime ${String(v)} too old`),
 }))
 jest.mock('../steps/generate-confs', () => ({
-  generateRuntimeConfs: jest.fn(() => ({ modbusSlave: '', modbusMaster: '', s7Comm: '', opcUa: null, ethercat: '' })),
+  generateRuntimeConfs: jest.fn(() => ({
+    modbusSlave: '',
+    modbusMaster: '',
+    s7Comm: '',
+    opcUa: null,
+    ethercat: '',
+    ethercatBusconfig: null,
+    ethercatIomapping: null,
+  })),
 }))
 
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'
