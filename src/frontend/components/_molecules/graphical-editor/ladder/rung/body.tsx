@@ -36,6 +36,7 @@ import {
 } from './ladder-utils/elements/placeholder'
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
 import { computeRungDebugStates, type RungDebugStates } from './rung-debug-states'
+import { isSameSelection } from './selection'
 
 /**
  * Check recursively if the related target or any of its parent elements are within the ladder area
@@ -78,11 +79,6 @@ type RungBodyProps = {
 }
 
 const EDGE_COLOR_TRUE = '#00FF00'
-
-const isSameSelection = (local: FlowNode[], stored: FlowNode[] | undefined): boolean => {
-  const storedIds = new Set((stored ?? []).map((node) => node.id))
-  return local.length === storedIds.size && local.every((node) => storedIds.has(node.id))
-}
 
 const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
   deletable: false,
@@ -255,7 +251,6 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // By id: local copies carry extra fields, and a rewrite clears the other rungs' selection, looping between them.
     if (dragging || isSameSelection(rungLocal.selectedNodes, rung.selectedNodes)) return
 
     // Update the selected nodes in the rung state

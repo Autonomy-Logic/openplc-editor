@@ -1,9 +1,9 @@
 import { useOpenPLCStore } from '../../../store'
-import type { RungLadderState } from '../../../store/slices/ladder'
 import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { removeElements } from '../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
+import { resolveSelectedNodes } from '../../_molecules/graphical-editor/ladder/rung/selection'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default/exit'
 import { BlockButton } from '../../_molecules/workspace-activity-bar/ladder/block'
 import { CoilButton } from '../../_molecules/workspace-activity-bar/ladder/coil'
@@ -63,17 +63,11 @@ export const LadderToolbox = () => {
     }
   }
 
-  // The stored selection tracks which nodes are selected; their current data lives in rung.nodes.
-  const currentSelectedNodes = (rung: RungLadderState) => {
-    const selectedIds = new Set((rung.selectedNodes || []).map((node) => node.id))
-    return rung.nodes.filter((node) => selectedIds.has(node.id))
-  }
-
   const handleRemoveNodes = () => {
-    const allNodesToRemove = flow?.rungs.flatMap(currentSelectedNodes) || []
+    const allNodesToRemove = flow?.rungs.flatMap((rung) => resolveSelectedNodes(rung)) || []
 
     flow?.rungs.forEach((rung) => {
-      const selectedNodes = currentSelectedNodes(rung)
+      const selectedNodes = resolveSelectedNodes(rung)
       if (selectedNodes.length === 0) return
 
       const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)
