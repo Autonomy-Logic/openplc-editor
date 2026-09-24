@@ -53,10 +53,8 @@ const validateUniqueMasterInterfaces = (entries: EthercatRootEntry[]): string[] 
 }
 
 /**
- * Each I/O mapping master pairs with the busconfig root entry at the same position and name, and
- * each of its entries must resolve to exactly one channel (slave position + PDO entry index +
- * subindex) there. Anything else means the runtime would bind a located variable to the wrong
- * PDO entry, or to none.
+ * Mapping masters must match the busconfig entries in order and name; each entry must resolve to
+ * exactly one channel (slave position + PDO entry index + subindex).
  */
 const validateIoMapping = (entries: EthercatRootEntry[], iomappingJson: string): string[] => {
   let mapping: EthercatIoMapping

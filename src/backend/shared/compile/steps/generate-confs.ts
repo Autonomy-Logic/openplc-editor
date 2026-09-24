@@ -92,16 +92,8 @@ export interface GenerateConfsOutput {
   modbusMaster: string | null
   s7Comm: string | null
   opcUa: string | null
-  /** EtherCAT is gated on `validateEthercatConfig`; this function
-   *  throws BEFORE returning when validation fails.
-   *
-   *  Legacy runtimes: `ethercat` is `conf/ethercat.json`, `''` when the
-   *  project has no EtherCAT (the file was always written), and the two
-   *  split fields are null.
-   *
-   *  EtherDOG runtimes: `ethercat` is null; `ethercatBusconfig` and
-   *  `ethercatIomapping` are both set, or both null when the project has
-   *  no EtherCAT. */
+  /** Validated before return. Legacy runtimes: `ethercat` only ('' without EtherCAT).
+   *  EtherDOG runtimes: `ethercatBusconfig` + `ethercatIomapping`, both null without EtherCAT. */
   ethercat: string | null
   ethercatBusconfig: string | null
   ethercatIomapping: string | null
