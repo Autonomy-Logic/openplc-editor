@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Mail } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -71,6 +71,13 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
     formState: { errors },
   } = useForm<SignInValues>({ resolver: zodResolver(signInSchema) })
 
+  // Latest callback in a ref, so a caller passing an inline arrow does not resubscribe every render.
+  const onSignedInRef = useRef(onSignedIn)
+  onSignedInRef.current = onSignedIn
+
+  // A password sign-in both restores the session and resolves `onSubmit`; announce it once.
+  const signedInAnnounced = useRef(false)
+
   // Reset on every open: the caller keeps this component mounted and only flips `open`,
   // so stale form state and error messages would otherwise survive a close.
   useEffect(() => {
@@ -82,7 +89,27 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
     setSubmitting(false)
     setShowPassword(false)
     reset()
+    signedInAnnounced.current = false
   }, [open, reset])
+
+  const announceSignedIn = useCallback(() => {
+    if (signedInAnnounced.current) {
+      return
+    }
+
+    signedInAnnounced.current = true
+    onSignedInRef.current()
+  }, [])
+
+  // A provider sign-in finishes outside this dialog (system browser on desktop, another tab on
+  // web), so the session's restoration is the only signal that it worked and the dialog can close.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    return account.session.onRestored(announceSignedIn)
+  }, [open, account, announceSignedIn])
 
   // Provider flow opens in a separate tab and lands on /oauth-complete there, so this
   // tab (and its unsaved project) is never navigated away from.
@@ -106,7 +133,7 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
 
     switch (outcome.status) {
       case 'signed-in':
-        onSignedIn()
+        announceSignedIn()
         return
       // Correct password, unconfirmed address - Edge answers 200, so this isn't a login failure.
       case 'email-unverified':
