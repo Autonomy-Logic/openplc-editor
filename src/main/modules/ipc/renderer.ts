@@ -238,6 +238,11 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-account:sign-in', { email, password }),
   edgeAccountSignOut: (): Promise<void> => ipcRenderer.invoke('edge-account:sign-out'),
   edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
+  /** A provider sign-in ran in the system browser and the main process now holds the session. */
+  onEdgeAccountSignedIn: (callback: () => void): (() => void) =>
+    subscribe('edge-account:signed-in', () => {
+      callback()
+    }),
   edgeProjectsListRecent: (limit: number): Promise<CloudProjectsResult> =>
     ipcRenderer.invoke('edge-projects:list-recent', limit),
   edgeProjectsListInFolder: (folderId: string): Promise<CloudProjectsResult> =>

@@ -88,7 +88,8 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
   oauthProviders: EDGE_OAUTH_PROVIDERS,
 
   // The desktop never follows this URL: the dialog opens it as a target='_blank' link the main
-  // process intercepts and reopens in its own window, matching on path only.
+  // process intercepts, matching on path only, and runs the flow in the system browser with a
+  // return address of its own.
   oauthUrl(provider: EdgeOAuthProviderId, returnTo: string): string {
     return `${getEdgeWebUrl()}/auth/${provider}?${new URLSearchParams({ state: returnTo }).toString()}`
   },
@@ -169,6 +170,20 @@ export const editorEdgeAccountPort: EdgeAccountPort = {
   },
 
   session,
+}
+
+/**
+ * A provider sign-in finishes in the system browser and lands in the main process, which
+ * this side would otherwise notice only at its next read. Announced as a restoration, so
+ * every consumer of the hook refreshes at once; unconditionally, because the event itself
+ * is the transition. Returns the unsubscribe.
+ */
+export function listenForProviderSignIns(): () => void {
+  return window.bridge.onEdgeAccountSignedIn(() => {
+    expired = false
+    absent = false
+    notify(restoredListeners)
+  })
 }
 
 // Whether a session survives a restart. False on a Linux box with no keyring, where the refresh
