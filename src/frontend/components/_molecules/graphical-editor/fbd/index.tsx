@@ -26,6 +26,7 @@ import {
 } from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../hooks/use-stable-callback'
+import { useThemeVariant } from '../../../../hooks/use-theme-variant'
 import { useOpenPLCStore } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
@@ -39,6 +40,7 @@ import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import BlockElement from '../../../_features/[workspace]/editor/graphical/elements/fbd/block'
+import { applyFbdEdgeTheme, getFbdEdgeType } from './fbd-utils/edges'
 import { buildGenericNode } from './fbd-utils/nodes'
 import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
@@ -49,10 +51,6 @@ interface FBDProps {
 }
 
 const EDGE_COLOR_TRUE = '#00FF00'
-
-const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
-  type: 'smoothstep',
-}
 const SNAP_GRID: SnapGrid = [16, 16]
 const PRO_OPTIONS = { hideAttribution: true }
 const CONTROLS_CONFIG = { showInteractive: false }
@@ -247,6 +245,11 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   })
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
+
+  // Square themes (e.g. SquareTeal) draw 90° step wires; everything else keeps
+  // the default rounded smoothstep.
+  const themeVariant = useThemeVariant()
+  const defaultEdgeOptions = useMemo<DefaultEdgeOptions>(() => ({ type: getFbdEdgeType(themeVariant) }), [themeVariant])
   const canZoom = useMemo(() => {
     if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
       return editor.graphical.canEditorZoom
@@ -307,6 +310,11 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       return edge
     })
   }, [rungLocal.edges, stableDebugEdgeStates])
+
+  // Square themes (e.g. SquareTeal) render 90° step wires. Edges loaded from a
+  // project carry an explicit `type` (e.g. `smoothstep`), which would otherwise
+  // ignore `defaultEdgeOptions` — remap them at render time.
+  const themedEdges = useMemo(() => applyFbdEdgeTheme(styledEdges, themeVariant), [styledEdges, themeVariant])
 
   const styledNodes = useMemo(() => {
     if (isDebuggerActive) {
@@ -811,9 +819,9 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
           nodeTypes,
           nodes: styledNodes,
-          edges: styledEdges,
+          edges: themedEdges,
 
-          defaultEdgeOptions: DEFAULT_EDGE_OPTIONS,
+          defaultEdgeOptions: defaultEdgeOptions,
 
           nodesDraggable: !isDebuggerActive,
           nodesConnectable: !isDebuggerActive,

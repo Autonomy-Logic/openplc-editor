@@ -1,3 +1,5 @@
+import { nativeTheme } from 'electron'
+
 import MainProcessBridge from './main'
 
 jest.mock('electron', () => ({
@@ -57,12 +59,12 @@ jest.mock('../../../backend/shared/simulator/simulator-module', () => ({
   SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
 }))
 
-const createBridge = (mainWindow: { isDestroyed: jest.Mock; isMaximized: jest.Mock }) =>
+const createBridge = (mainWindow: { isDestroyed: jest.Mock; isMaximized: jest.Mock }, savedTheme?: string) =>
   new MainProcessBridge({
     ipcMain: {},
     mainWindow,
     projectService: {},
-    store: { get: jest.fn(() => undefined) },
+    store: { get: jest.fn(() => savedTheme) },
     menuBuilder: {},
     pouService: {},
     compilerModule: {},
@@ -70,6 +72,10 @@ const createBridge = (mainWindow: { isDestroyed: jest.Mock; isMaximized: jest.Mo
   } as never)
 
 describe('MainProcessBridge.handleGetSystemInfo', () => {
+  beforeEach(() => {
+    nativeTheme.themeSource = 'system'
+  })
+
   it('does not read maximized state from a destroyed window', () => {
     const mainWindow = {
       isDestroyed: jest.fn(() => true),
@@ -100,5 +106,29 @@ describe('MainProcessBridge.handleGetSystemInfo', () => {
     )
     expect(mainWindow.isDestroyed).toHaveBeenCalledTimes(1)
     expect(mainWindow.isMaximized).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['light', 'dark'] as const)('restores the %s native theme', (savedTheme) => {
+    const mainWindow = {
+      isDestroyed: jest.fn(() => false),
+      isMaximized: jest.fn(() => false),
+    }
+    const bridge = createBridge(mainWindow, savedTheme)
+
+    bridge.handleGetSystemInfo()
+
+    expect(nativeTheme.themeSource).toBe(savedTheme)
+  })
+
+  it.each(['nineties', 'squareteal'] as const)('restores the %s skin on a light native theme', (savedTheme) => {
+    const mainWindow = {
+      isDestroyed: jest.fn(() => false),
+      isMaximized: jest.fn(() => false),
+    }
+    const bridge = createBridge(mainWindow, savedTheme)
+
+    bridge.handleGetSystemInfo()
+
+    expect(nativeTheme.themeSource).toBe('light')
   })
 })
