@@ -184,6 +184,8 @@ export type OpenProjectResponseData = {
   rawLoadedFiles?: Record<string, string>
   /** `false` puts the workspace in read-only mode; absent means desktop/dev-local, which stay unrestricted. */
   canEdit?: boolean
+  /** `false` skips the save before a build or debug; only a partner session sends it. Absent means `true`. */
+  autoSaveOnBuild?: boolean
 }
 
 export type SharedWorkspaceActions = {
