@@ -12,6 +12,8 @@ export function ipcPouToFlat(pou: IpcPou): FlatPou & { variablesText?: string } 
     pouType: pou.type as FlatPou['pouType'],
     interface: {
       returnType: (data.returnType as string | undefined) ?? undefined,
+      // Named explicitly, or `serializePouToText` drops the EXTENDS clause.
+      ...(data.extends ? { extends: data.extends as string } : {}),
       variables: (data.variables ?? []) as NonNullable<FlatPou['interface']>['variables'],
     },
     body: pou.data.body as FlatPou['body'],

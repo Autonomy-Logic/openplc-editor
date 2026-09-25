@@ -20,6 +20,7 @@ import { serializeDataTypeToText } from '../utils/PLC/data-type-serializer'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../utils/PLC/pou-file-extensions'
 import { parseGraphicalPouFromString, parseTextualPouFromString } from '../utils/PLC/pou-text-parser'
 import { serializePouToText } from '../utils/PLC/pou-text-serializer'
+import { withProjectLibraries } from '../utils/PLC/project-libraries-json'
 import { carryEditorMetadata } from '../utils/PLC/variable-metadata'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
@@ -927,34 +928,18 @@ async function saveLibraryManagerOnly(
   state: ReturnType<typeof openPLCStoreBase.getState>,
 ): Promise<{ success: boolean; error?: string }> {
   const fullPath = joinPath(projectPath, 'project.json')
-  const refs = state.project.data.libraries ?? []
-  const sortedRefs = [...refs]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((r) => ({ name: r.name, version: r.version }))
 
   const read = await projectPort.readFileContent(fullPath)
   if (!read.success || typeof read.content !== 'string') {
     return projectPort.saveFile(fullPath, buildProjectJsonContent(state))
   }
 
-  let onDisk: Record<string, unknown>
-  try {
-    const parsed = JSON.parse(read.content) as unknown
-    if (typeof parsed !== 'object' || parsed === null) {
-      return { success: false, error: 'project.json on disk is not an object' }
-    }
-    onDisk = parsed as Record<string, unknown>
-  } catch {
-    return { success: false, error: 'project.json on disk is malformed' }
-  }
+  // Shared with the CLI's `library pin`, so the two cannot write the field
+  // differently.
+  const rewritten = withProjectLibraries(read.content, state.project.data.libraries ?? [])
+  if (!rewritten.ok) return { success: false, error: rewritten.error }
 
-  const data =
-    onDisk.data && typeof onDisk.data === 'object'
-      ? (onDisk.data as Record<string, unknown>)
-      : ((onDisk.data = {}), onDisk.data as Record<string, unknown>)
-  data.libraries = sortedRefs
-
-  return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
+  return projectPort.saveFile(fullPath, rewritten.json)
 }
 
 function vendorScreenOwnedKeysFor(state: ReturnType<typeof openPLCStoreBase.getState>, screenName: string): string[] {

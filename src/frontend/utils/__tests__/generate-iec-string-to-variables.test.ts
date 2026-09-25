@@ -116,6 +116,49 @@ describe('buildTypeContext — the classification the compiler cannot make', () 
   it('works with no project context at all', () => {
     expect(typeOf('x : TON;')).toEqual({ definition: 'user-data-type', value: 'TON' })
   })
+
+  // ---- variable-length arrays ----
+
+  it('parses a variable-length array, the bound a VLA carries', () => {
+    // `ARRAY [*] OF INT`, legal as a function block's in-out variable. The type
+    // group excluded `*`, so the line matched nothing and the POU loaded with no
+    // variables at all.
+    const result = parseIecStringToVariables('VAR_IN_OUT\n  values : ARRAY [*] OF INT;\nEND_VAR')
+
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('values')
+    expect(result[0].class).toBe('inOut')
+    expect(result[0].type).toEqual({
+      definition: 'array',
+      value: 'ARRAY [*] OF INT',
+      data: {
+        baseType: { definition: 'base-type', value: 'INT' },
+        dimensions: [{ dimension: '*' }],
+      },
+    })
+  })
+
+  it('parses a two-dimensional variable-length array', () => {
+    const result = parseIecStringToVariables('VAR_IN_OUT\n  grid : ARRAY [*,*] OF REAL;\nEND_VAR')
+
+    expect(result[0].type.data?.dimensions).toEqual([{ dimension: '*' }, { dimension: '*' }])
+  })
+
+  it('does not read an empty bound as a variable-length one', () => {
+    // `*` is a bound; nothing is not. The scanner rejects `ARRAY []` outright
+    // rather than letting it through as a named type, so the guarantee this
+    // test exists for still holds: an empty bound is never read as `ARRAY [*]`.
+    expect(() => parseIecStringToVariables('VAR\n  bad : ARRAY [] OF INT;\nEND_VAR')).toThrow(/ARRAY dimension/)
+  })
+
+  it('does not mistake a comment for a type', () => {
+    // `(` stays outside the type character class, so widening it for `*` could
+    // not let a `(*` comment be read as one.
+    const result = parseIecStringToVariables('VAR\n  count : INT; (* how many *)\nEND_VAR')
+
+    expect(result[0].type).toEqual({ definition: 'base-type', value: 'INT' })
+    expect(result[0].documentation).toBe('how many')
+  })
 })
 
 describe('findDuplicateVariableName', () => {

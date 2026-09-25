@@ -100,6 +100,12 @@ export interface PLCPou {
   pouType: PouType
   interface?: {
     returnType?: string
+    /**
+     * Base function block, from `FUNCTION_BLOCK X EXTENDS Y`; undefined when
+     * the POU derives from nothing. On the interface because the clause changes
+     * the block's pins and methods, as `returnType` does for a FUNCTION.
+     */
+    extends?: string
     variables: PLCVariable[]
   }
   body: PLCBody
@@ -1048,7 +1054,18 @@ export interface DebugCompileResult {
   error?: string
 }
 
-/** Deliberately carries no verification field: running a library is its own action, via the debug harness. */
+/**
+ * Result of building a `.stlib` from a Library Project.  Mirrors the
+ * shape of `CompileResult` (success / error) plus the artefact path
+ * the console surfaces so the user can find the produced archive.
+ *
+ * The verification step (compiling the synthetic project against the
+ * manifest's verify target) reports its outcome through `verification`:
+ * missing means it did not run — `build.verify: "off"`; `success: true`
+ * means it ran clean; `success: false` does NOT fail the build, the warning
+ * surfaces to the console instead, because the `.stlib` carries source and
+ * the consumer compiles it for its own board.
+ */
 export interface CompileLibraryResult {
   success: boolean
   /** Absolute path, set only on success. */
@@ -1056,6 +1073,10 @@ export interface CompileLibraryResult {
   /** Manifest name extracted from `library.json`. */
   libraryName?: string
   error?: string
+  verification?: {
+    success: boolean
+    message?: string
+  }
 }
 
 /** Function Block Instance Info — represents a specific FB instance for debugging */

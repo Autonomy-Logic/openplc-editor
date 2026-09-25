@@ -57,7 +57,7 @@ const AcceleratorHandler = () => {
   } = useOpenPLCStore()
   const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
-  const pendingRecentProjectRef = useRef<unknown>(null)
+  const pendingRecentProjectRef = useRef<string | null>(null)
 
   const executeSave = useCallback(() => executeSaveProject(projectPort, capabilities), [projectPort, capabilities])
 
@@ -151,28 +151,49 @@ const AcceleratorHandler = () => {
   }, [editingState, accelerator, openModal, projectPort, handleOpenProjectResponse])
 
   /**
-   * Open recent project (editor-specific — data passed via IPC accelerator)
+   * Open recent project (editor-specific — the PATH arrives via IPC).
+   *
+   * Opening goes through `projectPort.openProjectByPath` like the start
+   * screen, the recents list and File → Open, so the files are parsed into the
+   * shape the store expects and a project that has moved raises a toast. The
+   * main process used to read the project and send its response, which was
+   * neither unwrapped nor parsed and crashed the renderer on every recent.
    */
+  const openRecentByPath = useCallback(
+    async (projectPath: string) => {
+      const result = await projectPort.openProjectByPath(projectPath)
+      if (result.success && result.data) {
+        handleOpenProjectResponse(result.data)
+        return
+      }
+      toast({
+        title: 'Cannot open the project.',
+        description: result.error?.description ?? `The path ${projectPath} does not exist on this computer.`,
+        variant: 'fail',
+      })
+    },
+    [projectPort, handleOpenProjectResponse],
+  )
+
   useEffect(() => {
-    const unsub = accelerator.onOpenRecent((projectData?: unknown) => {
+    const unsub = accelerator.onOpenRecent((projectPath?: string) => {
       switch (editingState) {
         case 'saved':
         case 'initial-state':
-          // Process immediately — data comes from the main process IPC event
-          if (projectData) {
-            handleOpenProjectResponse(projectData as Parameters<typeof handleOpenProjectResponse>[0])
+          if (projectPath) {
+            void openRecentByPath(projectPath)
           }
           break
         case 'unsaved':
-          // Store pending data and show save modal with callback
-          pendingRecentProjectRef.current = projectData ?? null
+          // Hold the path and open it once the save modal has been answered.
+          pendingRecentProjectRef.current = projectPath ?? null
           openModal('save-changes-project', {
             validationContext: 'open-recent-project',
             onAfterAction: () => {
-              const data = pendingRecentProjectRef.current
+              const pending = pendingRecentProjectRef.current
               pendingRecentProjectRef.current = null
-              if (data) {
-                handleOpenProjectResponse(data as Parameters<typeof handleOpenProjectResponse>[0])
+              if (pending) {
+                void openRecentByPath(pending)
               }
             },
           })
@@ -189,7 +210,7 @@ const AcceleratorHandler = () => {
       }
     })
     return unsub
-  }, [editingState, accelerator, openModal, handleOpenProjectResponse])
+  }, [editingState, accelerator, openModal, openRecentByPath])
 
   /**
    * Close project

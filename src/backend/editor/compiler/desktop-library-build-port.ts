@@ -16,6 +16,7 @@
  * shared with the web port impl.
  */
 
+import { createHash } from 'node:crypto'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -26,7 +27,9 @@ import {
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { TranspileToStArgs, TranspileToStResult } from '@root/middleware/shared/ports/compiler-platform-port'
-import type { LibraryBuildPort } from '@root/middleware/shared/ports/library-build-port'
+import type { LibraryBuildPort, LibraryVerifyTarget } from '@root/middleware/shared/ports/library-build-port'
+
+import type { EnabledArchives, LibraryRef } from '../../../middleware/shared/ports/library-types'
 
 /**
  * Subset of the desktop CompilerModule that the port leans on.
@@ -41,11 +44,31 @@ export interface DesktopLibraryBuildPortDeps {
    * `missing` — orchestrator fails the build with a Library-Manager-
    * pointing message before any heavy step runs.
    */
-  loadEnabledArchives(enabledNames: string[]): { archives: unknown[]; missing: string[] }
+  loadEnabledArchives(refs: ReadonlyArray<LibraryRef>): EnabledArchives
+
+  /**
+   * Run a verification compile against `target`.  Wraps
+   * `CompilerModule.runVerificationCompile` so the port stays decoupled
+   * from the compiler module's full surface.  Failures here are advisory —
+   * caller surfaces them as warnings, never as a fatal build error.
+   */
+  runVerificationCompile(args: {
+    projectPath: string
+    verifyProjectData: unknown
+    target: LibraryVerifyTarget
+    emit: (message: string, level?: 'info' | 'warning' | 'error') => void
+  }): Promise<{ success: boolean; message?: string }>
 }
 
 export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps): LibraryBuildPort {
   return {
+    computeMd5(input: string): Promise<string> {
+      // Web's port impl computes the same digest via `spark-md5`.
+      // The orchestrator's verification cache keys off this value,
+      // so both platforms MUST agree byte-for-byte.
+      return Promise.resolve(createHash('md5').update(input).digest('hex'))
+    },
+
     transpileToSt(
       args: TranspileToStArgs,
       log: (message: string, level: 'info' | 'warning' | 'error') => void,
@@ -84,10 +107,64 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       }
     },
 
+    async readBuildFileBase64(projectPath: string, relPath: string): Promise<string | null> {
+      const fullPath = resolveProjectRelativePath(projectPath, relPath)
+      try {
+        return (await fs.readFile(fullPath)).toString('base64')
+      } catch (error) {
+        if (isFsNotFound(error)) return null
+        throw error
+      }
+    },
+
+    async listProjectDirs(projectPath: string, relPath: string): Promise<string[]> {
+      const root = resolveProjectRelativePath(projectPath, relPath)
+      let entries
+      try {
+        entries = await fs.readdir(root, { withFileTypes: true })
+      } catch (error) {
+        if (isFsNotFound(error)) return []
+        throw error
+      }
+      // Symlinks are not followed here for the same reason they are not
+      // followed when walking: a link out of the tree would put files the
+      // author never chose into a published archive.
+      return entries
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort()
+    },
+
     async writeBuildFile(projectPath: string, relPath: string, content: string): Promise<void> {
       const fullPath = resolveProjectRelativePath(projectPath, relPath)
       await fs.mkdir(path.dirname(fullPath), { recursive: true })
       await fs.writeFile(fullPath, content, 'utf-8')
+    },
+
+    async listProjectFiles(projectPath: string, relPath: string): Promise<string[]> {
+      const root = resolveProjectRelativePath(projectPath, relPath)
+      const walk = async (dir: string, prefix: string): Promise<string[]> => {
+        let entries
+        try {
+          entries = await fs.readdir(dir, { withFileTypes: true })
+        } catch (error) {
+          if (isFsNotFound(error)) return []
+          throw error
+        }
+        const found: string[] = []
+        for (const entry of entries) {
+          const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+          // Symlinks are not followed: a link out of the tree would put
+          // arbitrary files into a published archive.
+          if (entry.isDirectory()) {
+            found.push(...(await walk(path.join(dir, entry.name), rel)))
+          } else if (entry.isFile()) {
+            found.push(rel)
+          }
+        }
+        return found
+      }
+      return (await walk(root, '')).sort()
     },
 
     async deleteBuildSubtree(projectPath: string, relPath: string): Promise<void> {
@@ -102,7 +179,19 @@ export function createDesktopLibraryBuildPort(deps: DesktopLibraryBuildPortDeps)
       // Bridge resolves bundled (always-included) + user-installed
       // archives in one call; names that don't resolve come back
       // under `missing` for the orchestrator to fail the build on.
-      return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs.map((r) => r.name)))
+      return Promise.resolve(deps.loadEnabledArchives(projectLibraryRefs))
+    },
+
+    async verifyCompile({ projectPath, verifyProjectData, target, emit }) {
+      return deps.runVerificationCompile({
+        projectPath,
+        verifyProjectData,
+        target,
+        // `runVerificationCompile` forwards every line off
+        // `compileProgram`'s message port; pass them straight
+        // through to the orchestrator's emit.
+        emit: (message, level) => emit(message, level ?? 'info'),
+      })
     },
   }
 }

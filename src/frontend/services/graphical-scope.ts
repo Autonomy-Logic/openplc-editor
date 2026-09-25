@@ -29,6 +29,7 @@ import {
 } from '../utils/PLC/validate-variable-type'
 import { collectDeclaredRoots, rootIdentifierOf } from './project-scope-roots'
 // The leaf, not the `st-lsp` barrel: the barrel pulls ESM-only LSP packages that Jest cannot transform.
+import type { ScopedCompletionItem } from './st-lsp/scoped-query'
 import { getScopedQueryApi, isValueCompletionKind, splitExpression } from './st-lsp/scoped-query'
 
 /** Max instance/struct variables to drill into when a type-filtered search has no direct hits. */
@@ -150,9 +151,85 @@ export async function resolveScopeExpressionType(pouName: string, expression: st
   const match = items.find(
     (item) => isValueCompletionKind(item.kind) && item.label.toLowerCase() === segment.toLowerCase(),
   )
-  if (!match || !match.type) return { status: 'unknown' }
+  if (match && match.type) return { status: 'resolved', type: match.type }
 
-  return { status: 'resolved', type: match.type }
+  // No symbol by that name. One case is still legal and has to be resolved
+  // here rather than by the language server: a subscript that is a VARIABLE.
+  return resolveVariableSubscript(pouName, segment, items)
+}
+
+/** `base` and the subscript expressions of `base[a, b]`, or undefined. */
+function splitSubscripts(segment: string): { base: string; subscripts: string[] } | undefined {
+  const open = segment.indexOf('[')
+  if (open <= 0 || !segment.trimEnd().endsWith(']')) return undefined
+  const base = segment.slice(0, open)
+  const inner = segment.slice(open + 1, segment.lastIndexOf(']'))
+  if (inner.includes('[')) return undefined // nested subscripts are out of scope
+  const subscripts = inner.split(',').map((x) => x.trim())
+  if (subscripts.some((x) => x.length === 0)) return undefined
+  return { base, subscripts }
+}
+
+const INTEGER_LITERAL = /^[+-]?\d+$/
+
+/**
+ * `arr[i]` — an array element whose subscript is a variable.
+ *
+ * IEC 61131-3 Ed 3 §6.4.4.5.1 restricts a subscript in the graphical languages
+ * to "single-element variables or integer literals", and §8.1.2 shows exactly
+ * this on a contact: `Xs[i]`, *"as an array element with variable subscript"*.
+ * So it is legal and the box must not be flagged.
+ *
+ * The language server cannot answer it. It publishes one symbol per in-bounds
+ * element — `arr[0]`, `arr[1]`, … — which is what makes a LITERAL subscript
+ * bounds-checked for free, and deliberately so: `arr[99]` is not a symbol and
+ * stays flagged. A variable subscript has no such symbol and never could, and
+ * the standard agrees it cannot be checked here — §6.4.4.5.1 note: *"This
+ * error can be detected only at runtime for a computed index."*
+ *
+ * So resolve it from the element symbols instead, and check what can be
+ * checked: the base is an array in scope, the subscript count matches its
+ * dimensions, and every variable subscript is an integer. A REAL subscript
+ * stays unknown — the standard does not allow one.
+ */
+async function resolveVariableSubscript(
+  pouName: string,
+  segment: string,
+  items: ScopedCompletionItem[],
+): Promise<ScopeTypeResult> {
+  const parts = splitSubscripts(segment)
+  if (!parts) return { status: 'unknown' }
+
+  // All-literal subscripts already had their chance above. Reaching here means
+  // the element is out of bounds, which is a real fault worth showing.
+  if (parts.subscripts.every((x) => INTEGER_LITERAL.test(x))) return { status: 'unknown' }
+
+  // Any element symbol of this array carries the element type, and its own
+  // subscript count is the array's dimensionality. Taking it from the symbol
+  // rather than parsing the rendered `ARRAY [0..3] OF BOOL` keeps the language
+  // server the authority on both.
+  const prefix = `${parts.base.toLowerCase()}[`
+  const element = items.find((item) => isValueCompletionKind(item.kind) && item.label.toLowerCase().startsWith(prefix))
+  if (!element || !element.type) return { status: 'unknown' }
+
+  const elementParts = splitSubscripts(element.label)
+  if (!elementParts || elementParts.subscripts.length !== parts.subscripts.length) {
+    return { status: 'unknown' }
+  }
+
+  for (const subscript of parts.subscripts) {
+    if (INTEGER_LITERAL.test(subscript)) continue
+    // Resolved from the POU's own scope, NOT from the array's anchor. The `i`
+    // in `NET.bits[i]` is a variable of the POU, not a member of `NET` — and a
+    // subscript that really is a list member is written out in full as
+    // `NET.bits[NET.idx]`, which resolves here just the same.
+    const subscriptType = await resolveScopeExpressionType(pouName, subscript)
+    if (subscriptType.status === 'unavailable') return { status: 'unavailable' }
+    if (subscriptType.status !== 'resolved') return { status: 'unknown' }
+    if (!validateVariableType(subscriptType.type, 'ANY_INT').isValid) return { status: 'unknown' }
+  }
+
+  return { status: 'resolved', type: element.type }
 }
 
 /**
@@ -169,6 +246,30 @@ export async function isExpressionValidForType(
   if (result.status === 'unavailable') return true
   if (result.status === 'unknown') return false
   return validateVariableType(result.type, expectedType).isValid
+}
+
+/**
+ * Is `name` an instance of function-block type `blockType` in this POU's scope?
+ *
+ * A block element resolves its instance name against the POU's own
+ * `interface.variables`, which structurally cannot see a **global variable
+ * list** member: `NET.node` is not in that list under any spelling, so the
+ * block painted itself as an error while compiling perfectly. This asks the
+ * LSP instead, the way the contacts, coils and variable boxes already do.
+ *
+ * Returns `undefined` when the LSP cannot answer, so the caller leaves the
+ * block alone rather than flashing red while the worker warms up — the same
+ * contract `isExpressionValidForType` keeps for its own `unavailable`.
+ */
+export async function isBlockInstanceInScope(
+  pouName: string,
+  name: string,
+  blockType: string,
+): Promise<boolean | undefined> {
+  const result = await resolveScopeExpressionType(pouName, name)
+  if (result.status === 'unavailable') return undefined
+  if (result.status === 'unknown') return false
+  return result.type.toLowerCase() === blockType.toLowerCase()
 }
 
 /**

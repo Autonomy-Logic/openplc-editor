@@ -14,6 +14,7 @@ import {
   needsMigration,
 } from '@root/backend/shared/utils/migrate-project-to-name-type-system'
 import { getExtensionFromLanguage } from '@root/frontend/utils/PLC/pou-file-extensions'
+import { extractDocumentation, findLastEndVarIndex } from '@root/frontend/utils/PLC/pou-text-parser'
 import {
   detectLanguageFromExtension,
   parseGraphicalPouFromString,
@@ -164,25 +165,6 @@ function detectPouTypeFromPath(filePath: string): string {
 }
 
 /**
- * Helper function to find the last END_VAR in the content
- * @param content - The content to search
- * @param startIndex - The index to start searching from
- * @returns The index after the last END_VAR, or -1 if not found
- */
-function findLastEndVarIndex(content: string, startIndex: number): number {
-  let lastEndVarIndex = -1
-  const regex = /\bEND_VAR\b/gi
-  regex.lastIndex = startIndex
-
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(content)) !== null) {
-    lastEndVarIndex = match.index + match[0].length
-  }
-
-  return lastEndVarIndex
-}
-
-/**
  * Fallback extraction when parsing fails - extracts raw variables block and body
  * @param content - The file content
  * @param language - The language code
@@ -191,9 +173,10 @@ function findLastEndVarIndex(content: string, startIndex: number): number {
  * @returns A partial PLCPou with empty variables array but preserved variablesText
  */
 function createFallbackPou(content: string, language: string, pouType: string, pouName: string): PLCPou {
-  const docMatch = content.match(/^\s*\(\*\s*(.*?)\s*\*\)\s*\n/s)
-  const documentation = docMatch ? docMatch[1].trim() : ''
-  const remainingContent = docMatch ? content.slice(docMatch[0].length) : content
+  // Shared with the primary parser: a header written as several consecutive
+  // comment blocks kept only its first block here, and left the rest in front
+  // of the declaration the regex below then failed to match.
+  const { documentation, remainingContent } = extractDocumentation(content)
 
   const varStartIndex = remainingContent.search(
     /\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i,
@@ -360,7 +343,7 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
     const portPou = pou as unknown as {
       name: string
       pouType: string
-      interface?: { returnType?: string; variables: unknown[] }
+      interface?: { returnType?: string; extends?: string; variables: unknown[] }
       body: { language: string; value: unknown }
       documentation?: string
     }
@@ -371,6 +354,11 @@ function readAndParsePouFile(filePath: string, fileName: string): PLCPou {
         name: portPou.name,
         variables: portPou.interface?.variables ?? [],
         ...(portPou.pouType === 'function' ? { returnType: portPou.interface?.returnType ?? '' } : {}),
+        // Only a function block may extend another. This flattening names each
+        // field explicitly, so anything unlisted is dropped.
+        ...(portPou.pouType === 'function-block' && portPou.interface?.extends
+          ? { extends: portPou.interface.extends }
+          : {}),
         body: portPou.body,
         documentation: portPou.documentation ?? '',
       },
