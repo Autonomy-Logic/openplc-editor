@@ -20,12 +20,13 @@ import { CompilerModule } from '../backend/editor/compiler'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
 import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
-import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-window'
+import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
+import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
@@ -106,6 +107,54 @@ const installExtensions = async () => {
   } catch (error) {
     logger.warn(`Skipping development extension installation: ${getErrorMessage(error)}`)
     return []
+  }
+}
+
+/** The browser has the user's attention; once the session is in, the editor asks for it back. */
+function bringMainWindowToFront(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+
+  mainWindow.show()
+  mainWindow.focus()
+  // On macOS a window's `focus()` does not take the app back from another one; `steal` does.
+  app.focus({ steal: true })
+}
+
+/**
+ * A provider sign-in runs in the system browser and lands here, not in the renderer:
+ * the tokens are adopted on this side, then the renderer is told there is a session to
+ * read. It would otherwise learn of it only at its next focus.
+ */
+async function completeProviderSignIn(provider: EdgeOAuthProviderId): Promise<void> {
+  try {
+    const outcome = await runOAuthFlow(provider)
+
+    if (outcome.status !== 'tokens') {
+      if (outcome.status === 'failed') {
+        log.warn(`[edge-account] provider sign-in did not finish: ${outcome.reason ?? 'unknown'}`)
+      }
+
+      return
+    }
+
+    const signIn = await adoptProviderTokens({ accessToken: outcome.accessToken, refreshToken: outcome.refreshToken })
+
+    if (signIn.status !== 'signed-in') {
+      log.warn(`[edge-account] provider tokens arrived but the session could not be read: ${signIn.status}`)
+
+      return
+    }
+
+    mainWindow?.webContents.send('edge-account:signed-in')
+    bringMainWindowToFront()
+  } catch (error: unknown) {
+    log.error(`[edge-account] provider sign-in failed: ${getErrorMessage(error)}`)
   }
 }
 
@@ -270,25 +319,12 @@ const createMainWindow = async () => {
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    // Provider sign-in must NOT go to the system browser: its cookie jar is unreadable from here.
+    // A provider link reaches the system browser too, but through the OAuth flow, which
+    // is what listens for the browser to come back with the session.
     const provider = edgeOAuthProviderFromUrl(edata.url)
 
     if (provider) {
-      void runOAuthFlow(provider)
-        .then((outcome) => {
-          if (outcome.status !== 'tokens') {
-            // Cancelled, declined or timed out: the renderer re-checks on focus.
-            return undefined
-          }
-
-          return adoptProviderTokens({
-            accessToken: outcome.accessToken,
-            refreshToken: outcome.refreshToken,
-          })
-        })
-        .catch((error: unknown) => {
-          log.error(`[edge-account] provider sign-in failed: ${getErrorMessage(error)}`)
-        })
+      void completeProviderSignIn(provider)
 
       return { action: 'deny' }
     }

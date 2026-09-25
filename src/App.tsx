@@ -33,6 +33,7 @@ import { configureSaveResume } from './frontend/services/resume-save-after-sign-
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
+import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
 import { editorPorts, packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
@@ -71,6 +72,11 @@ hydrateLibraries()
 // install/uninstall/CDN change.  Subscriber lives outside React to
 // catch events fired before any component mounts.
 editorPorts.library.onLibrariesChanged(() => hydrateLibraries())
+
+// A provider sign-in finishes in the system browser and lands in the main
+// process; this is how the account hook hears about it without waiting for
+// the window to regain focus. Outside React for the same reason as above.
+listenForProviderSignIns()
 
 // Fetch the VPP catalog once, now, so a build can tell the user a newer
 // package exists without waiting on the network to find out. Nothing awaits
