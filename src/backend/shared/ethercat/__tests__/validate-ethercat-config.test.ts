@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 import { pdoToChannels } from '../esi-parser'
 import { parseESIDeviceFull } from '../esi-parser-main'
-import { validateEthercatConfig } from '../validate-ethercat-config'
+import { ETHERDOG_LIMITS, validateEthercatConfig } from '../validate-ethercat-config'
 
 const DELTA_ESI = readFileSync(resolve(__dirname, 'fixtures/delta-asda2e.xml'), 'utf-8')
 
@@ -246,6 +246,95 @@ describe('validateEthercatConfig', () => {
 
     it('reports an I/O mapping without a bus configuration', () => {
       expect(validateEthercatConfig(null, mapping([]))).toHaveLength(1)
+    })
+  })
+  describe('runtime limits (EtherDOG runtimes)', () => {
+    const L = ETHERDOG_LIMITS
+    const pdo = (index: string, entries: number) => ({ index, entries: Array.from({ length: entries }, () => ({})) })
+    const busWith = (slave: Record<string, unknown>, masters = 1) =>
+      toJson(
+        Array.from({ length: masters }, (_, m) => {
+          const entry = makeMaster(`bus_${m}`, `eth${m}`)
+          return { ...entry, config: { ...entry.config, slaves: m === 0 ? [{ position: 1, ...slave }] : [] } }
+        }),
+      )
+    const mapWith = (entries: { iec_location: string }[], masters = 1) =>
+      JSON.stringify({
+        version: 1,
+        masters: Array.from({ length: masters }, (_, m) => ({
+          name: `bus_${m}`,
+          entries:
+            m === 0
+              ? entries.map((e, i) => ({ slave: 1, index: '0x6000', subindex: i % 256, iec_location: e.iec_location }))
+              : [],
+        })),
+      })
+    const channels = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ pdo_entry_index: '0x6000', pdo_entry_subindex: i % 256 }))
+    const limitErrors = (bus: string, io: string) =>
+      validateEthercatConfig(bus, io).filter(
+        (e) => e.includes('at most') || e.includes('IEC location') || e.includes('beyond'),
+      )
+
+    it('accepts a project at every limit', () => {
+      const bus = busWith({
+        channels: channels(L.channelsPerSlave),
+        rx_pdos: Array.from({ length: L.pdosPerDirection }, (_, i) => pdo(`0x16${i}`, L.entriesPerPdo)),
+        sdo_configurations: Array.from({ length: L.sdosPerSlave }, () => ({})),
+      })
+      const io = mapWith([{ iec_location: '%IW65535' }, { iec_location: '%QX65535.7' }])
+      expect(limitErrors(bus, io)).toEqual([])
+    })
+
+    it('reports too many masters, slaves, PDOs, PDO entries, channels and SDOs', () => {
+      expect(limitErrors(busWith({}, L.masters + 1), mapWith([], L.masters + 1))).toHaveLength(1)
+      const big = toJson([
+        {
+          ...makeMaster('bus_0', 'eth0'),
+          config: {
+            ...makeMaster('bus_0', 'eth0').config,
+            slaves: Array.from({ length: L.slavesPerMaster + 1 }, (_, i) => ({ position: i + 1 })),
+          },
+        },
+      ])
+      expect(limitErrors(big, mapWith([]))[0]).toContain(`${L.slavesPerMaster + 1} slaves`)
+      const slave = busWith({
+        channels: channels(L.channelsPerSlave + 1),
+        tx_pdos: [
+          ...Array.from({ length: L.pdosPerDirection }, (_, i) => pdo(`0x1A${i}`, 1)),
+          pdo('0x1AFF', L.entriesPerPdo + 1),
+        ],
+        sdo_configurations: Array.from({ length: L.sdosPerSlave + 1 }, () => ({})),
+      })
+      const errors = limitErrors(slave, mapWith([]))
+      expect(errors).toHaveLength(4)
+      expect(errors.join('\n')).toContain('TxPDOs')
+      expect(errors.join('\n')).toContain('PDO 0x1AFF has 33 entries')
+    })
+
+    it('reports more mapped entries than a master supports', () => {
+      const io = mapWith(Array.from({ length: L.mappedEntriesPerMaster + 1 }, (_, i) => ({ iec_location: `%IW${i}` })))
+      expect(limitErrors(busWith({}), io)[0]).toContain(`maps ${L.mappedEntriesPerMaster + 1} entries`)
+    })
+
+    it('reports IEC locations the runtime cannot hold', () => {
+      const io = mapWith([
+        { iec_location: '%IW65536' },
+        { iec_location: '%QX1.8' },
+        { iec_location: '%IX0000000000000001.0' },
+      ])
+      expect(limitErrors(busWith({}), io)).toHaveLength(3)
+    })
+
+    it('reports a master name longer than the runtime keeps', () => {
+      const name = 'm'.repeat(L.nameLength + 1)
+      const bus = toJson([makeMaster(name, 'eth0')])
+      const io = JSON.stringify({ version: 1, masters: [{ name, entries: [] }] })
+      expect(validateEthercatConfig(bus, io).some((e) => e.includes('longer than 63'))).toBe(true)
+    })
+
+    it('does not apply to the legacy format', () => {
+      expect(validateEthercatConfig(busWith({}, L.masters + 1))).toEqual([])
     })
   })
 })

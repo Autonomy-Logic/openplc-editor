@@ -12,7 +12,11 @@ type EthercatRootEntry = {
     }
     slaves?: {
       position: number
+      name?: string
       channels?: { pdo_entry_index: string; pdo_entry_subindex: number }[]
+      rx_pdos?: { index: string; entries?: unknown[] }[]
+      tx_pdos?: { index: string; entries?: unknown[] }[]
+      sdo_configurations?: unknown[]
     }[]
   }
 }
@@ -47,6 +51,88 @@ const validateUniqueMasterInterfaces = (entries: EthercatRootEntry[]): string[] 
   for (const [iface, masters] of interfaceToMasters) {
     if (masters.length > 1) {
       errors.push(`Network interface '${iface}' is shared by multiple masters: ${masters.join(', ')}`)
+    }
+  }
+  return errors
+}
+
+/**
+ * Limits of runtimes 4.3.0 and newer (EtherDOG and the runtime's EtherCAT plugin). Exceeding
+ * one makes EtherDOG refuse the bus configuration or the plugin refuse the mapping at start.
+ */
+export const ETHERDOG_LIMITS = {
+  masters: 4,
+  slavesPerMaster: 64,
+  pdosPerDirection: 16,
+  entriesPerPdo: 32,
+  channelsPerSlave: 64,
+  sdosPerSlave: 32,
+  mappedEntriesPerMaster: 2048,
+  nameLength: 63,
+  iecLocationLength: 15,
+  maxByteIndex: 65535,
+} as const
+
+// Same grammar as the runtime's parser: a bit (0-7) only on X, optional there
+const IEC_LOCATION = /^%[IQ](?:X(\d+)(?:\.[0-7])?|[BWDL](\d+))$/i
+
+/** Checks what runtimes 4.3.0 and newer can hold, so an oversized project fails at build time. */
+const validateEtherdogLimits = (entries: EthercatRootEntry[], mapping: EthercatIoMapping): string[] => {
+  const L = ETHERDOG_LIMITS
+  const errors: string[] = []
+  if (entries.length > L.masters) {
+    errors.push(`EtherCAT has ${entries.length} masters; the runtime supports at most ${L.masters}`)
+  }
+  for (const entry of entries) {
+    const master = entry.name || '<unnamed master>'
+    if (master.length > L.nameLength) {
+      errors.push(`EtherCAT master name '${master}' is longer than ${L.nameLength} characters`)
+    }
+    const slaves = entry.config?.slaves ?? []
+    if (slaves.length > L.slavesPerMaster) {
+      errors.push(`EtherCAT master '${master}' has ${slaves.length} slaves; at most ${L.slavesPerMaster} are supported`)
+    }
+    for (const slave of slaves) {
+      const where = `EtherCAT master '${master}', slave ${slave.position}`
+      for (const [dir, pdos] of [
+        ['RxPDOs', slave.rx_pdos ?? []],
+        ['TxPDOs', slave.tx_pdos ?? []],
+      ] as const) {
+        if (pdos.length > L.pdosPerDirection) {
+          errors.push(`${where} has ${pdos.length} ${dir}; at most ${L.pdosPerDirection} are supported`)
+        }
+        for (const pdo of pdos) {
+          const count = pdo.entries?.length ?? 0
+          if (count > L.entriesPerPdo) {
+            errors.push(`${where}, PDO ${pdo.index} has ${count} entries; at most ${L.entriesPerPdo} are supported`)
+          }
+        }
+      }
+      const channels = slave.channels?.length ?? 0
+      if (channels > L.channelsPerSlave) {
+        errors.push(`${where} has ${channels} channels; at most ${L.channelsPerSlave} are supported`)
+      }
+      const sdos = slave.sdo_configurations?.length ?? 0
+      if (sdos > L.sdosPerSlave) {
+        errors.push(`${where} has ${sdos} SDO configurations; at most ${L.sdosPerSlave} are supported`)
+      }
+    }
+  }
+  for (const master of mapping.masters ?? []) {
+    const mapped = master.entries ?? []
+    if (mapped.length > L.mappedEntriesPerMaster) {
+      errors.push(
+        `EtherCAT master '${master.name}' maps ${mapped.length} entries; at most ${L.mappedEntriesPerMaster} are supported`,
+      )
+    }
+    for (const io of mapped) {
+      const location = io.iec_location ?? ''
+      const match = IEC_LOCATION.exec(location)
+      if (location.length > L.iecLocationLength || !match) {
+        errors.push(`EtherCAT master '${master.name}': '${location}' is not a valid IEC location for the runtime`)
+      } else if (Number(match[1] ?? match[2]) > L.maxByteIndex) {
+        errors.push(`EtherCAT master '${master.name}': '${location}' is beyond byte ${L.maxByteIndex}`)
+      }
     }
   }
   return errors
@@ -144,6 +230,11 @@ export const validateEthercatConfig = (configJson: string | null, iomappingJson:
   errors.push(...validateUniqueMasterInterfaces(entries))
   if (iomappingJson !== null) {
     errors.push(...validateIoMapping(entries, iomappingJson))
+    try {
+      errors.push(...validateEtherdogLimits(entries, JSON.parse(iomappingJson) as EthercatIoMapping))
+    } catch {
+      // An unparseable mapping is already reported by validateIoMapping
+    }
   }
   // Future internal validations append their errors here. Keeping them
   // additive lets the user see every problem in a single pass instead of
