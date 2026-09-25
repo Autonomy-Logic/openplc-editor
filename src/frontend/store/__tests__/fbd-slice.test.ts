@@ -172,6 +172,61 @@ describe('createFBDFlowSlice', () => {
     expect(flow.updated).toBe(true)
   })
 
+  it('setRung does not mark the flow modified for a selection or a re-measure', () => {
+    const node = makeNode({ id: 'n1', data: { label: 'same' } })
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setRung({ editorName: 'editor-1', rung: makeRung({ nodes: [node] }) })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    const selected = { ...node, selected: true, measured: { width: 113, height: 40 } }
+    store.getState().fbdFlowActions.setRung({
+      editorName: 'editor-1',
+      rung: makeRung({ nodes: [selected], selectedNodes: [selected] }),
+    })
+
+    const flow = store.getState().fbdFlows[0]
+    expect(flow.rung.selectedNodes).toHaveLength(1)
+    expect(flow.updated).toBe(false)
+  })
+
+  it('setRung does not mark the flow modified when a wire is selected', () => {
+    const edge = makeEdge({ id: 'e1' })
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setRung({ editorName: 'editor-1', rung: makeRung({ edges: [edge] }) })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.setRung({
+      editorName: 'editor-1',
+      rung: makeRung({ edges: [{ ...edge, selected: true }] }),
+    })
+
+    expect(store.getState().fbdFlows[0].rung.edges[0].selected).toBe(true)
+    expect(store.getState().fbdFlows[0].updated).toBe(false)
+  })
+
+  it('setRung marks the flow modified when a wire is added', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.setRung({ editorName: 'editor-1', rung: makeRung({ edges: [makeEdge()] }) })
+
+    expect(store.getState().fbdFlows[0].updated).toBe(true)
+  })
+
+  it('setRung marks the flow modified when a node moves', () => {
+    const node = makeNode({ id: 'n1' })
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setRung({ editorName: 'editor-1', rung: makeRung({ nodes: [node] }) })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.setRung({
+      editorName: 'editor-1',
+      rung: makeRung({ nodes: [{ ...node, position: { x: 16, y: 0 } }] }),
+    })
+
+    expect(store.getState().fbdFlows[0].updated).toBe(true)
+  })
+
   it('setRung does nothing for nonexistent editor', () => {
     store.getState().fbdFlowActions.setRung({ editorName: 'nonexistent', rung: makeRung() })
     expect(store.getState().fbdFlows).toEqual([])
@@ -248,6 +303,39 @@ describe('createFBDFlowSlice', () => {
     store.getState().fbdFlowActions.updateNode({ editorName: 'editor-1', nodeId: 'n1', node: updated })
 
     expect(store.getState().fbdFlows[0].rung.nodes[0].data.label).toBe('new')
+    expect(store.getState().fbdFlows[0].updated).toBe(true)
+  })
+
+  it('updateNode does not mark the flow modified when only interaction state changes', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setNodes({
+      editorName: 'editor-1',
+      nodes: [makeNode({ id: 'n1', data: { label: 'same' } })],
+    })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    // Focusing a box locks dragging and selects it; blurring submits the same value.
+    const focused = { ...makeNode({ id: 'n1', data: { label: 'same' }, draggable: false }), selected: true }
+    store.getState().fbdFlowActions.updateNode({ editorName: 'editor-1', nodeId: 'n1', node: focused })
+
+    expect(store.getState().fbdFlows[0].rung.nodes[0].draggable).toBe(false)
+    expect(store.getState().fbdFlows[0].updated).toBe(false)
+  })
+
+  it('updateNode marks the flow modified when the node content changes', () => {
+    store.getState().fbdFlowActions.startFBDRung({ editorName: 'editor-1' })
+    store.getState().fbdFlowActions.setNodes({
+      editorName: 'editor-1',
+      nodes: [makeNode({ id: 'n1', data: { label: 'old' } })],
+    })
+    store.getState().fbdFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    store.getState().fbdFlowActions.updateNode({
+      editorName: 'editor-1',
+      nodeId: 'n1',
+      node: makeNode({ id: 'n1', data: { label: 'new' } }),
+    })
+
     expect(store.getState().fbdFlows[0].updated).toBe(true)
   })
 
