@@ -248,6 +248,15 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-projects:save-project', files),
   edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('edge-projects:save-file', filePath, content),
+  edgeEditSessionOpen: (
+    projectId: string,
+    client: { kind: 'web' | 'desktop'; label: string },
+    previousSessionId?: string,
+  ): Promise<unknown> => ipcRenderer.invoke('edge-edit-session:open', projectId, client, previousSessionId),
+  edgeEditSessionHeartbeat: (projectId: string, sessionId: string): Promise<unknown> =>
+    ipcRenderer.invoke('edge-edit-session:heartbeat', projectId, sessionId),
+  edgeEditSessionClose: (projectId: string, sessionId: string, closedBySessionId?: string): Promise<boolean> =>
+    ipcRenderer.invoke('edge-edit-session:close', projectId, sessionId, closedBySessionId),
   edgeUploadListFolders: (): Promise<CloudFoldersResult> => ipcRenderer.invoke('edge-upload:list-folders'),
   edgeUploadProject: (params: UploadProjectParams): Promise<UploadProjectResult> =>
     ipcRenderer.invoke('edge-upload:project', params),

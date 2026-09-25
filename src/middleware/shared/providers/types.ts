@@ -4,6 +4,7 @@ import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
 import type { EdgeAccountPort } from '../ports/edge-account-port'
+import type { EditSessionPort } from '../ports/edit-session-port'
 import type { EsiPort } from '../ports/esi-port'
 import type { LibraryPort } from '../ports/library-port'
 import type { NavigationPort } from '../ports/navigation-port'
@@ -40,6 +41,7 @@ export interface PlatformPorts {
   ai?: AIPort
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
+  editSession?: EditSessionPort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort
 }

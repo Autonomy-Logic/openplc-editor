@@ -6,6 +6,7 @@
 import { z } from 'zod'
 
 import { APP_VERSION } from '../../../frontend/data/constants/app-version'
+import { editSessionRefusalMessage } from '../../../middleware/shared/ports/edit-session-port'
 import type {
   CloudProjectsResult,
   RawProjectFiles,
@@ -23,6 +24,7 @@ import {
 } from '../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
+import { editSessionHeadersFor } from '../edge-edit-sessions'
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
@@ -290,6 +292,7 @@ async function writeEnvelope(
   const response = await edgeAuthedRequest(`/projects/${encodeURIComponent(projectId)}/files/save`, {
     method: 'POST',
     json: { files, ...(deletions.length > 0 ? { deletions } : {}) },
+    headers: editSessionHeadersFor(projectId),
   })
 
   if (!response) {
@@ -301,6 +304,12 @@ async function writeEnvelope(
     // user could fix, and the body carries a contract string, not a sentence.
     if (response.status === 403 && response.body.includes(OVER_PLAN_LIMIT)) {
       return { success: false, error: OVER_PLAN_LIMIT_MESSAGE }
+    }
+
+    const refusal = editSessionRefusalMessage(response.status, response.body)
+
+    if (refusal) {
+      return { success: false, error: refusal }
     }
 
     return { success: false, error: `Autonomy Edge answered ${response.status}.` }

@@ -129,6 +129,10 @@ export function useEdgeAccount() {
   return usePlatform().edgeAccount
 }
 
+export function useEditSession() {
+  return usePlatform().editSession
+}
+
 export function useLibrary() {
   return usePlatform().library
 }
