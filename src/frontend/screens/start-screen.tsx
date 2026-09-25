@@ -61,7 +61,7 @@ const StartScreen = () => {
   }
 
   const handleExitAppRequest = () => {
-    windowPort.close()
+    windowPort.requestQuit()
   }
 
   const handleOpenDocumentation = () => {

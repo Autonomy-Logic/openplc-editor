@@ -14,6 +14,8 @@
  *   - window:reload               (send)
  *   - window:rebuild-menu         (send)
  *   - app:quit                    (send)
+ *   - app:request-quit            (send) — request confirmation
+ *   - app:quit-requested          (on)   — show confirmation
  *   - window-controls:is-closing  (on)   — window close notification
  *   - app:darwin-is-closing       (on)   — macOS quit notification
  *   - window-controls:toggle-maximized (on) — maximize state change
@@ -42,6 +44,14 @@ export function createEditorWindowAdapter(): WindowPort {
 
     reload(): void {
       window.bridge.reloadWindow()
+    },
+
+    requestQuit(): void {
+      window.bridge.requestQuitApp()
+    },
+
+    onQuitRequested(callback: () => void): Unsubscribe {
+      return window.bridge.quitRequested(() => callback())
     },
 
     quit(): void {

@@ -42,14 +42,7 @@ const AcceleratorHandler = () => {
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, handleOpenProjectResponse },
-    workspaceActions: {
-      setSystemConfigs,
-      toggleMaximizedWindow,
-      setCloseWindow,
-      setCloseAppDarwin,
-      setModalOpen,
-      toggleCollapse,
-    },
+    workspaceActions: { setSystemConfigs, toggleMaximizedWindow, setCloseWindow, setModalOpen, toggleCollapse },
     tabsActions: { removeTab },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -408,11 +401,11 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
 
-    const unsub = windowPort.onDarwinAppQuitting?.(() => {
-      setCloseAppDarwin(true)
+    const unsub = windowPort.onQuitRequested?.(() => {
+      quitAppRequest(openPLCStoreBase.getState().workspace.editingState === 'unsaved', openModal)
     })
     return unsub
-  }, [capabilities.isNativeApplication, windowPort, setCloseAppDarwin])
+  }, [capabilities.isNativeApplication, windowPort, openModal])
 
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
@@ -430,7 +423,7 @@ const AcceleratorHandler = () => {
     if (!capabilities.isNativeApplication) return
 
     const handler = (e: BeforeUnloadEvent) => {
-      if (capabilities.isDevMode) return
+      if (capabilities.isDevMode || systemConfigs.OS === 'darwin') return
 
       if (!close.window) {
         e.returnValue = false
@@ -438,12 +431,6 @@ const AcceleratorHandler = () => {
       }
 
       if (close.app) return
-
-      if (systemConfigs.OS === 'darwin' && !close.appDarwin) {
-        windowPort.hide()
-        e.returnValue = false
-        return
-      }
 
       quitAppRequest(editingState === 'unsaved', openModal)
       e.returnValue = false
@@ -455,7 +442,7 @@ const AcceleratorHandler = () => {
     capabilities.isNativeApplication,
     close.window,
     close.app,
-    close.appDarwin,
+    capabilities.isDevMode,
     systemConfigs.OS,
     editingState,
     openModal,

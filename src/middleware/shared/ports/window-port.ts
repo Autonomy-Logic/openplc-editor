@@ -42,15 +42,21 @@ export interface WindowPort {
   /** Reload the application. Web: window.location.reload(). */
   reload(): void
 
-  /** Quit the application entirely. No-op on web. */
+  /** Request a quit confirmation. No-op on web. */
+  requestQuit(): void
+
+  /** Subscribe to application quit confirmation requests. No-op on web. */
+  onQuitRequested?(callback: () => void): Unsubscribe
+
+  /** Quit the application entirely after confirmation. No-op on web. */
   quit(): void
 
   /** Rebuild the native application menu. No-op on web. */
   rebuildMenu(): void
 
   /**
-   * Subscribe to window close/quit requests.
-   * Editor: fires when user clicks close button or uses Cmd+Q.
+   * Subscribe to window close notices handled by the renderer.
+   * Editor: used for Windows/Linux window closing; macOS closing is handled in main.
    * Web: fires on beforeunload event.
    */
   onCloseRequested(callback: () => void): Unsubscribe

@@ -384,6 +384,8 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('libraries:changed', listener)
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
+  requestQuitApp: () => ipcRenderer.send('app:request-quit'),
+  quitRequested: (callback: IpcRendererCallbacks) => subscribe('app:quit-requested', callback),
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
   quitAppRequest: (callback: IpcRendererCallbacks) => subscribe('app:quit-accelerator', callback),
