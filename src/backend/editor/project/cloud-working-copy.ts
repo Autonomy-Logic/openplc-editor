@@ -35,8 +35,8 @@ export interface CloudProjectFiles {
 }
 
 let sequence = 0
-/** When each project last took a save, so an older read cannot overwrite it. */
-const lastSaveApplied = new Map<string, number>()
+/** Sequence of the newest read or save applied to each project, so nothing older can overwrite it. */
+const lastApplied = new Map<string, number>()
 /** One working-copy operation at a time per project, so a refresh never interleaves with a save. */
 const queues = new Map<string, Promise<unknown>>()
 
@@ -101,12 +101,12 @@ async function writeAll(writes: Array<{ target: string; content: string }>): Pro
  * Replace the working copy with the files Edge just sent.
  *
  * The new copy is staged beside the old one and swapped in only once it is complete, so a
- * failed refresh leaves the previous copy usable. Returns false when a save landed after
- * `readStartedAt`, since this read then carries an older version than the copy already has.
+ * failed refresh leaves the previous copy usable. Returns false when a newer read or a save was
+ * applied after `readStartedAt`, since this read then carries an older version than the copy has.
  */
 export function materializeCloudProject(project: CloudProjectFiles, readStartedAt?: number): Promise<boolean> {
   return exclusive(project.projectPath, async () => {
-    if (readStartedAt !== undefined && (lastSaveApplied.get(project.projectPath) ?? 0) > readStartedAt) {
+    if (readStartedAt !== undefined && (lastApplied.get(project.projectPath) ?? 0) > readStartedAt) {
       return false
     }
 
@@ -140,6 +140,7 @@ export function materializeCloudProject(project: CloudProjectFiles, readStartedA
       await fs.rename(join(staging, name), join(dir, name))
     }
     await fs.rm(staging, { recursive: true, force: true })
+    if (readStartedAt !== undefined) lastApplied.set(project.projectPath, readStartedAt)
     return true
   })
 }
@@ -151,7 +152,7 @@ export function applyCloudProjectSave(files: WriteProjectFiles): Promise<void> {
     const writes = plannedWrites(dir, files)
     const deletions = files.deletions.filter((path) => path.length > 0).map((path) => insidePath(dir, path))
 
-    lastSaveApplied.set(files.projectPath, ++sequence)
+    lastApplied.set(files.projectPath, ++sequence)
     await writeAll(writes)
     for (const target of deletions) await fs.rm(target, { force: true })
   })
@@ -162,7 +163,7 @@ export function applyCloudFileSave(projectId: string, relativePath: string, cont
   return exclusive(projectId, async () => {
     const target = insidePath(workingCopyDir(projectId), relativePath)
 
-    lastSaveApplied.set(projectId, ++sequence)
+    lastApplied.set(projectId, ++sequence)
     await writeAll([{ target, content }])
   })
 }

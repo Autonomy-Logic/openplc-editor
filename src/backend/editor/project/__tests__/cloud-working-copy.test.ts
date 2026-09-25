@@ -117,6 +117,16 @@ describe('materializeCloudProject', () => {
     expect(read('devices/pin-mapping.json')).toBe(project().pinMapping)
   })
 
+  it('drops an older read that completes after a newer one', async () => {
+    const olderRead = beginCloudProjectRead()
+    const newerRead = beginCloudProjectRead()
+
+    await expect(materializeCloudProject(project({ pinMapping: 'newer' }), newerRead)).resolves.toBe(true)
+    await expect(materializeCloudProject(project({ pinMapping: 'older' }), olderRead)).resolves.toBe(false)
+
+    expect(read('devices/pin-mapping.json')).toBe('newer')
+  })
+
   it('runs a save that arrives mid-refresh after the refresh, not inside it', async () => {
     const refresh = materializeCloudProject(project())
     const save = applyCloudFileSave(ID, 'pous/programs/main.ld', 'PROGRAM main (saved)')
