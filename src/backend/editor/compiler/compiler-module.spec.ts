@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { CompilerModule } from './compiler-module'
-import type { ToolchainProperties } from './types'
 
 jest.mock('electron', () => ({
   app: {
@@ -256,86 +255,6 @@ describe('CompilerModule', () => {
       const stdout = `recipe.cpp.o.pattern=${recipe}\n`
       const props = CompilerModule.parseShowPropertiesOutput(stdout)
       expect(props['recipe.cpp.o.pattern']).toBe(recipe)
-    })
-  })
-
-  describe('ensureResponseFileStubs (ESP32/STM32duino response-file workaround)', () => {
-    // Method is `private static` — exposed for direct testing via a typed
-    // façade so the regex and EEXIST handling can be exercised in isolation
-    // without going through the full pre-compile path. Takes already-tokenized
-    // argv (post-`tokenizeRecipe`) — response-file tokens arrive without
-    // surrounding quote chars.
-    const ensureStubs = (
-      CompilerModule as unknown as {
-        ensureResponseFileStubs(argv: ReadonlyArray<string>, log: (s: string) => void): Promise<void>
-      }
-    ).ensureResponseFileStubs.bind(CompilerModule)
-    const fs = jest.requireActual('node:fs') as typeof import('node:fs')
-    const noopLog = jest.fn()
-    let workDir: string
-
-    beforeEach(() => {
-      noopLog.mockClear()
-      workDir = fs.mkdtempSync(join(tmpdir(), 'openplc-stubs-spec-'))
-    })
-
-    afterEach(() => {
-      fs.rmSync(workDir, { recursive: true, force: true })
-    })
-
-    it('creates an empty stub for a POSIX @-file the recipe references but does not exist', async () => {
-      const missing = join(workDir, 'sub', 'build_opt.h')
-      const argv = ['arm-none-eabi-g++', '-c', `@${missing}`, '-DARDUINO=10607', '-o', 'foo.o']
-      await ensureStubs(argv, noopLog)
-      expect(fs.existsSync(missing)).toBe(true)
-      expect(fs.statSync(missing).size).toBe(0)
-      expect(noopLog).toHaveBeenCalledWith(expect.stringContaining(`Stubbed empty response file: ${missing}`), 'info')
-    })
-
-    it('matches Windows-style @C:\\... and @C:/... absolute paths in argv tokens', () => {
-      // Pure regex assertion against the public extractor — observing
-      // extraction via filesystem side-effects (mkdir/writeFile) is
-      // platform-fragile (POSIX accepts "C:" as a literal directory
-      // name; Windows actually writes under C:\). The extractor is the
-      // authoritative subject, so we test it directly.
-      const winBackslash = 'C:\\Users\\dev\\AppData\\arduino\\sketches\\hash\\file_opts'
-      const winSlash = 'C:/Users/dev/AppData/arduino/sketches/hash/build_opt.h'
-      const argv = ['arm-zephyr-eabi-g++', '-c', `@${winBackslash}`, `@${winSlash}`, '-o', 'foo.o']
-
-      const extracted = (
-        CompilerModule as unknown as {
-          extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[]
-        }
-      ).extractResponseFilesFromArgv(argv)
-
-      expect(extracted).toContain(winBackslash)
-      expect(extracted).toContain(winSlash)
-    })
-
-    it('does not overwrite existing response files', async () => {
-      const existing = join(workDir, 'preexisting.txt')
-      fs.writeFileSync(existing, 'real flags here', 'utf-8')
-      const argv = ['g++', '-c', `@${existing}`, 'foo.cpp']
-      await ensureStubs(argv, noopLog)
-      expect(fs.readFileSync(existing, 'utf-8')).toBe('real flags here')
-      expect(noopLog).not.toHaveBeenCalled()
-    })
-
-    it('deduplicates repeated @-references so a path is stubbed at most once', async () => {
-      const target = join(workDir, 'shared.opt')
-      const argv = ['g++', '-c', `@${target}`, `@${target}`, `@${target}`]
-      await ensureStubs(argv, noopLog)
-      expect(fs.existsSync(target)).toBe(true)
-      expect(noopLog).toHaveBeenCalledTimes(1)
-    })
-
-    it('ignores @-tokens with relative paths (not absolute → not a response file we own)', async () => {
-      // Relative-path @-args either reference workspace-local files (which
-      // we shouldn't touch) or are non-path arguments — the regex deliberately
-      // only matches absolute paths.
-      const argv = ['g++', '-c', '@subdir/file.txt', 'foo.cpp']
-      await ensureStubs(argv, noopLog)
-      expect(noopLog).not.toHaveBeenCalled()
     })
   })
 

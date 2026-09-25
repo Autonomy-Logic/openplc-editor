@@ -1442,48 +1442,6 @@ class CompilerModule {
     })
   }
 
-  // Extract every absolute `@<path>` response-file reference from a
-  // tokenized recipe (post-`tokenizeRecipe`). Only POSIX `/...` and
-  // Windows `C:\...`/`C:/...` qualify — relative `@-` tokens are
-  // workspace-local files the editor must not touch. Pure function so
-  // the regex can be unit-tested without filesystem side effects.
-  static extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[] {
-    const responseFileRe = /^@([A-Za-z]:[\\/].+|\/.+)$/
-    const seen = new Set<string>()
-    for (const token of argv) {
-      const match = responseFileRe.exec(token)
-      if (match) seen.add(match[1])
-    }
-    return Array.from(seen)
-  }
-
-  // Stub empty files for `@response_file` paths a recipe references but
-  // that arduino-cli would only generate during a real compile (ESP32 +
-  // STM32duino). GCC treats missing `@file` as a literal positional
-  // argument → "cannot specify '-o' with '-c' ... with multiple files".
-  // Empty is the canonical default arduino-cli itself writes when no
-  // per-project build_opt customization exists.
-  //
-  // Takes the already-tokenized argv (post-`tokenizeRecipe`) so the
-  // surrounding-quote concern from the legacy regex form goes away —
-  // quotes are stripped by tokenization and the response-file token
-  // arrives as `@<absolute-path>` cleanly.
-  private static async ensureResponseFileStubs(
-    argv: ReadonlyArray<string>,
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    for (const responsePath of CompilerModule.extractResponseFilesFromArgv(argv)) {
-      if (existsSync(responsePath)) continue
-      await mkdir(path.dirname(responsePath), { recursive: true })
-      try {
-        await writeFile(responsePath, '', { flag: 'wx' })
-        handleOutputData(`[precompile] Stubbed empty response file: ${responsePath}`, 'info')
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-      }
-    }
-  }
-
   // Pre-compile every .cpp under `<compilationPath>/src/` (excluding the
   // board HAL `arduino.cpp`) with the board's toolchain at -std=gnu++17 and
   // archive into `libOpenPLCUserLib.a`. Keeps the gnu++17 + exceptions
