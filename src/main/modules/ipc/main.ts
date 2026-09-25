@@ -259,6 +259,7 @@ class MainProcessBridge implements MainIpcModule {
   compilerModule
   hardwareModule
   quitCoordinator
+  private quitPromptReady = false
   private registeredHandleChannels: string[] = []
   // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
   // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
@@ -318,6 +319,12 @@ class MainProcessBridge implements MainIpcModule {
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
     this.quitCoordinator = quitCoordinator
+    this.mainWindow?.webContents?.on('render-process-gone', () => {
+      this.quitPromptReady = false
+    })
+    this.mainWindow?.webContents?.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
+      if (isMainFrame && !isSameDocument) this.quitPromptReady = false
+    })
 
     // When the token authority transparently refreshes an expired token, push
     // the fresh token to the renderer so its store connection flag tracks it.
@@ -859,6 +866,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:track-recent', this.handleTrackRecentProject)
     this.registerHandle('project:delete', this.handleDeleteProject)
     this.ipcMain.on('app:request-quit', this.handleAppRequestQuit)
+    this.ipcMain.on('app:quit-ready', this.handleAppQuitReady)
+    this.ipcMain.on('app:quit-unready', this.handleAppQuitUnready)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
 
@@ -2037,6 +2046,18 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
   handleAppRequestQuit = () => this.quitCoordinator.requestQuit()
+  handleAppQuitReady = () => {
+    this.quitPromptReady = true
+  }
+  handleAppQuitUnready = () => {
+    this.quitPromptReady = false
+  }
+
+  /** Whether the renderer is loaded, alive and listening for the quit prompt. */
+  canPromptQuit(): boolean {
+    const webContents = this.mainWindow?.webContents
+    return this.quitPromptReady && !!webContents && !webContents.isCrashed()
+  }
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers

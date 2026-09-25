@@ -25,11 +25,13 @@ export function createQuitCoordinator({
   getWindow,
   quitApp,
   stopSimulator,
+  canPrompt,
 }: {
   platform: NodeJS.Platform
   getWindow: () => QuitWindow | null
   quitApp: () => void
   stopSimulator: () => void
+  canPrompt: (window: QuitWindow) => boolean
 }): QuitCoordinator {
   // Only confirmation commits to shutdown. A dismissed prompt leaves no intent behind.
   let confirmed = false
@@ -56,10 +58,11 @@ export function createQuitCoordinator({
   return {
     handleBeforeQuit(event) {
       if (confirmed) return
-      if (platform !== 'darwin' || !liveWindow()) {
+      const window = liveWindow()
+      // A crashed or still-loading renderer cannot show the prompt, so holding the quit would swallow it.
+      if (platform !== 'darwin' || !window || !canPrompt(window)) {
         stopSimulator()
-        // Preserve the immediate native quit behavior on Windows and Linux.
-        liveWindow()?.destroy()
+        window?.destroy()
         return
       }
       event.preventDefault()

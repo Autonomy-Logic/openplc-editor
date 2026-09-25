@@ -52,6 +52,7 @@ const quitCoordinator = createQuitCoordinator({
   getWindow: () => mainWindow,
   quitApp: () => app.quit(),
   stopSimulator: () => mainIpcModule?.stopSimulator(),
+  canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
 })
 
 if (process.env.NODE_ENV === 'production') {

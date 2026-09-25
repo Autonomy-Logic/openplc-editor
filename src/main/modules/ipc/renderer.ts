@@ -385,7 +385,14 @@ const rendererProcessBridge = {
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
   requestQuitApp: () => ipcRenderer.send('app:request-quit'),
-  quitRequested: (callback: IpcRendererCallbacks) => subscribe('app:quit-requested', callback),
+  quitRequested: (callback: IpcRendererCallbacks) => {
+    const unsubscribe = subscribe('app:quit-requested', callback)
+    ipcRenderer.send('app:quit-ready')
+    return () => {
+      unsubscribe()
+      ipcRenderer.send('app:quit-unready')
+    }
+  },
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
   quitAppRequest: (callback: IpcRendererCallbacks) => subscribe('app:quit-accelerator', callback),

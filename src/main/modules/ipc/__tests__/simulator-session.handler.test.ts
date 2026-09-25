@@ -57,7 +57,7 @@ function createBridge(): Bridge {
     mainWindow: {
       isDestroyed: jest.fn(() => false),
       isMaximized: jest.fn(() => false),
-      webContents: { reload: jest.fn(), send: jest.fn() },
+      webContents: { reload: jest.fn(), send: jest.fn(), on: jest.fn() },
     },
     projectService: {},
     store: { get: jest.fn(() => undefined) },
