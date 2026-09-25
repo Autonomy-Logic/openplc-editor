@@ -117,6 +117,40 @@ interface RuntimeRootEntry {
   config: RuntimeConfig
 }
 
+// EtherDOG bus configuration: the legacy shape without `iec_location`
+
+type BusChannel = Omit<RuntimeChannel, 'iec_location'>
+
+type BusSlave = Omit<RuntimeSlave, 'channels'> & { channels: BusChannel[] }
+
+type BusRootEntry = Omit<RuntimeRootEntry, 'config'> & {
+  config: Omit<RuntimeConfig, 'slaves'> & { slaves: BusSlave[] }
+}
+
+// Runtime I/O mapping: located variables keyed by slave position and PDO entry
+
+interface IoMappingEntry {
+  slave: number
+  index: string
+  subindex: number
+  iec_location: string
+}
+
+interface IoMappingMaster {
+  name: string
+  entries: IoMappingEntry[]
+}
+
+interface IoMappingDocument {
+  version: 1
+  masters: IoMappingMaster[]
+}
+
+export interface EtherdogConfigs {
+  busconfig: string
+  iomapping: string
+}
+
 /**
  * Converts a hex string (e.g., "0x01") to an integer.
  */
@@ -287,17 +321,12 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
 }
 
 /**
- * Generates the EtherCAT plugin configuration JSON from the project's remote devices.
- * Produces the exact contract expected by the OpenPLC runtime EtherCAT plugin.
- *
- * Output format: array root `[{ name, protocol: "ETHERCAT", config: { master, slaves[], diagnostics } }]`
- *
- * @param remoteDevices - Array of PLCRemoteDevice from the project data
- * @returns The EtherCAT configuration as a JSON string, or null if no devices are configured
+ * Builds one root entry per enabled EtherCAT master that has slaves.
+ * Channels carry `iec_location`, as the legacy single file expects.
  */
-export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefined): string | null => {
+function buildRootEntries(remoteDevices: PLCRemoteDevice[] | undefined): RuntimeRootEntry[] {
   if (!remoteDevices || remoteDevices.length === 0) {
-    return null
+    return []
   }
 
   const ethercatRemoteDevices = remoteDevices.filter(
@@ -305,11 +334,6 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
       device.protocol === 'ethercat' && device.ethercatConfig && (device.ethercatConfig.masterConfig?.enabled ?? true),
   )
 
-  if (ethercatRemoteDevices.length === 0) {
-    return null
-  }
-
-  // Build one root entry per EtherCAT remote device
   const rootEntries: RuntimeRootEntry[] = []
 
   for (const remoteDevice of ethercatRemoteDevices) {
@@ -345,9 +369,67 @@ export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefi
     })
   }
 
+  return rootEntries
+}
+
+/**
+ * Generates the legacy single-file EtherCAT configuration (`conf/ethercat.json`) consumed by the
+ * runtime's bundled SOEM plugin (runtimes older than `MIN_ETHERDOG_RUNTIME_VERSION`).
+ *
+ * Output format: array root `[{ name, protocol: "ETHERCAT", config: { master, slaves[], diagnostics } }]`
+ *
+ * @param remoteDevices - Array of PLCRemoteDevice from the project data
+ * @returns The EtherCAT configuration as a JSON string, or null if no devices are configured
+ */
+export const generateEthercatConfig = (remoteDevices: PLCRemoteDevice[] | undefined): string | null => {
+  const rootEntries = buildRootEntries(remoteDevices)
   if (rootEntries.length === 0) {
     return null
   }
 
   return JSON.stringify(rootEntries, null, 2)
+}
+
+/**
+ * Generates the two EtherDOG-era EtherCAT documents:
+ *  - `busconfig` (`conf/ethercat_busconfig.json`): the legacy array with no `iec_location` on
+ *    any channel. Read only by EtherDOG, so it carries no PLC concepts.
+ *  - `iomapping` (`conf/ethercat_iomapping.json`): one master per busconfig root entry, same
+ *    order and name, one entry per channel with a located variable. Read only by the runtime.
+ *
+ * @returns Both JSON strings, or null if no devices are configured
+ */
+export const generateEtherdogConfigs = (remoteDevices: PLCRemoteDevice[] | undefined): EtherdogConfigs | null => {
+  const rootEntries = buildRootEntries(remoteDevices)
+  if (rootEntries.length === 0) {
+    return null
+  }
+
+  const masters: IoMappingMaster[] = []
+  const busEntries = rootEntries.map((entry): BusRootEntry => {
+    const entries: IoMappingEntry[] = []
+    const slaves = entry.config.slaves.map((slave): BusSlave => {
+      const channels = slave.channels.map(({ iec_location, ...channel }): BusChannel => {
+        if (iec_location) {
+          entries.push({
+            slave: slave.position,
+            index: channel.pdo_entry_index,
+            subindex: channel.pdo_entry_subindex,
+            iec_location,
+          })
+        }
+        return channel
+      })
+      return { ...slave, channels }
+    })
+    masters.push({ name: entry.name, entries })
+    return { ...entry, config: { ...entry.config, slaves } }
+  })
+
+  const iomapping: IoMappingDocument = { version: 1, masters }
+
+  return {
+    busconfig: JSON.stringify(busEntries, null, 2),
+    iomapping: JSON.stringify(iomapping, null, 2),
+  }
 }
