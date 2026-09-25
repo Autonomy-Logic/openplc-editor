@@ -54,6 +54,8 @@ beforeEach(() => {
     hideWindow: jest.fn(),
     reloadWindow: jest.fn(),
     handleQuitApp: jest.fn(),
+    requestQuitApp: jest.fn(),
+    quitRequested: register('quitRequested'),
     rebuildMenu: jest.fn(),
     windowIsClosing: register('closeRequested'),
     darwinAppIsClosing: register('darwinQuitting'),
@@ -110,6 +112,39 @@ describe('quit', () => {
   it('delegates to bridge', () => {
     adapter.quit()
     expect(window.bridge.handleQuitApp).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('requestQuit', () => {
+  it('asks main for the quit prompt instead of closing or quitting', () => {
+    adapter.requestQuit()
+
+    expect(window.bridge.requestQuitApp).toHaveBeenCalledTimes(1)
+    expect(window.bridge.handleQuitApp).not.toHaveBeenCalled()
+    expect(window.bridge.handleCloseOrHideWindow).not.toHaveBeenCalled()
+  })
+})
+
+describe('onQuitRequested', () => {
+  it('registers a bridge listener and fires callback', () => {
+    const cb = jest.fn()
+    implemented(adapter.onQuitRequested, 'onQuitRequested')(cb)
+
+    expect(window.bridge.quitRequested).toHaveBeenCalledTimes(1)
+    fire('quitRequested')
+
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns an unsubscribe function that removes the bridge listener', () => {
+    const cb = jest.fn()
+    const unsub = implemented(adapter.onQuitRequested, 'onQuitRequested')(cb)
+
+    unsub()
+    fireIfRegistered('quitRequested')
+
+    expect(cb).not.toHaveBeenCalled()
+    expect(capturedHandlers.quitRequested).toBeNull()
   })
 })
 

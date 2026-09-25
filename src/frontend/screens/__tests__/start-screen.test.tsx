@@ -16,6 +16,7 @@ import type { DevicePort } from '../../../middleware/shared/ports/device-port'
 import { EDITOR_CAPABILITIES } from '../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import type { SystemPort } from '../../../middleware/shared/ports/system-port'
+import type { WindowPort } from '../../../middleware/shared/ports/window-port'
 import { PlatformProvider } from '../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
 import { StartScreen } from '../start-screen'
@@ -34,6 +35,8 @@ function stubPort<T extends object>(overrides: Partial<T> = {}): T {
 const openedLinks: string[] = []
 /** How many times the local folder picker was asked for. */
 let localOpens = 0
+/** Every WindowPort call the screen made, in order. */
+const windowCalls: string[] = []
 
 let projectOverrides: Partial<ProjectPort> = {}
 
@@ -62,7 +65,12 @@ function makePorts(): PlatformPorts {
         return Promise.resolve({ success: true })
       },
     }),
-    window: stubPort(),
+    window: stubPort<WindowPort>({
+      close: () => windowCalls.push('close'),
+      hide: () => windowCalls.push('hide'),
+      quit: () => windowCalls.push('quit'),
+      requestQuit: () => windowCalls.push('requestQuit'),
+    }),
     accelerator: stubPort(),
     theme: stubPort(),
     versionControl: stubPort(),
@@ -78,6 +86,7 @@ function Wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   openedLinks.length = 0
+  windowCalls.length = 0
   localOpens = 0
   projectOverrides = {}
 })
@@ -137,5 +146,26 @@ describe('the Open entry', () => {
 
     const edge = await screen.findByRole('menuitem', { name: /autonomy edge project/i })
     expect(edge.getAttribute('aria-disabled')).toBe('true')
+  })
+})
+
+/** Exit is a quit, same as Cmd+Q: it asks main for the prompt and never closes or hides the window. */
+describe('the Exit entry', () => {
+  it('requests a quit', async () => {
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    await userEvent.click(await screen.findByRole('button', { name: /exit/i }))
+
+    expect(windowCalls).toEqual(['requestQuit'])
+  })
+
+  it('requests a quit on every click', async () => {
+    render(<StartScreen />, { wrapper: Wrapper })
+    const exit = await screen.findByRole('button', { name: /exit/i })
+
+    await userEvent.click(exit)
+    await userEvent.click(exit)
+
+    expect(windowCalls).toEqual(['requestQuit', 'requestQuit'])
   })
 })
