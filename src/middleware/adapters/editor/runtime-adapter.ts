@@ -15,6 +15,7 @@
  *     whether a session is active (for isReadyForDebug).
  */
 
+import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import { openPLCStoreBase } from '../../../frontend/store'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
@@ -26,6 +27,7 @@ import type {
   ListUsersResult,
   LoginParams,
   LoginResult,
+  PluginCommandArgs,
   RetrievableDevice,
   RuntimeLogsResult,
   RuntimePort,
@@ -253,6 +255,26 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         return await window.bridge.runtimeGetSerialPorts(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    /**
+     * VPP screen actions through the runtime's existing `POST
+     * /api/plugin-command` catch-all, over the same direct HTTPS transport
+     * every other runtime call uses. The main process already interprets the
+     * response — that route reports plugin failures at HTTP 200 — so this is a
+     * pass-through.
+     */
+    async sendPluginCommand(args: PluginCommandArgs): Promise<PluginCommandOutcome> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeSendPluginCommand(ip, {
+          plugin: args.plugin,
+          command: args.command,
+          params: args.params ?? {},
+        })
+      } catch (err) {
+        return { ok: false, error: getErrorMessage(err) }
       }
     },
 

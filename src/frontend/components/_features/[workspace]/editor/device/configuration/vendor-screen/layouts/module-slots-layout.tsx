@@ -28,6 +28,7 @@ import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'
+import { VppScreenActions } from '../screen-actions'
 
 // Same help glyph the HAL Settings form-layout uses, so per-field
 // explanations live in a tooltip instead of cluttering the row.
@@ -373,6 +374,11 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* Module image (lazy fetch via the SystemPort preview endpoint) */
   /* ------------------------------------------------------------ */
   const deviceBoard = boardSelectors.useDeviceBoard()
+  // Results from a plugin command describe ONE device. Changing the board or
+  // the connected vPLC makes the previous answers wrong, not stale, so the
+  // action panel is keyed on both and clears when either moves.
+  const selectedDevice = useOpenPLCStore((s) => s.runtimeConnection.selectedDevice)
+  const connectedDeviceKey = `${deviceBoard}:${selectedDevice?.orchestratorId ?? ''}:${selectedDevice?.deviceId ?? ''}`
   const availableBoards = boardSelectors.useAvailableBoards()
   const packagePath = availableBoards.get(deviceBoard)?.vpp?.packagePath
   const devicePort = useDevice()
@@ -797,32 +803,33 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // section grants us; both panes inside scroll independently so the
     // page-level container never needs to.
     <div className='flex min-h-0 flex-1 flex-col gap-3'>
-      {/* Top-level actions (e.g. Clear All Slots) */}
-      {section.actions && (
-        <div className='flex gap-2'>
-          {(
-            section.actions as Array<{ id: string; label: string; type: string; action?: string; confirm?: string }>
-          ).map((action) =>
-            action.type === 'local' && action.action === 'clear-module-slots' ? (
-              <button
-                key={action.id}
-                type='button'
-                onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
-                // Clear All only does work if there's at least one
-                // non-locked, non-empty slot to clear.  The fixed
-                // built-in slot doesn't count — Clear All preserves
-                // it.  Without this guard the button would always
-                // appear enabled for fixed-module devices even when
-                // every expansion slot is already empty.
-                disabled={!slots.some((s, idx) => s !== null && !slotIsLocked(idx))}
-                className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
-              >
-                {action.label}
-              </button>
-            ) : null,
-          )}
-        </div>
-      )}
+      {/* Top-level actions: local ones (Clear All Slots) and the device-facing
+          `discover` / `test` / `status` commands, which go through the
+          runtime's existing plugin-command route. */}
+      <VppScreenActions
+        actions={section.actions}
+        defaultPlugin={section.moduleSource}
+        deviceKey={connectedDeviceKey}
+        renderLocalAction={(action) =>
+          action.action === 'clear-module-slots' ? (
+            <button
+              key={action.id}
+              type='button'
+              onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
+              // Clear All only does work if there's at least one
+              // non-locked, non-empty slot to clear.  The fixed
+              // built-in slot doesn't count — Clear All preserves
+              // it.  Without this guard the button would always
+              // appear enabled for fixed-module devices even when
+              // every expansion slot is already empty.
+              disabled={!slots.some((s, idx) => s !== null && !slotIsLocked(idx))}
+              className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+            >
+              {action.label}
+            </button>
+          ) : null
+        }
+      />
 
       <div className='flex min-h-0 flex-1 gap-4'>
         {/* ------ Left: slot tree ------ */}

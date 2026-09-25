@@ -43,6 +43,16 @@ type FieldDef = {
 const TEXT_INPUT_CLASS =
   'flex h-[30px] w-48 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
+/**
+ * The field types this layout knows how to render. A vendor package is
+ * untrusted input, so dispatch is an allowlist: a field whose type is not here
+ * renders NOTHING and never enters the value map, so it cannot be persisted
+ * into `vendorScreenData` or reach the generated plugin config. The previous
+ * behaviour — falling back to a text input — meant an unrecognised type still
+ * produced a value the device would be configured with.
+ */
+const SUPPORTED_FIELD_TYPES = new Set(['boolean', 'number', 'select', 'password', 'ip-address', 'mac-address', 'text'])
+
 // Anchor-less HTML5 patterns for the formatted text types. The schema's
 // per-field `validation` (when present) is more specific and wins via the
 // runtime override below, but these defaults give a sensible UX hint when
@@ -55,7 +65,8 @@ type FormLayoutProps = {
 }
 
 function FormLayout({ section }: FormLayoutProps) {
-  const fields = (section.fields ?? []) as FieldDef[]
+  const declared = (section.fields ?? []) as FieldDef[]
+  const fields = declared.filter((field) => typeof field?.id === 'string' && SUPPORTED_FIELD_TYPES.has(field.type))
 
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
@@ -247,6 +258,7 @@ function FormLayout({ section }: FormLayoutProps) {
                       className={TEXT_INPUT_CLASS}
                     />
                   ) : (
+                    // `text` — the only remaining allowlisted type.
                     <input
                       type='text'
                       value={String(values[field.id] ?? '')}

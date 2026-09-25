@@ -37,6 +37,7 @@
  *   - runtimeLogout()
  */
 
+import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -324,6 +325,15 @@ export interface BootloaderPort {
   clearSession(): Promise<void>
 }
 
+export interface PluginCommandArgs {
+  /** Plugin name as `vpp_plugins.conf` registered it. */
+  plugin: string
+  command: string
+  params?: Record<string, unknown>
+  /** Abort and report a failure after this long. */
+  timeoutMs?: number
+}
+
 export interface RuntimePort {
   /** The bootloader on this device, when one is present. */
   bootloader: BootloaderPort
@@ -377,6 +387,21 @@ export interface RuntimePort {
 
   /** Clear stored credentials (logout). */
   clearCredentials(): Promise<{ success: boolean }>
+
+  /**
+   * Invoke a VPP plugin command on the connected device — the `discover`,
+   * `test` and `status` actions a vendor screen declares.
+   *
+   * Rides the runtime's existing `POST /api/plugin-command` catch-all with the
+   * body it already accepts; no runtime change is involved. That route answers
+   * HTTP 200 even for a plugin failure, with the reason in an `error` key, so
+   * the outcome here is already interpreted — `ok: false` means the command
+   * did not do what was asked, whether the transport or the plugin said so.
+   *
+   * Optional: a platform with no device transport omits it, and the screen
+   * renders its device actions disabled instead of offering a dead button.
+   */
+  sendPluginCommand?(args: PluginCommandArgs): Promise<PluginCommandOutcome>
 
   /**
    * Check if the runtime connection is ready for debug operations.

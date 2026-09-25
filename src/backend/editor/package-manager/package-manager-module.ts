@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { app } from 'electron'
 import extract from 'extract-zip'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
@@ -11,7 +12,13 @@ import {
 } from '../../../middleware/shared/ports/package-manifest-schema'
 import type { VppDeviceMatch } from '../../shared/hardware/find-vpp-device'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
+import type { VppPackagePin } from '../../shared/types/PLC/devices/configuration'
 import { validatePathId } from '../../shared/utils/path-safety'
+import {
+  contentHashOfPayload,
+  parseSignatureFile,
+  SIGNATURE_FILENAME,
+} from '../../shared/utils/vpp/package-verification-core'
 import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { logger } from '../services/logger-service'
@@ -270,6 +277,43 @@ class PackageManagerModule {
       packageId,
       ...info,
     }))
+  }
+
+  /**
+   * The installed package's pinnable identity, read from its own
+   * `signature.json`.
+   *
+   * `contentHash` is `"sha256:" + sha256(canonical(payload))` — the same value
+   * openplc-web derives from the verified archive, so a project pinned on one
+   * platform compares correctly on the other. Returns null when the package is
+   * absent or unsigned: an unsigned package has no identity to pin to.
+   */
+  getPackagePin(packageId: string): VppPackagePin | null {
+    try {
+      validatePathId(packageId, 'packageId')
+      const registry = this.readRegistry()
+      const info = registry.packages[packageId]
+      if (!info) return null
+
+      const signaturePath = join(info.path, SIGNATURE_FILENAME)
+      assertPathContained(info.path, signaturePath, 'package signature path')
+      const raw: unknown = JSON.parse(readFileSync(signaturePath, 'utf-8'))
+      const parsed = parseSignatureFile(raw)
+      if (!parsed) return null
+      const { payload } = parsed
+      // The file must actually attest to THIS registry entry — otherwise a
+      // malformed/mismatched signature.json (even `{}`-adjacent shapes that
+      // still parse) would yield a pin for a package it never signed.
+      if (payload.packageId !== packageId || payload.version !== info.version) return null
+
+      return {
+        packageId,
+        version: info.version,
+        contentHash: contentHashOfPayload(payload, (bytes) => createHash('sha256').update(bytes).digest('hex')),
+      }
+    } catch {
+      return null
+    }
   }
 
   uninstall(packageId: string): { success: boolean; error?: string } {

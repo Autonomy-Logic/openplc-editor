@@ -64,7 +64,7 @@ export interface PlatformCapabilities {
 
   hasDirectProgramUpload: boolean
 
-  /** True if the app supports installing/managing VPP board packages. */
+  /** True if the app can install, browse and remove VPP board packages. Desktop only — web runs the package chosen at creation and never browses a catalog (VPP_CONTRACTS C6 §8.1.1). */
   hasPackageManager: boolean
 
   /** True if the app supports EtherCAT device configuration and ESI repository. */
