@@ -131,14 +131,6 @@ const AUTONOMY_MARK =
   'c2.614 0 5.126-1.067 7.002-2.974L51.108 9.653zM82.108 0 124 43 82.108 86l-9.216-9.653 25.56-25.985c1.877-1.907 ' +
   '4.389-2.974 7.003-2.974h6.815v-8.776h-6.815c-2.614 0-5.126-1.067-7.002-2.974L72.892 9.653z"/></svg>'
 
-const CHECK_MARK =
-  '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" ' +
-  'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>'
-
-const WARNING_MARK =
-  '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" ' +
-  'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v6M12 17h.01"/></svg>'
-
 export function renderDonePage(outcome: PageOutcome): string {
   const ok = outcome === 'ok'
   const title = ok ? 'You are signed in' : 'That sign-in did not finish'
@@ -195,12 +187,7 @@ export function renderDonePage(outcome: PageOutcome): string {
     width: 100%; max-width: 26rem; padding: 40px 36px 32px; text-align: center;
     background: var(--card); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow);
   }
-  .logo { color: var(--brand); display: flex; justify-content: center; margin-bottom: 28px; }
-  .status {
-    width: 56px; height: 56px; margin: 0 auto 20px; border-radius: 9999px;
-    display: flex; align-items: center; justify-content: center; color: #fff;
-    background: var(--status); box-shadow: 0 0 0 10px color-mix(in srgb, var(--status) 14%, transparent);
-  }
+  .logo { color: var(--brand); display: flex; justify-content: center; margin-bottom: 24px; }
   .eyebrow {
     display: inline-block; margin-bottom: 10px; padding: 4px 12px; border-radius: 9999px;
     font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
@@ -218,7 +205,6 @@ export function renderDonePage(outcome: PageOutcome): string {
 <body>
 <main style="--status: ${ok ? 'var(--ok)' : 'var(--warn)'}">
   <div class="logo">${AUTONOMY_MARK}</div>
-  <div class="status">${ok ? CHECK_MARK : WARNING_MARK}</div>
   <span class="eyebrow">${eyebrow}</span>
   <h1>${escapeHtml(title)}</h1>
   <p>${escapeHtml(body)}</p>
