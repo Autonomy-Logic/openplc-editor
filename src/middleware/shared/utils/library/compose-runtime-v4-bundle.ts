@@ -88,8 +88,9 @@ export interface ComposeRuntimeV4BundleInput {
     opcUa: string | null
     /** From `generateEthercatConfig(remoteDevices)`.  Caller should
      *  run `validateEthercatConfig` first and abort the compile (not
-     *  call the composer) when validation produces errors. */
-    ethercat: string
+     *  call the composer) when validation produces errors.  `null`
+     *  when the project has no EtherCAT devices. */
+    ethercat: string | null
   }
 }
 
@@ -142,7 +143,7 @@ export function composeRuntimeV4Bundle(input: ComposeRuntimeV4BundleInput): Reco
   if (input.confs.modbusMaster) files['conf/modbus_master.json'] = input.confs.modbusMaster
   if (input.confs.s7Comm) files['conf/s7comm.json'] = input.confs.s7Comm
   if (input.confs.opcUa) files['conf/opcua.json'] = input.confs.opcUa
-  files['conf/ethercat.json'] = input.confs.ethercat
+  if (input.confs.ethercat) files['conf/ethercat.json'] = input.confs.ethercat
 
   return files
 }

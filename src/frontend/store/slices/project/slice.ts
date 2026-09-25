@@ -2,16 +2,7 @@ import { produce } from 'immer'
 import type { StoreApi } from 'zustand'
 import { StateCreator } from 'zustand'
 
-import type {
-  ModbusIOPoint,
-  OpcUaServerConfig,
-  PLCPou,
-  PLCServer,
-  PLCVariable,
-  S7CommLogging,
-  S7CommPlcIdentity,
-  S7CommServerSettings,
-} from '../../../../middleware/shared/ports/types'
+import type { ModbusIOPoint, PLCPou, PLCServer, PLCVariable } from '../../../../middleware/shared/ports/types'
 import {
   type AddressPool,
   buildAddressPool,
@@ -55,6 +46,12 @@ import { serializeGlobalVariableListToText } from '../../../utils/PLC/global-var
 import { parseGlobalVariableListFromText } from '../../../utils/PLC/global-variable-list-text-parser'
 import { getExtensionFromLanguage, getFolderFromPouType } from '../../../utils/PLC/pou-file-extensions'
 import { parseVariableDeclarations } from '../../../utils/PLC/variable-declarations'
+import {
+  DEFAULT_OPCUA_SERVER_CONFIG,
+  DEFAULT_S7COMM_LOGGING,
+  DEFAULT_S7COMM_PLC_IDENTITY,
+  DEFAULT_S7COMM_SERVER_SETTINGS,
+} from '../../../utils/protocol/server-defaults'
 import { applyVariablesToText } from '../../../utils/variable-text-edits'
 import { elementNameCollision } from '../shared/name-collision'
 import type { ProjectResponse, ProjectSlice, ProjectSliceRoot, VariableScope } from './types'
@@ -66,69 +63,6 @@ const fail = (message: string, title?: string): ProjectResponse => ({ ok: false,
 
 /** IEC identifiers are case-insensitive — the rule every element-name lookup folds by. */
 const nameMatches = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
-
-// Default S7Comm configurations
-const DEFAULT_S7COMM_SERVER_SETTINGS: S7CommServerSettings = {
-  enabled: false,
-  bindAddress: '0.0.0.0',
-  port: 102,
-  maxClients: 32,
-  workIntervalMs: 100,
-  sendTimeoutMs: 3000,
-  recvTimeoutMs: 3000,
-  pingTimeoutMs: 10000,
-  pduSize: 480,
-}
-
-const DEFAULT_S7COMM_PLC_IDENTITY: S7CommPlcIdentity = {
-  name: 'OpenPLC Runtime',
-  moduleType: 'CPU 315-2 PN/DP',
-  serialNumber: 'S C-OPENPLC01',
-  copyright: 'OpenPLC Project',
-  moduleName: 'OpenPLC',
-}
-
-const DEFAULT_S7COMM_LOGGING: S7CommLogging = {
-  logConnections: true,
-  logDataAccess: false,
-  logErrors: true,
-}
-
-// Default OPC-UA configuration
-const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
-  server: {
-    enabled: false,
-    name: 'OpenPLC OPC UA Server',
-    applicationUri: 'urn:openplc:opcua:server',
-    productUri: 'urn:openplc:runtime',
-    bindAddress: '0.0.0.0',
-    port: 4840,
-    endpointPath: '/openplc/opcua',
-  },
-  securityProfiles: [
-    {
-      id: 'default-insecure',
-      name: 'insecure',
-      enabled: true,
-      securityPolicy: 'None',
-      securityMode: 'None',
-      authMethods: ['Anonymous'],
-      anonymousRole: 'viewer',
-    },
-  ],
-  security: {
-    serverCertificateStrategy: 'auto_self_signed',
-    serverCertificateCustom: null,
-    serverPrivateKeyCustom: null,
-    trustedClientCertificates: [],
-  },
-  users: [],
-  cycleTimeMs: 100,
-  addressSpace: {
-    namespaceUri: 'urn:openplc:opcua:namespace',
-    nodes: [],
-  },
-}
 
 /**
  * What a new Modbus server answers on, decided by the target it is created for.
@@ -143,7 +77,7 @@ const DEFAULT_OPCUA_SERVER_CONFIG: OpcUaServerConfig = {
  * build narrows transports to what the board can carry regardless, so this is
  * the choice that keeps the common case from ever reaching that narrowing.
  */
-function seedTransports(live: ProjectSliceRoot): ('rtu' | 'tcp')[] {
+export function seedTransports(live: ProjectSliceRoot): ('rtu' | 'tcp')[] {
   return resolveBoardInfo(live)?.compiler === 'arduino-cli' ? ['rtu'] : ['tcp']
 }
 

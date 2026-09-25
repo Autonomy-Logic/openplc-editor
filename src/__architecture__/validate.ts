@@ -392,10 +392,18 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
 
   // FBD paste/duplicate helpers — needs molecule-level buildGenericNode from components
   'frontend/store/slices/fbd/utils/index.ts': ['components'],
+  // FBD graph builder — same buildGenericNode, for a diagram assembled from a
+  // description rather than from drops. Hosted in the store so the CLI can
+  // reach it; the builders themselves are component molecules.
+  'frontend/store/slices/fbd/utils/build-graph.ts': ['components'],
   // Ladder paste/duplicate helpers — needs nodesBuilder from component atoms
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // Ladder rung builder — same nodesBuilder, for a rung assembled from a
+  // series/parallel description rather than from clicks. Hosted in the store so
+  // the CLI can reach it; the builders themselves are component atoms.
+  'frontend/store/slices/ladder/utils/build-rung.ts': ['components'],
   // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.
