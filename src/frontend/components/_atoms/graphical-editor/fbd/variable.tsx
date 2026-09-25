@@ -398,7 +398,10 @@ const VariableElement = (block: VariableProps) => {
     if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
     // This runs on every blur: leaving the box without changing the name must
-    // not rebuild the bound variable, which would read as an edit.
+    // not rebuild the bound variable, which would read as an edit. Skipping the
+    // re-resolve loses nothing: compile, the debugger and the validation effect
+    // all resolve the variable by name, and `{ name }` alone is already stored
+    // for references such as `TON0.Q`.
     if (variableNameToSubmit === variableNode.data.variable.name) return
 
     // Persist the typed value: enrich with the local variable (carrying its

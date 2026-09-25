@@ -239,9 +239,9 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
 
           const selectedNodes = flow.rung.selectedNodes
           if (!selectedNodes) flow.rung.selectedNodes = []
+          // Selection is interaction state, not an edit: it does not mark the flow.
           if (!flow.rung.selectedNodes.find((n) => n.id === node.id)) {
             flow.rung.selectedNodes.push(node)
-            flow.updated = true
           }
 
           const target = flow.rung.nodes.find((n) => n.id === node.id)

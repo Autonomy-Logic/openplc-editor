@@ -101,10 +101,6 @@ const EnumeratedTable = ({
         return newRows
       }
 
-      if (prevRows[rowIndex].description === inputValue) {
-        return prevRows
-      }
-
       const validation = enumeratedValidation({ value: inputValue })
       const checkIfExists = prevRows.some((row, i) => i !== rowIndex && row.description === inputValue)
 
