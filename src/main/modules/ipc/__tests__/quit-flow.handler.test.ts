@@ -37,12 +37,23 @@ const quitCoordinator = {
   confirmQuit: jest.fn(),
 }
 
+const webContentsListeners = new Map<string, Array<(...args: unknown[]) => void>>()
+
 const mainWindow = {
   isDestroyed: jest.fn(() => false),
   isMaximized: jest.fn(() => false),
   destroy: jest.fn(),
-  webContents: { reload: jest.fn(), send: jest.fn() },
+  webContents: {
+    reload: jest.fn(),
+    send: jest.fn(),
+    isCrashed: jest.fn(() => false),
+    on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+      webContentsListeners.set(event, [...(webContentsListeners.get(event) ?? []), handler])
+    }),
+  },
 }
+
+let bridge: MainProcessBridge
 
 function createBridge(): MainProcessBridge {
   const bridge = new MainProcessBridge({
@@ -71,10 +82,18 @@ function emit(channel: string): void {
   handler({})
 }
 
+function emitWebContents(event: string, ...args: unknown[]): void {
+  const handlers = webContentsListeners.get(event)
+  if (!handlers?.length) throw new Error(`nothing listens on webContents "${event}"`)
+  for (const handler of handlers) handler(...args)
+}
+
 beforeEach(() => {
   listeners.clear()
+  webContentsListeners.clear()
   jest.clearAllMocks()
-  createBridge()
+  mainWindow.webContents.isCrashed.mockReturnValue(false)
+  bridge = createBridge()
 })
 
 describe('quit channels', () => {
@@ -98,5 +117,67 @@ describe('quit channels', () => {
 
     expect(app.quit).not.toHaveBeenCalled()
     expect(mainWindow.destroy).not.toHaveBeenCalled()
+  })
+})
+
+/** Whether the renderer can show the quit prompt right now; the coordinator's canPrompt reads this. */
+describe('canPromptQuit', () => {
+  it('is false until the renderer says its prompt listener is ready', () => {
+    expect(bridge.canPromptQuit()).toBe(false)
+  })
+
+  it('is true once app:quit-ready arrives', () => {
+    emit('app:quit-ready')
+
+    expect(bridge.canPromptQuit()).toBe(true)
+  })
+
+  it('is false again after app:quit-unready', () => {
+    emit('app:quit-ready')
+    emit('app:quit-unready')
+
+    expect(bridge.canPromptQuit()).toBe(false)
+  })
+
+  it('is false while the renderer is crashed, even after it was ready', () => {
+    emit('app:quit-ready')
+    mainWindow.webContents.isCrashed.mockReturnValue(true)
+
+    expect(bridge.canPromptQuit()).toBe(false)
+  })
+
+  it('resets when the renderer process goes away', () => {
+    emit('app:quit-ready')
+
+    emitWebContents('render-process-gone', {}, { reason: 'crashed' })
+    mainWindow.webContents.isCrashed.mockReturnValue(false)
+
+    expect(bridge.canPromptQuit()).toBe(false)
+  })
+
+  it('resets when the main frame starts a new navigation (reload)', () => {
+    emit('app:quit-ready')
+
+    emitWebContents('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+
+    expect(bridge.canPromptQuit()).toBe(false)
+  })
+
+  it('survives in-page and subframe navigations', () => {
+    emit('app:quit-ready')
+
+    emitWebContents('did-start-navigation', { isMainFrame: true, isSameDocument: true })
+    emitWebContents('did-start-navigation', { isMainFrame: false, isSameDocument: false })
+
+    expect(bridge.canPromptQuit()).toBe(true)
+  })
+
+  it('becomes true again when the reloaded renderer reports ready', () => {
+    emit('app:quit-ready')
+    emitWebContents('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+
+    emit('app:quit-ready')
+
+    expect(bridge.canPromptQuit()).toBe(true)
   })
 })

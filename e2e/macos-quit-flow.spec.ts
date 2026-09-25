@@ -388,3 +388,36 @@ test.describe('unsaved project', () => {
     await expectNoPrompt()
   })
 })
+
+/** A renderer that cannot show the prompt must not swallow the quit. */
+test.describe('renderer unable to prompt', () => {
+  test('Cmd+Q ends the process when the renderer has crashed', async () => {
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()
+        .find((w) => !w.isDestroyed() && w.webContents.getURL().includes('index.html'))
+        ?.webContents.forcefullyCrashRenderer()
+    })
+    await expect
+      .poll(() =>
+        app.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows().some((w) => !w.isDestroyed() && w.webContents.isCrashed()),
+        ),
+      )
+      .toBe(true)
+
+    await quit()
+
+    await expectProcessEnds()
+  })
+
+  test('Cmd+Q prompts on screen again after a reload', async () => {
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('button', { name: /exit/i })).toBeVisible({ timeout: 30000 })
+
+    await quit()
+
+    await expectQuitPromptOnScreen()
+    await expectProcessAlive()
+  })
+})

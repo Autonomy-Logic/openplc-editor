@@ -49,16 +49,19 @@ function createEvent() {
 let win: FakeWindow | null
 let quitApp: jest.Mock
 let stopSimulator: jest.Mock
+let canPrompt: jest.Mock<boolean, [QuitWindow]>
 
 function setup(platform: NodeJS.Platform): QuitCoordinator {
   win = createWindow()
   quitApp = jest.fn()
   stopSimulator = jest.fn()
+  canPrompt = jest.fn((_window: QuitWindow) => true)
   return createQuitCoordinator({
     platform,
     getWindow: () => win,
     quitApp,
     stopSimulator,
+    canPrompt,
   })
 }
 
@@ -322,7 +325,79 @@ describe('quit coordinator on macOS', () => {
   })
 })
 
+/** A crashed renderer, or one still loading, cannot show the prompt; the quit must not be swallowed. */
+describe('quit coordinator on macOS when the renderer cannot prompt', () => {
+  let coordinator: QuitCoordinator
+
+  beforeEach(() => {
+    coordinator = setup('darwin')
+    canPrompt.mockReturnValue(false)
+  })
+
+  it('asks canPrompt about the live window', () => {
+    coordinator.handleBeforeQuit(createEvent())
+
+    expect(canPrompt).toHaveBeenCalledWith(currentWindow())
+  })
+
+  it('lets the quit through instead of holding it', () => {
+    const event = createEvent()
+
+    coordinator.handleBeforeQuit(event)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(promptsSent()).toBe(0)
+  })
+
+  it('stops the simulator and destroys the window so nothing else can cancel the quit', () => {
+    coordinator.handleBeforeQuit(createEvent())
+
+    expect(stopSimulator).toHaveBeenCalled()
+    expect(currentWindow().destroy).toHaveBeenCalled()
+  })
+
+  it('does not bring a hidden or still-loading window forward', () => {
+    const w = currentWindow()
+    w.visible = false
+
+    coordinator.handleBeforeQuit(createEvent())
+
+    expect(w.show).not.toHaveBeenCalled()
+    expect(w.focus).not.toHaveBeenCalled()
+  })
+
+  it('prompts again once the renderer can, with nothing carried over', () => {
+    const w = currentWindow()
+    w.destroy.mockImplementation(() => undefined)
+    coordinator.handleBeforeQuit(createEvent())
+    canPrompt.mockReturnValue(true)
+
+    const next = createEvent()
+    coordinator.handleBeforeQuit(next)
+
+    expect(next.preventDefault).toHaveBeenCalledTimes(1)
+    expect(promptsSent()).toBe(1)
+  })
+
+  it('still hides on the red button', () => {
+    const close = createEvent()
+
+    coordinator.handleWindowClose(close)
+
+    expect(close.preventDefault).toHaveBeenCalled()
+    expect(currentWindow().hide).toHaveBeenCalled()
+  })
+})
+
 describe('quit coordinator on Windows and Linux', () => {
+  it.each(['win32', 'linux'] as const)('%s: before-quit does not depend on canPrompt', (platform) => {
+    const coordinator = setup(platform)
+
+    coordinator.handleBeforeQuit(createEvent())
+
+    expect(canPrompt).not.toHaveBeenCalled()
+  })
+
   it.each(['win32', 'linux'] as const)('%s: before-quit ends the app without a prompt, as today', (platform) => {
     const coordinator = setup(platform)
     const event = createEvent()

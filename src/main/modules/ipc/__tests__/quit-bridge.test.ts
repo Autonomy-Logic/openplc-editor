@@ -14,7 +14,7 @@ import rendererProcessBridge from '../renderer'
 
 beforeEach(() => {
   ipc.removeAllListeners()
-  ipc.send.mockClear()
+  ipc.send.mockReset()
 })
 
 describe('requestQuitApp', () => {
@@ -44,5 +44,31 @@ describe('quitRequested', () => {
 
     expect(cb).not.toHaveBeenCalled()
     expect(ipc.listenerCount('app:quit-requested')).toBe(0)
+  })
+
+  it('tells main the prompt listener is ready once subscribed', () => {
+    rendererProcessBridge.quitRequested(jest.fn())
+
+    expect(ipc.send).toHaveBeenCalledWith('app:quit-ready')
+    expect(ipc.listenerCount('app:quit-requested')).toBe(1)
+  })
+
+  it('announces ready only after the listener is attached', () => {
+    ipc.send.mockImplementation((channel: string) => {
+      if (channel === 'app:quit-ready') expect(ipc.listenerCount('app:quit-requested')).toBe(1)
+    })
+
+    rendererProcessBridge.quitRequested(jest.fn())
+
+    expect(ipc.send).toHaveBeenCalledWith('app:quit-ready')
+  })
+
+  it('tells main the listener is gone once unsubscribed', () => {
+    const unsubscribe = rendererProcessBridge.quitRequested(jest.fn())
+    ipc.send.mockClear()
+
+    unsubscribe()
+
+    expect(ipc.send).toHaveBeenCalledWith('app:quit-unready')
   })
 })
