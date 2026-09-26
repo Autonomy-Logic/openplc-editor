@@ -16,7 +16,6 @@
  *   - window.bridge.rebuildMenu()
  *   - window.bridge.isMaximizedWindow()
  *   - window.bridge.windowIsClosing()
- *   - window.bridge.darwinAppIsClosing()
  *
  * ## Web equivalents:
  *   - Most methods are no-ops in the browser
@@ -67,13 +66,6 @@ export interface WindowPort {
    * Web: no-op (never fires).
    */
   onMaximizedChanged?(callback: (isMaximized: boolean) => void): Unsubscribe
-
-  /**
-   * Subscribe to macOS app-level quit events (before-quit → close → will-quit).
-   * Editor: fires when the macOS app receives a before-quit event.
-   * Web: no-op (never fires).
-   */
-  onDarwinAppQuitting?(callback: () => void): Unsubscribe
 
   /**
    * Register the auto-response handler for window close requests from the main process.

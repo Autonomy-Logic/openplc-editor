@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 
 import type { DevicePort } from '../../../middleware/shared/ports/device-port'
-import { EDITOR_CAPABILITIES } from '../../../middleware/shared/ports/platform-capabilities'
+import { EDITOR_CAPABILITIES, type PlatformCapabilities } from '../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import type { SystemPort } from '../../../middleware/shared/ports/system-port'
 import type { WindowPort } from '../../../middleware/shared/ports/window-port'
@@ -23,7 +23,8 @@ import { StartScreen } from '../start-screen'
 
 /** A port whose every method answers `undefined`, except the ones handed in. */
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
-  return new Proxy({} as T, {
+  const target: T = Object.create(null)
+  return new Proxy(target, {
     get: (_, prop) => {
       if (Reflect.has(overrides, prop)) return Reflect.get(overrides, prop)
       return typeof prop === 'string' ? () => undefined : undefined
@@ -39,6 +40,7 @@ let localOpens = 0
 const windowCalls: string[] = []
 
 let projectOverrides: Partial<ProjectPort> = {}
+let capabilities: PlatformCapabilities = EDITOR_CAPABILITIES
 
 function makePorts(): PlatformPorts {
   return {
@@ -76,7 +78,7 @@ function makePorts(): PlatformPorts {
     versionControl: stubPort(),
     navigation: stubPort(),
     library: stubPort(),
-    capabilities: EDITOR_CAPABILITIES,
+    capabilities,
   }
 }
 
@@ -89,6 +91,7 @@ beforeEach(() => {
   windowCalls.length = 0
   localOpens = 0
   projectOverrides = {}
+  capabilities = EDITOR_CAPABILITIES
 })
 
 describe('the Documentation entry', () => {
@@ -167,5 +170,14 @@ describe('the Exit entry', () => {
     await userEvent.click(exit)
 
     expect(windowCalls).toEqual(['requestQuit', 'requestQuit'])
+  })
+
+  it('is not offered outside the desktop app, where there is no app to quit', async () => {
+    capabilities = { ...EDITOR_CAPABILITIES, isNativeApplication: false }
+    render(<StartScreen />, { wrapper: Wrapper })
+
+    await screen.findByRole('button', { name: /documentation/i })
+
+    expect(screen.queryByRole('button', { name: /exit/i })).toBeNull()
   })
 })

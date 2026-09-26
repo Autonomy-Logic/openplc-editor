@@ -158,12 +158,16 @@ const StartScreen = () => {
             {/* Above the divider with the actions; the account is not on the way out. */}
             <StartAccountSection />
           </MenuSection>
-          <MenuDivider />
-          <MenuSection id='2'>
-            <MenuItem onClick={handleExitAppRequest} ghosted>
-              <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
-            </MenuItem>
-          </MenuSection>
+          {capabilities.isNativeApplication && (
+            <>
+              <MenuDivider />
+              <MenuSection id='2'>
+                <MenuItem onClick={handleExitAppRequest} ghosted>
+                  <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
+                </MenuItem>
+              </MenuSection>
+            </>
+          )}
         </MenuRoot>
       </StartSideContent>
       <StartMainContent>

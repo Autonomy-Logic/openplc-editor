@@ -181,3 +181,48 @@ describe('canPromptQuit', () => {
     expect(bridge.canPromptQuit()).toBe(true)
   })
 })
+
+/** The renderer's beforeunload blocks uninvited unloads; only a reload the user confirmed may pass it. */
+describe('confirmed reload', () => {
+  const unloadEvent = () => ({ preventDefault: jest.fn() })
+
+  it('leaves an uninvited unload to the renderer guard', () => {
+    const event = unloadEvent()
+
+    emitWebContents('will-prevent-unload', event)
+
+    expect(event.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('lets the reload requested over window:reload past the guard', () => {
+    emit('window:reload')
+    const event = unloadEvent()
+
+    emitWebContents('will-prevent-unload', event)
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1)
+    expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('arms the bypass before reloading', () => {
+    mainWindow.webContents.reload.mockImplementationOnce(() => {
+      const event = unloadEvent()
+      emitWebContents('will-prevent-unload', event)
+      expect(event.preventDefault).toHaveBeenCalled()
+    })
+
+    emit('window:reload')
+
+    expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('is spent once the reload navigation starts', () => {
+    emit('window:reload')
+    emitWebContents('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+    const later = unloadEvent()
+
+    emitWebContents('will-prevent-unload', later)
+
+    expect(later.preventDefault).not.toHaveBeenCalled()
+  })
+})

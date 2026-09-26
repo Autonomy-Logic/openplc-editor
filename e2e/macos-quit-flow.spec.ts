@@ -5,7 +5,7 @@
  * call; `BrowserWindow.close()` is what the red traffic-light button does.
  * Needs the build + preload copy described under "Electron e2e" in CLAUDE.md.
  */
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,6 +22,7 @@ let app: ElectronApplication
 let page: Page
 let exited: Promise<void>
 let hasExited = false
+let projectDir = ''
 
 async function findMainWindow(): Promise<Page> {
   const deadline = Date.now() + 60000
@@ -188,7 +189,8 @@ test.beforeEach(async ({}, testInfo) => {
   const base = join(ROOT, slug)
   rmSync(base, { recursive: true, force: true })
   const userData = join(base, 'userdata')
-  writeProjectFixture(join(base, 'project'), userData)
+  projectDir = join(base, 'project')
+  writeProjectFixture(projectDir, userData)
 
   app = await electron.launch({
     args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${userData}`],
@@ -411,13 +413,119 @@ test.describe('renderer unable to prompt', () => {
   })
 
   test('Cmd+Q prompts on screen again after a reload', async () => {
-    await page.reload()
-    await page.waitForLoadState('domcontentloaded')
+    await markPage()
+    await clickRefreshMenuItem()
+    await expectReloaded()
     await expect(page.getByRole('button', { name: /exit/i })).toBeVisible({ timeout: 30000 })
 
     await quit()
 
     await expectQuitPromptOnScreen()
     await expectProcessAlive()
+  })
+})
+
+/** The native macOS Display > Refresh item, Cmd+R. */
+async function clickRefreshMenuItem(): Promise<void> {
+  await app.evaluate(({ Menu }) => {
+    const find = (items: Electron.MenuItem[]): Electron.MenuItem | undefined => {
+      for (const item of items) {
+        if (item.label === 'Refresh') return item
+        const inner = item.submenu ? find(item.submenu.items) : undefined
+        if (inner) return inner
+      }
+      return undefined
+    }
+    const item = find(Menu.getApplicationMenu()?.items ?? [])
+    if (!item) throw new Error('no Refresh menu item')
+    if (!item.enabled) throw new Error('Refresh menu item is disabled')
+    item.click()
+  })
+}
+
+/** Tags the current page; a reload drops the tag. */
+async function markPage(): Promise<void> {
+  await page.evaluate(() => {
+    Object.assign(window, { __dope662: true })
+  })
+}
+
+async function pageWasReloaded(): Promise<boolean> {
+  try {
+    return await page.evaluate(() => !('__dope662' in window))
+  } catch {
+    return false
+  }
+}
+
+async function expectReloaded(): Promise<void> {
+  await expect.poll(pageWasReloaded, { timeout: 15000 }).toBe(true)
+  await page.waitForLoadState('domcontentloaded')
+}
+
+async function expectNotReloaded(): Promise<void> {
+  await page.waitForTimeout(2000)
+  expect(await pageWasReloaded(), 'the page should not have reloaded').toBe(false)
+}
+
+/** Refresh reloads the app, so it prompts like any other flow that could lose work. */
+test.describe('Refresh', () => {
+  test('reloads without a prompt when nothing is unsaved', async () => {
+    await markPage()
+
+    await clickRefreshMenuItem()
+
+    await expectReloaded()
+    await expect(page.getByRole('button', { name: /exit/i })).toBeVisible({ timeout: 30000 })
+  })
+
+  test('with unsaved changes, shows the save-changes prompt; Cancel keeps the work', async () => {
+    await openProjectWithUnsavedChanges()
+    await markPage()
+
+    await clickRefreshMenuItem()
+
+    await expect(savePrompt()).toBeVisible({ timeout: 10000 })
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expectNotReloaded()
+    await expect(page.locator('.view-lines:visible').first()).toContainText('unsaved')
+  })
+
+  test('with unsaved changes, "Close without saving" reloads', async () => {
+    await openProjectWithUnsavedChanges()
+    await markPage()
+    await clickRefreshMenuItem()
+    await expect(savePrompt()).toBeVisible({ timeout: 10000 })
+
+    await page.getByRole('button', { name: /close without saving/i }).click()
+
+    await expectReloaded()
+    expect(readFileSync(join(projectDir, 'pous', 'programs', 'main.st'), 'utf-8')).not.toContain('(* unsaved *)')
+  })
+
+  test('with unsaved changes, "Save and close" saves and reloads', async () => {
+    await openProjectWithUnsavedChanges()
+    await markPage()
+    await clickRefreshMenuItem()
+    await expect(savePrompt()).toBeVisible({ timeout: 10000 })
+
+    await page.getByRole('button', { name: /save and close/i }).click()
+
+    await expectReloaded()
+    expect(readFileSync(join(projectDir, 'pous', 'programs', 'main.st'), 'utf-8')).toContain('(* unsaved *)')
+  })
+
+  test('an uninvited reload with unsaved changes is blocked', async () => {
+    await openProjectWithUnsavedChanges()
+    await markPage()
+
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()
+        .find((w) => !w.isDestroyed() && w.webContents.getURL().includes('index.html'))
+        ?.webContents.reload()
+    })
+
+    await expectNotReloaded()
+    await expect(page.locator('.view-lines:visible').first()).toContainText('unsaved')
   })
 })

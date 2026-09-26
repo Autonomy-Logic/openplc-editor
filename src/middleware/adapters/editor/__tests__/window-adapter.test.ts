@@ -58,7 +58,6 @@ beforeEach(() => {
     quitRequested: register('quitRequested'),
     rebuildMenu: jest.fn(),
     windowIsClosing: register('closeRequested'),
-    darwinAppIsClosing: register('darwinQuitting'),
     // Takes no callback of its own — the main process echoes the close back —
     // but still hands out a disposer for the listener it registered.
     handleCloseOrHideWindowAccelerator: jest.fn().mockImplementation(() => {
@@ -175,29 +174,6 @@ describe('onCloseRequested', () => {
 
     expect(cb).not.toHaveBeenCalled()
     expect(capturedHandlers.closeRequested).toBeNull()
-  })
-})
-
-describe('onDarwinAppQuitting', () => {
-  it('registers a bridge listener and fires callback', () => {
-    const cb = jest.fn()
-    implemented(adapter.onDarwinAppQuitting, 'onDarwinAppQuitting')(cb)
-
-    expect(window.bridge.darwinAppIsClosing).toHaveBeenCalledTimes(1)
-    fire('darwinQuitting')
-
-    expect(cb).toHaveBeenCalledTimes(1)
-  })
-
-  it('returns an unsubscribe function that removes the bridge listener', () => {
-    const cb = jest.fn()
-    const unsub = implemented(adapter.onDarwinAppQuitting, 'onDarwinAppQuitting')(cb)
-
-    unsub()
-    fireIfRegistered('darwinQuitting')
-
-    expect(cb).not.toHaveBeenCalled()
-    expect(capturedHandlers.darwinQuitting).toBeNull()
   })
 })
 

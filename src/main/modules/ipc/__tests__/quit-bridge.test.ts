@@ -72,3 +72,29 @@ describe('quitRequested', () => {
     expect(ipc.send).toHaveBeenCalledWith('app:quit-unready')
   })
 })
+
+describe('refreshRequest', () => {
+  it('fires on app:refresh-accelerator', () => {
+    const cb = jest.fn()
+    rendererProcessBridge.refreshRequest(cb)
+
+    ipc.emit('app:refresh-accelerator', {})
+
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops firing once unsubscribed', () => {
+    const cb = jest.fn()
+    rendererProcessBridge.refreshRequest(cb)()
+
+    ipc.emit('app:refresh-accelerator', {})
+
+    expect(cb).not.toHaveBeenCalled()
+  })
+})
+
+describe('the macOS quit notice', () => {
+  it('is gone from the bridge', () => {
+    expect('darwinAppIsClosing' in rendererProcessBridge).toBe(false)
+  })
+})

@@ -181,7 +181,6 @@ const rendererProcessBridge = {
   handleRedoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:redo-request', callback),
 
   // ===================== APP & SYSTEM METHODS =====================
-  darwinAppIsClosing: (callback: IpcRendererCallbacks) => subscribe('app:darwin-is-closing', callback),
   getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   getSystemInfo: (): Promise<{
@@ -396,6 +395,7 @@ const rendererProcessBridge = {
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
   quitAppRequest: (callback: IpcRendererCallbacks) => subscribe('app:quit-accelerator', callback),
+  refreshRequest: (callback: IpcRendererCallbacks) => subscribe('app:refresh-accelerator', callback),
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
   /** Drop a recent-projects entry without touching disk — used by the

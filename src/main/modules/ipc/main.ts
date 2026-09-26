@@ -260,6 +260,7 @@ class MainProcessBridge implements MainIpcModule {
   hardwareModule
   quitCoordinator
   private quitPromptReady = false
+  private reloadConfirmed = false
   private registeredHandleChannels: string[] = []
   // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
   // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
@@ -323,7 +324,13 @@ class MainProcessBridge implements MainIpcModule {
       this.quitPromptReady = false
     })
     this.mainWindow?.webContents?.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
-      if (isMainFrame && !isSameDocument) this.quitPromptReady = false
+      if (!isMainFrame || isSameDocument) return
+      this.quitPromptReady = false
+      this.reloadConfirmed = false
+    })
+    // The renderer's beforeunload blocks every unload it did not ask for; a confirmed reload is let through.
+    this.mainWindow?.webContents?.on('will-prevent-unload', (event) => {
+      if (this.reloadConfirmed) event.preventDefault()
     })
 
     // When the token authority transparently refreshes an expired token, push
@@ -2150,6 +2157,7 @@ class MainProcessBridge implements MainIpcModule {
       this.abortAiStreamsFor(contents)
     }
 
+    this.reloadConfirmed = true
     contents?.reload()
   }
   handleWindowRebuildMenu = () => {
