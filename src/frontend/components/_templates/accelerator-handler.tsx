@@ -8,6 +8,7 @@ import {
   useTheme,
   useWindow,
 } from '../../../middleware/shared/providers'
+import { requestAppRefresh } from '../../services/refresh-app'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
 import { openPLCStoreBase, useOpenPLCStore } from '../../store'
@@ -42,14 +43,7 @@ const AcceleratorHandler = () => {
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, handleOpenProjectResponse },
-    workspaceActions: {
-      setSystemConfigs,
-      toggleMaximizedWindow,
-      setCloseWindow,
-      setCloseAppDarwin,
-      setModalOpen,
-      toggleCollapse,
-    },
+    workspaceActions: { setSystemConfigs, toggleMaximizedWindow, setCloseWindow, setModalOpen, toggleCollapse },
     tabsActions: { removeTab },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -373,6 +367,16 @@ const AcceleratorHandler = () => {
   }, [editingState, accelerator, openModal])
 
   /**
+   * Refresh (Cmd+R / Ctrl+R from the native menu)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onRefresh(() => {
+      requestAppRefresh(openPLCStoreBase.getState().workspace.editingState, openModal, windowPort)
+    })
+    return unsub
+  }, [accelerator, openModal, windowPort])
+
+  /**
    * Theme changes (user toggle, OS preference, or cross-app cookie sync).
    * The theme adapter owns the DOM class and persistence; here we only
    * mirror the Monaco light/dark flag (set explicitly from the theme —
@@ -408,11 +412,11 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
 
-    const unsub = windowPort.onDarwinAppQuitting?.(() => {
-      setCloseAppDarwin(true)
+    const unsub = windowPort.onQuitRequested?.(() => {
+      quitAppRequest(openPLCStoreBase.getState().workspace.editingState === 'unsaved', openModal)
     })
     return unsub
-  }, [capabilities.isNativeApplication, windowPort, setCloseAppDarwin])
+  }, [capabilities.isNativeApplication, windowPort, openModal])
 
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
@@ -432,18 +436,13 @@ const AcceleratorHandler = () => {
     const handler = (e: BeforeUnloadEvent) => {
       if (capabilities.isDevMode) return
 
+      // Any unload that is not a window close (a stray navigation, an unconfirmed reload) is blocked.
       if (!close.window) {
         e.returnValue = false
         return
       }
 
-      if (close.app) return
-
-      if (systemConfigs.OS === 'darwin' && !close.appDarwin) {
-        windowPort.hide()
-        e.returnValue = false
-        return
-      }
+      if (systemConfigs.OS === 'darwin' || close.app) return
 
       quitAppRequest(editingState === 'unsaved', openModal)
       e.returnValue = false
@@ -455,7 +454,7 @@ const AcceleratorHandler = () => {
     capabilities.isNativeApplication,
     close.window,
     close.app,
-    close.appDarwin,
+    capabilities.isDevMode,
     systemConfigs.OS,
     editingState,
     openModal,

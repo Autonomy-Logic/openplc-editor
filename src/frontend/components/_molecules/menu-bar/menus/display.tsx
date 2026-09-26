@@ -1,8 +1,9 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
-import { useTheme } from '../../../../../middleware/shared/providers'
+import { useTheme, useWindow } from '../../../../../middleware/shared/providers'
 import { i18n } from '../../../../locales/i18n'
+import { requestAppRefresh } from '../../../../services/refresh-app'
 import { useOpenPLCStore } from '../../../../store'
 import { MenuClasses } from '../constants'
 
@@ -19,8 +20,11 @@ const THEME_LABEL: Record<ThemeChoice, string> = { light: 'light', dark: 'dark',
 
 export const DisplayMenu = () => {
   const {
+    workspace: { editingState },
     workspaceActions: { setSystemConfigs, toggleCollapse },
+    modalActions: { openModal },
   } = useOpenPLCStore()
+  const windowPort = useWindow()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
@@ -57,7 +61,7 @@ export const DisplayMenu = () => {
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:display.label')}</MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
-          <MenuPrimitive.Item className={ITEM} onClick={() => window.location.reload()}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => requestAppRefresh(editingState, openModal, windowPort)}>
             <span>{i18n.t('menu:display.submenu.refresh')}</span>
             <span className={ACCELERATOR}>{'Ctrl + R'}</span>
           </MenuPrimitive.Item>

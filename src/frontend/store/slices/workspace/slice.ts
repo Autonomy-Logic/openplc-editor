@@ -25,7 +25,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     close: {
       window: false,
       app: false,
-      appDarwin: false,
     },
     // PLC Logs
     isPlcLogsVisible: false,
@@ -89,13 +88,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.close.app = value
-        }),
-      )
-    },
-    setCloseAppDarwin: (value) => {
-      setState(
-        produce(({ workspace }: WorkspaceSlice) => {
-          workspace.close.appDarwin = value
         }),
       )
     },

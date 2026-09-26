@@ -29,6 +29,7 @@ import { getErrorMessage } from '../frontend/utils/get-error-message'
 import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
+import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
 
 enableMapSet()
@@ -45,6 +46,15 @@ Menu.setApplicationMenu(null)
 
 export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
+
+let mainIpcModule: MainProcessBridge | undefined
+const quitCoordinator = createQuitCoordinator({
+  platform: process.platform,
+  getWindow: () => mainWindow,
+  quitApp: () => app.quit(),
+  stopSimulator: () => mainIpcModule?.stopSimulator(),
+  canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
+})
 
 if (process.env.NODE_ENV === 'production') {
   async function loadSourceMapSupport(): Promise<void> {
@@ -264,9 +274,10 @@ const createMainWindow = async () => {
    * Calling event.preventDefault() will cancel the close.
    */
   mainWindow.on('close', saveBounds)
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
     logger.info('mainWindow close')
-    mainWindow?.webContents.send('window-controls:is-closing')
+    quitCoordinator.handleWindowClose(event)
+    if (process.platform !== 'darwin') mainWindow?.webContents.send('window-controls:is-closing')
   })
 
   /**
@@ -367,7 +378,7 @@ const createMainWindow = async () => {
 
   const hardwareModule = new HardwareModule()
 
-  const mainIpcModule = new MainProcessBridge({
+  mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
     projectService,
@@ -376,6 +387,7 @@ const createMainWindow = async () => {
     pouService,
     compilerModule,
     hardwareModule,
+    quitCoordinator,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
 
@@ -418,13 +430,9 @@ app.on('activate', () => {
  * Emitted before the application starts closing its windows. Calling event.preventDefault() will prevent the default behavior,
  * which is terminating the application.
  */
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   logger.info('before-quit')
-  if (process.platform === 'darwin' && process.env.NODE_ENV === 'production') {
-    mainWindow?.webContents.send('app:darwin-is-closing')
-    return
-  }
-  mainWindow?.destroy()
+  quitCoordinator.handleBeforeQuit(event)
 })
 
 /**
