@@ -32,6 +32,18 @@ import type {
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
+import {
+  buildDebugOwnerRanges,
+  firmwareOutgrewBoard,
+  locatedVariableCount,
+  ramLeftAfterLink,
+  readRtosSettings,
+  rtosBuildFailureIsOurs,
+  rtosRamNeed,
+  rtosRamProblem,
+  rtosScheduleProblem,
+  withFqbnOptions,
+} from '../../../middleware/shared/utils/rtos'
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
@@ -56,6 +68,7 @@ import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-fir
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
 import { generateRetainConf } from './steps/generate-retain-conf'
+import { generateRtosConfigContent, runtimeCanBeThreaded } from './steps/generate-rtos-config'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
@@ -161,7 +174,7 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  without forwarding this through the pipeline, `vppIo` resolves
    *  to false and `vpp_config.h` never gets generated, leaving the
    *  HAL with an unresolved `#include "vpp_config.h"`. */
-  capabilities?: Partial<import('../../../middleware/shared/utils/target-capabilities/types').TargetCapabilities>
+  capabilities?: import('../../../middleware/shared/utils/target-capabilities/types').ManifestCapabilities
 }
 
 export interface RunCompilePipelineArgs {
@@ -449,6 +462,15 @@ async function runCompilePipelineInner(
     originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
   }
   const originalCppPous = processedData.originalCppPous ?? []
+
+  // A build the user put in RTOS mode that RTOS mode cannot schedule fails here,
+  // before the long part of the build. On the default it falls back to the
+  // single loop further down, with a warning.
+  const rtosSettings = readRtosSettings(vendorScreenData)
+  if (targetCapabilities.rtos && rtosSettings.enabled && rtosSettings.chosen) {
+    const problem = rtosScheduleProblem(processedData.configuration.resource.tasks, targetCapabilities.rtos)
+    if (problem) return bailError(emit, 'validate', `${problem} RTOS mode can be switched off in Board Settings.`)
+  }
 
   // ---------------------------------------------------------------------
   // Step 0b: Reject blank FBD variable blocks before XML generation.
@@ -951,9 +973,8 @@ async function runCompilePipelineInner(
   // header truly can't be resolved, it fails with a precise message
   // pointing at the file that needed it.  Web's adapter no-ops
   // entirely (its compile-service backend pre-installs every
-  // library).  Either way `ok` should be true here; the defensive
-  // `!ok` branch below warns and continues if an adapter ever
-  // returns false.
+  // library).  A library that failed to install comes back as
+  // `ok: false`; this step only warns on it and continues.
   emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
   const libInstall = await port.installArduinoLib(
     {
@@ -1107,42 +1128,223 @@ async function runCompilePipelineInner(
     }
   }
 
+  // RTOS mode, for a board whose Arduino core has an RTOS the firmware has a
+  // backend for, when the board's RTOS switch is on. Without rtos_config.h the
+  // skeleton's stub (OPENPLC_RTOS 0) stays and the build is the single loop.
+  let rtosConfigH: string | undefined
+  // Board options the RTOS needs selected (arduino-pico's os=freertos), for
+  // every step that names the board: compile, its pre-compile, and upload.
+  let rtosBoardOptions: Readonly<Record<string, string>> | undefined
+  // ...and the -D flags it needs in every file compiled (the Uno R4's FreeRTOS).
+  let rtosExtraFlags: readonly string[] = []
+  let strucppThreaded = false
+  // About what RTOS mode's tasks take from the RAM the link leaves free, where
+  // the firmware does not check that itself.
+  let rtosRamNeedBytes: number | undefined
+  if (targetCapabilities.rtos && rtosSettings.enabled) {
+    const rtosProfile = targetCapabilities.rtos
+    const { tasks, instances } = processedData.configuration.resource
+    // A build the user put in RTOS mode that cannot be scheduled already
+    // stopped before the long part of the build (see the early check above).
+    const blocker = rtosScheduleProblem(tasks, rtosProfile)
+    // An RTOS that comes as an Arduino library (STM32, SAMD) is installed here,
+    // once the build is known to need it.
+    let libraryProblem: string | undefined
+    if (!blocker && rtosProfile.library) {
+      const rtosLibrary = await port.installArduinoLib(
+        { libId: '', extraLibraries: [rtosProfile.library], thirdPartyLibraries: [] },
+        makePlatformLog(emit, 'lib-install'),
+      )
+      if (!rtosLibrary.ok) {
+        libraryProblem = `RTOS mode on this board needs the ${rtosProfile.library} library, which could not be installed (no internet connection, or the library index is out of reach).`
+        if (rtosSettings.chosen) {
+          return bailError(
+            emit,
+            'lib-install',
+            `${libraryProblem} Connect and build again, or switch RTOS mode off in Board Settings.`,
+          )
+        }
+      }
+    }
+    if (blocker || libraryProblem) {
+      // Reached on the default only (a chosen RTOS mode stopped above): the
+      // project builds as the single loop and says why.
+      emit({
+        stage: blocker ? 'validate' : 'lib-install',
+        message: `${blocker ?? libraryProblem} Building the single scan loop instead (RTOS mode is this board's default; its switch is in Board Settings).`,
+        level: 'warning',
+      })
+    } else {
+      // More than one task: one thread each, so the runtime is built threaded.
+      // A `platform` backend needs a STruC++ runtime that takes its locks from
+      // the RTOS; without one, every task runs on one PLC thread. So does a
+      // project with a located global of an ARRAY or user type when STruC++
+      // generates no per-global lock hooks: the firmware then reaches a located
+      // global's lock only from a scalar's binding.
+      const globalLockHooks = Object.values(strucppFilesMap).some((content) =>
+        content.includes('strucpp_located_global_index'),
+      )
+      const locatedCompositeGlobal =
+        !globalLockHooks &&
+        (processedData.configuration.resource.globalVariables ?? []).some(
+          (variable) => variable.location !== '' && variable.type.definition !== 'base-type',
+        )
+      const runtimeThreads = runtimeCanBeThreaded(firmwareSkeleton, rtosProfile)
+      strucppThreaded = tasks.length > 1 && runtimeThreads && !locatedCompositeGlobal
+      rtosRamNeedBytes = rtosRamNeed({
+        profile: rtosProfile,
+        workers: strucppThreaded ? tasks.length : 1,
+        serviceB: [opcuaConfigH, s7commConfigH].some((header) =>
+          /^#define (OPCUA|S7COMM)_ENABLED 1$/m.test(header ?? ''),
+        ),
+        lockedGlobals:
+          strucppThreaded && rtosProfile.threads === 'platform'
+            ? (processedData.configuration.resource.globalVariables?.length ?? 0)
+            : 0,
+        locatedVariables: locatedVariableCount(strucppFilesMap['generated.hpp'] ?? ''),
+      })
+      rtosBoardOptions = rtosProfile.boardOptions
+      rtosExtraFlags = (rtosProfile.defines ?? []).map((define) => `-D${define}`)
+      rtosConfigH = generateRtosConfigContent({
+        profile: rtosProfile,
+        threaded: strucppThreaded,
+        workers: strucppThreaded ? tasks.length : 1,
+        debugOwners: strucppThreaded
+          ? buildDebugOwnerRanges(
+              debugMapJson,
+              instances,
+              (processedData.configuration.resource.globalVariables ?? []).map((variable) => variable.name),
+            )
+          : [],
+      })
+      emit({
+        stage: 'firmware-bundle',
+        message: strucppThreaded
+          ? `RTOS mode: a thread for each of the ${tasks.length} tasks, and a task per service.`
+          : tasks.length > 1
+            ? `RTOS mode: the ${tasks.length} tasks on one PLC thread (${
+                runtimeThreads
+                  ? 'a located global of an ARRAY or user type cannot be shared between task threads'
+                  : "this editor's STruC++ runtime cannot give them one each on this board"
+              }), and a task per service.`
+            : 'RTOS mode: building with a task per service.',
+        level: 'info',
+      })
+    }
+  }
+
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
-  emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
   const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
   const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
-  const firmwareFiles = composeFirmwareBundle({
-    strucppFiles: strucppFilesMap,
-    cBlocks,
-    definesH,
-    vppConfigH,
-    opcuaConfigH,
-    s7commConfigH,
-    firmwareSkeleton,
-  })
 
-  // Build arduino-cli argv via the shared helper.  Same input/output
-  // on both platforms.  `boardEntry` carries `platform` / `core` /
-  // `c_flags` / etc. straight from `hals.json`.
-  const arduinoArgs = buildArduinoCliCompileArgs(boardEntry, {
-    sketchPath: 'examples/Baremetal/Baremetal.ino',
-    libraryPath: 'src',
-    avrLibStdCppInclude,
-    parallel: arduinoCliParallel,
-    // Prebuilt arduino-hal: link the precompiled vendor library alongside the
-    // source integration layer. arduino-cli accepts a 2nd --library.
-    ...(boardEntry.precompiledLibraryDir ? { prebuiltLibraryPath: boardEntry.precompiledLibraryDir } : {}),
-  })
+  // In RTOS mode the board is named with the options its RTOS needs, and every
+  // file gets the RTOS's -D flags.
+  const rtosBuildEntry = {
+    ...boardEntry,
+    ...(rtosBoardOptions && typeof boardEntry.platform === 'string'
+      ? { platform: withFqbnOptions(boardEntry.platform, rtosBoardOptions) }
+      : {}),
+    ...(rtosExtraFlags.length > 0
+      ? {
+          c_flags: [...(boardEntry.c_flags ?? []), ...rtosExtraFlags],
+          cxx_flags: [...(boardEntry.cxx_flags ?? []), ...rtosExtraFlags],
+        }
+      : {}),
+  }
 
-  // Run arduino-cli compile.  Editor: spawns the binary.  Web: HTTP
-  // POST.  Both consume the same `files` map + `argv`.
+  // One build of the firmware, in RTOS mode or as the single loop: compose
+  // the bundle, build the arduino-cli argv with the shared helper, and compile
+  // it through the platform port.
+  const compileFirmware = async (inRtosMode: boolean, log: PlatformLog) => {
+    const entry = inRtosMode ? rtosBuildEntry : boardEntry
+    const files = composeFirmwareBundle({
+      strucppFiles: strucppFilesMap,
+      cBlocks,
+      definesH,
+      vppConfigH,
+      opcuaConfigH,
+      s7commConfigH,
+      rtosConfigH: inRtosMode ? rtosConfigH : undefined,
+      strucppThreaded: inRtosMode && strucppThreaded,
+      firmwareSkeleton,
+    })
+    const argv = buildArduinoCliCompileArgs(entry, {
+      sketchPath: 'examples/Baremetal/Baremetal.ino',
+      libraryPath: 'src',
+      avrLibStdCppInclude,
+      parallel: arduinoCliParallel,
+      // Prebuilt arduino-hal: link the precompiled vendor library alongside the
+      // source integration layer. arduino-cli accepts a 2nd --library.
+      ...(boardEntry.precompiledLibraryDir ? { prebuiltLibraryPath: boardEntry.precompiledLibraryDir } : {}),
+    })
+    const result = await port.compileArduino(
+      {
+        files,
+        argv,
+        parallel: arduinoCliParallel,
+        ...(inRtosMode && rtosBoardOptions ? { boardOptions: rtosBoardOptions } : {}),
+        ...(inRtosMode && rtosExtraFlags.length > 0 ? { extraFlags: rtosExtraFlags } : {}),
+      },
+      log,
+    )
+    return { result, entry }
+  }
+
+  emit({ stage: 'firmware-bundle', message: 'Composing firmware bundle...', level: 'info' })
   emit({ stage: 'arduino-compile', message: 'Compiling Arduino firmware...', level: 'info' })
-  const compileResult = await port.compileArduino(
-    { files: firmwareFiles, argv: arduinoArgs, parallel: arduinoCliParallel },
-    makePlatformLog(emit, 'arduino-compile'),
+  const compileLog = makePlatformLog(emit, 'arduino-compile')
+  const inRtosMode = rtosConfigH !== undefined
+  // On the default, an RTOS build that fails for a reason of RTOS mode's own is
+  // built again as the single loop. Until that is known, the attempt's error
+  // lines are held back: errors if they stand, warnings if the fallback replaces them.
+  const mayFallBack = inRtosMode && !rtosSettings.chosen
+  let rtosOutgrewBoard = false
+  let freeRamBytes: number | undefined
+  const heldErrors: string[] = []
+  let { result: compileResult, entry: buildEntry } = await compileFirmware(
+    inRtosMode,
+    inRtosMode
+      ? (message, level) => {
+          if (firmwareOutgrewBoard(message)) rtosOutgrewBoard = true
+          freeRamBytes = ramLeftAfterLink(message) ?? freeRamBytes
+          if (mayFallBack && level === 'error') heldErrors.push(message)
+          else compileLog(message, level)
+        }
+      : compileLog,
   )
+  // Linked, but the task stacks, made when the board starts, will not fit.
+  const ramProblem = compileResult.ok && inRtosMode ? rtosRamProblem(rtosRamNeedBytes, freeRamBytes) : undefined
+  if (ramProblem && !mayFallBack) {
+    emit({
+      stage: 'arduino-compile',
+      message: `${ramProblem} The board may stop at start-up in ERROR: run fewer tasks, or switch RTOS mode off in Board Settings.`,
+      level: 'warning',
+    })
+  }
+  const rtosFallback = !mayFallBack
+    ? undefined
+    : ramProblem
+      ? ramProblem
+      : compileResult.ok
+        ? undefined
+        : rtosOutgrewBoard || firmwareOutgrewBoard((compileResult.errors ?? []).map((error) => error.message))
+          ? "RTOS mode does not fit in this board's memory with this project."
+          : rtosBuildFailureIsOurs(compileResult.errors ?? [])
+            ? "The RTOS mode build failed outside this project's own code."
+            : undefined
+  if (rtosFallback) {
+    for (const line of heldErrors) compileLog(`RTOS mode attempt: ${line}`, 'warning')
+    emit({
+      stage: 'arduino-compile',
+      message: `${rtosFallback} Building the single scan loop instead (RTOS mode is this board's default; its switch is in Board Settings).`,
+      level: 'warning',
+    })
+    ;({ result: compileResult, entry: buildEntry } = await compileFirmware(false, compileLog))
+  } else {
+    for (const line of heldErrors) compileLog(line, 'error')
+  }
   if (!compileResult.ok) {
     if (compileResult.errors && compileResult.errors.length > 0) {
       emitCompileErrorEvents(
@@ -1188,7 +1390,7 @@ async function runCompilePipelineInner(
   const uploadResult = await port.uploadArduinoBoard(
     {
       compilationPath: '',
-      fqbn: typeof boardEntry.platform === 'string' ? boardEntry.platform : '',
+      fqbn: typeof buildEntry.platform === 'string' ? buildEntry.platform : '',
       // User-selected serial port from the device-board UI picker.
       // Forwarded verbatim; the adapter decides what to do if the
       // caller didn't supply one (editor: fall back to the disk-

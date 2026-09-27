@@ -83,10 +83,10 @@ composite gates in `modbus_config.h`:
    Step 2 accepts **two** slave ids on this port: the Modbus server's, and
    `MB_EDITOR_SLAVE` for the editor's own link. A frame that matched only the
    editor's id must carry an editor function code (`mb_pdu_is_editor_fc()`,
-   `0x41`-`0x4B`) or it is dropped in silence — the channel is private, and an
-   exception would tell a bus scanner the address is live. When the two ids are
-   equal, which is the default, the server's branch matches first and this costs
-   nothing.
+   `0x41`-`0x4D`, and `0x4E` in RTOS mode) or it is dropped in silence — the
+   channel is private, and an exception would tell a bus scanner the address is
+   live. When the two ids are equal, which is the default, the server's branch
+   matches first and this costs nothing.
 4. `process_mbpacket()` dispatches: operation FC → `modbus_registers`; debug FC →
    `modbus_debug`. The response is built back into `mb_frame`.
 5. `handle_serial_port` appends the CRC and writes to the serial port.
@@ -107,10 +107,12 @@ header (no CRC) instead of RTU framing.
    `0x4B`, which does carry a CRC, so using it as "is this the editor" would make
    run/stop unreachable on the editor's id.
 2. **`mb_frame` is the one seam.** Every transport fills it, calls
-   `process_mbpacket()`, and reads the response back out. Single-threaded
-   cooperative scheduling means the transports time-slice within a scan; there
-   are no data races, but persistent partial state in `mb_frame` is a hazard —
-   see the note below.
+   `process_mbpacket()`, and reads the response back out. In the single loop
+   the transports time-slice within a scan and there are no data races, but
+   persistent partial state in `mb_frame` is a hazard — see the note below. In
+   RTOS mode the scan runs on other tasks, and every request is run under the
+   locks `plc_rtos_run_pdu()` picks for its function code — see
+   [RTOS mode](#rtos-mode).
 
 ## Adding a function code (e.g. custom `0x49+`)
 
@@ -118,8 +120,13 @@ header (no CRC) instead of RTU framing.
 2. In **`modbus_pdu.cpp`**:
    - add a `case` in `process_mbpacket()` that calls the handler;
    - add the FC's request length to `mb_pdu_request_len()`;
-   - if the FC should bypass CRC on RTU, add it to `mb_pdu_skips_crc()`.
+   - if the FC should bypass CRC on RTU, add it to `mb_pdu_skips_crc()`;
+   - if it lies past the editor's range, widen `mb_pdu_is_editor_fc()` (both
+     branches), or it is dropped on the editor's id.
 3. Add the FC constant to the enum in **`modbus_types.h`**.
+4. If it touches program variables, the process image or HAL/package code, give
+   it a case in `plc_rtos_run_pdu()` (`plc_rtos.cpp`), or RTOS mode runs it
+   with no lock at all.
 
 That is the whole surface. `modbus_serial.*` and `modbus_tcp.*` are untouched.
 
@@ -143,8 +150,136 @@ Every path now has its own RX assembly buffer wherever it can be raced:
 | single-serial + TCP (`MBTCP`) | `mb_rx_single` | process + TX only |
 | dual-serial (`MBSERIAL_ON_SECONDARY`) | `mb_rx_dbg`, `mb_rx_rtu` | process + TX only |
 
-The extra buffer costs `MAX_MB_FRAME` bytes (128 on ATmega328P/32U4, 256
+The extra buffer costs `MAX_MB_FRAME` bytes (128 on ATmega328P/32U4, 272
 elsewhere) and is compiled only where TCP is present, so a board without it
 keeps its original footprint. The condition is `MBTCP` rather than
 `MBSERIAL && MBTCP` because the always-on debugger assembles through the same
 path and was losing frames the same way in a TCP-only Modbus build.
+
+## RTOS mode
+
+On a board whose Arduino core has an RTOS, the editor builds this runtime in
+RTOS mode by default: each IEC task on a thread of its own, the services on
+theirs. The task model is Runtime v4's (IEC 61131-3 §6.8.2). What users and
+library authors need to know is in `docs/rtos-mode.md`; this section is how it
+works inside.
+
+**Switching it on.** The editor writes `rtos_config.h` with `OPENPLC_RTOS 1`
+over the skeleton's stub. With the stub (`OPENPLC_RTOS 0`) nothing below is
+compiled and the build is the single loop above; `plc_os.cpp` and
+`plc_rtos.cpp` are left out of the bundle altogether. The supported cores
+(FreeRTOS on the ESP32, arduino-pico, STM32, the Uno R4 and SAMD; Mbed OS;
+Zephyr) are listed in `middleware/shared/utils/rtos/support.ts`.
+
+### Tasks
+
+| Task | Runs |
+|---|---|
+| Dispatcher (`loop()`, or a task of its own; the highest priority) | the base tick: run/stop, HAL input, the located globals, releasing each IEC task when due, HAL output as each finishes, forced values, retain, statistics |
+| One worker per IEC task | its programs, under its own scan lock, with its located variables copied in and out of the process image. IEC PRIORITY 0 is the highest. |
+| Service A | Modbus RTU/TCP, the debugger, discovery; samples stack margins and the heap once a second |
+| Service B (if OPC-UA or S7 is enabled) | OPC-UA, S7 |
+
+On a board with 32 KB of RAM or less (`PLC_OS_SMALL_STACKS`) the two services
+share one task (4 KB stack), each IEC task and the dispatcher have a 2 KB
+stack, and one lock serves the network, every bus and every serial port.
+
+### Timing
+
+- **Overruns are skipped, never queued.** A task still running when it is due
+  again is counted, not released.
+- **IEC time is the grid time** of the task's release, so timers keep
+  wall-clock time across an overrun.
+- **On RUN** every task is due on the first tick, and its grid starts there.
+- A worker scans only for a release the dispatcher made, never for a stray
+  notification.
+
+### Process image
+
+The slot pointers (`bool_input[]` ...) address cells the runtime owns, not the
+variables. Each task copies its own located variables in at the start of a
+scan, and out at the end, only what it changed, so a protocol write to an
+output the scan left alone survives. Forced values are pinned into the cells
+every frame, over the HAL and over protocol writes. Located CONFIGURATION
+globals are synced every frame under each global's own lock, which the
+dispatcher only tries: a global a task holds that moment syncs on the next
+frame. STruC++'s hooks (`strucpp_located_global_index`,
+`strucpp_global_try_lock`) give each binding its global's lock. With a STruC++
+that has none, a scalar's binding is its `GlobalVar`, and a project with a
+located ARRAY global is built with one worker.
+
+### Locks
+
+- **Order:** scan locks (by task index), then a global's lock, then the image
+  lock. The dispatcher and the retain restore, which hold the image lock, only
+  try a global's lock (the restore waits at most 2 ms). The network and bus
+  locks come last, and whoever holds one takes nothing else.
+- **The image lock** covers copies, HAL calls and the Modbus register banks.
+  Nothing holding it may block on the network.
+- **The debugger** writes or forces a task's variable only between that task's
+  scans, and a global under the global's own lock, waiting up to 100 ms either
+  way; it answers exception `0x06` (busy) when a task does not let go. Reads
+  never fail: a stalled task's variables, and a global a task holds for more
+  than 2 ms, are read as they stand.
+- **Globals** have a lock each (STruC++ `STRUCPP_THREADED`, on in a multi-task
+  build). With the lock hooks, a statement that updates a global from itself
+  is one locked step, and a call of a global FB instance holds that instance's
+  lock for the whole call. On a toolchain without `<mutex>` and
+  `thread_local` (every core but the ESP32's), `STRUCPP_PLATFORM_THREADS` has
+  the runtime take those locks from `plc_os.cpp` (one for all globals on a small
+  board) and each task's IEC time from the glue.
+- **The network, bus and serial port locks** (`plc_rtos.h`): `openplc_net_lock`,
+  `openplc_i2c_lock`, `openplc_spi_lock`, `openplc_can_lock`, and
+  `openplc_serial_lock(port)`, one per serial port, keyed by the port object
+  (eight locks, bound on first use; ports past the eighth share the last).
+  Recursive, and declared weak for outside code, so a library links with and
+  without RTOS mode. A bus lock is held for the driver calls, a serial port's
+  for a whole exchange (request and reply). OpenPLC's own serial ports are
+  served by service A alone and take no lock. A library that drives a shared
+  peripheral from more than one task takes its lock around each driver call.
+  The block modules in `modules/` do, and so must a board HAL that drives a
+  shared bus (the dispatcher calls the HAL under the image lock only). Where the network chip is on SPI, the SPI lock is the
+  network lock.
+- **The services and the network lock.** `modbus_config.h` decides whether the
+  services need it (`OPLC_NET_LOCKED`; not on lwIP under the ESP32 core or
+  arduino-pico, Mbed OS, Zephyr). Service A only tries it at the start of a
+  pass, so a PLC task holding the network does not hold up the serial port
+  there. `handle_tcp()` lets it go while a request is processed and waits for
+  it again to reply, so the serial port can wait behind a PLC task that took it
+  in between. OPC-UA and S7 get their clients from `bm_net`, which in RTOS mode
+  hands out a `Client` that takes the lock for each socket call.
+
+### Start-up and failure
+
+- **A peripheral is started by the task that uses it.** Serial `begin()` and the
+  network run on service A, OPC-UA and S7 on service B, not in `setup()`. Every
+  RTOS object is made in `plc_rtos_start()`, at the end of `setup()`.
+- **The network comes up before the first scan,** as in `setup()`: the
+  dispatcher waits up to 15 s for service A's start-up.
+- **A failed start-up** (a task or lock that could not be made) leaves the PLC
+  in ERROR with nothing released and the outputs off. The services are created
+  first, so the editor can still read that.
+- **Memory is checked before the board ever runs it:** a compile-time check on
+  the fixed RTOS heaps (Uno R4, SAMD), and the editor's estimate against the
+  RAM the link leaves free everywhere else.
+
+### Retain
+
+Packed between the owners' scans (a task stalled in a block is read as it
+stands), and on STOP after the last scans.
+
+### Statistics
+
+FC `0x4E` (`plc_rtos_encode_stats`). Read-only, apart from flags bit 0, which
+resets the statistics window once the last task has been read. Paged:
+`[flags][first task]` in; `[status]`, then `[2][total][first][count]`, the tasks
+that fit, the services and the board totals out.
+
+### Adding an RTOS
+
+OS calls go through `plc_os.*` only (`arduino/plc_os.h`, backends in
+`Baremetal/plc_os.cpp`, a sketch file so that an RTOS shipped as an Arduino
+library is found). A new RTOS is a backend there, its priorities in
+`plc_os.h`, and one row in the editor's core table. Where the RTOS is not
+running under `setup()` (FreeRTOS from a library), the dispatcher is a task of
+its own and `plc_rtos_start()` starts the scheduler.

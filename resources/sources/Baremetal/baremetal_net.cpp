@@ -13,9 +13,39 @@ unrecognised target is a hard #error rather than a fallback.
 
 #include "opcua_log.h"
 
+#if OPENPLC_RTOS
+#include "plc_rtos.h"
+#endif
+
 namespace bm_net {
 
 namespace {
+
+#if OPENPLC_RTOS
+/** RTOS mode: OPC-UA and S7 run beside the PLC tasks, and a library that drives
+ *  its network chip directly is not safe from two tasks at once. The pool hands
+ *  out this wrapper, which holds the services' network lock (plc_rtos.h) for each
+ *  socket call and never while a request is processed. */
+class LockedClient : public Client
+{
+public:
+    bm_client_impl_t* inner = nullptr;
+
+    using Print::write;
+    int connect(IPAddress ip, uint16_t port) override { OPENPLC_SERVICE_NET_HOLD(); return inner->connect(ip, port); }
+    int connect(const char* host, uint16_t port) override { OPENPLC_SERVICE_NET_HOLD(); return inner->connect(host, port); }
+    size_t write(uint8_t b) override { OPENPLC_SERVICE_NET_HOLD(); return inner->write(b); }
+    size_t write(const uint8_t* buf, size_t size) override { OPENPLC_SERVICE_NET_HOLD(); return inner->write(buf, size); }
+    int available() override { OPENPLC_SERVICE_NET_HOLD(); return inner->available(); }
+    int read() override { OPENPLC_SERVICE_NET_HOLD(); return inner->read(); }
+    int read(uint8_t* buf, size_t size) override { OPENPLC_SERVICE_NET_HOLD(); return inner->read(buf, size); }
+    int peek() override { OPENPLC_SERVICE_NET_HOLD(); return inner->peek(); }
+    void flush() override { OPENPLC_SERVICE_NET_HOLD(); inner->flush(); }
+    void stop() override { OPENPLC_SERVICE_NET_HOLD(); inner->stop(); }
+    uint8_t connected() override { OPENPLC_SERVICE_NET_HOLD(); return inner->connected(); }
+    operator bool() override { OPENPLC_SERVICE_NET_HOLD(); return static_cast<bool>(*inner); }
+};
+#endif
 
 /** Client storage, shared by every listener.
  *
@@ -29,6 +59,9 @@ struct Slot
     bm_client_impl_t client;
     bool             in_use;
     uint8_t          owner;   // which Listener took it
+#if OPENPLC_RTOS
+    LockedClient     guard;   // what the protocols are handed instead of `client`
+#endif
 };
 
 Slot g_slots[BM_NET_MAX_CLIENTS];
@@ -100,6 +133,9 @@ bool Listener::begin()
 {
     if (started_)
         return true;
+#if OPENPLC_RTOS
+    OPENPLC_SERVICE_NET_HOLD();
+#endif
 
     ensure_pool();
 
@@ -116,6 +152,9 @@ Client* Listener::accept()
 {
     if (!started_)
         return nullptr;
+#if OPENPLC_RTOS
+    OPENPLC_SERVICE_NET_HOLD();
+#endif
 
     // accept(), not available(). available() hands back any established
     // connection, round-robin, whether or not it is new, so a server keeping
@@ -151,7 +190,12 @@ Client* Listener::accept()
             g_slots[i].owner  = id_;
             OPCUA_LOG("[net] accepted port=%d -> slot %u (listener %u)",
                       incoming.port(), (unsigned)i, (unsigned)id_);
+#if OPENPLC_RTOS
+            g_slots[i].guard.inner = &g_slots[i].client;
+            return static_cast<Client*>(&g_slots[i].guard);
+#else
             return &g_slots[i].client;
+#endif
         }
     }
 
@@ -169,14 +213,30 @@ bool can_send(const Client* client, size_t need)
 {
     if (client == nullptr)
         return false;
+#if OPENPLC_RTOS
+    OPENPLC_SERVICE_NET_HOLD();
+#endif
     for (uint8_t i = 0; i < BM_NET_MAX_CLIENTS; i++)
     {
+#if OPENPLC_RTOS
+        if (g_slots[i].in_use && static_cast<Client*>(&g_slots[i].guard) == client)
+#else
         if (g_slots[i].in_use &&
             static_cast<const Client*>(&g_slots[i].client) == client)
+#endif
         {
+#if OPENPLC_RTOS && defined(ARDUINO_ARCH_ESP32)
+            // The ESP32 core's NetworkClient reports no send space (Print's
+            // default availableForWrite() is 0). Here a write that waits blocks
+            // only the protocols' task, so a connected client is enough. Keyed
+            // on the core: the Nano ESP32 declares BOARD_PORTENTA.
+            (void)need;
+            return g_slots[i].client.connected();
+#else
             // The concrete type is the whole reason this lives here.
             const int room = g_slots[i].client.availableForWrite();
             return room > 0 && (size_t)room >= need;
+#endif
         }
     }
     return false;
@@ -186,9 +246,16 @@ void release(Client* client)
 {
     if (client == nullptr)
         return;
+#if OPENPLC_RTOS
+    OPENPLC_SERVICE_NET_HOLD();
+#endif
     for (uint8_t i = 0; i < BM_NET_MAX_CLIENTS; i++)
     {
+#if OPENPLC_RTOS
+        if (g_slots[i].in_use && static_cast<Client*>(&g_slots[i].guard) == client)
+#else
         if (g_slots[i].in_use && static_cast<Client*>(&g_slots[i].client) == client)
+#endif
         {
             // Unconditional. A handle whose slot was recycled under us is
             // detected inside EthernetClient, where stop() is a no-op rather
@@ -211,6 +278,9 @@ void close_all()
 {
     if (!g_pool_ready)
         return;
+#if OPENPLC_RTOS
+    OPENPLC_SERVICE_NET_HOLD();
+#endif
     for (uint8_t i = 0; i < BM_NET_MAX_CLIENTS; i++)
     {
         if (g_slots[i].in_use)

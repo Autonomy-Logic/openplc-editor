@@ -104,7 +104,7 @@ import type {
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
-import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
+import type { DebugConnectionConfig, RtosStatsResult } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -920,6 +920,7 @@ class MainProcessBridge implements MainIpcModule {
     // VPP licensing over the HELD link — callable any time the device is
     // connected, deliberately not folded into `device:connect`. See the handlers.
     this.registerHandle('device:read-license', this.handleDeviceReadLicense)
+    this.registerHandle('device:read-task-stats', this.handleDeviceReadTaskStats)
     this.registerHandle('device:refresh-license', this.handleDeviceRefreshLicense)
     this.registerHandle('session:open-runtime', this.handleOpenRuntimeSession)
     this.registerHandle('session:close-runtime', this.handleCloseRuntimeSession)
@@ -2305,6 +2306,25 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during PLC control request',
       }
+    }
+  }
+
+  /**
+   * FC 0x4e per-task timing of a baremetal board in RTOS mode, over the held
+   * device link. Read-only; the Runtime Status screen polls it while open.
+   */
+  handleDeviceReadTaskStats = async (_event: IpcMainInvokeEvent, resetWindow: unknown): Promise<RtosStatsResult> => {
+    const link = this.requireControl('task stats')
+    if ('error' in link) return { success: false, error: link.error }
+    const read = link.client.getTaskStats?.bind(link.client)
+    if (!read) return { success: false, unsupported: true, error: 'This connection does not carry task statistics' }
+    try {
+      const result = await read(resetWindow === true)
+      // Device traffic like any other: it proves the link, so the liveness poll need not.
+      if (result.success) this.deviceSession.noteTraffic()
+      return result
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   }
 

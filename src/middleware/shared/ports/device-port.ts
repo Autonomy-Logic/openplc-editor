@@ -21,7 +21,14 @@
  *   - getDeviceStatus()
  */
 
-import type { BoardInfo, CommunicationPort, DebugConnectionConfig, DebugMedium, DeviceLinkTransport } from './types'
+import type {
+  BoardInfo,
+  CommunicationPort,
+  DebugConnectionConfig,
+  DebugMedium,
+  DeviceLinkTransport,
+  RtosStatsResult,
+} from './types'
 
 // ---------------------------------------------------------------------------
 // Connect-time classification (D72) — platform contract shared by the port and
@@ -265,6 +272,15 @@ export interface DevicePort {
    * `device:refresh-license`.
    */
   refreshLicense?(request: DeviceLicenseRequest): Promise<DeviceLicenseReport>
+
+  /**
+   * Per-task timing of a board in RTOS mode (FC 0x4e), over the held device
+   * link. `resetWindow` starts a new statistics window after this read.
+   *
+   * Optional: only platforms that hold a device link implement it. Editor:
+   * `device:read-task-stats`.
+   */
+  readTaskStats?(resetWindow?: boolean): Promise<RtosStatsResult>
 
   /**
    * Subscribe to live serial-link status pushed by the main process (liveness

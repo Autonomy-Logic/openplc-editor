@@ -407,3 +407,74 @@ describe('buildCBlocksFromPous', () => {
     expect(result.code).toContain('one_setup')
   })
 })
+
+describe('composeFirmwareBundle — rtos_config.h', () => {
+  // The skeleton ships `OPENPLC_RTOS 0`; only a build in RTOS mode replaces it,
+  // which is what keeps every other build byte-identical to the single loop.
+  const skeleton = { 'src/rtos_config.h': '#define OPENPLC_RTOS 0\n' }
+
+  it('replaces the stub when the build runs in RTOS mode', () => {
+    const out = composeFirmwareBundle({
+      ...baseInput,
+      firmwareSkeleton: skeleton,
+      rtosConfigH: '#define OPENPLC_RTOS 1\n',
+    })
+    expect(out['src/rtos_config.h']).toBe('#define OPENPLC_RTOS 1\n')
+  })
+
+  it('keeps the stub otherwise', () => {
+    const out = composeFirmwareBundle({ ...baseInput, firmwareSkeleton: skeleton })
+    expect(out['src/rtos_config.h']).toBe('#define OPENPLC_RTOS 0\n')
+  })
+
+  it('builds the RTOS sources only in RTOS mode, so the single loop links what it always did', () => {
+    const withSources = {
+      ...skeleton,
+      'examples/Baremetal/plc_os.cpp': '// os\n',
+      'examples/Baremetal/plc_rtos.cpp': '// rtos\n',
+    }
+    const single = composeFirmwareBundle({ ...baseInput, firmwareSkeleton: withSources })
+    expect(single).not.toHaveProperty(['examples/Baremetal/plc_os.cpp'])
+    expect(single).not.toHaveProperty(['examples/Baremetal/plc_rtos.cpp'])
+    const rtos = composeFirmwareBundle({
+      ...baseInput,
+      firmwareSkeleton: withSources,
+      rtosConfigH: '#define OPENPLC_RTOS 1\n',
+    })
+    expect(rtos['examples/Baremetal/plc_os.cpp']).toBe('// os\n')
+    expect(rtos['examples/Baremetal/plc_rtos.cpp']).toBe('// rtos\n')
+  })
+})
+
+describe('composeFirmwareBundle — threaded runtime headers', () => {
+  // A threaded build changes the configuration's layout, so every file that
+  // includes the STruC++ runtime must see STRUCPP_THREADED: the two headers
+  // that read it include rtos_config.h first.
+  const skeleton = {
+    'src/iec_global.hpp': '// global\n',
+    'src/iec_std_lib.hpp': '// std\n',
+    'src/iec_var.hpp': '// var\n',
+  }
+
+  it('makes the headers that read STRUCPP_THREADED include rtos_config.h first', () => {
+    const out = composeFirmwareBundle({ ...baseInput, firmwareSkeleton: skeleton, strucppThreaded: true })
+    expect(out['src/iec_global.hpp']).toMatch(/^#include "rtos_config.h"/)
+    expect(out['src/iec_std_lib.hpp']).toMatch(/^#include "rtos_config.h"/)
+    expect(out['src/iec_var.hpp']).toBe('// var\n')
+  })
+
+  it('leaves them alone otherwise', () => {
+    const out = composeFirmwareBundle({ ...baseInput, firmwareSkeleton: skeleton })
+    expect(out['src/iec_global.hpp']).toBe('// global\n')
+  })
+
+  it('fails loudly when a header the threaded build must patch is missing', () => {
+    expect(() =>
+      composeFirmwareBundle({
+        ...baseInput,
+        firmwareSkeleton: { 'src/iec_global.hpp': '// global\n' },
+        strucppThreaded: true,
+      }),
+    ).toThrow(/iec_std_lib\.hpp/)
+  })
+})

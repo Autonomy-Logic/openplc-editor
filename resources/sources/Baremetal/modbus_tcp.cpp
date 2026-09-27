@@ -8,6 +8,21 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 #include "modbus_tcp.h"
 #include "modbus_pdu.h"   // process_mbpacket
 
+#if OPENPLC_RTOS
+#include "plc_rtos.h"
+// RTOS mode: service A holds the network lock (plc_rtos.h) while it talks to a
+// socket, never while it processes the request, which takes the image and scan
+// locks a PLC task may hold while it waits for the network itself.
+#define MBTCP_PROCESS_PACKET()          \
+    do {                                \
+        plc_rtos_service_net_unlock();  \
+        process_mbpacket();             \
+        plc_rtos_service_net_lock();    \
+    } while (0)
+#else
+#define MBTCP_PROCESS_PACKET() process_mbpacket()
+#endif
+
 // The listen port travels with the project's Modbus server. A firmware built
 // before it did -- or by a toolchain that does not emit it -- keeps the IANA
 // default it always listened on.
@@ -50,7 +65,24 @@ void mbconfig_ethernet_iface(uint8_t *mac, uint8_t *ip, uint8_t *dns, uint8_t *g
     #ifdef MBTCP_ETHERNET
         #ifdef BOARD_ESP32
 
-            ETH.begin();
+            #if defined(MBTCP_ETH_ENC28J60)
+                #error "Ethernet on an ESP32: the ENC28J60 has no ESP32 driver. Use a W5500."
+            #elif defined(MBTCP_ETH_CS)
+                // A W5500 on SPI instead of an RMII PHY, driven by the core's ETH
+                // under lwIP, so any task may use the network. Polled: no
+                // interrupt pin. On the variant's SPI pins. The driver derives the
+                // MAC from the ESP32's factory address; `mac` is not used.
+                #if !ETH_SPI_SUPPORTS_CUSTOM || !ETH_SPI_SUPPORTS_NO_IRQ || !CONFIG_ETH_SPI_ETHERNET_W5500
+                    #error "A W5500 on an ESP32 needs the ESP32 Arduino core 3.x."
+                #else
+                    SPI.begin();
+                    // No module answering: leave the interface down rather than
+                    // configure an address on it.
+                    if (!ETH.begin(ETH_PHY_W5500, 1, MBTCP_ETH_CS, -1, -1, SPI)) return;
+                #endif
+            #else
+                ETH.begin();
+            #endif
 
             if (ip != NULL && subnet != NULL && gateway != NULL)
                 (ETH.config(ip, gateway, subnet, dns));
@@ -232,7 +264,7 @@ void handle_tcp()
                 if (j != mb_frame_len) return;
 
                 //Process packet and write back
-                process_mbpacket();
+                MBTCP_PROCESS_PACKET();
                 //Calculate packet length for MBAP header (mb_frame_len + 1)
                 mb_mbap[4] = (mb_frame_len) >> 8;
                 mb_mbap[5] = (mb_frame_len) & 0x00FF;
@@ -319,7 +351,7 @@ void handle_tcp()
                 }
 
                 //Process packet and write back
-                process_mbpacket();
+                MBTCP_PROCESS_PACKET();
                 //Calculate packet length for MBAP header (mb_frame_len + 1)
                 mb_mbap[4] = (mb_frame_len) >> 8;
                 mb_mbap[5] = (mb_frame_len) & 0x00FF;

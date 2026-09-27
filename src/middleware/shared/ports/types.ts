@@ -572,9 +572,9 @@ export function projectCapabilities(
 
 export type CompilerType = 'arduino-cli' | 'openplc-compiler' | 'simulator'
 
-import type { DebuggerTransport, TargetCapabilities } from '../utils/target-capabilities'
+import type { DebuggerTransport, ManifestCapabilities, TargetCapabilities } from '../utils/target-capabilities'
 
-export type { DebuggerTransport, TargetCapabilities }
+export type { DebuggerTransport, ManifestCapabilities, TargetCapabilities }
 
 /** VPP-declared FQBN sub-option, e.g. Nano `cpu=atmega328old`. */
 export interface PlatformOptionValue {
@@ -614,7 +614,7 @@ export interface BoardInfo {
     defaultDout?: string[]
   }
   /** When absent, the resolver in backend/shared infers capabilities from the legacy `compiler` field. */
-  capabilities?: Partial<TargetCapabilities>
+  capabilities?: ManifestCapabilities
   vpp?: VppMetadata
   /** The VPP manifest's `target.platformOptions`, flattened so device-screen UI need not reach into `vpp`. */
   platformOptions?: PlatformOption[]
@@ -769,7 +769,7 @@ export interface PackageManifest {
     /** Absence means no debug channel is declared. */
     debug?: import('./debug-spec-types').DebugSpec
     /** Merged over the preset the editor derives from the target type. */
-    capabilities?: Partial<TargetCapabilities>
+    capabilities?: ManifestCapabilities
     moduleSystem?: {
       enabled: boolean
       maxSlots: number
@@ -937,6 +937,61 @@ export interface PluginStatsPayload {
 export interface TimingStats {
   tasks: TaskTimingStats[]
   plugin_stats?: Record<string, PluginStatsPayload>
+}
+
+/** One IEC task's timing over the board's current statistics window. */
+export interface RtosTaskStats {
+  name: string
+  /** Times the task was released to run. */
+  releases: number
+  /** Releases skipped because the task was still running (never queued). */
+  overruns: number
+  scanMinUs: number
+  scanAvgUs: number
+  scanMaxUs: number
+  /** From the release to the scan starting. */
+  latencyAvgUs: number
+  latencyMaxUs: number
+  /** Between two scan starts: the period the task really ran at. */
+  cycleMinUs: number
+  cycleMaxUs: number
+  /** The least stack the task has had left. */
+  stackFreeBytes: number
+  /** How long the task has been inside the scan it is in now; 0 between scans.
+   *  Far past its period, the task is stuck (a block waiting on something). */
+  busyUs: number
+  /** The task's period on the board: its interval, in whole base ticks. */
+  periodUs: number
+}
+
+/** A service task: [0] Modbus, the debugger and discovery; [1] OPC-UA and S7. */
+export interface RtosServiceStats {
+  iterationMaxUs: number
+  /** Requests answered "busy" because a task they needed was stalled. */
+  busyReplies: number
+  stackFreeBytes: number
+}
+
+/** What a board in RTOS mode reports about its tasks (FC 0x4E, version 2). */
+export interface RtosStats {
+  tasks: RtosTaskStats[]
+  services: RtosServiceStats[]
+  dispatcherStackFreeBytes: number
+  /** 0 where the board cannot tell (Zephyr). */
+  heapFreeBytes: number
+  heapMinFreeBytes: number
+  /** The period every task's interval is a multiple of. */
+  baseTickUs: number
+  /** The longest retained values waited past their due time to be saved. */
+  retainLateMaxUs: number
+}
+
+export interface RtosStatsResult {
+  success: boolean
+  stats?: RtosStats
+  /** The board does not report task statistics: it is not running in RTOS mode. */
+  unsupported?: boolean
+  error?: string
 }
 
 export type RuntimeLogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR'

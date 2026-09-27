@@ -4,17 +4,21 @@ import {
   buildPlcSetStateRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
+  DEBUG_BUSY_ERROR,
+  isBusyException,
   parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
+  readTaskStats,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
+  DebugTaskStatsResult,
   DeviceModbusTransport,
   Md5ProbeResult,
   PlcControlResult,
@@ -40,6 +44,8 @@ export enum ModbusFunctionCode {
   /** Set the runtime run/stop state. Reads go through DEBUG_GET_STATUS (0x46),
    *  which already reports it. */
   PLC_SET_STATE = 0x4b,
+  /** Per-task timing of a board in RTOS mode. */
+  DEBUG_GET_TASK_STATS = 0x4e,
 }
 
 export enum ModbusDebugResponse {
@@ -127,11 +133,17 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         reject(new Error('Request timeout'))
       }, this.timeout)
 
+      // A reply can arrive in more than one segment. The MBAP header's length
+      // field (offset 4) counts every byte after it, so the reply is whole at
+      // 6 + length; until then the pieces are gathered.
+      let received: Buffer | null = null
       const onData = (data: Buffer) => {
+        received = received ? Buffer.concat([new Uint8Array(received), new Uint8Array(data)]) : data
+        if (received.length < 6 || received.length < 6 + received.readUInt16BE(4)) return
         clearTimeout(timeoutHandle)
         this.socket?.removeListener('data', onData)
         this.socket?.removeListener('error', onError)
-        resolve(data)
+        resolve(received)
       }
 
       const onError = (error: Error) => {
@@ -141,7 +153,7 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         reject(error)
       }
 
-      this.socket.once('data', onData)
+      this.socket.on('data', onData)
       this.socket.once('error', onError)
       this.socket.write(request as unknown as Uint8Array)
     })
@@ -378,6 +390,10 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'Transaction ID mismatch' }
       }
 
+      if (isBusyException(responseFunctionCode, statusCode)) {
+        return { success: false, error: DEBUG_BUSY_ERROR }
+      }
+
       if (responseFunctionCode !== (ModbusFunctionCode.DEBUG_SET as number)) {
         return { success: false, error: 'Function code mismatch' }
       }
@@ -510,6 +526,26 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'Transaction ID mismatch' }
       }
       return parsePlcSetStateResponse(Uint8Array.prototype.slice.call(data, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /**
+   * FC 0x4e -- per-task timing of a board in RTOS mode, a page of tasks per
+   * request (readTaskStats). A reply's length follows from its task names; the
+   * MBAP length field frames it here (see sendTcpRequestImpl).
+   */
+  async getTaskStats(resetWindow = false): Promise<DebugTaskStatsResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+    try {
+      return await readTaskStats(async (pdu) => {
+        const { request, transactionId } = this.buildTcpFrame(pdu)
+        const data = await this.sendTcpRequest(request)
+        if (data.length < 9) throw new Error(`Invalid response: too short (${data.length} bytes)`)
+        if (data.readUInt16BE(0) !== transactionId) throw new Error('Transaction ID mismatch')
+        return Uint8Array.prototype.slice.call(data, 7)
+      }, resetWindow)
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

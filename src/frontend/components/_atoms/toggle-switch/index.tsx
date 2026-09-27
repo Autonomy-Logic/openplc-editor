@@ -16,9 +16,18 @@ type ToggleSwitchProps = {
   id?: string
   disabled?: boolean
   'aria-label'?: string
+  /** Ids of the text that explains the switch's state (a note, a warning). */
+  'aria-describedby'?: string
 }
 
-function ToggleSwitch({ checked, onCheckedChange, id, disabled, 'aria-label': ariaLabel }: ToggleSwitchProps) {
+function ToggleSwitch({
+  checked,
+  onCheckedChange,
+  id,
+  disabled,
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
+}: ToggleSwitchProps) {
   return (
     <label className={cn('relative inline-flex items-center', disabled ? 'cursor-not-allowed' : 'cursor-pointer')}>
       <input
@@ -27,6 +36,7 @@ function ToggleSwitch({ checked, onCheckedChange, id, disabled, 'aria-label': ar
         checked={checked}
         disabled={disabled}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
         onChange={(e) => onCheckedChange(e.target.checked)}
         className='peer sr-only'
       />

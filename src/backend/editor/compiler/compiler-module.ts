@@ -39,6 +39,7 @@ import {
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
+import { withFqbnOptions } from '@root/middleware/shared/utils/rtos'
 
 /**
  * Bridge contract `compileLibrary` needs from the main process.
@@ -208,6 +209,11 @@ type CompileArduinoProgramArgs = {
   compilationPath: string
   handleOutputData: HandleOutputDataCallback
   cleanBuild?: boolean
+  /** Board options the build needs over the board's own (RTOS mode's
+   *  `os=freertos` on arduino-pico), for the pre-compile and the compile. */
+  boardOptions?: Readonly<Record<string, string>>
+  /** `-D` flags for every C and C++ file (RTOS mode's FreeRTOS settings). */
+  extraFlags?: readonly string[]
 }
 
 class CompilerModule {
@@ -1207,7 +1213,7 @@ class CompilerModule {
 
     if (missingLibraries.length === 0) {
       handleOutputData(`All required libraries are already installed.`, 'info')
-      return
+      return { success: true }
     }
 
     let binaryPath = this.arduinoCliBinaryPath
@@ -1257,7 +1263,9 @@ class CompilerModule {
               (trimmedStderr ? `\n${trimmedStderr}` : ''),
             'warning',
           )
-          resolve({ success: true })
+          // Resolved, not rejected (the build goes on); unsuccessful when a
+          // library the caller named is among those that failed.
+          resolve({ success: !missingLibraries.some((lib) => extraLibraries.includes(lib)) })
         }
       })
     })
@@ -1554,8 +1562,13 @@ class CompilerModule {
    *
    * Missing directories are skipped rather than reported: a machine that never
    * had the Arduino IDE has no sketchbook, and that is not an error.
+   *
+   * A library whose `architectures=` excludes this board's is left out: its
+   * headers could otherwise shadow the core's, which come later on the include
+   * path (another port's FreeRTOS `portmacro.h` over the ESP32 core's).
    */
-  async #libraryIncludeArgs(): Promise<string[]> {
+  async #libraryIncludeArgs(fqbn: string): Promise<string[]> {
+    const architecture = fqbn.split(':')[1] ?? ''
     const roots = [
       managedLibrariesPath(electronApp.getPath('userData')),
       defaultSketchbookLibrariesPath(electronApp.getPath('documents')),
@@ -1573,6 +1586,7 @@ class CompilerModule {
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
         const libDir = join(root, entry.name)
+        if (!(await libraryServesArchitecture(libDir, architecture))) continue
         // `src/` only when it is there: a 1.5-format library keeps its headers
         // under it, a 1.0-format one at the root. Emitting both unconditionally
         // doubles the flag count on a sketchbook of a hundred libraries, in the
@@ -1696,7 +1710,7 @@ class CompilerModule {
     const extraNonIncludeFlags = extraCxxFlags.filter((flag) => !flag.startsWith('-I'))
 
     // Last, so a library can never shadow a core or generated header.
-    const libraryIncludeFlags = await this.#libraryIncludeArgs()
+    const libraryIncludeFlags = await this.#libraryIncludeArgs(fqbn)
 
     const includeArgs = [
       ...extraIncludeFlags,
@@ -1924,6 +1938,8 @@ class CompilerModule {
     compilationPath,
     handleOutputData,
     cleanBuild,
+    boardOptions,
+    extraFlags = [],
   }: CompileArduinoProgramArgs) {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
@@ -1944,10 +1960,9 @@ class CompilerModule {
     // compilationPath (always `<projectPath>/build/<boardTarget>`).
     const projectPath = path.dirname(path.dirname(compilationPath))
     const selectedPlatformOptions = await this.#readSelectedPlatformOptions(projectPath)
-    const effectiveFqbn = CompilerModule.applyPlatformOptions(
-      info.platform,
-      info.platformOptions,
-      selectedPlatformOptions,
+    const effectiveFqbn = withFqbnOptions(
+      CompilerModule.applyPlatformOptions(info.platform, info.platformOptions, selectedPlatformOptions),
+      boardOptions,
     )
 
     // The AVR/megaavr toolchain ships <stdint.h> but no C++ wrappers; we
@@ -1965,6 +1980,7 @@ class CompilerModule {
     // -std=gnu++17/-fno-rtti stays pre-compile-only.
     const cxxFlags: string[] = info.compilerFlags?.cxx_flags ? [...info.compilerFlags.cxx_flags] : []
     if (avrLibStdCppInclude) cxxFlags.push(`-I${avrLibStdCppInclude}`)
+    cxxFlags.push(...extraFlags)
 
     const { archivePath, archCandidates } = await this.handlePrecompileUserLib({
       compilationPath,
@@ -1995,7 +2011,8 @@ class CompilerModule {
     const compileEntry = {
       platform: info.platform,
       core: info.core,
-      c_flags: info.compilerFlags?.c_flags,
+      c_flags:
+        extraFlags.length > 0 ? [...(info.compilerFlags?.c_flags ?? []), ...extraFlags] : info.compilerFlags?.c_flags,
       cxx_flags: info.compilerFlags?.cxx_flags,
       ld_flags: info.compilerFlags?.ld_flags,
       max_data_size: info.maxDataSize,
@@ -3897,3 +3914,30 @@ class CompilerModule {
   }
 }
 export { CompilerModule }
+
+/**
+ * Whether a library may be offered to a build for `architecture` (the FQBN's
+ * second part): its `library.properties` lists it, or `*`, or declares none. A
+ * core family's variants match their family (`mbed` serves `mbed_nano`), as in
+ * arduino-cli.
+ */
+export async function libraryServesArchitecture(libDir: string, architecture: string): Promise<boolean> {
+  let properties: string
+  try {
+    properties = await readFile(join(libDir, 'library.properties'), 'utf-8')
+  } catch {
+    return true
+  }
+  const line = properties.split(/\r?\n/).find((entry) => entry.trim().startsWith('architectures='))
+  if (!line || !architecture) return true
+  const declared = line
+    .slice(line.indexOf('=') + 1)
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry !== '')
+  const wanted = architecture.toLowerCase()
+  return (
+    declared.length === 0 ||
+    declared.some((entry) => entry === '*' || entry === wanted || wanted.startsWith(`${entry}_`))
+  )
+}

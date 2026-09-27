@@ -56,6 +56,7 @@
  */
 
 import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/endian'
+import type { RtosServiceStats, RtosStats, RtosTaskStats } from '../../../middleware/shared/ports/types'
 import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from '../simulator/types'
 import type {
   DebugAnchorResult,
@@ -64,6 +65,7 @@ import type {
   DebugLicenseWriteResult,
   DebugSetResult,
   DebugStatusResult,
+  DebugTaskStatsResult,
   DebugTransportResult,
   DebugVersionResult,
   Md5ProbeResult,
@@ -104,6 +106,18 @@ function readU32BE(buf: Uint8Array, offset: number): number {
 // ---------------------------------------------------------------------------
 
 const MODBUS_EXCEPTION_SLAVE_FAILURE = 0x04
+const MODBUS_EXCEPTION_SLAVE_BUSY = 0x06
+
+/**
+ * A board in RTOS mode refuses a debugger write with "slave device busy" while
+ * the task owning the variable is stalled mid-scan (typically a block waiting on
+ * the network). Nothing was written, and the request can be repeated.
+ */
+export const DEBUG_BUSY_ERROR = 'The PLC is busy: a scan is taking longer than its period. Try again.'
+
+export function isBusyException(functionCode: number, exceptionCode: number): boolean {
+  return functionCode >= 0x80 && exceptionCode === MODBUS_EXCEPTION_SLAVE_BUSY
+}
 
 // Firmware that runs out of frame answers GET_LIST with this exception; callers treat it as out of memory.
 export function isGetListOverflowException(functionCode: number, exceptionCode: number): boolean {
@@ -328,6 +342,10 @@ export function parseSetVariableResponse(data: Uint8Array): DebugSetResult {
 
   const fc = readU8(data, 0)
   const status = readU8(data, 1)
+
+  if (isBusyException(fc, status)) {
+    return { success: false, error: DEBUG_BUSY_ERROR }
+  }
 
   if (fc !== ModbusFunctionCode.DEBUG_SET) {
     return { success: false, error: 'Function code mismatch' }
@@ -634,4 +652,204 @@ export function parsePlcSetStateResponse(data: Uint8Array): PlcControlResult {
     result.error = statusError(status)
   }
   return result
+}
+
+// ---------------------------------------------------------------------------
+// FC 0x4e — per-task statistics (RTOS mode)
+//
+//   request:  [FC=0x4e] [flags: U8] [firstTask: U8]
+//             (flags bit 0: start a new window once the last task has been read)
+//   response: [FC=0x4e] [status] [version=2: U8]
+//             [taskTotal: U8] [firstTask: U8] [taskCount: U8]
+//             then per task [nameLen: U8] [name...] [12 x U32BE]
+//             [serviceCount: U8] then per service [3 x U32BE]
+//             [dispatcherStack, heapFree, heapMinFree, baseTickUs,
+//              retainLateMaxUs: 5 x U32BE]
+//
+// A reply holds as many tasks as fit one frame (three or four); the reader asks
+// again from firstTask + taskCount until it has taskTotal.
+// ---------------------------------------------------------------------------
+
+const MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 0x01
+const TASK_STATS_VERSION = 2
+const TASK_STATS_TASK_U32S = 12
+const TASK_STATS_TAIL_U32S = 5
+/** The most tasks a board has (OPENPLC_RTOS_MAX_WORKERS), so the most pages. */
+const TASK_STATS_MAX_PAGES = 32
+
+export function buildGetTaskStatsRequest(firstTask = 0, resetWindow = false): Uint8Array {
+  const buf = alloc(3)
+  writeU8(buf, 0, ModbusFunctionCode.DEBUG_GET_TASK_STATS)
+  writeU8(buf, 1, resetWindow ? 1 : 0)
+  writeU8(buf, 2, firstTask)
+  return buf
+}
+
+/**
+ * The length a task-statistics reply PDU will have, from as much of it as has
+ * arrived, or null until that can be told. For a transport that has to frame
+ * the reply itself (serial), since the length follows only from the task names.
+ */
+export function taskStatsPduLength(pdu: Uint8Array): number | null {
+  if (pdu.length < 2) return null
+  if (readU8(pdu, 0) & 0x80 || readU8(pdu, 1) !== (ModbusDebugResponse.SUCCESS as number)) return 2
+  if (pdu.length < 6) return null
+  let length = 6
+  for (let task = 0; task < readU8(pdu, 5); task++) {
+    if (pdu.length <= length) return null
+    length += 1 + readU8(pdu, length) + TASK_STATS_TASK_U32S * 4
+  }
+  if (pdu.length <= length) return null
+  return length + 1 + readU8(pdu, length) * 12 + TASK_STATS_TAIL_U32S * 4
+}
+
+/** One reply: a page of the tasks, and everything else the board reports. */
+export interface TaskStatsPage {
+  taskTotal: number
+  firstTask: number
+  stats: RtosStats
+}
+
+export type TaskStatsPageResult =
+  | { success: true; page: TaskStatsPage }
+  | { success: false; unsupported?: boolean; error: string }
+
+export function parseGetTaskStatsPage(data: Uint8Array): TaskStatsPageResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+  const fc = readU8(data, 0)
+  if (fc === (ModbusFunctionCode.DEBUG_GET_TASK_STATS as number) + 0x80) {
+    const exception = readU8(data, 1)
+    return exception === MODBUS_EXCEPTION_ILLEGAL_FUNCTION
+      ? { success: false, unsupported: true, error: 'The board is not running in RTOS mode' }
+      : { success: false, error: `Exception 0x${exception.toString(16)}` }
+  }
+  if (fc !== ModbusFunctionCode.DEBUG_GET_TASK_STATS) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+  const status = readU8(data, 1)
+  if (status !== ModbusDebugResponse.SUCCESS) {
+    return { success: false, error: statusError(status) }
+  }
+
+  const truncated = { success: false as const, error: 'Incomplete task statistics' }
+  let offset = 2
+  if (data.length < offset + 4) return truncated
+  const version = readU8(data, offset)
+  if (version !== TASK_STATS_VERSION) {
+    return {
+      success: false,
+      error: `Task statistics version ${version} is not supported: upload the project again to update the firmware`,
+    }
+  }
+  const taskTotal = readU8(data, offset + 1)
+  const firstTask = readU8(data, offset + 2)
+  const taskCount = readU8(data, offset + 3)
+  offset += 4
+
+  const u32s = (count: number): number[] | undefined => {
+    if (data.length < offset + count * 4) return undefined
+    const values = Array.from({ length: count }, (_, i) => readU32BE(data, offset + i * 4))
+    offset += count * 4
+    return values
+  }
+
+  const tasks: RtosTaskStats[] = []
+  for (let i = 0; i < taskCount; i++) {
+    if (data.length < offset + 1) return truncated
+    const nameLength = readU8(data, offset)
+    if (data.length < offset + 1 + nameLength) return truncated
+    const name = new TextDecoder('utf-8').decode(data.subarray(offset + 1, offset + 1 + nameLength))
+    offset += 1 + nameLength
+    const values = u32s(TASK_STATS_TASK_U32S)
+    if (!values) return truncated
+    const [
+      releases,
+      overruns,
+      scanMinUs,
+      scanAvgUs,
+      scanMaxUs,
+      latencyAvgUs,
+      latencyMaxUs,
+      cycleMinUs,
+      cycleMaxUs,
+      stackFreeBytes,
+      busyUs,
+      periodUs,
+    ] = values
+    tasks.push({
+      name,
+      releases,
+      overruns,
+      scanMinUs,
+      scanAvgUs,
+      scanMaxUs,
+      latencyAvgUs,
+      latencyMaxUs,
+      cycleMinUs,
+      cycleMaxUs,
+      stackFreeBytes,
+      busyUs,
+      periodUs,
+    })
+  }
+
+  if (data.length < offset + 1) return truncated
+  const serviceCount = readU8(data, offset)
+  offset += 1
+  const services: RtosServiceStats[] = []
+  for (let i = 0; i < serviceCount; i++) {
+    const values = u32s(3)
+    if (!values) return truncated
+    services.push({ iterationMaxUs: values[0], busyReplies: values[1], stackFreeBytes: values[2] })
+  }
+
+  const tail = u32s(TASK_STATS_TAIL_U32S)
+  if (!tail) return truncated
+  return {
+    success: true,
+    page: {
+      taskTotal,
+      firstTask,
+      stats: {
+        tasks,
+        services,
+        dispatcherStackFreeBytes: tail[0],
+        heapFreeBytes: tail[1],
+        heapMinFreeBytes: tail[2],
+        baseTickUs: tail[3],
+        retainLateMaxUs: tail[4],
+      },
+    },
+  }
+}
+
+/**
+ * Every task's statistics, a page at a time. `fetchPage` sends one request (from
+ * buildGetTaskStatsRequest) and returns the reply PDU. The window reset rides on
+ * every request; the board applies it only once the last task has been read.
+ * Services, memory and the rest come from the last page.
+ */
+export async function readTaskStats(
+  fetchPage: (request: Uint8Array) => Promise<Uint8Array>,
+  resetWindow = false,
+): Promise<DebugTaskStatsResult> {
+  const tasks: RtosTaskStats[] = []
+  let last: TaskStatsPage | undefined
+  for (let page = 0; page < TASK_STATS_MAX_PAGES; page++) {
+    const result = parseGetTaskStatsPage(await fetchPage(buildGetTaskStatsRequest(tasks.length, resetWindow)))
+    if (!result.success) return result
+    if (result.page.firstTask !== tasks.length) {
+      return { success: false, error: 'Task statistics out of order' }
+    }
+    tasks.push(...result.page.stats.tasks)
+    last = result.page
+    if (tasks.length >= result.page.taskTotal) break
+    if (result.page.stats.tasks.length === 0) {
+      return { success: false, error: 'A task name does not fit the reply frame' }
+    }
+  }
+  if (!last || tasks.length < last.taskTotal) return { success: false, error: 'Incomplete task statistics' }
+  return { success: true, stats: { ...last.stats, tasks } }
 }

@@ -588,3 +588,22 @@ void debugReadLicense(void)
         mb_frame_len = 3;   // [FC][STATUS] only
     }
 }
+
+#if OPENPLC_RTOS
+#include "plc_rtos.h"
+
+// PDU request:  [FC 0x4E][flags:u8][first_task:u8]
+//               flags bit 0 = reset the statistics window once the last task
+//               has been read
+// PDU response: [FC][status][stats blob, see plc_rtos_encode_stats()]
+//
+// Needs no lock of its own: the blob is the snapshot the dispatcher publishes. A
+// reply holds as many tasks as fit from first_task, and the total count.
+void debugGetTaskStats(uint8_t flags, uint8_t first_task)
+{
+    const size_t n = plc_rtos_encode_stats(&mb_frame[3], MB_RESPONSE_CAPACITY - 3, first_task, (flags & 0x01) != 0);
+    mb_frame[1] = MB_FC_DEBUG_GET_TASK_STATS;
+    mb_frame[2] = n > 0 ? MB_DEBUG_SUCCESS : MB_DEBUG_ERROR_OUT_OF_MEMORY;
+    mb_frame_len = (uint16_t)(3 + n);
+}
+#endif

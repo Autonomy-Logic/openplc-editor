@@ -167,6 +167,21 @@ export class SessionCore {
         return { id: request.id, ok: true, data: { kind: 'read', values: values.values } }
       }
 
+      case 'stats': {
+        const read = this.options.channel.getTaskStats?.bind(this.options.channel)
+        if (!read) return this.fail(request.id, ErrorCode.TargetError, 'This target does not report task statistics')
+        const result = await read(request.reset === true)
+        if (!result.success || !result.stats) {
+          const code = result.unsupported
+            ? ErrorCode.NotSupported
+            : /timeout/i.test(result.error ?? '')
+              ? ErrorCode.Timeout
+              : ErrorCode.TargetError
+          return this.fail(request.id, code, result.error ?? 'No task statistics')
+        }
+        return { id: request.id, ok: true, data: { kind: 'stats', stats: result.stats } }
+      }
+
       case 'force':
         return this.applyForce(request.id, request.name, request.value)
 

@@ -26,9 +26,76 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "rtos_config.h"
+#if OPENPLC_RTOS
+#include <stdbool.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if OPENPLC_RTOS
+// ---------------------------------------------------------------------------
+// RTOS mode. Baremetal/plc_rtos.cpp runs the tasks; these are the runtime's
+// halves of them. See the RTOS section of arduino_runtime_glue.cpp.
+// ---------------------------------------------------------------------------
+
+// Create the image lock. Called by plc_rtos_start() at the end of setup(): on
+// some cores an RTOS object made before the scheduler starts masks interrupts.
+void runtime_rtos_init(void);
+void runtime_rtos_fault(void);   // set-up failed: ERROR, outputs off, nothing released
+
+// One worker per IEC task (or one for all, when not threaded), each with its
+// own scan lock. Called by plc_rtos_start(), after runtime_discover_tasks().
+void runtime_rtos_prepare_workers(void);
+uint32_t    runtime_rtos_worker_count(void);
+const char* runtime_rtos_worker_name(uint32_t worker);
+int32_t     runtime_rtos_worker_priority(uint32_t worker);   // IEC PRIORITY, 0 highest
+uint32_t    runtime_rtos_worker_divisor(uint32_t worker);    // released every N base ticks
+// How long the worker has been inside its current scan, in microseconds; 0
+// when it is between scans. A task stuck in a block shows here.
+uint32_t    runtime_rtos_worker_busy_us(uint32_t worker);
+
+// One release of a worker; `run_tick` is the grid time in base ticks.
+void runtime_rtos_worker_cycle(uint32_t worker, uint64_t run_tick);
+
+// The process-image lock: held for a copy, a HAL refresh or one protocol
+// request's reads and writes of the image, never across I/O to a peer.
+void runtime_rtos_image_lock(void);
+void runtime_rtos_image_unlock(void);
+
+// A service's access to program variables (debugger, OPC-UA): the scan locks of
+// the workers that own them, as a bit mask. False when a scan did not yield in
+// time; the caller answers "busy" instead of stalling.
+uint32_t runtime_rtos_owner_mask(uint8_t arr, uint16_t elem);
+uint32_t runtime_rtos_owner_mask_range(uint8_t arr, uint16_t first, uint16_t last);
+uint32_t runtime_rtos_lock_workers_for_read(uint32_t mask);
+void     runtime_rtos_unlock_workers(uint32_t mask);
+
+// A service's write or force of one variable: the owning task's scan lock, or
+// a global's own lock. Released with runtime_rtos_unlock_write().
+typedef struct {
+    uint32_t workers;
+    int32_t  global;
+} runtime_rtos_write_lock_t;
+bool runtime_rtos_lock_for_write(uint8_t arr, uint16_t elem, runtime_rtos_write_lock_t* held);
+void runtime_rtos_unlock_write(const runtime_rtos_write_lock_t* held);
+void     runtime_rtos_after_write(uint8_t arr, uint16_t elem);   // a plain write: re-seed its cell
+
+// The dispatcher: frame I/O (the located globals included, each under its own
+// lock, and forced values pinned), run/stop, and retain.
+void    runtime_rtos_frame_input(bool all_idle);
+void    runtime_rtos_frame_output(bool all_idle, bool stopping);
+uint8_t runtime_rtos_wanted_state(void);
+uint8_t runtime_rtos_state(void);
+void    runtime_rtos_enter_stop(void);
+void    runtime_rtos_enter_run(uint64_t run_tick);
+void    runtime_rtos_stopped_copy_in(void);
+// False when skipped this time: a task was mid-scan (not stalled), or a service
+// held one. A task stalled in a block is read as it stands, so it cannot keep
+// retain from being saved.
+bool    runtime_rtos_retain_save(void);
 #endif
 
 // Globals owned by arduino_runtime_glue.cpp, read by the sketch.

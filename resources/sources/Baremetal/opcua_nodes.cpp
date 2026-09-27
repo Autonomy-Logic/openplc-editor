@@ -27,6 +27,9 @@ loop at scan rate.
 // core's default C++ standard while the strucpp runtime needs gnu++17 and lives
 // in a precompiled archive, so including its templates here is an ABI break.
 #include "arduino_runtime_glue.h"
+#if OPENPLC_RTOS
+#include "plc_rtos.h"   // plc_rtos_count_busy
+#endif
 
 namespace {
 
@@ -132,6 +135,35 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
     if (row == nullptr || row->tag >= kTagCount)
         return UA_STATUSCODE_BADINTERNALERROR;
 
+#if OPENPLC_RTOS
+    // RTOS mode: the scan can run while OPC-UA reads, so the value is copied out
+    // under the scan lock, into a slot per node of the request: the Read service
+    // fills every result before it encodes any of them. Rows are 8-byte aligned:
+    // a scalar goes to open62541 as a typed pointer into its row.
+    alignas(8) static uint8_t s_values[OPCUA_MAX_NODES_PER_READ][(1 + OPENPLC_DEBUG_STRING_CAP * 2 + 1 + 7) & ~7];
+    static uint8_t s_value_next = 0;
+    uint8_t* slot = s_values[s_value_next];
+    s_value_next = (uint8_t)((s_value_next + 1) % OPCUA_MAX_NODES_PER_READ);
+
+    // Between the scans of the task that owns the variable (none for a global,
+    // which its own mutex covers), or as it stands if that task is stalled
+    // mid-scan, as the debugger reads it.
+    const uint32_t locked = runtime_rtos_lock_workers_for_read(runtime_rtos_owner_mask(row->arr, row->elem));
+    const uint16_t copied = openplc_debug_read(row->arr, row->elem, slot);
+    runtime_rtos_unlock_workers(locked);
+    if (copied == 0)
+        return UA_STATUSCODE_BADNODATA;
+
+    const void* payload = slot;
+    if (is_string_tag(row->tag))
+    {
+        // The debug wire form: one length byte in code units, then the payload.
+        UA_String* hdr = next_string_header();
+        hdr->length = (size_t)slot[0] * (row->tag == OPCUA_TAG_WSTRING ? 2u : 1u);
+        hdr->data   = &slot[1];
+        payload = hdr;
+    }
+#else
     // Address the value in place instead of copying it out. `setScalarCopy`
     // allocated from the ~19 KB arena on every value of every read; this makes a
     // read allocation-free, which is what lets strings be served at all -- a
@@ -165,6 +197,7 @@ UA_StatusCode read_node(UA_Server* server, const UA_NodeId* sessionId, void* ses
         hdr->data   = (UA_Byte*)src;   // not copied, not freed -- see NODELETE
         payload = hdr;
     }
+#endif
 
     UA_Variant_setScalar(&value->value, (void*)payload, &UA_TYPES[kTagToUaType[row->tag]]);
     // Nothing here is owned by the variant: neither the value, nor a string's
@@ -235,14 +268,40 @@ UA_StatusCode write_node(UA_Server* server, const UA_NodeId* sessionId, void* se
         wire[0] = (uint8_t)units;
         if (payload > 0 && in->data != nullptr)
             memcpy(&wire[1], in->data, payload);
+#if OPENPLC_RTOS
+        // Between two of the owner's scans; released before logging.
+        runtime_rtos_write_lock_t held;
+        if (!runtime_rtos_lock_for_write(row->arr, row->elem, &held))
+        {
+            plc_rtos_count_busy();
+            return UA_STATUSCODE_BADRESOURCEUNAVAILABLE;
+        }
         status = openplc_debug_write(row->arr, row->elem, wire, (uint16_t)(1 + payload));
+        if (status == OPENPLC_DEBUG_STATUS_OK) runtime_rtos_after_write(row->arr, row->elem);
+        runtime_rtos_unlock_write(&held);
+#else
+        status = openplc_debug_write(row->arr, row->elem, wire, (uint16_t)(1 + payload));
+#endif
     }
     else
     {
         if (width > 8)
             return UA_STATUSCODE_BADNOTWRITABLE;
+#if OPENPLC_RTOS
+        runtime_rtos_write_lock_t held;
+        if (!runtime_rtos_lock_for_write(row->arr, row->elem, &held))
+        {
+            plc_rtos_count_busy();
+            return UA_STATUSCODE_BADRESOURCEUNAVAILABLE;
+        }
         status = openplc_debug_write(
             row->arr, row->elem, static_cast<const uint8_t*>(value->value.data), width);
+        if (status == OPENPLC_DEBUG_STATUS_OK) runtime_rtos_after_write(row->arr, row->elem);
+        runtime_rtos_unlock_write(&held);
+#else
+        status = openplc_debug_write(
+            row->arr, row->elem, static_cast<const uint8_t*>(value->value.data), width);
+#endif
     }
     OPCUA_LOG("[ua] write %s arr=%u elem=%u w=%u status=0x%02x",
               row->browse_name, (unsigned)row->arr, (unsigned)row->elem,

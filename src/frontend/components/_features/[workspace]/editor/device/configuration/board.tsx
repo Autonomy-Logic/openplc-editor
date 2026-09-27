@@ -26,6 +26,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
+import { RtosModeSwitch } from './components/rtos-mode-switch'
 
 const Board = memo(function () {
   const capabilities = useCapabilities()
@@ -761,6 +762,7 @@ const Board = memo(function () {
               </DeviceConnectButton>
             </>
           ) : null}
+          <RtosModeSwitch boardInfo={currentBoardInfo} />
           {!isOpenPLCRuntimeTarget(currentBoardInfo) && !isSimulatorTarget(currentBoardInfo) && (
             <div id='board-specs' className='flex w-full flex-col items-start justify-start gap-4'>
               <Label id='board-specs-label' className='w-fit text-xs text-neutral-950 dark:text-white'>

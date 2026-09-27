@@ -67,6 +67,8 @@ const BOOLEAN_FLAGS = [
   'keep-forces',
   'keep-going',
   'all',
+  // `debug stats --reset`: start a new statistics window after the read.
+  'reset',
 ] as const
 
 const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'packages'] as const
@@ -87,6 +89,7 @@ Usage
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
   openplc-cli debug list
   openplc-cli debug status | list-vars | read | force | unforce | start | stop | watch | poll | unwatch
+  openplc-cli debug stats [--reset]                          (each task's timing, a board in RTOS mode)
   openplc-cli debug close --session <id> | --all [--keep-forces]
   openplc-cli debug repl [--session <id>]                       (interactive; needs a terminal)
   openplc-cli debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)

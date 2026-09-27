@@ -34,6 +34,7 @@ import type { CppPouData as CppPouDataCode } from '../../utils/cpp/generateCBloc
 import { generateCBlocksCode } from '../../utils/cpp/generateCBlocksCode'
 import type { CppPouData as CppPouDataHeader } from '../../utils/cpp/generateCBlocksHeader'
 import { generateCBlocksHeader } from '../../utils/cpp/generateCBlocksHeader'
+import { RTOS_SKETCH_SOURCES, THREADED_RUNTIME_HEADERS, withRtosConfigInclude } from './generate-rtos-config'
 
 export interface ComposeFirmwareBundleInput {
   /** Strucpp emitted artefacts (key = filename at zip root, value
@@ -87,6 +88,13 @@ export interface ComposeFirmwareBundleInput {
    *  `#include "s7comm_config.h"` unconditionally and compile to nothing on
    *  every target that has no server. */
   s7commConfigH?: string
+  /** Generated `rtos_config.h` for a build in RTOS mode, on the same contract:
+   *  the skeleton ships a stub with `OPENPLC_RTOS 0`, so without it the build
+   *  is the single loop and compiles every RTOS addition out. */
+  rtosConfigH?: string
+  /** RTOS mode with one thread per IEC task: the bundled STruC++ runtime
+   *  headers include `rtos_config.h` first, which defines STRUCPP_THREADED. */
+  strucppThreaded?: boolean
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -331,7 +339,17 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton } = input
+  const {
+    strucppFiles,
+    cBlocks,
+    definesH,
+    vppConfigH,
+    opcuaConfigH,
+    s7commConfigH,
+    rtosConfigH,
+    strucppThreaded,
+    firmwareSkeleton,
+  } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -414,6 +432,32 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // s7comm_config.h — identical contract.
   if (s7commConfigH !== undefined) {
     files['src/s7comm_config.h'] = s7commConfigH
+  }
+
+  // rtos_config.h — identical contract: only a build in RTOS mode replaces the
+  // skeleton's `OPENPLC_RTOS 0` stub.
+  if (rtosConfigH !== undefined) {
+    files['src/rtos_config.h'] = rtosConfigH
+  } else {
+    // Left out, not compiled to nothing: even an empty object can move where
+    // the linker puts its branch veneers, and so change the single-loop image.
+    for (const source of RTOS_SKETCH_SOURCES) delete files[source]
+  }
+
+  // A threaded build: STRUCPP_THREADED changes the configuration's layout, so
+  // every file that includes the STruC++ runtime must see it. The two headers
+  // that read it include rtos_config.h first, rather than relying on flags.
+  if (strucppThreaded) {
+    for (const header of THREADED_RUNTIME_HEADERS) {
+      const content = files[header]
+      // Loud, not skipped: a runtime header the patch missed would compile the
+      // runtime unthreaded under a threaded glue, a layout mismatch no compiler
+      // reports.
+      if (typeof content !== 'string') {
+        throw new Error(`RTOS mode: the STruC++ runtime header ${header} is not in the firmware bundle`)
+      }
+      files[header] = withRtosConfigInclude(content)
+    }
   }
 
   // OpenPLCUserLib.h stub — Baremetal.ino unconditionally

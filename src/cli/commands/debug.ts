@@ -16,6 +16,8 @@ import { userInfo } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
+import { isRtosTaskStuck } from '@root/middleware/shared/utils/rtos'
+
 import { boolFlag, listFlag, type ParsedArgs, stringFlag } from '../args'
 import { resolveOptionalRuntimeCredentials } from '../credentials'
 import { formatValue, formatVariableList } from '../debug/format'
@@ -110,6 +112,7 @@ export function exitCodeForError(code: string): ExitCodeValue {
     case ErrorCode.MissingArgument:
       return ExitCode.Usage
     case ErrorCode.TargetError:
+    case ErrorCode.NotSupported:
     case ErrorCode.UploadRejected:
     case ErrorCode.Md5Mismatch:
       return ExitCode.TargetError
@@ -176,13 +179,14 @@ export async function runDebug(args: ParsedArgs, reporter: Reporter, context: De
     case 'watch':
     case 'poll':
     case 'unwatch':
+    case 'stats':
       return runOneShot(args.subcommand, args, reporter, context)
     case undefined:
       return reporter.failure(
         {
           code: ErrorCode.MissingArgument,
           message:
-            'Name a debug subcommand: open, list, close, status, list-vars, read, force, unforce, start, stop, watch, poll, unwatch, repl',
+            'Name a debug subcommand: open, list, close, status, list-vars, read, force, unforce, start, stop, watch, poll, unwatch, stats, repl',
         },
         ExitCode.Usage,
       )
@@ -495,6 +499,8 @@ export function buildRequest(
   switch (kind) {
     case 'status':
       return { request: { id, kind } }
+    case 'stats':
+      return { request: { id, kind, reset: boolFlag(args, 'reset') } }
     case 'list-vars':
       return { request: { id, kind, filter: stringFlag(args, 'filter') ?? args.positionals[0] } }
     case 'read':
@@ -587,6 +593,47 @@ export function renderOk(response: OkResponse): string {
       return `${data.value.name} : ${data.value.type} = ${formatValue(data.value)}${data.value.forced ? ' [FORCED]' : ''}`
     case 'plc-state':
       return `PLC is now ${data.plcState}`
+    case 'stats': {
+      const { stats } = data
+      const us = (value: number) => value.toLocaleString('en-US')
+      const service = stats.services[0]
+      return [
+        renderTable(
+          [
+            'TASK',
+            'PERIOD us',
+            'RELEASES',
+            'OVERRUNS',
+            'SCAN us min/avg/max',
+            'CYCLE us min/max',
+            'LATENCY us avg/max',
+            'STACK FREE',
+            'NOW',
+          ],
+          stats.tasks.map((task) => [
+            task.name,
+            us(task.periodUs),
+            us(task.releases),
+            us(task.overruns),
+            `${us(task.scanMinUs)} / ${us(task.scanAvgUs)} / ${us(task.scanMaxUs)}`,
+            `${us(task.cycleMinUs)} / ${us(task.cycleMaxUs)}`,
+            `${us(task.latencyAvgUs)} / ${us(task.latencyMaxUs)}`,
+            `${us(task.stackFreeBytes)} B`,
+            isRtosTaskStuck(task) ? `STUCK ${us(task.busyUs)} us` : task.busyUs > 0 ? 'scanning' : 'idle',
+          ]),
+        ),
+        `base tick ${us(stats.baseTickUs)} us`,
+        stats.heapFreeBytes > 0
+          ? `heap      ${us(stats.heapFreeBytes)} B free, ${us(stats.heapMinFreeBytes)} B lowest`
+          : 'heap      not reported by this board',
+        `retain    saved late by up to ${us(stats.retainLateMaxUs)} us`,
+        ...(service
+          ? [
+              `debugger  longest pass ${us(service.iterationMaxUs)} us, ${us(service.busyReplies)} busy replies since boot`,
+            ]
+          : []),
+      ].join('\n')
+    }
     case 'watch':
       return `Recording ${data.watching.length} variable(s) every ${data.intervalMs} ms: ${data.watching.join(', ')}`
     case 'poll': {
@@ -631,6 +678,7 @@ const REPL_HELP = `Commands
   watch <name> [name...]     start recording; use poll to drain
   poll                       show what has been recorded since the last poll
   unwatch [name...]          stop recording (all, or the named ones)
+  stats [reset]              each task's timing (a board in RTOS mode); reset starts a new window
   start | stop               run/stop the PLC
   status                     connection, program md5, plc state, forced list
   help                       this list
@@ -672,6 +720,11 @@ export function parseReplLine(
       return { request: { id, kind: 'poll' } }
     case 'unwatch':
       return { request: { id, kind: 'unwatch', names: rest.length > 0 ? rest : undefined } }
+    case 'stats':
+      if (rest.length > 1 || (rest.length === 1 && !['reset', '--reset'].includes(rest[0].toLowerCase()))) {
+        return { error: 'stats takes one optional word: reset' }
+      }
+      return { request: { id, kind: 'stats', reset: rest.length === 1 } }
     case 'start':
       return { request: { id, kind: 'start' } }
     case 'stop':
