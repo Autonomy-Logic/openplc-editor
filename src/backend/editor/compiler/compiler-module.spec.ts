@@ -2,7 +2,7 @@ import { cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { CompilerModule } from './compiler-module'
+import { CompilerModule, mergeStandardFlags, standardFlagsForCore } from './compiler-module'
 
 jest.mock('electron', () => ({
   app: {
@@ -352,5 +352,79 @@ describe('CompilerModule', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(isClosed()).toBe(true)
     })
+  })
+})
+
+// The whole contract between us and the Arduino cores now lives in these two
+// functions: with the pre-compile gone, a core that defaults below C++14 only
+// reaches the C++14 strucpp runtime because of the flag pushed here.
+describe('standardFlagsForCore', () => {
+  it.each([
+    ['arduino:avr', ['-std=gnu++14']],
+    ['arduino:samd', ['-std=gnu++14']],
+    ['FACTS:samd', ['-std=gnu++14']],
+    ['industrialshields:esp32', ['-std=gnu++14']],
+    // From C++14 gcc emits calls to the sized `operator delete`, which this
+    // core's libstdc++ never defines — its own SPI.h is what fails to link.
+    ['arduino:megaavr', ['-std=gnu++14', '-fno-sized-deallocation']],
+  ])('pushes %s up to gnu++14', (core, expected) => {
+    expect(standardFlagsForCore(core)).toEqual(expected)
+  })
+
+  it.each([
+    ['arduino:mbed_nano'],
+    ['arduino:mbed_giga'],
+    ['arduino:mbed_opta'],
+    ['arduino:mbed_edge'],
+    ['arduino:mbed_portenta'],
+    ['esp32:esp32'],
+    ['rp2040:rp2040'],
+    ['arduino:zephyr'],
+    ['arduino:renesas_uno'],
+    ['STMicroelectronics:stm32'],
+    ['esp8266:esp8266'],
+  ])('leaves %s alone — already at gnu++14 or above', (core) => {
+    expect(standardFlagsForCore(core)).toEqual([])
+  })
+
+  // gcc 4.8.3 rejects -std=gnu++14 outright and implements neither relaxed
+  // constexpr nor generic lambdas, so no flag rescues it. DOPE-640.
+  it('leaves arduino:sam alone — no flag rescues gcc 4.8.3', () => {
+    expect(standardFlagsForCore('arduino:sam')).toEqual([])
+  })
+
+  it('returns nothing for an unknown core', () => {
+    expect(standardFlagsForCore(undefined)).toEqual([])
+    expect(standardFlagsForCore('some:future-core')).toEqual([])
+  })
+
+  it('matches on the core prefix, so a board-specific suffix still counts', () => {
+    expect(standardFlagsForCore('arduino:avr:mega')).toEqual(['-std=gnu++14'])
+  })
+})
+
+describe('mergeStandardFlags', () => {
+  it('appends the flag when the board declares none', () => {
+    expect(mergeStandardFlags(['-DFOO'], 'arduino:avr')).toEqual(['-DFOO', '-std=gnu++14'])
+  })
+
+  // The Simulator carries `-std=gnu++17` in hals.json. Appending gnu++14 after
+  // it would win on the command line and silently downgrade that board.
+  it('keeps a -std the board already declares', () => {
+    expect(mergeStandardFlags(['-std=gnu++17'], 'arduino:avr')).toEqual(['-std=gnu++17'])
+  })
+
+  it('still adds -fno-sized-deallocation on megaavr when -std is already set', () => {
+    expect(mergeStandardFlags(['-std=gnu++17'], 'arduino:megaavr')).toEqual(['-std=gnu++17', '-fno-sized-deallocation'])
+  })
+
+  it('does not mutate the array it is given', () => {
+    const original = ['-DFOO']
+    mergeStandardFlags(original, 'arduino:avr')
+    expect(original).toEqual(['-DFOO'])
+  })
+
+  it('leaves the flags untouched for a core that needs nothing', () => {
+    expect(mergeStandardFlags(['-DFOO'], 'esp32:esp32')).toEqual(['-DFOO'])
   })
 })

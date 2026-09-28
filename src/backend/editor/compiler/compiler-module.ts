@@ -220,7 +220,7 @@ type CompileArduinoProgramArgs = {
  * `-std=gnu++14` outright and implements neither relaxed constexpr nor generic
  * lambdas, so no flag rescues it. That board is DOPE-640.
  */
-function standardFlagsForCore(core: string | undefined): string[] {
+export function standardFlagsForCore(core: string | undefined): string[] {
   if (core === undefined) return []
   // megaavr additionally needs the sized-deallocation opt-out: from C++14 gcc
   // emits `operator delete(void*, size_t)` calls its libstdc++ never defines,
@@ -228,6 +228,22 @@ function standardFlagsForCore(core: string | undefined): string[] {
   if (core.startsWith('arduino:megaavr')) return ['-std=gnu++14', '-fno-sized-deallocation']
   const belowCxx14 = ['arduino:avr', 'arduino:samd', 'FACTS:samd', 'industrialshields:esp32']
   return belowCxx14.some((id) => core.startsWith(id)) ? ['-std=gnu++14'] : []
+}
+
+/**
+ * Append the core's standard flags to `cxxFlags`, without overriding a `-std`
+ * the board already declares.
+ *
+ * The Simulator carries `-std=gnu++17` in `hals.json`; pushing `gnu++14` after
+ * it would win on the command line and silently downgrade that board. Matching
+ * on the flag name rather than the whole token is what makes that hold.
+ */
+export function mergeStandardFlags(cxxFlags: string[], core: string | undefined): string[] {
+  const merged = [...cxxFlags]
+  for (const flag of standardFlagsForCore(core)) {
+    if (!merged.some((existing) => existing.startsWith(flag.split('=')[0]))) merged.push(flag)
+  }
+  return merged
 }
 
 class CompilerModule {
@@ -1361,8 +1377,8 @@ class CompilerModule {
     compilationPath: string,
     // Reserved on the signature so caller orchestrators (Arduino vs Runtime
     // v4) keep a stable API surface; both runtimes share <build>/src/ today
-    // because both need gnu++17 for the strucpp IECVar<T> wrappers, but a
-    // future runtime might branch off this discriminator again.
+    // because arduino-cli compiles everything under it with the sketch, but
+    // a future runtime might branch off this discriminator again.
     _boardRuntime: string,
     handleOutputData: HandleOutputDataCallback,
   ) {
@@ -1374,10 +1390,9 @@ class CompilerModule {
     }
 
     const cppPous = originalCppPous
-    // Written into <build>/src/ so the pre-compile loop picks it up with
-    // -std=gnu++17. The static Baremetal/c_blocks_code.cpp baseline stays
-    // strucpp-free and is compiled by arduino-cli in the core's native
-    // standard.
+    // Written into <build>/src/, which arduino-cli takes as a library and
+    // compiles with the sketch in the core's own standard — that is what
+    // lets a C++ block resolve its Arduino #includes.
     // Every data type the project declares is aliased into the block's scope,
     // including ones reachable only through a structure member.
     const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
@@ -1442,17 +1457,6 @@ class CompilerModule {
     })
   }
 
-  // Pre-compile every .cpp under `<compilationPath>/src/` (excluding the
-  // board HAL `arduino.cpp`) with the board's toolchain at -std=gnu++17 and
-  // archive into `libOpenPLCUserLib.a`. Keeps the gnu++17 + exceptions
-  // surface contained — arduino-cli compiles the core and sketch in
-  // whatever standard the core ships with.
-  // Wrap the precompiled archive as an Arduino library so arduino-cli's
-  // library discovery picks it up via `#include <OpenPLCUserLib.h>` and
-  // links the archive without recompiling anything inside. Staged under
-  // os.tmpdir() because arduino-cli's --build-property tokenises on
-  // whitespace and ignores quotes, so a build path with spaces (e.g.
-  // "Arduino Mega") would break the -L flag and link input list.
   async handleCompileArduinoProgram({
     boardTarget,
     boardHalsContent,
@@ -1467,7 +1471,7 @@ class CompilerModule {
     }
 
     // Resolve unified board info (VPP-aware, falls back to hals.json) so the
-    // pre-compile + arduino-cli paths see the same compilerFlags/platformOptions.
+    // flags and platformOptions below all come from one source.
     const resolver = await this.#createBoardInfoResolver()
     const info = resolver.resolve(boardTarget)
     if (!info.platform) {
@@ -1497,7 +1501,7 @@ class CompilerModule {
     const cxxFlags: string[] = info.compilerFlags?.cxx_flags ? [...info.compilerFlags.cxx_flags] : []
     if (avrLibStdCppInclude) cxxFlags.push(`-I${avrLibStdCppInclude}`)
 
-    // EXPERIMENT (DOPE-651): no pre-compile. The strucpp runtime is C++14 now,
+    // No pre-compile: the strucpp runtime is C++14 now,
     // so the generated TUs no longer need a standard the core may not offer —
     // they stay under `src/`, which already goes to arduino-cli as a library,
     // and arduino-cli compiles them with the sketch. That is also what puts a
@@ -1509,9 +1513,7 @@ class CompilerModule {
     // along on megaavr: from C++14 gcc emits calls to the sized
     // `operator delete`, and that core's libstdc++ does not define it, so the
     // core's own SPI.h fails to link without it.
-    for (const flag of standardFlagsForCore(info.core)) {
-      if (!cxxFlags.some((existing) => existing.startsWith(flag.split('=')[0]))) cxxFlags.push(flag)
-    }
+    const effectiveCxxFlags = mergeStandardFlags(cxxFlags, info.core)
 
     // Shared with openplc-web's compiler-adapter — single source of truth for
     // arduino-cli compile argv composition. The compile entry is synthesised
@@ -1523,10 +1525,7 @@ class CompilerModule {
     // After the shared helper composes its baseline args we append:
     //   --fqbn (effective with platformOptions applied),
     //   compiler.cpp.extra_flags (VPP cxx_flags),
-    //   --library <precompiledLibDir> (so arduino-cli's discovery finds the
-    //     header via Baremetal.ino's #include <OpenPLCUserLib.h>),
-    //   compiler.libraries.ldflags=-L<archDir> -lOpenPLCUserLib (arduino-cli
-    //     doesn't auto-emit -L/-l for libraries marked precompiled=full).
+    //   compiler.cpp.extra_flags (VPP cxx_flags plus the standard bump).
     const compileEntry = {
       platform: info.platform,
       core: info.core,
@@ -1537,7 +1536,9 @@ class CompilerModule {
     }
     void boardHalsContent // accepted for signature compat; data comes from `info`
     const cxxFlagsArg =
-      cxxFlags.length > 0 ? ['--build-property', `compiler.cpp.extra_flags=${cxxFlags.join(' ')}`] : []
+      effectiveCxxFlags.length > 0
+        ? ['--build-property', `compiler.cpp.extra_flags=${effectiveCxxFlags.join(' ')}`]
+        : []
     const buildProjectFlags = [
       ...buildArduinoCliCompileArgs(compileEntry, {
         sketchPath: join(baremetalPath, 'Baremetal.ino'),
