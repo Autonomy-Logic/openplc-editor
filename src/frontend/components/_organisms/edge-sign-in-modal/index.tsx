@@ -80,8 +80,12 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
   const onSignedInRef = useRef(onSignedIn)
   onSignedInRef.current = onSignedIn
 
-  // A password sign-in both restores the session and resolves `onSubmit`; announce it once.
+  // Several restorations can reach one opening before the caller closes it; announce the first.
   const signedInAnnounced = useRef(false)
+
+  // Every restoration this dialog heard, announced or not. A password request compares it across
+  // its own round trip to tell whether the restoration already spoke for it.
+  const restorationsHeard = useRef(0)
 
   // Bumped on every open, so a password request still in flight from an earlier opening cannot
   // write its outcome into the fresh form.
@@ -118,7 +122,10 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
       return
     }
 
-    return account.session.onRestored(() => announceSignedIn(true))
+    return account.session.onRestored(() => {
+      restorationsHeard.current += 1
+      announceSignedIn(true)
+    })
   }, [open, account, announceSignedIn])
 
   // Provider flow opens in a separate tab and lands on /oauth-complete there, so this
@@ -131,6 +138,7 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
 
   const onSubmit = async (values: SignInValues) => {
     const submittedIn = opening.current
+    const restorationsBefore = restorationsHeard.current
 
     setSubmitting(true)
     setFormState({ kind: 'idle' })
@@ -141,9 +149,12 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
       .signIn(values.email, values.password)
       .catch((): EdgeSignInOutcome => ({ status: 'failed' }))
 
-    // A success still counts, whenever it lands: the session is signed in either way.
-    if (outcome.status === 'signed-in') {
-      announceSignedIn(false)
+    // Every success is reported, whenever it lands and whatever was reported before it: a later
+    // request may have signed in a different account, and the caller has to re-read for it. The
+    // one exception is a request whose own restoration already reached the caller.
+    if (outcome.status === 'signed-in' && restorationsHeard.current === restorationsBefore) {
+      signedInAnnounced.current = true
+      onSignedInRef.current({ sessionRestored: false })
     }
 
     // Anything else belongs to a form that has since been closed and reset.

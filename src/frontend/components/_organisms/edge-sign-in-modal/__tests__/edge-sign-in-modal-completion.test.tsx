@@ -197,4 +197,28 @@ describe('EdgeSignInModal', () => {
     expect(calls).toHaveLength(1)
     expect(calls.at(-1)).toEqual({ sessionRestored: false })
   })
+
+  it('reports each of two overlapping successes, so the later account is re-read too', async () => {
+    const account = fakeAccount({ signInRestores: false })
+    const { calls, onSignedIn } = recorder()
+
+    const { rerender } = render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
+    account.holdSignIns()
+    await submitPassword()
+
+    rerender(<EdgeSignInModal open={false} onSignedIn={onSignedIn} account={account.port} />)
+    rerender(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
+    await submitPassword()
+
+    await act(async () => {
+      account.settleSignIn({ status: 'signed-in', user: ADA })
+      await Promise.resolve()
+    })
+    await act(async () => {
+      account.settleSignIn({ status: 'signed-in', user: { ...ADA, id: 'u2', email: 'grace@example.com' } })
+      await Promise.resolve()
+    })
+
+    expect(calls).toEqual([{ sessionRestored: false }, { sessionRestored: false }])
+  })
 })
