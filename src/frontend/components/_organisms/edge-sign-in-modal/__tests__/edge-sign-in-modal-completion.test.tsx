@@ -1,6 +1,6 @@
 /** The sign-in dialog's exits: a password sign-in it ran itself, and a provider sign-in that finished somewhere else. */
 
-import { describe, expect, it, jest } from '@jest/globals'
+import { describe, expect, it } from '@jest/globals'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -77,6 +77,16 @@ function fakeAccount({ signInRestores = true }: FakeAccountOptions = {}) {
   }
 }
 
+/** Records what the dialog reported. Hand-rolled: `jest.fn` has no counterpart behind the web repo's `@jest/globals`. */
+function recorder() {
+  const calls: Array<{ sessionRestored: boolean }> = []
+  const onSignedIn = (sign: { sessionRestored: boolean }) => {
+    calls.push(sign)
+  }
+
+  return { calls, onSignedIn }
+}
+
 async function submitPassword() {
   await userEvent.type(screen.getByLabelText('Email address'), 'ada@example.com')
   await userEvent.type(screen.getByLabelText('Password'), 'correct horse')
@@ -86,55 +96,55 @@ async function submitPassword() {
 describe('EdgeSignInModal', () => {
   it('closes when a provider sign-in restores the session while it is open', () => {
     const account = fakeAccount()
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
 
     act(() => account.restore())
 
-    expect(onSignedIn).toHaveBeenCalledTimes(1)
-    expect(onSignedIn).toHaveBeenCalledWith({ sessionRestored: true })
+    expect(calls).toHaveLength(1)
+    expect(calls.at(-1)).toEqual({ sessionRestored: true })
   })
 
   it('ignores a restoration while closed', () => {
     const account = fakeAccount()
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     render(<EdgeSignInModal open={false} onSignedIn={onSignedIn} account={account.port} />)
 
     act(() => account.restore())
 
     expect(account.listenerCount()).toBe(0)
-    expect(onSignedIn).not.toHaveBeenCalled()
+    expect(calls).toHaveLength(0)
   })
 
   it('reports a password sign-in once, as restored, although it also resolves the submit', async () => {
     const account = fakeAccount()
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
     await submitPassword()
 
-    await waitFor(() => expect(onSignedIn).toHaveBeenCalled())
-    expect(onSignedIn).toHaveBeenCalledTimes(1)
-    expect(onSignedIn).toHaveBeenCalledWith({ sessionRestored: true })
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0))
+    expect(calls).toHaveLength(1)
+    expect(calls.at(-1)).toEqual({ sessionRestored: true })
   })
 
   it('reports a password sign-in that restored nothing as unrestored, so the caller re-reads itself', async () => {
     const account = fakeAccount({ signInRestores: false })
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
     await submitPassword()
 
-    await waitFor(() => expect(onSignedIn).toHaveBeenCalled())
-    expect(onSignedIn).toHaveBeenCalledTimes(1)
-    expect(onSignedIn).toHaveBeenCalledWith({ sessionRestored: false })
+    await waitFor(() => expect(calls.length).toBeGreaterThan(0))
+    expect(calls).toHaveLength(1)
+    expect(calls.at(-1)).toEqual({ sessionRestored: false })
   })
 
   it('reports again after being reopened', () => {
     const account = fakeAccount()
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     const { rerender } = render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
     act(() => account.restore())
@@ -143,12 +153,12 @@ describe('EdgeSignInModal', () => {
     rerender(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
     act(() => account.restore())
 
-    expect(onSignedIn).toHaveBeenCalledTimes(2)
+    expect(calls).toHaveLength(2)
   })
 
   it('keeps a failure from an earlier opening out of the fresh form', async () => {
     const account = fakeAccount()
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     const { rerender } = render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
     account.holdSignIns()
@@ -165,12 +175,12 @@ describe('EdgeSignInModal', () => {
 
     expect(screen.queryByText('Email or password is incorrect.')).toBeNull()
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeTruthy()
-    expect(onSignedIn).not.toHaveBeenCalled()
+    expect(calls).toHaveLength(0)
   })
 
   it('still reports a success from an earlier opening: the session is signed in either way', async () => {
     const account = fakeAccount({ signInRestores: false })
-    const onSignedIn = jest.fn()
+    const { calls, onSignedIn } = recorder()
 
     const { rerender } = render(<EdgeSignInModal open onSignedIn={onSignedIn} account={account.port} />)
     account.holdSignIns()
@@ -184,7 +194,7 @@ describe('EdgeSignInModal', () => {
       await Promise.resolve()
     })
 
-    expect(onSignedIn).toHaveBeenCalledTimes(1)
-    expect(onSignedIn).toHaveBeenCalledWith({ sessionRestored: false })
+    expect(calls).toHaveLength(1)
+    expect(calls.at(-1)).toEqual({ sessionRestored: false })
   })
 })
