@@ -154,6 +154,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.isEphemeralProject = false
           workspace.editingState = 'initial-state'
           workspace.selectedProjectTreeLeaf = { label: '', type: null }
+          workspace.isCollapsed = false
+          workspace.isModalOpen = []
           workspace.isDebuggerVisible = false
           workspace.debuggerTargetIp = null
           workspace.debugCContent = null

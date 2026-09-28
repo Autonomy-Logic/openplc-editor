@@ -13,6 +13,7 @@
  *   - window-controls:hide        (send)
  *   - window:reload               (send)
  *   - window:rebuild-menu         (send)
+ *   - window:project-open         (send)
  *   - app:quit                    (send)
  *   - app:request-quit            (send) — request confirmation
  *   - app:quit-requested          (on)   — show confirmation
@@ -78,4 +79,8 @@ export function createEditorWindowAdapter(): WindowPort {
       })
     },
   }
+}
+
+export function setMenuProjectOpen(open: boolean): void {
+  window.bridge.setMenuProjectOpen(open)
 }
