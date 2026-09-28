@@ -2208,6 +2208,7 @@ class MainProcessBridge implements MainIpcModule {
       logger.error('Error rebuilding application menu:', error)
     })
   }
+
   handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
     if (typeof open !== 'boolean') return
     void this.menuBuilder.setProjectOpen(open).catch((error) => {
