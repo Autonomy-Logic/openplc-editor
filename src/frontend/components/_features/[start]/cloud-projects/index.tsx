@@ -235,9 +235,13 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Re
         onOpenChange={setSignInOpen}
         account={edgeAccount}
         reason='signed-out'
-        onSignedIn={() => {
+        onSignedIn={({ sessionRestored }) => {
           setSignInOpen(false)
-          void load()
+
+          // The `onRestored` subscription above has already reloaded.
+          if (!sessionRestored) {
+            void load()
+          }
         }}
       />
     </section>

@@ -22,7 +22,12 @@ interface EdgeSignInModalProps {
   open: boolean
   /** Requests a close, on a build where this dialog is dismissible (absent where an account is required). */
   onOpenChange?: (open: boolean) => void
-  onSignedIn: () => void
+  /**
+   * The session is signed in and the dialog may close. `sessionRestored` says the session's own
+   * `onRestored` already fired, so whatever subscribes to it has re-read; only a caller that
+   * does not subscribe, or a sign-in that restored nothing, still has to.
+   */
+  onSignedIn: (sign: { sessionRestored: boolean }) => void
   account: EdgeAccountPort
   reason?: 'expired' | 'expired-reloaded' | 'sign-in-required' | 'oauth-failed' | 'signed-out'
 }
@@ -78,6 +83,10 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
   // A password sign-in both restores the session and resolves `onSubmit`; announce it once.
   const signedInAnnounced = useRef(false)
 
+  // Bumped on every open, so a password request still in flight from an earlier opening cannot
+  // write its outcome into the fresh form.
+  const opening = useRef(0)
+
   // Reset on every open: the caller keeps this component mounted and only flips `open`,
   // so stale form state and error messages would otherwise survive a close.
   useEffect(() => {
@@ -90,15 +99,16 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
     setShowPassword(false)
     reset()
     signedInAnnounced.current = false
+    opening.current += 1
   }, [open, reset])
 
-  const announceSignedIn = useCallback(() => {
+  const announceSignedIn = useCallback((sessionRestored: boolean) => {
     if (signedInAnnounced.current) {
       return
     }
 
     signedInAnnounced.current = true
-    onSignedInRef.current()
+    onSignedInRef.current({ sessionRestored })
   }, [])
 
   // A provider sign-in finishes outside this dialog (system browser on desktop, another tab on
@@ -108,7 +118,7 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
       return
     }
 
-    return account.session.onRestored(announceSignedIn)
+    return account.session.onRestored(() => announceSignedIn(true))
   }, [open, account, announceSignedIn])
 
   // Provider flow opens in a separate tab and lands on /oauth-complete there, so this
@@ -120,6 +130,8 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
   const signUpUrl = new URL('/signup', account.frontendBaseUrl).toString()
 
   const onSubmit = async (values: SignInValues) => {
+    const submittedIn = opening.current
+
     setSubmitting(true)
     setFormState({ kind: 'idle' })
 
@@ -129,11 +141,20 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
       .signIn(values.email, values.password)
       .catch((): EdgeSignInOutcome => ({ status: 'failed' }))
 
+    // A success still counts, whenever it lands: the session is signed in either way.
+    if (outcome.status === 'signed-in') {
+      announceSignedIn(false)
+    }
+
+    // Anything else belongs to a form that has since been closed and reset.
+    if (submittedIn !== opening.current) {
+      return
+    }
+
     setSubmitting(false)
 
     switch (outcome.status) {
       case 'signed-in':
-        announceSignedIn()
         return
       // Correct password, unconfirmed address - Edge answers 200, so this isn't a login failure.
       case 'email-unverified':
