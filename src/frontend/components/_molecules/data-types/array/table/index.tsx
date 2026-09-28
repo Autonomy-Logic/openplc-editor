@@ -32,9 +32,6 @@ const DimensionsTable = ({
 
   const {
     editor,
-    project: {
-      data: { dataTypes },
-    },
     projectActions: { updateDatatype },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
@@ -46,7 +43,9 @@ const DimensionsTable = ({
   // `derivation` / `baseType` / `initialValue` from the array
   // datatype (which would corrupt it for downstream consumers).
   const writeDimensions = (newDimensions: PLCArrayDatatype['dimensions']) => {
-    const current = dataTypes.find((dt) => dt.name === name)
+    // From the store, not this render: the cells call in through a memoised
+    // column definition, so this closure can be several renders old.
+    const current = useOpenPLCStore.getState().project.data.dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'array') return
     updateDatatype(name, { ...current, dimensions: newDimensions })
     handleFileAndWorkspaceSavedState(editor.meta.name)
@@ -78,7 +77,11 @@ const DimensionsTable = ({
 
   const handleBlur = (rowIndex: number) => {
     const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
-    const prevRows = tableData
+    // The column definition that calls this is memoised on [name, selectedRow],
+    // so `tableData` here can predate the table's first fill ([]): comparing or
+    // rebuilding from it would rewrite, or wipe, the dimensions. Read the store.
+    const stored = useOpenPLCStore.getState().project.data.dataTypes.find((dt) => dt.name === name)
+    const prevRows = stored?.derivation === 'array' ? stored.dimensions : tableData
 
     if (inputElement) {
       const inputValue = inputElement.value.trim()
@@ -96,6 +99,8 @@ const DimensionsTable = ({
           variant: 'fail',
         })
       } else {
+        // Runs on every blur: an unchanged dimension is not an edit.
+        if (prevRows[rowIndex]?.dimension === inputValue) return
         captureAndPush(editor.meta.name)
 
         const newRows = prevRows.map((row, index) => ({
