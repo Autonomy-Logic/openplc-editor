@@ -6,6 +6,7 @@ import {
   buildPlcSetStateRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
+  isGetListOverflowException,
   parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
@@ -456,6 +457,10 @@ export class ModbusRtuClient implements DeviceModbusTransport {
 
       const functionCodeResponse = response.readUInt8(7)
       const statusCode = response.readUInt8(8)
+
+      if (isGetListOverflowException(functionCodeResponse, statusCode)) {
+        return { success: false, error: 'ERROR_OUT_OF_MEMORY' }
+      }
 
       if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_LIST as number)) {
         return { success: false, error: 'Function code mismatch' }

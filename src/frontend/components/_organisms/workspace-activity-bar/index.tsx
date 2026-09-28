@@ -167,10 +167,14 @@ export const WorkspaceActivityBar = ({ defaultActivityBar, explorer, sourceContr
           onOpenChange={setSignInDialogOpen}
           account={edgeAccount}
           reason={accountSignedOutReason}
-          onSignedIn={() => {
+          onSignedIn={({ sessionRestored }) => {
             // Cleared, not left standing: the flag must not force the dialog back open on a later expiry.
             setSignInDialogOpen(false)
-            void refreshAccount()
+
+            // A restoration already reached the account hook, which re-reads on it.
+            if (!sessionRestored) {
+              void refreshAccount()
+            }
           }}
         />
       )}

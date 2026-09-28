@@ -23,6 +23,12 @@ import {
 } from '../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBody, parseJsonBodyAs } from '../edge-account/edge-http'
+import {
+  applyCloudFileSave,
+  applyCloudProjectSave,
+  beginCloudProjectRead,
+  materializeCloudProject,
+} from '../project/cloud-working-copy'
 
 /** Every successful payload from the API arrives wrapped as `{ data: ... }`. */
 const envelopeOf = <Schema extends z.ZodTypeAny>(data: Schema) => z.object({ data: data.nullish() })
@@ -212,6 +218,8 @@ function rawLoadedFilesFrom(raw: {
 }
 
 export async function readCloudProject(projectId: string): Promise<RawProjectFiles> {
+  const readStartedAt = beginCloudProjectRead()
+
   try {
     const response = await edgeAuthedRequest(detailsPath(projectId))
 
@@ -258,6 +266,11 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
 
     const raw = apiFilesToRaw(projectId, files)
 
+    // The build reads the project from disk. A pending PLCopen import has no project yet; its first save writes it.
+    if (raw.pendingPlcopenSource === undefined) {
+      await materializeCloudProject(raw, readStartedAt).catch(reportWorkingCopyFailure)
+    }
+
     return {
       success: true,
       data: {
@@ -279,6 +292,11 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
       },
     }
   }
+}
+
+/** Edge already holds the change, so a failed copy is logged rather than failing the open or the save. */
+function reportWorkingCopyFailure(error: unknown): void {
+  console.error('Could not update the local working copy of the Autonomy Edge project:', error)
 }
 
 /** `deletions` is omitted when empty, as the API expects. */
@@ -319,11 +337,17 @@ export async function saveCloudProject(files: WriteProjectFiles): Promise<{ succ
       return { success: false, error: `Could not read the project before saving it: ${read.error}` }
     }
 
-    return await writeEnvelope(
+    const written = await writeEnvelope(
       files.projectPath,
       mergeEnvelopeOverExisting(read.files, envelopeFromWriteProjectFiles(files)),
       files.deletions.filter((path) => path.length > 0),
     )
+
+    if (written.success) {
+      await applyCloudProjectSave(files).catch(reportWorkingCopyFailure)
+    }
+
+    return written
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Save failed' }
   }
@@ -360,7 +384,13 @@ export async function saveCloudFile(filePath: string, content: unknown): Promise
       return { success: false, error: `Autonomy Edge has no slot for ${relativePath}.` }
     }
 
-    return await writeEnvelope(projectId, envelope, [])
+    const written = await writeEnvelope(projectId, envelope, [])
+
+    if (written.success) {
+      await applyCloudFileSave(projectId, relativePath, text).catch(reportWorkingCopyFailure)
+    }
+
+    return written
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Save failed' }
   }

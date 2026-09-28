@@ -1,7 +1,7 @@
 import { parse } from 'yaml'
 
 import { reconcileArduinoCliConfig } from '../arduino-cli-config'
-import { ARDUINO_DATA } from '../types'
+import { ARDUINO_DATA, buildArduinoCliConfig } from '../types'
 
 /**
  * The config every install created before this change: two board-manager URLs
@@ -155,5 +155,130 @@ describe('ARDUINO_DATA', () => {
 
   it('is valid YAML with a non-empty board manager list', () => {
     expect(urlsOf(ARDUINO_DATA).length).toBeGreaterThan(0)
+  })
+})
+
+describe('buildArduinoCliConfig', () => {
+  const SHIPPED = buildArduinoCliConfig('/home/user/.config/open-plc-editor/arduino', '/home/user/Arduino/libraries')
+
+  function dirsOf(yaml: string): Record<string, string> {
+    const parsed: unknown = parse(yaml)
+    if (!isRecord(parsed)) return {}
+    const directories = parsed.directories
+    if (!isRecord(directories)) return {}
+    const out: Record<string, string> = {}
+    for (const [key, value] of Object.entries(directories)) {
+      if (typeof value === 'string') out[key] = value
+    }
+    return out
+  }
+
+  it('roots data and user under the directory it is given', () => {
+    // Left unset, arduino-cli installs into ~/.arduino15 and the user's
+    // sketchbook — the Arduino IDE's own directories.
+    expect(dirsOf(SHIPPED)).toEqual({
+      data: '/home/user/.config/open-plc-editor/arduino/data',
+      user: '/home/user/.config/open-plc-editor/arduino/user',
+    })
+  })
+
+  it('keeps the board manager URLs alongside the directories', () => {
+    expect(urlsOf(SHIPPED)).toEqual(urlsOf(ARDUINO_DATA))
+  })
+
+  it('quotes a Windows path so its backslashes survive YAML parsing', () => {
+    // A double-quoted scalar would read \U and \A as escapes and mangle the
+    // path. The separator `join` appends is the runner's, not Windows', so the
+    // assertion is about the root surviving verbatim.
+    const root = 'C:\\Users\\dev\\AppData\\Roaming\\OpenPLC Editor\\arduino'
+    const data = dirsOf(buildArduinoCliConfig(root, '/x/libraries')).data
+    expect(data.startsWith(root)).toBe(true)
+    expect(data).toContain('data')
+  })
+
+  it('quotes a path containing a single quote', () => {
+    const root = "/home/o'brien/.config/open-plc-editor/arduino"
+    expect(dirsOf(buildArduinoCliConfig(root, '/x/libraries')).data).toBe(`${root}/data`)
+  })
+})
+
+describe('reconcileArduinoCliConfig — directories', () => {
+  const SHIPPED = buildArduinoCliConfig('/opt/openplc/arduino', '/home/user/Arduino/libraries')
+
+  it('adds the directories to a config that has none', () => {
+    // Without this an existing install keeps writing into the Arduino IDE's
+    // directories forever, because the file is only created once.
+    const updated = requireUpdated(reconcileArduinoCliConfig(LEGACY_CONFIG, SHIPPED))
+    const parsed: unknown = parse(updated)
+    expect(isRecord(parsed) && parsed.directories).toEqual({
+      data: '/opt/openplc/arduino/data',
+      user: '/opt/openplc/arduino/user',
+      builtin: { libraries: '/home/user/Arduino/libraries' },
+    })
+  })
+
+  it('never replaces a directory the user already set', () => {
+    // That value is either a deliberate choice or where their cores already
+    // are; moving it silently would orphan gigabytes of downloads.
+    const custom = 'directories:\n  data: /mnt/big-disk/arduino\n'
+    const updated = requireUpdated(reconcileArduinoCliConfig(custom, SHIPPED))
+    const parsed: unknown = parse(updated)
+    expect(isRecord(parsed) && parsed.directories).toEqual({
+      data: '/mnt/big-disk/arduino',
+      user: '/opt/openplc/arduino/user',
+      builtin: { libraries: '/home/user/Arduino/libraries' },
+    })
+  })
+
+  it('is idempotent once the directories are in place', () => {
+    const once = requireUpdated(reconcileArduinoCliConfig(LEGACY_CONFIG, SHIPPED))
+    expect(reconcileArduinoCliConfig(once, SHIPPED)).toBeNull()
+  })
+
+  it('does not throw when directories is a scalar rather than a map', () => {
+    expect(() => reconcileArduinoCliConfig('directories: 7\n', SHIPPED)).not.toThrow()
+  })
+})
+
+describe('user libraries stay reachable', () => {
+  const SHIPPED = buildArduinoCliConfig('/opt/openplc/arduino', '/home/user/Arduino/libraries')
+
+  function builtinLibrariesOf(yaml: string): unknown {
+    const parsed: unknown = parse(yaml)
+    if (!isRecord(parsed) || !isRecord(parsed.directories) || !isRecord(parsed.directories.builtin)) return undefined
+    return parsed.directories.builtin.libraries
+  }
+
+  it('points builtin.libraries at the sketchbook the editor moved away from', () => {
+    // Users install libraries through the Arduino IDE and call them from C++
+    // blocks. Owning our directories must not cost them that.
+    expect(builtinLibrariesOf(SHIPPED)).toBe('/home/user/Arduino/libraries')
+  })
+
+  it('adds the nested key to a config that predates it', () => {
+    // A flat read of `directories` would skip this one and leave every existing
+    // install without its own libraries, while appearing to have worked.
+    const updated = requireUpdated(reconcileArduinoCliConfig(LEGACY_CONFIG, SHIPPED))
+    expect(builtinLibrariesOf(updated)).toBe('/home/user/Arduino/libraries')
+  })
+
+  it('never replaces a builtin.libraries the user already set', () => {
+    const custom = 'directories:\n  builtin:\n    libraries: /mnt/shared/libs\n'
+    const updated = requireUpdated(reconcileArduinoCliConfig(custom, SHIPPED))
+    expect(builtinLibrariesOf(updated)).toBe('/mnt/shared/libs')
+    // ...while the keys they do not have still arrive.
+    expect(parse(updated)).toMatchObject({ directories: { data: '/opt/openplc/arduino/data' } })
+  })
+
+  it('is idempotent once the nested key is in place', () => {
+    const once = requireUpdated(reconcileArduinoCliConfig(LEGACY_CONFIG, SHIPPED))
+    expect(reconcileArduinoCliConfig(once, SHIPPED)).toBeNull()
+  })
+
+  it('does not throw when directories.builtin is a scalar, and still sets its siblings', () => {
+    const odd = 'directories:\n  builtin: 7\n'
+    const updated = requireUpdated(reconcileArduinoCliConfig(odd, SHIPPED))
+    expect(parse(updated)).toMatchObject({ directories: { data: '/opt/openplc/arduino/data' } })
+    expect(updated).toContain('builtin: 7')
   })
 })

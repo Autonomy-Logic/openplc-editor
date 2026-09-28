@@ -36,7 +36,7 @@ describe('createWorkspaceSlice', () => {
     expect(workspace.isModalOpen).toEqual([])
     expect(workspace.discardChanges).toBe(false)
     expect(workspace.selectedProjectTreeLeaf).toEqual({ label: '', type: null })
-    expect(workspace.close).toEqual({ window: false, app: false, appDarwin: false })
+    expect(workspace.close).toEqual({ window: false, app: false })
     expect(workspace.isPlcLogsVisible).toBe(false)
     expect(workspace.plcLogs).toBe('')
     expect(workspace.plcLogsLastId).toBeNull()
@@ -92,11 +92,6 @@ describe('createWorkspaceSlice', () => {
   it('setCloseApp', () => {
     store.getState().workspaceActions.setCloseApp(true)
     expect(store.getState().workspace.close.app).toBe(true)
-  })
-
-  it('setCloseAppDarwin', () => {
-    store.getState().workspaceActions.setCloseAppDarwin(true)
-    expect(store.getState().workspace.close.appDarwin).toBe(true)
   })
 
   it('setCloseWindow', () => {

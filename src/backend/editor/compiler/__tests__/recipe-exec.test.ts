@@ -23,8 +23,33 @@ describe('tokenizeRecipe', () => {
     expect(tokenizeRecipe(input)).toEqual(['-DUSB_MANUFACTURER="Unknown"', '-DUSB_PRODUCT="Arduino Leonardo"'])
   })
 
-  it('concatenates quoted and unquoted segments inside the same token', () => {
-    expect(tokenizeRecipe('-DFOO="bar baz"')).toEqual(['-DFOO=bar baz'])
+  it('keeps double quotes that are part of a token rather than wrapping it', () => {
+    // The quotes are the macro's value, not grouping. Eating them leaves a
+    // define the preprocessor cannot use.
+    expect(tokenizeRecipe('-DFOO="bar baz"')).toEqual(['-DFOO="bar baz"'])
+  })
+
+  it('keeps the quotes stm32duino needs around VARIANT_H', () => {
+    // `variant.h` does `#include VARIANT_H`. Without the quotes gcc answers
+    // `#include expects "FILENAME" or <FILENAME>` and every STM32 board fails.
+    expect(tokenizeRecipe('-DVARIANT_H="variant_BLACKPILL_F411CE.h" -DSTM32F411xE')).toEqual([
+      '-DVARIANT_H="variant_BLACKPILL_F411CE.h"',
+      '-DSTM32F411xE',
+    ])
+  })
+
+  it("strips the quotes when the token opens with one, renesas_uno's shape", () => {
+    // `"-DPROJECT_NAME="/path/x.ino""` is shell concatenation: a quoted prefix,
+    // a bare path and an empty pair. Keeping the quotes hands g++ a filename.
+    expect(tokenizeRecipe('"-DPROJECT_NAME="/tmp/sketch/D.ino""')).toEqual(['-DPROJECT_NAME=/tmp/sketch/D.ino'])
+  })
+
+  it('still strips double quotes that wrap a whole token', () => {
+    expect(tokenizeRecipe('"/build/src/file.cpp" -o "/build/obj/file.o"')).toEqual([
+      '/build/src/file.cpp',
+      '-o',
+      '/build/obj/file.o',
+    ])
   })
 
   it('handles Windows-style absolute paths in double quotes (with backslashes)', () => {
