@@ -123,6 +123,19 @@ describe('useAssistantAccess', () => {
     expect(result.current.ready).toBe(true)
   })
 
+  it('leaves the re-read to the restoration when the sign-in already announced one', async () => {
+    const account = fakeAccount({ status: 'no-session' })
+    const { result } = renderHook(() => useAssistantAccess(EDITOR_CAPABILITIES, account.port))
+    await waitFor(() => expect(result.current.needsSignIn).toBe(true))
+    const readsBefore = account.reads()
+
+    act(() => {
+      result.current.signedIn(true)
+    })
+
+    expect(account.reads()).toBe(readsBefore)
+  })
+
   it('applies on the web build too, where the account is required', async () => {
     const account = fakeAccount({ status: 'no-session' })
     const { result } = renderHook(() => useAssistantAccess(WEB_CAPABILITIES, account.port))
