@@ -1,5 +1,5 @@
 import type { WindowPort } from '../../../shared/ports/window-port'
-import { createEditorWindowAdapter } from '../window-adapter'
+import { createEditorWindowAdapter, setMenuProjectOpen } from '../window-adapter'
 
 let adapter: WindowPort
 
@@ -57,6 +57,7 @@ beforeEach(() => {
     requestQuitApp: jest.fn(),
     quitRequested: register('quitRequested'),
     rebuildMenu: jest.fn(),
+    setMenuProjectOpen: jest.fn(),
     windowIsClosing: register('closeRequested'),
     // Takes no callback of its own — the main process echoes the close back —
     // but still hands out a disposer for the listener it registered.
@@ -151,6 +152,15 @@ describe('rebuildMenu', () => {
   it('delegates to bridge', () => {
     adapter.rebuildMenu()
     expect(window.bridge.rebuildMenu).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('setMenuProjectOpen', () => {
+  it('forwards the project state to the bridge', () => {
+    setMenuProjectOpen(true)
+    setMenuProjectOpen(false)
+    expect(window.bridge.setMenuProjectOpen).toHaveBeenNthCalledWith(1, true)
+    expect(window.bridge.setMenuProjectOpen).toHaveBeenNthCalledWith(2, false)
   })
 })
 

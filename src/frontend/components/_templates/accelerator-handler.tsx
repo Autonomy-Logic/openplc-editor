@@ -26,6 +26,9 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
   openModal('quit-application', null)
 }
 
+// The native menu disables project-only items on the start screen; this covers a keypress that beats the rebuild.
+const hasOpenProject = () => openPLCStoreBase.getState().project.meta.path !== ''
+
 const AcceleratorHandler = () => {
   const accelerator = useAccelerator()
   const compilerPort = useCompiler()
@@ -62,6 +65,7 @@ const AcceleratorHandler = () => {
     if (!capabilities.hasProjectExport) return
 
     const unsub = accelerator.onExportProject(() => {
+      if (!hasOpenProject()) return
       setRequestFlag(true)
       setParseTo('old-editor')
     })
@@ -190,6 +194,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onCloseProject(() => {
+      if (!hasOpenProject()) return
       closeProject()
     })
     return unsub
@@ -200,6 +205,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProject(() => {
+      if (!hasOpenProject()) return
       void executeSave()
     })
     return unsub
@@ -210,6 +216,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProjectAs(() => {
+      if (!hasOpenProject()) return
       void executeSaveProjectAs(projectPort, capabilities)
     })
     return unsub
@@ -263,6 +270,7 @@ const AcceleratorHandler = () => {
     }
 
     const unsub = accelerator.onDeleteFile(() => {
+      if (!hasOpenProject()) return
       handleDelete()
     })
     return unsub
@@ -272,7 +280,10 @@ const AcceleratorHandler = () => {
    * Close tab
    */
   useEffect(() => {
-    const unsub = accelerator.onCloseTab(() => removeTab(selectedProjectTreeLeaf.label))
+    const unsub = accelerator.onCloseTab(() => {
+      if (!hasOpenProject()) return
+      removeTab(selectedProjectTreeLeaf.label)
+    })
     return unsub
   }, [selectedProjectTreeLeaf, accelerator, removeTab])
 
@@ -291,6 +302,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onPrint(() => {
+      if (!hasOpenProject()) return
       if (!canExportPdf(project.data.pous)) return
       openModal('export-pdf', null)
     })
@@ -302,6 +314,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onPageSetup(() => {
+      if (!hasOpenProject()) return
       openModal('page-setup', null)
     })
     return unsub
@@ -312,6 +325,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onFindInProject(() => {
+      if (!hasOpenProject()) return
       setModalOpen('findInProject', true)
     })
     return unsub
@@ -322,6 +336,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSwitchPerspective(() => {
+      if (!hasOpenProject()) return
       toggleCollapse()
     })
     return unsub
@@ -342,7 +357,7 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onUndo(() => {
-      if (!meta?.name) return
+      if (!hasOpenProject() || !meta?.name) return
       if (!undo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
@@ -350,7 +365,7 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onRedo(() => {
-      if (!meta?.name) return
+      if (!hasOpenProject() || !meta?.name) return
       if (!redo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
