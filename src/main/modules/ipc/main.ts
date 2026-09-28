@@ -262,6 +262,9 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
+  quitCoordinator
+  private quitPromptReady = false
+  private reloadConfirmed = false
   private registeredHandleChannels: string[] = []
   // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
   // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
@@ -310,6 +313,7 @@ class MainProcessBridge implements MainIpcModule {
     pouService,
     compilerModule,
     hardwareModule,
+    quitCoordinator,
   }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -319,6 +323,19 @@ class MainProcessBridge implements MainIpcModule {
     this.pouService = pouService
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+    this.quitCoordinator = quitCoordinator
+    this.mainWindow?.webContents?.on('render-process-gone', () => {
+      this.quitPromptReady = false
+    })
+    this.mainWindow?.webContents?.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
+      if (!isMainFrame || isSameDocument) return
+      this.quitPromptReady = false
+      this.reloadConfirmed = false
+    })
+    // The renderer's beforeunload blocks every unload it did not ask for; a confirmed reload is let through.
+    this.mainWindow?.webContents?.on('will-prevent-unload', (event) => {
+      if (this.reloadConfirmed) event.preventDefault()
+    })
 
     // When the token authority transparently refreshes an expired token, push
     // the fresh token to the renderer so its store connection flag tracks it.
@@ -895,6 +912,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
     this.registerHandle('project:track-recent', this.handleTrackRecentProject)
     this.registerHandle('project:delete', this.handleDeleteProject)
+    this.ipcMain.on('app:request-quit', this.handleAppRequestQuit)
+    this.ipcMain.on('app:quit-ready', this.handleAppQuitReady)
+    this.ipcMain.on('app:quit-unready', this.handleAppQuitUnready)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
 
@@ -2074,13 +2094,20 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: getErrorMessage(error) }
     }
   }
-  handleAppQuit = () => {
-    this.stopSimulator()
-    if (this.mainWindow) {
-      this.mainWindow.destroy()
-    }
-    app.quit()
+  handleAppRequestQuit = () => this.quitCoordinator.requestQuit()
+  handleAppQuitReady = () => {
+    this.quitPromptReady = true
   }
+  handleAppQuitUnready = () => {
+    this.quitPromptReady = false
+  }
+
+  /** Whether the renderer is loaded, alive and listening for the quit prompt. */
+  canPromptQuit(): boolean {
+    const webContents = this.mainWindow?.webContents
+    return this.quitPromptReady && !!webContents && !webContents.isCrashed()
+  }
+  handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
   // TODO: This handle should be refactored to use a new approach on module implementation.
@@ -2172,6 +2199,7 @@ class MainProcessBridge implements MainIpcModule {
       this.abortAiStreamsFor(contents)
     }
 
+    this.reloadConfirmed = true
     contents?.reload()
   }
   handleWindowRebuildMenu = () => {
@@ -3308,7 +3336,7 @@ class MainProcessBridge implements MainIpcModule {
    * leaves the renderer gated on a session whose target no longer exists — which
    * a window reload and a failed start both used to do.
    */
-  private stopSimulator(): void {
+  stopSimulator(): void {
     this.closeSimulatorSession()
     this.simulatorModule.stop()
   }

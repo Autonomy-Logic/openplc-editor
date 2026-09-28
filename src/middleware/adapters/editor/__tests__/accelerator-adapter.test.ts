@@ -60,6 +60,7 @@ beforeEach(() => {
     switchPerspective: register('switchPerspective'),
     aboutModalAccelerator: register('about'),
     quitAppRequest: register('quitApp'),
+    refreshRequest: register('refresh'),
   } as unknown as typeof window.bridge
 
   adapter = createEditorAcceleratorAdapter()
@@ -119,6 +120,7 @@ testAccelerator('onRedo', 'redo', 'handleRedoRequest')
 testAccelerator('onSwitchPerspective', 'switchPerspective', 'switchPerspective')
 testAccelerator('onAbout', 'about', 'aboutModalAccelerator')
 testAccelerator('onQuitApp', 'quitApp', 'quitAppRequest')
+testAccelerator('onRefresh', 'refresh', 'refreshRequest')
 
 describe('onOpenRecent', () => {
   it('registers a bridge listener and passes response data to the callback', () => {

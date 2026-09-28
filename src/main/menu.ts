@@ -156,6 +156,11 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('window-controls:request-close')
   }
 
+  handleRefreshRequest() {
+    if (!this.hasLiveWindow()) return
+    this.mainWindow.webContents.send('app:refresh-accelerator')
+  }
+
   handleUndoRequest() {
     this.mainWindow.webContents.send('edit:undo-request')
   }
@@ -408,8 +413,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:display.submenu.refresh'),
           accelerator: 'Cmd+R',
-          selector: 'reload:',
-          enabled: false,
+          click: () => this.handleRefreshRequest(),
         },
         {
           label: i18n.t('menu:display.submenu.clearErrors'),
@@ -721,8 +725,8 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:display.submenu.refresh'),
-            role: 'reload',
-            enabled: false,
+            accelerator: 'Ctrl+R',
+            click: () => this.handleRefreshRequest(),
           },
           {
             label: i18n.t('menu:display.submenu.clearErrors'),
