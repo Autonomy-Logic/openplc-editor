@@ -18,6 +18,13 @@ jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAuthedRequest: jest.fn(),
 }))
 
+jest.mock('../../project/cloud-working-copy', () => ({
+  beginCloudProjectRead: jest.fn(() => 0),
+  materializeCloudProject: jest.fn(() => Promise.resolve(true)),
+  applyCloudProjectSave: jest.fn(() => Promise.resolve()),
+  applyCloudFileSave: jest.fn(() => Promise.resolve()),
+}))
+
 const request = jest.mocked(edgeAuthedRequest)
 
 type EdgeResponse = Awaited<ReturnType<typeof edgeAuthedRequest>>
