@@ -1,5 +1,5 @@
 import type { WindowPort } from '../../../shared/ports/window-port'
-import { createEditorWindowAdapter } from '../window-adapter'
+import { createEditorWindowAdapter, setMenuProjectOpen } from '../window-adapter'
 
 let adapter: WindowPort
 
@@ -54,9 +54,11 @@ beforeEach(() => {
     hideWindow: jest.fn(),
     reloadWindow: jest.fn(),
     handleQuitApp: jest.fn(),
+    requestQuitApp: jest.fn(),
+    quitRequested: register('quitRequested'),
     rebuildMenu: jest.fn(),
+    setMenuProjectOpen: jest.fn(),
     windowIsClosing: register('closeRequested'),
-    darwinAppIsClosing: register('darwinQuitting'),
     // Takes no callback of its own — the main process echoes the close back —
     // but still hands out a disposer for the listener it registered.
     handleCloseOrHideWindowAccelerator: jest.fn().mockImplementation(() => {
@@ -113,10 +115,52 @@ describe('quit', () => {
   })
 })
 
+describe('requestQuit', () => {
+  it('asks main for the quit prompt instead of closing or quitting', () => {
+    adapter.requestQuit()
+
+    expect(window.bridge.requestQuitApp).toHaveBeenCalledTimes(1)
+    expect(window.bridge.handleQuitApp).not.toHaveBeenCalled()
+    expect(window.bridge.handleCloseOrHideWindow).not.toHaveBeenCalled()
+  })
+})
+
+describe('onQuitRequested', () => {
+  it('registers a bridge listener and fires callback', () => {
+    const cb = jest.fn()
+    implemented(adapter.onQuitRequested, 'onQuitRequested')(cb)
+
+    expect(window.bridge.quitRequested).toHaveBeenCalledTimes(1)
+    fire('quitRequested')
+
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns an unsubscribe function that removes the bridge listener', () => {
+    const cb = jest.fn()
+    const unsub = implemented(adapter.onQuitRequested, 'onQuitRequested')(cb)
+
+    unsub()
+    fireIfRegistered('quitRequested')
+
+    expect(cb).not.toHaveBeenCalled()
+    expect(capturedHandlers.quitRequested).toBeNull()
+  })
+})
+
 describe('rebuildMenu', () => {
   it('delegates to bridge', () => {
     adapter.rebuildMenu()
     expect(window.bridge.rebuildMenu).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('setMenuProjectOpen', () => {
+  it('forwards the project state to the bridge', () => {
+    setMenuProjectOpen(true)
+    setMenuProjectOpen(false)
+    expect(window.bridge.setMenuProjectOpen).toHaveBeenNthCalledWith(1, true)
+    expect(window.bridge.setMenuProjectOpen).toHaveBeenNthCalledWith(2, false)
   })
 })
 
@@ -140,29 +184,6 @@ describe('onCloseRequested', () => {
 
     expect(cb).not.toHaveBeenCalled()
     expect(capturedHandlers.closeRequested).toBeNull()
-  })
-})
-
-describe('onDarwinAppQuitting', () => {
-  it('registers a bridge listener and fires callback', () => {
-    const cb = jest.fn()
-    implemented(adapter.onDarwinAppQuitting, 'onDarwinAppQuitting')(cb)
-
-    expect(window.bridge.darwinAppIsClosing).toHaveBeenCalledTimes(1)
-    fire('darwinQuitting')
-
-    expect(cb).toHaveBeenCalledTimes(1)
-  })
-
-  it('returns an unsubscribe function that removes the bridge listener', () => {
-    const cb = jest.fn()
-    const unsub = implemented(adapter.onDarwinAppQuitting, 'onDarwinAppQuitting')(cb)
-
-    unsub()
-    fireIfRegistered('darwinQuitting')
-
-    expect(cb).not.toHaveBeenCalled()
-    expect(capturedHandlers.darwinQuitting).toBeNull()
   })
 })
 

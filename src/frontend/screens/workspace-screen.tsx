@@ -469,6 +469,19 @@ const WorkspaceScreen = () => {
     }
   }, [packagesPort, device, setAvailableOptions])
 
+  // Which vPLC the IDE is pointed at decides which vendor package it can use:
+  // a vPLC runs the package it was created with. Telling the package layer is
+  // what loads that archive and refreshes the board list; with no vPLC
+  // selected there is no vendor board to offer. Inert on the desktop, which
+  // connects to a board directly and never to a vPLC.
+  const selectedDevice = useOpenPLCStore((state) => state.runtimeConnection.selectedDevice)
+  useEffect(() => {
+    if (!packagesPort) return
+    void packagesPort.setTargetDevice(
+      selectedDevice ? { deviceId: selectedDevice.deviceId, vpp: selectedDevice.vpp ?? null } : null,
+    )
+  }, [packagesPort, selectedDevice])
+
   // Re-verifies installed VPP package signatures on project open and drops any that fail (blocks a
   // locally-crafted/unsigned .vpp bypassing the signed import flow). No-op on web (`packagesPort` is undefined).
   useEffect(() => {
