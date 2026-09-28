@@ -229,17 +229,58 @@ export function standardFlagsForCore(core: string | undefined): string[] {
 }
 
 /**
- * Append the core's standard flags to `cxxFlags`, without overriding a `-std`
- * the board already declares.
+ * Where a `-std=` value sits relative to the others, so an older one can be
+ * told from a newer. The letter spellings are gcc's pre-ratification names for
+ * the same standards.
+ */
+function cxxStandardRank(flag: string): number | undefined {
+  const named = /^-std=(?:gnu|c)\+\+(.+)$/.exec(flag)
+  if (named === null) return undefined
+  // Publication years, so the order is monotonic — a two-digit suffix is not:
+  // C++98 would otherwise outrank C++14.
+  const ranks: Record<string, number> = {
+    '98': 1998,
+    '03': 2003,
+    '0x': 2011,
+    '11': 2011,
+    '1y': 2014,
+    '14': 2014,
+    '1z': 2017,
+    '17': 2017,
+    '2a': 2020,
+    '20': 2020,
+    '2b': 2023,
+    '23': 2023,
+  }
+  return ranks[named[1]]
+}
+
+/**
+ * Append the core's standard flags to `cxxFlags`, keeping a `-std` the board
+ * already declares unless that one is older than what the runtime needs.
  *
- * The Simulator carries `-std=gnu++17` in `hals.json`; pushing `gnu++14` after
- * it would win on the command line and silently downgrade that board. Matching
- * on the flag name rather than the whole token is what makes that hold.
+ * Both halves matter. The Simulator carries `-std=gnu++17` in `hals.json`, and
+ * appending `gnu++14` after it would win on the command line and silently
+ * downgrade the board. A board declaring `gnu++11` is the opposite case: keeping
+ * it would leave the C++14 runtime compiling below the standard it needs, and
+ * the failure reads as a missing `std::enable_if_t` rather than a flag problem.
+ *
+ * A `-std` value this does not recognise is left alone — the compiler is a
+ * better judge of it than a table here.
  */
 export function mergeStandardFlags(cxxFlags: string[], core: string | undefined): string[] {
   const merged = [...cxxFlags]
   for (const flag of standardFlagsForCore(core)) {
-    if (!merged.some((existing) => existing.startsWith(flag.split('=')[0]))) merged.push(flag)
+    const name = flag.split('=')[0]
+    const at = merged.findIndex((existing) => existing.startsWith(name))
+    if (at === -1) {
+      merged.push(flag)
+      continue
+    }
+    if (name !== '-std') continue
+    const declared = cxxStandardRank(merged[at])
+    const needed = cxxStandardRank(flag)
+    if (declared !== undefined && needed !== undefined && declared < needed) merged[at] = flag
   }
   return merged
 }

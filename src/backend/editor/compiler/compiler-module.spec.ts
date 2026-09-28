@@ -427,4 +427,38 @@ describe('mergeStandardFlags', () => {
   it('leaves the flags untouched for a core that needs nothing', () => {
     expect(mergeStandardFlags(['-DFOO'], 'esp32:esp32')).toEqual(['-DFOO'])
   })
+
+  // Keeping a board-declared standard is only right while it is new enough.
+  // Below C++14 the runtime does not compile, and the failure reads as a
+  // missing `std::enable_if_t` rather than as a flag problem.
+  it.each([
+    ['-std=gnu++11', '-std=gnu++14'],
+    ['-std=c++11', '-std=gnu++14'],
+    ['-std=gnu++0x', '-std=gnu++14'],
+    ['-std=gnu++98', '-std=gnu++14'],
+    ['-std=c++03', '-std=gnu++14'],
+  ])('replaces %s, which is older than the runtime needs', (declared, expected) => {
+    expect(mergeStandardFlags([declared], 'arduino:avr')).toEqual([expected])
+  })
+
+  it.each([['-std=gnu++14'], ['-std=gnu++17'], ['-std=c++17'], ['-std=gnu++2a'], ['-std=gnu++23']])(
+    'keeps %s, which already covers the runtime',
+    (declared) => {
+      expect(mergeStandardFlags([declared], 'arduino:avr')).toEqual([declared])
+    },
+  )
+
+  // A spelling the table does not know is left to the compiler to judge.
+  it('leaves an unrecognised -std alone', () => {
+    expect(mergeStandardFlags(['-std=gnu++2c'], 'arduino:avr')).toEqual(['-std=gnu++2c'])
+  })
+
+  it('replaces the old standard in place, without disturbing the other flags', () => {
+    expect(mergeStandardFlags(['-DFOO', '-std=gnu++11', '-Wall'], 'arduino:megaavr')).toEqual([
+      '-DFOO',
+      '-std=gnu++14',
+      '-Wall',
+      '-fno-sized-deallocation',
+    ])
+  })
 })
