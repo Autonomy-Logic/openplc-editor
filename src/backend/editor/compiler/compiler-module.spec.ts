@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -460,5 +461,30 @@ describe('mergeStandardFlags', () => {
       '-Wall',
       '-fno-sized-deallocation',
     ])
+  })
+})
+
+// The pre-compile is gone, and the two arguments that linked its archive went
+// with it. They were appended here, after the shared argv helper ran, so no
+// assertion on that helper can see them come back — this reads the module the
+// way `validate:arch` and `check:purity` read the tree.
+describe('the pre-compiled archive does not come back', () => {
+  const source = readFileSync(join(__dirname, 'compiler-module.ts'), 'utf8')
+
+  it.each([
+    ['compiler.libraries.ldflags', 'linked the archive arduino-cli did not build'],
+    ['OpenPLCUserLib', 'named that archive'],
+    ['precompiledLibDir', 'passed it as a --library'],
+    ['handlePrecompileUserLib', 'built it'],
+    ['installAsArduinoLibrary', 'staged it where discovery would find it'],
+  ])('no longer mentions %s, which %s', (symbol) => {
+    expect(source).not.toContain(symbol)
+  })
+
+  // `precompiledLibraryDir` is a different thing — a vendor's prebuilt
+  // arduino-hal — and still belongs here, so the assertions above must not have
+  // been written broadly enough to forbid it.
+  it('keeps the vendor prebuilt arduino-hal library', () => {
+    expect(source).toContain('precompiledLibraryDir')
   })
 })
