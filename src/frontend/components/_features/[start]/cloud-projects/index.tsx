@@ -169,9 +169,11 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Re
             <h3 className='font-caption text-base font-semibold text-neutral-1000 dark:text-white'>
               Bring your cloud projects here
             </h3>
+            {/* Names what an account unlocks: a visitor deciding whether to sign in has no other way to know. */}
             <p className='max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400'>
-              Sign in with your Autonomy Edge account to access Edge features. Open your cloud projects in this editor
-              and save straight back to them.
+              Sign in with your Autonomy Edge account to access Edge features: open your cloud projects in this editor
+              and save straight back to them, track changes with version control (branches, commits and history), and
+              get help from the AI assistant. Without an account, only local projects are available.
             </p>
           </div>
 
