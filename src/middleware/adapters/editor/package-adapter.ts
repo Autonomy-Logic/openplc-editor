@@ -20,6 +20,7 @@
  * importFromFile`) can run unchanged.
  */
 
+import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
 import { parseInstalledPackageManifest } from '../../shared/ports/package-manifest-schema'
 import type { PackagePort } from '../../shared/ports/package-port'
 import type {
@@ -75,6 +76,18 @@ const USE_LOCAL_MOCK = false
 
 export function createEditorPackageAdapter(): PackagePort {
   return {
+    // The desktop connects to a board directly, never to a vPLC, and keeps
+    // every installed package available whatever it is pointed at. The web
+    // build is where this decides which package is loaded.
+    setTargetDevice(): Promise<void> {
+      return Promise.resolve()
+    },
+
+    /** No vPLC to follow: the desktop picks a board directly. */
+    listTargetBoards(): Promise<string[]> {
+      return Promise.resolve([])
+    },
+
     importFromFile(): Promise<ImportResult> {
       return window.bridge.importPackageFromFile()
     },
@@ -103,6 +116,10 @@ export function createEditorPackageAdapter(): PackagePort {
       const raw = await window.bridge.getPackageManifest(packageId)
       if (raw === null || raw === undefined) return null
       return parseInstalledPackageManifest(raw)
+    },
+
+    getPackagePin(packageId: string): Promise<VppPackagePin | null> {
+      return window.bridge.getPackagePin(packageId)
     },
 
     async listRemoteCatalog(): Promise<RemoteCatalog> {

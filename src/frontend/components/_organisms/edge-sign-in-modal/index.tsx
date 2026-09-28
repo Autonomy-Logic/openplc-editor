@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Mail } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -22,7 +22,12 @@ interface EdgeSignInModalProps {
   open: boolean
   /** Requests a close, on a build where this dialog is dismissible (absent where an account is required). */
   onOpenChange?: (open: boolean) => void
-  onSignedIn: () => void
+  /**
+   * The session is signed in and the dialog may close. `sessionRestored` says the session's own
+   * `onRestored` already fired, so whatever subscribes to it has re-read; only a caller that
+   * does not subscribe, or a sign-in that restored nothing, still has to.
+   */
+  onSignedIn: (sign: { sessionRestored: boolean }) => void
   account: EdgeAccountPort
   reason?: 'expired' | 'expired-reloaded' | 'sign-in-required' | 'oauth-failed' | 'signed-out'
 }
@@ -71,6 +76,21 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
     formState: { errors },
   } = useForm<SignInValues>({ resolver: zodResolver(signInSchema) })
 
+  // Latest callback in a ref, so a caller passing an inline arrow does not resubscribe every render.
+  const onSignedInRef = useRef(onSignedIn)
+  onSignedInRef.current = onSignedIn
+
+  // Several restorations can reach one opening before the caller closes it; announce the first.
+  const signedInAnnounced = useRef(false)
+
+  // Every restoration this dialog heard, announced or not. A password request compares it across
+  // its own round trip to tell whether the restoration already spoke for it.
+  const restorationsHeard = useRef(0)
+
+  // Bumped on every open, so a password request still in flight from an earlier opening cannot
+  // write its outcome into the fresh form.
+  const opening = useRef(0)
+
   // Reset on every open: the caller keeps this component mounted and only flips `open`,
   // so stale form state and error messages would otherwise survive a close.
   useEffect(() => {
@@ -82,7 +102,31 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
     setSubmitting(false)
     setShowPassword(false)
     reset()
+    signedInAnnounced.current = false
+    opening.current += 1
   }, [open, reset])
+
+  const announceSignedIn = useCallback((sessionRestored: boolean) => {
+    if (signedInAnnounced.current) {
+      return
+    }
+
+    signedInAnnounced.current = true
+    onSignedInRef.current({ sessionRestored })
+  }, [])
+
+  // A provider sign-in finishes outside this dialog (system browser on desktop, another tab on
+  // web), so the session's restoration is the only signal that it worked and the dialog can close.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    return account.session.onRestored(() => {
+      restorationsHeard.current += 1
+      announceSignedIn(true)
+    })
+  }, [open, account, announceSignedIn])
 
   // Provider flow opens in a separate tab and lands on /oauth-complete there, so this
   // tab (and its unsaved project) is never navigated away from.
@@ -93,6 +137,9 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
   const signUpUrl = new URL('/signup', account.frontendBaseUrl).toString()
 
   const onSubmit = async (values: SignInValues) => {
+    const submittedIn = opening.current
+    const restorationsBefore = restorationsHeard.current
+
     setSubmitting(true)
     setFormState({ kind: 'idle' })
 
@@ -102,11 +149,23 @@ const EdgeSignInModal = ({ open, onOpenChange, onSignedIn, account, reason = 'si
       .signIn(values.email, values.password)
       .catch((): EdgeSignInOutcome => ({ status: 'failed' }))
 
+    // Every success is reported, whenever it lands and whatever was reported before it: a later
+    // request may have signed in a different account, and the caller has to re-read for it. The
+    // one exception is a request whose own restoration already reached the caller.
+    if (outcome.status === 'signed-in' && restorationsHeard.current === restorationsBefore) {
+      signedInAnnounced.current = true
+      onSignedInRef.current({ sessionRestored: false })
+    }
+
+    // Anything else belongs to a form that has since been closed and reset.
+    if (submittedIn !== opening.current) {
+      return
+    }
+
     setSubmitting(false)
 
     switch (outcome.status) {
       case 'signed-in':
-        onSignedIn()
         return
       // Correct password, unconfirmed address - Edge answers 200, so this isn't a login failure.
       case 'email-unverified':
