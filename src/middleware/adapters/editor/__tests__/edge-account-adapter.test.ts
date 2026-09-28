@@ -1,7 +1,12 @@
 // Covers the session state machine: `unknown` must not read as signed out, "never signed in" must
 // not be worded as "expired", and expiry must announce once, on the transition.
 
-import { __resetEdgeSessionForTests, editorEdgeAccountPort, isSessionPersistent } from '../edge-account-adapter'
+import {
+  __resetEdgeSessionForTests,
+  editorEdgeAccountPort,
+  isSessionPersistent,
+  listenForProviderSignIns,
+} from '../edge-account-adapter'
 
 // Picked from the real bridge, so a changed channel signature breaks this file instead of being
 // papered over by a permissive cast.
@@ -12,6 +17,7 @@ type EdgeAccountBridge = Pick<
   | 'edgeAccountSignIn'
   | 'edgeAccountSignOut'
   | 'edgeAccountIsSessionPersistent'
+  | 'onEdgeAccountSignedIn'
 >
 
 const bridge: { [Method in keyof EdgeAccountBridge]: jest.MockedFunction<EdgeAccountBridge[Method]> } = {
@@ -20,7 +26,12 @@ const bridge: { [Method in keyof EdgeAccountBridge]: jest.MockedFunction<EdgeAcc
   edgeAccountSignIn: jest.fn(),
   edgeAccountSignOut: jest.fn(),
   edgeAccountIsSessionPersistent: jest.fn(),
+  onEdgeAccountSignedIn: jest.fn(),
 }
+
+/** The main-process push, as the bridge would deliver it. */
+let mainProcessSignedIn: (() => void) | null = null
+const unsubscribeFromMain = jest.fn()
 
 const USER = { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', username: 'ada' }
 
@@ -33,6 +44,12 @@ beforeEach(() => {
   bridge.edgeAccountSignIn.mockResolvedValue({ status: 'signed-in', user: USER })
   bridge.edgeAccountSignOut.mockResolvedValue(undefined)
   bridge.edgeAccountIsSessionPersistent.mockResolvedValue(true)
+  mainProcessSignedIn = null
+  bridge.onEdgeAccountSignedIn.mockImplementation((callback) => {
+    mainProcessSignedIn = callback
+
+    return unsubscribeFromMain
+  })
 
   // Assigned onto `window` rather than cast onto `window.bridge`: the seam is
   // deliberately partial, and saying so is the point.
@@ -253,6 +270,39 @@ describe('listener bookkeeping', () => {
     // It still retires `absent`, which is what stops the next expiry being worded as
     // "you were never signed in".
     expect(editorEdgeAccountPort.session.isAbsent()).toBe(false)
+  })
+})
+
+describe('listenForProviderSignIns', () => {
+  it('announces a sign-in that landed in the main process to every restoration listener', async () => {
+    await editorEdgeAccountPort.fetchUser()
+    expect(editorEdgeAccountPort.session.isExpired()).toBe(true)
+
+    const restored = jest.fn()
+    editorEdgeAccountPort.session.onRestored(restored)
+
+    listenForProviderSignIns()
+    mainProcessSignedIn?.()
+
+    expect(restored).toHaveBeenCalledTimes(1)
+    expect(editorEdgeAccountPort.session.isExpired()).toBe(false)
+    expect(editorEdgeAccountPort.session.isAbsent()).toBe(false)
+  })
+
+  it('announces it even when nothing was announced dead first', () => {
+    // Unlike `markRestored`, which is called on every healthy read, this event IS the
+    // transition: a consumer that never saw the session die still has to refresh.
+    const restored = jest.fn()
+    editorEdgeAccountPort.session.onRestored(restored)
+
+    listenForProviderSignIns()
+    mainProcessSignedIn?.()
+
+    expect(restored).toHaveBeenCalledTimes(1)
+  })
+
+  it('hands back the bridge unsubscribe', () => {
+    expect(listenForProviderSignIns()).toBe(unsubscribeFromMain)
   })
 })
 

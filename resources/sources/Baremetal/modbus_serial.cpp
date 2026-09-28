@@ -259,8 +259,8 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
 
     //Add CRC
     //Check if response message is too big for this device
-    if (mb_frame_len + 2 > MAX_MB_FRAME) exceptionResponse(mb_frame[1], MB_EX_SLAVE_FAILURE);
-    mb_frame_len += 2; //increase frame length by two bytes to acomodate CRC
+    if (mb_frame_len > MB_RESPONSE_CAPACITY) exceptionResponse(mb_frame[1], MB_EX_SLAVE_FAILURE);
+    mb_frame_len += MB_CRC_SIZE; //increase frame length by two bytes to acomodate CRC
     packet_crc = calcCrc(); //calculate CRC of the new packet
     mb_frame[mb_frame_len - 2] = (uint8_t)(packet_crc >> 8);
     mb_frame[mb_frame_len - 1] = (uint8_t)(packet_crc & 0x00FF);

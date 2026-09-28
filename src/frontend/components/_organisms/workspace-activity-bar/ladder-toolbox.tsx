@@ -3,6 +3,7 @@ import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { removeElements } from '../../_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
+import { resolveSelectedNodes } from '../../_molecules/graphical-editor/ladder/rung/selection'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default/exit'
 import { BlockButton } from '../../_molecules/workspace-activity-bar/ladder/block'
 import { CoilButton } from '../../_molecules/workspace-activity-bar/ladder/coil'
@@ -63,10 +64,10 @@ export const LadderToolbox = () => {
   }
 
   const handleRemoveNodes = () => {
-    const allNodesToRemove = flow?.rungs.flatMap((rung) => rung.selectedNodes || []) || []
+    const allNodesToRemove = flow?.rungs.flatMap((rung) => resolveSelectedNodes(rung)) || []
 
     flow?.rungs.forEach((rung) => {
-      const selectedNodes = rung.selectedNodes || []
+      const selectedNodes = resolveSelectedNodes(rung)
       if (selectedNodes.length === 0) return
 
       const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)

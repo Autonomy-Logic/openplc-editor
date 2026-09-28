@@ -16,7 +16,8 @@ export interface AssistantAccess {
   reason: 'expired' | 'signed-out'
   /** Record a refused request. True when it was a sign-in refusal and the gate now shows. */
   noteRefusal: (status: number | undefined) => boolean
-  signedIn: () => void
+  /** `sessionRestored`: the account hook already re-read on the session's restoration. */
+  signedIn: (sessionRestored?: boolean) => void
 }
 
 export function useAssistantAccess(capabilities: PlatformCapabilities, account?: EdgeAccountPort): AssistantAccess {
@@ -45,10 +46,16 @@ export function useAssistantAccess(capabilities: PlatformCapabilities, account?:
     [gated, refresh],
   )
 
-  const signedIn = useCallback(() => {
-    setRefused(false)
-    void refresh()
-  }, [refresh])
+  const signedIn = useCallback(
+    (sessionRestored = false) => {
+      setRefused(false)
+
+      if (!sessionRestored) {
+        void refresh()
+      }
+    },
+    [refresh],
+  )
 
   return {
     needsSignIn: gated && (status === 'signed-out' || refused),
