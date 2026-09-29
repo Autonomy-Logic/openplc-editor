@@ -42,6 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockGetState.mockReturnValue({
     project: { meta: { name: 'Old', type: 'plc-project', path: 'proj-1' } },
+    libraries: { system: [] },
     sharedWorkspaceActions: { handleOpenProjectResponse },
   })
   mockParsePlcopenXml.mockReturnValue({
@@ -85,7 +86,7 @@ describe('executeImportPlcopen', () => {
     const result = await executeImportPlcopen(projectPort)
 
     expect(result).toEqual({ success: true })
-    expect(mockParsePlcopenXml).toHaveBeenCalledWith('<project/>')
+    expect(mockParsePlcopenXml).toHaveBeenCalledWith('<project/>', { systemLibraries: [] })
     expect(handleOpenProjectResponse).toHaveBeenCalledWith({
       meta: { name: 'Imported', type: 'plc-project', path: 'proj-1' },
       projectData: {

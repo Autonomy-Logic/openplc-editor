@@ -15,6 +15,7 @@ import { z } from 'zod'
 
 import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import { openPLCStoreBase } from '../../../frontend/store'
 import { buildProjectResponseFromPlcopenParse } from '../../../frontend/utils/PLC/build-plcopen-project-response'
 import { parsePlcopenXml } from '../../../frontend/utils/PLC/xml-parser'
 import type { EdgeAccountPort } from '../../shared/ports/edge-account-port'
@@ -348,7 +349,10 @@ export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdge
         return {
           success: true,
           data: {
-            ...buildProjectResponseFromPlcopenParse(parsePlcopenXml(pending), raw.data.projectPath),
+            ...buildProjectResponseFromPlcopenParse(
+              parsePlcopenXml(pending, { systemLibraries: openPLCStoreBase.getState().libraries.system }),
+              raw.data.projectPath,
+            ),
             wasPendingPlcopenImport: true,
             canEdit: raw.data.canEdit,
           },
