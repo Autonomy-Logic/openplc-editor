@@ -1,11 +1,14 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { PLCDataType, PLCStructureVariable } from '@root/middleware/shared/ports/types'
 
 import { StructureDataType } from '../index'
 
-const getState = () => useOpenPLCStore.getState()
+let store: OpenPLCStore
+
+const getState = () => store.getState()
 
 const field = (name: string): PLCStructureVariable => ({
   name,
@@ -42,6 +45,7 @@ const renderBoth = () => {
         <StructureDataType dataTypeName='Pump' />
       </div>
     </>,
+    { wrapper: createStoreWrapper(store) },
   )
   return {
     motor: within(screen.getByTestId('motor-panel')),
@@ -51,7 +55,7 @@ const renderBoth = () => {
 
 describe('StructureDataType with two structure types open', () => {
   beforeEach(() => {
-    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    store = createTestStore()
     seedBoth()
   })
 

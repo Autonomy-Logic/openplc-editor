@@ -1,7 +1,10 @@
+import type { OpenPLCStore } from '../../../../frontend/store'
+import { createTestStore } from '../../../../frontend/store/testing'
 import type { RuntimePort } from '../../../shared/ports/runtime-port'
 import { createEditorRuntimeAdapter } from '../runtime-adapter'
 
 let adapter: RuntimePort
+let store: OpenPLCStore
 let mockIpAddress: string
 
 beforeEach(() => {
@@ -61,7 +64,8 @@ beforeEach(() => {
     etherCATGetRuntimeStatus: jest.fn().mockResolvedValue({ success: true, data: {} }),
   } as unknown as typeof window.bridge
 
-  adapter = createEditorRuntimeAdapter(() => mockIpAddress)
+  store = createTestStore()
+  adapter = createEditorRuntimeAdapter(store, () => mockIpAddress)
 })
 
 // ---------------------------------------------------------------------------
@@ -836,11 +840,9 @@ describe('selectRetrievableDevice', () => {
   it('moves the target address the adapter authenticates against', async () => {
     // This has to happen before the login, not with it: the adapter reads its
     // target from the store to know which device to sign in to.
-    const { openPLCStoreBase } = await import('../../../../frontend/store')
-
     adapter.selectRetrievableDevice!({ key: '192.168.1.77', name: '192.168.1.77', answeredScan: true })
 
-    expect(openPLCStoreBase.getState().deviceDefinitions.configuration.runtimeIpAddress).toBe('192.168.1.77')
+    expect(store.getState().deviceDefinitions.configuration.runtimeIpAddress).toBe('192.168.1.77')
   })
 })
 

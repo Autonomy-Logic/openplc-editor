@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
-import { openPLCStoreBase } from '../../../../store'
+import type { PLCPou } from '../../../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../../../store'
+import { createTestStore } from '../../../../store/testing'
 import { invalidateSTCache } from '../../graphical-context'
 import { AI_TOOLS } from '../tool-definitions'
 import { executeTool, type ToolExecutionOptions } from '../tool-executor'
 
 type TestPou = { name: string; pouType: string; body: { language: string; value: unknown } }
 
+let store: OpenPLCStore
+
 function seedStore(pous: TestPou[]) {
-  vi.spyOn(openPLCStoreBase, 'getState').mockReturnValue({
-    project: { data: { pous } },
-  } as unknown as ReturnType<typeof openPLCStoreBase.getState>)
+  const { project } = store.getState()
+  store.setState({ project: { ...project, data: { ...project.data, pous: pous as unknown as PLCPou[] } } })
 }
 
 /** A transpiler that always answers the same whole-program ST. */
@@ -19,7 +22,7 @@ function transpilerYielding(programSt: string | null): ToolExecutionOptions {
 }
 
 beforeEach(() => {
-  vi.restoreAllMocks()
+  store = createTestStore()
   invalidateSTCache()
 })
 
@@ -36,7 +39,7 @@ describe('executeTool("read_pou_body")', () => {
     const body = 'x := 1;\n'.repeat(2000)
     seedStore([{ name: 'Main', pouType: 'program', body: { language: 'st', value: body } }])
 
-    const result = await executeTool('read_pou_body', { name: 'Main' })
+    const result = await executeTool(store, 'read_pou_body', { name: 'Main' })
     expect(result.success).toBe(true)
     expect(result.message).toContain('Main [program, st]')
     expect(result.message).toContain(body)
@@ -45,7 +48,7 @@ describe('executeTool("read_pou_body")', () => {
   it('matches the POU name case-insensitively and trims the input', async () => {
     seedStore([{ name: 'TCP_CLIENT', pouType: 'function-block', body: { language: 'cpp', value: 'void loop(){}' } }])
 
-    const result = await executeTool('read_pou_body', { name: '  tcp_client  ' })
+    const result = await executeTool(store, 'read_pou_body', { name: '  tcp_client  ' })
     expect(result.success).toBe(true)
     expect(result.message).toContain('void loop(){}')
   })
@@ -53,7 +56,7 @@ describe('executeTool("read_pou_body")', () => {
   it('reports an unknown POU and lists what is available', async () => {
     seedStore([{ name: 'Main', pouType: 'program', body: { language: 'st', value: 'x := 1;' } }])
 
-    const result = await executeTool('read_pou_body', { name: 'Nope' })
+    const result = await executeTool(store, 'read_pou_body', { name: 'Nope' })
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found')
     expect(result.message).toContain('Main')
@@ -61,35 +64,35 @@ describe('executeTool("read_pou_body")', () => {
 
   it('reports "(none)" when the project has no POUs', async () => {
     seedStore([])
-    const result = await executeTool('read_pou_body', { name: 'Anything' })
+    const result = await executeTool(store, 'read_pou_body', { name: 'Anything' })
     expect(result.success).toBe(false)
     expect(result.message).toContain('(none)')
   })
 
   it.each([undefined, '', '   ', 42])('rejects a missing or blank name (%p)', async (name) => {
     seedStore([])
-    const result = await executeTool('read_pou_body', { name })
+    const result = await executeTool(store, 'read_pou_body', { name })
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: name')
   })
 
   it('rejects a null input object without throwing', async () => {
     seedStore([])
-    const result = await executeTool('read_pou_body', null)
+    const result = await executeTool(store, 'read_pou_body', null)
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: name')
   })
 
   it('reports an empty body rather than returning nothing', async () => {
     seedStore([{ name: 'Blank', pouType: 'program', body: { language: 'st', value: '   ' } }])
-    const result = await executeTool('read_pou_body', { name: 'Blank' })
+    const result = await executeTool(store, 'read_pou_body', { name: 'Blank' })
     expect(result.success).toBe(true)
     expect(result.message).toContain('body is empty')
   })
 
   it('reports a non-string body as empty rather than serialising it', async () => {
     seedStore([{ name: 'Weird', pouType: 'program', body: { language: 'st', value: { nodes: [] } } }])
-    const result = await executeTool('read_pou_body', { name: 'Weird' })
+    const result = await executeTool(store, 'read_pou_body', { name: 'Weird' })
     expect(result.success).toBe(true)
     expect(result.message).toContain('body is empty')
   })
@@ -99,6 +102,7 @@ describe('executeTool("read_pou_body")', () => {
       seedStore([{ name: 'Rungs', pouType: 'program', body: { language: 'ld', value: { rungs: [{ x: 1, y: 2 }] } } }])
 
       const result = await executeTool(
+        store,
         'read_pou_body',
         { name: 'Rungs' },
         transpilerYielding('PROGRAM Rungs\n  motor := start;\nEND_PROGRAM'),
@@ -112,7 +116,7 @@ describe('executeTool("read_pou_body")', () => {
     it('fails clearly when no transpiler is wired up at all', async () => {
       seedStore([{ name: 'Rungs', pouType: 'program', body: { language: 'ld', value: {} } }])
 
-      const result = await executeTool('read_pou_body', { name: 'Rungs' })
+      const result = await executeTool(store, 'read_pou_body', { name: 'Rungs' })
       expect(result.success).toBe(false)
       expect(result.message).toContain('could not produce the ST equivalent')
       expect(result.message).toContain('LD')
@@ -121,7 +125,7 @@ describe('executeTool("read_pou_body")', () => {
     it('fails clearly when the transpile is unavailable', async () => {
       seedStore([{ name: 'Rungs', pouType: 'program', body: { language: 'ld', value: {} } }])
 
-      const result = await executeTool('read_pou_body', { name: 'Rungs' }, transpilerYielding(null))
+      const result = await executeTool(store, 'read_pou_body', { name: 'Rungs' }, transpilerYielding(null))
       expect(result.success).toBe(false)
       expect(result.message).toContain('could not produce the ST equivalent')
       expect(result.message).toContain('LD')
@@ -131,6 +135,7 @@ describe('executeTool("read_pou_body")', () => {
       seedStore([{ name: 'Blocks', pouType: 'function-block', body: { language: 'fbd', value: {} } }])
 
       const result = await executeTool(
+        store,
         'read_pou_body',
         { name: 'Blocks' },
         transpilerYielding('PROGRAM Other\nEND_PROGRAM'),
@@ -144,6 +149,7 @@ describe('executeTool("read_pou_body")', () => {
       seedStore([{ name: 'Rungs', pouType: 'program', body: { language: 'ld', value: {} } }])
 
       const result = await executeTool(
+        store,
         'read_pou_body',
         { name: 'Rungs' },
         { transpileProject: () => Promise.reject(new Error('worker died')) },

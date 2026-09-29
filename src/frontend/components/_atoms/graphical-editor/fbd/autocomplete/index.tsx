@@ -8,7 +8,7 @@ import {
   type ScopeCompletion,
   scopeCompletionToVariable,
 } from '../../../../../services/graphical-scope'
-import { useOpenPLCStore } from '../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import type { CreateGraphicalVariableModalData } from '../../../../../store/slices/modal/types'
 import { cn } from '../../../../../utils/cn'
 import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
@@ -81,6 +81,7 @@ type FBDBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
 
 const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProps>(
   ({ block: unknownBlock, isOpen, setIsOpen, keyPressed, valueToSearch }: FBDBlockAutoCompleteProps, ref) => {
+    const store = useOpenPLCStoreApi()
     const pouName = useBoundPou()
     const pous = useOpenPLCStore((state) => state.project.data.pous)
     const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
@@ -127,13 +128,13 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         return
       }
       let cancelled = false
-      void getScopeCompletions(pouName, valueToSearch, expectedType).then((items) => {
+      void getScopeCompletions(store, pouName, valueToSearch, expectedType).then((items) => {
         if (!cancelled) setVariableCandidates(items)
       })
       return () => {
         cancelled = true
       }
-    }, [isVariableBox, pouName, valueToSearch, expectedType, pous])
+    }, [store, isVariableBox, pouName, valueToSearch, expectedType, pous])
 
     // Connector/continuation boxes suggest the matching pair's labels — a
     // graph-topology concern, unrelated to variable scope, kept as-is.
@@ -229,7 +230,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
      * dangling name behind.
      */
     const clearBoundVariable = () => {
-      const { project, fbdFlows: freshFlows } = useOpenPLCStore.getState()
+      const { project, fbdFlows: freshFlows } = store.getState()
       const { node } = getFBDPouVariablesRungNodeAndEdges(pouName, project.data.pous, freshFlows, {
         nodeId: block.id,
       })
@@ -256,7 +257,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       class: PLCVariable['class']
       type: { definition: PLCVariable['type']['definition']; value: string }
     }) => {
-      const { project, fbdFlows: freshFlows } = useOpenPLCStore.getState()
+      const { project, fbdFlows: freshFlows } = store.getState()
       const { node } = getFBDPouVariablesRungNodeAndEdges(pouName, project.data.pous, freshFlows, {
         nodeId: block.id,
       })

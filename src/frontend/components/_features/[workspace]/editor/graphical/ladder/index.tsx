@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { RungLadderState } from '../../../../../../store/slices/ladder'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
@@ -40,6 +40,7 @@ import ContactElement from '../elements/ladder/contact'
 const EMPTY_DIVERGENCES: string[] = []
 
 export default function LadderEditor() {
+  const store = useOpenPLCStoreApi()
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  Mirrors `FbdEditor` — see that
   // file for the multi-mount rationale.
@@ -148,7 +149,7 @@ export default function LadderEditor() {
    */
   useEffect(() => {
     if (!flowUpdated) return
-    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'ld')
+    scheduleFlowWriteBack(store.getState, pouName, 'ld')
   }, [flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)

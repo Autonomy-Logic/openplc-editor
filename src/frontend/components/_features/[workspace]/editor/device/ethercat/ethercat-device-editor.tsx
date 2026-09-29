@@ -1,6 +1,6 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type {
   Cia402AxisConfig,
@@ -65,6 +65,7 @@ interface EtherCATDeviceEditorProps {
  * instance reads its own device regardless of which tab is active.
  */
 const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: EtherCATDeviceEditorProps = {}) => {
+  const store = useOpenPLCStoreApi()
   const { editor, project, projectActions, workspaceActions } = useOpenPLCStore()
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const esi = useEsi()
@@ -120,7 +121,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   // Runtime v4, so all three feed into the pool — but capability
   // scoping ensures inactive producers don't claim.
   const usedAddresses = useMemo(() => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(
       state.deviceDefinitions.configuration.deviceBoard,
     )
@@ -162,7 +163,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
       // registry and cascades any alias rename onto bound variables' names.
       projectActions.updateEthercatConfig(busName, { masterConfig, devices })
       // Mark the slave file dirty (same pattern as other file types)
-      const { sharedWorkspaceActions } = useOpenPLCStore.getState()
+      const { sharedWorkspaceActions } = store.getState()
       if (deviceName) {
         sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
       } else {

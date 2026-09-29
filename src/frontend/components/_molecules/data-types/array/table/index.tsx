@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react'
 
 import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
-import { useOpenPLCStore } from '../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import { arrayValidation } from '../../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../../utils/cn'
 import { GenericDataTypeTable } from '../../../../_atoms/generic-data-type-table'
@@ -27,6 +27,7 @@ const DimensionsTable = ({
   handleRowClick,
   setArrayTable,
 }: DataTypeDimensionsTableProps) => {
+  const store = useOpenPLCStoreApi()
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
@@ -45,7 +46,7 @@ const DimensionsTable = ({
   const writeDimensions = (newDimensions: PLCArrayDatatype['dimensions']) => {
     // From the store, not this render: the cells call in through a memoised
     // column definition, so this closure can be several renders old.
-    const current = useOpenPLCStore.getState().project.data.dataTypes.find((dt) => dt.name === name)
+    const current = store.getState().project.data.dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'array') return
     updateDatatype(name, { ...current, dimensions: newDimensions })
     handleFileAndWorkspaceSavedState(editor.meta.name)
@@ -80,7 +81,7 @@ const DimensionsTable = ({
     // The column definition that calls this is memoised on [name, selectedRow],
     // so `tableData` here can predate the table's first fill ([]): comparing or
     // rebuilding from it would rewrite, or wipe, the dimensions. Read the store.
-    const stored = useOpenPLCStore.getState().project.data.dataTypes.find((dt) => dt.name === name)
+    const stored = store.getState().project.data.dataTypes.find((dt) => dt.name === name)
     const prevRows = stored?.derivation === 'array' ? stored.dimensions : tableData
 
     if (inputElement) {

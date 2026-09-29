@@ -1,32 +1,28 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { getMemoryState } from '@root/frontend/utils/toast'
 
 import { ElementCard } from '../element-card'
 
+let store: OpenPLCStore
+
 function seed({ pous = [], dataTypes = [] }: { pous?: string[]; dataTypes?: string[] } = {}) {
-  useOpenPLCStore.setState((state) => ({
-    ...state,
-    project: {
-      ...state.project,
-      data: { ...state.project.data, pous: [], dataTypes: [], globalVariableLists: [] },
-    },
-  }))
-  const store = useOpenPLCStore.getState()
-  for (const name of pous) store.pouActions.create({ type: 'program', name, language: 'st' })
-  for (const name of dataTypes) store.datatypeActions.create({ name, derivation: 'structure' })
+  const state = store.getState()
+  for (const name of pous) state.pouActions.create({ type: 'program', name, language: 'st' })
+  for (const name of dataTypes) state.datatypeActions.create({ name, derivation: 'structure' })
 }
 
-const dataTypeNames = () => useOpenPLCStore.getState().project.data.dataTypes.map((d) => d.name)
+const dataTypeNames = () => store.getState().project.data.dataTypes.map((d) => d.name)
 
 const latestToast = () => getMemoryState().toasts[0]
 
 /** Open the card, fill the form and submit it. */
 async function createDataType(name: string) {
   const user = userEvent.setup()
-  render(<ElementCard target='data-type' closeContainer={() => undefined} />)
+  render(<ElementCard target='data-type' closeContainer={() => undefined} />, { wrapper: createStoreWrapper(store) })
 
   // The Popover trigger opens on a plain click; user-event's full pointer sequence
   // leaves it closed. The derivation Select is the reverse — it needs the real
@@ -39,7 +35,9 @@ async function createDataType(name: string) {
 }
 
 describe('ElementCard — data type creation', () => {
-  beforeEach(() => seed())
+  beforeEach(() => {
+    store = createTestStore()
+  })
 
   it('creates the data type when the name is free', async () => {
     await createDataType('Motor')

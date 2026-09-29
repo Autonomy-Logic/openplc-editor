@@ -524,22 +524,61 @@ function validate(): Violation[] {
   return violations
 }
 
+/**
+ * Test files share a worker's module graph, so a module mock of the store or of
+ * the platform ports leaks into every file that runs after it in that worker.
+ * Both are injected instead: `createTestStore()` / `createStoreWrapper()` from
+ * `frontend/store/testing` and a `PlatformProvider` with test ports.
+ */
+function validateTestInjection(): { file: string; line: number; mocked: string }[] {
+  const found: { file: string; line: number; mocked: string }[] = []
+  const tests = collectFiles(SRC_ROOT, ['.ts', '.tsx']).filter(
+    (f) => !f.includes('__architecture__/') && (f.includes('__tests__/') || /\.(test|spec)\.[jt]sx?$/.test(f)),
+  )
+  const mockCall = /\b(?:vi|jest)\.(?:mock|doMock)\(\s*['"]([^'"]+)['"]/g
+
+  for (const file of tests) {
+    const source = readFileSync(file, 'utf-8')
+    let match: RegExpExecArray | null
+    while ((match = mockCall.exec(source)) !== null) {
+      const resolved = resolveImport(match[1], file)
+      if (!resolved) continue
+      const target = relative(SRC_ROOT, resolved).replace(/\\/g, '/')
+      if (target === 'frontend/store/index.ts' || target.startsWith('middleware/shared/providers/')) {
+        found.push({
+          file: relative(SRC_ROOT, file).replace(/\\/g, '/'),
+          line: source.slice(0, match.index).split('\n').length,
+          mocked: match[1],
+        })
+      }
+    }
+  }
+  return found
+}
+
 // ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
 
 const violations = validate()
+const mockedInjections = validateTestInjection()
 
-if (violations.length === 0) {
+if (violations.length === 0 && mockedInjections.length === 0) {
   //
   console.log('Architecture validation passed. No layer violations found.')
   process.exit(0)
 } else {
-  console.error(`Architecture validation FAILED. ${violations.length} violation(s) found:\n`)
+  console.error(`Architecture validation FAILED. ${violations.length + mockedInjections.length} violation(s) found:\n`)
   for (const v of violations) {
     console.error(`  ${v.file}:${v.line}`)
     console.error(`    Import: ${v.importPath}`)
     console.error(`    Rule:   ${v.message}`)
+    console.error()
+  }
+  for (const m of mockedInjections) {
+    console.error(`  ${m.file}:${m.line}`)
+    console.error(`    Mock:   ${m.mocked}`)
+    console.error('    Rule:   tests inject the store and platform ports; they must not module-mock them')
     console.error()
   }
   process.exit(1)

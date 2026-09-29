@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import { UserService } from '@root/backend/editor/services'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
+import { createOpenPLCStore, type OpenPLCStore } from '@root/frontend/store'
 import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
@@ -175,6 +176,8 @@ export function registryDir(): string {
 async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeValue> {
   // Version before the no-command branch: `openplc --version` has no command,
   // and answering it with the usage text (plus a usage exit code) is wrong.
+  const store = createOpenPLCStore()
+
   if (boolFlag(args, 'version') || args.command === 'version') {
     return reporter.success({ version: APP_VERSION }, () => APP_VERSION).exitCode
   }
@@ -201,11 +204,11 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
     case 'packages':
       return (await runPackages(args, reporter)).exitCode
     case 'compile':
-      return (await runBuild(args, reporter, { withUpload: false })).exitCode
+      return (await runBuild(store, args, reporter, { withUpload: false })).exitCode
     case 'upload':
-      return (await runBuild(args, reporter, { withUpload: true })).exitCode
+      return (await runBuild(store, args, reporter, { withUpload: true })).exitCode
     case 'debug':
-      return (await runDebug(args, reporter, buildDebugContext())).exitCode
+      return (await runDebug(args, reporter, buildDebugContext(store))).exitCode
     default:
       // Print the usage as well as the error: a mistyped command is the moment
       // the list of real commands is most useful, and hunting for --help is a
@@ -218,11 +221,12 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   }
 }
 
-function buildDebugContext(): DebugContext {
+function buildDebugContext(store: OpenPLCStore): DebugContext {
   const dir = registryDir()
   return {
     registry: new SessionRegistry(dir),
     spawnSession: createSessionSpawner({
+      store,
       registryDir: dir,
       execPath: process.execPath,
       execArgs: daemonSpawnArgs(),
@@ -237,7 +241,7 @@ function buildDebugContext(): DebugContext {
           mode: 'json',
           streams: { out: () => undefined, err: (text) => onLine(text.replace(/\n$/, '')) },
         })
-        const result = await buildProject({
+        const result = await buildProject(store, {
           projectPath,
           target,
           host: host || undefined,

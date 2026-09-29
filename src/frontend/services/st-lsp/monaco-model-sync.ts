@@ -29,7 +29,7 @@
 import type * as monaco from 'monaco-editor'
 
 import type { PLCPou } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { OPAQUE_BODY_PLACEHOLDER } from '../../utils/PLC/pou-signature-serializer'
 import { pouUri, stubUri } from './types'
 
@@ -44,7 +44,7 @@ export interface MonacoModelSyncHandle {
  * at the URI the LSP service uses.  Idempotent on initial mount;
  * dispose tears down every model the sync created.
  */
-export function attachMonacoModelSync(monacoApi: typeof monaco): MonacoModelSyncHandle {
+export function attachMonacoModelSync(store: OpenPLCStore, monacoApi: typeof monaco): MonacoModelSyncHandle {
   let disposed = false
   // URIs we minted ourselves; we only dispose models from this set on
   // teardown so we don't yank a model some other consumer registered.
@@ -112,12 +112,12 @@ export function attachMonacoModelSync(monacoApi: typeof monaco): MonacoModelSync
     }
   }
 
-  const unsubscribe = openPLCStoreBase.subscribe(
+  const unsubscribe = store.subscribe(
     (state) => state.project.data.pous,
     (pous) => reconcile(pous),
   )
 
-  reconcile(openPLCStoreBase.getState().project.data.pous)
+  reconcile(store.getState().project.data.pous)
 
   return {
     dispose() {

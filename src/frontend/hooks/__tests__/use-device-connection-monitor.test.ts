@@ -1,47 +1,84 @@
+import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { BoardInfo } from '@root/middleware/shared/ports/types'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { renderHook } from '@testing-library/react'
 
-// `mock*`-prefixed refs are hoisted into the jest.mock factories below.
-const mockSetDeviceConnectionStatus = jest.fn()
-const mockOpenModal = jest.fn()
-const mockAddLog = jest.fn()
+jest.mock('../../services/device-link-resolution', () => ({
+  resolveRuntimeDebugChannel: (...args: unknown[]) => mockResolveRuntimeDebugChannel(...(args as [])),
+}))
+
+import type { DevicePort } from '@root/middleware/shared/ports/device-port'
+import type { OpenPLCStore } from '../../store'
+import { createStoreWrapper, createTestStore } from '../../store/testing'
+import { useDeviceConnectionMonitor } from '../use-device-connection-monitor'
 
 const mockOpenRuntimeSession = jest.fn().mockResolvedValue({ success: true })
 const mockCloseRuntimeSession = jest.fn().mockResolvedValue({ success: true })
 const mockResolveRuntimeDebugChannel = jest.fn(() => null as unknown)
 
-const mockState: Record<string, unknown> = {
-  modalActions: { openModal: mockOpenModal },
-  consoleActions: { addLog: mockAddLog },
-  runtimeConnection: { connectionStatus: 'disconnected', jwtToken: null, ipAddress: null },
-  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Runtime v4' } },
-  deviceAvailableOptions: { availableBoards: new Map() },
-  deviceActions: {
-    setDeviceConnectionStatus: mockSetDeviceConnectionStatus,
-  },
-}
-
-type Selector<T> = (s: typeof mockState) => T
-const mockUseOpenPLCStore = ((selector?: Selector<unknown>) =>
-  selector ? selector(mockState) : mockState) as unknown as jest.Mock & { getState: () => typeof mockState }
-mockUseOpenPLCStore.getState = () => mockState
-
 const mockOnConnectionStatus = jest.fn().mockReturnValue(() => undefined)
 const mockOnLinkLog = jest.fn().mockReturnValue(() => undefined)
 
-jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
-jest.mock('../../../middleware/shared/providers', () => ({
-  useDevice: () => ({
-    onConnectionStatus: mockOnConnectionStatus,
-    onLinkLog: mockOnLinkLog,
-    openRuntimeSession: mockOpenRuntimeSession,
-    closeRuntimeSession: mockCloseRuntimeSession,
-  }),
-}))
-jest.mock('../../services/device-link-resolution', () => ({
-  resolveRuntimeDebugChannel: (...args: unknown[]) => mockResolveRuntimeDebugChannel(...(args as [])),
-}))
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
 
-import { useDeviceConnectionMonitor } from '../use-device-connection-monitor'
+function buildPorts(): PlatformPorts {
+  return {
+    compiler: stubPort(),
+    runtime: stubPort(),
+    debugger: stubPort(),
+    simulator: stubPort(),
+    project: stubPort(),
+    device: stubPort<DevicePort>({
+      onConnectionStatus: mockOnConnectionStatus,
+      onLinkLog: mockOnLinkLog,
+      openRuntimeSession: mockOpenRuntimeSession,
+      closeRuntimeSession: mockCloseRuntimeSession,
+    }),
+    orchestrator: stubPort(),
+    system: stubPort(),
+    window: stubPort(),
+    accelerator: stubPort(),
+    theme: stubPort(),
+    versionControl: stubPort(),
+    navigation: stubPort(),
+    library: stubPort(),
+    capabilities: WEB_CAPABILITIES,
+  }
+}
+
+const RUNTIME_BOARD: BoardInfo = { compiler: 'runtime_v4', core: 'openplc', preview: 'generic.png', specs: {} }
+
+let store: OpenPLCStore
+let ports: PlatformPorts
+
+/** Immer freezes the action namespaces, so spies go in as a swapped, write-through copy. */
+function installActionSpies() {
+  const { modalActions, consoleActions, deviceActions } = store.getState()
+  const spies = {
+    openModal: jest.fn(modalActions.openModal),
+    addLog: jest.fn(consoleActions.addLog),
+    setDeviceConnectionStatus: jest.fn(deviceActions.setDeviceConnectionStatus),
+  }
+  store.setState({
+    modalActions: { ...modalActions, openModal: spies.openModal },
+    consoleActions: { ...consoleActions, addLog: spies.addLog },
+    deviceActions: { ...deviceActions, setDeviceConnectionStatus: spies.setDeviceConnectionStatus },
+  })
+  return spies
+}
+
+let spies: ReturnType<typeof installActionSpies>
+
+function renderMonitor() {
+  return renderHook(() => useDeviceConnectionMonitor(), { wrapper: createStoreWrapper(store, ports) })
+}
 
 type Payload = {
   status: string
@@ -53,16 +90,19 @@ type Payload = {
 
 /** Mount the hook and hand back the main-process push callback. */
 function mountAndPush(): (payload: Payload) => void {
-  renderHook(() => useDeviceConnectionMonitor())
+  renderMonitor()
   return mockOnConnectionStatus.mock.calls[0][0] as (payload: Payload) => void
 }
 
 beforeEach(() => {
   jest.clearAllMocks()
+  store = createTestStore()
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+  ports = buildPorts()
+  spies = installActionSpies()
   mockOnConnectionStatus.mockReturnValue(() => undefined)
   mockOnLinkLog.mockReturnValue(() => undefined)
   mockResolveRuntimeDebugChannel.mockReturnValue(null)
-  mockState.runtimeConnection = { connectionStatus: 'disconnected', jwtToken: null, ipAddress: null }
 })
 
 describe('useDeviceConnectionMonitor', () => {
@@ -70,20 +110,21 @@ describe('useDeviceConnectionMonitor', () => {
     it('opens a session when a runtime login comes up', () => {
       // A runtime is controlled over REST, which is connectionless — logging in IS
       // what establishes its session.
-      mockState.runtimeConnection = { connectionStatus: 'connected', jwtToken: 'jwt', ipAddress: '10.0.0.5' }
-      mockState.deviceAvailableOptions = {
-        availableBoards: new Map([['OpenPLC Runtime v4', { debug: { channels: [] } }]]),
-      }
+      const { deviceActions } = store.getState()
+      deviceActions.setRuntimeIpAddress('10.0.0.5')
+      deviceActions.setRuntimeJwtToken('jwt')
+      deviceActions.setRuntimeConnectionStatus('connected')
+      deviceActions.setAvailableOptions({ availableBoards: new Map([['OpenPLC Runtime v4', RUNTIME_BOARD]]) })
       const debugChannel = { connectionType: 'websocket', connectionParams: { ipAddress: '10.0.0.5' } }
       mockResolveRuntimeDebugChannel.mockReturnValue(debugChannel)
 
-      renderHook(() => useDeviceConnectionMonitor())
+      renderMonitor()
 
       expect(mockOpenRuntimeSession).toHaveBeenCalledWith({ address: '10.0.0.5', debug: debugChannel })
     })
 
     it('closes the session when the runtime connection goes down', () => {
-      renderHook(() => useDeviceConnectionMonitor())
+      renderMonitor()
       expect(mockCloseRuntimeSession).toHaveBeenCalledTimes(1)
       expect(mockOpenRuntimeSession).not.toHaveBeenCalled()
     })
@@ -92,12 +133,12 @@ describe('useDeviceConnectionMonitor', () => {
   it('mirrors the main-process connection trace into the console', () => {
     // The decisions worth reading happen in the main process; the console is where
     // a user can actually see and copy them while reproducing a problem.
-    renderHook(() => useDeviceConnectionMonitor())
+    renderMonitor()
     const emit = mockOnLinkLog.mock.calls[0][0] as (message: string) => void
 
     emit('open: 2 candidate(s) in order: tcp 192.168.2.20, rtu /dev/ttyACM0')
 
-    expect(mockAddLog).toHaveBeenCalledWith(
+    expect(spies.addLog).toHaveBeenCalledWith(
       expect.objectContaining({ level: 'info', message: expect.stringContaining('tcp 192.168.2.20') }),
     )
   })
@@ -106,7 +147,7 @@ describe('useDeviceConnectionMonitor', () => {
     const unsubscribe = jest.fn()
     mockOnConnectionStatus.mockReturnValue(unsubscribe)
 
-    const { unmount } = renderHook(() => useDeviceConnectionMonitor())
+    const { unmount } = renderMonitor()
     expect(mockOnConnectionStatus).toHaveBeenCalledTimes(1)
 
     unmount()
@@ -118,7 +159,7 @@ describe('useDeviceConnectionMonitor', () => {
 
     for (const status of ['connecting', 'connected', 'disconnected', 'error'] as const) {
       push({ status, descriptor: 'COM5', transport: 'rtu', debugTransport: 'rtu' })
-      expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith(status, 'COM5', 'rtu', 'rtu')
+      expect(spies.setDeviceConnectionStatus).toHaveBeenCalledWith(status, 'COM5', 'rtu', 'rtu')
     }
   })
 
@@ -126,7 +167,7 @@ describe('useDeviceConnectionMonitor', () => {
     const push = mountAndPush()
 
     push({ status: 'connecting', descriptor: 'COM5' })
-    expect(mockSetDeviceConnectionStatus).toHaveBeenCalledWith('connecting', 'COM5', null, null)
+    expect(spies.setDeviceConnectionStatus).toHaveBeenCalledWith('connecting', 'COM5', null, null)
   })
 
   it('warns the user only when recovery gave up', () => {
@@ -134,11 +175,11 @@ describe('useDeviceConnectionMonitor', () => {
 
     // An 'error' from something the user just clicked already has its own dialog.
     push({ status: 'error', descriptor: 'COM5' })
-    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(spies.openModal).not.toHaveBeenCalled()
 
     push({ status: 'error', descriptor: 'COM5', reason: 'lost' })
-    expect(mockOpenModal).toHaveBeenCalledTimes(1)
-    const [modalId, data] = mockOpenModal.mock.calls[0]
+    expect(spies.openModal).toHaveBeenCalledTimes(1)
+    const [modalId, data] = spies.openModal.mock.calls[0]
     expect(modalId).toBe('runtime-connection-lost')
     expect(data).toMatchObject({ label: 'COM5' })
     expect(String((data as { body: string }).body)).toContain('COM5')
@@ -152,13 +193,13 @@ describe('useDeviceConnectionMonitor', () => {
     push({ status: 'connecting', descriptor: 'COM5' })
     push({ status: 'connected', descriptor: 'COM5' })
 
-    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(spies.openModal).not.toHaveBeenCalled()
   })
 
   it('still names the device when the endpoint is unknown', () => {
     const push = mountAndPush()
     push({ status: 'error', reason: 'lost' })
-    expect(mockOpenModal).toHaveBeenCalledWith('runtime-connection-lost', {
+    expect(spies.openModal).toHaveBeenCalledWith('runtime-connection-lost', {
       label: 'the device',
       body: expect.stringContaining('the device'),
     })
@@ -169,7 +210,7 @@ describe('useDeviceConnectionMonitor', () => {
     const push = mountAndPush()
     push({ status: 'error', descriptor: '192.168.0.50', transport: 'tcp', reason: 'lost' })
 
-    const [, data] = mockOpenModal.mock.calls[0]
+    const [, data] = spies.openModal.mock.calls[0]
     expect((data as { body: string }).body).toContain('192.168.0.50')
     expect((data as { body: string }).body).toContain('network')
     expect((data as { body: string }).body).not.toContain('cable')

@@ -8,23 +8,10 @@
  * target the user had connected to and uploaded a program to. The fix is not a
  * second code path for runtimes — it is asking the target which media it speaks.
  */
-const mockAddLog = jest.fn()
-
-const mockState: Record<string, unknown> = {
-  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Runtime v4', runtimeIpAddress: '192.168.0.42' } },
-  runtimeConnection: { connectionStatus: 'connected', jwtToken: 'jwt-token' },
-  consoleActions: { addLog: mockAddLog },
-}
-
-type Selector<T> = (s: typeof mockState) => T
-const mockUseOpenPLCStore = ((selector?: Selector<unknown>) =>
-  selector ? selector(mockState) : mockState) as unknown as jest.Mock & { getState: () => typeof mockState }
-mockUseOpenPLCStore.getState = () => mockState
-
-jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
-
 import type { DebugSpec } from '../../../backend/shared/hardware/debug-spec'
 import type { BoardInfo } from '../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../store'
+import { createTestStore } from '../../store/testing'
 import { resolveRuntimeDebugChannel } from '../device-link-resolution'
 
 /** A board carries BOTH halves: the spec says how a channel is built, the
@@ -61,14 +48,22 @@ const v3Spec: DebugSpec = {
   ],
 }
 
+let store: OpenPLCStore
+
+const loggedMessages = () => store.getState().logs.map((log) => log.message)
+
 beforeEach(() => {
-  jest.clearAllMocks()
-  mockState.runtimeConnection = { connectionStatus: 'connected', jwtToken: 'jwt-token' }
+  store = createTestStore()
+  const { deviceActions } = store.getState()
+  deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+  deviceActions.setRuntimeIpAddress('192.168.0.42')
+  deviceActions.setRuntimeConnectionStatus('connected')
+  deviceActions.setRuntimeJwtToken('jwt-token')
 })
 
 describe('resolveRuntimeDebugChannel', () => {
   it('describes a v4 target as its WebSocket channel', () => {
-    const config = resolveRuntimeDebugChannel('OpenPLC Runtime v4', boardWith(v4Spec, ['websocket']))
+    const config = resolveRuntimeDebugChannel(store, 'OpenPLC Runtime v4', boardWith(v4Spec, ['websocket']))
 
     expect(config).not.toBeNull()
     expect(config?.connectionType).toBe('websocket')
@@ -77,7 +72,7 @@ describe('resolveRuntimeDebugChannel', () => {
   })
 
   it('describes a v3 target as its Modbus TCP channel', () => {
-    const config = resolveRuntimeDebugChannel('OpenPLC Runtime v3', boardWith(v3Spec, ['modbus-tcp']))
+    const config = resolveRuntimeDebugChannel(store, 'OpenPLC Runtime v3', boardWith(v3Spec, ['modbus-tcp']))
 
     expect(config?.connectionType).toBe('tcp')
     expect(config?.connectionParams.ipAddress).toBe('192.168.0.42')
@@ -85,27 +80,21 @@ describe('resolveRuntimeDebugChannel', () => {
 
   it('returns null and SAYS SO when a board declares no debug spec', () => {
     // Failing quietly is what hid the bug above until it reached hardware.
-    expect(resolveRuntimeDebugChannel('Some Board', undefined)).toBeNull()
-    expect(mockAddLog).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('no debug spec') }),
-    )
+    expect(resolveRuntimeDebugChannel(store, 'Some Board', undefined)).toBeNull()
+    expect(loggedMessages()).toContainEqual(expect.stringContaining('no debug spec'))
   })
 
   it('returns null and says why when the spec cannot be satisfied', () => {
     // v4 requires a JWT; without one the resolver refuses, and the user should be
     // able to see that rather than meet "not connected" later.
-    mockState.runtimeConnection = { connectionStatus: 'connected', jwtToken: null }
+    store.getState().deviceActions.setRuntimeJwtToken(null)
 
-    expect(resolveRuntimeDebugChannel('OpenPLC Runtime v4', boardWith(v4Spec, ['websocket']))).toBeNull()
-    expect(mockAddLog).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('could NOT describe a debug channel') }),
-    )
+    expect(resolveRuntimeDebugChannel(store, 'OpenPLC Runtime v4', boardWith(v4Spec, ['websocket']))).toBeNull()
+    expect(loggedMessages()).toContainEqual(expect.stringContaining('could NOT describe a debug channel'))
   })
 
   it('traces the channel it settled on', () => {
-    resolveRuntimeDebugChannel('OpenPLC Runtime v4', boardWith(v4Spec, ['websocket']))
-    expect(mockAddLog).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('debug channel is websocket') }),
-    )
+    resolveRuntimeDebugChannel(store, 'OpenPLC Runtime v4', boardWith(v4Spec, ['websocket']))
+    expect(loggedMessages()).toContainEqual(expect.stringContaining('debug channel is websocket'))
   })
 })

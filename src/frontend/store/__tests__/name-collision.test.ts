@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
-import { useOpenPLCStore } from '../index'
+import type { OpenPLCStore } from '../index'
+import { createTestStore } from '../testing'
 import { elementNameCollision, type NamedElementKind, newGlobalNameCollision } from '../slices/shared/name-collision'
+
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
 
 /**
  * The gate on the real store, so the bundled library archives the test shim
@@ -9,7 +16,7 @@ import { elementNameCollision, type NamedElementKind, newGlobalNameCollision } f
  * other kind's name.
  */
 const seed = () => {
-  useOpenPLCStore.getState().projectActions.setProject({
+  store.getState().projectActions.setProject({
     meta: { name: 'test', type: 'plc-project', path: '' },
     data: {
       dataTypes: [{ name: 'Speed', derivation: 'enumerated', values: [{ description: 'SLOW' }], initialValue: 'SLOW' }],
@@ -45,11 +52,11 @@ const seed = () => {
       libraries: [],
     },
   })
-  useOpenPLCStore.getState().projectActions.setUnparsedDataTypeFiles([])
+  store.getState().projectActions.setUnparsedDataTypeFiles([])
 }
 
 const gate = (name: string, kind: NamedElementKind, ignoring?: string) =>
-  elementNameCollision(useOpenPLCStore.getState(), name, kind, ignoring)
+  elementNameCollision(store.getState(), name, kind, ignoring)
 
 const KINDS: NamedElementKind[] = [
   'pou',
@@ -143,9 +150,7 @@ describe('elementNameCollision beyond the project elements', () => {
   })
 
   it("refuses an unreadable .dt file's name for workspace kinds only", () => {
-    useOpenPLCStore
-      .getState()
-      .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Broken.dt', content: 'TYPE' }])
+    store.getState().projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Broken.dt', content: 'TYPE' }])
     expect(gate('broken', 'server')).toMatch(/could not be read/)
     expect(gate('broken', 'ethercat-slave')).toMatch(/could not be read/)
     expect(gate('broken', 'pou')).toMatch(/could not be read/)
@@ -160,10 +165,10 @@ describe('elementNameCollision beyond the project elements', () => {
 
   it('keeps the derived-name rules for a new list', () => {
     expect(gate('Speed', 'global-variable-list')).toBe('"Speed" is already the name of a data type')
-    useOpenPLCStore.getState().projectActions.setProject({
-      ...useOpenPLCStore.getState().project,
+    store.getState().projectActions.setProject({
+      ...store.getState().project,
       data: {
-        ...useOpenPLCStore.getState().project.data,
+        ...store.getState().project.data,
         dataTypes: [{ name: 'Tank_TYPE', derivation: 'enumerated', values: [{ description: 'A' }], initialValue: 'A' }],
       },
     })
@@ -181,12 +186,12 @@ describe('elementNameCollision beyond the project elements', () => {
   })
 
   it('does not stand in the way of opening a project that already carries a collision', () => {
-    const { project } = useOpenPLCStore.getState()
-    useOpenPLCStore.getState().projectActions.setProject({
+    const { project } = store.getState()
+    store.getState().projectActions.setProject({
       ...project,
       data: { ...project.data, servers: [{ name: 'Plant', protocol: 'modbus-tcp' }] },
     })
-    const { data } = useOpenPLCStore.getState().project
+    const { data } = store.getState().project
     expect(data.servers?.map((s) => s.name)).toEqual(['Plant'])
     expect(data.globalVariableLists?.map((l) => l.name)).toEqual(['Plant'])
     expect(gate('Plant', 'server')).toBe('Server already exists')
@@ -194,7 +199,7 @@ describe('elementNameCollision beyond the project elements', () => {
 })
 
 const holdGlobals = (...names: string[]) =>
-  useOpenPLCStore.getState().projectActions.setGlobalVariables({
+  store.getState().projectActions.setGlobalVariables({
     variables: names.map((name) => ({
       name,
       class: 'global' as const,
@@ -205,7 +210,7 @@ const holdGlobals = (...names: string[]) =>
   })
 
 describe('newGlobalNameCollision, the code view commit gate', () => {
-  const check = (...names: string[]) => newGlobalNameCollision(useOpenPLCStore.getState(), names)
+  const check = (...names: string[]) => newGlobalNameCollision(store.getState(), names)
 
   it('leaves names the table already holds alone, even ones the gate would refuse today', () => {
     holdGlobals('Scale')

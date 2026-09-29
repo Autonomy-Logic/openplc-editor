@@ -6,7 +6,7 @@ import type {
   WriteProjectFiles,
 } from '../../middleware/shared/ports/project-port'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore, RootState } from '../store'
 import type { LadderFlowType } from '../store/slices/ladder'
 import { validateVariableSet } from '../store/slices/project/validation/variables'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
@@ -31,7 +31,7 @@ import { executeSaveProjectAs } from './save-project-as'
 /** Join path segments with forward slashes (platform-agnostic, works with Node's fs on all OSes). */
 const joinPath = (...parts: string[]): string => parts.join('/').replace(/\/+/g, '/')
 
-type StoreState = ReturnType<typeof openPLCStoreBase.getState>
+type StoreState = RootState
 
 type ProjectFileCategory =
   | 'pou'
@@ -244,16 +244,16 @@ function serializeProjectFile(
   return [{ path: 'project.json', content: buildProjectJsonContent(state), category: 'project-json' }]
 }
 
-export function flushGlobalVariableListDrafts(): void {
-  const state = openPLCStoreBase.getState()
+export function flushGlobalVariableListDrafts(store: OpenPLCStore): void {
+  const state = store.getState()
   for (const list of state.project.data.globalVariableLists ?? []) {
     state.projectActions.reconcileGlobalVariableListText(list.name)
   }
 }
 
-export function buildAllProjectFileContentsPure(): Record<string, string> {
-  flushGlobalVariableListDrafts()
-  const state = openPLCStoreBase.getState()
+export function buildAllProjectFileContentsPure(store: OpenPLCStore): Record<string, string> {
+  flushGlobalVariableListDrafts(store)
+  const state = store.getState()
   const result: Record<string, string> = {}
   for (const spec of iterateProjectFiles(state)) {
     result[spec.path] = spec.content
@@ -262,8 +262,8 @@ export function buildAllProjectFileContentsPure(): Record<string, string> {
 }
 
 /** Like `buildAllProjectFileContentsPure`, but applies the raw-fallback for files unchanged since the last sync. */
-export function buildAllProjectFileContents(): Record<string, string> {
-  const state = openPLCStoreBase.getState()
+export function buildAllProjectFileContents(store: OpenPLCStore): Record<string, string> {
+  const state = store.getState()
   const result: Record<string, string> = {}
   for (const spec of iterateProjectFiles(state)) {
     result[spec.path] = pickContentForSave(spec.path, spec.content, state.versionControl)
@@ -286,8 +286,8 @@ const ENDED_SESSION_NO_RETURN = {
     'Editing sessions are temporary and this one has run out, so nothing further can be saved from this tab. Open the project again from the application you came from to carry on.',
 } as const
 
-function refusedForHavingNoLocation(reason: SaveReason): boolean {
-  if (!openPLCStoreBase.getState().workspace.isEphemeralProject || reason !== 'user') return false
+function refusedForHavingNoLocation(store: OpenPLCStore, reason: SaveReason): boolean {
+  if (!store.getState().workspace.isEphemeralProject || reason !== 'user') return false
   toast({
     title: 'This project has no location yet',
     description: 'It was retrieved from a device. Use Save As to choose where to keep it, then saving works as usual.',
@@ -308,32 +308,37 @@ function canFallBackToSaveAs(result: SaveResult, capabilities: PlatformCapabilit
   return result.reason === 'unreachable' && capabilities.hasLocalFilesystem
 }
 
-async function fallBackToSaveAs(projectPort: ProjectPort, capabilities: PlatformCapabilities): Promise<boolean> {
+async function fallBackToSaveAs(
+  store: OpenPLCStore,
+  projectPort: ProjectPort,
+  capabilities: PlatformCapabilities,
+): Promise<boolean> {
   toast({
     title: 'Autonomy Edge could not be reached',
     description: 'Choose a folder to keep a local copy of the project, so nothing you did is lost.',
     variant: 'warn',
   })
-  const saved = await executeSaveProjectAs(projectPort, capabilities)
+  const saved = await executeSaveProjectAs(store, projectPort, capabilities)
   return saved.success
 }
 
 export async function executeSaveProject(
+  store: OpenPLCStore,
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
   reason: SaveReason = 'user',
 ): Promise<{ success: boolean }> {
   // Flush debounced flow write-backs first; a flow that fails validation stays stale and must not count as saved.
-  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
+  const staleFlows = flushFlowWriteBacks(store.getState)
   // Same for GVLs, which commit on blur only — Ctrl+S with focus still in Monaco never fires one.
-  flushGlobalVariableListDrafts()
-  const state = openPLCStoreBase.getState()
+  flushGlobalVariableListDrafts(store)
+  const state = store.getState()
   if (!state.workspace.canEdit) {
     notifyNoWritePermission('save changes to')
     return { success: false }
   }
 
-  if (refusedForHavingNoLocation(reason)) return { success: false }
+  if (refusedForHavingNoLocation(store, reason)) return { success: false }
 
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
@@ -474,7 +479,7 @@ export async function executeSaveProject(
         return { success: false }
       }
 
-      resumeSaveAfterEdgeSignIn(() => executeSaveProject(projectPort, capabilities))
+      resumeSaveAfterEdgeSignIn(store, () => executeSaveProject(store, projectPort, capabilities))
       toast({
         title: 'Not saved — your session ended',
         description: 'Sign in again and this save finishes on its own. Everything you typed is still open here.',
@@ -482,7 +487,7 @@ export async function executeSaveProject(
       })
     } else if (canFallBackToSaveAs(res, capabilities)) {
       setEditingState('unsaved')
-      return { success: (await fallBackToSaveAs(projectPort, capabilities)) && staleFlows.length === 0 }
+      return { success: (await fallBackToSaveAs(store, projectPort, capabilities)) && staleFlows.length === 0 }
     } else {
       setEditingState('unsaved')
       toast({
@@ -537,21 +542,22 @@ async function migrateDataTypesToFiles(
 }
 
 export async function executeSaveFile(
+  store: OpenPLCStore,
   fileName: string,
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState, fileName)
+  const staleFlows = flushFlowWriteBacks(store.getState, fileName)
   // A GVL rides inside project.json, which this path rewrites, so its buffer is folded in too.
-  flushGlobalVariableListDrafts()
-  const state = openPLCStoreBase.getState()
+  flushGlobalVariableListDrafts(store)
+  const state = store.getState()
   // See executeSaveProject for rationale — same persist gate.
   if (!state.workspace.canEdit) {
     notifyNoWritePermission('save changes to')
     return { success: false }
   }
   // Same again: every caller of this is a person pressing Save.
-  if (refusedForHavingNoLocation('user')) return { success: false }
+  if (refusedForHavingNoLocation(store, 'user')) return { success: false }
   const { project, files } = state
   const { setEditingState } = state.workspaceActions
   const { updateFile, checkIfAllFilesAreSaved } = state.fileActions
@@ -583,7 +589,7 @@ export async function executeSaveFile(
         return { success: false }
       }
 
-      resumeSaveAfterEdgeSignIn(() => executeSaveFile(fileName, projectPort, capabilities), {
+      resumeSaveAfterEdgeSignIn(store, () => executeSaveFile(store, fileName, projectPort, capabilities), {
         scope: 'file',
         fileName,
       })
@@ -597,7 +603,7 @@ export async function executeSaveFile(
 
     // One file of a cloud project cannot be kept on its own; the whole project is.
     if (canFallBackToSaveAs(result, capabilities)) {
-      return { success: await fallBackToSaveAs(projectPort, capabilities) }
+      return { success: await fallBackToSaveAs(store, projectPort, capabilities) }
     }
 
     toast({ title: 'Error saving file', description: result.error ?? 'Save failed', variant: 'fail' })
@@ -758,10 +764,11 @@ export async function executeSaveFile(
 }
 
 export async function executeSaveActiveFile(
+  store: OpenPLCStore,
   projectPort: ProjectPort,
   capabilities: PlatformCapabilities,
 ): Promise<{ success: boolean }> {
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
 
   // The start screen is `path === ''` (see App.tsx). Ctrl+S there is a stray
   // keystroke rather than a save that failed, so it says nothing.
@@ -780,11 +787,15 @@ export async function executeSaveActiveFile(
     return { success: false }
   }
 
-  return executeSaveFile(editor.meta.name, projectPort, capabilities)
+  return executeSaveFile(store, editor.meta.name, projectPort, capabilities)
 }
 
-export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
-  const state = openPLCStoreBase.getState()
+export async function reloadPouFromDisk(
+  store: OpenPLCStore,
+  pouName: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === pouName)
   if (!pou) return { success: false }
 
@@ -839,7 +850,7 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
     }
 
     // Reclassify variables with full project context (same as handleOpenProjectResponse).
-    const freshState = openPLCStoreBase.getState()
+    const freshState = store.getState()
     const freshPou = freshState.project.data.pous.find((p) => p.name === pouName)
     if (freshPou) {
       const vars = freshPou.interface?.variables ?? []
@@ -879,18 +890,18 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
       }
 
       if (language === 'ld') {
-        const pouFlows = openPLCStoreBase.getState().ladderFlows.filter((f) => f.name === pouName)
+        const pouFlows = store.getState().ladderFlows.filter((f) => f.name === pouName)
         if (pouFlows.length > 0) {
-          syncNodesWithVariables(reparsedVars, pouFlows, openPLCStoreBase.getState().ladderFlowActions.updateNodes)
+          syncNodesWithVariables(reparsedVars, pouFlows, store.getState().ladderFlowActions.updateNodes)
         }
         // Reset flow updated flag (syncNodesWithVariables triggers updateNodes which sets updated=true).
-        openPLCStoreBase.getState().ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
+        store.getState().ladderFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
       } else if (language === 'fbd') {
-        const pouFlows = openPLCStoreBase.getState().fbdFlows.filter((f) => f.name === pouName)
+        const pouFlows = store.getState().fbdFlows.filter((f) => f.name === pouName)
         if (pouFlows.length > 0) {
-          syncNodesWithVariablesFBD(reparsedVars, pouFlows, openPLCStoreBase.getState().fbdFlowActions.updateNodes)
+          syncNodesWithVariablesFBD(reparsedVars, pouFlows, store.getState().fbdFlowActions.updateNodes)
         }
-        openPLCStoreBase.getState().fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
+        store.getState().fbdFlowActions.setFlowUpdated({ editorName: pouName, updated: false })
       }
     }
 
@@ -900,8 +911,12 @@ export async function reloadPouFromDisk(pouName: string, projectPort: ProjectPor
   }
 }
 
-export async function reloadDataTypeFromDisk(name: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
-  const state = openPLCStoreBase.getState()
+export async function reloadDataTypeFromDisk(
+  store: OpenPLCStore,
+  name: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = store.getState()
   const dt = state.project.data.dataTypes.find((d) => d.name === name)
   if (!dt) return { success: false }
 
@@ -924,7 +939,7 @@ export async function reloadDataTypeFromDisk(name: string, projectPort: ProjectP
 async function saveLibraryManagerOnly(
   projectPath: string,
   projectPort: ProjectPort,
-  state: ReturnType<typeof openPLCStoreBase.getState>,
+  state: RootState,
 ): Promise<{ success: boolean; error?: string }> {
   const fullPath = joinPath(projectPath, 'project.json')
   const refs = state.project.data.libraries ?? []
@@ -957,14 +972,14 @@ async function saveLibraryManagerOnly(
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
 }
 
-function vendorScreenOwnedKeysFor(state: ReturnType<typeof openPLCStoreBase.getState>, screenName: string): string[] {
+function vendorScreenOwnedKeysFor(state: RootState, screenName: string): string[] {
   const boardId = state.deviceDefinitions.configuration.deviceBoard
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
   const screen = boardInfo?.vpp?.screens?.[screenName]
   return collectScreenPersistenceKeys(screen)
 }
 
-function serializeVendorScreenSlice(state: ReturnType<typeof openPLCStoreBase.getState>, ownedKeys: string[]): string {
+function serializeVendorScreenSlice(state: RootState, ownedKeys: string[]): string {
   const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData ?? {}
   const slice: Record<string, unknown> = {}
   for (const k of [...ownedKeys].sort()) {
@@ -978,7 +993,7 @@ function serializeVendorScreenSlice(state: ReturnType<typeof openPLCStoreBase.ge
 async function saveVendorScreenOnly(
   projectPath: string,
   projectPort: ProjectPort,
-  state: ReturnType<typeof openPLCStoreBase.getState>,
+  state: RootState,
   screenName: string,
 ): Promise<{ success: boolean; error?: string }> {
   const fullPath = joinPath(projectPath, 'devices/configuration.json')
@@ -1030,8 +1045,8 @@ async function saveVendorScreenOnly(
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
 }
 
-function reloadLibraryManifestFromCleanState(fileName: string): { success: boolean } {
-  const state = openPLCStoreBase.getState()
+function reloadLibraryManifestFromCleanState(store: OpenPLCStore, fileName: string): { success: boolean } {
+  const state = store.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
   if (!file || file.type !== 'library-manifest') return { success: false }
   const cleanState = typeof file.cleanState === 'string' ? file.cleanState : ''
@@ -1040,8 +1055,8 @@ function reloadLibraryManifestFromCleanState(fileName: string): { success: boole
   return { success: true }
 }
 
-function reloadVendorScreenFromCleanState(fileName: string): { success: boolean } {
-  const state = openPLCStoreBase.getState()
+function reloadVendorScreenFromCleanState(store: OpenPLCStore, fileName: string): { success: boolean } {
+  const state = store.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
   if (!file || file.type !== 'vendor-screen') return { success: false }
   const cleanState = typeof file.cleanState === 'string' ? file.cleanState : '{}'
@@ -1060,8 +1075,8 @@ function reloadVendorScreenFromCleanState(fileName: string): { success: boolean 
   }
 }
 
-function reloadLibraryManagerFromCleanState(fileName: string): { success: boolean } {
-  const state = openPLCStoreBase.getState()
+function reloadLibraryManagerFromCleanState(store: OpenPLCStore, fileName: string): { success: boolean } {
+  const state = store.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
   if (!file || file.type !== 'library-manager') return { success: false }
   const cleanState = typeof file.cleanState === 'string' ? file.cleanState : '[]'
@@ -1087,24 +1102,28 @@ function reloadLibraryManagerFromCleanState(fileName: string): { success: boolea
   }
 }
 
-export async function reloadFileFromDisk(fileName: string, projectPort: ProjectPort): Promise<{ success: boolean }> {
-  const state = openPLCStoreBase.getState()
+export async function reloadFileFromDisk(
+  store: OpenPLCStore,
+  fileName: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = store.getState()
   const file = state.fileActions.getFile({ name: fileName }).file
   if (!file) {
     // File entry vanished — nothing to revert; treat as success so the modal still closes the tab.
     return { success: true }
   }
   if (file.type === 'library-manager') {
-    return reloadLibraryManagerFromCleanState(fileName)
+    return reloadLibraryManagerFromCleanState(store, fileName)
   }
   if (file.type === 'vendor-screen') {
-    return reloadVendorScreenFromCleanState(fileName)
+    return reloadVendorScreenFromCleanState(store, fileName)
   }
   if (file.type === 'library-manifest') {
-    return reloadLibraryManifestFromCleanState(fileName)
+    return reloadLibraryManifestFromCleanState(store, fileName)
   }
   if (file.type === 'data-type') {
-    return reloadDataTypeFromDisk(fileName, projectPort)
+    return reloadDataTypeFromDisk(store, fileName, projectPort)
   }
-  return reloadPouFromDisk(fileName, projectPort)
+  return reloadPouFromDisk(store, fileName, projectPort)
 }

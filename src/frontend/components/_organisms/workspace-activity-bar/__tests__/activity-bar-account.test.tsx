@@ -3,15 +3,14 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 
 import type { EdgeAccountPort, EdgeUserRead } from '../../../../../middleware/shared/ports/edge-account-port'
 import {
   EDITOR_CAPABILITIES,
   type PlatformCapabilities,
 } from '../../../../../middleware/shared/ports/platform-capabilities'
-import { PlatformProvider } from '../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../middleware/shared/providers/types'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { WorkspaceActivityBar } from '..'
 
 const USER = { id: 'u1', name: 'Ada Lovelace', email: 'ada@example.com', username: 'ada' }
@@ -75,11 +74,7 @@ let capabilities: PlatformCapabilities
 
 function renderBar(account: EdgeAccountPort) {
   const ports = makePorts({ capabilities, edgeAccount: account })
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <PlatformProvider ports={ports}>{children}</PlatformProvider>
-  )
-
-  return render(<WorkspaceActivityBar />, { wrapper })
+  return render(<WorkspaceActivityBar />, { wrapper: createStoreWrapper(createTestStore(), ports) })
 }
 
 const SIGN_IN_LABEL = 'Sign in to Autonomy Edge'

@@ -32,7 +32,7 @@ import { SFCIcon } from '../../../assets/icons/project/SFC'
 import { STIcon } from '../../../assets/icons/project/ST'
 import { StructureIcon } from '../../../assets/icons/project/Structure'
 import { UsersIcon } from '../../../assets/icons/project/Users'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import { elementNameCollision, type NamedElementKind } from '../../../store/slices/shared/name-collision'
 import { WorkspaceProjectTreeLeafType } from '../../../store/slices/workspace/types'
 import { cn } from '../../../utils/cn'
@@ -525,6 +525,7 @@ const ProjectTreeLeaf = ({
   onClick: handleLeafClick,
   ...res
 }: IProjectTreeLeafProps) => {
+  const store = useOpenPLCStoreApi()
   const {
     editor: {
       meta: { name },
@@ -688,7 +689,7 @@ const ProjectTreeLeaf = ({
    * a name the menu could not know was taken.
    */
   const nextCopyName = (base: string): string => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const kind = copyKind()
     const free = (candidate: string) => elementNameCollision(state, candidate, kind) === null
     const first = `${base}_copy`

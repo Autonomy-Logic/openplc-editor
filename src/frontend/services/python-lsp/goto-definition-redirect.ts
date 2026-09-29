@@ -37,6 +37,7 @@
 
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
+import type { OpenPLCStore } from '../../store'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import {
   type NavTarget,
@@ -67,12 +68,16 @@ export interface PythonRedirectContext {
  * corresponding variable, e.g. a header comment line) so the
  * caller can fall back to the URI-reachability filter.
  */
-export function redirectPythonDefinitionToStore(loc: Location | LocationLink, ctx: PythonRedirectContext): boolean {
-  return redirectPythonNavTarget(normaliseLocation(loc), ctx)
+export function redirectPythonDefinitionToStore(
+  store: OpenPLCStore,
+  loc: Location | LocationLink,
+  ctx: PythonRedirectContext,
+): boolean {
+  return redirectPythonNavTarget(store, normaliseLocation(loc), ctx)
 }
 
 /** Same routing for a target already in LSP coordinates. */
-export function redirectPythonNavTarget(target: NavTarget, ctx: PythonRedirectContext): boolean {
+export function redirectPythonNavTarget(store: OpenPLCStore, target: NavTarget, ctx: PythonRedirectContext): boolean {
   // Cross-file navigation isn't supported yet — every reachable
   // Python definition target lives in the source URI.  Anything
   // else (a typeshed stub click, an external import) falls through
@@ -93,10 +98,10 @@ export function redirectPythonNavTarget(target: NavTarget, ctx: PythonRedirectCo
     if (!variableName) return false
     const iecPosition = ctx.iecVariableLineMap.get(variableName)
     if (!iecPosition) return false
-    return routeToPouPreamble(ctx.sourcePouName, iecPosition.line, iecPosition.column)
+    return routeToPouPreamble(store, ctx.sourcePouName, iecPosition.line, iecPosition.column)
   }
 
   // Body target — subtract the body offset to bring the LSP line
   // back into the body-only frame Monaco renders.
-  return routeToPouBody(ctx.sourcePouName, target.lineLsp - bodyOffset + 1, target.characterLsp + 1)
+  return routeToPouBody(store, ctx.sourcePouName, target.lineLsp - bodyOffset + 1, target.characterLsp + 1)
 }
