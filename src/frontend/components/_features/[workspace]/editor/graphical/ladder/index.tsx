@@ -150,7 +150,7 @@ export default function LadderEditor() {
   useEffect(() => {
     if (!flowUpdated) return
     scheduleFlowWriteBack(store.getState, pouName, 'ld')
-  }, [flowUpdated])
+  }, [store, flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 

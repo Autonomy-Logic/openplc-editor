@@ -208,7 +208,7 @@ const RuntimeStatusEditor = () => {
       }
     }
     setBootloader(next)
-  }, [connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
+  }, [store, connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
 
   useEffect(() => {
     void refresh()

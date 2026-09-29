@@ -76,7 +76,7 @@ const VendorScreenEditor = () => {
     if (file.saved !== isClean) {
       updateFile({ name: screenName, saved: isClean })
     }
-  }, [screenName, ownedKeys, vendorScreenData, getFile, updateFile])
+  }, [store, screenName, ownedKeys, vendorScreenData, getFile, updateFile])
 
   if (!screenDefinition) {
     return (

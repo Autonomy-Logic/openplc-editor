@@ -199,7 +199,7 @@ const OrchestratorsList = () => {
     } finally {
       setLoading(false)
     }
-  }, [orchestratorPort])
+  }, [store, orchestratorPort])
 
   useEffect(() => {
     void fetchOrchestrators()

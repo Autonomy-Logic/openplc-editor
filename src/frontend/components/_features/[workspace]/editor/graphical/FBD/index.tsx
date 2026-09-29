@@ -94,7 +94,7 @@ export default function FbdEditor() {
   useEffect(() => {
     if (!flowUpdated) return
     scheduleFlowWriteBack(store.getState, pouName, 'fbd')
-  }, [flowUpdated])
+  }, [store, flowUpdated])
 
   return (
     <div className='h-full w-full'>
