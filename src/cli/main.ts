@@ -176,8 +176,6 @@ export function registryDir(): string {
 async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeValue> {
   // Version before the no-command branch: `openplc --version` has no command,
   // and answering it with the usage text (plus a usage exit code) is wrong.
-  const store = createOpenPLCStore()
-
   if (boolFlag(args, 'version') || args.command === 'version') {
     return reporter.success({ version: APP_VERSION }, () => APP_VERSION).exitCode
   }
@@ -204,11 +202,11 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
     case 'packages':
       return (await runPackages(args, reporter)).exitCode
     case 'compile':
-      return (await runBuild(store, args, reporter, { withUpload: false })).exitCode
+      return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: false })).exitCode
     case 'upload':
-      return (await runBuild(store, args, reporter, { withUpload: true })).exitCode
+      return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: true })).exitCode
     case 'debug':
-      return (await runDebug(args, reporter, buildDebugContext(store))).exitCode
+      return (await runDebug(args, reporter, buildDebugContext(createOpenPLCStore()))).exitCode
     default:
       // Print the usage as well as the error: a mistyped command is the moment
       // the list of real commands is most useful, and hunting for --help is a

@@ -525,10 +525,9 @@ function validate(): Violation[] {
 }
 
 /**
- * Test files share a worker's module graph, so a module mock of the store or of
- * the platform ports leaks into every file that runs after it in that worker.
- * Both are injected instead: `createTestStore()` / `createStoreWrapper()` from
- * `frontend/store/testing` and a `PlatformProvider` with test ports.
+ * Tests inject the store and the platform ports instead of mocking them, so a
+ * mock cannot bypass the Provider: `createTestStore()` / `createStoreWrapper()`
+ * from `frontend/store/testing` and a `PlatformProvider` with test ports.
  */
 function validateTestInjection(): { file: string; line: number; mocked: string }[] {
   const found: { file: string; line: number; mocked: string }[] = []
@@ -544,7 +543,8 @@ function validateTestInjection(): { file: string; line: number; mocked: string }
       const resolved = resolveImport(match[1], file)
       if (!resolved) continue
       const target = relative(SRC_ROOT, resolved).replace(/\\/g, '/')
-      if (target === 'frontend/store/index.ts' || target.startsWith('middleware/shared/providers/')) {
+      const mocksStore = target.startsWith('frontend/store/') && !target.startsWith('frontend/store/slices/')
+      if (mocksStore || target.startsWith('middleware/shared/providers/')) {
         found.push({
           file: relative(SRC_ROOT, file).replace(/\\/g, '/'),
           line: source.slice(0, match.index).split('\n').length,
