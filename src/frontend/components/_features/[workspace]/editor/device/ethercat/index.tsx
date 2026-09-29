@@ -3,6 +3,7 @@ import { createDefaultSlaveConfig } from '@root/backend/shared/ethercat/device-c
 import { matchDevicesToRepository } from '@root/backend/shared/ethercat/device-matcher'
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
@@ -11,6 +12,7 @@ import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
 import { generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
+  DeviceMatch,
   ESIDeviceRef,
   ESIDeviceSummary,
   ESIRepositoryItemLight,
@@ -40,13 +42,10 @@ type EditorTab = 'scan-bus' | 'repository' | 'advanced'
  * is naturally store-driven and the two callers here both live in
  * this file; lifting to a util buys nothing.
  */
-function buildClaimedAddressSet(
-  remoteDevices: ReturnType<typeof useOpenPLCStore.getState>['project']['data']['remoteDevices'],
-  vendorScreenData: ReturnType<
-    typeof useOpenPLCStore.getState
-  >['deviceDefinitions']['configuration']['vendorScreenData'],
-): Set<string> {
+function buildClaimedAddressSet(): Set<string> {
   const state = useOpenPLCStore.getState()
+  const remoteDevices = state.project.data.remoteDevices
+  const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
   const ioMapping =
     (
@@ -115,7 +114,6 @@ const EtherCATEditor = () => {
     sharedWorkspaceActions,
     editorActions,
   } = useOpenPLCStore()
-  const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const runtime = useRuntime()
   const esi = useEsi()
 
@@ -154,6 +152,14 @@ const EtherCATEditor = () => {
       }
     )
   }, [remoteDevice])
+
+  // Read at write time: an add awaits ESI loads, so the render-time list can be stale by then.
+  const readConfiguredDevices = useCallback(
+    (): ConfiguredEtherCATDevice[] =>
+      useOpenPLCStore.getState().project.data.remoteDevices?.find((d) => d.name === deviceName)?.ethercatConfig
+        ?.devices ?? [],
+    [deviceName],
+  )
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
@@ -212,6 +218,11 @@ const EtherCATEditor = () => {
   // Devices the user tried to add but couldn't (no ESI XML in repository).
   // When non-empty the warning modal is open.
   const [unmatchedAddAttempt, setUnmatchedAddAttempt] = useState<ScannedDeviceMatch['device'][]>([])
+
+  // Only one add runs at a time; the ref guards reentry before the state update renders.
+  const isAddingRef = useRef(false)
+  const [addProgress, setAddProgress] = useState<{ current: number; total: number } | null>(null)
+  const isAdding = addProgress !== null
 
   // Matched devices
   const deviceMatches = useMemo<ScannedDeviceMatch[]>(() => {
@@ -281,6 +292,7 @@ const EtherCATEditor = () => {
 
   // Scan for EtherCAT devices
   const scanDevices = useCallback(async () => {
+    if (isAddingRef.current) return
     if (!isConnectedToRuntime || !selectedInterface) {
       setScanError('Please select a network interface')
       return
@@ -418,97 +430,103 @@ const EtherCATEditor = () => {
   )
 
   const handleAddSelectedFromScan = useCallback(async () => {
-    const newDevices: ConfiguredEtherCATDevice[] = []
-    const unmatched: ScannedDeviceMatch['device'][] = []
-    const existingPositions = new Set(configuredDevices.map((d) => d.position))
-    const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
-    // Every element name in the project, plus the batch so it cannot collide with itself.
-    const batch = new Set<string>()
-    const nameTaken = (name: string) =>
-      batch.has(name) || elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null
+    if (isAddingRef.current) return
+    isAddingRef.current = true
 
-    for (const position of selectedScannedDevices) {
-      // Skip devices already configured at this position
-      if (existingPositions.has(position)) continue
-      const match = deviceMatches.find((dm) => dm.device.position === position)
-      if (!match) continue
+    try {
+      const newDevices: ConfiguredEtherCATDevice[] = []
+      const unmatched: ScannedDeviceMatch['device'][] = []
+      const existingPositions = new Set(readConfiguredDevices().map((d) => d.position))
+      const usedAddresses = buildClaimedAddressSet()
+      // Every element name in the project, plus the batch so it cannot collide with itself.
+      const batch = new Set<string>()
+      const nameTaken = (name: string) =>
+        batch.has(name) || elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null
 
-      // No ESI XML in repository → collect for the warning modal and skip add.
-      if (match.matches.length === 0) {
-        unmatched.push(match.device)
-        continue
+      const toLoad: { match: ScannedDeviceMatch; bestMatch: DeviceMatch; repoItem: ESIRepositoryItemLight }[] = []
+      for (const position of selectedScannedDevices) {
+        // Skip devices already configured at this position
+        if (existingPositions.has(position)) continue
+        const match = deviceMatches.find((dm) => dm.device.position === position)
+        if (!match) continue
+
+        // No ESI XML in repository → collect for the warning modal and skip add.
+        if (match.matches.length === 0) {
+          unmatched.push(match.device)
+          continue
+        }
+
+        // Use the best match (first one, which is sorted by quality)
+        const bestMatch = match.matches[0]
+        const repoItem = repository.find((r) => r.id === bestMatch.repositoryItemId)
+        if (!repoItem) continue
+        toLoad.push({ match, bestMatch, repoItem })
       }
 
-      // Use the best match (first one, which is sorted by quality)
-      const bestMatch = match.matches[0]
-      const repoItem = repository.find((r) => r.id === bestMatch.repositoryItemId)
-      if (!repoItem) continue
+      for (const [index, { match, bestMatch, repoItem }] of toLoad.entries()) {
+        setAddProgress({ current: index + 1, total: toLoad.length })
 
-      let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
-      const result = await esi!.loadDeviceFull(bestMatch.repositoryItemId, bestMatch.deviceIndex)
-      if (result.success && result.device) {
-        enriched = enrichDeviceData(result.device, usedAddresses)
-        // Reserve the freshly assigned addresses so the next device in the
-        // batch doesn't collide with them.
-        for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
+        let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
+        const result = await esi!.loadDeviceFull(bestMatch.repositoryItemId, bestMatch.deviceIndex)
+        if (result.success && result.device) {
+          enriched = enrichDeviceData(result.device, usedAddresses)
+          // Reserve the freshly assigned addresses so the next device in the
+          // batch doesn't collide with them.
+          for (const m of enriched.channelMappings ?? []) usedAddresses.add(m.iecLocation)
+        }
+
+        // SoftMotion drive names become axis variable names — keep them valid.
+        const rawName = getShortDeviceName(bestMatch.esiDevice)
+        const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
+        const uniqueName = generateUniqueSlaveName(baseName, nameTaken)
+        batch.add(uniqueName)
+
+        newDevices.push({
+          id: uuidv4(),
+          position: match.device.position,
+          name: uniqueName,
+          esiDeviceRef: {
+            repositoryItemId: bestMatch.repositoryItemId,
+            deviceIndex: bestMatch.deviceIndex,
+          },
+          vendorId: repoItem.vendor.id,
+          productCode: bestMatch.esiDevice.type.productCode,
+          revisionNo: bestMatch.esiDevice.type.revisionNo,
+          addedFrom: 'scan',
+          config: createDefaultSlaveConfig(),
+          channelMappings: [],
+          ...enriched,
+        })
       }
 
-      // SoftMotion drive names become axis variable names — keep them valid.
-      const rawName = getShortDeviceName(bestMatch.esiDevice)
-      const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
-      const uniqueName = generateUniqueSlaveName(baseName, nameTaken)
-      batch.add(uniqueName)
+      if (newDevices.length > 0) {
+        syncDevicesToStore([...readConfiguredDevices(), ...newDevices])
+      }
 
-      newDevices.push({
-        id: uuidv4(),
-        position: match.device.position,
-        name: uniqueName,
-        esiDeviceRef: {
-          repositoryItemId: bestMatch.repositoryItemId,
-          deviceIndex: bestMatch.deviceIndex,
-        },
-        vendorId: repoItem.vendor.id,
-        productCode: bestMatch.esiDevice.type.productCode,
-        revisionNo: bestMatch.esiDevice.type.revisionNo,
-        addedFrom: 'scan',
-        config: createDefaultSlaveConfig(),
-        channelMappings: [],
-        ...enriched,
-      })
-    }
+      // Keep unmatched selected so the user can see which ones failed; clear
+      // the successfully-added ones from the selection. We compute the new set
+      // as `prev minus added` rather than rebuilding from `unmatched` so that
+      // selections of already-configured positions (silently skipped above)
+      // and any state changes that happened while the loop ran are preserved.
+      if (newDevices.length > 0) {
+        setSelectedScannedDevices((prev) => {
+          const next = new Set(prev)
+          // position is optional in the device type but always set when added here.
+          for (const d of newDevices) if (d.position !== undefined) next.delete(d.position)
+          return next
+        })
+      }
 
-    if (newDevices.length > 0) {
-      syncDevicesToStore([...configuredDevices, ...newDevices])
+      if (unmatched.length > 0) {
+        setUnmatchedAddAttempt(unmatched)
+      }
+    } catch (error) {
+      toast({ title: 'Failed to add EtherCAT devices', description: String(error), variant: 'fail' })
+    } finally {
+      isAddingRef.current = false
+      setAddProgress(null)
     }
-
-    // Keep unmatched selected so the user can see which ones failed; clear
-    // the successfully-added ones from the selection. We compute the new set
-    // as `prev minus added` rather than rebuilding from `unmatched` so that
-    // selections of already-configured positions (silently skipped above)
-    // and any state changes that happened while the loop ran are preserved.
-    if (newDevices.length > 0) {
-      setSelectedScannedDevices((prev) => {
-        const next = new Set(prev)
-        // position is optional in the device type but always set when added here.
-        for (const d of newDevices) if (d.position !== undefined) next.delete(d.position)
-        return next
-      })
-    }
-
-    if (unmatched.length > 0) {
-      setUnmatchedAddAttempt(unmatched)
-    }
-  }, [
-    selectedScannedDevices,
-    deviceMatches,
-    repository,
-    configuredDevices,
-    syncDevicesToStore,
-    projectPath,
-    project.data.remoteDevices,
-    vendorScreenData,
-    esi,
-  ])
+  }, [selectedScannedDevices, deviceMatches, repository, readConfiguredDevices, syncDevicesToStore, esi])
 
   const handleRetryRepository = useCallback(() => {
     setRepositoryError(null)
@@ -518,46 +536,56 @@ const EtherCATEditor = () => {
 
   const handleAddDeviceFromBrowser = useCallback(
     async (ref: ESIDeviceRef, device: ESIDeviceSummary, repoItem: ESIRepositoryItemLight) => {
-      let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
-      const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
-      if (result.success && result.device) {
-        const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
-        enriched = enrichDeviceData(result.device, usedAddresses)
+      if (isAddingRef.current) return
+      isAddingRef.current = true
+      setAddProgress({ current: 1, total: 1 })
+
+      try {
+        let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
+        const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
+        if (result.success && result.device) {
+          enriched = enrichDeviceData(result.device, buildClaimedAddressSet())
+        }
+
+        const currentDevices = readConfiguredDevices()
+        const nextPosition = currentDevices.length > 0 ? Math.max(...currentDevices.map((d) => d.position ?? 0)) + 1 : 1
+
+        // A SoftMotion drive's name becomes the axis variable name in generated
+        // code, so it must be a valid IEC identifier from the start.
+        const rawName = getShortDeviceName(device)
+        const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
+        const uniqueName = generateUniqueSlaveName(
+          baseName,
+          (name) => elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null,
+        )
+
+        const newDevice: ConfiguredEtherCATDevice = {
+          id: uuidv4(),
+          position: nextPosition,
+          name: uniqueName,
+          esiDeviceRef: ref,
+          vendorId: repoItem.vendor.id,
+          productCode: device.type.productCode,
+          revisionNo: device.type.revisionNo,
+          addedFrom: 'repository',
+          config: createDefaultSlaveConfig(),
+          channelMappings: [],
+          ...enriched,
+        }
+
+        syncDevicesToStore([...currentDevices, newDevice])
+
+        // Register file entry for the new slave so Ctrl+S and dirty tracking work
+        const { fileActions } = useOpenPLCStore.getState()
+        fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
+      } catch (error) {
+        toast({ title: 'Failed to add EtherCAT device', description: String(error), variant: 'fail' })
+      } finally {
+        isAddingRef.current = false
+        setAddProgress(null)
       }
-
-      const nextPosition =
-        configuredDevices.length > 0 ? Math.max(...configuredDevices.map((d) => d.position ?? 0)) + 1 : 1
-
-      // A SoftMotion drive's name becomes the axis variable name in generated
-      // code, so it must be a valid IEC identifier from the start.
-      const rawName = getShortDeviceName(device)
-      const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
-      const uniqueName = generateUniqueSlaveName(
-        baseName,
-        (name) => elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null,
-      )
-
-      const newDevice: ConfiguredEtherCATDevice = {
-        id: uuidv4(),
-        position: nextPosition,
-        name: uniqueName,
-        esiDeviceRef: ref,
-        vendorId: repoItem.vendor.id,
-        productCode: device.type.productCode,
-        revisionNo: device.type.revisionNo,
-        addedFrom: 'repository',
-        config: createDefaultSlaveConfig(),
-        channelMappings: [],
-        ...enriched,
-      }
-
-      syncDevicesToStore([...configuredDevices, newDevice])
-
-      // Register file entry for the new slave so Ctrl+S and dirty tracking work
-      const { fileActions } = useOpenPLCStore.getState()
-      fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
     },
-    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices, vendorScreenData, esi],
+    [readConfiguredDevices, syncDevicesToStore, deviceName, esi],
   )
 
   const handleRemoveDevice = useCallback(
@@ -623,6 +651,8 @@ const EtherCATEditor = () => {
             onSelectScannedDevice={handleSelectScannedDevice}
             onSelectAllScanned={handleSelectAllScanned}
             onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
+            isAdding={isAdding}
+            addProgress={addProgress}
             configuredDevices={configuredDevices}
             repository={repository}
             onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
