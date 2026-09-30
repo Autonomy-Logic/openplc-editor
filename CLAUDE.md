@@ -333,14 +333,16 @@ with an illegal-function exception. When the two ids are equal, that id serves b
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 **Pre-build gates.** `evaluateVppBackplaneGate`
-(`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`) refuses a build of a vendor-package board
-on a vPLC with `backplaneAccess: false`. In `src/frontend/components/_organisms/workspace-activity-bar/default.tsx`,
+(`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`, shared with openplc-web) refuses when: the
+project's board is not among the selected vPLC's boards; a vendor board is used with no vPLC selected on a
+host whose vPLCs provide the vendor boards; the vPLC reports `backplaneAccess: false`; or the vPLC's package
+is `null` or differs from the board's. In `src/frontend/components/_organisms/workspace-activity-bar/default.tsx`,
 `handleBuild` runs it before `evaluatePreBuildPlcGate`, and `handleMd5Verification` runs it before offering an upload.
 It is inert in the editor (no orchestrator devices) and kept so the shared surface stays byte-identical with openplc-web.
 
 ### Debugging
 
-- **Protocol:** Custom Modbus PDU (function codes 0x41-0x45) for variable read/write
+- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
 - **Simulator:** AVR8JS emulator (`src/backend/shared/simulator/`) emulates ATmega2560
 - **Flow:** Compile with debug symbols (.dbg file + MD5) -> connect debugger -> poll variables

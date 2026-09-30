@@ -26,7 +26,7 @@ npx prettier --check "./src/**/*.{ts,tsx}"
 npx eslint "./src/**/*.{ts,tsx}"
 npx jest --config jest.config.json --collectCoverage --ci   # unit tests (Jest, with coverage)
 npm run validate:arch  # architecture layer dependencies
-npm run test:e2e       # end-to-end (Playwright, requires a build; not run by CI)
+npm run test:e2e       # end-to-end (Playwright, not run by CI; runs npm run build first; the preload copy from CLAUDE.md "Electron e2e" must be in place)
 ```
 
 No pre-commit hook is committed (there is no `.husky/` directory), so run these yourself.
