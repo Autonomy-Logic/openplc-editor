@@ -1,3 +1,5 @@
+import type { DeviceVpp } from './vpp-types'
+
 /**
  * OrchestratorPort — Abstracts orchestrator discovery and device listing.
  *
@@ -17,6 +19,16 @@ export interface OrchestratorDevice {
   name: string
   status: string | null
   active: boolean
+  /** Whether this vPLC holds the Device's backplane I/O. Absent means the host did not say, not `false`. */
+  backplaneAccess?: boolean
+  /**
+   * The vendor package this vPLC runs, from the host's listing.
+   *
+   * `null` means the vPLC was created without one; absent means the host
+   * predates the field and said nothing, which is not the same thing — the
+   * gate treats absent as "do not gate" and null as "no VPP board applies".
+   */
+  vpp?: DeviceVpp | null
 }
 
 /**

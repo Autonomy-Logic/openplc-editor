@@ -83,10 +83,13 @@ const StartAccountSection = () => {
         onOpenChange={setDialogOpen}
         account={edgeAccount}
         reason={signedOutReason === 'expired' ? 'expired-reloaded' : 'signed-out'}
-        onSignedIn={() => {
+        onSignedIn={({ sessionRestored }) => {
           setDialogOpen(false)
-          // The hook has no way to know a sign-in happened in a dialog it didn't open.
-          void refresh()
+
+          // A restoration already reached the hook; anything else it has no way to know about.
+          if (!sessionRestored) {
+            void refresh()
+          }
         }}
       />
     </>

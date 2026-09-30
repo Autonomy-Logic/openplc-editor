@@ -43,6 +43,10 @@ vi.mock('@root/middleware/shared/providers', () => ({
     setDeviceContext: vi.fn(),
     clearCredentials: vi.fn(),
   }),
+  // The screen reads the package port to offer a vendor package's boards. No
+  // port here: these are string tests, and the board rules stay inert without
+  // one, which is the same answer the desktop gives.
+  usePlatform: () => ({ packages: undefined }),
 }))
 
 // Mocked through the @root alias rather than a relative path: Jest resolves a
@@ -54,7 +58,9 @@ vi.mock('@root/frontend/store', () => {
   // with a selector for the simulator check.
   const useOpenPLCStore = (selector?: (state: unknown) => unknown) => (selector ? selector(storeState) : storeState)
   useOpenPLCStore.getState = () => storeState
-  return { useOpenPLCStore }
+  // The refresh path reads the store outside React, to reconcile the selected
+  // device against a listing that may have changed under it.
+  return { useOpenPLCStore, openPLCStoreBase: { getState: () => storeState } }
 })
 
 // Whether the board is the in-process simulator is decided by board metadata
