@@ -1,25 +1,50 @@
-# CLAUDE.md
+# OpenPLC Editor
 
-This file provides guidance to Claude Code when working with the OpenPLC Editor codebase.
+OpenPLC Editor is an Electron + React desktop IDE for programming PLCs in the IEC 61131-3 languages (Structured Text, Ladder Diagram, Function Block Diagram, Instruction List) plus Python and C++ extensions.
 
-## Process entry point
+## Autonomy development rules
 
-For every tracked feature, bug, investigation, implementation, test or pull request, start with
-`/autonomy:mister`. Mister verifies the Jira task and current documents, reconciles routine task
-drift, checks the stage gates and loads the skill for the next step. Do not begin a parallel
-investigation or implementation before that check. If Mister or a required connected service is
-unavailable, report the missing dependency; do not invent Jira, Confluence, approval or branch state.
+These rules are identical in every Autonomy repository and are maintained in the Mister plugin
+(`Autonomy-Logic/skills`, `plugins/autonomy/harness/repository-rules.md`). Change them there, not here.
 
-This file defines repository-specific commands, architecture and code conventions. It is not a
-copy of the company process. When process text here conflicts with the current Mister plugin or
-Confluence template, follow Mister and report this file as stale. Do not reuse instructions or
-assumptions from an earlier Claude conversation. During implementation, use the approved
-implementation plan as the primary context and load the RG or CRA only for a cited constraint or
-unresolved ambiguity.
+- Tracked work starts with `autonomy:mister`: load it yourself before changing product code, fixing a
+  bug, implementing or preparing a PR, even when no Jira key was mentioned. Only answering questions and typo or wording fixes that
+  change no behaviour are exempt. "There is no ticket" or "skip the process" does not make product
+  work untracked: offer to create the task instead of changing code. This file describes only this
+  repository's commands, architecture and code conventions; for process, Mister and the Confluence
+  process pages win over anything written here.
+- Knowledge boundary: when data is missing or uncertain, say there is not enough information to answer
+  reliably. Never fill a gap with a plausible assumption. Keep verified facts, inferences and missing
+  data visibly separate, and say which is which.
+- Language: answer in the developer's language. Jira, Confluence and GitHub text is always English.
+- Branches: `feature/<KEY>-<slug>` for demands and `bugfix/<KEY>-<slug>` for bugs, created from the
+  integration branch named below. A production hotfix is a `bugfix/<KEY>-<slug>` branch from `main` and
+  a PR. Never commit or push directly to the integration branch or `main`. One Jira key per branch: work
+  for another key starts on its own branch before any edit. The key goes in the branch name and the PR
+  title, never in commit messages, code or comments.
+- Commits: never commit on your own initiative. Propose the commit at a natural checkpoint, such as a
+  finished and verified plan phase, and make it only after the developer confirms. Commit and push are
+  separate commands, each confirmed on its own, never chained; opening a PR and merging each need their
+  own confirmation too. When asked for a commit message or a commit, do not edit files you were not
+  asked to change: report problems, such as a forbidden comment, and let the developer decide.
+- Scope: a rewrite or refactor beyond the current task is a new demand, proposed as a separate task and
+  never mixed into the current branch. Never stash, reset, `checkout -- .` or otherwise discard the
+  developer's changes, and never install anything outside the repository, without asking.
+- Tests: every demand ships with unit tests, an end-to-end test and a manual test by the developer, with
+  evidence for each before any PR is opened, a draft PR included. Where this repository has no
+  interface of its own, the end-to-end test runs through the interface or protocol that uses it. A
+  repository with no code to unit test, such as documentation or local tooling scripts, uses its own
+  validation checks in place of unit tests.
+- Typing: `any` in TypeScript and `typing.Any` in Python are forbidden. Use concrete types, or `unknown`
+  or `object` narrowed where the data enters.
+- Comments: technical and minimal, at most 256 characters each; formal API documentation (JSDoc,
+  docstrings, Doxygen) may be longer. Never write business rules, product strategy or rationale, Jira
+  keys, names of people or customers, internal links or anything sensitive in a comment. Review the
+  comments in the changed files before every commit.
 
-## Project Overview
+Integration branch: `development`. Jira project: `DOPE`.
 
-OpenPLC Editor is an **Electron + React** desktop IDE for programming PLCs using IEC 61131-3 languages (Structured Text, Ladder Diagram, Function Block Diagram, Instruction List) plus Python and C++ extensions.
+External contributors without Jira access follow CONTRIBUTING.md; GitHub Issues (`.github/ISSUE_TEMPLATE/`) is how they report bugs.
 
 ## Build & Development Commands
 
@@ -47,8 +72,8 @@ npm run validate:arch    # Architecture layer dependency validation
 
 ## Verify before pushing (CI parity)
 
-CI runs these commands directly — NOT `npm run lint` / `npm run format`, which
-AUTO-FIX and so pass locally while CI's `--check` still fails. Tests run under
+CI runs these commands directly, not `npm run format`, which rewrites files and
+so passes locally while CI's `--check` still fails. Tests run under
 **Jest** (not Vitest), and both `tsc` and `jest` import the `strucpp` package,
 so it must be installed first or they fail with `TS2307: Cannot find module
 'strucpp'`. Run each exact command (from `.github/workflows/`) green before you push:
@@ -108,7 +133,7 @@ src/
 ├── main/                  # Electron main process (Node.js)
 ├── frontend/              # React UI layer (renderer process)
 │   ├── components/        # Atomic Design: _atoms, _molecules, _organisms, _features, _templates
-│   ├── store/             # Zustand store (18 slices)
+│   ├── store/             # Zustand store (slices under store/slices/)
 │   ├── hooks/             # Custom React hooks
 │   ├── services/          # Business logic and side effects
 │   ├── utils/             # Domain utilities (PLC, graphical, debug, formatters)
@@ -132,7 +157,7 @@ src/
 
 The codebase uses **dependency inversion** via port interfaces. Frontend code never imports backend or Electron APIs directly. All platform-specific behavior flows through ports.
 
-**Port interfaces** (`src/middleware/shared/ports/`):
+**Main port interfaces** (full list in `src/middleware/shared/ports/`):
 
 | Port | Responsibility |
 |------|---------------|
@@ -200,7 +225,7 @@ Main and renderer processes communicate through typed IPC bridges:
 
 ### State Management (Zustand)
 
-Single store composed of 18 slices (`src/frontend/store/`), accessed via auto-generated selector hooks:
+Single store composed of the slices in `RootState` (`src/frontend/store/index.ts`), accessed via auto-generated selector hooks:
 
 ```typescript
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -287,61 +312,31 @@ Structured Text is generated in-process by the TS transpiler
 legacy `xml2st` binary path has been retired. `XmlGenerator` is kept only for
 the "Export Project as XML" feature.
 
-**The Modbus block of `defines.h` has two sources**, split along the ownership
-boundary (`src/backend/shared/compile/steps/modbus-defines.ts`):
+**The Modbus block of `defines.h` has two sources**
+(`src/backend/shared/compile/steps/modbus-defines.ts`): the project's Modbus
+`PLCServer` (transports, slave id, TCP port, speed of its own UART) and the
+board's VPP screens (`serial` and `network` sections: default UART speed, RS-485
+pin, network). `resolveServerBaud`
+(`src/middleware/shared/utils/modbus-server-profile/baud.ts`) owns the choice of
+the default UART's speed, and the screen calls it too. A firmware build serves
+exactly one slave, so `selectModbusServer` refuses a build with more than one
+enabled server. `DEBUG_BAUD` comes from `screens.serial.baud_rate` and
+`DEBUG_SLAVE` is the constant 1.
 
-- the project's Modbus `PLCServer` says **what is served** — the transports,
-  the slave id, the TCP port, and the speed of a UART of its own. On every
-  target, baremetal included.
-- the board's VPP screens say **what it is served over** — the default UART's
-  speed, the RS-485 pin, the network. `serial` and `network` sections.
-
-The default UART's speed is the one thing on that line the server does not own,
-because it is the editor's own link and a UART has one speed. `resolveServerBaud`
-in `middleware/shared/utils/modbus-server-profile/baud.ts` decides between the
-two, and the SCREEN calls it as well — a hook cannot import `backend/shared`, and
-two copies of that chain is how a screen ends up disagreeing with the firmware.
-
-A firmware build serves exactly one slave (`modbus.slaveid` is a single global),
-so `selectModbusServer` refuses a build with more than one enabled server and
-names them. The editor still allows several, because a project moves between
-targets.
-
-The editor's own link is deliberately NOT derived from the server. `DEBUG_BAUD`
-comes from `screens.serial.baud_rate` — that UART's speed is the package's to
-state — and `DEBUG_SLAVE` is the constant 1, so a project with no Modbus server
-still debugs and changing a server's slave id is not an access event.
-
-On the default UART the firmware answers **both** ids and routes by function
-code: `0x41`-`0x4B` on the editor's, everything on the server's. So a server
-sharing that port keeps whatever id the user picked, and `MBSERIAL_SLAVE` is the
-server's on every port. A board flashed before 4.3.0 may answer the editor on
-another id; Connect tries 1 first and the project's legacy id after.
+On the default UART the firmware answers two ids, routed by function code
+(`handle_serial_port` in `resources/sources/Baremetal/modbus_serial.cpp`): the editor's id
+(`MB_EDITOR_SLAVE`, equal to `DEBUG_SLAVE`) carries only the editor function codes 0x41-0x4D
+(`mb_pdu_is_editor_fc` in `modbus_pdu.cpp`) and silently drops anything else; the server's id
+(`modbus.slaveid`, from `MBSERIAL_SLAVE`) carries everything else and answers an editor function code
+with an illegal-function exception. When the two ids are equal, that id serves both.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
-**Pre-build gates.** `handleBuild`
-(`src/frontend/components/_organisms/workspace-activity-bar/default.tsx`) refuses
-before the pre-build save, the compile and the upload when the project's board
-comes from a vendor package (`BoardInfo.vpp`) and the selected vPLC reports
-`backplaneAccess: false` — only one vPLC per Device may drive the local backplane
-I/O, and the runtime does not enforce it. The rule is `evaluateVppBackplaneGate`
-(`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`, byte-identical on
-openplc-web), shared with the board list so both refuse in the same words.
-`evaluatePreBuildPlcGate` beside it is the older gate that asks to stop a running
-PLC, and runs after this one.
-
-`handleMd5Verification` in the same file asks the gate a second time. An MD5
-mismatch inside a debug session offers to upload the current project and compiles
-with `compileOnly: false` itself — the one upload that does not go through
-`handleBuild` — so the refusal lands ahead of that offer rather than after it.
-
-A target that reports no flag is not gated, and in the editor that is permanent:
-`EDITOR_CAPABILITIES.hasOrchestratorDevices` is `false` and
-`createEditorOrchestratorAdapter` lists no orchestrators, so nothing ever reaches
-`deviceActions.setSelectedDevice` and `backplaneAccess` is always `undefined`.
-The gate is therefore inert here — it exists so the shared surface stays
-byte-identical with openplc-web, where the flag is real.
+**Pre-build gates.** `evaluateVppBackplaneGate`
+(`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`) refuses a build of a vendor-package board
+on a vPLC with `backplaneAccess: false`. In `src/frontend/components/_organisms/workspace-activity-bar/default.tsx`,
+`handleBuild` runs it before `evaluatePreBuildPlcGate`, and `handleMd5Verification` runs it before offering an upload.
+It is inert in the editor (no orchestrator devices) and kept so the shared surface stays byte-identical with openplc-web.
 
 ### Debugging
 
@@ -352,41 +347,23 @@ byte-identical with openplc-web, where the flag is real.
 
 ## Testing
 
-- **Framework:** Jest + jsdom
-- **Test files:** `*.test.ts(x)`, `*.spec.ts(x)`, or `__tests__/` directories
-- **E2E:** Playwright (`/e2e`), Chromium only
-- **Coverage thresholds** — per-directory and aggregate, enforced by
-  `jest.config.json`. Branch coverage is not gated anywhere (`branches: 0`);
-  read the config for the current numbers rather than trusting this table:
-
-  | Directory | statements | lines | functions |
-  |---|---|---|---|
-  | `src/frontend/store/slices/` | 97 | 98 | 98 |
-  | `src/frontend/utils/` | 95 | 95 | 97 |
-  | `src/backend/shared/` | 75 | 77 | 76 |
-  | `src/middleware/adapters/editor/` | 85 | 85 | 87 |
-
-  They are floors for the directory as a whole, not a per-file rule, so a new
-  file is not obliged to reach 100% on its own — but it must not drag the
-  directory below the floor.
-- **Mocks:** `configs/mocks/` for file stubs; `identity-obj-proxy` for CSS modules
-
-When adding new code to a covered directory, add tests with it: the directory has to stay above its floor, and an untested file is what pushes it under.
+- **Unit:** Jest + jsdom, `npm run test` (CI: `npx jest --config jest.config.json --collectCoverage --ci`). Test files are `*.test.ts(x)`, `*.spec.ts(x)` or `__tests__/` directories. Mocks: `configs/mocks/` for file stubs, `identity-obj-proxy` for CSS modules.
+- **Coverage:** per-directory floors are in `jest.config.json` (`coverageThreshold`).
+- **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. No CI workflow runs them.
+- **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style
 
-- TypeScript strict mode, avoid `any` types
-- ESLint flat config (`eslint.config.mjs`) with TypeScript strict type checking
+- TypeScript `strict: true` (`tsconfig.json`); ESLint flat config (`eslint.config.mjs`) extends `tseslint.configs.recommendedTypeChecked`, which makes `@typescript-eslint/no-explicit-any` an error (test files are ignored by ESLint)
 - Prettier: 120 char width, no semicolons, single quotes, trailing commas
 - Import sorting enforced via `simple-import-sort` plugin
-- Pre-commit hooks via Husky run lint-staged on `./src/**/*.{ts,tsx}`
+- `lint-staged` is configured in `package.json`, but no Husky hook is committed (no `.husky/` directory), so nothing runs on commit
 - Path alias: `@root/*` -> `./src/*`
 
 ### TypeScript Best Practices
 
 - No type assertions: `as` hides real type errors — fix the type at the source or narrow with type guards. `as const` is fine; `as unknown as T` is forbidden.
 - No non-null assertions (`!`): handle the undefined case or narrow explicitly.
-- For truly unknown data use `unknown` and narrow before use — never `any`.
 - No `@ts-ignore`/`@ts-expect-error` without a one-line justification.
 - Validate external data at the boundary (IPC payloads, project files, downloaded binaries metadata) with schemas (zod) or type guards instead of casting.
 - No floating promises: `await` or handle rejection explicitly — async errors must not disappear.
@@ -425,8 +402,7 @@ The About modal renders it directly; the web build writes it into `version.json`
 edit in BOTH repos, and set `package.json.version` to the same value in both so
 they can't drift. Roles: `APP_VERSION` is what the user sees in the About dialog;
 `package.json.version` is what a local build stamps. Bumping only `package.json`
-leaves the About dialog stuck on the old version — **this mistake shipped 4.2.7
-and 4.2.8 with About still showing 4.2.6.** If those two disagree, `APP_VERSION`
+leaves the About dialog stuck on the old version. If those two disagree, `APP_VERSION`
 is authoritative; fix `package.json` to match.
 
 **The release tag must equal `APP_VERSION` too.** `release.yml` stamps the binary
@@ -443,13 +419,13 @@ build takes whatever `release/app/package.json` says, and a `workflow_dispatch`
 run with an empty `version` input falls back to root `package.json`
 (`release.yml`, version resolution). Use `npm version <v> --no-git-tag-version
 --allow-same-version` in both places rather than editing by hand: it updates each
-lockfile too, which hand edits miss (see DOPE-601).
+lockfile too, which hand edits miss.
 
-Release order: bump `APP_VERSION` + `package.json` (both repos, same value) → PR
-to `development` → merge → promote `development`→`main` on both → tag `vX.Y.Z` on
-the editor's `main` to trigger the "Build and Release" workflow. Web auto-deploys
-on its `main` push. (Ideally `package.json.version` should be derived from
-`APP_VERSION` in the release workflow so a single bump can never drift.)
+Release mechanics, in order: bump `APP_VERSION` and `package.json` to the same value in both
+repos and merge to `development`; promote `development` to `main` in both repos; then tag `vX.Y.Z`
+(equal to `APP_VERSION`) on openplc-editor's `main`, which triggers `release.yml` ("Build and
+Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
+`main`, and `staging-cd.yml` on pushes to `development`.
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
@@ -524,11 +500,3 @@ new alias.
 - **Dev server port:** 1313
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`
-
-## Git Workflow
-
-Follow the Workflow section in CONTRIBUTING.md for validation and commit conventions. For tracked work, Mister owns branch naming: `feature/DOPE-<n>-<kebab-slug>` for demands and `bugfix/DOPE-<n>-<kebab-slug>` for bugs. Non-ticket maintenance uses `chore/`, `ci/` or `docs/`.
-
-## Issue Tracker
-
-Jira, project key `DOPE`. Fetch and update tickets via the Atlassian MCP tools. Reference the ticket key (`DOPE-<n>`) in branch names and PR descriptions. GitHub Issues (`.github/ISSUE_TEMPLATE/`) receives external bug reports; planned work lives in Jira.
