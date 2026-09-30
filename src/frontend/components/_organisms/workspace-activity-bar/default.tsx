@@ -96,7 +96,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
   const canEdit = useOpenPLCStore((state) => state.workspace.canEdit)
-  const autoSaveOnBuild = useOpenPLCStore((state) => state.workspace.autoSaveOnBuild)
 
   const currentBoardInfo = availableBoards.get(deviceDefinitions.configuration.deviceBoard)
   const isSimulatorBoard = resolveTargetCapabilities(currentBoardInfo).isInProcessSimulator
@@ -281,12 +280,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // own) can compile their in-memory edits but can't push them
       // back; skip the pre-build save for them so the doomed backend
       // write never gates the build.
-      //
-      // A partner session can turn the save off (`autoSaveOnBuild`), because
-      // there every save is delivered to the partner's callback. Skipping it is
-      // safe on web: the compile is handed the store's project data, not the
-      // backend copy.
-      if (canEdit && autoSaveOnBuild) {
+      if (canEdit) {
         const saved = await executeSave()
         if (!saved) return
       }
@@ -540,7 +534,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       isCompiling,
       executeSave,
       canEdit,
-      autoSaveOnBuild,
       jwtToken,
       runtime,
       requestConsoleFollow,
@@ -578,11 +571,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     // content.  `executeSaveProject` is the same full-project save
     // the PLC build invokes; it walks every file the project owns
     // and flushes the in-memory buffer to disk before the build
-    // starts.  Skipped when the session turned it off (see handleBuild).
-    if (autoSaveOnBuild) {
-      const saved = await executeSave()
-      if (!saved) return
-    }
+    // starts.
+    const saved = await executeSave()
+    if (!saved) return
 
     if (!compiler.compileLibrary) {
       addLog({
@@ -617,17 +608,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsCompiling(false)
     }
-  }, [
-    compiler,
-    projectData,
-    projectMeta,
-    addLog,
-    isCompiling,
-    canEdit,
-    autoSaveOnBuild,
-    executeSave,
-    requestConsoleFollow,
-  ])
+  }, [compiler, projectData, projectMeta, addLog, isCompiling, canEdit, executeSave, requestConsoleFollow])
 
   // ---------------------------------------------------------------------------
   // Debug Library — run the library's blocks on the simulator
@@ -655,7 +636,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     // Same reason the build path always saves: the compile pipeline reads the
     // project's own files off disk, so an unflushed edit compiles stale bytes.
-    if (canEdit && autoSaveOnBuild) {
+    if (canEdit) {
       const saved = await executeSave()
       if (!saved) return
     }
@@ -738,7 +719,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     addLog,
     isCompiling,
     canEdit,
-    autoSaveOnBuild,
     executeSave,
     requestConsoleFollow,
     simulatorRun,
@@ -1046,9 +1026,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // on screen. Avoids the race where an editor change hadn't
       // bubbled up to `editingState === 'unsaved'` yet. Viewers
       // without write permission skip the save (same rationale as
-      // the build path — backend write would fail), and so does a session that
-      // turned the pre-build save off.
-      if (canEdit && autoSaveOnBuild) {
+      // the build path — backend write would fail).
+      if (canEdit) {
         const saved = await executeSave()
         if (!saved) {
           setIsDebuggerProcessing(false)
@@ -1211,7 +1190,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     isSimulatorBoard,
     isDebuggerProcessing,
     canEdit,
-    autoSaveOnBuild,
     executeSave,
     addLog,
     currentBoardInfo,
