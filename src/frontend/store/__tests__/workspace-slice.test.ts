@@ -636,4 +636,15 @@ describe('createWorkspaceSlice', () => {
     })
     expect(workspace.canEdit).toBe(true)
   })
+
+  it('clearWorkspace closes the find-in-project modal and restores the layout, so neither reaches the next project', () => {
+    store.getState().workspaceActions.setModalOpen('findInProject', true)
+    store.getState().workspaceActions.toggleCollapse()
+
+    store.getState().workspaceActions.clearWorkspace()
+
+    const { workspace } = store.getState()
+    expect(workspace.isModalOpen).toEqual([])
+    expect(workspace.isCollapsed).toBe(false)
+  })
 })

@@ -428,6 +428,7 @@ const rendererProcessBridge = {
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
+  setMenuProjectOpen: (open: boolean) => ipcRenderer.send('window:project-open', open),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 

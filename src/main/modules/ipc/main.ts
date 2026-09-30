@@ -946,6 +946,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window-controls:maximize', this.handleWindowControlsMaximize)
     this.ipcMain.on('window:reload', this.handleWindowReload)
     this.ipcMain.on('window:rebuild-menu', this.handleWindowRebuildMenu)
+    this.ipcMain.on('window:project-open', this.handleWindowProjectOpen)
 
     // ===================== HARDWARE =====================
     this.registerHandle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
@@ -2204,6 +2205,13 @@ class MainProcessBridge implements MainIpcModule {
   }
   handleWindowRebuildMenu = () => {
     void this.menuBuilder.buildMenu().catch((error) => {
+      logger.error('Error rebuilding application menu:', error)
+    })
+  }
+
+  handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
+    if (typeof open !== 'boolean') return
+    void this.menuBuilder.setProjectOpen(open).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })
   }
