@@ -18,7 +18,14 @@
 
 import type { Unsubscribe } from './types'
 
-export type ThemeVariant = 'light' | 'dark' | 'nineties'
+export type ThemeVariant = 'light' | 'dark' | 'nineties' | 'squareteal'
+
+/**
+ * Themes that opt into the "square" FBD editor look — 90° (step) wires and
+ * grey function-block bodies instead of the default smooth/white style.
+ * Add a theme here to enable the square FBD style for it.
+ */
+export const SQUARE_FBD_THEMES: ReadonlySet<ThemeVariant> = new Set(['squareteal'])
 
 export interface ThemePort {
   /** Get the current active theme. */

@@ -244,6 +244,83 @@
 }
 
 /* ============================================================================
+   SquareTeal theme — an angular teal / gray skin.
+   A light-based theme: keeps the app's light surfaces and swaps the brand
+   blue accent for a teal ramp. Scoped under `.squareteal`, so the default
+   light/dark themes are untouched.
+   ========================================================================== */
+.squareteal {
+  --primary-default: #009999;
+  --primary-light: #66cccc;
+  --primary-medium: #008080;
+  --primary-medium-dark: #006666;
+  --primary-dark: #004d4d;
+}
+
+/* SquareTeal FBD canvas — monochrome grey, square corners, near-black 90°
+   wires. The 90° wires are driven in JS via SQUARE_FBD_THEMES; the grey/black
+   styling below is scoped under `.squareteal` so light/dark are untouched. */
+
+/* Square corners on all FBD node bodies (blocks, variables, comments). */
+.squareteal .react-flow__node .bg-white {
+  border-radius: 0 !important;
+}
+
+/* Function blocks: very lightly teal body + a slightly deeper teal header band
+   for the block name. */
+.squareteal .react-flow__node-block .bg-white {
+  background-color: #dcebea !important;
+}
+.squareteal .react-flow__node-block .bg-white::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background-color: #b3d6d3;
+  pointer-events: none;
+}
+
+/* Variables: match the lightly teal block aesthetic instead of white. */
+.squareteal .react-flow__node-input-variable .bg-white,
+.squareteal .react-flow__node-output-variable .bg-white,
+.squareteal .react-flow__node-inout-variable .bg-white {
+  background-color: #e7f1f0 !important;
+}
+
+/* Connectors/continuations: lightly teal instead of white. */
+.squareteal .react-flow__node-connector .fill-white,
+.squareteal .react-flow__node-continuation .fill-white {
+  fill: #e7f1f0 !important;
+}
+
+/* No teal in the FBD canvas: selection/hover rings, connector strokes and the
+   execution-order badge go dark grey instead of the brand colour. */
+.squareteal .react-flow .ring-brand,
+.squareteal .react-flow .hover\:ring-brand:hover {
+  --tw-ring-color: #3f3f46 !important;
+}
+.squareteal .react-flow .stroke-brand,
+.squareteal .react-flow .hover\:stroke-brand:hover {
+  stroke: #3f3f46 !important;
+}
+.squareteal .react-flow .bg-brand {
+  background-color: #3f3f46 !important;
+}
+
+/* Near-black wires (SquareTeal style). Uses the XYFlow stroke var so the debugger's
+   green "true" wires (inline style) keep working. Selected wires highlight in the
+   theme accent (and thicken) so selection stays visible against the dark wires. */
+.squareteal .react-flow {
+  --xy-edge-stroke: #1f2937;
+  --xy-edge-stroke-selected: #009999;
+}
+.squareteal .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 2;
+}
+
+/* ============================================================================
    90's (retro) theme — a blocky "Windows 98-ish" skin.
    It is a LIGHT-based theme (no `.dark` class), so components render with their
    light palette and these scoped overrides sit on top: light surfaces become
