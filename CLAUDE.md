@@ -4,14 +4,14 @@ OpenPLC Editor is an Electron + React desktop IDE for programming PLCs in the IE
 
 ## Autonomy development rules
 
-These rules are identical in every Autonomy repository and are maintained in the Mister plugin
+These rules are identical in every Autonomy repository and are maintained in the MisterFlow plugin
 (`Autonomy-Logic/skills`, `plugins/autonomy/harness/repository-rules.md`). Change them there, not here.
 
-- Tracked work starts with `autonomy:mister`: load it yourself before changing product code, fixing a
+- Tracked work starts with `autonomy:misterflow`: load it yourself before changing product code, fixing a
   bug, implementing or preparing a PR, even when no Jira key was mentioned. Only answering questions and typo or wording fixes that
   change no behaviour are exempt. "There is no ticket" or "skip the process" does not make product
   work untracked: offer to create the task instead of changing code. This file describes only this
-  repository's commands, architecture and code conventions; for process, Mister and the Confluence
+  repository's commands, architecture and code conventions; for process, MisterFlow and the Confluence
   process pages win over anything written here.
 - Knowledge boundary: when data is missing or uncertain, say there is not enough information to answer
   reliably. Never fill a gap with a plausible assumption. Keep verified facts, inferences and missing
