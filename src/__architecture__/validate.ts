@@ -421,6 +421,35 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // debug session. Pre-existing; it was invisible until `extractImports` learned
   // to read multi-line imports.
   'frontend/components/_organisms/workspace-activity-bar/default.tsx': ['backend-shared'],
+  // ---------------------------------------------------------------------------
+  // VPP (Vendor Plugin Package) — DOPE-637/638
+  //
+  // `VppPackagePin` is `z.infer` of the pin schema in the project-file
+  // configuration, so backend/shared is its home: it is part of the shape a
+  // project persists, and the three layers below only name it. `screen-actions`
+  // is the one parser for a vendor screen's declarative actions, for the same
+  // reason `device-link-resolution.ts` is the one reader of a debug spec — a
+  // second interpreter is how two of them come to disagree.
+  //
+  // Same judgement as `ports/debugger-port.ts` above: hoisting these into
+  // ports/types.ts would drag the schema they are inferred from along with it.
+  // ---------------------------------------------------------------------------
+  // Pin drift warning — compares the pin a project recorded against the package
+  // actually installed; `describeVppPinDrift` is the one place that is worded.
+  'frontend/components/_features/[workspace]/editor/device/configuration/board.tsx': ['backend-shared'],
+  // Vendor screen actions — parses and runs a screen's declarative actions.
+  'frontend/components/_features/[workspace]/editor/device/configuration/vendor-screen/screen-actions.tsx': [
+    'backend-shared',
+  ],
+  // Type-only: the store holds the recorded pin per board.
+  'frontend/store/slices/device/types.ts': ['backend-shared'],
+  // Type-only: the package port answers with the pin a project would record.
+  'middleware/shared/ports/package-port.ts': ['backend-shared'],
+  // Type-only: the runtime port returns a plugin command's outcome.
+  'middleware/shared/ports/runtime-port.ts': ['backend-shared'],
+  // Type-only: BoardInfo carries the pin of the package a VPP board came from.
+  'middleware/shared/ports/types.ts': ['backend-shared'],
+
   // PLCopen export — needs the shared XmlGenerator composing function
   // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
   // project data into XML before handing it to the platform port. No

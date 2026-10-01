@@ -149,6 +149,9 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
+    // Same reason as the ladder block: the library entry must travel with the project.
+    useOpenPLCStore.getState().libraryActions.ensureLibrariesForTypes([blockNameValue])
+
     if (!pou || !rung || !node) return
 
     if (libraryBlock && pou.pouType === 'function' && (libraryBlock as BlockVariant).type !== 'function') {

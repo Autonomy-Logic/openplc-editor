@@ -18,6 +18,12 @@ const StoreSchema = z.object({
       y: z.number(),
     }),
   }),
+  // Absent key is the signed-out state. `refreshToken` is a base64 `safeStorage` ciphertext, never the raw token.
+  edge_session: z
+    .object({
+      refreshToken: z.string(),
+    })
+    .optional(),
 })
 
 export { StoreSchema, ThemeSchema }

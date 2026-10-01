@@ -60,6 +60,7 @@
     "src/backend/shared/**/*.ts",
     "src/middleware/shared/**/*.ts",
     "src/middleware/adapters/editor/**/*.ts",
+    "src/frontend/services/ai/**/*.ts",
     "src/frontend/hooks/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
@@ -100,6 +101,12 @@
       "functions": 87,
       "lines": 85,
       "statements": 85
+    },
+    "src/frontend/services/ai/": {
+      "branches": 0,
+      "functions": 97,
+      "lines": 98,
+      "statements": 97
     },
     "src/middleware/shared/": {
       "branches": 88,

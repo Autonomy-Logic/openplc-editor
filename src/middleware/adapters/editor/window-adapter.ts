@@ -13,9 +13,11 @@
  *   - window-controls:hide        (send)
  *   - window:reload               (send)
  *   - window:rebuild-menu         (send)
+ *   - window:project-open         (send)
  *   - app:quit                    (send)
+ *   - app:request-quit            (send) — request confirmation
+ *   - app:quit-requested          (on)   — show confirmation
  *   - window-controls:is-closing  (on)   — window close notification
- *   - app:darwin-is-closing       (on)   — macOS quit notification
  *   - window-controls:toggle-maximized (on) — maximize state change
  */
 
@@ -44,6 +46,14 @@ export function createEditorWindowAdapter(): WindowPort {
       window.bridge.reloadWindow()
     },
 
+    requestQuit(): void {
+      window.bridge.requestQuitApp()
+    },
+
+    onQuitRequested(callback: () => void): Unsubscribe {
+      return window.bridge.quitRequested(() => callback())
+    },
+
     quit(): void {
       window.bridge.handleQuitApp()
     },
@@ -54,10 +64,6 @@ export function createEditorWindowAdapter(): WindowPort {
 
     onCloseRequested(callback: () => void): Unsubscribe {
       return window.bridge.windowIsClosing(() => callback())
-    },
-
-    onDarwinAppQuitting(callback: () => void): Unsubscribe {
-      return window.bridge.darwinAppIsClosing(() => callback())
     },
 
     enableAutoCloseHandshake(): Unsubscribe {
@@ -73,4 +79,8 @@ export function createEditorWindowAdapter(): WindowPort {
       })
     },
   }
+}
+
+export function setMenuProjectOpen(open: boolean): void {
+  window.bridge.setMenuProjectOpen(open)
 }

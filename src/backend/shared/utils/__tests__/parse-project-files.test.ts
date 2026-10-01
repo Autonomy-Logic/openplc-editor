@@ -51,6 +51,14 @@ function makeStContent(pouName: string, pouType: 'PROGRAM' | 'FUNCTION' | 'FUNCT
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — basic', () => {
+  it('says so when project.json is missing, instead of opening a default project in silence', () => {
+    const result = parseProjectFiles('/my/project', '', makeDeviceConfig(), makePinMapping(), [], [], [])
+
+    expect(result.warnings?.some((w) => w.includes('project.json was missing or empty'))).toBe(true)
+    // Still opens — the warning is the point, not a refusal.
+    expect(result.meta.path).toBe('/my/project')
+  })
+
   it('parses a minimal valid project with no POU files', () => {
     const result = parseProjectFiles('/my/project', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], [], [])
     expect(result.meta.name).toBe('TestProject')
@@ -79,9 +87,7 @@ describe('parseProjectFiles — basic', () => {
 
 describe('parseProjectFiles — legacy alias migration', () => {
   it('folds a JSON POU variable with a non-empty alias into its location', () => {
-    // Old two-field model: an alias-bound variable stored the resolved
-    // %address in `location` and the alias name in `alias`.  The single-
-    // field model keeps only the alias name in `location`.
+    // Old two-field model: `location` held the resolved %address, `alias` the alias name.
     const legacyPou = JSON.stringify({
       type: 'program',
       data: {
@@ -136,7 +142,7 @@ describe('parseProjectFiles — legacy alias migration', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Line 79 — detectPouTypeFromPath: function-block and function detection
+// detectPouTypeFromPath: function-block and function detection
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — POU type detection throws for unknown path', () => {
@@ -167,7 +173,7 @@ describe('parseProjectFiles — POU type detection from path', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Line 90 — getLanguageFromExt returns null for unsupported extension
+// getLanguageFromExt returns null for unsupported extension
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — unsupported file extension', () => {
@@ -176,14 +182,10 @@ describe('parseProjectFiles — unsupported file extension', () => {
       { relativePath: 'pous/programs/main.xyz', content: 'PROGRAM main\nEND_PROGRAM' },
     ]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
-    // The POU should be skipped since the extension is not recognized
     expect(result.projectData.pous).toHaveLength(0)
   })
 
   it('returns null for a file with no extension', () => {
-    // A file like 'pous/programs/Makefile' has no recognized extension
-    // But it does have a '.' so ext will be the last segment after the period
-    // If no period at all, ext is undefined and parsePouFile returns null
     const pouFiles: RawProjectFile[] = [{ relativePath: 'pous/programs/noext', content: 'PROGRAM noext\nEND_PROGRAM' }]
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(0)
@@ -191,7 +193,7 @@ describe('parseProjectFiles — unsupported file extension', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 119-180 — createFallbackPou (reached via parse failure)
+// createFallbackPou (reached via parse failure)
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — fallback POU creation', () => {
@@ -207,7 +209,6 @@ describe('parseProjectFiles — fallback POU creation', () => {
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), pouFiles, [], [])
     expect(result.projectData.pous).toHaveLength(1)
     expect(result.projectData.pous[0].name).toBe('broken')
-    // The fallback should extract variablesText
     expect(result.projectData.pous[0].variablesText).toBeDefined()
     consoleSpy.mockRestore()
   })
@@ -237,9 +238,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
   })
 
   it('derives the fallback name from the basename even for Windows backslash paths', () => {
-    // The desktop reader builds relativePaths with path.join → backslashes on
-    // Windows. A parse failure must still yield the bare basename, not the whole
-    // `pous\functions\...` path (the origin of the deleting-function corruption).
+    // path.join emits backslashes on Windows; the basename must not include the directory.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       {
@@ -288,9 +287,6 @@ describe('parseProjectFiles — fallback POU creation', () => {
   })
 
   it('reports an unparseable graphical body as fatal, not as a partial-data warning', () => {
-    // Was a warning + a POU with a default empty body. That blank canvas was
-    // indistinguishable from a legitimately empty diagram and the first save
-    // wrote it over the user's real one, so it is fatal now (DOPE-592).
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       { relativePath: 'pous/programs/FbdPou.fbd', content: 'PROGRAM FbdPou\nnot valid json\nEND_PROGRAM' },
@@ -365,10 +361,6 @@ describe('parseProjectFiles — fallback POU creation', () => {
     ['an LD-shaped body in an FBD POU', 'Main.fbd', '{"name":"Main","rungs":[]}'],
     ['a null body', 'Main.ld', 'null'],
   ])('treats %s as fatal even though it is valid JSON', (_label, file, body) => {
-    // Valid JSON of the wrong shape used to sail through and only fail deep in
-    // a consumer (`value.rungs` / `value.rung.nodes`) — the same class of bug
-    // this change exists to remove. Note the first case is precisely the value
-    // the old fallback manufactured.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       { relativePath: `pous/programs/${file}`, content: `PROGRAM Main\nVAR\nEND_VAR\n\n${body}\nEND_PROGRAM` },
@@ -380,9 +372,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
   })
 
   it('keeps a malformed VARIABLES section recoverable: the project still opens', () => {
-    // The other half of the DOPE-592 contract. A bad declaration is repairable
-    // in-app (the variables table opens in text mode), so it must stay a
-    // warning and the POU must still load with its body intact.
+    // A bad declaration is repairable in-app, so it stays a warning and the body loads intact.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pouFiles: RawProjectFile[] = [
       {
@@ -413,10 +403,8 @@ describe('parseProjectFiles — fallback POU creation', () => {
 
   it('fallback handles unknown language with empty body', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    // We cannot easily trigger the `else { bodyValue = '' }` branch from
-    // the normal parse path because unknown extensions are filtered before the
-    // try/catch. Instead we test that a python POU that fails parsing uses the
-    // correct branch.
+    // Exercises the empty-body branch via a python POU that fails parsing, since unknown
+    // extensions are filtered before that branch is reachable from the normal parse path.
     const pouFiles: RawProjectFile[] = [
       {
         relativePath: 'pous/programs/PyPou.py',
@@ -472,7 +460,7 @@ describe('parseProjectFiles — fallback POU creation', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 214-233 — JSON POU parsing (legacy format + flat format + malformed)
+// JSON POU parsing (legacy format + flat format + malformed)
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — JSON POU format', () => {
@@ -514,7 +502,7 @@ describe('parseProjectFiles — JSON POU format', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 243-260 — parsePouFile: Python, C++, LD, FBD paths + catch branches
+// parsePouFile: Python, C++, LD, FBD paths + catch branches
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — Python and C++ POU parsing', () => {
@@ -536,7 +524,7 @@ describe('parseProjectFiles — Python and C++ POU parsing', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 283-286 — deduplicatePouFiles: text-based wins over JSON
+// deduplicatePouFiles: text-based wins over JSON
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — POU deduplication', () => {
@@ -579,7 +567,7 @@ describe('parseProjectFiles — POU deduplication', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 333-342 — project.json Zod validation failure + malformed JSON
+// project.json Zod validation failure + malformed JSON
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — project.json error paths', () => {
@@ -611,7 +599,7 @@ describe('parseProjectFiles — project.json error paths', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 358-369 — device config validation failures / empty
+// device config validation failures / empty
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — device config error paths', () => {
@@ -645,7 +633,7 @@ describe('parseProjectFiles — device config error paths', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 382-391 — pin mapping validation failures / empty
+// pin mapping validation failures / empty
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — pin mapping error paths', () => {
@@ -676,12 +664,8 @@ describe('parseProjectFiles — pin mapping error paths', () => {
   })
 
   it('accepts the legacy flat-array shape and forwards it for store-side migration', () => {
-    // Pre-per-board-scoping projects wrote `DevicePin[]` to disk. The
-    // store's `setDeviceDefinitions` keys that array under the active
-    // board on load. Here we just verify the parser passes the flat
-    // array through verbatim — the migration responsibility is the
-    // store's, not the parser's (the parser doesn't know what the
-    // active board is from the schema alone).
+    // The parser passes the flat array through verbatim; keying it under the active board is
+    // `setDeviceDefinitions`'s job, not the parser's.
     const legacy = JSON.stringify([{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }])
     const result = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), legacy, [], [], [])
     expect(Array.isArray(result.devicePinMapping)).toBe(true)
@@ -689,9 +673,6 @@ describe('parseProjectFiles — pin mapping error paths', () => {
   })
 
   it('accepts the canonical per-board dict shape (post-migration)', () => {
-    // Projects saved by post-migration editors write a per-board dict.
-    // Each key is a `BoardInfo.name`, each value is that board's pin
-    // array. The parser passes it through verbatim.
     const dict = JSON.stringify({
       'Arduino Mega': [{ pin: '13', pinType: 'digitalOutput', address: '%QX0.0', alias: 'led' }],
       'Arduino MKR WiFi 1010': [{ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' }],
@@ -706,7 +687,7 @@ describe('parseProjectFiles — pin mapping error paths', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 404-420 — server file parsing (valid, Zod fail, bad JSON)
+// server file parsing (valid, Zod fail, bad JSON)
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — server file parsing', () => {
@@ -755,7 +736,7 @@ describe('parseProjectFiles — server file parsing', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Lines 430-437 — remote device file parsing
+// remote device file parsing
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — remote device file parsing', () => {
@@ -802,7 +783,7 @@ describe('parseProjectFiles — remote device file parsing', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Line 453 — configuration fallback defaults
+// configuration fallback defaults
 // ---------------------------------------------------------------------------
 
 describe('parseProjectFiles — configuration fallback', () => {
@@ -824,10 +805,8 @@ describe('parseProjectFiles — configuration fallback', () => {
   })
 
   it('fills missing resource entirely with defaults', () => {
-    // `data.configurations` is `{ resource: null }` — the `??` chain
-    // doesn't substitute the default object because `{ resource: null }`
-    // itself is not null/undefined, so we fall through to the explicit
-    // `if (!configuration.resource)` guard which fills in the default.
+    // `{ resource: null }` isn't itself null/undefined, so `??` doesn't substitute the default;
+    // the explicit `if (!configuration.resource)` guard does instead.
     const projectJson = JSON.stringify({
       meta: { name: 'Test', type: 'plc-project' },
       data: {
@@ -844,7 +823,6 @@ describe('parseProjectFiles — configuration fallback', () => {
   })
 
   it('fills partially missing resource fields with empty arrays', () => {
-    // Use "configurations" with a resource that has only tasks (no instances or globalVariables)
     const projectJson = JSON.stringify({
       meta: { name: 'Test', type: 'plc-project' },
       data: {
@@ -886,7 +864,6 @@ describe('parseProjectFiles — configuration fallback', () => {
 
 describe('parseProjectFiles — POU name derivation', () => {
   it('derives POU name from filename when parsed POU has no name', () => {
-    // A flat JSON POU with empty name
     const jsonContent = JSON.stringify({
       name: '',
       pouType: 'program',
@@ -901,7 +878,7 @@ describe('parseProjectFiles — POU name derivation', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Data type files (datatypes/<Name>.dt) — hydration matrix (DOPE-533)
+// Data type files (datatypes/<Name>.dt) — hydration matrix
 // ---------------------------------------------------------------------------
 
 describe('data type file hydration', () => {
@@ -940,9 +917,8 @@ describe('data type file hydration', () => {
     expect(result.unparsedDataTypeFiles).toBeUndefined()
   })
 
-  // A half-migrated project — one `.dt` written while project.json still holds
-  // the rest — must keep every type. The all-or-nothing rule this replaces
-  // dropped the ones that had no file yet.
+  // A half-migrated project — one `.dt` written while project.json still holds the rest —
+  // must keep every type.
   it('keeps a legacy JSON type that has no .dt file beside it', () => {
     const result = parse([modeFile], [legacyEnum])
     expect(result.projectData.dataTypes).toEqual([parsedMode, legacyEnum])
@@ -1052,14 +1028,11 @@ describe('data type file hydration', () => {
 })
 
 // ---------------------------------------------------------------------------
-// DOPE-592
+// Graphical POU holding a native library block
 // ---------------------------------------------------------------------------
 describe('graphical POU holding a native library block', () => {
-  // A ladder body whose block variant used to carry the whole authored source of
-  // a native (C/C++) library block, VAR ... END_VAR and all. Both the parser and
-  // this fallback took that embedded END_VAR as the end of the declarations and
-  // sliced the body from the middle of the JSON, so the POU came back with an
-  // empty FBD-shaped body and the project could not be opened.
+  // The block variant's authored source embeds its own `VAR ... END_VAR`; the body-start scan
+  // must not mistake that for the POU's own declaration block and slice into the JSON.
   const nativeBlockSource = [
     'FUNCTION_BLOCK TCP_CLIENT',
     'VAR_INPUT',

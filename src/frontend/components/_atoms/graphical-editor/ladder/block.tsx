@@ -175,6 +175,11 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
+    // The block's library goes into `project.libraries` here, not only through the
+    // Library Manager: without the entry the other editor renders the block from its
+    // node data and has nothing to warn about when the library is not installed.
+    useOpenPLCStore.getState().libraryActions.ensureLibrariesForTypes([blockNameValue])
+
     const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: nodeId ?? '',
     })

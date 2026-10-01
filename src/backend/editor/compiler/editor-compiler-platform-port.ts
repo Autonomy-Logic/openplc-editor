@@ -663,12 +663,19 @@ export function createEditorCompilerPlatformPort(
       log: PlatformLog,
     ): Promise<MaterializeRuntimeV4BundleResult> {
       try {
-        const entries: Array<[string, string]> = Object.entries(args.bundle)
+        const entries = Object.entries(args.bundle)
         await Promise.all(
-          entries.map(async ([relPath, content]: [string, string]) => {
+          entries.map(async ([relPath, content]) => {
             const absPath = join(context.sourceTargetFolderPath, relPath)
             await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
+            // A VPP plugin payload may be precompiled objects rather than
+            // source, so bytes are written as bytes; the encoding argument
+            // only applies to the text entries the pipeline composes.
+            if (typeof content === 'string') {
+              await fs.writeFile(absPath, content, 'utf-8')
+            } else {
+              await fs.writeFile(absPath, content)
+            }
           }),
         )
         return { written: entries.length }

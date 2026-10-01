@@ -6,6 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
@@ -18,12 +19,17 @@ import { ensureCliShimInstalled, shimStatePath } from '../backend/editor/cli-shi
 import { CompilerModule } from '../backend/editor/compiler'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
+import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
+import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
+import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
+import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
+import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
 
 enableMapSet()
@@ -40,6 +46,15 @@ Menu.setApplicationMenu(null)
 
 export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
+
+let mainIpcModule: MainProcessBridge | undefined
+const quitCoordinator = createQuitCoordinator({
+  platform: process.platform,
+  getWindow: () => mainWindow,
+  quitApp: () => app.quit(),
+  stopSimulator: () => mainIpcModule?.stopSimulator(),
+  canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
+})
 
 if (process.env.NODE_ENV === 'production') {
   async function loadSourceMapSupport(): Promise<void> {
@@ -102,6 +117,54 @@ const installExtensions = async () => {
   } catch (error) {
     logger.warn(`Skipping development extension installation: ${getErrorMessage(error)}`)
     return []
+  }
+}
+
+/** The browser has the user's attention; once the session is in, the editor asks for it back. */
+function bringMainWindowToFront(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+
+  mainWindow.show()
+  mainWindow.focus()
+  // On macOS a window's `focus()` does not take the app back from another one; `steal` does.
+  app.focus({ steal: true })
+}
+
+/**
+ * A provider sign-in runs in the system browser and lands here, not in the renderer:
+ * the tokens are adopted on this side, then the renderer is told there is a session to
+ * read. It would otherwise learn of it only at its next focus.
+ */
+async function completeProviderSignIn(provider: EdgeOAuthProviderId): Promise<void> {
+  try {
+    const outcome = await runOAuthFlow(provider)
+
+    if (outcome.status !== 'tokens') {
+      if (outcome.status === 'failed') {
+        log.warn(`[edge-account] provider sign-in did not finish: ${outcome.reason ?? 'unknown'}`)
+      }
+
+      return
+    }
+
+    const signIn = await adoptProviderTokens({ accessToken: outcome.accessToken, refreshToken: outcome.refreshToken })
+
+    if (signIn.status !== 'signed-in') {
+      log.warn(`[edge-account] provider tokens arrived but the session could not be read: ${signIn.status}`)
+
+      return
+    }
+
+    mainWindow?.webContents.send('edge-account:signed-in')
+    bringMainWindowToFront()
+  } catch (error: unknown) {
+    log.error(`[edge-account] provider sign-in failed: ${getErrorMessage(error)}`)
   }
 }
 
@@ -211,9 +274,10 @@ const createMainWindow = async () => {
    * Calling event.preventDefault() will cancel the close.
    */
   mainWindow.on('close', saveBounds)
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
     logger.info('mainWindow close')
-    mainWindow?.webContents.send('window-controls:is-closing')
+    quitCoordinator.handleWindowClose(event)
+    if (process.platform !== 'darwin') mainWindow?.webContents.send('window-controls:is-closing')
   })
 
   /**
@@ -266,7 +330,23 @@ const createMainWindow = async () => {
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    void shell.openExternal(edata.url)
+    // A provider link reaches the system browser too, but through the OAuth flow, which
+    // is what listens for the browser to come back with the session.
+    const provider = edgeOAuthProviderFromUrl(edata.url)
+
+    if (provider) {
+      void completeProviderSignIn(provider)
+
+      return { action: 'deny' }
+    }
+
+    // Only web links leave the app: a `file:` or custom-scheme URL would run whatever the OS registers for it.
+    if (isWebUrl(edata.url)) {
+      void shell.openExternal(edata.url)
+    } else {
+      log.warn(`[main] refused to open external URL with scheme ${edata.url.split(':')[0] || '(none)'}`)
+    }
+
     return { action: 'deny' }
   })
 
@@ -298,7 +378,7 @@ const createMainWindow = async () => {
 
   const hardwareModule = new HardwareModule()
 
-  const mainIpcModule = new MainProcessBridge({
+  mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
     projectService,
@@ -307,6 +387,7 @@ const createMainWindow = async () => {
     pouService,
     compilerModule,
     hardwareModule,
+    quitCoordinator,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
 
@@ -349,13 +430,9 @@ app.on('activate', () => {
  * Emitted before the application starts closing its windows. Calling event.preventDefault() will prevent the default behavior,
  * which is terminating the application.
  */
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   logger.info('before-quit')
-  if (process.platform === 'darwin' && process.env.NODE_ENV === 'production') {
-    mainWindow?.webContents.send('app:darwin-is-closing')
-    return
-  }
-  mainWindow?.destroy()
+  quitCoordinator.handleBeforeQuit(event)
 })
 
 /**
@@ -408,6 +485,12 @@ app
   .whenReady()
   .then(() => {
     void createMainWindow()
+    // Last session's cloud builds. The cloud is the source of truth for those
+    // projects, so nothing here survives a restart; best-effort, since a scratch
+    // directory that will not delete is no reason to refuse to start.
+    void clearCloudBuildRoot().catch((error: unknown) =>
+      logger.warn('Could not clear the cloud build scratch directory: ' + getErrorMessage(error)),
+    )
     // Put `openplc-cli` on PATH, once. After the window, so a slow filesystem
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.

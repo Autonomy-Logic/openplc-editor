@@ -19,6 +19,8 @@ jest.mock('@root/middleware/shared/providers', () => ({
     onThemeChanged: () => () => undefined,
     setTheme: () => undefined,
   }),
+  // Only reaches requestAppRefresh on click, which no case here exercises.
+  useWindow: () => ({}),
 }))
 
 import * as MenuPrimitive from '@radix-ui/react-menubar'
