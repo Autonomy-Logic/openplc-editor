@@ -153,20 +153,25 @@ const EtherCATEditor = () => {
     )
   }, [remoteDevice])
 
-  // Read at write time: an add awaits ESI loads, so the render-time list can be stale by then.
-  const readConfiguredDevices = useCallback(
-    (): ConfiguredEtherCATDevice[] =>
-      useOpenPLCStore.getState().project.data.remoteDevices?.find((d) => d.name === deviceName)?.ethercatConfig
-        ?.devices ?? [],
+  // Read at write time: an add awaits ESI loads, so the render-time config can be stale by then.
+  const readEthercatConfig = useCallback(
+    () => useOpenPLCStore.getState().project.data.remoteDevices?.find((d) => d.name === deviceName)?.ethercatConfig,
     [deviceName],
+  )
+  const readConfiguredDevices = useCallback(
+    (): ConfiguredEtherCATDevice[] => readEthercatConfig()?.devices ?? [],
+    [readEthercatConfig],
   )
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
-      projectActions.updateEthercatConfig(deviceName, { masterConfig, devices })
+      projectActions.updateEthercatConfig(deviceName, {
+        masterConfig: readEthercatConfig()?.masterConfig ?? masterConfig,
+        devices,
+      })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, masterConfig, workspaceActions],
+    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions],
   )
 
   const handleUpdateMasterConfig = useCallback(
@@ -499,8 +504,11 @@ const EtherCATEditor = () => {
         })
       }
 
-      if (newDevices.length > 0) {
-        syncDevicesToStore([...readConfiguredDevices(), ...newDevices])
+      const latestDevices = readConfiguredDevices()
+      const takenPositions = new Set(latestDevices.map((d) => d.position))
+      const toAdd = newDevices.filter((d) => !takenPositions.has(d.position))
+      if (toAdd.length > 0) {
+        syncDevicesToStore([...latestDevices, ...toAdd])
       }
 
       // Keep unmatched selected so the user can see which ones failed; clear
@@ -508,11 +516,11 @@ const EtherCATEditor = () => {
       // as `prev minus added` rather than rebuilding from `unmatched` so that
       // selections of already-configured positions (silently skipped above)
       // and any state changes that happened while the loop ran are preserved.
-      if (newDevices.length > 0) {
+      if (toAdd.length > 0) {
         setSelectedScannedDevices((prev) => {
           const next = new Set(prev)
           // position is optional in the device type but always set when added here.
-          for (const d of newDevices) if (d.position !== undefined) next.delete(d.position)
+          for (const d of toAdd) if (d.position !== undefined) next.delete(d.position)
           return next
         })
       }

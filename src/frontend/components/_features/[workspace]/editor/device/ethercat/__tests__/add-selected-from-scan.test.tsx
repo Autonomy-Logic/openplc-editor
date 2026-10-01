@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
 import { openPLCStoreBase } from '@root/frontend/store'
+import { getMemoryState } from '@root/frontend/utils/toast'
 import type { EsiPort } from '@root/middleware/shared/ports/esi-port'
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type { EtherCATDevice } from '@root/middleware/shared/ports/ethercat-types'
@@ -132,7 +133,8 @@ function seedStore() {
 const configuredSlaves = () =>
   openPLCStoreBase.getState().project.data.remoteDevices?.find((d) => d.name === BUS)?.ethercatConfig?.devices ?? []
 
-const addButton = () => screen.getByRole('button', { name: /Add Selected|Adding/ })
+const addButton = () => screen.getByRole('button', { name: /Add Selected|Adding/, hidden: true })
+const browserAddButton = () => screen.getByRole('button', { name: 'Add Device', hidden: true })
 
 async function renderScannedAndSelected() {
   const ports = makePorts()
@@ -198,6 +200,7 @@ describe('EtherCATEditor "Add Selected"', () => {
     await waitFor(() => expect(addButton().textContent).toContain('Adding 1/2…'))
     expect(addButton().hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'Scan' }).hasAttribute('disabled')).toBe(true)
+    expect(browserAddButton().hasAttribute('disabled')).toBe(true)
 
     await settleLoad(0, { success: false, error: 'no xml' })
     await waitFor(() => expect(addButton().textContent).toContain('Adding 2/2…'))
@@ -206,6 +209,48 @@ describe('EtherCATEditor "Add Selected"', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Scan' }).hasAttribute('disabled')).toBe(false))
     expect(addButton().textContent).toBe('Add Selected')
     expect(addButton().hasAttribute('disabled')).toBe(true)
+    expect(browserAddButton().hasAttribute('disabled')).toBe(false)
+  })
+
+  it('keeps a master config edit made while the add was running', async () => {
+    await renderScannedAndSelected()
+
+    fireEvent.click(addButton())
+    await waitFor(() => expect(pendingLoads.length).toBe(1))
+    act(() => {
+      openPLCStoreBase.getState().projectActions.updateEthercatConfig(BUS, {
+        masterConfig: { networkInterface: 'eth1', cycleTimeUs: 2000 },
+        devices: configuredSlaves(),
+      })
+    })
+
+    for (let i = 0; i < SCANNED.length; i++) await settleLoad(i, { success: false, error: 'no xml' })
+
+    await waitFor(() => expect(configuredSlaves()).toHaveLength(SCANNED.length))
+    const master = openPLCStoreBase.getState().project.data.remoteDevices?.find((d) => d.name === BUS)
+      ?.ethercatConfig?.masterConfig
+    expect(master).toEqual({ networkInterface: 'eth1', cycleTimeUs: 2000 })
+  })
+
+  it('ignores a device browser add while a scan add is running', async () => {
+    await renderScannedAndSelected()
+
+    fireEvent.click(browserAddButton())
+    fireEvent.change(screen.getByPlaceholderText(/Search devices/), { target: { value: 'EL2004' } })
+    fireEvent.click(await screen.findByRole('button', { name: /EL2004/, pressed: false }))
+    // With the modal open the page behind it is aria-hidden, so this finds only the modal's confirm button.
+    const confirm = screen.getByRole('button', { name: 'Add Device' })
+
+    act(() => {
+      fireEvent.click(addButton())
+      fireEvent.click(confirm)
+    })
+
+    for (let i = 0; i < SCANNED.length; i++) await settleLoad(i, { success: false, error: 'no xml' })
+
+    await waitFor(() => expect(configuredSlaves()).toHaveLength(SCANNED.length))
+    expect(loadCalls).toHaveLength(SCANNED.length)
+    expect(configuredSlaves().every((d) => d.addedFrom === 'scan')).toBe(true)
   })
 
   it('releases the button when loadDeviceFull rejects', async () => {
@@ -221,5 +266,10 @@ describe('EtherCATEditor "Add Selected"', () => {
     await waitFor(() => expect(addButton().textContent).toBe(`Add Selected (${SCANNED.length})`))
     expect(addButton().hasAttribute('disabled')).toBe(false)
     expect(configuredSlaves()).toHaveLength(0)
+    expect(getMemoryState().toasts[0]).toMatchObject({
+      title: 'Failed to add EtherCAT devices',
+      description: 'Error: network down',
+      variant: 'fail',
+    })
   })
 })
