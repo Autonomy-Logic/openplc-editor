@@ -36,6 +36,7 @@ import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
 import { runInspect } from './commands/inspect'
 import { runInstallCli } from './commands/install-cli'
+import { runPackages } from './commands/packages'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
 import { createProcessReporter, Reporter } from './output'
@@ -69,7 +70,7 @@ const BOOLEAN_FLAGS = [
   'all',
 ] as const
 
-const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'inspect'] as const
+const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'inspect', 'packages'] as const
 
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
@@ -82,6 +83,8 @@ Usage
   openplc-cli devices [--timeout <ms>]
   openplc-cli inspect image <project> [--target <board>] [--verbose]
                             (I/O image sizes, producers and located vars — no build)
+  openplc-cli packages list                                 (boards --target accepts, and their pins)
+  openplc-cli packages install <file.vpp|dir>...            (same checks as the GUI: schema + signature)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
@@ -200,6 +203,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runInstallCli(args, reporter)).exitCode
     case 'inspect':
       return (await runInspect(args, reporter)).exitCode
+    case 'packages':
+      return (await runPackages(args, reporter)).exitCode
     case 'compile':
       return (await runBuild(args, reporter, { withUpload: false })).exitCode
     case 'upload':
@@ -226,6 +231,10 @@ function buildDebugContext(): DebugContext {
       registryDir: dir,
       execPath: process.execPath,
       execArgs: daemonSpawnArgs(),
+      // This process was already aligned to the editor's (or --user-data's)
+      // userData before `debug` runs; forward it so the daemon resolves the
+      // same installed VPP packages.
+      userData: app.getPath('userData'),
       uploadProgram: async ({ projectPath, target, host, username, password, port, onLine }) => {
         // A reporter whose progress forwards to the caller and whose result is
         // discarded — `debug open` reports the outcome itself.
@@ -331,9 +340,11 @@ async function main(): Promise<void> {
   const isDaemon = process.argv.includes('--cli-daemon')
   installNeverHangGuards({ exitWhenOutputClosed: !isDaemon })
 
-  // The daemon reads its config from stdin and never parses argv.
+  // The daemon reads its config from stdin and never parses argv, so it cannot
+  // see the parent's --user-data flag; the parent forwards the resolved dir via
+  // OPENPLC_USER_DATA and we align to it here.
   if (isDaemon) {
-    alignUserDataWithEditor(undefined)
+    alignUserDataWithEditor(process.env.OPENPLC_USER_DATA || undefined)
     await runDaemonFromStdin()
     return
   }

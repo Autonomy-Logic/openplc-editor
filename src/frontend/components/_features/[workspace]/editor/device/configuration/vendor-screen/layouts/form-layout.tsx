@@ -6,6 +6,7 @@ import { useOpenPLCStore } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { resolveFieldOptions } from '@root/frontend/utils/vpp/field-options'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { useEffect } from 'react'
 
 import type { ScreenSection } from '../index'
 
@@ -42,6 +43,16 @@ type FieldDef = {
 const TEXT_INPUT_CLASS =
   'flex h-[30px] w-48 items-center rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
+/**
+ * The field types this layout knows how to render. A vendor package is
+ * untrusted input, so dispatch is an allowlist: a field whose type is not here
+ * renders NOTHING and never enters the value map, so it cannot be persisted
+ * into `vendorScreenData` or reach the generated plugin config. The previous
+ * behaviour — falling back to a text input — meant an unrecognised type still
+ * produced a value the device would be configured with.
+ */
+const SUPPORTED_FIELD_TYPES = new Set(['boolean', 'number', 'select', 'password', 'ip-address', 'mac-address', 'text'])
+
 // Anchor-less HTML5 patterns for the formatted text types. The schema's
 // per-field `validation` (when present) is more specific and wins via the
 // runtime override below, but these defaults give a sensible UX hint when
@@ -54,7 +65,8 @@ type FormLayoutProps = {
 }
 
 function FormLayout({ section }: FormLayoutProps) {
-  const fields = (section.fields ?? []) as FieldDef[]
+  const declared = (section.fields ?? []) as FieldDef[]
+  const fields = declared.filter((field) => typeof field?.id === 'string' && SUPPORTED_FIELD_TYPES.has(field.type))
 
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
@@ -83,8 +95,53 @@ function FormLayout({ section }: FormLayoutProps) {
 
   const updateField = (id: string, value: string | number | boolean) => {
     if (persistenceKey === null) return
-    setVendorScreenData(persistenceKey, { ...storedValues, [id]: value })
+    // A `default` the user can see has to be a `default` the build gets.
+    // Above, defaults fill `values` for rendering, but only what someone
+    // actually typed was ever stored -- so a project that switched the
+    // network on without opening the Interface dropdown compiled with no
+    // carrier at all, and a Pico showing "17" for its chip select compiled
+    // against the library's pin 10. Seed every default that is visible after
+    // this edit and has nothing stored yet. Scoped to an edit the user is
+    // already making in this section, so nothing is written behind their
+    // back, and evaluated against the post-edit values so flipping a
+    // section's switch on seeds the fields it reveals.
+    const next = { ...values, [id]: value }
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.id === id || field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, next)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    setVendorScreenData(persistenceKey, { ...storedValues, ...seeded, [id]: value })
   }
+
+  // Persist visible defaults when the screen is SHOWN, not only when the user
+  // edits it. `updateField` seeds defaults on an edit, but a user who opens a
+  // screen, agrees with every default and changes nothing left those defaults
+  // unstored — so the build fell back to the library value (a Pico showing
+  // "17" for chip select compiled against pin 10). Per-board storage already
+  // keeps each target's data in its own bucket, so this writes into the active
+  // board's bucket only. Runs on mount and whenever the section or board
+  // changes; writes nothing when there is nothing new to seed, so it does not
+  // dirty a project just by being viewed once everything is already stored.
+  useEffect(() => {
+    if (persistenceKey === null) return
+    const seeded: Record<string, string | number | boolean> = {}
+    for (const field of fields) {
+      if (field.default === undefined) continue
+      if (storedValues?.[field.id] !== undefined) continue
+      if (!evalVisible(field.visible, values)) continue
+      seeded[field.id] = field.default as string | number | boolean
+    }
+    if (Object.keys(seeded).length > 0) {
+      setVendorScreenData(persistenceKey, { ...storedValues, ...seeded })
+    }
+    // `values`/`storedValues` are derived from the two deps below every render;
+    // depending on them directly would loop. The board key stands in for "the
+    // active bucket changed".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistenceKey, deviceBoard])
 
   return (
     <TooltipProvider>
@@ -201,6 +258,7 @@ function FormLayout({ section }: FormLayoutProps) {
                       className={TEXT_INPUT_CLASS}
                     />
                   ) : (
+                    // `text` — the only remaining allowlisted type.
                     <input
                       type='text'
                       value={String(values[field.id] ?? '')}

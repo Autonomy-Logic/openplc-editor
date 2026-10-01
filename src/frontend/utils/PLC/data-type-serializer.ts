@@ -157,7 +157,7 @@ export function serializeDataTypesToST(dataTypes: PLCDataType[]): string {
  * Serialise ONE data type to its on-disk `.dt` file content — a
  * `TYPE…END_TYPE` block holding a single declaration.  This is the
  * canonical persistence format (`datatypes/<Name>.dt`); its inverse
- * is `parseDataTypeFromText` in `data-type-text-parser.ts`, and the
+ * is `parseDataTypeFromText` in `data-type-declarations.ts`, and the
  * pair must round-trip.  Returns `''` for a derivation that renders
  * to no lines (unknown shape).
  */

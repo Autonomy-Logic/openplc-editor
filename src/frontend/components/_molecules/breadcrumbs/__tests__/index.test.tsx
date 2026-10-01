@@ -46,7 +46,7 @@ describe('the Device tree branch', () => {
   it.each([
     ['configuration', 'Configuration'],
     ['pin-mapping', 'Pin Mapping'],
-    ['orchestrators', 'Orchestrators'],
+    ['orchestrators', 'Edge Devices'],
     ['runtime-status', 'Runtime Status'],
   ])('trails %s as Project > Device > screen', (derivation, name) => {
     expect(trail({ type: 'plc-device', meta: { name, derivation } })).toEqual(['Irrigation Controller', 'Device', name])

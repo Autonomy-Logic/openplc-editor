@@ -19,9 +19,12 @@ export {
   type AliasEntry,
   type AliasRegistry,
   buildAliasRegistry,
+  describeAliasRejection,
   describeSource,
+  isAliasConflict,
   isAliasNameAvailable,
   resolveAlias,
   validateAliasEdit,
+  validateAliasName,
 } from './alias-registry'
 export { resolveProjectAliases } from './resolve-project-aliases'

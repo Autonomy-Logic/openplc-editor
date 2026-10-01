@@ -121,9 +121,25 @@ export const PackageManifestSchema = z
       .array(
         z
           .object({
-            // Only `boardManagerUrl` is declared; everything else on a device
-            // — and on `target` itself — still flows through untouched.
-            target: z.object({ boardManagerUrl: boardManagerUrl.optional() }).passthrough().optional(),
+            // Only `boardManagerUrl` and `uploadMethod` are declared; everything
+            // else on a device — and on `target` itself — still flows through
+            // untouched.
+            //
+            // `uploadMethod` is constrained rather than passed through because
+            // it ROUTES: it is typed `'serial' | 'ethernet'` downstream, and
+            // `BoardInfoResolver.#fromVppDevice` copies whatever is here into
+            // that field. Left to `.passthrough()`, a manifest saying
+            // `uploadMethod: "etherner"` would be carried as if it were a valid
+            // member of the union and simply not match 'ethernet' anywhere,
+            // silently taking the serial path — on a board whose only link is
+            // Ethernet. Refusing the manifest is the safer failure.
+            target: z
+              .object({
+                boardManagerUrl: boardManagerUrl.optional(),
+                uploadMethod: z.enum(['serial', 'ethernet']).optional(),
+              })
+              .passthrough()
+              .optional(),
           })
           .passthrough(),
       )

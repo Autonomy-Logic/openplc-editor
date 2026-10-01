@@ -449,6 +449,55 @@ function encodeModuleConfig(
 }
 
 /**
+ * Keys that would reach the prototype chain rather than the object.
+ *
+ * `configTemplate` and `vendorScreenData` both carry package- and
+ * user-authored keys. `Object.assign` writes through setters, so a
+ * `__proto__` key parsed out of a package's `config_template.json` would
+ * pollute `Object.prototype` for the whole session rather than land in the
+ * config. Dropped, not escaped: no plugin config has a legitimate use for
+ * them, and the runtime would not read them either.
+ */
+const FORBIDDEN_CONFIG_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+
+/** Depth a merged value may nest before it is dropped. */
+const MAX_CONFIG_VALUE_DEPTH = 24
+
+function assignSafely(target: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const key of Object.keys(source)) {
+    if (FORBIDDEN_CONFIG_KEYS.has(key)) continue
+    const sanitized = sanitizeConfigValue(source[key], 0)
+    if (sanitized === undefined) continue
+    Object.defineProperty(target, key, {
+      value: sanitized,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    })
+  }
+}
+
+/**
+ * Copy a value the package controls, dropping prototype keys at every depth
+ * and anything nested past the cap. A cyclic or pathologically deep structure
+ * would otherwise be carried straight into `JSON.stringify` at bundle time.
+ */
+function sanitizeConfigValue(value: unknown, depth: number): unknown {
+  if (depth > MAX_CONFIG_VALUE_DEPTH) return undefined
+  if (value === null || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeConfigValue(item, depth + 1)).filter((item) => item !== undefined)
+  }
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    if (FORBIDDEN_CONFIG_KEYS.has(key)) continue
+    const sanitized = sanitizeConfigValue((value as Record<string, unknown>)[key], depth + 1)
+    if (sanitized !== undefined) out[key] = sanitized
+  }
+  return out
+}
+
+/**
  * Generate the final plugin config JSON for a VPP runtime-v4 package.
  *
  * All fields from the config template are preserved. Form-based vendor screen
@@ -464,7 +513,8 @@ export function generateVendorPluginConfig(
   modules: VppModuleDefinition[],
   devicePins: DevicePinInput[] = [],
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...configTemplate }
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>
+  assignSafely(result, configTemplate)
 
   // Merge form-based vendor screen data at root. Skip the keys that have
   // specific handling below.
@@ -472,7 +522,7 @@ export function generateVendorPluginConfig(
   for (const [key, value] of Object.entries(vendorScreenData)) {
     if (RESERVED_KEYS.has(key)) continue
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      Object.assign(result, value as Record<string, unknown>)
+      assignSafely(result, value as Record<string, unknown>)
     }
   }
 
@@ -486,7 +536,10 @@ export function generateVendorPluginConfig(
     result.pins = buildPins(devicePins)
   }
 
-  return result
+  // Back onto a normal object so callers (and JSON.stringify) see what they
+  // expect; the null prototype was only needed while untrusted keys were
+  // being merged in.
+  return { ...result }
 }
 
 export type { PluginSlot, PluginSlotIoMapping, VendorScreenData, VppModuleDefinition }

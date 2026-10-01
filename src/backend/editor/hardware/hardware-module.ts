@@ -38,7 +38,9 @@ class HardwareModule {
   // ############################################################################
   static readonly HOST_PLATFORM = process.platform
   static readonly HOST_ARCHITECTURE = process.arch
-  static readonly DEVELOPMENT_MODE = process.env.NODE_ENV === 'development'
+  /** Unpackaged means the binaries and sources sit beside the checkout. See the
+   *  note on `CompilerModule.DEVELOPMENT_MODE` for why this is not `NODE_ENV`. */
+  static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
 
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
@@ -349,6 +351,8 @@ class HardwareModule {
           boards.set(device.name, {
             compiler,
             core: device.target.core ?? '',
+            // Upload transport ("ethernet" for the LOGO! 8.2; serial default).
+            uploadMethod: device.target.uploadMethod,
             ...(device.target.platform ? { platform: device.target.platform } : {}),
             preview: device.preview,
             specs: device.specs ?? {},

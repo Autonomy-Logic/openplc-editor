@@ -54,6 +54,9 @@ export interface ComposeFirmwareBundleInput {
   cBlocks: {
     header: string
     code: string | null
+    /** `#include` lines lifted from the user's C++ blocks, emitted as a
+     *  symbol-free TU next to the sketch. `null` / absent when the project
+     *  declares no C/C++ POUs, or none of them includes anything. */
   }
   /** Pre-authored `defines.h` content.  Caller invokes the shared
    *  `generateDefinesContent` to produce this — the composer keeps
@@ -69,6 +72,20 @@ export interface ComposeFirmwareBundleInput {
    *  skeleton ships a placeholder stub so naive `#include "vpp_config.h"`
    *  in shared HAL code still compiles on non-VPP boards. */
   vppConfigH?: string
+  /** Pre-authored `opcua_config.h` content for baremetal targets whose VPP
+   *  declares `opcuaServer: true`.  Caller invokes
+   *  `generateOpcUaHeaderContent`; absent / undefined when the target cannot
+   *  host an OPC-UA server at all.  Always overwrites `src/opcua_config.h`
+   *  when present — the firmware skeleton ships a stub with
+   *  `OPCUA_ENABLED 0`, so the runtime's OPC-UA translation units
+   *  `#include "opcua_config.h"` unconditionally and compile to nothing on
+   *  every target that has no server. */
+  opcuaConfigH?: string
+  /** Generated `s7comm_config.h`, on the same contract: the firmware skeleton
+   *  ships a stub with `S7COMM_ENABLED 0`, so the S7 translation units
+   *  `#include "s7comm_config.h"` unconditionally and compile to nothing on
+   *  every target that has no server. */
+  s7commConfigH?: string
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -140,7 +157,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, firmwareSkeleton } = input
+  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -167,19 +184,11 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // resolves which one wins.
   files['src/c_blocks.h'] = cBlocks.header
 
-  // C blocks code goes under `src/`, not next to the sketch, so the
-  // pre-compile step picks it up and builds it at -std=gnu++17 with the rest of
-  // the generated code.
-  //
-  // It used to land in `examples/Baremetal/`, where arduino-cli compiles it at
-  // whatever standard the core ships. That was survivable while the unit only
-  // pulled in `iec_var.hpp` and `iec_string.hpp`, and stopped being survivable
-  // when it started including `generated.hpp` for the project's own types:
-  // `iec_ptr.hpp` uses `std::is_arithmetic_v`, so on an mbed core (gnu++14) a
-  // project with a C++ block failed with `'is_arithmetic_v' is not a member of
-  // 'std'`. The AVR targets hid it because `hals.json` declares
-  // `-std=gnu++17` in their `cxx_flags`; a VPP board such as Arduino Opta
-  // declares no such flag and does not.
+  // C blocks code goes under `src/`, which arduino-cli takes as a library and
+  // compiles with the sketch. That is what lets a C++ block resolve an Arduino
+  // `#include` at all — a block built outside arduino-cli sees none of its
+  // library search. The runtime is C++14, so the core's own standard is
+  // enough and no separate pass is needed.
   //
   // The skeleton's static `examples/Baremetal/c_blocks_code.cpp` stays where it
   // is either way. It defines no symbols and pulls in no strucpp header, so it
@@ -206,21 +215,26 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
     files['src/vpp_config.h'] = vppConfigH
   }
 
+  // opcua_config.h — same contract as vpp_config.h above: overwritten when
+  // the target can host an OPC-UA server, otherwise the skeleton's
+  // `OPCUA_ENABLED 0` stub stays and the server compiles out.
+  if (opcuaConfigH !== undefined) {
+    files['src/opcua_config.h'] = opcuaConfigH
+  }
+
+  // s7comm_config.h — identical contract.
+  if (s7commConfigH !== undefined) {
+    files['src/s7comm_config.h'] = s7commConfigH
+  }
+
   // OpenPLCUserLib.h stub — Baremetal.ino unconditionally
   // `#include <OpenPLCUserLib.h>` to trigger arduino-cli's
-  // library-discovery for the strucpp pipeline.  On the editor's
-  // local build path that header lives in a separately-staged
-  // precompiled-archive library tree (see `installAsArduinoLibrary`)
-  // and the include resolves through arduino-cli's library search
-  // pass.  On the web's compile-service single-pass build the
-  // strucpp `.cpp` files live directly under `src/` and are compiled
-  // alongside the sketch via `--library src` — no precompiled
-  // archive — so the include needs a sibling stub here to satisfy
-  // the preprocessor.  Bundling it on the client keeps the editor /
-  // web compile flows symmetric without the server needing to know
-  // about the precompile/no-precompile distinction.  Real
-  // declarations come via `arduino_runtime_glue.h`; the stub is
-  // intentionally empty.
+  // library-discovery for the strucpp pipeline.  The strucpp `.cpp`
+  // files live directly under `src/` and are compiled alongside the
+  // sketch via `--library src`, so nothing else provides that header
+  // and the include needs a sibling stub here to satisfy the
+  // preprocessor.  Real declarations come via
+  // `arduino_runtime_glue.h`; the stub is intentionally empty.
   files['src/OpenPLCUserLib.h'] = [
     '// Auto-generated stub for OpenPLCUserLib.',
     "// Resolves Baremetal.ino's `#include <OpenPLCUserLib.h>` in the",

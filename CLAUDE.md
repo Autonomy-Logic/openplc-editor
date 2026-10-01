@@ -30,6 +30,60 @@ npm run test:e2e         # Playwright E2E tests
 npm run validate:arch    # Architecture layer dependency validation
 ```
 
+## Verify before pushing (CI parity)
+
+CI runs these commands directly — NOT `npm run lint` / `npm run format`, which
+AUTO-FIX and so pass locally while CI's `--check` still fails. Tests run under
+**Jest** (not Vitest), and both `tsc` and `jest` import the `strucpp` package,
+so it must be installed first or they fail with `TS2307: Cannot find module
+'strucpp'`. Run each exact command (from `.github/workflows/`) green before you push:
+
+```bash
+npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
+npx tsc --noEmit                                   # ci-build:       Build Check
+npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
+npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
+npx jest --config jest.config.json --collectCoverage --ci   # ci-unit-tests
+```
+
+`prettier --check` only reports; fix with `npx prettier --write <files>`.
+
+`npm run setup:strucpp` installs the **pinned** STruC++ from its GitHub release
+and overwrites whatever is in `node_modules/strucpp`, so a locally patched build
+(testing an unreleased parser change) is wiped by the very command CI runs. Jest
+loads the parser through `dist/parser-bundle.cjs` — STruC++'s ESM chain does not
+survive Jest's CJS transform — so the pinned release has to be one that ships
+that bundle, or every suite fails to load. Run the suite again after
+`setup:strucpp` rather than trusting a run made against a patched install.
+The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared`)
+is byte-identical with **openplc-web** — mirror any change and run the check suite
+in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).
+
+## Electron e2e (Playwright)
+
+No CI workflow runs Playwright, so these are local checks. `e2e/` drives the real
+Electron app through `_electron.launch`, and three things bite before any assertion:
+
+```bash
+npm run build                                          # main + renderer
+mkdir -p release/app/configs/dll
+cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
+npx playwright test e2e/<spec>.ts --workers=1
+```
+
+- **The preload copy is required.** `main.ts` picks the preload with `app.isPackaged`,
+  and a suite launching `release/app/dist/main/main.js` directly is NOT packaged, so it
+  looks under `release/app/configs/dll/` - a path `npm run build` never writes. Without
+  it the window renders blank and the only clue is `Cannot read properties of undefined
+  (reading 'onSimulatorStopped')` in the renderer console.
+- **Do not set `NODE_ENV=development`.** `resolveHtmlPath` would point the window at the
+  webpack dev server on `localhost:1212`, which is not running against a built app.
+- **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the
+  one whose URL contains `index.html`.
+
+Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
+body text from `.view-lines:visible`, never `.view-lines` alone.
+
 ## Architecture
 
 ### Layer Overview
@@ -246,10 +300,33 @@ still debugs and changing a server's slave id is not an access event.
 On the default UART the firmware answers **both** ids and routes by function
 code: `0x41`-`0x4B` on the editor's, everything on the server's. So a server
 sharing that port keeps whatever id the user picked, and `MBSERIAL_SLAVE` is the
-server's on every port. A board flashed before 4.4.0 may answer the editor on
+server's on every port. A board flashed before 4.3.0 may answer the editor on
 another id; Connect tries 1 first and the project's legacy id after.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
+
+**Pre-build gates.** `handleBuild`
+(`src/frontend/components/_organisms/workspace-activity-bar/default.tsx`) refuses
+before the pre-build save, the compile and the upload when the project's board
+comes from a vendor package (`BoardInfo.vpp`) and the selected vPLC reports
+`backplaneAccess: false` — only one vPLC per Device may drive the local backplane
+I/O, and the runtime does not enforce it. The rule is `evaluateVppBackplaneGate`
+(`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`, byte-identical on
+openplc-web), shared with the board list so both refuse in the same words.
+`evaluatePreBuildPlcGate` beside it is the older gate that asks to stop a running
+PLC, and runs after this one.
+
+`handleMd5Verification` in the same file asks the gate a second time. An MD5
+mismatch inside a debug session offers to upload the current project and compiles
+with `compileOnly: false` itself — the one upload that does not go through
+`handleBuild` — so the refusal lands ahead of that offer rather than after it.
+
+A target that reports no flag is not gated, and in the editor that is permanent:
+`EDITOR_CAPABILITIES.hasOrchestratorDevices` is `false` and
+`createEditorOrchestratorAdapter` lists no orchestrators, so nothing ever reaches
+`deviceActions.setSelectedDevice` and `backplaneAccess` is always `undefined`.
+The gate is therefore inert here — it exists so the shared surface stays
+byte-identical with openplc-web, where the flag is real.
 
 ### Debugging
 

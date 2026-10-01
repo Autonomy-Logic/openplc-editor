@@ -61,9 +61,9 @@ void debugInfo()
 {
     uint8_t arrCount = openplc_debug_array_count();
 
-    // Cap at what the Modbus frame can hold: 3 header bytes + 2 bytes/array.
+    // Cap at what the Modbus frame can hold: 4 header bytes + 2 bytes/array.
     // Realistic projects have <=10 arrays, so this is never a real limit.
-    uint8_t maxArrs = (MAX_MB_FRAME - 3) / 2;
+    uint8_t maxArrs = (MB_RESPONSE_CAPACITY - 4) / 2;
     if (arrCount > maxArrs) arrCount = maxArrs;
 
     mb_frame[1] = MB_FC_DEBUG_INFO;
@@ -166,10 +166,24 @@ void debugGetTrace(uint8_t arr, uint16_t startidx, uint16_t endidx)
     {
         uint16_t varSize = openplc_debug_size(arr, elem);
         // Bounds check — stop packing if this one won't fit.
-        if ((11 + responseSize + varSize) > MAX_MB_FRAME) break;
+        //
+        // NOTE: two cases are conflated here, and they cannot be separated
+        // without a wire change. A leaf that cannot fit an EMPTY frame can
+        // never be sent (a WSTRING needs 11+253 against a 256-byte ceiling,
+        // because the READ path pads strings to their full width), so breaking
+        // starves every later variable in the range as well.
+        //
+        // Skipping it instead was tried and is WORSE: the response is
+        // positional, so omitting one leaf shifts every following value into
+        // the wrong slot. The decoder's bounds check turns most of those into a
+        // dropped batch, but a large enough payload would let it decode one
+        // variable's bytes AS another and display a confidently wrong value.
+        // Absent beats wrong, so this stays until the framing itself can say
+        // "skipped" -- see the compact-string work (DOPE-645).
+        if ((11 + responseSize + varSize) > MB_RESPONSE_CAPACITY) break;
         if (varSize == 0) {
-            // Entry has no readable bytes (string stub / out-of-bounds)
-            // — skip gracefully to keep the scan progressing.
+            // No readable bytes for this entry (out of bounds). Skip gracefully
+            // to keep the scan progressing.
             lastElemIdx = elem;
             continue;
         }
@@ -265,7 +279,7 @@ void debugGetTraceList(uint16_t numIndexes, uint8_t *indexArray)
             lastReqIdx = i;
             continue;
         }
-        if ((response_idx + varSize) > MAX_MB_FRAME) break;
+        if ((response_idx + varSize) > MB_RESPONSE_CAPACITY) break;
 
         uint16_t n = openplc_debug_read(arr, elem, &mb_frame[response_idx]);
         if (n == 0)
@@ -398,6 +412,53 @@ void plcSetState(uint8_t desired)
     mb_frame_len = 5;
 }
 
+// Magic that must accompany a reboot-to-bootloader request, so a stray or
+// probing 0x4C frame cannot reset a running PLC. The editor sends these bytes.
+static const uint8_t REBOOT_BOOTLOADER_MAGIC[4] = { 0xB0, 0x07, 0x10, 0xAD };
+
+// PDU request:  [FC][magic:4]
+// PDU response: [FC][status]        (0x7E = accepted and rebooting)
+//
+// Asks the HAL to reboot into its firmware bootloader. The response is built here
+// but sent after process_mbpacket() returns, so a HAL must arm the reset rather
+// than perform it. The weak default is a no-op.
+void rebootToBootloader(const uint8_t *magic)
+{
+    uint8_t status = MB_DEBUG_SUCCESS;
+    for (int i = 0; i < 4; i++)
+        if (magic[i] != REBOOT_BOOTLOADER_MAGIC[i]) { status = MB_DEBUG_ERROR_OUT_OF_BOUNDS; break; }
+
+    // Programming lock. A locked device must still answer, or the editor could
+    // only report a timeout, so reply MB_REFUSED_LOCKED and raise the unlock
+    // prompt on the device's own display for the person standing at it.
+    if (status == MB_DEBUG_SUCCESS && hardwareProgrammingLocked())
+    {
+        status = MB_REFUSED_LOCKED;
+        hardwarePromptUnlock();         // returns immediately; never blocks the scan
+    }
+
+    mb_frame[1] = MB_FC_REBOOT_BOOTLOADER;
+    mb_frame[2] = status;
+    mb_frame_len = 3;
+
+    if (status == MB_DEBUG_SUCCESS)
+        hardwareRebootToBootloader();   // arms; the actual reset happens post-reply
+}
+
+// PDU request:  [FC]
+// PDU response: [FC][STATUS][locked:u8]     (locked: 0 = unlocked, 1 = locked)
+//
+// Read-only companion to 0x4C, polled by the editor while it waits out a refused
+// reboot so it can tell "still locked" from "device went away". Free of side
+// effects, so polling cannot spam the display. A board with no lock reports 0.
+void getLockState(void)
+{
+    mb_frame[1] = MB_FC_GET_LOCK_STATE;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = hardwareProgrammingLocked() ? 1 : 0;
+    mb_frame_len = 4;
+}
+
 // PDU request:  [FC]
 // PDU response: [FC, STATUS, version_ascii...]  (no NUL terminator)
 //
@@ -412,7 +473,7 @@ void debugGetVersion()
     uint16_t i = 0;
     for (i = 0; ver[i] != '\0'; i++)
     {
-        if ((uint16_t)(3 + i) >= MAX_MB_FRAME) break; // never overrun the frame
+        if ((uint16_t)(3 + i) >= MB_RESPONSE_CAPACITY) break; // never overrun the frame
         mb_frame[3 + i] = (uint8_t)ver[i];
     }
     mb_frame_len = 3 + i;
@@ -440,7 +501,7 @@ void debugGetDeviceId()
     mb_frame[1] = MB_FC_DEBUG_GET_DEVICE_ID;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MAX_MB_FRAME - 4));
+    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MB_RESPONSE_CAPACITY - 4));
     mb_frame[3] = (uint8_t)idLen;
     mb_frame_len = 4 + (int)idLen;
 }
@@ -506,12 +567,12 @@ void debugWriteLicense(uint16_t len, const uint8_t *blob)
 // there is no malloc on AVR. READ carries no request payload, so writing at [5]
 // cannot clobber an input. `out_len` is unknown until after the read, and the len
 // field lives at [3..4] — BEFORE the blob — so filling it afterwards never
-// overlaps the blob bytes. A 98-byte blob fits MAX_MB_FRAME comfortably.
+// overlaps the blob bytes. A 98-byte blob fits MB_RESPONSE_CAPACITY comfortably.
 void debugReadLicense(void)
 {
     size_t out_len = 0;
     lic_store_status_t st =
-        license_store_read(&mb_frame[5], MAX_MB_FRAME - 5, &out_len);
+        license_store_read(&mb_frame[5], MB_RESPONSE_CAPACITY - 5, &out_len);
 
     mb_frame[1] = MB_FC_DEBUG_READ_LICENSE;
     mb_frame[2] = lic_status_to_mb(st);

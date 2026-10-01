@@ -265,10 +265,14 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation(args.extraLibraries ?? [], (chunk, level) => {
-          const message = typeof chunk === 'string' ? chunk : chunk.toString()
-          log(message, level ?? 'info')
-        })
+        await handlers.handleLibraryInstallation(
+          args.extraLibraries ?? [],
+          (chunk, level) => {
+            const message = typeof chunk === 'string' ? chunk : chunk.toString()
+            log(message, level ?? 'info')
+          },
+          args.thirdPartyLibraries ?? [],
+        )
         return { ok: true }
       } catch (error) {
         // Reached only when the install machinery itself can't run
@@ -497,6 +501,12 @@ export function createEditorCompilerPlatformPort(
           arduinoPlatform: args.fqbn,
           compilationPath: context.compilationPath,
           communicationPort: args.port || undefined,
+          uploadMethod: args.uploadMethod,
+          // Declared on UploadArduinoBoardArgs since the ethernet-upload work
+          // landed, populated only now: without it an ethernet build ignored
+          // the address the caller gave and used whatever the project file
+          // remembered.
+          ipAddress: args.ipAddress,
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')
@@ -653,12 +663,19 @@ export function createEditorCompilerPlatformPort(
       log: PlatformLog,
     ): Promise<MaterializeRuntimeV4BundleResult> {
       try {
-        const entries: Array<[string, string]> = Object.entries(args.bundle)
+        const entries = Object.entries(args.bundle)
         await Promise.all(
-          entries.map(async ([relPath, content]: [string, string]) => {
+          entries.map(async ([relPath, content]) => {
             const absPath = join(context.sourceTargetFolderPath, relPath)
             await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
+            // A VPP plugin payload may be precompiled objects rather than
+            // source, so bytes are written as bytes; the encoding argument
+            // only applies to the text entries the pipeline composes.
+            if (typeof content === 'string') {
+              await fs.writeFile(absPath, content, 'utf-8')
+            } else {
+              await fs.writeFile(absPath, content)
+            }
           }),
         )
         return { written: entries.length }

@@ -53,7 +53,7 @@ export interface VppModbusScreenState {
    *
    *  Which UART the server answers on, and its speed when it has one to itself,
    *  are the server's and arrive through `ModbusServerCompileConfig`. Nothing
-   *  here reads a pre-4.4.0 `modbus_rtu` section: 4.4.0 carries no configuration
+   *  here reads a pre-4.3.0 `modbus_rtu` section: 4.3.0 carries no configuration
    *  forward, and a project from before it creates its server again. */
   serial?: {
     baud_rate?: string
@@ -74,6 +74,17 @@ export interface VppModbusScreenState {
     gateway?: string
     subnet?: string
     dns?: string
+    /** Which SPI Ethernet controller is wired to the board, for the boards that
+     *  have no MAC of their own and take a module. "wiznet" is the W5100 /
+     *  W5200 / W5500 family, which the Arduino `Ethernet` library tells apart
+     *  by itself at begin() -- so this picks the LIBRARY, not the chip.
+     *  "enc28j60" is Microchip's, a different part with a different driver
+     *  (`EthernetENC`, API-compatible). Absent means wiznet. */
+    eth_driver?: 'wiznet' | 'enc28j60'
+    /** Chip-select pin for that module. The Ethernet libraries default to pin
+     *  10, which is the Uno shield's wiring and wrong almost everywhere else
+     *  -- the Pico's SPI0 CS is 17. Absent leaves the library default. */
+    eth_cs_pin?: string | number
   }
 }
 
@@ -246,6 +257,22 @@ const TCP_DEFAULTS = {
   tcp_interface: 'Ethernet' as const,
 }
 
+/**
+ * Which carrier to compile when the project never stated one.
+ *
+ * Ethernet is the historical answer and stays the answer for a board that can
+ * do both -- but it is the wrong one for a board that has no Ethernet at all,
+ * where it emitted `MBTCP_ETHERNET` into a Wi-Fi-only firmware: on an ESP32
+ * that is `ETH.begin()` against a PHY the board does not have, which compiles,
+ * links, and never gets an address. A board that declares exactly one carrier
+ * has already answered the question, so use its answer.
+ */
+function resolveTcpInterface(stated: string | undefined, declared: string[] | undefined): string {
+  if (stated) return stated
+  if (declared && declared.length === 1) return declared[0]
+  return TCP_DEFAULTS.tcp_interface
+}
+
 /** The IANA Modbus port, and what the firmware listened on unconditionally
  *  before the port became the server's to state. */
 const BAREMETAL_DEFAULT_TCP_PORT = 502
@@ -268,11 +295,14 @@ export function generateModbusDefines(
   state: VppModbusScreenState,
   defaultSerial: string = 'Serial',
   server?: ModbusServerCompileConfig,
+  /** The board's `networkInterfaces`, so an unstated carrier can fall back to
+   *  the one the board actually has rather than to Ethernet. */
+  networkInterfaces?: string[],
 ): string {
   const net = state.network ?? {}
 
   // The project's server is the only thing that says what is served. No server,
-  // no Modbus: 4.4.0 does not read a pre-4.4.0 project's `modbus_rtu` section,
+  // no Modbus: 4.3.0 does not read a pre-4.3.0 project's `modbus_rtu` section,
   // so a project from before it has to create its server again.
   const served = server && server.enabled !== false ? (server.transports ?? []) : []
   const rtuOn = served.includes('rtu')
@@ -288,8 +318,20 @@ export function generateModbusDefines(
   // trade one silent failure for another. A pre-split project has no `network`
   // section whatsoever and keeps building exactly as it did.
   const tcpOn = served.includes('tcp') && net.enabled !== false
+  // The network is its own thing, and on an ethernet board it is the thing that
+  // matters most: it carries the debugger, the upload, OPC-UA and S7Comm, none
+  // of which are Modbus. Gating the interface on a Modbus SERVER meant a
+  // project with no server built firmware that never called
+  // mbconfig_*_iface() -- which on a board reached only over Ethernet is a
+  // device that boots fine and can never be spoken to again.
+  //
+  // `=== true` rather than `!== false`, unlike `tcpOn`: a board with no Network
+  // screen at all has no `network` state, and treating absence as "on" would
+  // emit a carrier for an Uno. Enabling the section is an explicit act and it
+  // persists an explicit `true`.
+  const netOn = net.enabled === true
 
-  if (!rtuOn && !tcpOn) return ''
+  if (!rtuOn && !tcpOn && !netOn) return ''
 
   const lines: string[] = []
   lines.push('//Comms Configuration')
@@ -328,7 +370,9 @@ export function generateModbusDefines(
     lines.push('#define MBSERIAL')
   }
 
-  if (tcpOn) {
+  // The link itself: emitted whenever the network is up, whether or not Modbus
+  // is the thing being served over it.
+  if (netOn || tcpOn) {
     // Network config comes from the `network` section the package ships.
     //
     // MBTCP_MAC / MBTCP_IP / MBTCP_DNS / MBTCP_GATEWAY / MBTCP_SUBNET are
@@ -338,7 +382,7 @@ export function generateModbusDefines(
     // value is signalled by a single-byte `0` so the `< 4` check fires and the
     // runtime falls back to the DHCP/NULL path.
     const mac = net.mac_address
-    const ifaceSel = net.interface ?? TCP_DEFAULTS.tcp_interface
+    const ifaceSel = resolveTcpInterface(net.interface, networkInterfaces)
     const dhcpOn = net.enable_dhcp === true
     const ip = net.ip_address
     const dns = net.dns
@@ -359,14 +403,31 @@ export function generateModbusDefines(
       lines.push('#define MBTCP_WIFI')
     } else {
       lines.push('#define MBTCP_ETHERNET')
+      // Which driver, and where its chip select is. Both matter only for a
+      // board that takes an SPI module: a part with its own MAC (ESP32 RMII,
+      // the LOGO!, Portenta) never reaches this branch's generic include.
+      if (net.eth_driver === 'enc28j60') lines.push('#define MBTCP_ETH_ENC28J60')
+      const cs = net.eth_cs_pin
+      const csNum = typeof cs === 'number' ? cs : cs ? Number(cs) : NaN
+      if (Number.isInteger(csNum) && csNum >= 0) lines.push(`#define MBTCP_ETH_CS ${csNum}`)
     }
-    lines.push(`#define MBTCP_PORT ${server?.port ?? BAREMETAL_DEFAULT_TCP_PORT}`)
-    lines.push('#define MBTCP')
+    // The link is up: bring up the interface, run the discovery responder, and
+    // let OPC-UA and S7Comm listen on it. Independent of Modbus, which is why
+    // it is emitted here and not beside MBTCP.
+    lines.push('#define OPLC_NET_ENABLED')
+    // ...and THIS is Modbus's: the TCP listener, and the port it answers on.
+    if (tcpOn) {
+      lines.push(`#define MBTCP_PORT ${server?.port ?? BAREMETAL_DEFAULT_TCP_PORT}`)
+      lines.push('#define MBTCP')
+    }
   }
 
-  // `MODBUS_ENABLED` gates everything Modbus in ModbusSlave.cpp. Emit
-  // once regardless of which transports are active.
-  lines.push('#define MODBUS_ENABLED')
+  // `MODBUS_ENABLED` gates everything Modbus in ModbusSlave.cpp -- the register
+  // file, the operation buffers, the slave. A network-only build has none of
+  // it, so this is emitted for a served transport and not for a live link.
+  if (rtuOn || tcpOn) {
+    lines.push('#define MODBUS_ENABLED')
+  }
 
   return lines.join('\n') + '\n'
 }

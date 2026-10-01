@@ -355,3 +355,51 @@ describe('createLibrarySlice', () => {
     })
   })
 })
+
+/**
+ * Placing a block never wrote its library into `project.libraries`, so the
+ * other editor rendered the block from its node data with nothing to warn
+ * about. This is the action the block components call to close that gap.
+ */
+describe('ensureLibrariesForTypes', () => {
+  let store: ReturnType<typeof makeStore>
+
+  beforeEach(() => {
+    store = makeStore()
+    store.getState().libraryActions.setSystemLibraries([
+      makeSystemLibrary({ name: 'iec-standard-fb', pous: [{ name: 'TON' }] as SystemLibrary['pous'] }),
+      makeSystemLibrary({
+        name: 'demo-utils',
+        version: '2.1.0',
+        pous: [{ name: 'ANALOGSCALE' }] as SystemLibrary['pous'],
+      }),
+    ])
+    store.getState().libraryActions.setBundledLibraryNames(['iec-standard-fb'])
+  })
+
+  it('enables the non-bundled library that owns the block, with its version', () => {
+    store.getState().libraryActions.ensureLibrariesForTypes(['ANALOGSCALE'])
+
+    expect(store.getState().enabledLibraries).toEqual(['demo-utils'])
+    expect(store.getState().missingLibraries).toEqual([])
+  })
+
+  it('leaves a bundled library alone: it is always on and never declared', () => {
+    store.getState().libraryActions.ensureLibrariesForTypes(['TON'])
+
+    expect(store.getState().enabledLibraries).toEqual([])
+  })
+
+  it('ignores a type nobody installed owns, rather than guessing', () => {
+    store.getState().libraryActions.ensureLibrariesForTypes(['MY_STRUCT'])
+
+    expect(store.getState().enabledLibraries).toEqual([])
+  })
+
+  it('does not enable the same library twice', () => {
+    store.getState().libraryActions.ensureLibrariesForTypes(['ANALOGSCALE'])
+    store.getState().libraryActions.ensureLibrariesForTypes(['analogscale'])
+
+    expect(store.getState().enabledLibraries).toEqual(['demo-utils'])
+  })
+})

@@ -149,7 +149,7 @@ export interface UploadRuntimeV4Args {
   /** File map the runtime extracts on the device.  Already
    *  composed by `composeRuntimeV4Bundle`; the pipeline passes it
    *  straight through. */
-  bundle: Record<string, string>
+  bundle: RuntimeV4Bundle
   /** Discriminated device context; see `PlatformDeviceContext`. */
   context: PlatformDeviceContext
   /**
@@ -183,6 +183,13 @@ export interface UploadArduinoBoardArgs {
   /** Serial port for upload (e.g. `/dev/cu.usbmodem1101`).  Editor
    *  resolves; web's adapter receives but ignores. */
   port: string
+  /** Upload transport. Absent/"serial" (default): `port` is a serial port.
+   *  "ethernet": the board's core does a network upload; `ipAddress` carries
+   *  the device IP that arduino-cli receives as `--port`. */
+  uploadMethod?: 'serial' | 'ethernet'
+  /** Device IP for `uploadMethod:"ethernet"` (from configuration
+   *  runtimeIpAddress). Ignored for serial uploads. */
+  ipAddress?: string
 }
 
 /** Runtime v3 upload (legacy, editor-only).  Web's adapter MUST
@@ -222,11 +229,25 @@ export interface InstallArduinoCoreArgs {
 
 /** Arduino-CLI library install (editor-only.  Same no-op
  *  contract as core install for web). */
+/** A library installed from a git URL rather than the Arduino index.
+ *  Mirrors `ThirdPartyLibrary` in backend/shared/compile/third-party-libraries.ts,
+ *  restated here so the port does not depend on a backend module. */
+export interface ThirdPartyLibraryRequest {
+  name: string
+  gitUrl: string
+  reason: string
+}
+
 export interface InstallArduinoLibArgs {
   /** Legacy single-library id (kept for the placeholder call sites
    *  that pre-date `extraLibraries`).  Empty string when the caller
    *  is driving the install entirely from `extraLibraries`. */
   libId: string
+  /** Libraries this target needs that are not in the Arduino index, installed
+   *  with `lib install --git-url`. Selected from the target's CAPABILITIES —
+   *  a board that cannot host an OPC-UA server never downloads the OPC-UA
+   *  stack. Web no-ops: its compile service pre-installs everything. */
+  thirdPartyLibraries?: ThirdPartyLibraryRequest[]
   /** Per-board library list.  Sourced from the selected board's
    *  `hals.json` `extra_libraries` (static boards) or its VPP
    *  manifest `hal.extraArduinoLibraries` (VPP boards) — both feed
@@ -277,6 +298,16 @@ export interface CheckRuntimeVersionResult {
   minEditorVersion?: string | null
 }
 
+/**
+ * Path → content of a runtime-v4 upload bundle.
+ *
+ * Text for everything the compile pipeline composes; `Uint8Array` exists for
+ * VPP plugin payloads, which may be precompiled objects (`hal.provisioning
+ * === 'prebuilt'`). Routing those through a JS string would corrupt them, and
+ * the corruption would only surface as a link failure on the device.
+ */
+export type RuntimeV4Bundle = Record<string, string | Uint8Array>
+
 /** VPP (Vendor Plugin Package) runtime-v4 packaging.  Boards that
  *  come from an installed `.vpp` package ship a vendor I/O driver
  *  alongside the program — the driver's source files, a generated
@@ -300,7 +331,7 @@ export interface PackageVppPluginResult {
    *  bundle.  Errors that should abort the upload are reported via
    *  `errors[]`; soft skips emit log lines via the `log` callback
    *  and return an empty record without errors. */
-  files: Record<string, string>
+  files: RuntimeV4Bundle
   errors?: StructuredCompileError[]
   /**
    * `package.minRuntimeVersion` from the manifest of the VPP this
@@ -416,7 +447,7 @@ export interface CompilerPlatformPort {
 
 export interface MaterializeRuntimeV4BundleArgs {
   /** Path → file content, as composed by `composeRuntimeV4Bundle`. */
-  bundle: Record<string, string>
+  bundle: RuntimeV4Bundle
 }
 
 export interface MaterializeRuntimeV4BundleResult {

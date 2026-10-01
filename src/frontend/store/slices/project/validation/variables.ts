@@ -1,4 +1,5 @@
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { validateAliasName } from '../../../../../middleware/shared/utils/iec-address/alias-registry'
 import {
   formatAddress,
   parseAddress,
@@ -210,7 +211,14 @@ const addressClassTypeOf = (variableType: PLCVariable['type']): string =>
  *   - A literal `%…` → must match the variable's type's address class.
  */
 const variableLocationValidation = (variableLocation: string, variableType: string) => {
-  if (variableLocation === '' || !variableLocation.startsWith('%')) return true
+  if (variableLocation === '') return true
+  // A non-`%` location is an alias name, and the alias is spliced verbatim into
+  // the declaration as the operand of `AT`. So it has to be a name the compiler
+  // can read: `AT flow sensor` is not a declaration any parser accepts, and
+  // typing one used to leave the variables code view unable to parse the POU it
+  // had just written (DOPE-650). Whether the alias resolves is still a
+  // compile-time question; this only checks that it is a legal identifier.
+  if (!variableLocation.startsWith('%')) return validateAliasName(variableLocation).ok
   switch (variableType.toUpperCase()) {
     case 'BOOL': {
       const boolMatch = BOOL_LOCATION_REGEX.test(variableLocation) && variableLocation.split('.')[1] <= '7'
@@ -239,7 +247,14 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
   }
 }
 
-const variableLocationValidationErrorMessage = (variableType: string) => {
+const variableLocationValidationErrorMessage = (variableType: string, variableLocation = '') => {
+  // An alias that is not a legal identifier is rejected for its own reason, not
+  // for the address class of the variable's type — "Valid locations: %QW0" says
+  // nothing to someone who typed a name with a space in it.
+  if (variableLocation !== '' && !variableLocation.startsWith('%')) {
+    const named = validateAliasName(variableLocation)
+    if (!named.ok) return named.reason
+  }
   switch (variableType.toUpperCase()) {
     case 'BOOL':
       return 'Valid locations: %QX0.0..7, %IX0.0..7, %MX0.0..7 (change the number to the desired location)'
@@ -507,7 +522,7 @@ const updateVariableValidation = (
       response = {
         ok: false,
         title: 'Location is invalid.',
-        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(effectiveAddressClass)}`,
+        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(effectiveAddressClass, location)}`,
       }
       return response
     }
@@ -577,6 +592,118 @@ const updateGlobalVariableValidation = (
   return response
 }
 
+/**
+ * One variable's problem inside a set, with the index that carries it.
+ * `index` is into the array as passed, so a caller holding the scanner's
+ * declarations can map it straight back to a line and a span.
+ */
+export interface VariableSetError {
+  index: number
+  title: string
+  message: string
+}
+
+export type VariableSetValidation = { ok: true } | { ok: false; errors: VariableSetError[] }
+
+/**
+ * Apply every table-mode rule to a whole set of variables at once.
+ *
+ * This exists because the code view used to apply none of them. `commitCode`
+ * parsed the text and handed the result straight to `setPouVariables`, which
+ * is a raw assignment that always answers `ok` — so a declaration the table
+ * refuses one cell at a time (wrong address class for the type, a located
+ * multi-dimensional array, two variables on overlapping addresses, a name the
+ * identifier rule rejects) sailed through the moment it was typed as text
+ * instead of picked in a cell.
+ *
+ * Same rules, one implementation. `updateVariableValidation` above judges a
+ * single edit against the variables around it; this judges every variable
+ * against every other, which is what a whole-text commit actually is. Both
+ * reach the same predicates, so the two views cannot drift apart again.
+ *
+ * Returns every problem rather than the first, so a user who pasted a block of
+ * declarations is told about all of them instead of being walked through them
+ * one save at a time.
+ */
+const validateVariableSet = (variables: PLCVariable[]): VariableSetValidation => {
+  const errors: VariableSetError[] = []
+  const seenNames = new Set<string>()
+
+  variables.forEach((variable, index) => {
+    const fail = (title: string, message: string): void => {
+      errors.push({ index, title, message })
+    }
+
+    // ---- name ----
+    if (variable.name === '') {
+      fail('Variable name is empty.', 'Please make sure that the name is not empty.')
+    } else {
+      const key = variable.name.toLowerCase()
+      if (seenNames.has(key)) {
+        // Same wording `duplicateVariableNameMessage` produces, deliberately:
+        // the user should not be able to tell which of the two views refused.
+        fail(
+          'Variable already exists',
+          `"${variable.name}" is declared more than once. Please make sure that the name is unique.`,
+        )
+      }
+      seenNames.add(key)
+
+      if (!variableNameValidation(variable.name)) {
+        fail(
+          'Variable name is invalid.',
+          'Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.',
+        )
+      }
+    }
+
+    // ---- initial value ----
+    // VAR_EXTERNAL names a global declared elsewhere; the initial value belongs
+    // to that declaration, and IEC does not let the importing POU restate it.
+    if (variable.initialValue && variable.class === 'external') {
+      fail('Initial Value is not allowed.', `Initial Value (":=") is not allowed for variables of class "EXTERNAL".`)
+    }
+
+    // ---- location ----
+    if (!variable.location) return
+
+    // A variable with no class is a global-scope declaration (the resource
+    // globals and a GVL both omit it), and a location is legal there.
+    const variableClass = variable.class
+    if (variableClass && DISALLOWED_LOCATION_CLASSES.includes(variableClass)) {
+      fail(
+        'Location is not allowed.',
+        `Variables of class "${variableClass.toUpperCase()}" cannot have a physical location ("AT"). Use class LOCAL for located variables.`,
+      )
+      return
+    }
+
+    if (hasUnlocatableShape(variable.type)) {
+      fail('Location is not allowed.', UNLOCATABLE_SHAPE_MESSAGE)
+      return
+    }
+
+    const addressClass = addressClassTypeOf(variable.type)
+    if (!variableLocationValidation(variable.location, addressClass)) {
+      fail(
+        'Location is invalid.',
+        `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(addressClass, variable.location)}`,
+      )
+      return
+    }
+
+    // Collision is checked against the variables BEFORE this one only, so a
+    // clashing pair is reported once, on the second of the two — the same
+    // place the table reports it when the user types it.
+    const earlier = variables.slice(0, index)
+    if (checkIfLocationExists(earlier, variable.location, slotsClaimedBy(variable))) {
+      fail('Location already exists', 'Please make sure that the location is unique.')
+    }
+  })
+
+  return errors.length === 0 ? { ok: true } : { ok: false, errors }
+}
+
 export {
   arrayValidation,
   checkVariableName,
@@ -584,4 +711,5 @@ export {
   enumeratedValidation,
   updateGlobalVariableValidation,
   updateVariableValidation,
+  validateVariableSet,
 }

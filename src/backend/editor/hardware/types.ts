@@ -16,6 +16,7 @@ const BoardInfoSchema = z.object({
   // compiler should declare a new entry here rather than passing a free string.
   compiler: z.enum(['arduino-cli', 'openplc-compiler', 'simulator']),
   core: z.string(),
+  uploadMethod: z.enum(['serial', 'ethernet']).optional(),
   platform: z.string(),
   source: z.string(),
   preview: z.string(),
@@ -133,6 +134,15 @@ type AvailableBoards = Map<
     specs: Record<string, string>
     // Optional properties
     coreVersion?: string
+    /** Upload transport. "ethernet" for a board programmed over the network
+     *  (the Siemens LOGO! 8.2); absent or "serial" for direct USB.
+     *
+     *  Declared on the VPP device schema above and on `BoardInfo` in
+     *  middleware/shared/ports/types.ts, but missing here — so the two places
+     *  that read it off this map, `#mergeVppBoards` and the CLI's build
+     *  command, failed to type-check. The LOGO! Ethernet upload flow added the
+     *  readers without the field. */
+    uploadMethod?: 'serial' | 'ethernet'
     pins: {
       defaultAin?: string[]
       defaultAout?: string[]

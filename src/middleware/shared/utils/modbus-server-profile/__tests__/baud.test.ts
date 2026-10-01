@@ -142,8 +142,8 @@ describe('readSerialBaudState', () => {
     }
   })
 
-  it('ignores a pre-4.4.0 project entirely', () => {
-    // 4.4.0 does not carry configuration forward: a project from before it
+  it('ignores a pre-4.3.0 project entirely', () => {
+    // 4.3.0 does not carry configuration forward: a project from before it
     // creates its Modbus server again, and nothing here reads the old section.
     const legacy = readSerialBaudState({
       modbus_rtu: { rtu_baud_rate: '9600', rtu_interface: 'Serial2', rtu_rs485_en_pin: '17' },
