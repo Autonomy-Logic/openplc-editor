@@ -1,5 +1,5 @@
 import type { LogObject, PLCDataType, PLCInstance, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import { createTestStore } from '../../store/testing'
 import type { DebugMap, DebugVariableEntry } from '../debug-parser'
 import { packDebugAddr } from '../debug-parser'
 import {
@@ -11,7 +11,7 @@ import {
 } from '../debugger-session'
 
 /** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
-const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
+const SYSTEM_LIBS = createTestStore().getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // Helpers

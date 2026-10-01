@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render as rtlRender, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
 
 // The variables code editor pulls in Monaco, which cannot run in jsdom. The
 // stub is writable so a test can play the user typing into the buffer.
@@ -14,11 +15,16 @@ vi.mock('@root/frontend/components/_features/[app]/toast/use-toast', () => ({
   useToast: () => ({ toast: toastMock }),
 }))
 
-import { useOpenPLCStore } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { generateIecVariablesToString } from '../../../../utils/generate-iec-variables-to-string'
 import { VariablesEditor } from '../index'
 
-const getState = () => useOpenPLCStore.getState()
+let store: OpenPLCStore
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: createStoreWrapper(store) })
+
+const getState = () => store.getState()
 
 const canonicalOf = (pouName: string) => {
   const pou = getState().project.data.pous.find((candidate) => candidate.name === pouName)
@@ -55,7 +61,7 @@ const TYPED_WITH_COMMENT = 'VAR\n  (* what it counts *)\n  Counter : INT;\nEND_V
 describe('VariablesEditor keeps the buffer the user typed after a commit', () => {
   beforeEach(() => {
     toastMock.mockClear()
-    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    store = createTestStore()
   })
 
   it('keeps the typed text instead of replacing it with a serialisation', async () => {

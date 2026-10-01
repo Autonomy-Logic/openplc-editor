@@ -3,7 +3,7 @@ import type * as monaco from 'monaco-editor'
 import type { AICompleteParams, AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
 import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import type { BillingErrorPayload } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { buildFIMContext } from './context-builder'
 import { isImeComposing } from './ime-state'
 
@@ -172,6 +172,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
   private unsubscribeFromSession: (() => void) | null = null
 
   constructor(
+    private readonly store: OpenPLCStore,
     private readonly pouName: string,
     private readonly language: AICompletionLanguage,
     private readonly aiPort: AIPort,
@@ -183,7 +184,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
         this.releaseSignedOutHold()
       }) ?? null
     // Variable, data type or POU changes make cached completions stale.
-    this.unsubscribeFromStore = openPLCStoreBase.subscribe(
+    this.unsubscribeFromStore = this.store.subscribe(
       (state) => {
         const pou = state.project.data.pous.find((p) => p.name === pouName)
         return [
@@ -202,7 +203,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       },
     )
 
-    this.unsubscribeFromPreferences = openPLCStoreBase.subscribe(
+    this.unsubscribeFromPreferences = this.store.subscribe(
       (state) => state.ai.preferences.inlineCompletionsEnabled,
       (enabled) => {
         if (!enabled) {
@@ -222,7 +223,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
   ): Promise<monaco.languages.InlineCompletions> {
     const emptyResult = { items: [] }
 
-    const aiState = openPLCStoreBase.getState().ai
+    const aiState = this.store.getState().ai
     if (!aiState.isEnabled) return emptyResult
     if (!aiState.preferences.inlineCompletionsEnabled) return emptyResult
 
@@ -283,7 +284,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
       this.activeAbortController?.abort()
     })
 
-    const fimContext = buildFIMContext(model, position, this.pouName, this.language)
+    const fimContext = buildFIMContext(this.store, model, position, this.pouName, this.language)
 
     const timer = startTimer()
     let _timedOut = false
@@ -381,7 +382,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
 
       // Completions fail silently, but a 402 must still reach the slice for the exhaustion modal.
       if (statusCode === 402 && billing) {
-        openPLCStoreBase.getState().aiActions.setBillingError(billing)
+        this.store.getState().aiActions.setBillingError(billing)
       }
 
       if (statusCode === 401 || statusCode === 403) {

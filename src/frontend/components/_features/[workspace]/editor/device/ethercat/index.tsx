@@ -4,7 +4,8 @@ import { matchDevicesToRepository } from '@root/backend/shared/ethercat/device-m
 import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore, RootState } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
 import { cn } from '@root/frontend/utils/cn'
 import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
@@ -41,12 +42,11 @@ type EditorTab = 'scan-bus' | 'repository' | 'advanced'
  * this file; lifting to a util buys nothing.
  */
 function buildClaimedAddressSet(
-  remoteDevices: ReturnType<typeof useOpenPLCStore.getState>['project']['data']['remoteDevices'],
-  vendorScreenData: ReturnType<
-    typeof useOpenPLCStore.getState
-  >['deviceDefinitions']['configuration']['vendorScreenData'],
+  store: OpenPLCStore,
+  remoteDevices: RootState['project']['data']['remoteDevices'],
+  vendorScreenData: RootState['deviceDefinitions']['configuration']['vendorScreenData'],
 ): Set<string> {
-  const state = useOpenPLCStore.getState()
+  const state = store.getState()
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
   const ioMapping =
     (
@@ -106,6 +106,7 @@ const TabItem = ({
  * EtherCATDeviceEditor, opened from the project tree.
  */
 const EtherCATEditor = () => {
+  const store = useOpenPLCStoreApi()
   const {
     editor,
     runtimeConnection,
@@ -421,11 +422,11 @@ const EtherCATEditor = () => {
     const newDevices: ConfiguredEtherCATDevice[] = []
     const unmatched: ScannedDeviceMatch['device'][] = []
     const existingPositions = new Set(configuredDevices.map((d) => d.position))
-    const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
+    const usedAddresses = buildClaimedAddressSet(store, project.data.remoteDevices, vendorScreenData)
     // Every element name in the project, plus the batch so it cannot collide with itself.
     const batch = new Set<string>()
     const nameTaken = (name: string) =>
-      batch.has(name) || elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null
+      batch.has(name) || elementNameCollision(store.getState(), name, 'ethercat-slave') !== null
 
     for (const position of selectedScannedDevices) {
       // Skip devices already configured at this position
@@ -499,6 +500,7 @@ const EtherCATEditor = () => {
       setUnmatchedAddAttempt(unmatched)
     }
   }, [
+    store,
     selectedScannedDevices,
     deviceMatches,
     repository,
@@ -521,7 +523,7 @@ const EtherCATEditor = () => {
       let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
       const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
       if (result.success && result.device) {
-        const usedAddresses = buildClaimedAddressSet(project.data.remoteDevices, vendorScreenData)
+        const usedAddresses = buildClaimedAddressSet(store, project.data.remoteDevices, vendorScreenData)
         enriched = enrichDeviceData(result.device, usedAddresses)
       }
 
@@ -534,7 +536,7 @@ const EtherCATEditor = () => {
       const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
       const uniqueName = generateUniqueSlaveName(
         baseName,
-        (name) => elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null,
+        (name) => elementNameCollision(store.getState(), name, 'ethercat-slave') !== null,
       )
 
       const newDevice: ConfiguredEtherCATDevice = {
@@ -554,10 +556,10 @@ const EtherCATEditor = () => {
       syncDevicesToStore([...configuredDevices, newDevice])
 
       // Register file entry for the new slave so Ctrl+S and dirty tracking work
-      const { fileActions } = useOpenPLCStore.getState()
+      const { fileActions } = store.getState()
       fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
     },
-    [configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices, vendorScreenData, esi],
+    [store, configuredDevices, syncDevicesToStore, deviceName, project.data.remoteDevices, vendorScreenData, esi],
   )
 
   const handleRemoveDevice = useCallback(
@@ -567,7 +569,7 @@ const EtherCATEditor = () => {
         // Remove cached editor model to avoid stale deviceId on re-add
         editorActions.removeModel(device.name)
         // Close the device tab only if it's open (without switching away from current tab)
-        const { tabs, tabsActions } = useOpenPLCStore.getState()
+        const { tabs, tabsActions } = store.getState()
         const hasTab = tabs.some((t) => t.name === device.name)
         if (hasTab) {
           tabsActions.removeTab(device.name)
@@ -575,7 +577,7 @@ const EtherCATEditor = () => {
       }
       syncDevicesToStore(configuredDevices.filter((d) => d.id !== deviceId))
     },
-    [configuredDevices, syncDevicesToStore, sharedWorkspaceActions, editorActions],
+    [store, configuredDevices, syncDevicesToStore, sharedWorkspaceActions, editorActions],
   )
 
   return (

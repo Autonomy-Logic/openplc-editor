@@ -1,8 +1,8 @@
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { OrchestratorInfo } from '@root/middleware/shared/ports/orchestrator-port'
 import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
-import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
@@ -44,6 +44,8 @@ const ORCHESTRATOR: OrchestratorInfo = {
   ],
 }
 
+let store: OpenPLCStore
+
 function renderPicker(listOrchestrators = () => Promise.resolve([ORCHESTRATOR])) {
   const ports: PlatformPorts = {
     compiler: stubPort(),
@@ -62,11 +64,7 @@ function renderPicker(listOrchestrators = () => Promise.resolve([ORCHESTRATOR]))
     library: stubPort(),
     capabilities: WEB_CAPABILITIES,
   }
-  render(
-    <PlatformProvider ports={ports}>
-      <OrchestratorsList />
-    </PlatformProvider>,
-  )
+  render(<OrchestratorsList />, { wrapper: createStoreWrapper(store, ports) })
 }
 
 /** Expand the orchestrator, then click the row carrying `deviceName`. */
@@ -77,18 +75,17 @@ async function selectDevice(deviceName: string) {
 
 async function connect() {
   fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
-  await waitFor(() => expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).not.toBeNull())
-  return openPLCStoreBase.getState().runtimeConnection.selectedDevice
+  await waitFor(() => expect(store.getState().runtimeConnection.selectedDevice).not.toBeNull())
+  return store.getState().runtimeConnection.selectedDevice
 }
 
 describe('OrchestratorsList', () => {
   beforeEach(() => {
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
+    store = createTestStore()
   })
 
   afterEach(() => {
     cleanup()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
   })
 
   it('carries backplaneAccess=true into the selected device', async () => {
@@ -125,14 +122,14 @@ describe('OrchestratorsList', () => {
     renderPicker(() => Promise.resolve([current]))
     await selectDevice(backplaneAccess === true ? 'Line B' : 'Line A')
     await connect()
-    act(() => openPLCStoreBase.getState().deviceActions.setRuntimeConnectionStatus('connected'))
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('connected'))
     current = { ...ORCHESTRATOR, devices: ORCHESTRATOR.devices.map((device) => ({ ...device, backplaneAccess })) }
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
     await waitFor(() =>
-      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess),
+      expect(store.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess),
     )
     if (backplaneAccess === undefined) {
-      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).not.toHaveProperty('backplaneAccess')
+      expect(store.getState().runtimeConnection.selectedDevice).not.toHaveProperty('backplaneAccess')
     }
   })
 
@@ -146,16 +143,14 @@ describe('OrchestratorsList', () => {
     renderPicker()
     await selectDevice('Line A')
     await connect()
-    act(() => openPLCStoreBase.getState().deviceActions.setRuntimeConnectionStatus('connected'))
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('connected'))
 
     // Switching device while connected to a different one opens the confirm modal.
     fireEvent.click(await screen.findByText('Line B'))
     fireEvent.click(await screen.findByRole('button', { name: 'Disconnect and Switch' }))
 
-    await waitFor(() =>
-      expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice?.deviceId).toBe('dev-plain'),
-    )
-    expect(openPLCStoreBase.getState().runtimeConnection.selectedDevice).toMatchObject({
+    await waitFor(() => expect(store.getState().runtimeConnection.selectedDevice?.deviceId).toBe('dev-plain'))
+    expect(store.getState().runtimeConnection.selectedDevice).toMatchObject({
       deviceId: 'dev-plain',
       backplaneAccess: false,
       vpp: { packageId: 'com.vendor.b', version: '2.0.0', contentHash: 'sha256:bbb' },

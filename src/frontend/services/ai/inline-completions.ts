@@ -2,16 +2,18 @@ import type * as monaco from 'monaco-editor'
 
 import type { AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
 import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
+import type { OpenPLCStore } from '../../store'
 import { setImeComposing } from './ime-state'
 import { AIInlineCompletionProvider } from './inline-completion-provider'
 
 let didWarmCache = false
+let didWireImeListeners = false
 
 /** Test seam: resets the once-per-session latches. */
 export function __resetInlineCompletionsForTests(): void {
   didWarmCache = false
+  didWireImeListeners = false
 }
-let didWireImeListeners = false
 
 /** Existing and future Monaco editors both, once per session. */
 function wireImeCompositionListeners(m: typeof monaco): void {
@@ -29,6 +31,7 @@ function wireImeCompositionListeners(m: typeof monaco): void {
 
 /** Dispose when the POU or the language changes. */
 export function registerAIInlineCompletions(
+  store: OpenPLCStore,
   ai: AIPort,
   params: {
     monacoInstance: typeof monaco
@@ -45,7 +48,7 @@ export function registerAIInlineCompletions(
 
   wireImeCompositionListeners(params.monacoInstance)
 
-  const provider = new AIInlineCompletionProvider(params.pouName, params.language, ai, params.session)
+  const provider = new AIInlineCompletionProvider(store, params.pouName, params.language, ai, params.session)
   const disposable = params.monacoInstance.languages.registerInlineCompletionsProvider(params.language, provider)
 
   return {

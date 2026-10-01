@@ -16,8 +16,8 @@ function persistPreferences(prefs: AIPreferences): void {
 }
 
 export const AISettingsPopover = () => {
-  const preferences = useOpenPLCStore.useAi().preferences
-  const { setPreference } = useOpenPLCStore.useAiActions()
+  const preferences = useOpenPLCStore((s) => s.ai).preferences
+  const { setPreference } = useOpenPLCStore((s) => s.aiActions)
 
   const handleInlineToggle = (enabled: boolean) => {
     setPreference('inlineCompletionsEnabled', enabled)

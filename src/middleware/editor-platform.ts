@@ -3,6 +3,7 @@
  */
 
 import { APP_VERSION } from '../frontend/data/constants/app-version'
+import type { OpenPLCStore } from '../frontend/store'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorAIAdapter } from './adapters/editor/ai-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
@@ -43,17 +44,6 @@ export function setProjectPath(path: string): void {
   _projectPath = path
 }
 
-/**
- * Editor platform ports — all port interfaces wired to Electron IPC bridge.
- */
-const editorProject = createEditorProjectAdapter()
-const editorRuntime = createEditorRuntimeAdapter(() => _runtimeIpAddress)
-
-/**
- * Composed here because it needs both the project and runtime ports in scope; see `open-fetched-project.ts`.
- */
-editorRuntime.openFetchedProject = (project) => openFetchedProject(project, editorProject)
-
 const editorPackages = createEditorPackageAdapter()
 
 /**
@@ -64,37 +54,47 @@ const editorPackages = createEditorPackageAdapter()
  */
 export const packageUpdateNotifier = createPackageUpdateNotifier(editorPackages, APP_VERSION)
 
-export const editorPorts: PlatformPorts = {
-  compiler: createEditorCompilerAdapter({
-    findPackageUpdateNotice: (packageId) => packageUpdateNotifier.notice(packageId),
-  }),
-  runtime: editorRuntime,
-  debugger: createEditorDebuggerAdapter(),
-  simulator: createEditorSimulatorAdapter(),
-  project: editorProject,
-  device: createEditorDeviceAdapter(),
-  orchestrator: createEditorOrchestratorAdapter(),
-  system: createEditorSystemAdapter(),
-  window: createEditorWindowAdapter(),
-  accelerator: createEditorAcceleratorAdapter(),
-  theme: createEditorThemeAdapter(),
-  packages: editorPackages,
-  esi: createEditorEsiAdapter(() => _projectPath),
-  versionControl: createEditorVersionControlAdapter(),
-  navigation: createEditorNavigationAdapter(),
-  library: createEditorLibraryAdapter(),
-  stlibSource: createEditorStlibSourceAdapter(),
-  // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
-  edgeAccount: editorEdgeAccountPort,
-  editSession: editorEditSessionPort,
-  // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
-  ai: createEditorAIAdapter({
-    // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.
-    isFeatureEnabled: true,
-    hasUserConsented: hasAiConsent(),
-    inlineCompletionsEnabled: readInlineCompletionsPreference(),
-  }),
-  capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
+/**
+ * Editor platform ports — all port interfaces wired to Electron IPC bridge.
+ */
+export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
+  const editorProject = createEditorProjectAdapter()
+  const editorRuntime = createEditorRuntimeAdapter(store, () => _runtimeIpAddress)
+  // Composed here because it needs both the project and runtime ports in scope; see `open-fetched-project.ts`.
+  editorRuntime.openFetchedProject = (project) => openFetchedProject(store, project, editorProject)
+
+  return {
+    compiler: createEditorCompilerAdapter({
+      findPackageUpdateNotice: (packageId) => packageUpdateNotifier.notice(packageId),
+    }),
+    runtime: editorRuntime,
+    debugger: createEditorDebuggerAdapter(),
+    simulator: createEditorSimulatorAdapter(),
+    project: editorProject,
+    device: createEditorDeviceAdapter(),
+    orchestrator: createEditorOrchestratorAdapter(),
+    system: createEditorSystemAdapter(),
+    window: createEditorWindowAdapter(),
+    accelerator: createEditorAcceleratorAdapter(),
+    theme: createEditorThemeAdapter(),
+    packages: editorPackages,
+    esi: createEditorEsiAdapter(() => _projectPath),
+    versionControl: createEditorVersionControlAdapter(),
+    navigation: createEditorNavigationAdapter(store),
+    library: createEditorLibraryAdapter(),
+    stlibSource: createEditorStlibSourceAdapter(),
+    // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
+    edgeAccount: editorEdgeAccountPort,
+    editSession: editorEditSessionPort,
+    // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
+    ai: createEditorAIAdapter({
+      // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.
+      isFeatureEnabled: true,
+      hasUserConsented: hasAiConsent(),
+      inlineCompletionsEnabled: readInlineCompletionsPreference(),
+    }),
+    capabilities: { ...EDITOR_CAPABILITIES, isDevMode: process.env.NODE_ENV === 'development' },
+  }
 }
 
 // Same localStorage key the shared consent modal writes; unreadable reads as "not accepted".

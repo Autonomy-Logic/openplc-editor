@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from '@jest/globals'
 import type * as monaco from 'monaco-editor'
 
 import type { AIPort } from '../../../../middleware/shared/ports/ai-port'
+import { createTestStore } from '../../../store/testing'
 import { isImeComposing, setImeComposing } from '../ime-state'
 import { __resetInlineCompletionsForTests, registerAIInlineCompletions } from '../inline-completions'
 
@@ -69,7 +70,7 @@ describe('registerAIInlineCompletions', () => {
       },
     } as unknown as typeof monaco
 
-    const registration = registerAIInlineCompletions(port, {
+    const registration = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       pouName: 'Main',
       language: 'st',
@@ -95,7 +96,7 @@ describe('registerAIInlineCompletions', () => {
     expect(registrationDisposed).toBe(1)
 
     // Second registration: neither latch fires again.
-    const second = registerAIInlineCompletions(port, {
+    const second = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       pouName: 'Other',
       language: 'st',
@@ -114,7 +115,7 @@ describe('registerAIInlineCompletions', () => {
       editor: { getEditors: () => [], onDidCreateEditor: () => undefined },
     } as unknown as typeof monaco
 
-    const registration = registerAIInlineCompletions(port, {
+    const registration = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       pouName: 'Main',
       language: 'st',

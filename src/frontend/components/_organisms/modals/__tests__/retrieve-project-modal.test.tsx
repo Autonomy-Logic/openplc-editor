@@ -7,13 +7,29 @@
  * gets in the way. All three of those shipped broken at least once, and none of
  * them were pinned by anything.
  *
- * Rendered against a mocked runtime port and store rather than a device: what
+ * Rendered against a stubbed runtime port and a real store rather than a device: what
  * needs proving is the decision, and a device adds nothing to it.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-import type { FetchedProject, RetrievableDevice } from '@root/middleware/shared/ports'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import { getMemoryState } from '@root/frontend/utils/toast'
+import type { FetchedProject, RetrievableDevice, RuntimePort } from '@root/middleware/shared/ports'
+import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
+
+import { RetrieveProjectModal } from '../retrieve-project-modal'
+
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
 
 const listRetrievableDevices = vi.fn()
 const fetchRetrievableProject = vi.fn()
@@ -36,7 +52,7 @@ const FETCHED: FetchedProject = { projectName: 'Irrigation Controller', payload:
 // One stable object, not a fresh literal per call: the picker's scan effect
 // lists the port in its dependencies, so a new identity on every render would
 // restart the scan on every render.
-const runtimePort = {
+const runtimePort = stubPort<RuntimePort>({
   listRetrievableDevices,
   fetchRetrievableProject,
   openFetchedProject,
@@ -44,40 +60,54 @@ const runtimePort = {
   installRetrievedLibraries,
   login,
   connectedRetrievableDeviceKey: () => 'dev-1',
-}
-
-vi.mock('@root/middleware/shared/providers', () => ({ useRuntime: () => runtimePort }))
-
-/** Spies for everything the picker can do to the workspace. */
-let hasUnsavedChanges: ReturnType<typeof vi.fn>
-let openModal: ReturnType<typeof vi.fn>
-let onOpenChange: ReturnType<typeof vi.fn>
-let closeProjectSpy: ReturnType<typeof vi.fn>
-
-// Mocked through the @root alias, not a relative path: Jest resolves a mock
-// path relative to its setup file, so a relative one works under Vitest and
-// fails here. The alias resolves to the same module in both runners, which is
-// what keeps this file identical across the two apps.
-vi.mock('@root/frontend/store', () => {
-  const state = () => ({
-    modals: { 'retrieve-project': { open: true, data: null } },
-    modalActions: { openModal, onOpenChange },
-    sharedWorkspaceActions: { hasUnsavedChanges, closeProject: closeProjectSpy },
-  })
-  const useOpenPLCStore = (selector?: (s: unknown) => unknown) => (selector ? selector(state()) : state())
-  useOpenPLCStore.getState = state
-  return { useOpenPLCStore }
 })
 
-import { getMemoryState } from '@root/frontend/utils/toast'
+const ports: PlatformPorts = {
+  compiler: stubPort(),
+  runtime: runtimePort,
+  debugger: stubPort(),
+  simulator: stubPort(),
+  project: stubPort(),
+  device: stubPort(),
+  orchestrator: stubPort(),
+  system: stubPort(),
+  window: stubPort(),
+  accelerator: stubPort(),
+  theme: stubPort(),
+  versionControl: stubPort(),
+  navigation: stubPort(),
+  library: stubPort(),
+  capabilities: EDITOR_CAPABILITIES,
+}
 
-import { RetrieveProjectModal } from '../retrieve-project-modal'
+/** Spies for everything the picker can do to the workspace. */
+let hasUnsavedChanges = vi.fn()
+let openModal = vi.fn()
+let closeProjectSpy = vi.fn()
+
+/** Store state is frozen by Immer, so the spies are swapped in rather than installed with `spyOn`. */
+function installSpies(target: OpenPLCStore) {
+  const { modalActions, sharedWorkspaceActions } = target.getState()
+  hasUnsavedChanges = vi.fn().mockReturnValue(false)
+  openModal = vi.fn()
+  closeProjectSpy = vi.fn(() => sharedWorkspaceActions.closeProject())
+  target.setState({
+    modalActions: { ...modalActions, openModal },
+    sharedWorkspaceActions: {
+      ...sharedWorkspaceActions,
+      hasUnsavedChanges: () => hasUnsavedChanges(),
+      closeProject: closeProjectSpy,
+    },
+  })
+}
+
+let store: OpenPLCStore
 
 const toastTitles = () => getMemoryState().toasts.map((t) => t.title)
 
 /** Pick the device and press Continue — the point every scenario starts from. */
 async function continueWithDevice() {
-  render(<RetrieveProjectModal />)
+  render(<RetrieveProjectModal />, { wrapper: createStoreWrapper(store, ports) })
   await waitFor(() => expect(screen.getByText('Irrigation Controller')).toBeTruthy())
   fireEvent.click(screen.getByText('Irrigation Controller'))
   fireEvent.click(screen.getByText('Continue'))
@@ -88,10 +118,9 @@ beforeEach(() => {
   // from one test into the next -- and "was this opened?" is the assertion most
   // of these make.
   vi.clearAllMocks()
-  hasUnsavedChanges = vi.fn().mockReturnValue(false)
-  openModal = vi.fn()
-  onOpenChange = vi.fn()
-  closeProjectSpy = vi.fn()
+  store = createTestStore()
+  store.getState().modalActions.openModal('retrieve-project', null)
+  installSpies(store)
   listRetrievableDevices.mockResolvedValue({ success: true, devices: [DEVICE] })
   fetchRetrievableProject.mockResolvedValue({ success: true, project: FETCHED })
   openFetchedProject.mockResolvedValue({ success: true })
@@ -153,7 +182,7 @@ describe('a project with nothing unsaved', () => {
 
 describe('a project with unsaved changes', () => {
   beforeEach(() => {
-    hasUnsavedChanges = vi.fn().mockReturnValue(true)
+    hasUnsavedChanges.mockReturnValue(true)
   })
 
   it('asks about the unsaved work under its own context, after fetching', async () => {

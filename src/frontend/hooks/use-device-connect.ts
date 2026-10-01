@@ -19,7 +19,7 @@ import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpo
 import { useCallback } from 'react'
 
 import { resolveDeviceLinkWithUx } from '../services/device-link-resolution'
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { requestDeviceFlash } from '../utils/device-connect-events'
 import { explainLicenseOutcome } from '../utils/license-outcome-dialog'
 import { useDeviceLicense } from './use-device-license'
@@ -37,6 +37,7 @@ export interface UseDeviceConnectResult {
 }
 
 export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceConnectResult {
+  const store = useOpenPLCStoreApi()
   const device = useDevice()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const setDeviceConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setDeviceConnectionStatus)
@@ -45,13 +46,13 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const licensing = useDeviceLicense(boardInfo)
 
   const connect = useCallback(async (): Promise<void> => {
-    const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
+    const deviceBoard = store.getState().deviceDefinitions.configuration.deviceBoard
 
     // FIRST PASS: everything that needs nothing from the user — serial, then
     // Modbus TCP on a static address. `deferPrompts` means a DHCP channel is set
     // aside rather than interrupting with an address dialog, because with a cable
     // attached the user should never be asked for one.
-    const silent = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, { deferPrompts: true })
+    const silent = await resolveDeviceLinkWithUx(store, deviceBoard, boardInfo, { deferPrompts: true })
     if (!silent) return
     if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return
 
@@ -74,7 +75,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       // only the deferred channels surfaces the address dialog, and a cancel here
       // ends the attempt rather than looping.
       if (result.status !== 'connected-with-firmware' && silent.awaitingInput.length > 0) {
-        const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, {
+        const prompted = await resolveDeviceLinkWithUx(store, deviceBoard, boardInfo, {
           onlyChannels: silent.awaitingInput,
         })
         if (prompted && prompted.candidates.length > 0) {
@@ -163,14 +164,11 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       // 'connected', but that push and this invoke's reply travel separate IPC
       // channels with no ordering guarantee between them, so settling here as well
       // would risk a visible flicker for no reason.
-      if (
-        result.status !== 'connected-with-firmware' &&
-        useOpenPLCStore.getState().deviceConnection.status === 'connecting'
-      ) {
+      if (result.status !== 'connected-with-firmware' && store.getState().deviceConnection.status === 'connecting') {
         setDeviceConnectionStatus('disconnected', null)
       }
     }
-  }, [boardInfo, device, licensing, openModal, setDeviceConnectionStatus])
+  }, [store, boardInfo, device, licensing, openModal, setDeviceConnectionStatus])
 
   const disconnect = useCallback(async (): Promise<void> => {
     await device.disconnect()
