@@ -14,7 +14,7 @@ export function __resetInlineCompletionsForTests(): void {
 let didWireImeListeners = false
 
 /** Existing and future Monaco editors both, once per session. */
-function wireImeCompositionListeners(m: typeof monaco): void {
+function wireImeCompositionListeners(m: InlineCompletionsMonaco): void {
   if (didWireImeListeners) return
   didWireImeListeners = true
 
@@ -27,11 +27,19 @@ function wireImeCompositionListeners(m: typeof monaco): void {
   m.editor.onDidCreateEditor(attach)
 }
 
+export type InlineCompletionsMonaco = {
+  languages: Pick<typeof monaco.languages, 'registerInlineCompletionsProvider'>
+  editor: Pick<typeof monaco.editor, 'getEditors' | 'onDidCreateEditor'>
+}
+
+export type InlineCompletionsModelUri = Pick<monaco.Uri, 'scheme' | 'fsPath' | 'toString'>
+
 /** Dispose when the POU or the language changes. */
 export function registerAIInlineCompletions(
   ai: AIPort,
   params: {
-    monacoInstance: typeof monaco
+    monacoInstance: InlineCompletionsMonaco
+    modelUri: InlineCompletionsModelUri
     pouName: string
     language: AICompletionLanguage
     session?: EdgeSessionState
@@ -45,8 +53,20 @@ export function registerAIInlineCompletions(
 
   wireImeCompositionListeners(params.monacoInstance)
 
-  const provider = new AIInlineCompletionProvider(params.pouName, params.language, ai, params.session)
-  const disposable = params.monacoInstance.languages.registerInlineCompletionsProvider(params.language, provider)
+  const provider = new AIInlineCompletionProvider(
+    params.pouName,
+    params.language,
+    ai,
+    params.session,
+    params.modelUri.toString(),
+  )
+  // Scoped to this editor's model: a language-only selector would answer for every open POU of that language.
+  const selector: monaco.languages.LanguageFilter = {
+    language: params.language,
+    scheme: params.modelUri.scheme,
+    pattern: params.modelUri.fsPath,
+  }
+  const disposable = params.monacoInstance.languages.registerInlineCompletionsProvider(selector, provider)
 
   return {
     dispose() {
