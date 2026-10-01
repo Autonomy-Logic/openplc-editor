@@ -416,6 +416,12 @@ const ExportPdfModal = () => {
   const isOpen = modals['export-pdf']?.open || false
   const [step, setStep] = useState<Step>('select')
   const [renderState, setRenderState] = useState<RenderState>({ status: 'idle' })
+  // Guards against starting a second render. Deliberately a ref: the effect
+  // must not gate on `renderState.status`, because setting it to 'loading'
+  // re-runs the effect and its cleanup would flip `cancelled` before the
+  // (tens-to-hundreds of ms) render resolves — silently discarding the
+  // rendered bytes and leaving the wizard stuck on "Rendering preview…".
+  const renderStartedRef = useRef(false)
 
   const projectCaps = projectCapabilities({ type: project.meta.type })
   // SFC has no PrintPou renderer in backend/shared/print (never in scope for
@@ -449,7 +455,8 @@ const ExportPdfModal = () => {
   }, [])
 
   useEffect(() => {
-    if (step !== 'preview' || renderState.status !== 'idle') return
+    if (step !== 'preview' || renderStartedRef.current) return
+    renderStartedRef.current = true
     setRenderState({ status: 'loading' })
     let cancelled = false
     void renderPrintPdf(projectPort).then((result) => {
@@ -459,7 +466,7 @@ const ExportPdfModal = () => {
     return () => {
       cancelled = true
     }
-  }, [step, renderState, projectPort])
+  }, [step, projectPort])
 
   useEffect(() => {
     if (step !== 'exporting' || renderState.status !== 'ready') return
@@ -478,7 +485,10 @@ const ExportPdfModal = () => {
   }, [step, renderState, projectPort, close])
 
   const handleBack = () => {
-    if (step === 'preview') setRenderState({ status: 'idle' })
+    if (step === 'preview') {
+      renderStartedRef.current = false
+      setRenderState({ status: 'idle' })
+    }
     setStep(step === 'options' ? 'select' : 'options')
   }
 
