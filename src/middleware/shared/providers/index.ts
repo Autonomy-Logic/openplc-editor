@@ -3,6 +3,7 @@ export { PlatformProvider, usePlatform } from './platform-context'
 export {
   useAccelerator,
   useAI,
+  useAppUpdate,
   useCapabilities,
   useCompiler,
   useDebugger,

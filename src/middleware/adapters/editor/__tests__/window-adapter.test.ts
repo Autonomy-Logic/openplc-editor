@@ -136,6 +136,23 @@ describe('onQuitRequested', () => {
     expect(cb).toHaveBeenCalledTimes(1)
   })
 
+  it('passes on the intent main sent, so an install skips the quit confirmation', () => {
+    const cb = jest.fn()
+    implemented(adapter.onQuitRequested, 'onQuitRequested')(cb)
+
+    fire('quitRequested', {}, { intent: 'install-update' })
+    fire('quitRequested', {}, { intent: 'quit' })
+    fire('quitRequested', {}, { intent: 'something-else' })
+    fire('quitRequested', {})
+
+    expect(cb.mock.calls).toEqual([
+      [{ intent: 'install-update' }],
+      [{ intent: 'quit' }],
+      [{ intent: 'quit' }],
+      [{ intent: 'quit' }],
+    ])
+  })
+
   it('returns an unsubscribe function that removes the bridge listener', () => {
     const cb = jest.fn()
     const unsub = implemented(adapter.onQuitRequested, 'onQuitRequested')(cb)

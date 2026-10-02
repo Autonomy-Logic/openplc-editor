@@ -437,3 +437,76 @@ describe('quit coordinator on Windows and Linux', () => {
     expect(quitApp).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * "Restart now" or the status bar's "Update" goes through the same prompt as any quit
+ * (DOPE-486). The renderer never reports a dismissed prompt, so the intent has
+ * to belong to one request: a cancelled restart must not turn the next plain
+ * quit into an install.
+ */
+describe.each(['darwin', 'win32', 'linux'] as const)('quit intent on %s', (platform) => {
+  it('an install request prompts first and installs only once confirmed', () => {
+    const coordinator = setup(platform)
+
+    coordinator.requestQuit('install-update')
+    expect(promptsSent()).toBe(1)
+    expect(quitApp).not.toHaveBeenCalled()
+
+    coordinator.confirmQuit()
+    expect(quitApp).toHaveBeenCalledWith('install-update')
+  })
+
+  it('tells the renderer which kind of quit it is confirming', () => {
+    const coordinator = setup(platform)
+
+    coordinator.requestQuit('install-update')
+    coordinator.requestQuit()
+
+    const prompts = currentWindow().webContents.send.mock.calls.filter(([channel]) => channel === QUIT_PROMPT_CHANNEL)
+    expect(prompts.map(([, request]) => request)).toEqual([{ intent: 'install-update' }, { intent: 'quit' }])
+  })
+
+  it('a plain quit after a dismissed install request only quits', () => {
+    const coordinator = setup(platform)
+
+    coordinator.requestQuit('install-update')
+    // The user cancels the prompt: nothing reaches main. Later, an ordinary quit.
+    coordinator.requestQuit()
+    coordinator.confirmQuit()
+
+    expect(quitApp).toHaveBeenCalledTimes(1)
+    expect(quitApp).toHaveBeenCalledWith('quit')
+  })
+
+  it('an install request with no window left installs straight away', () => {
+    const coordinator = setup(platform)
+    win = null
+
+    coordinator.requestQuit('install-update')
+
+    expect(stopSimulator).toHaveBeenCalled()
+    expect(quitApp).toHaveBeenCalledWith('install-update')
+  })
+})
+
+it('on macOS, a Cmd+Q held for the prompt after a dismissed restart only quits', () => {
+  const coordinator = setup('darwin')
+
+  coordinator.requestQuit('install-update')
+  coordinator.handleBeforeQuit(createEvent())
+  coordinator.confirmQuit()
+
+  expect(quitApp).toHaveBeenCalledWith('quit')
+})
+
+it.each(['darwin', 'win32', 'linux'] as const)(
+  '%s: a confirmed install runs before the window is destroyed, so the last window closing cannot quit first',
+  (platform) => {
+    const coordinator = setup(platform)
+
+    coordinator.requestQuit('install-update')
+    coordinator.confirmQuit()
+
+    expect(quitApp.mock.invocationCallOrder[0]).toBeLessThan(currentWindow().destroy.mock.invocationCallOrder[0])
+  },
+)

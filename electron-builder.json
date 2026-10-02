@@ -4,6 +4,11 @@
   "asar": true,
   "asarUnpack": "**\\*.{node,dll}",
   "generateUpdatesFilesForAllChannels": true,
+  "publish": {
+    "provider": "github",
+    "owner": "Autonomy-Logic",
+    "repo": "openplc-editor"
+  },
   "files": ["dist", "node_modules", "package.json"],
   "afterSign": "scripts/notarize.js",
   "directories": {
@@ -46,7 +51,7 @@
     "entitlements": "assets/entitlements.mac.plist",
     "entitlementsInherit": "assets/entitlements.mac.plist",
     "gatekeeperAssess": false,
-    "artifactName": "${productName}_${version}.${ext}"
+    "artifactName": "OpenPLC-Editor-${version}-${arch}.${ext}"
   },
   "dmg": {
     "artifactName": "${productName}_${version}.${ext}",
@@ -63,7 +68,8 @@
         "type": "link",
         "path": "/Applications"
       }
-    ]
+    ],
+    "writeUpdateInfo": false
   },
   "win": {
     "extraResources": [
@@ -102,6 +108,6 @@
       }
     ],
     "category": "Development",
-    "artifactName": "${productName}-${version}.${ext}"
+    "artifactName": "OpenPLC-Editor.${ext}"
   }
 }

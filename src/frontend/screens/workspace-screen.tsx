@@ -46,6 +46,7 @@ import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { PlcLogs } from '../components/_organisms/plc-logs'
 import { PlcLogsFilters } from '../components/_organisms/plc-logs/filters'
+import { StatusBar } from '../components/_organisms/status-bar'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent } from '../components/_templates/[workspace]/main-content'
@@ -918,8 +919,10 @@ const WorkspaceScreen = () => {
           </ResizablePanelGroup>
         </WorkspaceMainContent>
       </div>
-      {hasVersionControl && projectPath && (
+      {hasVersionControl && projectPath ? (
         <BranchStatusBar projectId={projectPath} onBranchSwitch={handleBranchSwitch} />
+      ) : (
+        <StatusBar />
       )}
 
       {/* Set only on desktop (no router); web navigates to /history in a new tab instead, leaving this null there.
