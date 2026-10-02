@@ -335,6 +335,19 @@ export async function executeSaveProject(
 
   if (refusedForHavingNoLocation(reason)) return { success: false }
 
+  // A partner session can turn the pre-build save off: there every write reaches the partner's save callback. The
+  // flushes above still ran, so the compile sees every edit; only the write (and marking files saved) is skipped.
+  if (reason === 'pre-build' && !state.workspace.autoSaveOnBuild) {
+    if (staleFlows.length > 0) {
+      toast({
+        title: 'Some changes are invalid',
+        description: `The graphical body of ${staleFlows.join(', ')} is invalid. Fix it before building.`,
+        variant: 'fail',
+      })
+    }
+    return { success: staleFlows.length === 0 }
+  }
+
   const { project, pendingDeletions } = state
   const { setEditingState } = state.workspaceActions
   const { setAllToSaved, updateFile } = state.fileActions

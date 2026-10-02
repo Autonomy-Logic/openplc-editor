@@ -59,6 +59,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectLoadingMessage: '',
     // Persist-permission flag (backend write access on the open project)
     canEdit: true,
+    autoSaveOnBuild: true,
     isEphemeralProject: false,
   },
 
@@ -185,6 +186,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.isProjectLoading = false
           workspace.projectLoadingMessage = ''
           workspace.canEdit = true
+          workspace.autoSaveOnBuild = true
         }),
       )
     },
@@ -442,6 +444,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.canEdit = value
+        }),
+      )
+    },
+    setAutoSaveOnBuild: (value: boolean) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.autoSaveOnBuild = value
         }),
       )
     },
