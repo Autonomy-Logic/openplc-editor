@@ -25,6 +25,7 @@ import type { S7CommSlaveConfigLike } from '../../../frontend/utils/s7comm'
 import { generateS7CommHeaderContent } from '../../../frontend/utils/s7comm'
 import { isVersionAtLeast } from '../../../frontend/utils/semver'
 import type {
+  CheckRuntimeVersionResult,
   CompilerPlatformPort,
   PlatformDeviceContext,
   PlatformLog,
@@ -627,10 +628,21 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4a: Runtime v4 branch — compose v4 bundle, run version
-  // check, upload.
+  // Step 4a: Runtime v4 branch — probe runtime version, compose v4
+  // bundle, run version gates, upload.
   // ---------------------------------------------------------------------
   if (isRuntimeV4) {
+    // Probed before the confs: the EtherCAT file format depends on the
+    // runtime version.  Null on a compile-only or deviceless build.
+    let versionCheck: CheckRuntimeVersionResult | null = null
+    if (!compileOnly && deviceContext) {
+      emit({ stage: 'runtime-version', message: 'Checking runtime version...', level: 'info' })
+      versionCheck = await port.checkRuntimeVersion(
+        { context: deviceContext },
+        makePlatformLog(emit, 'runtime-version'),
+      )
+    }
+
     let confs
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
@@ -660,6 +672,7 @@ async function runCompilePipelineInner(
         ),
         debugMapContent: debugMapJson,
         log: (message, level) => emit({ stage: 'confs', message, level }),
+        runtimeVersion: versionCheck?.version ?? null,
       })
     } catch (error) {
       return bailError(
@@ -683,9 +696,10 @@ async function runCompilePipelineInner(
         modbusMaster: confs.modbusMaster,
         s7Comm: confs.s7Comm,
         opcUa: confs.opcUa,
-        // `generateRuntimeConfs` validated EtherCAT before returning;
-        // null here means "no EtherCAT devices" → composer skips.
-        ethercat: confs.ethercat ?? '',
+        // Validated and format-picked by `generateRuntimeConfs`; null skips the file.
+        ethercat: confs.ethercat,
+        ethercatBusconfig: confs.ethercatBusconfig,
+        ethercatIomapping: confs.ethercatIomapping,
       },
     })
     emit({
@@ -766,7 +780,7 @@ async function runCompilePipelineInner(
       return { success: true, md5, uploaded: false }
     }
 
-    if (!deviceContext) {
+    if (!deviceContext || !versionCheck) {
       emit({
         stage: 'upload',
         message: 'Runtime not configured or not logged in. Skipping upload to runtime.',
@@ -776,13 +790,8 @@ async function runCompilePipelineInner(
     }
 
     // Strucpp-compatibility gate: a 4.0.x runtime can't load the
-    // strucpp artefacts.  Probe before uploading so the user gets
+    // strucpp artefacts.  Gate before uploading so the user gets
     // "upgrade your runtime" instead of a cryptic 500.
-    emit({ stage: 'runtime-version', message: 'Checking runtime version...', level: 'info' })
-    const versionCheck = await port.checkRuntimeVersion(
-      { context: deviceContext },
-      makePlatformLog(emit, 'runtime-version'),
-    )
     if (!isStrucppCompatibleRuntime(versionCheck.version)) {
       return bailError(emit, 'runtime-version', describeIncompatibleRuntime(versionCheck.version))
     }
