@@ -873,6 +873,12 @@ function mergeDeviceConfigWithDefaults(
     // every selector falling back to `?? {}` returns a fresh literal that
     // triggers an infinite Zustand re-render loop (blank device screen).
     selectedPlatformOptions: provided.selectedPlatformOptions ?? defaults.selectedPlatformOptions,
+    // Carried through, not dropped. This returns a WHOLE configuration, so a
+    // field left out here is erased on every project open — which is what was
+    // happening to the retain settings: saved to `configuration.json`, gone from
+    // the store the moment the project was reopened.
+    ...(provided.persistentStorage ? { persistentStorage: provided.persistentStorage } : {}),
+    ...(provided.persistentStorageByBoard ? { persistentStorageByBoard: provided.persistentStorageByBoard } : {}),
     // Must merge — otherwise every project load drops the saved pin and
     // board.tsx's drift detection sees a blank slate instead of the real
     // prior pin, so a project with a VPP board always opens as if unpinned.

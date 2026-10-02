@@ -289,23 +289,36 @@ type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
+/**
+ * Every field optional, matching `ModbusBufferMapping`.  A server file
+ * that fails this schema is skipped whole on load, so a partial mapping
+ * must parse; `generateModbusSlaveConfig` defaults each missing count.
+ */
 const ModbusSlaveBufferMappingSchema = z.object({
-  holdingRegisters: z.object({
-    qwCount: z.number(),
-    mwCount: z.number(),
-    mdCount: z.number(),
-    mlCount: z.number(),
-  }),
-  coils: z.object({
-    qxBits: z.number(),
-    mxBits: z.number(),
-  }),
-  discreteInputs: z.object({
-    ixBits: z.number(),
-  }),
-  inputRegisters: z.object({
-    iwCount: z.number(),
-  }),
+  holdingRegisters: z
+    .object({
+      qwCount: z.number().optional(),
+      mwCount: z.number().optional(),
+      mdCount: z.number().optional(),
+      mlCount: z.number().optional(),
+    })
+    .optional(),
+  coils: z
+    .object({
+      qxBits: z.number().optional(),
+      mxBits: z.number().optional(),
+    })
+    .optional(),
+  discreteInputs: z
+    .object({
+      ixBits: z.number().optional(),
+    })
+    .optional(),
+  inputRegisters: z
+    .object({
+      iwCount: z.number().optional(),
+    })
+    .optional(),
 })
 type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
 

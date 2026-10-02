@@ -32,9 +32,9 @@ import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/dra
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
 import { findOccupiedInOutPin } from '../../../../utils/graphical/in-out-pin-rules'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
+import { buildBlockVariant } from '../../../../utils/PLC/block-variant'
 import { CustomFbdNodeTypes, customNodeTypes } from '../../../_atoms/graphical-editor/fbd'
 import { BlockNode } from '../../../_atoms/graphical-editor/fbd/utils/types'
-import { getVariableRestrictionType } from '../../../_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '../../../_atoms/react-flow'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
@@ -428,65 +428,17 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     const { libraries } = useOpenPLCStore.getState()
     let pouLibrary = undefined
     if (library) {
-      const [blockLibraryType, blockLibrary, pouName] = library.split('/')
+      const built = buildBlockVariant({
+        blockRef: library,
+        systemLibraries: libraries.system,
+        userLibraries: libraries.user,
+        pous,
+      })
 
-      if (blockLibraryType === 'system') {
-        const libraryPou = libraries.system
-          .find((Library) => Library.name === blockLibrary)
-          ?.pous.find((p) => p.name === pouName)
-        // Copy the signature, not the library entry. That entry also carries
-        // `body` (the authored source, which for a native C/C++ or Python block
-        // is the entire file) and `language`, and passing the object straight
-        // through froze a copy of the library's source into every project that
-        // placed the block. Nothing ever reads either field back off a placed
-        // variant, and the embedded VAR ... END_VAR broke the POU parser badly
-        // enough that the project would not open (DOPE-592). The user-library
-        // branch below has always built a curated object this way.
-        pouLibrary = libraryPou
-          ? {
-              name: libraryPou.name,
-              type: libraryPou.type,
-              variables: libraryPou.variables,
-              documentation: libraryPou.documentation,
-              extensible: libraryPou.extensible ?? false,
-            }
-          : undefined
-      }
-
-      if (blockLibraryType === 'user') {
-        const library = libraries.user.find((library) => library.name === blockLibrary)
-        const pou = pous.find((pou) => pou.name === library?.name)
-        if (!pou) return
-        const variables = (pou.interface?.variables ?? []).map((variable) => ({
-          id: variable.id,
-          name: variable.name,
-          class: variable.class,
-          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
-        }))
-
-        if (pou.pouType === 'function') {
-          const variable = getVariableRestrictionType(pou.interface?.returnType ?? '')
-          variables.push({
-            id: 'OUT',
-            name: 'OUT',
-            class: 'output',
-            type: {
-              definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
-              value: (pou.interface?.returnType ?? '').toUpperCase(),
-            },
-          })
-        }
-
-        pouLibrary = {
-          name: pou.name,
-          type: pou.pouType,
-          variables: variables,
-          documentation: pou.documentation,
-          extensible: false,
-        }
-      }
-
-      if (!pouLibrary) {
+      // A user block that cannot be resolved has always dropped out silently —
+      // the block is simply not added. Only a system block explains itself.
+      if (!built.ok && built.libraryType === 'user') return
+      if (!built.ok) {
         toast({
           title: 'Can not add block',
           description: `The block type ${library} does not exist in the library`,
@@ -494,6 +446,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         })
         return
       }
+      pouLibrary = built.variant
     }
 
     const newNode = buildGenericNode({

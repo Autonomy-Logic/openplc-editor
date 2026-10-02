@@ -44,6 +44,9 @@ const keywords = [
   'END_CONFIGURATION',
   'RESOURCE',
   'END_RESOURCE',
+  // `RESOURCE Res0 ON PLC` -- the compiler lexes ON as a keyword everywhere, so
+  // an enumeration value named ON emits a `_types.st` that will not parse.
+  'ON',
   'TASK',
   'TYPE',
   'END_TYPE',
@@ -307,7 +310,14 @@ export const builtinFunctions = [
   '__DELETE',
 ]
 
-const protectedWords = [...keywords, ...builtinFunctions]
+/**
+ * Every name an identifier may not take: the language's keywords and the
+ * standard functions. Exported so `openplc-cli keywords` can publish exactly
+ * what `apply` enforces, rather than a second list written down beside it.
+ */
+export const reservedWords: readonly string[] = [...keywords, ...builtinFunctions]
+
+const protectedWords = reservedWords
 
 export function getLiteralType(name: string): string[] | undefined {
   const result = literals.find((x) => x.pattern.test(name))
