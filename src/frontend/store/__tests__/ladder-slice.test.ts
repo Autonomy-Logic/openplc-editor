@@ -643,6 +643,16 @@ describe('createLadderFlowSlice', () => {
     expect(store.getState().ladderFlows[0].updated).toBe(true)
   })
 
+  it('addComment does not mark the flow modified when the comment is unchanged', () => {
+    seedFlowWithRung(store)
+    store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'editor-1', updated: false })
+
+    // The comment box submits on blur, so leaving it untouched re-submits ''.
+    store.getState().ladderFlowActions.addComment({ editorName: 'editor-1', rungId: 'rung-1', comment: '' })
+
+    expect(store.getState().ladderFlows[0].updated).toBe(false)
+  })
+
   it('addComment does nothing for nonexistent rung', () => {
     seedFlowWithRung(store)
 

@@ -215,6 +215,28 @@ describe('gates before any request', () => {
     provider.dispose()
   })
 
+  it('asks for nothing for a model other than its own, even one sharing its path', async () => {
+    const { port, requests } = makePort(yielding('hello'))
+    const provider = new AIInlineCompletionProvider('Main', 'st', port, undefined, 'inmemory://pou/Main.st')
+
+    const result = await provide(provider, makeModel('x := ', 'inmemory://pouvars/Main.st'), makePosition(1, 6))
+
+    expect(result.items).toHaveLength(0)
+    expect(requests).toHaveLength(0)
+    provider.dispose()
+  })
+
+  it('answers for its own model', async () => {
+    const { port, requests } = makePort(yielding('hello'))
+    const provider = new AIInlineCompletionProvider('Main', 'st', port, undefined, 'inmemory://pou/Main.st')
+
+    const result = await provide(provider, makeModel('x := ', 'inmemory://pou/Main.st'), makePosition(1, 6))
+
+    expect(result.items).toHaveLength(1)
+    expect(requests).toHaveLength(1)
+    provider.dispose()
+  })
+
   it('asks for nothing in a completely empty editor', async () => {
     const { port, requests } = makePort(yielding('hello'))
     const provider = new AIInlineCompletionProvider('Main', 'st', port)

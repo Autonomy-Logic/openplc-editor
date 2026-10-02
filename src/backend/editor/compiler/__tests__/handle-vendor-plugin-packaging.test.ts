@@ -223,6 +223,44 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
     expect(copied).toBe('OBJECT-BYTES')
   })
 
+  it('produces the same bundle whether or not a prebuilt pluginEntry has a trailing slash', async () => {
+    await runFor({
+      type: 'runtime-v4-plugin',
+      pluginType: 'native',
+      provisioning: 'prebuilt',
+      pluginEntry: 'hal/runtime-v4/plugin',
+      configTemplate: 'hal/runtime-v4/plugin/config_template.json',
+    })
+    const checksumNoSlash = readFileSync(join(targetDir, 'vpp_plugin', 'checksum.sha256'), 'utf-8')
+
+    await runFor({
+      type: 'runtime-v4-plugin',
+      pluginType: 'native',
+      provisioning: 'prebuilt',
+      pluginEntry: 'hal/runtime-v4/plugin/',
+      configTemplate: 'hal/runtime-v4/plugin/config_template.json',
+    })
+    const checksumWithSlash = readFileSync(join(targetDir, 'vpp_plugin', 'checksum.sha256'), 'utf-8')
+
+    expect(checksumWithSlash).toBe(checksumNoSlash)
+  })
+
+  it('fails closed when the VPP builder reports a fatal packaging error', async () => {
+    // configTemplate never written to pkgDir: buildVppPluginFiles reports "config
+    // template not found", which must abort the build, not just log and continue.
+    await expect(
+      runFor({
+        type: 'runtime-v4-plugin',
+        pluginType: 'native',
+        provisioning: 'prebuilt',
+        pluginEntry: 'hal/runtime-v4/plugin',
+        configTemplate: 'hal/runtime-v4/plugin/missing_config_template.json',
+      }),
+    ).rejects.toThrow(/VPP config template not found in package/)
+
+    expect(existsSync(join(targetDir, 'vpp_plugin'))).toBe(false)
+  })
+
   // ---------------------------------------------------------------------
   // Trusted-keys branch — licensable VPPs get a generated trusted_keys.c
   // in the plugin link set; a licensable package without a usable

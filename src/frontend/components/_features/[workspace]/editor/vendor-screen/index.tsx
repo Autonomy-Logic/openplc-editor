@@ -45,11 +45,16 @@ const VendorScreenEditor = () => {
   // exists for the same name (re-opening keeps the prior cleanState).
   useEffect(() => {
     if (!screenName || !screenDefinition) return
+    // Read the slice from the store, not from this render: the form layouts
+    // seed their field defaults in their own mount effects, which run before
+    // this one, and those defaults are not an edit. Snapshotting the render's
+    // pre-seed value made the screen dirty the moment it opened.
+    const { vendorScreenData: seededData } = useOpenPLCStore.getState().deviceDefinitions.configuration
     addFile({
       name: screenName,
       type: 'vendor-screen',
       filePath: '',
-      cleanState: serializeOwnedSlice(vendorScreenData, ownedKeys),
+      cleanState: serializeOwnedSlice(seededData, ownedKeys),
     })
     // Intentionally only on (screenName / ownedKeys) — depending on
     // vendorScreenData would reset cleanState on every keystroke,
@@ -62,7 +67,12 @@ const VendorScreenEditor = () => {
     if (!screenName) return
     const file = getFile({ name: screenName }).file
     if (!file || file.type !== 'vendor-screen') return
-    const current = serializeOwnedSlice(vendorScreenData, ownedKeys)
+    // From the store for the same reason as the snapshot above: in the commit
+    // where a layout seeds its defaults, this render's value predates them.
+    const current = serializeOwnedSlice(
+      useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData,
+      ownedKeys,
+    )
     const clean = typeof file.cleanState === 'string' ? file.cleanState : current
     const isClean = current === clean
     if (file.saved !== isClean) {

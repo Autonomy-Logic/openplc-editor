@@ -18,6 +18,7 @@
 
 import type { FbInstanceInfo, PLCPou } from '../../middleware/shared/ports/types'
 import { buildGlobalCompositeKey } from './debug-variable-finder'
+import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from './PLC/edge-trigger-instance'
 
 /**
  * Minimal state shape required by the debug polling filter.
@@ -365,10 +366,16 @@ function collectLdVisibleKeys(
   for (const rung of currentFlow.rungs) {
     for (const node of rung.nodes) {
       if (node.type === 'contact' || node.type === 'coil') {
-        const nodeData = node.data as { variable?: { name?: string } }
+        const nodeData = node.data as { variable?: { name?: string }; variant?: string; numericId?: string }
         const varName = nodeData.variable?.name
         if (varName) {
           const key = makeKey(varName)
+          if (key) keys.add(key)
+        }
+        const edgeTriggerType = node.type === 'contact' ? edgeTriggerTypeForVariant(nodeData.variant ?? '') : null
+        const edgeTriggerName = edgeTriggerType ? edgeTriggerInstanceName(edgeTriggerType, nodeData.numericId) : null
+        if (edgeTriggerName) {
+          const key = makeKey(`${edgeTriggerName}.Q`)
           if (key) keys.add(key)
         }
       } else if (node.type === 'variable') {
