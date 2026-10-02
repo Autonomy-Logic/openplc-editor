@@ -29,7 +29,7 @@ export async function executeImportPlcopen(projectPort: ProjectPort): Promise<{ 
   const state = openPLCStoreBase.getState()
 
   try {
-    const parseResult = parsePlcopenXml(picked.content)
+    const parseResult = parsePlcopenXml(picked.content, { systemLibraries: state.libraries.system })
     const { warnings } = parseResult
 
     const data: OpenProjectResponseData = buildProjectResponseFromPlcopenParse(parseResult, state.project.meta.path)

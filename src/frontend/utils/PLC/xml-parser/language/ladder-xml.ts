@@ -1,16 +1,27 @@
 import {
+  defaultCustomNodesStyles,
+  nodesBuilder,
+} from '@root/frontend/components/_atoms/graphical-editor/ladder/node-builders'
+import {
   BlockNode,
   BlockVariant,
   CoilNode,
   ContactNode,
+  LadderBlockConnectedVariables,
+  ParallelNode,
   PowerRailNode,
   VariableNode,
 } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
-import { LadderFlowType } from '@root/frontend/store/slices'
+import { buildEdge } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/edges'
+import { updateDiagramElementsPosition } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { LadderFlowType, RungLadderState } from '@root/frontend/store/slices'
+import { newUuid } from '@root/frontend/utils/new-uuid'
 import { Edge, Position } from '@xyflow/react'
 
+import type { BlockSignature, BlockSignatureResolver } from '../block-signatures'
 import { asArray, asRecord, asString } from '../xml-node'
 import { makeHandle, parsePositionXml, toNumber } from './geometry'
+import { reduceSeriesParallel, SeriesParallel, SeriesParallelWire, SINK, SOURCE } from './series-parallel'
 
 type LadderParsedNode = PowerRailNode | ContactNode | CoilNode | BlockNode<BlockVariant> | VariableNode
 
@@ -456,80 +467,439 @@ class UnionFind {
   }
 }
 
-export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderFlowType; warnings: string[] } {
+export interface LadderParseContext {
+  resolveBlock: BlockSignatureResolver
+}
+
+const NO_SIGNATURES: LadderParseContext = { resolveBlock: () => undefined }
+
+// Bounds the editor gives a new rung (ladder/index.tsx, handleAddNewRung).
+const NEW_RUNG_BOUNDS: [number, number] = [300, 100]
+
+const EXECUTION_CONTROL_PINS = new Set(['EN', 'ENO'])
+
+type NativeElement = ContactNode | CoilNode | BlockNode<BlockVariant>
+type RailNode = ReturnType<typeof nodesBuilder.powerRail>
+type NativeNode = NativeElement | RailNode | ParallelNode
+
+interface Endpoint {
+  node: NativeNode
+  handle: string
+}
+
+type RebuildResult = { ok: true; rung: RungLadderState } | { ok: false; reason: string }
+
+interface ImportedLink {
+  edge: Edge
+  source: LadderParsedNode
+  target: LadderParsedNode
+}
+
+const isParallel = (node: NativeNode): node is ParallelNode => node.type === 'parallel'
+const isBlock = (node: LadderParsedNode): node is BlockNode<BlockVariant> => node.type === 'block'
+const isRail = (node: LadderParsedNode): node is PowerRailNode => node.type === 'powerRail'
+const isVariable = (node: LadderParsedNode): node is VariableNode => node.type === 'variable'
+const isContact = (node: LadderParsedNode): node is ContactNode => node.type === 'contact'
+const isCoil = (node: LadderParsedNode): node is CoilNode => node.type === 'coil'
+
+// The XML only names the pins it wired, so an undefined type keeps whatever pins it did name.
+function signatureFromXmlPins(block: BlockNode<BlockVariant>): BlockSignature {
+  const pins = (handles: { id?: string | null }[], pinClass: string) =>
+    handles
+      .map((handle) => handle.id ?? '')
+      .filter((id) => id !== '' && !EXECUTION_CONTROL_PINS.has(id.toUpperCase()))
+      .map((id) => ({ name: id, class: pinClass, type: { definition: 'generic-type', value: 'ANY' } }))
+  return {
+    name: block.data.variant.name,
+    type: block.data.variant.type,
+    variables: [...pins(block.data.inputHandles, 'input'), ...pins(block.data.outputHandles, 'output')],
+    documentation: '',
+    extensible: false,
+  }
+}
+
+function buildNativeBlock(
+  pouName: string,
+  imported: BlockNode<BlockVariant>,
+  context: LadderParseContext,
+  warnings: string[],
+): BlockNode<BlockVariant> {
+  let signature = context.resolveBlock(imported.data.variant.name)
+  if (!signature) {
+    warnings.push(
+      `POU "${pouName}": block type "${imported.data.variant.name}" is not defined in the project or its libraries, its pins were taken from the XML`,
+    )
+    signature = signatureFromXmlPins(imported)
+  }
+  const block: BlockNode<BlockVariant> = nodesBuilder.block({
+    id: imported.id,
+    posX: 0,
+    posY: 0,
+    handleX: 0,
+    handleY: 0,
+    variant: signature,
+    executionControl: imported.data.inputHandles.some((handle) => handle.id?.toUpperCase() === 'EN'),
+  })
+  return {
+    ...block,
+    selected: false,
+    data: {
+      ...block.data,
+      numericId: imported.data.numericId,
+      executionOrder: imported.data.executionOrder,
+      variable: { name: imported.data.variant.type === 'function-block' ? imported.data.variable.name : '' },
+    },
+  }
+}
+
+function buildNativeContact(imported: ContactNode): ContactNode {
+  const node = nodesBuilder.contact({
+    id: imported.id,
+    posX: 0,
+    posY: 0,
+    handleX: 0,
+    handleY: 0,
+    variant: imported.data.variant,
+  })
+  return { ...node, data: { ...node.data, numericId: imported.data.numericId, variable: imported.data.variable } }
+}
+
+function buildNativeCoil(imported: CoilNode): CoilNode {
+  const node = nodesBuilder.coil({
+    id: imported.id,
+    posX: 0,
+    posY: 0,
+    handleX: 0,
+    handleY: 0,
+    variant: imported.data.variant,
+  })
+  return { ...node, data: { ...node.data, numericId: imported.data.numericId, variable: imported.data.variable } }
+}
+
+// XML pin names are matched case-insensitively (IEC identifiers are), then spelled as the block spells them.
+function findPin(handles: { id?: string | null }[], xmlPin: string | null | undefined): string | undefined {
+  const wanted = (xmlPin ?? '').toUpperCase()
+  return handles.find((handle) => handle.id?.toUpperCase() === wanted)?.id ?? undefined
+}
+
+// Mirrors the handle overrides startParallelConnection applies to a parallel nested at the start or end of a
+// parallel path: there the inner OPEN receives on its top handle and the inner CLOSE sends from its top handle.
+function connectEndpoint(edges: Edge[], from: Endpoint, to: NativeNode, targetHandle: string): void {
+  let sourceHandle = from.handle
+  let handle = targetHandle
+  const source = from.node
+  if (isParallel(source) && isParallel(to)) {
+    if (
+      source.data.type === 'open' &&
+      to.data.type === 'open' &&
+      from.handle === source.data.parallelOutputConnector?.id
+    ) {
+      handle = to.data.parallelInputConnector?.id ?? handle
+    }
+    if (
+      source.data.type === 'close' &&
+      to.data.type === 'close' &&
+      targetHandle === to.data.parallelInputConnector?.id
+    ) {
+      sourceHandle = source.data.parallelOutputConnector?.id ?? sourceHandle
+    }
+  }
+  edges.push(buildEdge(source.id, to.id, { sourceHandle, targetHandle: handle }))
+}
+
+function buildParallelPair(): { open: ParallelNode; close: ParallelNode } {
+  const origin = { posX: 0, posY: 0, handleX: 0, handleY: 0 }
+  const open = nodesBuilder.parallel({ id: `PARALLEL_OPEN_${newUuid()}`, type: 'open', ...origin })
+  const close = nodesBuilder.parallel({ id: `PARALLEL_CLOSE_${newUuid()}`, type: 'close', ...origin })
+  open.data.parallelCloseReference = close.id
+  close.data.parallelOpenReference = open.id
+  return { open, close }
+}
+
+// Emits nodes in the order the editor's own insertions leave them (OPEN, serial path, parallel path, CLOSE): the
+// layout walks the array and positions each node from predecessors it has already placed.
+function emitSeriesParallel(
+  expr: SeriesParallel<NativeElement>,
+  from: Endpoint,
+  nodes: NativeNode[],
+  edges: Edge[],
+): Endpoint {
+  switch (expr.kind) {
+    case 'wire':
+      return from
+    case 'leaf': {
+      const node = expr.value
+      nodes.push(node)
+      connectEndpoint(edges, from, node, node.data.inputConnector?.id ?? LEAF_INPUT_HANDLE)
+      return { node, handle: node.data.outputConnector?.id ?? LEAF_OUTPUT_HANDLE }
+    }
+    case 'series':
+      return expr.items.reduce((endpoint, item) => emitSeriesParallel(item, endpoint, nodes, edges), from)
+    case 'parallel': {
+      const [serialBranch, ...parallelBranches] = expr.branches
+      const { open, close } = buildParallelPair()
+      nodes.push(open)
+      connectEndpoint(edges, from, open, open.data.inputConnector?.id ?? LEAF_INPUT_HANDLE)
+      const serialEnd = emitSeriesParallel(
+        serialBranch,
+        { node: open, handle: open.data.outputConnector?.id ?? '' },
+        nodes,
+        edges,
+      )
+      // More than two branches nest, as they do when a branch is added under a parallel path in the editor.
+      const parallelEnd = emitSeriesParallel(
+        parallelBranches.length === 1 ? parallelBranches[0] : { kind: 'parallel', branches: parallelBranches },
+        { node: open, handle: open.data.parallelOutputConnector?.id ?? '' },
+        nodes,
+        edges,
+      )
+      nodes.push(close)
+      connectEndpoint(edges, serialEnd, close, close.data.inputConnector?.id ?? '')
+      connectEndpoint(edges, parallelEnd, close, close.data.parallelInputConnector?.id ?? '')
+      return { node: close, handle: close.data.outputConnector?.id ?? '' }
+    }
+  }
+}
+
+function buildNativeRails(rungId: string): { left: RailNode; right: RailNode } {
+  const [width, height] = NEW_RUNG_BOUNDS
+  const { powerRail } = defaultCustomNodesStyles
+  const left = nodesBuilder.powerRail({
+    id: `left-rail-${rungId}`,
+    posX: 0,
+    posY: height / 2 - powerRail.height / 2,
+    connector: 'right',
+    handleX: powerRail.width,
+    handleY: height / 2,
+  })
+  const right = nodesBuilder.powerRail({
+    id: `right-rail-${rungId}`,
+    posX: width,
+    posY: height / 2 - powerRail.height / 2,
+    connector: 'left',
+    handleX: width - powerRail.width,
+    handleY: height / 2,
+  })
+  return { left, right }
+}
+
+/**
+ * Rebuild one imported rung as the editor itself would have drawn it: blocks carry their real signature, the
+ * literals and variables wired to their secondary pins become connected variables, fan-out/fan-in becomes
+ * OPEN/CLOSE parallels, and every position comes from the editor's own layout rather than the XML's.
+ */
+function rebuildRung(
+  pouName: string,
+  rungId: string,
+  imported: { nodes: LadderParsedNode[]; links: ImportedLink[] },
+  context: LadderParseContext,
+  warnings: string[],
+): RebuildResult {
+  const leftRails = imported.nodes.filter((node) => isRail(node) && node.data.variant === 'left')
+  const rightRails = imported.nodes.filter((node) => isRail(node) && node.data.variant === 'right')
+  if (leftRails.length !== 1 || rightRails.length !== 1) {
+    return { ok: false, reason: 'it does not have exactly one left and one right power rail' }
+  }
+  const [leftRailId, rightRailId] = [leftRails[0].id, rightRails[0].id]
+
+  const elements = new Map<string, NativeElement>()
+  const blockWarnings: string[] = []
+  for (const node of imported.nodes) {
+    if (isBlock(node)) elements.set(node.id, buildNativeBlock(pouName, node, context, blockWarnings))
+    else if (isContact(node)) elements.set(node.id, buildNativeContact(node))
+    else if (isCoil(node)) elements.set(node.id, buildNativeCoil(node))
+  }
+
+  const wires: SeriesParallelWire[] = []
+  const connectedVariables = new Map<string, LadderBlockConnectedVariables>()
+  const addConnectedVariable = (blockId: string, entry: LadderBlockConnectedVariables[number]) => {
+    connectedVariables.set(blockId, [...(connectedVariables.get(blockId) ?? []), entry])
+  }
+
+  for (const { edge, source, target } of imported.links) {
+    if (isVariable(source) || isVariable(target)) {
+      const direction = isVariable(source) ? 'input' : 'output'
+      const variableNode = direction === 'input' ? source : target
+      const block = elements.get(direction === 'input' ? target.id : source.id)
+      if (!isVariable(variableNode) || !block || !isBlock(block)) {
+        return { ok: false, reason: 'a variable box is wired to something other than a block pin' }
+      }
+      const handles = direction === 'input' ? block.data.inputHandles : block.data.outputHandles
+      const mainPin = direction === 'input' ? block.data.inputConnector?.id : block.data.outputConnector?.id
+      const pin = findPin(handles, direction === 'input' ? edge.targetHandle : edge.sourceHandle)
+      if (!pin || pin === mainPin) {
+        return {
+          ok: false,
+          reason: `block "${block.data.variant.name}" has a variable box on a pin that cannot take one`,
+        }
+      }
+      const { name } = variableNode.data.variable
+      if (name !== '') {
+        addConnectedVariable(block.id, {
+          handleId: pin,
+          handleTableId: block.data.variant.variables.find((variable) => variable.name === pin)?.id,
+          type: direction,
+          variable: { name },
+        })
+      }
+      continue
+    }
+
+    const endpointOf = (node: LadderParsedNode) =>
+      node.id === leftRailId ? SOURCE : node.id === rightRailId ? SINK : elements.get(node.id)
+    const from = endpointOf(source)
+    const to = endpointOf(target)
+    if (!from || !to || from === SINK || to === SOURCE) {
+      return { ok: false, reason: 'a connection runs into a power rail from the wrong side' }
+    }
+    if (
+      from !== SOURCE &&
+      isBlock(from) &&
+      edge.sourceHandle !== LEAF_OUTPUT_HANDLE &&
+      findPin(from.data.outputHandles, edge.sourceHandle) !== from.data.outputConnector?.id
+    ) {
+      return {
+        ok: false,
+        reason: `elements are wired to the secondary output "${edge.sourceHandle}" of block "${from.data.variant.name}"`,
+      }
+    }
+    if (to !== SINK && isBlock(to) && findPin(to.data.inputHandles, edge.targetHandle) !== to.data.inputConnector?.id) {
+      return {
+        ok: false,
+        reason: `elements are wired to the secondary input "${edge.targetHandle}" of block "${to.data.variant.name}"`,
+      }
+    }
+    wires.push({ from: from === SOURCE ? SOURCE : from.id, to: to === SINK ? SINK : to.id })
+  }
+
+  const positionOf = new Map(imported.nodes.map((node) => [node.id, node.position]))
+  const reduced = reduceSeriesParallel(
+    [...elements.values()].map((element) => ({ id: element.id, value: element })),
+    wires,
+    (element) => {
+      const position = positionOf.get(element.id) ?? { x: 0, y: 0 }
+      return position.y * 1e6 + position.x
+    },
+  )
+  if (!reduced.ok) return reduced
+
+  for (const [blockId, entries] of connectedVariables) {
+    const block = elements.get(blockId)
+    if (block && isBlock(block))
+      elements.set(blockId, { ...block, data: { ...block.data, connectedVariables: entries } })
+  }
+  const withConnectedVariables = (expr: SeriesParallel<NativeElement>): SeriesParallel<NativeElement> => {
+    switch (expr.kind) {
+      case 'wire':
+        return expr
+      case 'leaf':
+        return { kind: 'leaf', value: elements.get(expr.value.id) ?? expr.value }
+      case 'series':
+        return { kind: 'series', items: expr.items.map(withConnectedVariables) }
+      case 'parallel':
+        return { kind: 'parallel', branches: expr.branches.map(withConnectedVariables) }
+    }
+  }
+
+  const { left, right } = buildNativeRails(rungId)
+  const nodes: NativeNode[] = [left]
+  const edges: Edge[] = []
+  const end = emitSeriesParallel(
+    withConnectedVariables(reduced.expr),
+    { node: left, handle: RAIL_OUTPUT_HANDLE },
+    nodes,
+    edges,
+  )
+  connectEndpoint(edges, end, right, RAIL_INPUT_HANDLE)
+  nodes.push(right)
+
+  const rung: RungLadderState = {
+    id: rungId,
+    comment: '',
+    defaultBounds: [...NEW_RUNG_BOUNDS],
+    reactFlowViewport: [...NEW_RUNG_BOUNDS],
+    selectedNodes: [],
+    nodes,
+    edges,
+  }
+  const laidOut = updateDiagramElementsPosition(rung, NEW_RUNG_BOUNDS)
+  warnings.push(...blockWarnings)
+  return { ok: true, rung: { ...rung, nodes: laidOut.nodes, edges: laidOut.edges } }
+}
+
+export function parseLadderXml(
+  pouName: string,
+  ldXml: unknown,
+  context: LadderParseContext = NO_SIGNATURES,
+): { body: LadderFlowType; warnings: string[] } {
   const ld = asRecord(ldXml)
   const warnings: string[] = []
   const nodes: LadderParsedNode[] = []
-  const nodeIdByNumericId = new Map<string, string>()
   const pendingEdges: PendingEdge[] = []
 
   for (const entry of asArray(ld.leftPowerRail)) {
     const node = parseLeftRailXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
   }
   for (const entry of asArray(ld.rightPowerRail)) {
     const { node, pendingEdges: edges } = parseRightRailXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
     pendingEdges.push(...edges)
   }
   for (const entry of asArray(ld.contact)) {
     const { node, pendingEdges: edges } = parseContactXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
     pendingEdges.push(...edges)
   }
   for (const entry of asArray(ld.coil)) {
     const { node, pendingEdges: edges } = parseCoilXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
     pendingEdges.push(...edges)
   }
   for (const entry of asArray(ld.block)) {
     const { node, pendingEdges: edges } = parseBlockXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
     pendingEdges.push(...edges)
   }
   for (const entry of asArray(ld.inVariable)) {
     const node = parseInVariableXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
   }
   for (const entry of asArray(ld.outVariable)) {
     const { node, pendingEdges: edges } = parseOutVariableXml(asRecord(entry))
     nodes.push(node)
-    nodeIdByNumericId.set(node.data.numericId, node.id)
     pendingEdges.push(...edges)
   }
+
+  const nodeByNumericId = new Map(nodes.map((node) => [node.data.numericId, node]))
 
   const inOutCount = asArray(ld.inOutVariable).length
   if (inOutCount > 0) {
     warnings.push(`POU "${pouName}": ${inOutCount} LD inOutVariable node(s) are not supported, skipped`)
   }
 
-  const edges: Edge[] = []
+  const links: ImportedLink[] = []
   const forest = new UnionFind()
   for (const node of nodes) forest.find(node.id)
 
   for (const pending of pendingEdges) {
-    const targetNodeId = nodeIdByNumericId.get(pending.targetNumericId)
-    const sourceNodeId = nodeIdByNumericId.get(pending.sourceRefLocalId)
-    if (!targetNodeId || !sourceNodeId) {
+    const target = nodeByNumericId.get(pending.targetNumericId)
+    const source = nodeByNumericId.get(pending.sourceRefLocalId)
+    if (!target || !source) {
       warnings.push(`POU "${pouName}": LD connection references unknown localId "${pending.sourceRefLocalId}", skipped`)
       continue
     }
     const sourceHandle = pending.sourceFormalParameter ?? LEAF_OUTPUT_HANDLE
-    edges.push({
-      id: `xy-edge__${sourceNodeId}${sourceHandle}-${targetNodeId}${pending.targetHandle}`,
-      source: sourceNodeId,
+    const edge: Edge = {
+      id: `xy-edge__${source.id}${sourceHandle}-${target.id}${pending.targetHandle}`,
+      source: source.id,
       sourceHandle,
-      target: targetNodeId,
+      target: target.id,
       targetHandle: pending.targetHandle,
       type: 'smoothstep',
-    })
-    forest.union(sourceNodeId, targetNodeId)
+    }
+    links.push({ edge, source, target })
+    forest.union(source.id, target.id)
   }
 
   // Rungs aren't wrapped by any XML element in this dialect — all rungs
@@ -551,17 +921,30 @@ export function parseLadderXml(pouName: string, ldXml: unknown): { body: LadderF
     }
   }
 
-  // Rung stacking (offsetY in the generator) bakes a cumulative Y shift into
-  // every node's position; re-basing each rung to a local origin would need
-  // to rebuild every node-data variant's handles generically, which TS can't
-  // do without a type assertion across this discriminated union — kept as
-  // absolute coordinates instead (still internally consistent per rung; a
-  // reopened diagram just starts further down the canvas for later rungs).
-  const rungs: LadderFlowType['rungs'] = componentOrder.map((root, index) => {
-    const rungNodeIds = new Set(componentNodes.get(root)?.map((n) => n.id))
-    const rungEdges = edges.filter((e) => rungNodeIds.has(e.source) && rungNodeIds.has(e.target))
-    const rungNodes = componentNodes.get(root) ?? []
+  // A variable box wired to nothing has nowhere to be drawn: it is not a rung of its own.
+  const rungRoots = componentOrder.filter((root) => !(componentNodes.get(root) ?? []).every(isVariable))
+  const strayVariables = componentOrder.length - rungRoots.length
+  if (strayVariables > 0) {
+    warnings.push(`POU "${pouName}": ${strayVariables} unconnected LD variable box(es) skipped`)
+  }
 
+  const rungs: LadderFlowType['rungs'] = rungRoots.map((root, index) => {
+    const rungNodes = componentNodes.get(root) ?? []
+    const rungNodeIds = new Set(rungNodes.map((n) => n.id))
+    const rungLinks = links.filter((link) => rungNodeIds.has(link.source.id))
+    const rungEdges = rungLinks.map((link) => link.edge)
+
+    const rebuilt = rebuildRung(
+      pouName,
+      `rung_${pouName}_${newUuid()}`,
+      { nodes: rungNodes, links: rungLinks },
+      context,
+      warnings,
+    )
+    if (rebuilt.ok) return rebuilt.rung
+    warnings.push(`POU "${pouName}": rung ${index + 1} kept the layout from the XML, because ${rebuilt.reason}`)
+
+    // Kept as absolute XML coordinates: the rung is internally consistent, it just starts further down the canvas.
     const minX = Math.min(...rungNodes.map((n) => n.position.x))
     const minY = Math.min(...rungNodes.map((n) => n.position.y))
     const maxX = Math.max(...rungNodes.map((n) => n.position.x + (n.width ?? 0)))
