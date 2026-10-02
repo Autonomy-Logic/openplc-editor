@@ -24,6 +24,15 @@ const StoreSchema = z.object({
       refreshToken: z.string(),
     })
     .optional(),
+  // Automatic update checks (DOPE-486). Manual "Check for Updates" works either way.
+  auto_update_check: z.boolean(),
+  // What the updater must remember across runs; see UpdateState in src/main/modules/updater/update-service.ts.
+  update_state: z.object({
+    notifiedVersion: z.string().optional(),
+    pendingVersion: z.string().optional(),
+    installAttempts: z.number().optional(),
+    failedVersion: z.string().optional(),
+  }),
 })
 
 export { StoreSchema, ThemeSchema }

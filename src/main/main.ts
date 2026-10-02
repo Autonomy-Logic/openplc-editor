@@ -11,7 +11,6 @@ import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
-import { autoUpdater } from 'electron-updater'
 import { enableMapSet } from 'immer'
 import { homedir, platform, release } from 'os'
 import { join, resolve } from 'path'
@@ -32,16 +31,9 @@ import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
+import { createElectronUpdateService } from './modules/updater'
 
 enableMapSet()
-
-class AppUpdater {
-  constructor() {
-    log.transports.file.level = 'info'
-    autoUpdater.logger = log
-    void autoUpdater.checkForUpdatesAndNotify()
-  }
-}
 
 Menu.setApplicationMenu(null)
 
@@ -49,10 +41,16 @@ export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
+// One per process, not per window: macOS re-creates the window on activate.
+const updateService = createElectronUpdateService({
+  getWindow: () => mainWindow,
+  requestQuit: (intent) => quitCoordinator.requestQuit(intent),
+})
 const quitCoordinator = createQuitCoordinator({
   platform: process.platform,
   getWindow: () => mainWindow,
-  quitApp: () => app.quit(),
+  // "Restart now" on a downloaded update: the updater swaps the app and reopens it.
+  quitApp: (intent) => (intent === 'install-update' ? updateService.installAndRestart() : app.quit()),
   stopSimulator: () => mainIpcModule?.stopSimulator(),
   canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
 })
@@ -358,7 +356,7 @@ const createMainWindow = async () => {
   // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
-  const menuBuilder = new MenuBuilder(mainWindow)
+  const menuBuilder = new MenuBuilder(mainWindow, updateService)
   void menuBuilder.buildMenu()
 
   /**
@@ -391,9 +389,6 @@ const createMainWindow = async () => {
     quitCoordinator,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
-
-  // Remove this if your app does not use auto updates;
-  new AppUpdater()
 }
 
 // Disable GPU Acceleration for Windows 7;
@@ -508,6 +503,8 @@ app
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.
     void installCliShimOnFirstRun()
+    // Checks start about a minute after launch and never block it; see modules/updater.
+    updateService.start()
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
