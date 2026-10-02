@@ -152,13 +152,18 @@ void callback(char* topic, byte* payload, unsigned int length)
     add_message_to_pool(topic, (char *)payload);
 }
 
+// Every entry point holds the network lock (plc_rtos.h) in RTOS mode: one
+// client object and one message pool serve every task's blocks, and the
+// callback filling the pool runs inside mqttClient.loop().
 void mqtt_loop()
 {
+    OPLC_MODULE_HOLD(net);
     mqttClient.loop();
 }
 
 uint8_t connect_mqtt(char *broker, uint16_t port)
 {
+    OPLC_MODULE_HOLD(net);
     mqttClient.setServer(broker, port);
     mqttClient.setCallback(callback);
     return mqttClient.connect("openplc-client");
@@ -166,6 +171,7 @@ uint8_t connect_mqtt(char *broker, uint16_t port)
 
 uint8_t connect_mqtt_auth(char *broker, uint16_t port, char *user, char *password)
 {
+    OPLC_MODULE_HOLD(net);
     mqttClient.setServer(broker, port);
     mqttClient.setCallback(callback);
     return mqttClient.connect("openplc-client", user, password);
@@ -173,6 +179,7 @@ uint8_t connect_mqtt_auth(char *broker, uint16_t port, char *user, char *passwor
 
 uint8_t mqtt_send(char *topic, char *message)
 {
+    OPLC_MODULE_HOLD(net);
     /*
     mqttClient.beginMessage(topic);
     mqttClient.print(message);
@@ -186,11 +193,13 @@ uint8_t mqtt_send(char *topic, char *message)
 
 uint8_t mqtt_subscribe(char *topic)
 {
+    OPLC_MODULE_HOLD(net);
     return (uint8_t)mqttClient.subscribe(topic);
 }
 
 uint8_t mqtt_receive(char *topic, char *message)
 {
+    OPLC_MODULE_HOLD(net);
     // Return the first message in the pool that matches topic
     for (int i = 0; i < pool_size; i++)
     {
@@ -211,11 +220,13 @@ uint8_t mqtt_receive(char *topic, char *message)
 
 uint8_t mqtt_unsubscribe(char *topic)
 {
+    OPLC_MODULE_HOLD(net);
     return (uint8_t)mqttClient.unsubscribe(topic);
 }
 
 uint8_t mqtt_disconnect()
 {
+    OPLC_MODULE_HOLD(net);
     mqttClient.disconnect();
     return 1;
 }

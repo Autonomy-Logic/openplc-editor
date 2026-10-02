@@ -36,6 +36,7 @@ import {
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
 import type { KnownPou } from '@root/backend/shared/utils/PLC/split-program-st'
+import { withFqbnOptions } from '@root/middleware/shared/utils/rtos'
 
 /**
  * Bridge contract `compileLibrary` needs from the main process.
@@ -202,6 +203,11 @@ type CompileArduinoProgramArgs = {
   compilationPath: string
   handleOutputData: HandleOutputDataCallback
   cleanBuild?: boolean
+  /** Board options the build needs over the board's own (RTOS mode's
+   *  `os=freertos` on arduino-pico), for the pre-compile and the compile. */
+  boardOptions?: Readonly<Record<string, string>>
+  /** `-D` flags for every C and C++ file (RTOS mode's FreeRTOS settings). */
+  extraFlags?: readonly string[]
 }
 
 /**
@@ -1211,7 +1217,7 @@ class CompilerModule {
 
     if (missingLibraries.length === 0) {
       handleOutputData(`All required libraries are already installed.`, 'info')
-      return
+      return { success: true }
     }
 
     let binaryPath = this.arduinoCliBinaryPath
@@ -1261,7 +1267,9 @@ class CompilerModule {
               (trimmedStderr ? `\n${trimmedStderr}` : ''),
             'warning',
           )
-          resolve({ success: true })
+          // Resolved, not rejected (the build goes on); unsuccessful when a
+          // library the caller named is among those that failed.
+          resolve({ success: !missingLibraries.some((lib) => extraLibraries.includes(lib)) })
         }
       })
     })
@@ -1505,6 +1513,8 @@ class CompilerModule {
     compilationPath,
     handleOutputData,
     cleanBuild,
+    boardOptions,
+    extraFlags = [],
   }: CompileArduinoProgramArgs) {
     const baremetalPath = join(compilationPath, 'examples', 'Baremetal')
 
@@ -1525,10 +1535,9 @@ class CompilerModule {
     // compilationPath (always `<projectPath>/build/<boardTarget>`).
     const projectPath = path.dirname(path.dirname(compilationPath))
     const selectedPlatformOptions = await this.#readSelectedPlatformOptions(projectPath)
-    const effectiveFqbn = CompilerModule.applyPlatformOptions(
-      info.platform,
-      info.platformOptions,
-      selectedPlatformOptions,
+    const effectiveFqbn = withFqbnOptions(
+      CompilerModule.applyPlatformOptions(info.platform, info.platformOptions, selectedPlatformOptions),
+      boardOptions,
     )
 
     // The AVR/megaavr toolchain ships <stdint.h> but no C++ wrappers; we
@@ -1542,6 +1551,7 @@ class CompilerModule {
 
     const cxxFlags: string[] = info.compilerFlags?.cxx_flags ? [...info.compilerFlags.cxx_flags] : []
     if (avrLibStdCppInclude) cxxFlags.push(`-I${avrLibStdCppInclude}`)
+    cxxFlags.push(...extraFlags)
 
     // No pre-compile: the strucpp runtime is C++14 now,
     // so the generated TUs no longer need a standard the core may not offer —
@@ -1571,7 +1581,8 @@ class CompilerModule {
     const compileEntry = {
       platform: info.platform,
       core: info.core,
-      c_flags: info.compilerFlags?.c_flags,
+      c_flags:
+        extraFlags.length > 0 ? [...(info.compilerFlags?.c_flags ?? []), ...extraFlags] : info.compilerFlags?.c_flags,
       cxx_flags: info.compilerFlags?.cxx_flags,
       ld_flags: info.compilerFlags?.ld_flags,
       max_data_size: info.maxDataSize,

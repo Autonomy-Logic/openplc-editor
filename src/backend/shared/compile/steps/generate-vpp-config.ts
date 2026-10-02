@@ -33,6 +33,8 @@
  * (next to `defines.h`). Mirrors the style of `generate-defines.ts`.
  */
 
+import { RTOS_SETTINGS_SECTION } from '../../../../middleware/shared/utils/rtos'
+
 export interface GenerateVppConfigInput {
   /** `DeviceConfiguration.vendorScreenData` from the project model.
    *  Top-level keys are persistence keys (one per screen section).
@@ -70,7 +72,11 @@ export function generateVppConfigContent(input: GenerateVppConfigInput): string 
     // — same input bytes produce the same output bytes, important for
     // the editor's "compile didn't change" cache and for cross-repo
     // byte-diff hygiene.
-    const keys = Object.keys(vendorScreenData).sort()
+    // `rtos` is the editor's own switch, kept beside the package's screens; it
+    // reaches the firmware as rtos_config.h, not as package configuration.
+    const keys = Object.keys(vendorScreenData)
+      .filter((key) => key !== RTOS_SETTINGS_SECTION)
+      .sort()
     for (const key of keys) {
       const prefix = `VPP_${sanitize(key, true)}`
       walk(vendorScreenData[key], prefix, lines)

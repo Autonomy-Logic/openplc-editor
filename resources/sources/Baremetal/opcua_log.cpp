@@ -13,6 +13,15 @@ Copyright (C) 2026 Autonomy Logic
 
 #include "baremetal_net.h"   // for the same concrete server/client types
 
+#if OPENPLC_RTOS
+#include "plc_rtos.h"
+// RTOS mode: the log's socket is the network like any other, so it takes the
+// services' network lock (plc_rtos.h). Only service B writes the log.
+#define OPCUA_LOG_HOLD() OPENPLC_SERVICE_NET_HOLD()
+#else
+#define OPCUA_LOG_HOLD()
+#endif
+
 // lwIP's counters. Only meaningful on the lwIP-backed targets (the LOGO!);
 // guarded so the file still builds on a shield/WiFi core that has no lwIP.
 #if defined(BOARD_LOGO8)
@@ -59,6 +68,7 @@ void opcua_log_begin(void)
 {
     if (g_log_started)
         return;
+    OPCUA_LOG_HOLD();
     g_log_server.begin();
     g_log_started = true;
 }
@@ -67,6 +77,7 @@ void opcua_log_poll(void)
 {
     if (!g_log_started)
         return;
+    OPCUA_LOG_HOLD();
     if (!g_log_client || !g_log_client.connected())
     {
         bm_client_impl_t incoming = g_log_server.available();
@@ -131,6 +142,7 @@ void opcua_logf(const char* fmt, ...)
     line[n++] = '\r';
     line[n++] = '\n';
 
+    OPCUA_LOG_HOLD();
     ring_put(line, (size_t)n);
 
     // Non-blocking: if the peer is not draining, the line stays in the ring

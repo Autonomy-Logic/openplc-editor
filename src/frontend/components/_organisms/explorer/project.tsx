@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
+import { useCanReadBoardTaskStats } from '../../../hooks/use-board-task-stats'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
@@ -66,8 +67,13 @@ const Project = () => {
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
   // Everything on the Runtime Status screen is read from a live device -- scan
   // statistics, host facts, the bootloader's state -- so the leaf appears only
-  // while connected rather than opening onto an empty screen.
-  const showRuntimeStatus = runtimeConnected
+  // while connected rather than opening onto an empty screen. A baremetal board
+  // has one to show when its core can run RTOS mode, which reports each task's
+  // timing; the screen asks the board whether its firmware does.
+  const targetCaps = useTargetCapabilities()
+  const boardConnected = useOpenPLCStore((s) => s.deviceConnection.status === 'connected')
+  const canReadBoard = useCanReadBoardTaskStats()
+  const showRuntimeStatus = runtimeConnected || (boardConnected && targetCaps.rtos !== undefined && canReadBoard)
 
   // Per-project-type capability matrix — drives which branches
   // render.  Library projects only show Functions / Function Blocks /
@@ -81,7 +87,6 @@ const Project = () => {
   // them at all (the v3 build ships a single `program.st` and no remote-I/O
   // config), and the variable-location dropdown already hides their points
   // behind this exact predicate.
-  const targetCaps = useTargetCapabilities()
   const canHostRemoteIo = targetCaps.modbusTcpRemote || targetCaps.ethercat
 
   // Get VPP vendor screens from the currently selected board

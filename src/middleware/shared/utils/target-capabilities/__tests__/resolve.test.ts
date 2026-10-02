@@ -239,3 +239,67 @@ describe('the S7 profile', () => {
     expect(caps.s7?.maxClients).toBe(2)
   })
 })
+
+describe('the RTOS profile', () => {
+  it('comes from the board core, whichever package the board belongs to', () => {
+    // Every ESP32 variant runs FreeRTOS; support is the core's, not a board's.
+    const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', core: 'esp32:esp32' })
+    expect(caps.rtos).toEqual({
+      backend: 'freertos-esp32',
+      tickNs: 1_000_000,
+      workLevels: 8,
+      maxTasks: 8,
+      threads: 'native',
+    })
+  })
+
+  it('reads the core off the FQBN when that is all the caller has', () => {
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      platform: 'esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc',
+    })
+    expect(caps.rtos?.backend).toBe('freertos-esp32')
+  })
+
+  it('is absent on a core with no backend', () => {
+    expect(resolveTargetCapabilities({ compiler: 'arduino-cli', core: 'arduino:avr' }).rtos).toBeUndefined()
+  })
+
+  it('is never offered to the in-process simulator or a Runtime target', () => {
+    // The simulator is an AVR build that runs user logic only; a Runtime target
+    // already threads its tasks.
+    expect(resolveTargetCapabilities({ compiler: 'simulator', core: 'esp32:esp32' }).rtos).toBeUndefined()
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler', core: 'esp32:esp32' }).rtos).toBeUndefined()
+  })
+
+  it('lets a package refuse it for its board', () => {
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      core: 'esp32:esp32',
+      capabilities: { rtos: false },
+    })
+    expect(caps.rtos).toBeUndefined()
+  })
+
+  it('takes an empty core for no core', () => {
+    expect(resolveTargetCapabilities({ compiler: 'arduino-cli', core: '' }).rtos).toBeUndefined()
+  })
+
+  it('follows the core a board compiles with, its FQBN’s, over the manifest’s core', () => {
+    const fromFqbn = { compiler: 'arduino-cli', core: 'arduino:avr', platform: 'esp32:esp32:nano_nora' }
+    expect(resolveTargetCapabilities(fromFqbn).rtos?.backend).toBe('freertos-esp32')
+    const noRtos = { compiler: 'arduino-cli', core: 'esp32:esp32', platform: 'arduino:avr:mega' }
+    expect(resolveTargetCapabilities(noRtos).rtos).toBeUndefined()
+  })
+
+  it('sizes an STM32 by its board id or its part', () => {
+    const bluepill = { compiler: 'arduino-cli', platform: 'STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8' }
+    expect(resolveTargetCapabilities(bluepill).rtos).toBeUndefined()
+    const f0 = { compiler: 'arduino-cli', platform: 'STMicroelectronics:stm32:GenF0:pnum=GENERIC_F030F4PX' }
+    expect(resolveTargetCapabilities(f0).rtos).toBeUndefined()
+    const nucleoF103 = { compiler: 'arduino-cli', platform: 'STMicroelectronics:stm32:Nucleo_64:pnum=NUCLEO_F103RB' }
+    expect(resolveTargetCapabilities(nucleoF103).rtos).toBeUndefined()
+    const blackpill = { compiler: 'arduino-cli', platform: 'STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE' }
+    expect(resolveTargetCapabilities(blackpill).rtos?.backend).toBe('freertos-stm32')
+  })
+})

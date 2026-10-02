@@ -129,6 +129,14 @@ export interface CompileArduinoArgs {
    *  cores would starve concurrents).  When `true`, arduino-cli
    *  defaults to `--jobs 0` (editor default — uses every core). */
   parallel: boolean
+  /** Board options the build needs over the board's own (RTOS mode's
+   *  `os=freertos` on arduino-pico). Already in `argv`'s FQBN; an adapter that
+   *  composes its own FQBN applies them to it. */
+  boardOptions?: Readonly<Record<string, string>>
+  /** `-D` flags the build needs in every C and C++ file it compiles (RTOS
+   *  mode's FreeRTOS settings on the Uno R4). Already in `argv`; an adapter
+   *  that composes its own flags adds them. */
+  extraFlags?: readonly string[]
 }
 
 export interface CompileArduinoResult {

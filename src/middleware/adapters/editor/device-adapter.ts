@@ -23,7 +23,7 @@ import type {
   DeviceLicenseRequest,
   DevicePort,
 } from '../../shared/ports/device-port'
-import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from '../../shared/ports/types'
+import type { BoardInfo, CommunicationPort, DebugConnectionConfig, RtosStatsResult } from '../../shared/ports/types'
 
 export function createEditorDeviceAdapter(): DevicePort {
   return {
@@ -77,6 +77,10 @@ export function createEditorDeviceAdapter(): DevicePort {
 
     refreshLicense(request: DeviceLicenseRequest): Promise<DeviceLicenseReport> {
       return window.bridge.deviceRefreshLicense(request)
+    },
+
+    readTaskStats(resetWindow = false): Promise<RtosStatsResult> {
+      return window.bridge.deviceReadTaskStats(resetWindow)
     },
 
     onLinkLog(callback: (message: string) => void): () => void {

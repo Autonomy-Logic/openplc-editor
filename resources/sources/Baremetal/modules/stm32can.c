@@ -18,6 +18,7 @@ CAN_message_t CAN_RX_msg;
 
 uint8_t init_stm32can(int baudrate)
 {   
+    OPLC_MODULE_HOLD(can);
 
     Can.begin();
     Can.setBaudRate(baudrate);
@@ -37,6 +38,7 @@ uint8_t write_stm32can(	uint8_t ch,
 						uint8_t d6,
 						uint8_t d7)
 {	
+	OPLC_MODULE_HOLD(can);
 	if(ch == 1){
 		CAN1_TX_msg.id 				= id;
 		CAN1_TX_msg.flags.extended 		= 1;  	// To enable extended ID.
@@ -88,6 +90,7 @@ uint8_t read_stm32can(uint32_t* id,
 					uint8_t* d6, 
 					uint8_t* d7)
 {
+    OPLC_MODULE_HOLD(can);
     if (Can.read(CAN_RX_msg)) {
         // Assuming id is a pointer to a uint32_t, and CAN_RX_msg.id is uint32_t
         *id = CAN_RX_msg.id;

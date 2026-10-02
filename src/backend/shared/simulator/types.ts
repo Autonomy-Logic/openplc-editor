@@ -17,6 +17,9 @@ export enum ModbusFunctionCode {
    *  which already reports the state — there is deliberately no second FC for
    *  querying it. */
   PLC_SET_STATE = 0x4b,
+  /** Per-task timing of a board in RTOS mode. Read-only; a board built as a
+   *  single loop does not answer it. */
+  DEBUG_GET_TASK_STATS = 0x4e,
 }
 
 export enum ModbusDebugResponse {

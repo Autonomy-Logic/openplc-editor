@@ -55,6 +55,8 @@ export const ErrorCode = {
   AuthRequired: 'auth_required',
   AuthRejected: 'auth_rejected',
   TargetError: 'target_error',
+  /** The target answered, and does not do what was asked (a board not in RTOS mode, asked for task statistics). */
+  NotSupported: 'not_supported',
   UploadRejected: 'upload_rejected',
   Md5Mismatch: 'md5_mismatch',
   Timeout: 'timeout',

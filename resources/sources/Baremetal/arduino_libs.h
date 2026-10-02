@@ -5,6 +5,16 @@ extern uint8_t pinMask_AIN[];
 extern uint8_t pinMask_DOUT[];
 extern uint8_t pinMask_AOUT[];
 
+// RTOS mode: a block module holds the lock of the bus or network it drives
+// across each call into its driver (plc_rtos.h), since blocks in two IEC tasks,
+// or a block and a service, can reach the same peripheral at once. Nothing
+// outside RTOS mode.
+#if OPENPLC_RTOS
+    #define OPLC_MODULE_HOLD(bus) OPENPLC_HOLD(bus)
+#else
+    #define OPLC_MODULE_HOLD(bus)
+#endif
+
 #ifdef SIMULATOR_MODE
     // Simulator: no-op stubs for all hardware modules (no platform headers needed)
     #include "modules/simulator_stubs.c"

@@ -119,6 +119,9 @@ enum {
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
     MB_FC_REBOOT_BOOTLOADER   = 0x4C, // Reboot the device into its firmware bootloader (magic-guarded)
     MB_FC_GET_LOCK_STATE      = 0x4D, // Read the device's programming-lock state (read-only)
+#if OPENPLC_RTOS
+    MB_FC_DEBUG_GET_TASK_STATS = 0x4E, // RTOS mode: per-task scan/latency/overrun statistics
+#endif
 };
 
 //Exception Codes
@@ -127,6 +130,11 @@ enum {
     MB_EX_ILLEGAL_ADDRESS  = 0x02, // Output Address not exists
     MB_EX_ILLEGAL_VALUE    = 0x03, // Output Value not in Range
     MB_EX_SLAVE_FAILURE    = 0x04, // Slave Device Fails to process request
+#if OPENPLC_RTOS
+    // RTOS mode: the scan did not yield in time (a block waiting on the network).
+    // The request is fine and may be repeated; nothing was read or written.
+    MB_EX_SLAVE_BUSY       = 0x06,
+#endif
 };
 
 #endif

@@ -16,20 +16,26 @@ import {
   buildGetListRequest,
   buildGetMd5Request,
   buildGetStatusRequest,
+  buildGetTaskStatsRequest,
   buildGetVersionRequest,
   buildReadLicenseRequest,
   buildSetVariableRequest,
   buildWriteLicenseRequest,
-  parseGetDeviceIdResponse,
+  DEBUG_BUSY_ERROR,
+  isBusyException,
   isGetListOverflowException,
+  parseGetDeviceIdResponse,
   parseGetListResponse,
   parseGetMd5Response,
   parseGetStatusResponse,
+  parseGetTaskStatsPage,
   parseGetVersionResponse,
   parseReadLicenseResponse,
   parseSetVariableResponse,
   parseWriteLicenseResponse,
+  readTaskStats,
   responseFunctionCode,
+  taskStatsPduLength,
 } from '../modbus-pdu'
 
 const TextEnc = globalThis.TextEncoder
@@ -177,6 +183,21 @@ describe('isGetListOverflowException', () => {
     expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x01)).toBe(false)
     expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET_LIST, 0x04)).toBe(false)
     expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET + 0x80, 0x04)).toBe(false)
+  })
+})
+
+describe('isBusyException', () => {
+  // A board in RTOS mode refuses a debugger write with "slave device busy" (0x06).
+  it('matches the slave-busy exception on any function code', () => {
+    expect(isBusyException(ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x06)).toBe(true)
+    expect(isBusyException(ModbusFunctionCode.DEBUG_SET + 0x80, 0x06)).toBe(true)
+    expect(isBusyException(ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x04)).toBe(false)
+    expect(isBusyException(ModbusFunctionCode.DEBUG_GET_LIST, 0x06)).toBe(false)
+  })
+
+  it('turns a busy SET into the busy error, not a function-code mismatch', () => {
+    const set = parseSetVariableResponse(new Uint8Array([ModbusFunctionCode.DEBUG_SET + 0x80, 0x06]))
+    expect(set).toEqual({ success: false, error: DEBUG_BUSY_ERROR })
   })
 })
 
@@ -590,5 +611,130 @@ describe('parseReadLicenseResponse', () => {
     const result = parseReadLicenseResponse(new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE]))
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/too short/)
+  })
+})
+
+describe('FC 0x4e — task statistics', () => {
+  // A page as the firmware encodes it (plc_rtos_encode_stats, version 2).
+  type Task = { name: string; values: number[] }
+  const u32 = (value: number): number[] => [value >>> 24, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff]
+  const page = (total: number, first: number, tasks: Task[], tail = [0x1000, 0x3d440, 0x3d324, 10_000, 250]) =>
+    Uint8Array.from([
+      0x4e,
+      0x7e,
+      2,
+      total,
+      first,
+      tasks.length,
+      ...tasks.flatMap((task) => [task.name.length, ...Buffer.from(task.name), ...task.values.flatMap(u32)]),
+      2,
+      ...[4500, 3, 2048, 900, 0, 4096].flatMap(u32),
+      ...tail.flatMap(u32),
+    ])
+  // releases, overruns, scan min/avg/max, latency avg/max, cycle min/max, stack free, busy, period
+  const main: Task = { name: 'MAINTASK', values: [1000, 0, 90, 120, 400, 15, 60, 9_990, 10_020, 3000, 0, 10_000] }
+  const net: Task = {
+    name: 'NET_TASK',
+    values: [51522, 7698, 60, 900, 3_000_095, 20, 300, 20_000, 18_570_008, 2600, 2_500_000, 20_000],
+  }
+  const task = (n: number): Task => ({ name: `T${n}`, values: [n, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 10_000] })
+
+  it('asks from a task index, and for a new window after it', () => {
+    expect(Array.from(buildGetTaskStatsRequest())).toEqual([0x4e, 0, 0])
+    expect(Array.from(buildGetTaskStatsRequest(3, true))).toEqual([0x4e, 1, 3])
+  })
+
+  it('reads a page: its tasks, the services and the board totals', () => {
+    const result = parseGetTaskStatsPage(page(2, 0, [main, net]))
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.page).toMatchObject({ taskTotal: 2, firstTask: 0 })
+    expect(result.page.stats.tasks.map((entry) => entry.name)).toEqual(['MAINTASK', 'NET_TASK'])
+    expect(result.page.stats.tasks[1]).toMatchObject({
+      releases: 51522,
+      overruns: 7698,
+      scanMaxUs: 3_000_095,
+      cycleMaxUs: 18_570_008,
+      stackFreeBytes: 2600,
+      busyUs: 2_500_000,
+      periodUs: 20_000,
+    })
+    expect(result.page.stats.services).toEqual([
+      { iterationMaxUs: 4500, busyReplies: 3, stackFreeBytes: 2048 },
+      { iterationMaxUs: 900, busyReplies: 0, stackFreeBytes: 4096 },
+    ])
+    expect(result.page.stats).toMatchObject({
+      dispatcherStackFreeBytes: 0x1000,
+      heapFreeBytes: 0x3d440,
+      baseTickUs: 10_000,
+      retainLateMaxUs: 250,
+    })
+  })
+
+  it('reads every page, from where the last one ended, with the reset on each request', async () => {
+    const all = Array.from({ length: 7 }, (_, n) => task(n))
+    const requests: number[][] = []
+    const result = await readTaskStats(async (request) => {
+      requests.push(Array.from(request))
+      const first = request[2]
+      return page(all.length, first, all.slice(first, first + 3))
+    }, true)
+    expect(requests).toEqual([
+      [0x4e, 1, 0],
+      [0x4e, 1, 3],
+      [0x4e, 1, 6],
+    ])
+    expect(result.success).toBe(true)
+    expect(result.stats?.tasks.map((entry) => entry.name)).toEqual(['T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6'])
+    expect(result.stats?.retainLateMaxUs).toBe(250)
+  })
+
+  it('stops on a page that is out of order, empty short of the total, or an error', async () => {
+    const outOfOrder = await readTaskStats(async (request) => page(4, request[2] === 0 ? 0 : 1, [task(0), task(1)]))
+    expect(outOfOrder).toEqual({ success: false, error: 'Task statistics out of order' })
+    const empty = await readTaskStats(async () => page(4, 0, []))
+    expect(empty).toEqual({ success: false, error: 'A task name does not fit the reply frame' })
+    const refused = await readTaskStats(async () => Uint8Array.from([0xce, 0x01]))
+    expect(refused).toMatchObject({ success: false, unsupported: true })
+    const noTasks = await readTaskStats(async () => page(0, 0, []))
+    expect(noTasks).toMatchObject({ success: true, stats: { tasks: [] } })
+  })
+
+  it('reads a single-page reply whole', () => {
+    expect(parseGetTaskStatsPage(page(1, 0, [main]))).toMatchObject({
+      success: true,
+      page: { taskTotal: 1, firstTask: 0, stats: { tasks: [{ name: 'MAINTASK' }] } },
+    })
+  })
+
+  it('says a board that does not know the code is not in RTOS mode', () => {
+    expect(parseGetTaskStatsPage(Uint8Array.from([0xce, 0x01]))).toMatchObject({
+      success: false,
+      unsupported: true,
+    })
+    expect(parseGetTaskStatsPage(Uint8Array.from([0xce, 0x04]))).not.toHaveProperty('unsupported')
+  })
+
+  it('tells a serial link how long the reply is, from as much as has arrived', () => {
+    const reply = page(2, 0, [main, net])
+    expect(taskStatsPduLength(reply)).toBe(reply.length)
+    expect(taskStatsPduLength(reply.subarray(0, 30))).toBeNull()
+    expect(taskStatsPduLength(reply.subarray(0, 5))).toBeNull()
+    expect(taskStatsPduLength(reply.subarray(0, 1))).toBeNull()
+    expect(taskStatsPduLength(Uint8Array.from([0xce, 0x01]))).toBe(2)
+    expect(taskStatsPduLength(Uint8Array.from([0x4e, 0x82]))).toBe(2)
+  })
+
+  it('refuses a truncated reply, another version, or another code', () => {
+    const reply = page(2, 0, [main, net])
+    expect(parseGetTaskStatsPage(reply.subarray(0, reply.length - 1)).success).toBe(false)
+    expect(parseGetTaskStatsPage(reply.subarray(0, 20)).success).toBe(false)
+    expect(parseGetTaskStatsPage(reply.subarray(0, 5)).success).toBe(false)
+    const older = Uint8Array.from(reply)
+    older[2] = 1
+    expect(parseGetTaskStatsPage(older)).toMatchObject({ error: expect.stringMatching(/version 1 is not supported/) })
+    expect(parseGetTaskStatsPage(Uint8Array.from([0x46, 0x7e]))).toMatchObject({ error: 'Function code mismatch' })
+    expect(parseGetTaskStatsPage(Uint8Array.from([0x4e, 0x81])).success).toBe(false)
+    expect(parseGetTaskStatsPage(Uint8Array.from([0x4e])).success).toBe(false)
   })
 })

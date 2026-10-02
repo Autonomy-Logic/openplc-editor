@@ -303,6 +303,31 @@ sharing that port keeps whatever id the user picked, and `MBSERIAL_SLAVE` is the
 server's on every port. A board flashed before 4.3.0 may answer the editor on
 another id; Connect tries 1 first and the project's legacy id after.
 
+**RTOS mode.** On a board whose Arduino core has an RTOS (ESP32, Mbed OS,
+Zephyr, STM32 but the F1 and the Cortex-M0/M0+ families, arduino-pico, Uno R4, SAMD; the table is `middleware/shared/utils/rtos/support.ts`), the
+Baremetal firmware runs each IEC task on an RTOS thread of its own, and
+Modbus/debugger and OPC-UA/S7 on service tasks, following Runtime v4's model.
+Every toolchain but the ESP32's has no `<mutex>` or `thread_local`, so there the threaded
+STruC++ runtime takes its locks and IEC time from the RTOS
+(`STRUCPP_PLATFORM_THREADS`, implemented in `plc_os.cpp` and the glue); a
+bundled runtime without that hook runs their tasks on one PLC thread. The located I/O sync, the debugger,
+OPC-UA and retain take each global's own lock through STruC++'s weak lock hooks (`strucpp_global_try_lock`
+and friends); without them a located ARRAY global also means one PLC thread. It is on by default, and the Board
+Settings switch stores `vendorScreenData.rtos.enabled`. `steps/generate-rtos-config.ts`
+writes `rtos_config.h` over the skeleton's `OPENPLC_RTOS 0` stub, so a build
+without it is the single loop byte for byte. A multi-task build also turns on
+`STRUCPP_THREADED`, by making the bundled runtime headers include that file.
+Firmware: `Baremetal/plc_rtos.*`; OS calls go only through `plc_os`
+(`arduino/plc_os.h`, backends in `Baremetal/plc_os.cpp`). Shared peripherals
+have locks (`openplc_net/i2c/spi/can_lock`, and `openplc_serial_lock(port)` per
+serial port, `plc_rtos.h`) that every driver call from a task takes; the block
+modules in `Baremetal/modules/` do. On the default,
+a build RTOS mode cannot make (schedule, missing RTOS library, memory at link or
+counted against free RAM, a failure outside the project's C/C++) falls back to
+the single loop. Per-task statistics: FC 0x4E, paged (`debug stats`, Runtime
+Status screen, which asks the board rather than the project what it runs).
+User doc: `docs/rtos-mode.md`.
+
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 **Pre-build gates.** `handleBuild`

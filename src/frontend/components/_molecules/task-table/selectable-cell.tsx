@@ -3,6 +3,9 @@ import _ from 'lodash'
 import { useEffect, useMemo, useState } from 'react'
 
 import type { PLCTask } from '../../../../middleware/shared/ports/types'
+import { findIntervalsOffTick } from '../../../../middleware/shared/utils/rtos'
+import { useRtosMode } from '../../../hooks/use-rtos-mode'
+import { LocationWarningGlyph } from '../../_atoms/location-warning-glyph'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms/select'
 import ArrowButtonGroup from '../../_features/[workspace]/editor/graphical/elements/arrow-button-group'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../modal'
@@ -53,8 +56,19 @@ const SelectableTriggerCell = ({ getValue, row: { index }, column: { id }, table
   )
 }
 
-const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableIntervalCell = ({
+  getValue,
+  row: { index, original },
+  column: { id },
+  table,
+}: ISelectableCellProps) => {
   const initialValue: string = getValue() as string
+  // RTOS mode releases every task on the RTOS tick: flag a period it cannot keep
+  // here, where it is set, rather than only when the build reaches it.
+  const rtosMode = useRtosMode()
+  const offTick = rtosMode
+    ? findIntervalsOffTick([{ ...original, interval: initialValue }], rtosMode.profile.tickNs)[0]
+    : undefined
   const [intervalModalOpen, setIntervalModalIsOpen] = useState(false)
   const [values, setValues] = useState({
     day: 0,
@@ -138,10 +152,28 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
         asChild
         className='flex h-8 w-full cursor-pointer items-center justify-center outline-none dark:hover:bg-neutral-900'
       >
-        <div className='flex h-full w-full cursor-pointer justify-center p-2 outline-none'>
+        <div className='flex h-full w-full cursor-pointer items-center justify-center gap-1 p-2 outline-none'>
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {formattedInterval}
           </span>
+          {offTick && rtosMode && (
+            // The warning explains; it does not open the interval editor, which
+            // the rest of the cell does.
+            <span
+              role='presentation'
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <LocationWarningGlyph
+                label='Interval RTOS mode cannot keep'
+                tooltip={`RTOS mode cannot keep this interval: ${offTick.reason}. ${
+                  rtosMode.chosen
+                    ? 'Builds fail until it can, or until RTOS mode is turned off in Board Settings.'
+                    : 'Builds for this board use the single scan loop until it can.'
+                }`}
+              />
+            </span>
+          )}
         </div>
       </ModalTrigger>
       <ModalContent

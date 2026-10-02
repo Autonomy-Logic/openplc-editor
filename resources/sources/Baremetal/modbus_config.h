@@ -16,6 +16,9 @@ it must reach a TU through exactly one path: this header.
 
 #include <Arduino.h>
 #include "defines.h"
+// OPENPLC_RTOS: 1 in an RTOS-mode build, where the Modbus handlers take the
+// runtime's locks.
+#include "rtos_config.h"
 
 // Serial transport is active when full Modbus RTU (MBSERIAL) is enabled OR the
 // always-on debugger (DEBUGGER_ENABLED) needs the serial port without the rest
@@ -94,6 +97,32 @@ it must reach a TU through exactly one path: this header.
 #    define MBETH_MBED_LWIP
 #  else
 #    define MBETH_SPI
+#  endif
+#endif
+
+// ---------------------------------------------------------------------------
+// RTOS mode: do the services need the network lock (openplc_net_lock, plc_rtos.h)?
+//
+// Not where the core's stack has locks of its own (lwIP on the ESP32 and the
+// Pico W, Mbed OS, Zephyr). Yes for a library that drives its chip directly
+// (W5x00, EthernetENC, WiFiNINA, WiFiS3) and for anything not known to be safe.
+// With the chip on SPI, the SPI lock is the network lock (OPLC_NET_ON_SPI).
+// ---------------------------------------------------------------------------
+#if OPENPLC_RTOS
+#  if defined(OPENPLC_RTOS_FREERTOS_ESP32) || defined(OPENPLC_RTOS_ZEPHYR)
+#    define OPLC_NET_LOCKED 0
+#  elif defined(OPENPLC_RTOS_MBED_RTX) && !defined(BOARD_WIFININA) && !defined(MBETH_SPI) && \
+        (defined(MBETH_MBED_LWIP) || defined(MBTCP_WIFI))
+#    define OPLC_NET_LOCKED 0
+#  elif defined(OPENPLC_RTOS_FREERTOS_RP2040) && defined(BOARD_PICOW) && defined(MBTCP_WIFI)
+#    define OPLC_NET_LOCKED 0
+#  else
+#    define OPLC_NET_LOCKED 1
+#  endif
+#  if OPLC_NET_LOCKED && (defined(MBETH_SPI) || defined(BOARD_WIFININA))
+#    define OPLC_NET_ON_SPI 1
+#  else
+#    define OPLC_NET_ON_SPI 0
 #  endif
 #endif
 
