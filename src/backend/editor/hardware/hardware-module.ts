@@ -361,6 +361,7 @@ class HardwareModule {
               defaultDout: device.defaults?.pins?.defaultDout,
               defaultAin: device.defaults?.pins?.defaultAin,
               defaultAout: device.defaults?.pins?.defaultAout,
+              ...(device.defaults?.pins?.pull ? { pull: device.defaults.pins.pull } : {}),
             },
             // Forward platformOptions only when the manifest actually declares
             // some; the UI keys off `platformOptions?.length` to decide whether
