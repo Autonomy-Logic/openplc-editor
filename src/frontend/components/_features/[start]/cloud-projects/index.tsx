@@ -147,11 +147,11 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Re
             <div
               key={index}
               aria-hidden
-              className='h-[160px] w-[224px] animate-pulse overflow-hidden rounded-lg bg-neutral-200 dark:bg-neutral-800'
+              className='h-[120px] w-[168px] animate-pulse overflow-hidden rounded-lg bg-neutral-200 dark:bg-neutral-800'
             >
               {/* Mirrors the real folder card's layout so it resolves in place. */}
-              <div className='h-[33px] w-[60%] rounded-br-lg bg-neutral-300 dark:bg-neutral-700' />
-              <div className='flex h-[127px] flex-col justify-end gap-2 p-3'>
+              <div className='h-[25px] w-[60%] rounded-br-lg bg-neutral-300 dark:bg-neutral-700' />
+              <div className='flex h-[95px] flex-col justify-end gap-2 p-3'>
                 <div className='h-3 w-[55%] rounded bg-neutral-300 dark:bg-neutral-700' />
                 <div className='h-2 w-[75%] rounded bg-neutral-300/70 dark:bg-neutral-700/70' />
                 <div className='h-2 w-[40%] rounded bg-neutral-300/50 dark:bg-neutral-700/50' />
@@ -220,7 +220,7 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Re
               {summary.locked ? (
                 <span
                   aria-label={LOCKED_TOOLTIP}
-                  className='pointer-events-none absolute right-3 top-9 flex size-6 items-center justify-center rounded-md bg-neutral-900/80 text-white'
+                  className='pointer-events-none absolute right-2 top-7 flex size-6 items-center justify-center rounded-md bg-neutral-900/80 text-white'
                 >
                   <Lock className='size-3.5' />
                 </span>

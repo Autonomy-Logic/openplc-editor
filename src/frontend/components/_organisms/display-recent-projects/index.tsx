@@ -161,14 +161,14 @@ const DisplayRecentProjects = ({ searchNameFilterValue, onProjectUploaded, ...pr
               projectPath={proj.path}
               lastModified={projectTimes[proj.path]}
             />
-            {/* top-10 sits just inside the folder body's SVG shape, clear of the tab above it.
+            {/* top-7 sits just inside the folder body's SVG shape, clear of the tab above it.
                 Stops click propagation so opening the menu doesn't also fire the card's onClick. */}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
                 <button
                   aria-label='Project actions'
                   onClick={(e) => e.stopPropagation()}
-                  className='absolute right-2 top-10 rounded p-1 hover:bg-black/20 focus:outline-none dark:hover:bg-black/40'
+                  className='absolute right-2 top-7 rounded p-1 hover:bg-black/20 focus:outline-none dark:hover:bg-black/40'
                   title='More actions'
                 >
                   <svg className='h-4 w-4 text-white' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'>
