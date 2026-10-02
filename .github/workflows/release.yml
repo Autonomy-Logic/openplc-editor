@@ -14,11 +14,46 @@ on:
 env:
   NODE_VERSION: '22.x'
 
+# Only create-release writes to the repository, and it asks for that itself.
+permissions:
+  contents: read
+
 jobs:
+  # =============================================================================
+  # Release gate - a stable tag needs a published release candidate first
+  # =============================================================================
+  # Every installed editor from 4.1.0 on auto-updates from the latest stable
+  # release (DOPE-486), so a stable tag reaches the whole macOS and Linux fleet.
+  # It must have been through a published vX.Y.Z-rc.N first. Those rc releases
+  # are kept: stable clients ignore prereleases, and this gate reads them.
+  # Runs before the builds so a missing rc fails in seconds, not after them.
+  release-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a published release candidate for a stable tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "Prerelease tag ${GITHUB_REF_NAME}: no release candidate required."
+            exit 0
+          fi
+          COUNT=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 \
+            --json tagName,isDraft,isPrerelease \
+            --jq "[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | startswith(\"v${VERSION}-rc.\")))] | length")
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No published release candidate v${VERSION}-rc.N. Release and test one before tagging v${VERSION}."
+            exit 1
+          fi
+          echo "Found ${COUNT} published release candidate(s) for v${VERSION}."
+
   # =============================================================================
   # macOS Build - Builds both x64 and arm64
   # =============================================================================
   build-macos:
+    needs: release-gate
     runs-on: macos-latest
     steps:
       - name: Checkout repository
@@ -120,6 +155,22 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # What installed editors update from: the notarized .app zipped per
+      # arch, its blockmap for differential downloads, and the metadata that
+      # lists both archs. The DMGs above are for first installs only.
+      - name: Upload macOS update files
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-update
+          path: |
+            release/build/latest-mac.yml
+            release/build/OpenPLC-Editor-${{ steps.version.outputs.version }}-arm64.zip
+            release/build/OpenPLC-Editor-${{ steps.version.outputs.version }}-arm64.zip.blockmap
+            release/build/OpenPLC-Editor-${{ steps.version.outputs.version }}-x64.zip
+            release/build/OpenPLC-Editor-${{ steps.version.outputs.version }}-x64.zip.blockmap
+          retention-days: 30
+          if-no-files-found: error
+
   # =============================================================================
   # Windows Build - x64
   # =============================================================================
@@ -130,6 +181,7 @@ jobs:
     # underlying VS 2026 maxBuffer issue could trip x64 too on a
     # future runner rotation.  Pinning both today is cheaper than
     # debugging the same class of failure again in a few months.
+    needs: release-gate
     runs-on: windows-2022
     steps:
       - name: Checkout repository
@@ -212,6 +264,7 @@ jobs:
     # the ARM64 cross-compile of `@serialport/bindings-cpp` fails.
     # When node-gyp / electron-builder ship a fix we can revert to
     # `windows-latest`.
+    needs: release-gate
     runs-on: windows-2022
     steps:
       - name: Checkout repository
@@ -289,6 +342,7 @@ jobs:
   # Linux Build - x64
   # =============================================================================
   build-linux-x64:
+    needs: release-gate
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -335,11 +389,16 @@ jobs:
           BUILD_DATE: ${{ steps.version.outputs.build_date }}
         run: npm run package
 
+      # The AppImage name carries no version on purpose: electron-updater
+      # replaces a version-less AppImage in place, so the user's shortcuts keep
+      # pointing at it across updates.
       - name: Upload Linux x64 AppImage
         uses: actions/upload-artifact@v4
         with:
           name: linux-x64-appimage
-          path: release/build/*.AppImage
+          path: |
+            release/build/OpenPLC-Editor.AppImage
+            release/build/latest-linux.yml
           retention-days: 30
           if-no-files-found: error
 
@@ -347,6 +406,7 @@ jobs:
   # Linux Build - ARM64
   # =============================================================================
   build-linux-arm64:
+    needs: release-gate
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
@@ -393,41 +453,52 @@ jobs:
           BUILD_DATE: ${{ steps.version.outputs.build_date }}
         run: npm run build
 
+      # Named at build time, not renamed afterwards: latest-linux-arm64.yml
+      # records the file name electron-builder wrote, so a rename after the
+      # fact would point every ARM64 editor at a file that does not exist.
       - name: Package for ARM64
-        run: npx electron-builder --linux AppImage --arm64 --publish never
+        run: npx electron-builder --linux AppImage --arm64 --publish never -c.linux.artifactName='OpenPLC-Editor-ARM64.${ext}'
         env:
           CI: 'true'
 
-      - name: Rename artifact for ARM64
-        run: |
-          for f in release/build/*.AppImage; do
-            if [ -f "$f" ]; then
-              newname="${f%.AppImage}-ARM64.AppImage"
-              mv "$f" "$newname"
-              echo "Renamed to: $newname"
-            fi
-          done
-
+      # The metadata travels with its AppImage so they are missing together or
+      # not at all; verify-release-assets.js refuses one without the other.
       - name: Upload Linux ARM64 AppImage
         uses: actions/upload-artifact@v4
         with:
           name: linux-arm64-appimage
-          path: release/build/*-ARM64.AppImage
+          path: |
+            release/build/OpenPLC-Editor-ARM64.AppImage
+            release/build/latest-linux-arm64.yml
           retention-days: 30
           if-no-files-found: warn  # Warn only since ARM64 binaries may be missing
 
   # =============================================================================
   # Create GitHub Release
   # =============================================================================
+  # Publishing reaches every installed macOS and Linux editor (DOPE-486), so
+  # this job waits for approval in the `release` environment, verifies every
+  # file before anything is uploaded, and publishes stable releases to a 1%
+  # stage first. Raise the stage with release-stage.yml. See docs/auto-update.md.
   create-release:
     needs: [build-macos, build-windows-x64, build-windows-arm64, build-linux-x64, build-linux-arm64]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Only the YAML parser, not the whole repository.
+      - name: Install the release verifier's dependency
+        run: npm install --prefix "$RUNNER_TEMP/verifier" --no-audit --no-fund yaml@2.8.1
 
       - name: Get version
         id: version
@@ -449,21 +520,43 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == *"beta"* ]] || [[ "${{ github.ref }}" == *"alpha"* ]] || [[ "${{ github.ref }}" == *"rc"* ]]; then
             echo "flag=--prerelease" >> $GITHUB_OUTPUT
+            echo "staging=" >> $GITHUB_OUTPUT
           else
             echo "flag=" >> $GITHUB_OUTPUT
+            echo "staging=--staging 1" >> $GITHUB_OUTPUT
           fi
 
+      # One flat directory holding exactly what will be uploaded. Windows
+      # contributes its installers only: its latest.yml is never published,
+      # because Windows clients up to now have no publisherName and would
+      # install whatever it pointed to without checking a signature.
+      - name: Assemble release assets
+        run: |
+          mkdir -p release-assets
+          cp artifacts/macos-x64-dmg/*.dmg release-assets/
+          cp artifacts/macos-arm64-dmg/*.dmg release-assets/
+          cp artifacts/macos-update/* release-assets/
+          cp artifacts/windows-x64-exe/*.exe release-assets/
+          cp artifacts/windows-arm64-exe/*.exe release-assets/
+          cp artifacts/linux-x64-appimage/* release-assets/
+          if [ -d artifacts/linux-arm64-appimage ]; then cp artifacts/linux-arm64-appimage/* release-assets/; fi
+          ls -la release-assets
+
+      - name: Verify release assets
+        env:
+          NODE_PATH: ${{ runner.temp }}/verifier/node_modules
+        run: node scripts/verify-release-assets.js verify release-assets ${{ steps.prerelease.outputs.staging }}
+
+      # Created as a draft so no client ever sees the release before its
+      # update metadata is attached, then published in one step.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ github.ref_name }}" \
+            --draft \
             --title "OpenPLC Editor v${{ steps.version.outputs.version }}" \
             --generate-notes \
             ${{ steps.prerelease.outputs.flag }} \
-            artifacts/macos-x64-dmg/*.dmg \
-            artifacts/macos-arm64-dmg/*.dmg \
-            artifacts/windows-x64-exe/*.exe \
-            artifacts/windows-arm64-exe/*.exe \
-            artifacts/linux-x64-appimage/*.AppImage \
-            artifacts/linux-arm64-appimage/*.AppImage
+            release-assets/*
+          gh release edit "${{ github.ref_name }}" --draft=false
