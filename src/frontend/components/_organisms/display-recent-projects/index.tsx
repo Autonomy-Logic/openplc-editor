@@ -199,7 +199,7 @@ const DisplayRecentProjects = ({
       <h2 className='mb-6 flex  cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Projects
       </h2>
-      <div className='scroll-area flex min-h-0 w-full flex-1 flex-wrap gap-[25px] overflow-y-auto pb-2'>
+      <div className='scroll-area flex min-h-0 w-full flex-1 flex-wrap content-start gap-[25px] overflow-y-auto pb-2'>
         {entries.map((entry) => {
           if (entry.kind === 'cloud') {
             return <CloudProjectCard key={entry.key} summary={entry.summary} />
