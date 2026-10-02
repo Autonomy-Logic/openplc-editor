@@ -114,7 +114,7 @@ const OPENED: ProjectResponse = {
 }
 
 const HEADING = 'Autonomy Edge Cloud Projects'
-const SIGN_IN_COPY = /Sign in with your Autonomy Edge account to access Edge features/i
+const SIGN_IN_COPY = /^Sign in with your Autonomy Edge account$/i
 const LOADING = { name: /loading cloud projects/i }
 
 const lastToast = () => getMemoryState().toasts[0]

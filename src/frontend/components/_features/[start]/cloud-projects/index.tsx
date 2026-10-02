@@ -3,7 +3,7 @@
  * stays reserved whether or not anyone is signed in, so the layout never reflows.
  */
 
-import { CloudUpload, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { CloudProjectsResult, CloudProjectSummary } from '../../../../../middleware/shared/ports/project-port'
@@ -161,27 +161,15 @@ const StartCloudProjects = ({ searchNameFilterValue, revision = 0, orderBy = 'Re
         </div>
       ) : result.status === 'signed-out' ? (
         // `blue-500`, not `brand`: the brand token is a hex `var()` and Tailwind 3 can't apply an opacity modifier to it.
-        <div className='flex w-full flex-col items-center gap-4 rounded-xl border border-blue-500/25 bg-blue-500/5 px-6 py-8 text-center'>
-          <span className='flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-brand'>
-            <CloudUpload className='size-5' />
-          </span>
-          <div className='flex flex-col items-center gap-1'>
-            <h3 className='font-caption text-base font-semibold text-neutral-1000 dark:text-white'>
-              Bring your cloud projects here
-            </h3>
-            {/* Names what an account unlocks: a visitor deciding whether to sign in has no other way to know. */}
-            <p className='max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400'>
-              Sign in with your Autonomy Edge account to access Edge features: open your cloud projects in this editor
-              and save straight back to them, track changes with version control (branches, commits and history), and
-              get help from the AI assistant. Without an account, only local projects are available.
-            </p>
-          </div>
-
-          <div className='flex items-center gap-4'>
+        <div className='flex w-full flex-col items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/5 px-4 py-3 text-center'>
+          <h3 className='font-caption text-sm font-semibold text-neutral-1000 dark:text-white'>
+            Sign in with your Autonomy Edge account
+          </h3>
+          <div className='flex items-center gap-3'>
             <button
               type='button'
               onClick={() => setSignInOpen(true)}
-              className='cursor-pointer rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-medium-dark'
+              className='cursor-pointer rounded-md bg-brand px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-medium-dark'
             >
               Sign in
             </button>
