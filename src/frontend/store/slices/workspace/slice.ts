@@ -25,7 +25,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     close: {
       window: false,
       app: false,
-      appDarwin: false,
     },
     // PLC Logs
     isPlcLogsVisible: false,
@@ -92,13 +91,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setCloseAppDarwin: (value) => {
-      setState(
-        produce(({ workspace }: WorkspaceSlice) => {
-          workspace.close.appDarwin = value
-        }),
-      )
-    },
     setCloseWindow: (value) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -162,6 +154,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.isEphemeralProject = false
           workspace.editingState = 'initial-state'
           workspace.selectedProjectTreeLeaf = { label: '', type: null }
+          workspace.isCollapsed = false
+          workspace.isModalOpen = []
           workspace.isDebuggerVisible = false
           workspace.debuggerTargetIp = null
           workspace.debugCContent = null

@@ -738,9 +738,9 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
           onOpenChange={setSignInOpen}
           account={edgeAccount}
           reason={signInReason}
-          onSignedIn={() => {
+          onSignedIn={({ sessionRestored }) => {
             setSignInOpen(false)
-            onSignedIn()
+            onSignedIn(sessionRestored)
           }}
         />
       )}

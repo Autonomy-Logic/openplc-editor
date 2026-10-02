@@ -28,6 +28,7 @@ import type {
   CompilerPlatformPort,
   PlatformDeviceContext,
   PlatformLog,
+  RuntimeV4Bundle,
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
@@ -693,7 +694,7 @@ async function runCompilePipelineInner(
     emit({ stage: 'runtime-v4-bundle', message: 'Composing Runtime v4 upload bundle...', level: 'info' })
     const userTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
     const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames)
-    const bundle = composeRuntimeV4Bundle({
+    const bundle: RuntimeV4Bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
       strucppFiles: strucppFilesMap,
@@ -1133,7 +1134,7 @@ async function runCompilePipelineInner(
   // skeleton's stub (OPENPLC_RTOS 0) stays and the build is the single loop.
   let rtosConfigH: string | undefined
   // Board options the RTOS needs selected (arduino-pico's os=freertos), for
-  // every step that names the board: compile, its pre-compile, and upload.
+  // every step that names the board: compile and upload.
   let rtosBoardOptions: Readonly<Record<string, string>> | undefined
   // ...and the -D flags it needs in every file compiled (the Uno R4's FreeRTOS).
   let rtosExtraFlags: readonly string[] = []

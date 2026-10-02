@@ -36,6 +36,7 @@ import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-librar
 import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
+import { setMenuProjectOpen } from './middleware/adapters/editor/window-adapter'
 import { editorPorts, packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
 
@@ -214,10 +215,11 @@ export default function App() {
     setRuntimeIpAddress(runtimeIpAddress)
   }, [runtimeIpAddress])
 
-  // Sync project path to the platform adapter so the ESI port can access it
+  // Sync project path to the platform adapter (ESI port) and the native menu's project-only items
   const projectPath = useOpenPLCStore((state) => state.project.meta.path)
   useEffect(() => {
     setProjectPath(projectPath)
+    setMenuProjectOpen(projectPath !== '')
   }, [projectPath])
 
   return (

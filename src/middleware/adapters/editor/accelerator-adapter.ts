@@ -112,5 +112,9 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
     onQuitApp(callback: () => void): Unsubscribe {
       return window.bridge.quitAppRequest(() => callback())
     },
+
+    onRefresh(callback: () => void): Unsubscribe {
+      return window.bridge.refreshRequest(() => callback())
+    },
   }
 }
