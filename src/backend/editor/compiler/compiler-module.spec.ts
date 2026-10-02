@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 import { CompilerModule, mergeStandardFlags, standardFlagsForCore } from './compiler-module'
 
@@ -299,7 +299,18 @@ describe('CompilerModule', () => {
       return null
     }
 
-    const bridge = { loadEnabledArchives: () => ({ archives: [], missing: [] }) }
+    // The verification compile reaches `compileProgram`, whose bridge contract
+    // names the runtime-API pair.  Neither is called here — the build fails on
+    // the missing manifest long before — so a throwing stub documents that.
+    const bridge = {
+      loadEnabledArchives: () => ({ archives: [], missing: [] }),
+      makeRuntimeApiRequest: () => {
+        throw new Error('the library path never talks to a runtime')
+      },
+      makeRuntimeApiUpload: () => {
+        throw new Error('the library path never uploads')
+      },
+    } as unknown as Parameters<CompilerModule['compileLibrary']>[2]
 
     const wellFormed = {
       pous: [],
@@ -317,7 +328,7 @@ describe('CompilerModule', () => {
       const compilerModule = new CompilerModule()
       const { messages, channel } = makeChannel()
 
-      await compilerModule.compileLibrary(['/project', wellFormed, []], channel, bridge)
+      await compilerModule.compileLibrary(['/project', wellFormed, wellFormed, false, []], channel, bridge)
 
       const result = readBuildResult(messages)
       // It still fails — there is no `library.json` on disk at `/project` — but
@@ -337,6 +348,10 @@ describe('CompilerModule', () => {
       [['/project', { pous: [] }, []], 'no configuration'],
       [['/project', { pous: [], configuration: {} }, []], 'no resource'],
       [['/project', { pous: [], configuration: { resource: {} } }, []], 'no task or instance list'],
+      [['/project', wellFormed, null, false, []], 'no verification project data'],
+      // The verification payload is a separate argument and gets the same
+      // shape check as the build payload; an empty object used to pass.
+      [['/project', wellFormed, {}, false, []], 'verification project data has no POU list'],
     ])('rejects %p with a result and a closed port', async (args, expected) => {
       const compilerModule = new CompilerModule()
       const { messages, isClosed, channel } = makeChannel()

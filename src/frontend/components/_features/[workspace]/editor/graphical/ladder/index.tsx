@@ -26,6 +26,7 @@ import { RungLadderState } from '../../../../../../store/slices/ladder'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
+import { findLibraryPou, libraryVariantDiverges } from '../../../../../../utils/PLC/library-block-divergence'
 import { BlockNode, BlockNodeData } from '../../../../../_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '../../../../../_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '../../../../../_atoms/graphical-editor/ladder/contact'
@@ -55,6 +56,7 @@ export default function LadderEditor() {
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
+  const systemLibraries = useOpenPLCStore((state) => state.libraries.system)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const { captureAndPush } = usePouSnapshot()
@@ -78,10 +80,22 @@ export default function LadderEditor() {
         if (!variant) continue
 
         const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
-        if (!libMatch) continue
+        const originalPou = libMatch ? pous.find((pou) => pou.name === libMatch.name) : undefined
 
-        const originalPou = pous.find((pou) => pou.name === libMatch.name)
-        if (!originalPou) continue
+        if (!originalPou) {
+          // Not a POU this project owns, so it came out of a library. The
+          // load-time re-stamp reports a pin the library added and cannot draw
+          // it; this is what puts the badge there to apply it.
+          const libraryPou = findLibraryPou(
+            variant,
+            systemLibraries,
+            pous.map((pou) => pou.name),
+          )
+          if (libraryPou && libraryVariantDiverges(variant, libraryPou)) {
+            divergences.push(`${rung.id}:${node.id}`)
+          }
+          continue
+        }
 
         const originalVariables = originalPou.interface?.variables ?? []
         const originalInOut = originalVariables.filter((variable) =>
@@ -126,7 +140,7 @@ export default function LadderEditor() {
     }
 
     return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
-  }, [flow?.rungs, userLibraries, pous])
+  }, [flow?.rungs, userLibraries, systemLibraries, pous])
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {

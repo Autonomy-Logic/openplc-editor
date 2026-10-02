@@ -156,6 +156,40 @@ export function injectLibraryBlocks(projectData: PLCProjectData, archives: Stlib
 }
 
 /**
+ * Every data-type name in scope for a compile: the project's own, plus those
+ * the enabled libraries declare.
+ *
+ * The native bridge spells a pin's type from this set: strucpp declares a
+ * POU member of a data type as `IEC_<NAME>`, while a function block instance
+ * keeps its bare class name, and `mapUserTypeToIEC` tells them apart by
+ * membership.
+ *
+ * A library's types are emitted into the consuming project exactly as its own
+ * are, so they must be in the set too — built from the project alone, a pin
+ * typed by a library got `strucpp::MB_SPACE *` against strucpp's own
+ * `IEC_MB_SPACE`.
+ */
+export function projectAndLibraryTypeNames(
+  // Only the two fields this reads, so it takes the port shape and the schema
+  // shape alike — they differ on `configuration`/`configurations`, which is
+  // nothing to do with type names.
+  projectData: { dataTypes?: { name: string }[]; libraries?: { name: string }[] },
+  archives: readonly unknown[],
+): string[] {
+  const names = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
+
+  const enabled = new Set((projectData.libraries ?? []).map((ref) => ref.name))
+  for (const archive of archives as StlibArchiveDTO[]) {
+    const libraryName = archive?.manifest?.name
+    if (!libraryName || !enabled.has(libraryName)) continue
+    for (const type of archive.manifest.types ?? []) {
+      names.push(type.name)
+    }
+  }
+  return names
+}
+
+/**
  * Names of enabled libraries that declare native blocks whose source is
  * missing from the archive.
  *

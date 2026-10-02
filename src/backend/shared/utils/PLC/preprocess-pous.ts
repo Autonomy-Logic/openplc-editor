@@ -289,6 +289,20 @@ function preprocessPous(
         pou.interface?.variables ?? [],
     }))
 
+    // A pin typed by a function block is an alias for the caller's instance, so
+    // the field it fills already holds a pointer. Collected from the project's
+    // own POUs and from every installed library.
+    const functionBlockNames = new Set<string>(
+      processedProjectData.pous
+        .filter((candidate: PLCPou) => candidate.pouType === 'function-block')
+        .map((candidate: PLCPou) => candidate.name.toUpperCase()),
+    )
+    for (const library of libraries ?? []) {
+      for (const block of library.functionBlocks) {
+        functionBlockNames.add(block.name.toUpperCase())
+      }
+    }
+
     processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
       if (pou.body.language === 'cpp') {
         const stCode = generateCppSTCode({
@@ -296,6 +310,7 @@ function preprocessPous(
           allVariables:
             /* istanbul ignore next -- defensive: interface may be undefined */
             pou.interface?.variables ?? [],
+          functionBlockNames,
         })
 
         return {

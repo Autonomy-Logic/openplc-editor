@@ -26,9 +26,53 @@ function baseInput(overrides: Partial<ComposeRuntimeV4BundleInput> = {}): Compos
       opcUa: null,
       ethercat: '{"masters":[]}',
     },
+    libraryResources: [],
     ...overrides,
   }
 }
+
+describe('composeRuntimeV4Bundle — library resources', () => {
+  it('writes each library folder under libraries/, as it stands', () => {
+    const files = composeRuntimeV4Bundle(
+      baseInput({
+        libraryResources: [
+          {
+            name: 'DemoProtocol',
+            files: [
+              { path: 'library.properties', content: 'name=DemoProtocol\n' },
+              { path: 'src/DemoApi.h', content: '// api\n' },
+              { path: 'src/transport/DemoUdp.cpp', content: '// udp\n' },
+            ],
+          },
+        ],
+      }),
+    )
+    // Same layout the firmware bundle uses. Makefile.strucpp puts every
+    // libraries/*/src on the include path and compiles beneath it, so a block
+    // resolves `#include <DemoApi.h>` exactly as it does on Arduino.
+    expect(files['libraries/DemoProtocol/src/DemoApi.h']).toBe('// api\n')
+    expect(files['libraries/DemoProtocol/src/transport/DemoUdp.cpp']).toBe('// udp\n')
+    expect(files['libraries/DemoProtocol/library.properties']).toBe('name=DemoProtocol\n')
+  })
+
+  it('cannot collide with a generated artefact, which all sit at the root', () => {
+    const files = composeRuntimeV4Bundle(
+      baseInput({
+        libraryResources: [
+          {
+            name: 'DemoProtocol',
+            files: [
+              { path: 'generated.cpp', content: '// hijacked\n' },
+              { path: 'src/generated.cpp', content: '// also fine\n' },
+            ],
+          },
+        ],
+      }),
+    )
+    expect(files['generated.cpp']).toBe('// generated\n')
+    expect(files['libraries/DemoProtocol/generated.cpp']).toBe('// hijacked\n')
+  })
+})
 
 describe('composeRuntimeV4Bundle', () => {
   it('writes program.st at the zip root', () => {

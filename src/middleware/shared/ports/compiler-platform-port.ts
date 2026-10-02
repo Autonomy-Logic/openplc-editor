@@ -35,6 +35,7 @@
  * server-side, but the pipeline never knows.
  */
 
+import type { BundleFile } from '../utils/library/bundle-file'
 import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
@@ -118,8 +119,12 @@ export interface CompileArduinoArgs {
    *  `src/c_blocks.h`, `examples/Baremetal/c_blocks_code.cpp`,
    *  `src/defines.h`, and the bundled firmware skeleton + strucpp
    *  runtime headers.  On editor: written to disk before
-   *  arduino-cli runs.  On web: POSTed in the request body. */
-  files: Record<string, string>
+   *  arduino-cli runs.  On web: POSTed in the request body.
+   *
+   *  Almost every entry is generated text.  An entry carrying bytes — a
+   *  library's precompiled `.a` — arrives as `{ base64 }` and must be written
+   *  decoded; see `BundleFile`. */
+  files: Record<string, BundleFile>
   /** Argv suffix for arduino-cli compile (after the `compile`
    *  subcommand).  Comes from the shared `buildArduinoCliCompileArgs`
    *  helper. */
@@ -148,7 +153,8 @@ export interface CompileArduinoResult {
 export interface UploadRuntimeV4Args {
   /** File map the runtime extracts on the device.  Already
    *  composed by `composeRuntimeV4Bundle`; the pipeline passes it
-   *  straight through. */
+   *  straight through.  A `{ base64 }` entry carries bytes — see
+   *  `RuntimeV4Bundle`. */
   bundle: RuntimeV4Bundle
   /** Discriminated device context; see `PlatformDeviceContext`. */
   context: PlatformDeviceContext
@@ -301,12 +307,13 @@ export interface CheckRuntimeVersionResult {
 /**
  * Path → content of a runtime-v4 upload bundle.
  *
- * Text for everything the compile pipeline composes; `Uint8Array` exists for
- * VPP plugin payloads, which may be precompiled objects (`hal.provisioning
- * === 'prebuilt'`). Routing those through a JS string would corrupt them, and
- * the corruption would only surface as a link failure on the device.
+ * Text for most of what the compile pipeline composes, and `{ base64 }` for a
+ * library resource's bytes (see `BundleFile`). `Uint8Array` exists for VPP
+ * plugin payloads, which may be precompiled objects (`hal.provisioning ===
+ * 'prebuilt'`). Routing those through a JS string would corrupt them, and the
+ * corruption would only surface as a link failure on the device.
  */
-export type RuntimeV4Bundle = Record<string, string | Uint8Array>
+export type RuntimeV4Bundle = Record<string, BundleFile | Uint8Array>
 
 /** VPP (Vendor Plugin Package) runtime-v4 packaging.  Boards that
  *  come from an installed `.vpp` package ship a vendor I/O driver
@@ -446,7 +453,8 @@ export interface CompilerPlatformPort {
 }
 
 export interface MaterializeRuntimeV4BundleArgs {
-  /** Path → file content, as composed by `composeRuntimeV4Bundle`. */
+  /** Path → file content, as composed by `composeRuntimeV4Bundle`.  A
+   *  `{ base64 }` or `Uint8Array` entry carries bytes — see `RuntimeV4Bundle`. */
   bundle: RuntimeV4Bundle
 }
 

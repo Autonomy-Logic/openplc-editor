@@ -93,7 +93,20 @@ export function isValueCompletionKind(kind: number | undefined): boolean {
  * resolves differently depending on which one asked.
  */
 export function splitExpression(value: string): { anchor: string; segment: string } {
-  const lastDot = value.lastIndexOf('.')
+  // Split at the last dot that is NOT inside a subscript. A dot between
+  // brackets belongs to the index expression, not to the member chain:
+  // `arr[s.k]` is one element of `arr`, not a member `k` of something called
+  // `arr[s`. Splitting naively there produced an anchor that could never
+  // resolve and a segment that was not an identifier.
+  let lastDot = -1
+  let depth = 0
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]
+    if (ch === '[') depth++
+    else if (ch === ']') {
+      if (depth > 0) depth--
+    } else if (ch === '.' && depth === 0) lastDot = i
+  }
   if (lastDot < 0) return { anchor: '', segment: value }
   return { anchor: value.slice(0, lastDot + 1), segment: value.slice(lastDot + 1) }
 }

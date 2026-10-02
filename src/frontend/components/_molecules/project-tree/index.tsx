@@ -470,6 +470,7 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'ethercatDevice'
     | 'softMotionDrive'
     | 'libraryManifest'
+    | 'buildSettings'
     | 'userManagement'
     | 'persistentStorage'
   leafType: WorkspaceProjectTreeLeafType
@@ -512,6 +513,9 @@ const LeafSources = {
   // render the same glyph — the manifest is the user's entry point
   // into a library project, so it earns a dedicated mark.
   libraryManifest: { LeafIcon: LibraryManifestIcon },
+  // Build Settings shares the device-configuration gear: both are the
+  // settings screen for how the project is built.
+  buildSettings: { LeafIcon: ConfigIcon },
   userManagement: { LeafIcon: UsersIcon },
   persistentStorage: { LeafIcon: ConfigIcon },
 }
@@ -562,6 +566,19 @@ const ProjectTreeLeaf = ({
   // A SoftMotion drive is an EtherCAT child device too (cia402.enabled) — it
   // shares every EtherCAT device action (rename/delete), just a distinct icon.
   const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice' || leafLang === 'softMotionDrive', [leafLang])
+  // A fixed leaf names a panel, not a file, so it has nothing to rename or
+  // delete. One predicate for both the actions popover and the double-click,
+  // which used to disagree — the popover was hidden while a double-click still
+  // opened a rename box that `handleRenameFile` could only refuse.
+  const isFixedLeaf = useMemo(
+    () =>
+      leafLang === 'devPin' ||
+      leafLang === 'devConfig' ||
+      leafLang === 'buildSettings' ||
+      leafLang === 'userManagement' ||
+      leafLang === 'persistentStorage',
+    [leafLang],
+  )
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -859,16 +876,13 @@ const ProjectTreeLeaf = ({
             name === label && 'font-medium text-neutral-1000 dark:text-white',
             isUnsaved(associatedFile) && 'italic',
           )}
-          onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
+          onDoubleClick={() => !isDebuggerVisible && !isFixedLeaf && setIsEditing(true)}
         >
           <HighlightedText text={handleLabel(label) || ''} searchQuery={highlightQuery} />
         </span>
       )}
 
-      {leafLang === 'devPin' ||
-      leafLang === 'devConfig' ||
-      leafLang === 'userManagement' ||
-      leafLang === 'persistentStorage' ? null : (
+      {isFixedLeaf ? null : (
         <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
             disabled={isDebuggerVisible}

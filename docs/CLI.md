@@ -10,6 +10,7 @@ a parallel implementation.
 | Build                         | `openplc-cli compile <project>`    |
 | Build & Upload                | `openplc-cli upload <project>`     |
 | Search / serial-port dropdown | `openplc-cli devices`              |
+| Library Manager               | `openplc-cli library …`            |
 | Debug                         | `openplc-cli debug open …`         |
 | Start / Stop                  | `openplc-cli debug start` / `stop` |
 | Variable poll, force dialog   | `openplc-cli debug read` / `force` |
@@ -289,6 +290,112 @@ OPENPLC_CREDENTIALS=user:pass    # or OPENPLC_USER + OPENPLC_PASSWORD
 
 Prefer the environment form in CI: a flag lands in shell history and job logs.
 
+## Libraries
+
+A library is a `.stlib` archive: blocks, their pin signatures, data types, and
+any C/C++ sources they ship. Building one, installing it and choosing which
+version a project compiles against are all scriptable.
+
+```sh
+openplc-cli library build <library-project> [--clean]   # project -> .stlib
+openplc-cli library install <file.stlib|.lib|.library|.zip>
+openplc-cli library uninstall <name>[@<version>] [--all]
+openplc-cli library info <name>[@<version>]
+openplc-cli library list
+openplc-cli library pin <project> <name>@<version>
+openplc-cli library unpin <project> <name>
+```
+
+A version is named with `@`, not a flag: `--version` is global and prints the
+CLI's own version.
+
+### A ZIP installs every library it holds
+
+`install` takes a `.zip` as well as a single file, and installs every `.stlib`,
+`.lib` and `.library` inside it at any depth — a vendor drop of several
+libraries, or one library built for several versions. Each goes through the
+same preparer it would have on its own, so a CODESYS file in a ZIP is imported
+exactly as picking it directly would. Anything else in the ZIP is ignored,
+including the `__MACOSX` forks Finder adds.
+
+One bad file does not stop the rest: the good ones install and the output names
+each one that did not, so a bundle of eight with one corrupt file installs
+seven.
+
+```sh
+$ openplc-cli library install vendor-libs.zip
+Installed 3 libraries from vendor-libs.zip
+  libtest-basic 0.1.0
+  libtest-basic 0.2.0
+  node-uio 0.0.1
+```
+
+A ZIP that will not open, or holds no library file at all, fails outright —
+that is the wrong file rather than a bad archive.
+
+### Versions live side by side
+
+Installing `0.2.0` does not replace `0.1.0`. Both stay, and each project picks
+one. `list` names the newest and, once anything has more than one, adds a column
+listing them all; the JSON always carries the full array.
+
+```sh
+$ openplc-cli library list
+Name           Version  Installed            Origin
+libtest-basic  0.2.0    0.2.0, 0.1.0         stlib
+```
+
+`uninstall` refuses to choose for you when several are installed — name one, or
+pass `--all`. Bundled libraries cannot be uninstalled; disable them per project
+instead.
+
+### Pinning
+
+The pin lives in the project's `project.json` and decides what the compiler
+resolves against, so changing it changes the generated code:
+
+```sh
+openplc-cli library pin ./my-project libtest-basic@0.1.0
+openplc-cli compile ./my-project          # COUNTER_FB.PV is INT
+
+openplc-cli library pin ./my-project libtest-basic@0.2.0
+openplc-cli compile ./my-project          # COUNTER_FB.PV is REAL
+```
+
+`pin` refuses a version that is not installed rather than writing a reference the
+compiler would quietly substitute later. It rewrites one field of `project.json`
+and leaves the rest of the file alone.
+
+Diagrams already on the canvas are **reported, not rewritten**:
+
+```
+Repinned libtest-basic 0.1.0 → 0.2.0.
+  warning: COUNTER_FB: the library added pin RESET (BOOL). 1 placed block in main does not draw it yet.
+  COUNTER_FB.PV: type INT → REAL — 1 block in main.
+```
+
+Growing a block needs the editor's own layout engine, so the CLI says what
+changed and the GUI applies it the next time the project is opened. A pin type
+that changed is honoured by the compiler immediately either way.
+
+### `info`
+
+`list` carries identity only. `info` opens the archive and prints what is in it —
+which is how you answer "did this pin change between versions" without unpacking
+anything:
+
+```sh
+$ openplc-cli library info libtest-basic@0.2.0
+libtest-basic 0.2.0
+  namespace: libtest_basic
+  installed: 0.2.0, 0.1.0
+
+Function blocks (1)
+  COUNTER_FB
+    in:    CU: BOOL, MODE: TEST_MODE, RESET: BOOL
+    out:   Q: BOOL, CV: INT
+```
+
 ## Debug sessions
 
 A debug session is long-lived; a test step is one process. So `debug open` starts
@@ -332,25 +439,25 @@ point of naming a timeout is that the default was wrong for this run.
 
 ### Flags, by command
 
-| Flag                   | Command                             | Meaning                                                                                             |
-| ---------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `--session <id>`       | any `debug` subcommand              | which session, when several are open                                                                |
-| `--idle-timeout <ms>`  | `debug open`                        | idle budget; `0` disables (see above)                                                               |
-| `--force-new`          | `debug open`                        | start a session even if one is already open for this project and target                             |
-| `--upload-if-needed`   | `debug open`                        | upload first when the target's program does not match                                               |
-| `--var <name>`         | `read`, `force`, `unforce`           | the variable, when you would rather not pass it positionally                                        |
-| `--value <literal>`    | `force`                             | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                    |
-| `--filter <substring>` | `list-vars`                         | only variables whose path contains it                                                               |
-| `--interval <ms>`      | `watch`                             | sampling cadence; floor 20 ms                                                                       |
-| `--since <seq>`        | `poll`                              | only samples after this sequence number                                                             |
-| `--keep-forces`        | `close`                             | leave forced variables pinned                                                                       |
-| `--all`                | `close`                             | every session, not just one                                                                         |
-| `--keep-going`         | `exec`                              | run the remaining lines after one fails                                                             |
-| `--force`              | `create`                            | overwrite an existing destination                                                                   |
-| `--clean`              | `compile`, `upload`                 | discard the build directory first                                                                   |
-| `--user-data <dir>`    | any command                         | which editor state to use: settings, arduino-cli config, installed packages                         |
-| `-y`, `--yes`          | `upload`                            | skip the confirmation                                                                               |
-| `--create-user`        | `upload`, `debug open`              | permission to create the FIRST user on a fresh runtime v4, using the credentials you already passed |
+| Flag                   | Command                    | Meaning                                                                                             |
+| ---------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `--session <id>`       | any `debug` subcommand     | which session, when several are open                                                                |
+| `--idle-timeout <ms>`  | `debug open`               | idle budget; `0` disables (see above)                                                               |
+| `--force-new`          | `debug open`               | start a session even if one is already open for this project and target                             |
+| `--upload-if-needed`   | `debug open`               | upload first when the target's program does not match                                               |
+| `--var <name>`         | `read`, `force`, `unforce` | the variable, when you would rather not pass it positionally                                        |
+| `--value <literal>`    | `force`                    | the value — `16#FF`, `TRUE`, `T#5s`, all as the GUI accepts them                                    |
+| `--filter <substring>` | `list-vars`                | only variables whose path contains it                                                               |
+| `--interval <ms>`      | `watch`                    | sampling cadence; floor 20 ms                                                                       |
+| `--since <seq>`        | `poll`                     | only samples after this sequence number                                                             |
+| `--keep-forces`        | `close`                    | leave forced variables pinned                                                                       |
+| `--all`                | `close`                    | every session, not just one                                                                         |
+| `--keep-going`         | `exec`                     | run the remaining lines after one fails                                                             |
+| `--force`              | `create`                   | overwrite an existing destination                                                                   |
+| `--clean`              | `compile`, `upload`        | discard the build directory first                                                                   |
+| `--user-data <dir>`    | any command                | which editor state to use: settings, arduino-cli config, installed packages                         |
+| `-y`, `--yes`          | `upload`                   | skip the confirmation                                                                               |
+| `--create-user`        | `upload`, `debug open`     | permission to create the FIRST user on a fresh runtime v4, using the credentials you already passed |
 
 `watch` **records** into a buffer inside the session rather than streaming, so a
 transient that happens between two of your own commands is still there when you

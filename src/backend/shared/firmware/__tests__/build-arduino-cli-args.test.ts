@@ -156,6 +156,41 @@ describe('buildArduinoCliCompileArgs', () => {
     expect(args.indexOf('/packages/p1am/hal/arduino/lib')).toBeLessThan(args.indexOf('--export-binaries'))
   })
 
+  it('emits one --library per resource library, after the main src/', () => {
+    const args = buildArduinoCliCompileArgs(
+      { platform: 'arduino:avr:mega' },
+      {
+        sketchPath: 'examples/Baremetal/Baremetal.ino',
+        libraryPath: 'src',
+        resourceLibraryPaths: ['libraries/demo_lib', 'libraries/other_lib'],
+        parallel: false,
+      },
+    )
+    expect(args.filter((a) => a === '--library')).toHaveLength(3)
+    const firstLib = args.indexOf('--library')
+    expect(args.slice(firstLib, firstLib + 6)).toEqual([
+      '--library',
+      'src',
+      '--library',
+      'libraries/demo_lib',
+      '--library',
+      'libraries/other_lib',
+    ])
+    expect(args.indexOf('libraries/other_lib')).toBeLessThan(args.indexOf('--export-binaries'))
+  })
+
+  it('emits the same argv as before when no library ships resources', () => {
+    // A project with no resource libraries must produce a byte-identical
+    // command line, so adding the option cannot disturb an existing build.
+    const base = { sketchPath: 'a.ino', libraryPath: 'src', parallel: false }
+    const withoutOption = buildArduinoCliCompileArgs({ platform: 'arduino:avr:mega' }, base)
+    const withEmpty = buildArduinoCliCompileArgs(
+      { platform: 'arduino:avr:mega' },
+      { ...base, resourceLibraryPaths: [] },
+    )
+    expect(withEmpty).toEqual(withoutOption)
+  })
+
   it('emits a single --library when prebuiltLibraryPath is absent', () => {
     const args = buildArduinoCliCompileArgs(
       { platform: 'arduino:avr:mega' },

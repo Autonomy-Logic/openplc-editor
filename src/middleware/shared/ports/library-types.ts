@@ -119,6 +119,10 @@ export interface InstalledLibrary {
   origin: 'stlib' | 'codesys' | 'bundled'
   /** Optional human-readable label from the manifest.  Falls back
    *  to `name` in the UI. */
+  /** Every installed version of this library, newest first.  `version`
+   *  above is the first of these.  Absent for bundled libraries, which
+   *  ship one build with the editor. */
+  versions?: string[]
   displayName?: string
   /** Optional manifest descriptions surfaced in the manager's
    *  details panel.  Subset of the `.stlib` manifest — only the
@@ -133,7 +137,10 @@ export interface InstalledLibrary {
  * .lib/.library paths funnel through this shape so the renderer
  * doesn't branch on origin.
  */
-export type LibraryInstallResult =
+export type LibraryInstallResult = LibrarySingleInstallResult | LibraryBundleInstallResult
+
+/** Installing one archive: what every path except a ZIP returns. */
+export type LibrarySingleInstallResult =
   | {
       success: true
       /** True when the user closed the file picker without choosing
@@ -148,3 +155,49 @@ export type LibraryInstallResult =
     }
   | { success: true; canceled: true }
   | { success: false; error: string }
+
+/** One `.stlib` inside a ZIP, and what installing it did. */
+export type LibraryBundleEntry =
+  | { path: string; success: true; name: string; version: string; origin: 'stlib' | 'codesys' }
+  | { path: string; success: false; error: string }
+
+/**
+ * A ZIP holds several archives, so one of them failing says nothing about the
+ * rest: each is installed on its own and reported on its own. `success` is
+ * true whenever at least one landed — the caller refreshes for those and
+ * surfaces `failed` for the others. Narrow with `'entries' in result`.
+ */
+export interface LibraryBundleInstallResult {
+  success: true
+  canceled?: false
+  /** Every `.stlib` the ZIP held, in the order they were installed. */
+  entries: LibraryBundleEntry[]
+  /** The ones that installed, so the caller can select one and refresh. */
+  installed: Array<{ name: string; version: string }>
+  /** The ones that did not, each naming its entry path. */
+  failed: Array<{ path: string; error: string }>
+}
+
+/** A project's reference to a library: a name, optionally pinned to a version. */
+export interface LibraryRef {
+  name: string
+  version?: string
+}
+
+/** The pinned version was not installed, so a different one was used. */
+export interface VersionSubstitution {
+  name: string
+  wanted: string
+  used: string
+}
+
+/** What a compile gets for the libraries a project enables.
+ *  Parameterised so the resolver can keep its parsed archive type while the
+ *  IPC boundary, which cannot, stays on `unknown`. */
+export interface EnabledArchives<Archive = unknown> {
+  archives: Archive[]
+  /** Enabled names no archive could be resolved for. */
+  missing: string[]
+  /** Resolved, but not to the version the project pins. */
+  substituted: VersionSubstitution[]
+}

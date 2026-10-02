@@ -26,9 +26,20 @@
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { useOpenPLCStore } from '@root/frontend/store'
+import { cn } from '@root/frontend/utils/cn'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
 import { useMemo, useState } from 'react'
+
+import { reconcilePlacedBlocks } from './reconcile-placed-blocks'
+
+/** Dropdown row styling, shared by the two lists below. */
+const SELECT_ITEM = cn(
+  'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+  'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+)
+const SELECT_ITEM_TEXT = 'text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'
 
 interface ProjectLibrariesTabProps {
   installed: InstalledLibrary[]
@@ -39,6 +50,12 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
   const missingLibraries = useOpenPLCStore((s) => s.missingLibraries)
   const enableLibrary = useOpenPLCStore((s) => s.libraryActions.enableLibrary)
   const disableLibrary = useOpenPLCStore((s) => s.libraryActions.disableLibrary)
+  const setLibraryVersion = useOpenPLCStore((s) => s.libraryActions.setLibraryVersion)
+  // The version each enabled library is pinned to, which is not necessarily
+  // the newest installed one.
+  const pinnedVersions = useOpenPLCStore((s) => s.project?.data?.libraries)
+  const outdated = useOpenPLCStore((s) => s.outdatedLibraries)
+  const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
 
   const [availableFilter, setAvailableFilter] = useState('')
 
@@ -107,6 +124,16 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
             : `${bundled.length} bundled, ${enabled.length} added.`
         }
       >
+        {outdated.length > 0 && (
+          <button
+            type='button'
+            onClick={() => openModal('library-updates')}
+            className='bg-brand/10 hover:bg-brand/20 shrink-0 rounded-md border border-brand-light px-3 py-2 text-left text-xs font-medium text-brand-medium-dark dark:text-brand-light'
+          >
+            {outdated.length} {outdated.length === 1 ? 'library has' : 'libraries have'} a newer version installed —
+            review updates
+          </button>
+        )}
         {missingLibraries.length > 0 && (
           <div className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'>
             <span className='font-medium text-yellow-800 dark:text-yellow-200'>Missing libraries:</span>
@@ -138,6 +165,13 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
                   action='remove'
                   onAction={() => disableLibrary(lib.name)}
                   actionTitle='Remove from project'
+                  pinned={pinnedVersions?.find((ref) => ref.name === lib.name)?.version}
+                  onPin={(version) => {
+                    setLibraryVersion(lib.name, version)
+                    // Same as taking the update from the dialog: the pin and the
+                    // placed blocks move together or they disagree.
+                    reconcilePlacedBlocks()
+                  }}
                 />
               ))}
             </>
@@ -179,6 +213,9 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
   )
 }
 
+/** Scrolling list body. Rows carry `shrink-0`: a flex column shrinks its
+ *  children by default, so a long list collapses each row below its own
+ *  height instead of scrolling. */
 function ListBody({ children }: { children: React.ReactNode }) {
   return <div className='flex min-h-0 flex-1 flex-col overflow-y-auto'>{children}</div>
 }
@@ -196,22 +233,65 @@ function LibraryRow({
   action,
   onAction,
   actionTitle,
+  pinned,
+  onPin,
 }: {
   lib: InstalledLibrary
   action: 'add' | 'remove' | 'locked'
   onAction?: () => void
   actionTitle?: string
+  /** Version this project uses, when it differs from the newest installed. */
+  pinned?: string
+  onPin?: (version: string) => void
 }) {
+  const versions = lib.versions ?? [lib.version]
+  const shown = pinned ?? lib.version
+  // A pin can name a version this machine does not have. Offer it anyway, so
+  // the control shows what the project actually records.
+  const missingPin = !versions.includes(shown)
+  const showPicker = !!onPin && (versions.length > 1 || missingPin)
   return (
-    <div className='group flex items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
+    <div className='group flex shrink-0 items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
         <span className='truncate font-caption text-cp-sm font-medium text-neutral-950 dark:text-white'>
           {lib.displayName ?? lib.name}
         </span>
-        <span className='truncate text-[11px] text-neutral-500 dark:text-neutral-400'>
-          v{lib.version}
-          {lib.bundled ? ' · bundled' : lib.origin === 'codesys' ? ' · CODESYS' : ''}
-        </span>
+        {showPicker ? (
+          <Select value={shown} onValueChange={(version) => onPin?.(version)}>
+            <SelectTrigger
+              aria-label={`Version of ${lib.name}`}
+              placeholder={missingPin ? `v${shown} — not installed` : `v${shown}`}
+              withIndicator
+              className='group mt-0.5 flex h-[26px] w-36 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-0.5 font-caption text-[11px] font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+            />
+            <SelectContent
+              className='max-h-[220px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+              position='popper'
+              align='center'
+              side='bottom'
+              sideOffset={5}
+            >
+              {/* A pin can name a version this machine does not have; offer it
+                  so the control shows what the project actually records. */}
+              {missingPin && (
+                <SelectItem key={shown} value={shown} className={SELECT_ITEM}>
+                  <span className={SELECT_ITEM_TEXT}>v{shown} — not installed</span>
+                </SelectItem>
+              )}
+              {versions.map((version) => (
+                <SelectItem key={version} value={version} className={SELECT_ITEM}>
+                  <span className={SELECT_ITEM_TEXT}>v{version}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className='truncate text-[11px] text-neutral-500 dark:text-neutral-400'>
+            v{shown}
+            {versions.length > 1 ? ` · ${versions.length} versions` : ''}
+            {lib.bundled ? ' · bundled' : lib.origin === 'codesys' ? ' · CODESYS' : ''}
+          </span>
+        )}
       </div>
       {action === 'add' && (
         <button

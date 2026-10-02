@@ -1,6 +1,7 @@
 import type { LibraryState } from '../../middleware/shared/ports/library-types'
 import { baseTypeSchema } from '../../middleware/shared/ports/plc-schemas'
 import type { PLCDataType, PLCPou, PLCVariable } from '../../middleware/shared/ports/types'
+import { parseStringLength } from './iec-types-registry'
 import type { TypeContext } from './PLC/variable-declarations'
 import { parseVariableDeclarations } from './PLC/variable-declarations'
 
@@ -36,13 +37,45 @@ const hasLibraryPous = (lib: unknown): lib is { pous: Array<{ name: string; type
  * Returns null if not an array type, otherwise returns the parsed array type definition.
  * Also consumed by the global-variable-list text parser.
  */
+/**
+ * A `STRING(...)` / `WSTRING[...]` declaration, whatever sits between the
+ * delimiters. Matching the shape commits the writer to a length, so anything
+ * `parseStringLength` will not accept from here — `STRING[]`, `STRING(abc)`,
+ * `STRING(0)`, `STRING(999)`, the mismatched `STRING(23]` — is a mistake to
+ * report rather than a type name to keep.
+ */
+const SIZED_STRING_SHAPE = /^(W?STRING)\s*[([]\s*([^)\]]*?)\s*[)\]]$/i
+
+/**
+ * The declaration's type name and the length it got wrong, or `null` when the
+ * type is not sized-string-shaped or its length is one we can carry.
+ */
+const badStringLength = (typeStr: string): { typeName: string; got: string } | null => {
+  const shape = SIZED_STRING_SHAPE.exec(typeStr)
+  if (!shape) return null
+  const { length, valid } = parseStringLength(typeStr)
+  // `parseStringLength` reports `valid: true` with no length for an
+  // unqualified name, so the undefined case must be caught explicitly.
+  if (length !== undefined && valid) return null
+  return { typeName: shape[1].toUpperCase(), got: shape[2] }
+}
+
 export const parseArrayType = (typeStr: string): PLCVariable['type'] | null => {
-  // Match ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally namespaced)
-  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*)\s*$/i)
+  // ARRAY[dimensions] OF baseType, where baseType is an identifier (optionally
+  // namespaced) that may carry a declared string length —
+  // `ARRAY [0..3] OF STRING(23)`.
+  const arrayMatch = typeStr.match(/^ARRAY\s*\[([^\]]+)\]\s+OF\s+([A-Za-z_][\w.]*(?:\s*[([]\s*\d+\s*[)\]])?)\s*$/i)
   if (!arrayMatch) return null
 
   const dimensionsStr = arrayMatch[1]
   const baseTypeStr = arrayMatch[2].trim()
+
+  // An element's length is held to the same rule as a scalar's. Without this
+  // the element fails `baseTypeSchema` and is kept as a user data type named
+  // `STRING(0)`, which is then persisted and emitted verbatim into generated
+  // ST. Refusing the array here lets the caller report it as the syntax error
+  // it is.
+  if (badStringLength(baseTypeStr)) return null
 
   // Parse dimensions (can be comma-separated for multi-dimensional arrays)
   const dimensionParts = dimensionsStr.split(',').map((d) => d.trim())

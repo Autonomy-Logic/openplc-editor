@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react'
 import { useOpenPLCStore } from '../../../../../../store'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
+import { findLibraryPou, libraryVariantDiverges } from '../../../../../../utils/PLC/library-block-divergence'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
 import { BlockVariant } from '../../../../../_atoms/graphical-editor/types/block'
 import { FBDBody } from '../../../../../_molecules/graphical-editor/fbd'
@@ -20,6 +21,7 @@ export default function FbdEditor() {
   const fbdFlows = useOpenPLCStore((state) => state.fbdFlows)
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
+  const systemLibraries = useOpenPLCStore((state) => state.libraries.system)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const flow = fbdFlows.find((flow) => flow.name === pouName)
@@ -35,10 +37,22 @@ export default function FbdEditor() {
       if (!variant) continue
 
       const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
-      if (!libMatch) continue
+      const originalPou = libMatch ? pous.find((pou) => pou.name === libMatch.name) : undefined
 
-      const originalPou = pous.find((pou) => pou.name === libMatch.name)
-      if (!originalPou) continue
+      if (!originalPou) {
+        // Not a POU this project owns, so it came out of a library. The
+        // load-time re-stamp reports a pin the library added and cannot draw
+        // it; this is what puts the badge there to apply it.
+        const libraryPou = findLibraryPou(
+          variant,
+          systemLibraries,
+          pous.map((pou) => pou.name),
+        )
+        if (libraryPou && libraryVariantDiverges(variant, libraryPou)) {
+          divergences.push(node.id)
+        }
+        continue
+      }
 
       const originalVariables = originalPou.interface?.variables ?? []
       const originalInOut = originalVariables.filter((variable) =>
@@ -81,7 +95,7 @@ export default function FbdEditor() {
     }
 
     return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
-  }, [flow?.rung.nodes, userLibraries, pous])
+  }, [flow?.rung.nodes, userLibraries, systemLibraries, pous])
 
   /**
    * Queue the flow → project JSON write-back. The scheduler debounces it

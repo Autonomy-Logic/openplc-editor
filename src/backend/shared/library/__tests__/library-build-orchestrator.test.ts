@@ -17,7 +17,7 @@
  * unit-level for the orchestration logic itself.
  */
 
-import type { LibraryBuildPort } from '../../../../middleware/shared/ports/library-build-port'
+import type { LibraryBuildPort, VerifyCompileArgs } from '../../../../middleware/shared/ports/library-build-port'
 import type { TranspileToStArgs, TranspileToStResult } from '../../../../middleware/shared/ports/compiler-platform-port'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 
@@ -30,10 +30,16 @@ const FAKE_PROGRAM_ST = 'PROGRAM main\n(* transpiled *)\nEND_PROGRAM\n'
 
 const mockPrepareXml = jest.fn()
 const mockLibraryBuild = jest.fn()
+const mockComposeVerify = jest.fn((project: { meta: unknown; data: unknown }) => ({
+  meta: { ...(project.meta as Record<string, unknown>), type: 'plc-project' },
+  data: project.data,
+}))
 
 jest.mock('../build-pipeline', () => ({
   prepareXmlForLibraryBuild: (...args: unknown[]) => mockPrepareXml(...args),
   libraryBuildFromTranspiledSt: (...args: unknown[]) => mockLibraryBuild(...args),
+  composeVerificationProject: (...args: unknown[]) =>
+    mockComposeVerify(...(args as [{ meta: unknown; data: unknown }])),
 }))
 
 import { runLibraryBuildPipeline } from '../library-build-orchestrator'
@@ -48,6 +54,8 @@ interface PortHarness {
   manifestContent: string | null
   archives: unknown[]
   missing: string[]
+  verifyResult: { success: boolean; message?: string }
+  verifyCalls: VerifyCompileArgs[]
   transpileResult: TranspileToStResult
   transpileCalls: TranspileToStArgs[]
   /** Programmable error for whichever method the test wants to fail. */
@@ -66,12 +74,29 @@ function makePort(): PortHarness {
     manifestContent: '{"name":"lib","version":"0.1.0","namespace":"lib"}',
     archives: [],
     missing: [],
+    verifyResult: { success: true },
+    verifyCalls: [],
     throwOnRead: new Map<string, Error>(),
     transpileResult: { ok: true, programSt: FAKE_PROGRAM_ST },
     transpileCalls: [],
     throwOn: {},
   }
   harness.port = {
+    listProjectFiles(_projectPath: string, relPath: string) {
+      const prefix = `${relPath}/`
+      return Promise.resolve(
+        [...harness.files.keys()]
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => key.slice(prefix.length))
+          .sort(),
+      )
+    },
+    async computeMd5(input: string) {
+      // Deterministic stand-in — same input → same hash, different
+      // inputs → different hashes.  Length-prefix makes near-duplicates
+      // distinguishable.
+      return `md5-${input.length}-${input.charCodeAt(0) ?? 0}`
+    },
     async transpileToSt(args: TranspileToStArgs, log) {
       if (harness.throwOn.transpileToSt) throw harness.throwOn.transpileToSt
       harness.transpileCalls.push(args)
@@ -85,6 +110,23 @@ function makePort(): PortHarness {
       if (scoped) throw scoped
       if (relPath === 'library.json') return harness.manifestContent
       return harness.files.get(relPath) ?? null
+    },
+    async readBuildFileBase64(_projectPath: string, relPath: string) {
+      if (harness.throwOn.readBuildFileBase64) throw harness.throwOn.readBuildFileBase64
+      const content = harness.files.get(relPath)
+      if (content === undefined) return null
+      return Buffer.from(content, 'utf-8').toString('base64')
+    },
+    listProjectDirs(_projectPath: string, relPath: string) {
+      const prefix = `${relPath}/`
+      const names = new Set<string>()
+      for (const key of harness.files.keys()) {
+        if (!key.startsWith(prefix)) continue
+        const rest = key.slice(prefix.length)
+        const slash = rest.indexOf('/')
+        if (slash > 0) names.add(rest.slice(0, slash))
+      }
+      return Promise.resolve([...names].sort())
     },
     async writeBuildFile(_projectPath: string, relPath: string, content: string) {
       if (harness.throwOn.writeBuildFile) throw harness.throwOn.writeBuildFile
@@ -100,8 +142,29 @@ function makePort(): PortHarness {
       if (harness.throwOn.loadLibraryArchives) throw harness.throwOn.loadLibraryArchives
       return { archives: harness.archives, missing: harness.missing }
     },
+    async verifyCompile(args) {
+      harness.verifyCalls.push(args)
+      args.emit('verifying...', 'info')
+      return harness.verifyResult
+    },
   }
   return harness
+}
+
+/**
+ * The harness MD5 of what the orchestrator actually hashes: `program.st`,
+ * each C/C++ block's name and body, each resource, and the verify target.
+ */
+function verifyInputsMd5(
+  nativeSources: Array<{ fileName: string; source: string }> = [],
+  resources: Array<{ path: string; content: string }> = [],
+  target: { mode: string; core?: string } = { mode: 'arduino' },
+): string {
+  const cppSource = nativeSources.map((n) => `${n.fileName}\n${n.source}`).join('\n')
+  const resourceSource = resources.map((r) => `${r.path}\n${r.content}`).join('\n')
+  const targetSource = `${target.mode}\n${target.core ?? ''}`
+  const input = `${FAKE_PROGRAM_ST}\n${cppSource}\n${resourceSource}\n${targetSource}`
+  return `md5-${input.length}-${input.charCodeAt(0)}`
 }
 
 function projectDataEmpty(): PLCProjectData {
@@ -121,11 +184,12 @@ function captureEvents() {
 beforeEach(() => {
   mockPrepareXml.mockReset()
   mockLibraryBuild.mockReset()
+  mockComposeVerify.mockClear()
 
   mockPrepareXml.mockReturnValue({
     projectData: projectDataEmpty(),
     knownPous: [],
-    manifest: { name: 'lib', version: '0.1.0', namespace: 'lib', extra: {} },
+    manifest: { name: 'lib', version: '0.1.0', namespace: 'lib', verifyTarget: { mode: 'arduino' }, extra: {} },
   })
   mockLibraryBuild.mockReturnValue({ success: true, archive: { stub: true }, errors: [] })
 })
@@ -143,6 +207,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -152,9 +218,8 @@ describe('runLibraryBuildPipeline', () => {
     expect(result.libraryName).toBe('lib')
     expect(result.stlibPath).toBe('build/lib.stlib')
     expect(harness.files.get('build/lib.stlib')).toMatch(/^\{[\s\S]+\}\n$/)
-    // The `.stlib` is the ONLY thing the build writes. The verification
-    // cache that used to sit beside it went out with the verify stage.
-    expect(harness.files.has('build/.verify-cache-library.json')).toBe(false)
+    // Verification cache persisted with the MD5 the orchestrator computed.
+    expect(harness.files.has('build/.verify-cache-library.json')).toBe(true)
     // Intermediates (program.st) live in memory only — the ST is
     // produced in-process by `transpileToSt` and never persisted.
     // See the path-constants comment in library-build-orchestrator.ts.
@@ -165,16 +230,22 @@ describe('runLibraryBuildPipeline', () => {
         'Starting library build...',
         'Manifest OK — building "lib" v0.1.0.',
         'Transpiling project to Structured Text',
+        'Verifying library compile...',
         'Compiling library archive...',
         'Library built successfully: build/lib.stlib',
       ]),
     )
     // The stubbed projectData from Stage 1 is what the transpiler sees.
     expect(harness.transpileCalls).toHaveLength(1)
-    // Nothing in the build talks about verification any more. Asserted on the
-    // whole event stream rather than the `arrayContaining` above, which would
-    // happily pass with an extra verify line in the middle.
-    expect(events.filter((e) => /verif/i.test(e.message))).toEqual([])
+    // The verify stage runs, forwards the inner compile's own lines under a
+    // `[verify]` prefix, and reports its outcome. Asserted on the whole event
+    // stream rather than through the `arrayContaining` above, which would pass
+    // just as happily if a line went missing.
+    expect(events.filter((e) => /verif/i.test(e.message)).map((e) => e.message)).toEqual([
+      'Verifying library compile...',
+      '[verify] verifying...',
+      'Verification passed.',
+    ])
   })
 
   it('does not call deleteBuildSubtree (intermediates are no longer persisted)', async () => {
@@ -189,6 +260,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -206,6 +279,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -234,6 +309,8 @@ describe('runLibraryBuildPipeline', () => {
           ...projectDataEmpty(),
           libraries: [{ name: 'oscat-basic', version: '1.0.0' }],
         } as PLCProjectData,
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -256,6 +333,8 @@ describe('runLibraryBuildPipeline', () => {
           ...projectDataEmpty(),
           libraries: [{ name: 'ghost-lib', version: '1.0.0' }],
         } as PLCProjectData,
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -265,6 +344,321 @@ describe('runLibraryBuildPipeline', () => {
     expect(result.error).toMatch(/ghost-lib/)
     expect(result.error).toMatch(/Library Manager/)
     expect(mockLibraryBuild).not.toHaveBeenCalled()
+  })
+
+  it('skips verification when the MD5 cache matches', async () => {
+    const harness = makePort()
+    // Pre-seed the cache.  computeMd5 in the harness is deterministic
+    // off program.st length + first char; the orchestrator's value
+    // will match this when the same transpiler output replays.
+    const expectedMd5 = verifyInputsMd5()
+    harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(0)
+    expect(events.some((e) => e.message.includes('Skipping verification'))).toBe(true)
+  })
+
+  it('reads the resources/ tree and hands it to the build', async () => {
+    const harness = makePort()
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\n')
+    harness.files.set('resources/DemoProtocol/src/DemoApi.h', '#pragma once\n')
+    harness.files.set('resources/DemoProtocol/src/transport/DemoSerial.cpp', '// serial\n')
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    // Paths keep the author's layout, relative to `resources/`, so the first
+    // segment names the library folder the file belongs to.
+    expect(aux.resources).toEqual([
+      { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+      { path: 'DemoProtocol/src/DemoApi.h', content: '#pragma once\n' },
+      { path: 'DemoProtocol/src/transport/DemoSerial.cpp', content: '// serial\n' },
+    ])
+  })
+
+  it('takes only the library out of a resource folder', async () => {
+    // A folder is the author's checkout, so it arrives holding a build tree, a
+    // git directory and loose files. Only `library.properties` and `src/` are
+    // read: everything else is what the two consumers never look at, and
+    // reading it was thousands of files discarded one warning at a time.
+    const harness = makePort()
+    harness.files.set('resources/README.md', '# written by the editor\n')
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\n')
+    harness.files.set('resources/DemoProtocol/src/DemoApi.h', '// api\n')
+    harness.files.set('resources/DemoProtocol/build/DemoApi.o', 'object file\n')
+    harness.files.set('resources/DemoProtocol/test/test_api.cpp', '// test\n')
+    harness.files.set('resources/DemoProtocol/CMakeLists.txt', 'project(demo)\n')
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    expect(aux.resources).toEqual([
+      { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+      { path: 'DemoProtocol/src/DemoApi.h', content: '// api\n' },
+    ])
+    // Silently, not one warning per file skipped.
+    expect(events.filter((e) => e.level === 'warning')).toEqual([])
+  })
+
+  it('fails the build when a resource folder is not a library', async () => {
+    // Shipping the folder anyway produces an archive whose consumer finds no
+    // headers, and the error surfaces there instead of here.
+    const harness = makePort()
+    harness.files.set('resources/DemoProtocol/DemoApi.h', '// header at the root\n')
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(events.some((e) => e.level === 'error' && e.message.includes('DemoProtocol'))).toBe(true)
+    expect(events.some((e) => e.message.includes('library.properties'))).toBe(true)
+  })
+
+  it('carries a precompiled binary out of src/ base64-encoded', async () => {
+    // A library that declares `precompiled=true` ships a `.a` beside its
+    // headers. Dropping it leaves the consumer to link against nothing.
+    const harness = makePort()
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\nprecompiled=true\n')
+    harness.files.set('resources/DemoProtocol/src/DemoApi.h', '// api\n')
+    harness.files.set('resources/DemoProtocol/src/esp32/libdemo.a', 'binary\uFFFDbytes')
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    const binary = aux.resources.find((r: { path: string }) => r.path.endsWith('libdemo.a'))
+    expect(binary.encoding).toBe('base64')
+    expect(Buffer.from(binary.content, 'base64').toString('utf-8')).toBe('binary\uFFFDbytes')
+    // The text beside it is untouched.
+    const header = aux.resources.find((r: { path: string }) => r.path.endsWith('DemoApi.h'))
+    expect(header.encoding).toBeUndefined()
+    expect(events.some((e) => e.message.includes('1 binary file(s)'))).toBe(true)
+  })
+
+  it('re-verifies when a resource changed but nothing else did', async () => {
+    // The blocks are compiled against these, so a changed resource has to
+    // invalidate a cached verification the same way a changed body does.
+    const harness = makePort()
+    const before = [
+      { path: 'DemoProtocol/library.properties', content: 'name=DemoProtocol\n' },
+      { path: 'DemoProtocol/src/DemoApi.h', content: '#pragma once\n' },
+    ]
+    harness.files.set('resources/DemoProtocol/library.properties', 'name=DemoProtocol\n')
+    harness.files.set('resources/DemoProtocol/src/DemoApi.h', '#pragma once\n// changed\n')
+    harness.files.set(
+      'build/.verify-cache-library.json',
+      JSON.stringify({ md5: verifyInputsMd5([], before), success: true }),
+    )
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(1)
+    expect(events.some((e) => e.message.includes('Skipping verification'))).toBe(false)
+  })
+
+  it('re-verifies when only a native block body changed', async () => {
+    // The emitted ST for a C/C++ POU is a stub built from its pins, so editing
+    // the body leaves `program.st` byte-identical.  Keying the cache on that
+    // alone replays the previous result against source that no longer matches.
+    const harness = makePort()
+    const before = [{ fileName: 'SmartGate.cpp', source: 'void setup() {}\nvoid loop() {}' }]
+    const after = 'void setup() {}\nvoid loop() { gate(); }'
+    harness.files.set(
+      'build/.verify-cache-library.json',
+      JSON.stringify({ md5: verifyInputsMd5(before), success: true }),
+    )
+    harness.files.set('pous/function-blocks/SmartGate.cpp', after)
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+        nativePous: [{ name: 'SmartGate', relPath: 'pous/function-blocks/SmartGate.cpp', language: 'cpp' }],
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(1)
+    expect(events.some((e) => e.message.includes('Skipping verification'))).toBe(false)
+  })
+
+  it('still skips verification when the native block bodies are unchanged', async () => {
+    const harness = makePort()
+    const blocks = [{ fileName: 'SmartGate.cpp', source: 'void setup() {}\nvoid loop() {}' }]
+    harness.files.set(
+      'build/.verify-cache-library.json',
+      JSON.stringify({ md5: verifyInputsMd5(blocks), success: true }),
+    )
+    harness.files.set('pous/function-blocks/SmartGate.cpp', blocks[0].source)
+    const { events, emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+        nativePous: [{ name: 'SmartGate', relPath: 'pous/function-blocks/SmartGate.cpp', language: 'cpp' }],
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(0)
+    expect(events.some((e) => e.message.includes('Skipping verification'))).toBe(true)
+  })
+
+  it('cleanBuild forces a fresh verification regardless of cache', async () => {
+    const harness = makePort()
+    const expectedMd5 = verifyInputsMd5()
+    harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: expectedMd5, success: true }))
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: true,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(1)
+  })
+
+  it('runs a fresh verification when the cache read throws', async () => {
+    const harness = makePort()
+    // Throw only on the cache read; the manifest read (Stage 0) must
+    // still succeed so we reach the cache-consult path.
+    const realRead = harness.port.readBuildFile.bind(harness.port)
+    harness.port.readBuildFile = async (projectPath, relPath) => {
+      if (relPath === 'build/.verify-cache-library.json') throw new Error('cache read blew up')
+      return realRead(projectPath, relPath)
+    }
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    // Cache read failed → treated as a miss → fresh verification runs.
+    expect(harness.verifyCalls).toHaveLength(1)
+  })
+
+  it('runs a fresh verification when the cached file is malformed JSON', async () => {
+    const harness = makePort()
+    harness.files.set('build/.verify-cache-library.json', '{ not valid json')
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    // Malformed cache → fall through to a real verification run.
+    expect(harness.verifyCalls).toHaveLength(1)
+  })
+
+  it('surfaces a verification failure as a warning but still emits the .stlib', async () => {
+    const harness = makePort()
+    harness.verifyResult = { success: false, message: 'AVR ran out of flash' }
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(true) // verification failure is advisory
+    expect(result.verification?.success).toBe(false)
+    expect(result.verification?.message).toBe('AVR ran out of flash')
+    expect(harness.files.has('build/lib.stlib')).toBe(true)
+    expect(events.some((e) => e.level === 'warning' && /Verification reported issues/.test(e.message))).toBe(true)
   })
 
   it('propagates strucpp compile errors as a fatal build failure', async () => {
@@ -279,6 +673,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -303,7 +699,11 @@ describe('runLibraryBuildPipeline', () => {
       dataTypes: [{ name: 'MyType', documentation: 'A type description' }],
     } as unknown as PLCProjectData
 
-    await runLibraryBuildPipeline({ projectPath: '/project', projectData }, harness.port, emit)
+    await runLibraryBuildPipeline(
+      { projectPath: '/project', projectData, verifyProjectData: projectData, cleanBuild: false },
+      harness.port,
+      emit,
+    )
 
     const [, , , aux] = mockLibraryBuild.mock.calls[0]
     expect(aux.pouDocs).toEqual({ MyFb: 'A docstring', MyType: 'A type description' })
@@ -338,6 +738,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData,
+        verifyProjectData: projectData,
+        cleanBuild: false,
         nativePous: [
           { name: 'MyCppFb', language: 'cpp', relPath: 'pous/function-blocks/MyCppFb.cpp' },
           { name: 'MyPyFb', language: 'python', relPath: 'pous/function-blocks/MyPyFb.py' },
@@ -374,6 +776,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData,
+        verifyProjectData: projectData,
+        cleanBuild: false,
         nativePous: [{ name: 'CPP_ADD', language: 'cpp', relPath: 'pous/functions/CPP_ADD.cpp' }],
       },
       harness.port,
@@ -401,6 +805,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -421,6 +827,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
         nativePous: [{ name: 'Boom', language: 'cpp', relPath: 'pous/function-blocks/Boom.cpp' }],
       },
       harness.port,
@@ -441,6 +849,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
         nativePous: [{ name: 'Gone', language: 'cpp', relPath: 'pous/function-blocks/Gone.cpp' }],
       },
       harness.port,
@@ -462,6 +872,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -481,6 +893,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -503,6 +917,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -525,6 +941,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,
@@ -532,6 +950,151 @@ describe('runLibraryBuildPipeline', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/transpile-from-json failed: transpile-from-json failed/)
+  })
+
+  it('hands the manifest verify target to the port', async () => {
+    const harness = makePort()
+    mockPrepareXml.mockReturnValue({
+      projectData: projectDataEmpty(),
+      knownPous: [],
+      manifest: {
+        name: 'lib',
+        version: '0.1.0',
+        namespace: 'lib',
+        verifyTarget: { mode: 'arduino', core: 'esp32:esp32' },
+        extra: {},
+      },
+    })
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(1)
+    expect(harness.verifyCalls[0].target).toEqual({ mode: 'arduino', core: 'esp32:esp32' })
+  })
+
+  it('skips verification entirely, cache included, when the target is off', async () => {
+    const harness = makePort()
+    mockPrepareXml.mockReturnValue({
+      projectData: projectDataEmpty(),
+      knownPous: [],
+      manifest: { name: 'lib', version: '0.1.0', namespace: 'lib', verifyTarget: { mode: 'off' }, extra: {} },
+    })
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(0)
+    expect(harness.files.has('build/.verify-cache-library.json')).toBe(false)
+    // The `.stlib` still builds — verification was always advisory.
+    expect(result.success).toBe(true)
+    expect(result.verification).toBeUndefined()
+    expect(events.map((e) => e.message)).toEqual(
+      expect.arrayContaining(['Verification is off in Build Settings — skipping.']),
+    )
+  })
+
+  it('re-verifies when only the target changed', async () => {
+    const harness = makePort()
+    // Cache written for the default target; the project now names a core.
+    harness.files.set('build/.verify-cache-library.json', JSON.stringify({ md5: verifyInputsMd5(), success: true }))
+    mockPrepareXml.mockReturnValue({
+      projectData: projectDataEmpty(),
+      knownPous: [],
+      manifest: {
+        name: 'lib',
+        version: '0.1.0',
+        namespace: 'lib',
+        verifyTarget: { mode: 'arduino', core: 'esp32:esp32' },
+        extra: {},
+      },
+    })
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(harness.verifyCalls).toHaveLength(1)
+  })
+
+  it('treats a thrown verifyCompile as a failed (advisory) verification', async () => {
+    const harness = makePort()
+    // A non-Error throwable exercises the `String(error)` fallback in
+    // `formatError`.
+    harness.port.verifyCompile = async () => {
+      throw 'avr-gcc segfaulted'
+    }
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    // Verification failures are advisory — the build still succeeds.
+    expect(result.success).toBe(true)
+    expect(result.verification?.success).toBe(false)
+    expect(result.verification?.message).toBe('avr-gcc segfaulted')
+    expect(events.some((e) => e.level === 'warning' && /Verification reported issues/.test(e.message))).toBe(true)
+  })
+
+  it('warns but still ships the .stlib when the verification cache cannot be written', async () => {
+    const harness = makePort()
+    // Fail only the cache write; the .stlib write happens later and
+    // must still succeed.
+    const realWrite = harness.port.writeBuildFile.bind(harness.port)
+    harness.port.writeBuildFile = async (projectPath, relPath, content) => {
+      if (relPath === 'build/.verify-cache-library.json') throw new Error('cache dir read-only')
+      return realWrite(projectPath, relPath, content)
+    }
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
+      },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(harness.files.has('build/lib.stlib')).toBe(true)
+    expect(events.some((e) => e.level === 'warning' && /Could not write verification cache/.test(e.message))).toBe(true)
   })
 
   it('fails when the .stlib archive cannot be written', async () => {
@@ -546,6 +1109,8 @@ describe('runLibraryBuildPipeline', () => {
       {
         projectPath: '/project',
         projectData: projectDataEmpty(),
+        verifyProjectData: projectDataEmpty(),
+        cleanBuild: false,
       },
       harness.port,
       emit,

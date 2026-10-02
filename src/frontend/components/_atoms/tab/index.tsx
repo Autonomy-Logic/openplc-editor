@@ -59,6 +59,7 @@ const TabIcons: Record<string, React.ReactNode> = {
   'ethercat-device': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manager': <LibraryIcon className='h-4 w-4 flex-shrink-0' />,
   'library-manifest': <LibraryManifestIcon className='h-4 w-4 flex-shrink-0' />,
+  'build-settings': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   'user-management': <UsersIcon className='h-4 w-4 flex-shrink-0' />,
   'persistent-storage': <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
   // Same icon as the tree node for this screen, so the tab and the tree
@@ -98,6 +99,7 @@ const Tab = (props: ITabProps) => {
     | 'ethercat-device'
     | 'library-manager'
     | 'library-manifest'
+    | 'build-settings'
     | 'user-management'
     | 'persistent-storage'
     | 'diff-viewer' = 'il'
@@ -138,6 +140,9 @@ const Tab = (props: ITabProps) => {
   }
   if (fileDerivation?.type === 'library-manifest') {
     languageOrDerivation = 'library-manifest'
+  }
+  if (fileDerivation?.type === 'build-settings') {
+    languageOrDerivation = 'build-settings'
   }
   if (fileDerivation?.type === 'user-management') {
     languageOrDerivation = 'user-management'

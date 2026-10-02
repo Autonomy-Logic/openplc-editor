@@ -44,6 +44,8 @@
  * `<build>/<target>/src/` for `boardRuntime === 'openplc-compiler'`.
  */
 
+import type { BundleFile } from './bundle-file'
+
 export interface ComposeRuntimeV4BundleInput {
   /** Concatenated ST program emitted by the ST transpiler. */
   programSt: string
@@ -55,14 +57,24 @@ export interface ComposeRuntimeV4BundleInput {
    *  generated_debug.cpp, debug-map.json, per-POU *.cpp splits,
    *  program.st.map.json. */
   strucppFiles: Record<string, string>
+  /** Libraries carried inside the enabled `.stlib` archives, each a
+   *  folder laid out the ordinary way — `library.properties` beside a
+   *  `src/` directory.  `path` is relative to that folder's root.
+   *
+   *  Written under `libraries/<name>/`, the same layout the firmware
+   *  bundle uses.  `Makefile.strucpp` puts every `libraries/<name>/src` on
+   *  the include path and compiles the sources beneath it, so a block
+   *  resolves `#include <DemoApi.h>` exactly as it does on Arduino.
+   *  Empty for projects with no such libraries. */
+  libraryResources: Array<{ name: string; files: Array<{ path: string; content: string; encoding?: 'base64' }> }>
   /** Pre-rendered C blocks artefacts.  The composer treats them as
    *  opaque strings:
    *    - `header`: required.  Empty / no-cpp projects pass
    *      `'// Empty file\n'` (matches editor's static stub copied
    *      from `resources/sources/arduino/c_blocks.h`).
    *    - `code`: pass `null` when the project has no C/C++ POUs; the
-   *      runtime build skips the file via wildcard glob.  Otherwise
-   *      pass the output of `generateCBlocksCode(originalCppPous)`. */
+   *      runtime build skips the file.  Otherwise pass the output of
+   *      `generateCBlocksCode(originalCppPous)`. */
   cBlocks: {
     header: string
     code: string | null
@@ -97,8 +109,18 @@ export interface ComposeRuntimeV4BundleInput {
  * Build the file map.  Output keys are paths relative to the zip
  * root (which is what the runtime extracts into `core/generated/`).
  */
-export function composeRuntimeV4Bundle(input: ComposeRuntimeV4BundleInput): Record<string, string> {
-  const files: Record<string, string> = {}
+export function composeRuntimeV4Bundle(input: ComposeRuntimeV4BundleInput): Record<string, BundleFile> {
+  const files: Record<string, BundleFile> = {}
+
+  // 0. Library folders, written as they stand under `libraries/`.  They
+  //    cannot collide with anything generated below — those all sit at
+  //    the zip root.
+  for (const library of input.libraryResources) {
+    for (const file of library.files) {
+      files[`libraries/${library.name}/${file.path}`] =
+        file.encoding === 'base64' ? { base64: file.content } : file.content
+    }
+  }
 
   // 1. Concatenated ST program (ST transpiler output)
   files['program.st'] = input.programSt

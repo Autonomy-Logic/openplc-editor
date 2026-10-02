@@ -35,6 +35,7 @@ import { runCreate } from './commands/create'
 import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
 import { runInstallCli } from './commands/install-cli'
+import { runLibrary } from './commands/library'
 import { runPackages } from './commands/packages'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
@@ -80,6 +81,13 @@ Usage
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
+  openplc-cli library build <library-project> [--clean]
+  openplc-cli library install <file>                         (.stlib, .lib, .library, or a .zip of them)
+  openplc-cli library uninstall <name>[@<version>] [--all]
+  openplc-cli library info <name>[@<version>]
+  openplc-cli library list
+  openplc-cli library pin <project> <name>@<version>
+  openplc-cli library unpin <project> <name>
   openplc-cli packages list                                 (boards --target accepts, and their pins)
   openplc-cli packages install <file.vpp|dir>...            (same checks as the GUI: schema + signature)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
@@ -206,6 +214,8 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runBuild(args, reporter, { withUpload: true })).exitCode
     case 'debug':
       return (await runDebug(args, reporter, buildDebugContext())).exitCode
+    case 'library':
+      return (await runLibrary(args, reporter)).exitCode
     default:
       // Print the usage as well as the error: a mistyped command is the moment
       // the list of real commands is most useful, and hunting for --help is a
@@ -291,7 +301,12 @@ function daemonSpawnArgs(): string[] {
 
   // Dev: Electron was handed this bundle's path, and webpack leaves __filename
   // as the real runtime path (`node: { __filename: false }`).
-  const script = process.argv[1] ?? __filename
+  //
+  // Not `process.argv[1]`: on Linux the shim puts Chromium switches
+  // (`--ozone-platform=headless` and friends) ahead of the script and Electron
+  // leaves them in `process.argv`, so argv[1] is a switch. Take the first
+  // argument that names a bundle, falling back to the path webpack preserved.
+  const script = process.argv.slice(1).find((arg) => arg.endsWith('.js')) ?? __filename
   if (!script.endsWith('.js')) {
     throw new Error(
       `Cannot locate the CLI bundle to spawn a debug session (resolved "${script}"). ` +
