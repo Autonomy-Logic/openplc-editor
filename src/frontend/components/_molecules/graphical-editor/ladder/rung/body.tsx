@@ -6,7 +6,7 @@ import type {
   ReactFlowInstance,
 } from '@xyflow/react'
 import { applyNodeChanges } from '@xyflow/react'
-import { differenceWith, isEqual, parseInt } from 'lodash'
+import { parseInt } from 'lodash'
 import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
@@ -36,6 +36,7 @@ import {
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
+import { isSameSelection } from './selection'
 
 /**
  * Check recursively if the related target or any of its parent elements are within the ladder area
@@ -250,13 +251,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    if (
-      dragging ||
-      (rungLocal.selectedNodes.length > 0 &&
-        differenceWith(rungLocal.selectedNodes, rung.selectedNodes, (a, b) => isEqual(a, b)).length === 0)
-    ) {
-      return
-    }
+    if (dragging || isSameSelection(rungLocal.selectedNodes, rung.selectedNodes)) return
 
     // Update the selected nodes in the rung state
     ladderFlowActions.setSelectedNodes({

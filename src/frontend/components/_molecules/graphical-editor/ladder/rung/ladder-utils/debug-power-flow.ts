@@ -10,6 +10,7 @@
  */
 
 import type { RungLadderState } from '../../../../../../store/slices/ladder'
+import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from '../../../../../../utils/PLC/edge-trigger-instance'
 
 export type LadderDebugContext = {
   isFunctionBlockPou: boolean
@@ -54,11 +55,16 @@ export const computeRungDebugStates = (
     }
 
     if (node.type === 'contact') {
-      const contactData = node.data as { variable?: { name: string }; variant: 'open' | 'negated' }
+      const contactData = node.data as { variable?: { name: string }; variant: string; numericId?: string }
       const variableName = contactData.variable?.name
       if (!variableName) return undefined
 
-      const compositeKey = ctx.getCompositeKey(variableName)
+      // An edge contact passes the trigger's pulse, not the variable's level.
+      const edgeTriggerType = edgeTriggerTypeForVariant(contactData.variant)
+      const edgeTriggerName = edgeTriggerType ? edgeTriggerInstanceName(edgeTriggerType, contactData.numericId) : null
+      if (edgeTriggerType && !edgeTriggerName) return undefined
+
+      const compositeKey = ctx.getCompositeKey(edgeTriggerName ? `${edgeTriggerName}.Q` : variableName)
       const value = ctx.boolValues.get(compositeKey)
       if (value === undefined) return undefined
 

@@ -8,6 +8,7 @@ export {
   useDebugger,
   useDevice,
   useEdgeAccount as useEdgeAccountPort,
+  useEditSession,
   useNavigation,
   useOrchestrator,
   useProject,

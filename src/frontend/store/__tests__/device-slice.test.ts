@@ -1552,6 +1552,38 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // vppPackagePinsByBoard survives a save -> load round trip
+  // (setVppPackagePin -> setDeviceDefinitions -> mergeDeviceConfigWithDefaults)
+  // -----------------------------------------------------------------------
+  describe('vppPackagePinsByBoard round trip', () => {
+    it('keeps the recorded pin across a reload of the saved configuration', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('SLM-RP4')
+      store.getState().deviceActions.setVppPackagePin('SLM-RP4', {
+        packageId: 'com.vendor.slm',
+        version: '1.0.0',
+        contentHash: 'sha256:abc',
+      })
+      const saved = store.getState().deviceDefinitions.configuration
+
+      // Reload: a fresh store fed exactly what setDeviceDefinitions would
+      // receive when the project is reopened from disk.
+      const reloaded = makeStore()
+      reloaded.getState().deviceActions.setDeviceDefinitions({ configuration: saved })
+
+      expect(reloaded.getState().deviceDefinitions.configuration.vppPackagePinsByBoard).toEqual({
+        'SLM-RP4': { packageId: 'com.vendor.slm', version: '1.0.0', contentHash: 'sha256:abc' },
+      })
+    })
+
+    it('leaves the pin map undefined when the project never recorded one', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'P1AM-100' } })
+      expect(store.getState().deviceDefinitions.configuration.vppPackagePinsByBoard).toBeUndefined()
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // setCommunicationPort
   // -----------------------------------------------------------------------
   describe('setCommunicationPort', () => {
@@ -1712,6 +1744,33 @@ describe('createDeviceSlice', () => {
       })
       store.getState().deviceActions.setSelectedDevice(null)
       expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
+    })
+
+    it.each([true, false])('keeps backplaneAccess=%s as the picker read it', (backplaneAccess) => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'orch-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'dev-1',
+        deviceName: 'Test Device',
+        backplaneAccess,
+      })
+      expect(store.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess)
+    })
+
+    it('leaves backplaneAccess absent when the picker never set it', () => {
+      // Absence is the "host predates the field" case and must stay
+      // distinguishable from an explicit `false`, which is a refusal.
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'orch-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'dev-1',
+        deviceName: 'Test Device',
+      })
+      const selected = store.getState().runtimeConnection.selectedDevice
+      expect(selected).not.toBeNull()
+      expect(selected && 'backplaneAccess' in selected).toBe(false)
     })
   })
 

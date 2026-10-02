@@ -181,7 +181,6 @@ const rendererProcessBridge = {
   handleRedoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:redo-request', callback),
 
   // ===================== APP & SYSTEM METHODS =====================
-  darwinAppIsClosing: (callback: IpcRendererCallbacks) => subscribe('app:darwin-is-closing', callback),
   getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   getSystemInfo: (): Promise<{
@@ -238,6 +237,11 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-account:sign-in', { email, password }),
   edgeAccountSignOut: (): Promise<void> => ipcRenderer.invoke('edge-account:sign-out'),
   edgeAccountIsSessionPersistent: (): Promise<boolean> => ipcRenderer.invoke('edge-account:is-session-persistent'),
+  /** A provider sign-in ran in the system browser and the main process now holds the session. */
+  onEdgeAccountSignedIn: (callback: () => void): (() => void) =>
+    subscribe('edge-account:signed-in', () => {
+      callback()
+    }),
   edgeProjectsListRecent: (limit: number): Promise<CloudProjectsResult> =>
     ipcRenderer.invoke('edge-projects:list-recent', limit),
   edgeProjectsListInFolder: (folderId: string): Promise<CloudProjectsResult> =>
@@ -248,6 +252,15 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-projects:save-project', files),
   edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('edge-projects:save-file', filePath, content),
+  edgeEditSessionOpen: (
+    projectId: string,
+    client: { kind: 'web' | 'desktop'; label: string },
+    previousSessionId?: string,
+  ): Promise<unknown> => ipcRenderer.invoke('edge-edit-session:open', projectId, client, previousSessionId),
+  edgeEditSessionHeartbeat: (projectId: string, sessionId: string): Promise<unknown> =>
+    ipcRenderer.invoke('edge-edit-session:heartbeat', projectId, sessionId),
+  edgeEditSessionClose: (projectId: string, sessionId: string, closedBySessionId?: string): Promise<boolean> =>
+    ipcRenderer.invoke('edge-edit-session:close', projectId, sessionId, closedBySessionId),
   edgeUploadListFolders: (): Promise<CloudFoldersResult> => ipcRenderer.invoke('edge-upload:list-folders'),
   edgeUploadProject: (params: UploadProjectParams): Promise<UploadProjectResult> =>
     ipcRenderer.invoke('edge-upload:project', params),
@@ -384,9 +397,19 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('libraries:changed', listener)
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
+  requestQuitApp: () => ipcRenderer.send('app:request-quit'),
+  quitRequested: (callback: IpcRendererCallbacks) => {
+    const unsubscribe = subscribe('app:quit-requested', callback)
+    ipcRenderer.send('app:quit-ready')
+    return () => {
+      unsubscribe()
+      ipcRenderer.send('app:quit-unready')
+    }
+  },
   openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('open-external-link', link),
   quitAppRequest: (callback: IpcRendererCallbacks) => subscribe('app:quit-accelerator', callback),
+  refreshRequest: (callback: IpcRendererCallbacks) => subscribe('app:refresh-accelerator', callback),
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
   /** Drop a recent-projects entry without touching disk — used by the
@@ -414,6 +437,7 @@ const rendererProcessBridge = {
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
+  setMenuProjectOpen: (open: boolean) => ipcRenderer.send('window:project-open', open),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 
@@ -563,6 +587,8 @@ const rendererProcessBridge = {
   uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('packages:uninstall', packageId),
   getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
+  getPackagePin: (packageId: string): Promise<{ packageId: string; version: string; contentHash: string } | null> =>
+    ipcRenderer.invoke('packages:get-pin', packageId),
   verifyInstalledPackageSignatures: (): Promise<string[]> => ipcRenderer.invoke('packages:verify-signatures'),
   onOpenPackageManager: (callback: () => void) => {
     const listener = () => callback()
@@ -792,6 +818,11 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; logs?: string | RuntimeLogEntry[]; error?: string }> =>
     ipcRenderer.invoke('runtime:get-logs', ipAddress, minId),
   runtimeClearCredentials: (): Promise<{ success: boolean }> => ipcRenderer.invoke('runtime:clear-credentials'),
+  runtimeSendPluginCommand: (
+    ipAddress: string,
+    args: { plugin: string; command: string; params?: Record<string, unknown> },
+  ): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('runtime:send-plugin-command', ipAddress, args),
   runtimeGetSerialPorts: (
     ipAddress: string,
   ): Promise<{ success: boolean; ports?: Array<{ device: string; description?: string }>; error?: string }> =>

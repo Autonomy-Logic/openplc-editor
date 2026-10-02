@@ -38,6 +38,67 @@ describe('parseFbdXml', () => {
     expect(node.data.outputHandles[0].id).toBe('output-variable')
   })
 
+  it('widens an imported variable box narrower than the minimum, moving the output pin with it', () => {
+    const { body } = parseFbdXml('p', {
+      inVariable: [
+        {
+          '@localId': '1',
+          '@executionOrderId': '0',
+          '@width': '40',
+          '@height': '30',
+          '@negated': 'false',
+          position: { '@x': '100', '@y': '0' },
+          connectionPointOut: { relPosition: { '@x': '40', '@y': '15' } },
+          expression: 'X1',
+        },
+      ],
+      outVariable: [
+        {
+          '@localId': '2',
+          '@executionOrderId': '1',
+          '@width': '40',
+          '@height': '30',
+          '@negated': 'false',
+          position: { '@x': '300', '@y': '0' },
+          connectionPointIn: { relPosition: { '@x': '0', '@y': '15' } },
+          expression: 'Y1',
+        },
+      ],
+    })
+    const [input, output] = body.rung.nodes as VariableNode[]
+
+    expect(input.width).toBe(64)
+    expect(input.position).toEqual({ x: 100, y: 0 })
+    expect(input.data.outputConnector?.relPosition).toEqual({ x: 64, y: 15 })
+    expect(input.data.outputConnector?.glbPosition).toEqual({ x: 164, y: 15 })
+    expect(input.data.handles[0]).toEqual(input.data.outputConnector)
+
+    // The input pin is on the left edge, which does not move.
+    expect(output.width).toBe(64)
+    expect(output.data.inputConnector?.relPosition).toEqual({ x: 0, y: 15 })
+    expect(output.data.inputConnector?.glbPosition).toEqual({ x: 300, y: 15 })
+  })
+
+  it('keeps an imported variable width at or above the minimum as is', () => {
+    const { body } = parseFbdXml('p', {
+      inVariable: [
+        {
+          '@localId': '1',
+          '@executionOrderId': '0',
+          '@width': '90',
+          '@height': '30',
+          '@negated': 'false',
+          position: { '@x': '0', '@y': '0' },
+          connectionPointOut: { relPosition: { '@x': '90', '@y': '15' } },
+          expression: 'X1',
+        },
+      ],
+    })
+    const node = body.rung.nodes[0] as VariableNode
+    expect(node.width).toBe(90)
+    expect(node.data.outputConnector?.relPosition).toEqual({ x: 90, y: 15 })
+  })
+
   it('parses an output-variable node and resolves its connection into an edge', () => {
     const { body, warnings } = parseFbdXml('p', {
       inVariable: [

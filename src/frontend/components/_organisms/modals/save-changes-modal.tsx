@@ -104,6 +104,11 @@ const SaveChangesModal = ({
           windowPort.quit()
         }
         return
+      case 'refresh-app':
+        // Discarded work must not trip the web unload guard into asking a second time.
+        if (operation === 'not-saving') setEditingState('initial-state')
+        windowPort.reload()
+        return
       default: {
         // A context added without a branch here would otherwise close the
         // dialog and do nothing, which is indistinguishable from Cancel.

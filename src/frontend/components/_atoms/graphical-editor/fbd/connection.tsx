@@ -115,6 +115,9 @@ const ConnectionElement = (block: ConnectionProps) => {
       setInputError(false)
     }
 
+    // Runs on every blur: an unchanged name is not an edit.
+    if (connectionNameToSubmit === (connectionNode.data as BasicNodeData).variable.name) return
+
     updateNode({
       editorName: pouName,
       nodeId: id,

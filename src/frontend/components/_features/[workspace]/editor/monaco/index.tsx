@@ -626,8 +626,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (!aiPort) return
 
+    const modelUri = editorRef.current?.getModel()?.uri
+    if (!modelUri) return
+
     const registration = registerAIInlineCompletions(aiPort, {
       monacoInstance: monaco,
+      modelUri,
       pouName: name,
       language,
       session: edgeAccount?.session,
@@ -637,6 +641,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [
     name,
     language,
+    editorModelPath,
+    editorInstanceId,
     aiState.isEnabled,
     aiState.hasConsented,
     aiState.preferences.inlineCompletionsEnabled,
@@ -816,9 +822,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       )
     }
 
-    // Tab/Enter split so AI ghost text and the LSP dropdown can coexist; gated inert while AI
-    // is off via a context key driven from `inlineCompletionsActive` (see the effect below).
-    coexistenceRef.current = installAiLspCoexistenceKeybindings(editorInstance, monacoInstance)
+    // Tab commits visible AI ghost text; inert while AI is off (context key, see the effect below).
+    coexistenceRef.current = installAiLspCoexistenceKeybindings(editorInstance, monacoInstance.KeyCode.Tab)
     coexistenceRef.current.setActive(inlineCompletionsActive)
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -1080,8 +1085,8 @@ void loop()
     }),
   }
 
-  // Syncs the coexistence Tab overrides without remounting the editor; `editorInstanceId`
-  // re-asserts them after a remount.
+  // Syncs the coexistence Tab action without remounting the editor; `editorInstanceId`
+  // re-asserts it after a remount.
   useEffect(() => {
     coexistenceRef.current?.setActive(inlineCompletionsActive)
   }, [inlineCompletionsActive, editorInstanceId])

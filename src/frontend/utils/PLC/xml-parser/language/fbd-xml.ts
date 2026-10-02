@@ -14,6 +14,7 @@ import { BlockVariant } from '@root/frontend/components/_atoms/graphical-editor/
 import { FBDFlowType } from '@root/frontend/store/slices'
 import { Edge, Position } from '@xyflow/react'
 
+import { clampImportedVariableWidth } from '../../../graphical/fbd-variable-width'
 import { readExecuteStCode } from '../../execute-plcopen'
 import { executeStCodeKey } from '../parse-xml-document'
 import { extractXhtmlText } from '../variable-xml'
@@ -269,19 +270,28 @@ function soleOutputHandleId(node: FbdNode | undefined): string | undefined {
 function parseInVariableXml(entry: Record<string, unknown>): VariableNode {
   const numericId = asString(entry['@localId'])
   const position = parsePositionXml(entry.position)
-  const outputHandle = makeHandle(
+  const xmlWidth = toNumber(entry['@width'])
+  const width = clampImportedVariableWidth(xmlWidth)
+  const xmlOutputHandle = makeHandle(
     LEAF_OUTPUT_HANDLE_ID,
     'source',
     Position.Right,
     position,
     asRecord(entry.connectionPointOut).relPosition,
   )
+  // The output pin sits on the right edge, so it moves with a widened box.
+  const widening = width - xmlWidth
+  const outputHandle = {
+    ...xmlOutputHandle,
+    relPosition: { ...xmlOutputHandle.relPosition, x: xmlOutputHandle.relPosition.x + widening },
+    glbPosition: { ...xmlOutputHandle.glbPosition, x: xmlOutputHandle.glbPosition.x + widening },
+  }
 
   return {
     id: `INPUT-VARIABLE-${numericId}`,
     type: 'input-variable',
     position,
-    width: toNumber(entry['@width']),
+    width,
     height: toNumber(entry['@height']),
     draggable: true,
     selectable: true,
@@ -316,7 +326,7 @@ function parseOutVariableXml(entry: Record<string, unknown>): { node: VariableNo
     id: `OUTPUT-VARIABLE-${numericId}`,
     type: 'output-variable',
     position,
-    width: toNumber(entry['@width']),
+    width: clampImportedVariableWidth(toNumber(entry['@width'])),
     height: toNumber(entry['@height']),
     draggable: true,
     selectable: true,

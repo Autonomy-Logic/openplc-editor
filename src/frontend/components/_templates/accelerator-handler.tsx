@@ -8,6 +8,7 @@ import {
   useTheme,
   useWindow,
 } from '../../../middleware/shared/providers'
+import { requestAppRefresh } from '../../services/refresh-app'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
 import { openPLCStoreBase, useOpenPLCStore } from '../../store'
@@ -24,6 +25,9 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
   }
   openModal('quit-application', null)
 }
+
+// The native menu disables project-only items on the start screen; this covers a keypress that beats the rebuild.
+const hasOpenProject = () => openPLCStoreBase.getState().project.meta.path !== ''
 
 const AcceleratorHandler = () => {
   const accelerator = useAccelerator()
@@ -42,14 +46,7 @@ const AcceleratorHandler = () => {
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, handleOpenProjectResponse },
-    workspaceActions: {
-      setSystemConfigs,
-      toggleMaximizedWindow,
-      setCloseWindow,
-      setCloseAppDarwin,
-      setModalOpen,
-      toggleCollapse,
-    },
+    workspaceActions: { setSystemConfigs, toggleMaximizedWindow, setCloseWindow, setModalOpen, toggleCollapse },
     tabsActions: { removeTab },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -68,6 +65,7 @@ const AcceleratorHandler = () => {
     if (!capabilities.hasProjectExport) return
 
     const unsub = accelerator.onExportProject((format) => {
+      if (!hasOpenProject()) return
       setRequestFlag(true)
       // Defaulting to 'old-editor' keeps platforms whose menu sends no dialect
       // on the PLCOpen export.
@@ -210,6 +208,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onCloseProject(() => {
+      if (!hasOpenProject()) return
       closeProject()
     })
     return unsub
@@ -220,6 +219,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProject(() => {
+      if (!hasOpenProject()) return
       void executeSave()
     })
     return unsub
@@ -230,6 +230,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProjectAs(() => {
+      if (!hasOpenProject()) return
       void executeSaveProjectAs(projectPort, capabilities)
     })
     return unsub
@@ -283,6 +284,7 @@ const AcceleratorHandler = () => {
     }
 
     const unsub = accelerator.onDeleteFile(() => {
+      if (!hasOpenProject()) return
       handleDelete()
     })
     return unsub
@@ -292,7 +294,10 @@ const AcceleratorHandler = () => {
    * Close tab
    */
   useEffect(() => {
-    const unsub = accelerator.onCloseTab(() => removeTab(selectedProjectTreeLeaf.label))
+    const unsub = accelerator.onCloseTab(() => {
+      if (!hasOpenProject()) return
+      removeTab(selectedProjectTreeLeaf.label)
+    })
     return unsub
   }, [selectedProjectTreeLeaf, accelerator, removeTab])
 
@@ -311,6 +316,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onPrint(() => {
+      if (!hasOpenProject()) return
       if (!canExportPdf(project.data.pous)) return
       openModal('export-pdf', null)
     })
@@ -322,6 +328,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onPageSetup(() => {
+      if (!hasOpenProject()) return
       openModal('page-setup', null)
     })
     return unsub
@@ -332,6 +339,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onFindInProject(() => {
+      if (!hasOpenProject()) return
       setModalOpen('findInProject', true)
     })
     return unsub
@@ -342,6 +350,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onSwitchPerspective(() => {
+      if (!hasOpenProject()) return
       toggleCollapse()
     })
     return unsub
@@ -362,7 +371,7 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onUndo(() => {
-      if (!meta?.name) return
+      if (!hasOpenProject() || !meta?.name) return
       if (!undo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
@@ -370,7 +379,7 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onRedo(() => {
-      if (!meta?.name) return
+      if (!hasOpenProject() || !meta?.name) return
       if (!redo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
@@ -385,6 +394,16 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [editingState, accelerator, openModal])
+
+  /**
+   * Refresh (Cmd+R / Ctrl+R from the native menu)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onRefresh(() => {
+      requestAppRefresh(openPLCStoreBase.getState().workspace.editingState, openModal, windowPort)
+    })
+    return unsub
+  }, [accelerator, openModal, windowPort])
 
   /**
    * Theme changes (user toggle, OS preference, or cross-app cookie sync).
@@ -422,11 +441,11 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
 
-    const unsub = windowPort.onDarwinAppQuitting?.(() => {
-      setCloseAppDarwin(true)
+    const unsub = windowPort.onQuitRequested?.(() => {
+      quitAppRequest(openPLCStoreBase.getState().workspace.editingState === 'unsaved', openModal)
     })
     return unsub
-  }, [capabilities.isNativeApplication, windowPort, setCloseAppDarwin])
+  }, [capabilities.isNativeApplication, windowPort, openModal])
 
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
@@ -446,18 +465,13 @@ const AcceleratorHandler = () => {
     const handler = (e: BeforeUnloadEvent) => {
       if (capabilities.isDevMode) return
 
+      // Any unload that is not a window close (a stray navigation, an unconfirmed reload) is blocked.
       if (!close.window) {
         e.returnValue = false
         return
       }
 
-      if (close.app) return
-
-      if (systemConfigs.OS === 'darwin' && !close.appDarwin) {
-        windowPort.hide()
-        e.returnValue = false
-        return
-      }
+      if (systemConfigs.OS === 'darwin' || close.app) return
 
       quitAppRequest(editingState === 'unsaved', openModal)
       e.returnValue = false
@@ -469,7 +483,7 @@ const AcceleratorHandler = () => {
     capabilities.isNativeApplication,
     close.window,
     close.app,
-    close.appDarwin,
+    capabilities.isDevMode,
     systemConfigs.OS,
     editingState,
     openModal,

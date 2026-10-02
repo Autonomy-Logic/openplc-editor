@@ -780,6 +780,40 @@ describe('buildActiveIndexSet', () => {
       expect(activeIndexes).toContain(2)
     })
 
+    it('polls the edge trigger output of rising and falling contacts, not only their variable', () => {
+      const pou = makePou('Main', 'program', [], 'ld')
+      const indexMap = new Map([
+        ['Main:LED', 1],
+        ['Main:_TMP_R_TRIG42.Q', 2],
+        ['Main:_TMP_F_TRIG43.Q', 3],
+        ['Main:_TMP_R_TRIG44.Q', 4],
+      ])
+      const ldFlow = {
+        name: 'Main',
+        rungs: [
+          {
+            nodes: [
+              { type: 'contact', data: { variant: 'risingEdge', numericId: '42', variable: { name: 'LED' } } },
+              { type: 'contact', data: { variant: 'fallingEdge', numericId: '43', variable: { name: 'LED' } } },
+              { type: 'coil', data: { variant: 'risingEdge', numericId: '44', variable: { name: 'LED' } } },
+            ],
+          },
+        ],
+      }
+      const state = makeState({
+        pous: [pou],
+        editorName: 'Main',
+        editorLanguage: 'ld',
+        debugVariableIndexes: indexMap,
+        ladderFlows: [ldFlow],
+      })
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual(expect.arrayContaining([1, 2, 3]))
+      expect(activeIndexes).not.toContain(4)
+    })
+
     it('includes LD variable-type nodes', () => {
       const pou = makePou('Main', 'program', [], 'ld')
       const indexMap = new Map([['Main:VAR_NODE', 3]])
