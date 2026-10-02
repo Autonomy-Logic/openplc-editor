@@ -252,17 +252,21 @@ void setup()
             modbus.slaveid = DEBUG_SLAVE;
         #endif
 
-        mapEmptyBuffers();
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
-        // variables directly through the strucpp debug table (openplc_debug_*),
-        // so it reaches every variable whether or not a slot is bound —
-        // mapEmptyBuffers() is deliberately not called here, saving SRAM on
-        // small boards.
+        // variables by symbol through the strucpp debug table, so it reaches
+        // every variable whether or not a slot is bound.
         DEBUG_IFACE.begin(DEBUG_BAUD);
         mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
         modbus.slaveid = DEBUG_SLAVE;
+    #endif
+
+    // Outside the transport branch above: the backing belongs to the image, so
+    // whichever protocol addresses located variables needs it, not Modbus
+    // specifically.
+    #if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+        mapEmptyBuffers();
     #endif
 
     // ---- The network, on its own switch ----------------------------------
@@ -338,7 +342,10 @@ void setup()
 // =============================================================================
 // BACK THE UNBOUND SLOTS
 // =============================================================================
-#ifdef MODBUS_ENABLED
+// Compiled when a protocol that addresses LOCATED variables is enabled. The
+// debugger reaches variables by symbol, so it can never name an unbound slot
+// and a debug-only build saves the SRAM.
+#if defined(MODBUS_ENABLED) || S7COMM_ENABLED
 
 // Storage for slots the program declared no variable for -- the image is a
 // table of pointers into program variables, and those slots have none. Keeps
@@ -408,9 +415,13 @@ void mapEmptyBuffers()
     #endif
 }
 
+#endif // MODBUS_ENABLED || S7COMM_ENABLED
+
 // =============================================================================
 // MODBUS TASK
 // =============================================================================
+#ifdef MODBUS_ENABLED
+
 // Nothing to synchronise: the FC handlers address the process image directly.
 void modbusTask()
 {
