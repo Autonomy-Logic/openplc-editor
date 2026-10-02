@@ -1,6 +1,7 @@
 import * as blockNode from './block'
 import * as coilNode from './coil'
 import * as contactNode from './contact'
+import * as executeNode from './execute'
 import * as mockNode from './mock-node'
 import * as parallelNode from './parallel'
 import * as placeholderNode from './placeholder'
@@ -16,6 +17,7 @@ export const customNodeTypes = {
   block: blockNode.Block,
   coil: coilNode.Coil,
   contact: contactNode.Contact,
+  execute: executeNode.Execute,
   parallel: parallelNode.Parallel,
   parallelPlaceholder: placeholderNode.Placeholder,
   placeholder: placeholderNode.Placeholder,

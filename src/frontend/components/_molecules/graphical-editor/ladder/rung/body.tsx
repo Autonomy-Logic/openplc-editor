@@ -27,6 +27,7 @@ import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
+import { computeRungDebugStates, type RungDebugStates } from './ladder-utils/debug-power-flow'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
 import {
@@ -35,7 +36,6 @@ import {
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
 import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
-import { computeRungDebugStates, type RungDebugStates } from './rung-debug-states'
 import { isSameSelection } from './selection'
 
 /**
@@ -572,6 +572,16 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Handle the double click of a node
    */ //
   const handleNodeDoubleClick = (node: FlowNode) => {
+    // Execute is the one element whose modal opens during debug too —
+    // read-only, so the user can read the running snippet with live
+    // value badges. Everything else stays gated off while debugging
+    // because its modal edits the program.
+    if (node.type === 'execute') {
+      openModal('execute-ladder-element', node)
+      return
+    }
+    if (isDebuggerActive) return
+
     const modalToOpen =
       node.type === 'block'
         ? 'block-ladder-element'
@@ -806,7 +816,9 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
               onNodeDragStart: isDebuggerActive ? undefined : onNodeDragStart,
               onNodeDrag: isDebuggerActive ? undefined : onNodeDrag,
               onNodeDragStop: isDebuggerActive ? undefined : onNodeDragStop,
-              onNodeDoubleClick: isDebuggerActive ? undefined : onNodeDoubleClick,
+              // Always wired — `handleNodeDoubleClick` decides per node
+              // type whether a debug session suppresses the modal.
+              onNodeDoubleClick,
 
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,

@@ -18,6 +18,7 @@
 
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
 import { toast } from '../../utils/toast'
+import { attachExecuteSync } from './execute-sync'
 import { startStLsp } from './index'
 import { attachMonacoModelSync, type MonacoModelSyncHandle } from './monaco-model-sync'
 import {
@@ -88,6 +89,11 @@ export function bootStLsp(
   // opens a project, the subscribe fires and the worker sees a
   // didOpen wave for every POU.
   const projectSync = attachProjectSync(service)
+  // Execute ("ST Block") snippets live inside graphical bodies, which
+  // project-sync sends to the worker as opaque signature stubs.  This
+  // second sync gives each snippet its own document so it gets real
+  // diagnostics instead of none.
+  const executeSync = attachExecuteSync(service)
   // Both library-sync layers force a document re-publish after the
   // stlib cache settles.  The worker doesn't re-run analysis on
   // cache mutations, so without this nudge documents keep their
@@ -119,6 +125,7 @@ export function bootStLsp(
       unsubscribeBundledLibrariesSync()
       unsubscribeEnabledLibrariesSync()
       unsubscribeLibrarySync()
+      executeSync.dispose()
       projectSync.dispose()
       modelSync?.dispose()
       service.dispose()

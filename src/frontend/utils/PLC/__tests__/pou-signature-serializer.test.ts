@@ -2,6 +2,7 @@ import type { PLCPou } from '../../../../middleware/shared/ports/types'
 import {
   OPAQUE_BODY_PLACEHOLDER,
   SCOPE_QUERY_POU_NAME,
+  serializePouScopeForBody,
   serializePouScopeForQuery,
   serializePouSignatureToST,
   serializePouSignatureToSTWithBodyOffset,
@@ -380,6 +381,55 @@ describe('serializePouSignatureToST', () => {
       const { text } = serializePouScopeForQuery(pou, 'sh', 2, ALIAS_INDEX)
       expect(text).toContain('shared : INT AT %IW1;')
       expect(text).not.toContain('VAR_EXTERNAL')
+    })
+  })
+  describe('serializePouScopeForBody', () => {
+    // Backs diagnostics for Execute ("ST Block") snippets. The line count it
+    // returns is fed to `setBodyLineOffset`, which shifts every diagnostic the
+    // worker reports back onto the lines the user can actually see — so an
+    // off-by-one here puts every red squiggle on the wrong line.
+    it('reports the preamble line count as the body offset', () => {
+      const pou = makePou({
+        name: 'Irrigation',
+        pouType: 'function-block',
+        interface: FB_VARIABLES,
+        body: { language: 'ld', value: {} as never },
+      })
+      const body = 'x := 1;\ny := 2;'
+      const { text, bodyLineOffset } = serializePouScopeForBody(pou, body)
+
+      // The offset must be the index of the snippet's first line.
+      expect(text.split('\n')[bodyLineOffset]).toBe('x := 1;')
+      expect(text.split('\n')[bodyLineOffset + 1]).toBe('y := 2;')
+    })
+
+    it('preserves a multi-line body verbatim, including blank lines and indentation', () => {
+      const pou = makePou({ body: { language: 'ld', value: {} as never } })
+      const body = 'IF a THEN\n    b := 1;\n\n    c := 2;\nEND_IF;'
+      const { text, bodyLineOffset } = serializePouScopeForBody(pou, body)
+
+      expect(
+        text
+          .split('\n')
+          .slice(bodyLineOffset, bodyLineOffset + 5)
+          .join('\n'),
+      ).toBe(body)
+    })
+
+    it('gives two nodes distinct shell names so they cannot collide', () => {
+      const pou = makePou({ body: { language: 'ld', value: {} as never } })
+      const a = serializePouScopeForBody(pou, 'x := 1;', 'execute_n1').text
+      const b = serializePouScopeForBody(pou, 'x := 1;', 'execute_n2').text
+
+      expect(a).toContain(`${SCOPE_QUERY_POU_NAME}execute_n1__`)
+      expect(b).toContain(`${SCOPE_QUERY_POU_NAME}execute_n2__`)
+      expect(a).not.toBe(b)
+    })
+
+    it("does not collide with the POU's own declaration", () => {
+      const pou = makePou({ name: 'Irrigation', body: { language: 'ld', value: {} as never } })
+      const { text } = serializePouScopeForBody(pou, 'x := 1;', 'execute_n1')
+      expect(text).not.toContain('PROGRAM Irrigation')
     })
   })
 })

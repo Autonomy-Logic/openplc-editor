@@ -11,7 +11,7 @@ const zodLadderFlowStateSchema = z.object({
 })
 type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 
-const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
+const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'execute', 'parallel', 'powerRail', 'variable'])
 type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
 import type { HandleBranch, RungLadderState } from '../../../../middleware/shared/ports/types'
