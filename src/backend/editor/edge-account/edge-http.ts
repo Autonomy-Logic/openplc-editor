@@ -48,6 +48,7 @@ export interface EdgeRequestInit {
   raw?: { body: Buffer; contentType: string }
   accessToken?: string | null
   timeoutMs?: number
+  headers?: Record<string, string>
 }
 
 // Shared by the buffered and streaming paths so the guard, Content-Length and bearer
@@ -65,6 +66,7 @@ function prepareRequest(
   const payload = json !== undefined ? Buffer.from(json, 'utf-8') : init.raw?.body
 
   const headers: Record<string, string> = {
+    ...init.headers,
     Accept: accept,
     'User-Agent': 'OpenPLC-Editor/edge-account',
   }

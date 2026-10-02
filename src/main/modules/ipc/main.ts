@@ -22,6 +22,7 @@ import {
   streamAiCompletion,
   warmAi,
 } from '@root/backend/editor/edge-ai'
+import { closeEditSession, heartbeatEditSession, openEditSession } from '@root/backend/editor/edge-edit-sessions'
 import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
 import {
   listCloudProjectsInFolder,
@@ -80,6 +81,7 @@ import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
+import type { EditSessionBeat, EditSessionOpened } from '@root/middleware/shared/ports/edit-session-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -115,6 +117,7 @@ import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from '
 import { unlink, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { platform } from 'process'
+import { z } from 'zod'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/editor/hardware/debug-channel-factory'
@@ -153,7 +156,18 @@ import {
 } from '../../../backend/editor/utils'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
+import {
+  interpretPluginCommandResponse,
+  type PluginCommandOutcome,
+} from '../../../backend/shared/utils/vpp/screen-actions'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
+
+const EditSessionClientSchema = z.object({
+  kind: z.literal('desktop'),
+  label: z.string().trim().min(1).max(120),
+})
+
+const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 /** Why a channel could not be handed out. */
 interface ChannelUnavailable {
@@ -258,6 +272,9 @@ class MainProcessBridge implements MainIpcModule {
   pouService
   compilerModule
   hardwareModule
+  quitCoordinator
+  private quitPromptReady = false
+  private reloadConfirmed = false
   private registeredHandleChannels: string[] = []
   // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
   // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
@@ -306,6 +323,7 @@ class MainProcessBridge implements MainIpcModule {
     pouService,
     compilerModule,
     hardwareModule,
+    quitCoordinator,
   }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -315,6 +333,19 @@ class MainProcessBridge implements MainIpcModule {
     this.pouService = pouService
     this.compilerModule = compilerModule
     this.hardwareModule = hardwareModule
+    this.quitCoordinator = quitCoordinator
+    this.mainWindow?.webContents?.on('render-process-gone', () => {
+      this.quitPromptReady = false
+    })
+    this.mainWindow?.webContents?.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
+      if (!isMainFrame || isSameDocument) return
+      this.quitPromptReady = false
+      this.reloadConfirmed = false
+    })
+    // The renderer's beforeunload blocks every unload it did not ask for; a confirmed reload is let through.
+    this.mainWindow?.webContents?.on('will-prevent-unload', (event) => {
+      if (this.reloadConfirmed) event.preventDefault()
+    })
 
     // When the token authority transparently refreshes an expired token, push
     // the fresh token to the renderer so its store connection flag tracks it.
@@ -612,6 +643,42 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * VPP screen actions (`discover`, `test`, `status`) against the runtime's
+   * existing `POST /api/plugin-command` catch-all.
+   *
+   * That route answers HTTP 200 even when the plugin failed, with the reason
+   * in an `error` key, so the body is parsed and interpreted here rather than
+   * the status code being taken as the answer. The runtime is not changed by
+   * any of this — the route already exists and is used as it is.
+   */
+  handleRuntimeSendPluginCommand = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    args: { plugin: string; command: string; params?: Record<string, unknown> },
+  ): Promise<PluginCommandOutcome> => {
+    try {
+      const result = await this.makeRuntimeApiMutation(
+        'POST',
+        ipAddress,
+        '/api/plugin-command',
+        JSON.stringify({ plugin: args.plugin, command: args.command, params: args.params ?? {} }),
+      )
+      if (!result.success) {
+        return { ok: false, error: result.error }
+      }
+      let body: unknown
+      try {
+        body = JSON.parse(result.data)
+      } catch {
+        return { ok: false, error: 'The device returned an unreadable response.' }
+      }
+      return interpretPluginCommandResponse(200, body)
+    } catch (error) {
+      return { ok: false, error: getErrorMessage(error) }
+    }
+  }
+
   // ===================== RUNTIME API (delegated) =====================
   // Thin pass-throughs to `RuntimeApiClient`. They stay on this class because
   // `CompilerModule`'s bridge contract and several handlers call them by name.
@@ -817,6 +884,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    this.registerHandle('edge-edit-session:open', this.handleEdgeEditSessionOpen)
+    this.registerHandle('edge-edit-session:heartbeat', this.handleEdgeEditSessionHeartbeat)
+    this.registerHandle('edge-edit-session:close', this.handleEdgeEditSessionClose)
     this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
     this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
     this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
@@ -855,6 +925,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('project:remove-from-recent', this.handleRemoveProjectFromRecent)
     this.registerHandle('project:track-recent', this.handleTrackRecentProject)
     this.registerHandle('project:delete', this.handleDeleteProject)
+    this.ipcMain.on('app:request-quit', this.handleAppRequestQuit)
+    this.ipcMain.on('app:quit-ready', this.handleAppQuitReady)
+    this.ipcMain.on('app:quit-unready', this.handleAppQuitUnready)
     this.ipcMain.on('app:quit', this.handleAppQuit)
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => { ... })
 
@@ -886,6 +959,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window-controls:maximize', this.handleWindowControlsMaximize)
     this.ipcMain.on('window:reload', this.handleWindowReload)
     this.ipcMain.on('window:rebuild-menu', this.handleWindowRebuildMenu)
+    this.ipcMain.on('window:project-open', this.handleWindowProjectOpen)
 
     // ===================== HARDWARE =====================
     this.registerHandle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
@@ -899,6 +973,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
+    this.registerHandle('packages:get-pin', this.handlePackagesGetPin)
     this.registerHandle('packages:verify-signatures', this.handlePackagesVerifySignatures)
 
     // ===================== UTILITIES =====================
@@ -939,6 +1014,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:get-logs', this.handleRuntimeGetLogs)
     this.registerHandle('runtime:clear-credentials', this.handleRuntimeClearCredentials)
     this.registerHandle('runtime:get-serial-ports', this.handleRuntimeGetSerialPorts)
+    this.registerHandle('runtime:send-plugin-command', this.handleRuntimeSendPluginCommand)
     this.registerHandle('runtime:discover-devices', this.handleRuntimeDiscoverDevices)
     this.registerHandle('runtime:retrieve-project', this.handleRuntimeRetrieveProject)
     this.registerHandle('runtime:install-retrieved-libraries', this.handleInstallRetrievedLibraries)
@@ -1358,6 +1434,54 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     return saveCloudFile(filePath, content)
+  }
+
+  handleEdgeEditSessionOpen = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    client: unknown,
+    previousSessionId: unknown,
+  ): Promise<EditSessionOpened> => {
+    const parsed = EditSessionClientSchema.safeParse(client)
+
+    if (
+      !isNonEmptyString(projectId) ||
+      !parsed.success ||
+      (previousSessionId !== undefined && !isNonEmptyString(previousSessionId))
+    ) {
+      return Promise.resolve({ status: 'unavailable', permanent: true })
+    }
+
+    return openEditSession(projectId, parsed.data, previousSessionId)
+  }
+
+  handleEdgeEditSessionHeartbeat = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    sessionId: unknown,
+  ): Promise<EditSessionBeat> => {
+    if (!isNonEmptyString(projectId) || !isNonEmptyString(sessionId)) {
+      return Promise.resolve({ status: 'unknown' })
+    }
+
+    return heartbeatEditSession(projectId, sessionId)
+  }
+
+  handleEdgeEditSessionClose = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    sessionId: unknown,
+    closedBySessionId: unknown,
+  ): Promise<boolean> => {
+    if (
+      !isNonEmptyString(projectId) ||
+      !isNonEmptyString(sessionId) ||
+      (closedBySessionId !== undefined && !isNonEmptyString(closedBySessionId))
+    ) {
+      return Promise.resolve(false)
+    }
+
+    return closeEditSession(projectId, sessionId, closedBySessionId)
   }
 
   // Validate before building a URL: a non-string id interpolates as `undefined`. And `undefined`
@@ -2032,13 +2156,20 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: getErrorMessage(error) }
     }
   }
-  handleAppQuit = () => {
-    this.stopSimulator()
-    if (this.mainWindow) {
-      this.mainWindow.destroy()
-    }
-    app.quit()
+  handleAppRequestQuit = () => this.quitCoordinator.requestQuit()
+  handleAppQuitReady = () => {
+    this.quitPromptReady = true
   }
+  handleAppQuitUnready = () => {
+    this.quitPromptReady = false
+  }
+
+  /** Whether the renderer is loaded, alive and listening for the quit prompt. */
+  canPromptQuit(): boolean {
+    const webContents = this.mainWindow?.webContents
+    return this.quitPromptReady && !!webContents && !webContents.isCrashed()
+  }
+  handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
   // TODO: This handle should be refactored to use a new approach on module implementation.
@@ -2130,10 +2261,18 @@ class MainProcessBridge implements MainIpcModule {
       this.abortAiStreamsFor(contents)
     }
 
+    this.reloadConfirmed = true
     contents?.reload()
   }
   handleWindowRebuildMenu = () => {
     void this.menuBuilder.buildMenu().catch((error) => {
+      logger.error('Error rebuilding application menu:', error)
+    })
+  }
+
+  handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
+    if (typeof open !== 'boolean') return
+    void this.menuBuilder.setProjectOpen(open).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })
   }
@@ -2215,6 +2354,9 @@ class MainProcessBridge implements MainIpcModule {
   }
   handlePackagesGetManifest = async (_event: IpcMainInvokeEvent, packageId: string) =>
     this.packageManagerModule.getInstalledPackageManifest(packageId)
+
+  handlePackagesGetPin = async (_event: IpcMainInvokeEvent, packageId: string) =>
+    this.packageManagerModule.getPackagePin(packageId)
 
   // Utility handlers
   handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
@@ -3263,7 +3405,7 @@ class MainProcessBridge implements MainIpcModule {
    * leaves the renderer gated on a session whose target no longer exists — which
    * a window reload and a failed start both used to do.
    */
-  private stopSimulator(): void {
+  stopSimulator(): void {
     this.closeSimulatorSession()
     this.simulatorModule.stop()
   }

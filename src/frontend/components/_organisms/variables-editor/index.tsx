@@ -549,6 +549,8 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
+    // This runs on blur: leaving the field without typing is not an edit.
+    if (event.target.value === (pou?.documentation ?? '')) return
     updatePouDocumentation(editor.meta.name, event.target.value)
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }
