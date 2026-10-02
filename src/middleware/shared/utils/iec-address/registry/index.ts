@@ -9,6 +9,7 @@ export {
 } from './address-space'
 export { allocateAddresses, channelKey } from './allocate'
 export {
+  activeKindsFor,
   ethercatConsumerId,
   ethercatMemoryKey,
   migrateToRegistry,

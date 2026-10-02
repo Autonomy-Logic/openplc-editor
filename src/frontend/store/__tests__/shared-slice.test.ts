@@ -2439,6 +2439,22 @@ describe('createSharedSlice', () => {
         expect(store.getState().workspace.selectedProjectTreeLeaf.type).toBeNull()
       })
 
+      it('selects a diagnostics next tab with a null project-tree leaf', () => {
+        // Same as the diff viewer: the developer diagnostics tab has no
+        // project element behind it, so there is no leaf to highlight.
+        store.getState().tabsActions.updateTabs({
+          name: 'I/O Image Diagnostics',
+          path: '/diagnostics',
+          elementType: { type: 'diagnostics' },
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'PouB', language: 'st' })
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('PouB')
+
+        expect(store.getState().editor.type).toBe('plc-diagnostics')
+        expect(store.getState().workspace.selectedProjectTreeLeaf.type).toBeNull()
+      })
+
       it('does not resurrect the closed model in editors[]', () => {
         // forceCloseFile must remove the active model from editors[] before setEditor runs
         // for the next tab, or the closed model reappears on the next focus switch.

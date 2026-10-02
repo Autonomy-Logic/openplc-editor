@@ -8,6 +8,7 @@ import {
   useTheme,
   useWindow,
 } from '../../../middleware/shared/providers'
+import { openDiagnosticsTab } from '../../services/io-diagnostics/open-tab'
 import { requestAppRefresh } from '../../services/refresh-app'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
@@ -341,6 +342,11 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [accelerator, toggleCollapse])
+
+  /**
+   * Developer I/O image diagnostics, from the native menu on a framed window.
+   */
+  useEffect(() => accelerator.onOpenDiagnostics?.(() => openDiagnosticsTab()), [accelerator])
 
   /**
    * Undo / Redo

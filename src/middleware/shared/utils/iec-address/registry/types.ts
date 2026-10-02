@@ -87,6 +87,22 @@ export interface AddressConflict {
 export interface AllocationResult {
   assignments: Record<string, string>
   conflicts: AddressConflict[]
+  /**
+   * Slots claimed per prefix (`%IX`, `%QW`, …) — the highest claimed linear
+   * index plus one, which is the number of slots the producers need in that
+   * space. A prefix nobody claimed is ABSENT, not zero-valued: a missing key
+   * and a `0` mean the same thing, so consumers read it as
+   * `slotCounts[prefix] ?? 0`.
+   *
+   * Bit spaces count BITS, matching `linear` in `address-space.ts` — `%IX1.2`
+   * claims linear 10, so `slotCounts['%IX']` is 11. Rounding that up to a whole
+   * byte is the firmware buffer's concern (`[MAX_/8][8]`), not the registry's,
+   * so it is not done here.
+   *
+   * Unparseable `pinned` addresses take no part in the linear reservation, so
+   * they contribute nothing here either — same as in `assignments`.
+   */
+  slotCounts: Record<string, number>
 }
 
 export type SetAliasResult =

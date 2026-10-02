@@ -115,6 +115,17 @@ export interface GenerateS7CommHeaderInput {
 /** C string literal, escaped. \r included — escaping \n but not \r left a bare
  *  carriage return in the literal, which the compiler reports as an unterminated
  *  string with no hint which field carried it. */
+/** What the identification service answers when the project left the identity
+ *  screen untouched. A client that queries the SZL before anything else gets a
+ *  truthful, generic answer rather than a build that does not link. */
+const DEFAULT_S7_IDENTITY = {
+  name: 'OpenPLC',
+  moduleType: 'OpenPLC',
+  serialNumber: '',
+  copyright: '',
+  moduleName: 'OpenPLC',
+} as const
+
 const cString = (value: string): string =>
   `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`
 
@@ -298,17 +309,23 @@ export function generateS7CommHeaderContent(input: GenerateS7CommHeaderInput): s
   lines.push(`#define S7COMM_SZL_ENABLED ${profile.szl ? 1 : 0}`)
   lines.push('')
 
-  if (config.plcIdentity) {
+  // Emitted whenever the SZL service is compiled in, which is a fact about the
+  // BOARD, while the identity is a fact about the PROJECT and is optional. The
+  // firmware's identity table is guarded on S7COMM_SZL_ENABLED alone, so a
+  // project that never opened the identity screen used to reference five macros
+  // that were never defined and failed to compile.
+  if (profile.szl) {
+    const identity = config.plcIdentity ?? DEFAULT_S7_IDENTITY
     lines.push('// ---- Identity ----')
     lines.push('//')
-    lines.push('// What a client sees when it asks the CPU who it is. Only')
-    lines.push('// meaningful where S7COMM_SZL_ENABLED is 1 — without the')
-    lines.push('// identification service there is nowhere to publish it.')
-    lines.push(`#define S7COMM_ID_NAME ${cString(config.plcIdentity.name)}`)
-    lines.push(`#define S7COMM_ID_MODULE_TYPE ${cString(config.plcIdentity.moduleType)}`)
-    lines.push(`#define S7COMM_ID_SERIAL ${cString(config.plcIdentity.serialNumber)}`)
-    lines.push(`#define S7COMM_ID_COPYRIGHT ${cString(config.plcIdentity.copyright)}`)
-    lines.push(`#define S7COMM_ID_MODULE_NAME ${cString(config.plcIdentity.moduleName)}`)
+    lines.push('// What a client sees when it asks the CPU who it is. Present')
+    lines.push('// whenever S7COMM_SZL_ENABLED is 1, because the firmware table')
+    lines.push('// below it is compiled on that condition alone.')
+    lines.push(`#define S7COMM_ID_NAME ${cString(identity.name)}`)
+    lines.push(`#define S7COMM_ID_MODULE_TYPE ${cString(identity.moduleType)}`)
+    lines.push(`#define S7COMM_ID_SERIAL ${cString(identity.serialNumber)}`)
+    lines.push(`#define S7COMM_ID_COPYRIGHT ${cString(identity.copyright)}`)
+    lines.push(`#define S7COMM_ID_MODULE_NAME ${cString(identity.moduleName)}`)
     lines.push('')
   }
 

@@ -79,21 +79,13 @@ protocol, transport, register and debug layers agree on the same contracts.
 // asking for a few seconds while the user clears the lock at the device.
 #define MB_REFUSED_LOCKED                0x6C
 
-//Modbus registers struct
+// Modbus registers struct
+// What a Modbus slave is, on this firmware: an id. The register banks that used
+// to live here are gone -- every FC addresses the process image directly, so
+// the values have one home (the IEC program's variables) instead of two, and
+// there is nothing left to keep in step between them.
 struct MBinfo {
     uint8_t slaveid;
-    uint16_t *holding;
-    uint8_t holding_size;
-    uint32_t *dint_memory;
-    uint8_t dint_memory_size;
-    uint64_t *lint_memory;
-    uint8_t lint_memory_size;
-    uint8_t *coils;
-    uint8_t coils_size;
-    uint16_t *input_regs;
-    uint8_t input_regs_size;
-    uint8_t *input_status;
-    uint8_t input_status_size;
 };
 
 //Function Codes

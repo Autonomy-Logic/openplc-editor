@@ -75,6 +75,11 @@ export interface GenerateConfsInput {
    *  are rethrown.  Each adapter wires its native log channel
    *  through this callback. */
   log: (message: string, level: 'info' | 'warning' | 'error') => void
+  /** Slots per IEC prefix for this project, from `computeIoImage`. Supplies
+   *  the counts for any Modbus server segment the user did not configure, so
+   *  `modbus.json` and `image.conf` cannot describe different images. Absent
+   *  only for callers that have no image to offer. */
+  imageSizes?: Readonly<Record<string, number>>
 }
 
 /**
@@ -110,7 +115,7 @@ export interface GenerateConfsOutput {
  * editor's "fail fast" gate.
  */
 export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOutput {
-  const { servers, remoteDevices, instances, debugMapContent, log } = input
+  const { servers, remoteDevices, instances, debugMapContent, log, imageSizes } = input
 
   // Modbus slave / master / S7Comm: pure helpers.  Each returns `null`
   // when the project has no config of that type.  Master also forwards
@@ -119,7 +124,11 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   // Type assertions match the editor's call sites — the generators
   // accept a narrower shape than `PLCServer[]` / `PLCRemoteDevice[]`
   // but the runtime values are compatible.
-  const modbusSlave = generateModbusSlaveConfig(servers as Parameters<typeof generateModbusSlaveConfig>[0])
+  // `imageSizes` supplies the counts for any segment the user did not
+  // configure, so this file cannot declare addresses `image.conf` says do not
+  // exist. Without it the two disagreed for the commonest project of all: one
+  // with a Modbus server nobody customised (DOPE-615, FR16).
+  const modbusSlave = generateModbusSlaveConfig(servers as Parameters<typeof generateModbusSlaveConfig>[0], imageSizes)
   const modbusMaster = generateModbusMasterConfig(
     remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
     (msg) => log(msg, 'warning'),
