@@ -114,11 +114,9 @@ const C_BLOCKS_BASELINE = `#include <cstdint>
 // this project's own structures, enumerations and function block classes — so a
 // C block can name every type the Variables Table can declare.
 //
-// This TU is pre-compiled with the board's toolchain at -std=gnu++17 into
-// libOpenPLCUserLib.a, on the same side of the isolation seam as the rest of
-// the generated code, so the header's C++17 surface is available here. The
-// arduino-cli pass compiles the core in its own (older) standard and never
-// sees this file.
+// arduino-cli compiles this TU with the sketch, in the core's own standard —
+// which is also what lets the block resolve its Arduino \`#include\`s. The
+// strucpp runtime is C++14, so no separate pass is needed to reach it.
 #include "c_blocks.h"
 
 /*********************/

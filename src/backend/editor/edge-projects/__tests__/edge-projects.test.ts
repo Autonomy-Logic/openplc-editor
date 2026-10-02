@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { ApiProjectFilesSchema } from '../../../shared/project/api-envelope'
 import { edgeAuthedRequest } from '../../edge-account/edge-account-service'
+import { applyCloudFileSave, applyCloudProjectSave, materializeCloudProject } from '../../project/cloud-working-copy'
 import {
   listCloudProjectsInFolder,
   listRecentCloudProjects,
@@ -16,6 +17,13 @@ import {
 
 jest.mock('../../edge-account/edge-account-service', () => ({
   edgeAuthedRequest: jest.fn(),
+}))
+
+jest.mock('../../project/cloud-working-copy', () => ({
+  beginCloudProjectRead: jest.fn(() => 7),
+  materializeCloudProject: jest.fn(() => Promise.resolve(true)),
+  applyCloudProjectSave: jest.fn(() => Promise.resolve()),
+  applyCloudFileSave: jest.fn(() => Promise.resolve()),
 }))
 
 const request = jest.mocked(edgeAuthedRequest)
@@ -567,5 +575,79 @@ describe('readCloudProject carries the raw bytes', () => {
     // A key nobody reads is a key that can only drift. README is not produced by the save
     // flow, so echoing it would not save it either — that gap is its own problem.
     expect(result.data?.rawLoadedFiles).not.toHaveProperty('README.md')
+  })
+})
+
+/**
+ * The build reads a project from disk, so every successful open and save keeps the local
+ * working copy in step, and nothing Edge refused ever reaches it.
+ */
+describe('local working copy', () => {
+  const files = {
+    projectPath: 'p1',
+    projectJson: '{"meta":{"name":"Irrigation"}}',
+    deviceConfig: '{}',
+    pinMapping: '[]',
+    libraryManifest: '',
+    pouFiles: [{ relativePath: 'pous/programs/main.st', content: 'x := TRUE;' }],
+    serverFiles: [],
+    remoteDeviceFiles: [],
+    dataTypeFiles: [],
+    deletions: [],
+  }
+
+  it('is written when the project opens', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    await readCloudProject('p1')
+
+    expect(materializeCloudProject).toHaveBeenCalledWith(
+      expect.objectContaining({ projectPath: 'p1', pinMapping: '[]', projectJson: FILES['project.json'] }),
+      7,
+    )
+  })
+
+  it('is not touched when the open fails', async () => {
+    request.mockResolvedValueOnce({ status: 403, body: '{}' })
+
+    await readCloudProject('p1')
+
+    expect(materializeCloudProject).not.toHaveBeenCalled()
+  })
+
+  it('waits for the first save of a pending PLCopen import, which has no project yet', async () => {
+    request.mockResolvedValueOnce(ok({ files: { 'plcopen-pending-import.xml': '<project/>' } }))
+
+    await readCloudProject('p1')
+
+    expect(materializeCloudProject).not.toHaveBeenCalled()
+  })
+
+  it('does not fail the open when it cannot be written', async () => {
+    jest.mocked(materializeCloudProject).mockRejectedValueOnce(new Error('disk full'))
+    jest.spyOn(console, 'error').mockImplementationOnce(() => {})
+    request.mockResolvedValueOnce(ok({ files: FILES }))
+
+    await expect(readCloudProject('p1')).resolves.toMatchObject({ success: true })
+  })
+
+  it('takes a project save once Edge accepts it, and not before', async () => {
+    request.mockResolvedValueOnce(ok({ files: FILES })).mockResolvedValueOnce({ status: 403, body: '{}' })
+    await saveCloudProject(files)
+    expect(applyCloudProjectSave).not.toHaveBeenCalled()
+
+    request.mockResolvedValueOnce(ok({ files: FILES })).mockResolvedValueOnce({ status: 200, body: '{}' })
+    await expect(saveCloudProject(files)).resolves.toEqual({ success: true })
+    expect(applyCloudProjectSave).toHaveBeenCalledWith(files)
+  })
+
+  it('takes a single-file save once Edge accepts it', async () => {
+    request
+      .mockResolvedValueOnce(ok({ files: structuredClone(FILES) }))
+      .mockResolvedValueOnce({ status: 200, body: '{}' })
+
+    await saveCloudFile('p1/devices/pin-mapping.json', '{"ESP32":[]}')
+
+    expect(applyCloudFileSave).toHaveBeenCalledWith('p1', 'devices/pin-mapping.json', '{"ESP32":[]}')
   })
 })

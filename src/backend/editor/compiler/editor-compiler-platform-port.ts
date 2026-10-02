@@ -79,8 +79,14 @@ import type { CompilerModule } from './compiler-module'
  * the archive it travelled in is JSON.  Writing that as text would produce a
  * file the linker rejects, with nothing in the message pointing back here.
  */
-async function writeBundleFile(absPath: string, file: BundleFile): Promise<void> {
+async function writeBundleFile(absPath: string, file: BundleFile | Uint8Array): Promise<void> {
   await fs.mkdir(dirname(absPath), { recursive: true })
+  // A VPP plugin payload may be precompiled objects rather than source, so
+  // bytes are written as bytes.
+  if (file instanceof Uint8Array) {
+    await fs.writeFile(absPath, file)
+    return
+  }
   if (isBinaryBundleFile(file)) {
     // Copied into a plain `Uint8Array`: `Buffer` and the `Uint8Array` this
     // TypeScript lib expects are not assignable to one another.
@@ -683,9 +689,9 @@ export function createEditorCompilerPlatformPort(
       log: PlatformLog,
     ): Promise<MaterializeRuntimeV4BundleResult> {
       try {
-        const entries: Array<[string, BundleFile]> = Object.entries(args.bundle)
+        const entries = Object.entries(args.bundle)
         await Promise.all(
-          entries.map(async ([relPath, content]: [string, BundleFile]) =>
+          entries.map(async ([relPath, content]) =>
             writeBundleFile(join(context.sourceTargetFolderPath, relPath), content),
           ),
         )

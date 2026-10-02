@@ -33,8 +33,10 @@ import { configureSaveResume } from './frontend/services/resume-save-after-sign-
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { openPLCStoreBase, useOpenPLCStore } from './frontend/store'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
+import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
+import { setMenuProjectOpen } from './middleware/adapters/editor/window-adapter'
 import { editorPorts, packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
 
@@ -81,6 +83,11 @@ openPLCStoreBase.subscribe(
   (state) => state.project.meta.path,
   () => hydrateLibraries(),
 )
+
+// A provider sign-in finishes in the system browser and lands in the main
+// process; this is how the account hook hears about it without waiting for
+// the window to regain focus. Outside React for the same reason as above.
+listenForProviderSignIns()
 
 // Fetch the VPP catalog once, now, so a build can tell the user a newer
 // package exists without waiting on the network to find out. Nothing awaits
@@ -218,10 +225,11 @@ export default function App() {
     setRuntimeIpAddress(runtimeIpAddress)
   }, [runtimeIpAddress])
 
-  // Sync project path to the platform adapter so the ESI port can access it
+  // Sync project path to the platform adapter (ESI port) and the native menu's project-only items
   const projectPath = useOpenPLCStore((state) => state.project.meta.path)
   useEffect(() => {
     setProjectPath(projectPath)
+    setMenuProjectOpen(projectPath !== '')
   }, [projectPath])
 
   return (

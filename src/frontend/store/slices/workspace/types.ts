@@ -77,7 +77,6 @@ export type WorkspaceState = {
     close: {
       window: boolean
       app: boolean
-      appDarwin: boolean
     }
     // PLC Logs
     isPlcLogsVisible: boolean
@@ -182,7 +181,6 @@ export type WorkspaceActions = {
   setSystemConfigs: (config: Partial<SystemConfigs>) => void
   setCloseWindow: (value: boolean) => void
   setCloseApp: (value: boolean) => void
-  setCloseAppDarwin: (value: boolean) => void
   switchAppTheme: () => void
   toggleMaximizedWindow: () => void
   toggleCollapse: () => void

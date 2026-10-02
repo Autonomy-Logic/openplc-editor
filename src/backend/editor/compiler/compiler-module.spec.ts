@@ -1,9 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
-import { CompilerModule } from './compiler-module'
-import type { ToolchainProperties } from './types'
+import { CompilerModule, mergeStandardFlags, standardFlagsForCore } from './compiler-module'
 
 jest.mock('electron', () => ({
   app: {
@@ -259,782 +259,6 @@ describe('CompilerModule', () => {
     })
   })
 
-  describe('installAsArduinoLibrary (precompiled library layout)', () => {
-    const fs = jest.requireActual('node:fs') as typeof import('node:fs')
-    const fsPromises = jest.requireActual('node:fs/promises') as typeof import('node:fs/promises')
-    const cpMock = cp as jest.MockedFunction<typeof cp>
-    let tempCompilationPath: string
-    let dummyArchivePath: string
-
-    beforeEach(() => {
-      tempCompilationPath = fs.mkdtempSync(join(tmpdir(), 'openplc-precompile-spec-'))
-      dummyArchivePath = join(tempCompilationPath, 'precompile', 'libOpenPLCUserLib.a')
-      fs.mkdirSync(join(tempCompilationPath, 'precompile'), { recursive: true })
-      fs.writeFileSync(dummyArchivePath, '!<arch>\n', 'utf-8')
-      cpMock.mockImplementation(fsPromises.cp)
-    })
-
-    afterEach(() => {
-      fs.rmSync(tempCompilationPath, { recursive: true, force: true })
-      cpMock.mockReset().mockResolvedValue(undefined)
-    })
-
-    it('stages the library under os.tmpdir() (path must be space-free for the linker -L flag)', async () => {
-      const { libraryDir, archDir } = await compilerModule.installAsArduinoLibrary({
-        compilationPath: tempCompilationPath,
-        archivePath: dummyArchivePath,
-        archCandidates: ['cortex-m7'],
-      })
-      expect(libraryDir.startsWith(jest.requireActual('node:os').tmpdir())).toBe(true)
-      expect(libraryDir).not.toMatch(/\s/)
-      expect(archDir).toBe(join(libraryDir, 'src', 'cortex-m7'))
-      expect(fs.existsSync(join(libraryDir, 'library.properties'))).toBe(true)
-      expect(fs.existsSync(join(libraryDir, 'src', 'OpenPLCUserLib.h'))).toBe(true)
-      expect(fs.existsSync(join(archDir, 'libOpenPLCUserLib.a'))).toBe(true)
-    })
-
-    it('lays the archive under every candidate subdir so arduino-cli finds it regardless of per-core convention', async () => {
-      const { libraryDir } = await compilerModule.installAsArduinoLibrary({
-        compilationPath: tempCompilationPath,
-        archivePath: dummyArchivePath,
-        // AVR Mega exposes build.mcu=atmega2560 + build.arch=AVR; arduino-cli
-        // picks atmega2560 for the precompiled-lib subdir on this core, while
-        // mbed cores pick build.architecture (e.g. cortex-m7). Writing to both
-        // dirs sidesteps the per-core mapping.
-        archCandidates: ['atmega2560', 'avr'],
-      })
-      expect(fs.existsSync(join(libraryDir, 'src', 'atmega2560', 'libOpenPLCUserLib.a'))).toBe(true)
-      expect(fs.existsSync(join(libraryDir, 'src', 'avr', 'libOpenPLCUserLib.a'))).toBe(true)
-    })
-
-    it('marks the library as precompiled=full so arduino-cli skips source compilation', async () => {
-      const { libraryDir } = await compilerModule.installAsArduinoLibrary({
-        compilationPath: tempCompilationPath,
-        archivePath: dummyArchivePath,
-        archCandidates: ['avr'],
-      })
-      const props = fs.readFileSync(join(libraryDir, 'library.properties'), 'utf-8')
-      expect(props).toMatch(/^precompiled=full$/m)
-      expect(props).toMatch(/^name=OpenPLCUserLib$/m)
-      expect(props).toMatch(/^architectures=\*$/m)
-    })
-
-    it('writes a stub header that documents its purpose without redeclaring symbols', async () => {
-      const { libraryDir } = await compilerModule.installAsArduinoLibrary({
-        compilationPath: tempCompilationPath,
-        archivePath: dummyArchivePath,
-        archCandidates: ['cortex-m7'],
-      })
-      const header = fs.readFileSync(join(libraryDir, 'src', 'OpenPLCUserLib.h'), 'utf-8')
-      expect(header).toContain('#pragma once')
-      expect(header).toContain('stub')
-      expect(header).not.toMatch(/^extern\s+/m)
-    })
-
-    it('isolates concurrent same-board compiles by suffixing the staging path with process.pid', async () => {
-      const { libraryDir } = await compilerModule.installAsArduinoLibrary({
-        compilationPath: tempCompilationPath,
-        archivePath: dummyArchivePath,
-        archCandidates: ['cortex-m4'],
-      })
-      // Reset-on-stage-collision is documented in the method; the pid suffix
-      // is what prevents a concurrent process from deleting our staging dir
-      // mid-build (md5 alone would collide for the same compilationPath).
-      expect(libraryDir).toMatch(new RegExp(`-${process.pid}/OpenPLCUserLib$`))
-    })
-  })
-
-  describe('ensureResponseFileStubs (ESP32/STM32duino response-file workaround)', () => {
-    // Method is `private static` — exposed for direct testing via a typed
-    // façade so the regex and EEXIST handling can be exercised in isolation
-    // without going through the full pre-compile path. Takes already-tokenized
-    // argv (post-`tokenizeRecipe`) — response-file tokens arrive without
-    // surrounding quote chars.
-    const ensureStubs = (
-      CompilerModule as unknown as {
-        ensureResponseFileStubs(argv: ReadonlyArray<string>, log: (s: string) => void): Promise<void>
-      }
-    ).ensureResponseFileStubs.bind(CompilerModule)
-    const fs = jest.requireActual('node:fs') as typeof import('node:fs')
-    const noopLog = jest.fn()
-    let workDir: string
-
-    beforeEach(() => {
-      noopLog.mockClear()
-      workDir = fs.mkdtempSync(join(tmpdir(), 'openplc-stubs-spec-'))
-    })
-
-    afterEach(() => {
-      fs.rmSync(workDir, { recursive: true, force: true })
-    })
-
-    it('creates an empty stub for a POSIX @-file the recipe references but does not exist', async () => {
-      const missing = join(workDir, 'sub', 'build_opt.h')
-      const argv = ['arm-none-eabi-g++', '-c', `@${missing}`, '-DARDUINO=10607', '-o', 'foo.o']
-      await ensureStubs(argv, noopLog)
-      expect(fs.existsSync(missing)).toBe(true)
-      expect(fs.statSync(missing).size).toBe(0)
-      expect(noopLog).toHaveBeenCalledWith(expect.stringContaining(`Stubbed empty response file: ${missing}`), 'info')
-    })
-
-    it('matches Windows-style @C:\\... and @C:/... absolute paths in argv tokens', () => {
-      // Pure regex assertion against the public extractor — observing
-      // extraction via filesystem side-effects (mkdir/writeFile) is
-      // platform-fragile (POSIX accepts "C:" as a literal directory
-      // name; Windows actually writes under C:\). The extractor is the
-      // authoritative subject, so we test it directly.
-      const winBackslash = 'C:\\Users\\dev\\AppData\\arduino\\sketches\\hash\\file_opts'
-      const winSlash = 'C:/Users/dev/AppData/arduino/sketches/hash/build_opt.h'
-      const argv = ['arm-zephyr-eabi-g++', '-c', `@${winBackslash}`, `@${winSlash}`, '-o', 'foo.o']
-
-      const extracted = (
-        CompilerModule as unknown as {
-          extractResponseFilesFromArgv(argv: ReadonlyArray<string>): string[]
-        }
-      ).extractResponseFilesFromArgv(argv)
-
-      expect(extracted).toContain(winBackslash)
-      expect(extracted).toContain(winSlash)
-    })
-
-    it('does not overwrite existing response files', async () => {
-      const existing = join(workDir, 'preexisting.txt')
-      fs.writeFileSync(existing, 'real flags here', 'utf-8')
-      const argv = ['g++', '-c', `@${existing}`, 'foo.cpp']
-      await ensureStubs(argv, noopLog)
-      expect(fs.readFileSync(existing, 'utf-8')).toBe('real flags here')
-      expect(noopLog).not.toHaveBeenCalled()
-    })
-
-    it('deduplicates repeated @-references so a path is stubbed at most once', async () => {
-      const target = join(workDir, 'shared.opt')
-      const argv = ['g++', '-c', `@${target}`, `@${target}`, `@${target}`]
-      await ensureStubs(argv, noopLog)
-      expect(fs.existsSync(target)).toBe(true)
-      expect(noopLog).toHaveBeenCalledTimes(1)
-    })
-
-    it('ignores @-tokens with relative paths (not absolute → not a response file we own)', async () => {
-      // Relative-path @-args either reference workspace-local files (which
-      // we shouldn't touch) or are non-path arguments — the regex deliberately
-      // only matches absolute paths.
-      const argv = ['g++', '-c', '@subdir/file.txt', 'foo.cpp']
-      await ensureStubs(argv, noopLog)
-      expect(noopLog).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('extractToolchainProperties (recipe extraction)', () => {
-    it('caches successful results so a second call for the same FQBN skips arduino-cli', async () => {
-      let execCallCount = 0
-      execImpl.current = async () => {
-        execCallCount += 1
-        return {
-          stdout: [
-            'recipe.cpp.o.pattern=avr-g++ {source_file} -o {object_file}',
-            'recipe.c.o.pattern=avr-gcc {source_file} -o {object_file}',
-            'recipe.ar.pattern=avr-ar rcs {archive_file_path} {object_file}',
-            'compiler.path=/avr/',
-            'compiler.ar.cmd=avr-ar',
-          ].join('\n'),
-          stderr: '',
-        }
-      }
-      const first = await compilerModule.extractToolchainProperties('arduino:avr:uno')
-      const second = await compilerModule.extractToolchainProperties('arduino:avr:uno')
-      expect(first).toBe(second) // same reference — cache hit, not re-parsed
-      expect(execCallCount).toBe(1)
-    })
-
-    it('throws a descriptive error when arduino-cli returns an incomplete recipe set', async () => {
-      // Missing recipe.c.o.pattern and recipe.ar.pattern — usually signals
-      // that the core for this FQBN isn't installed.
-      execImpl.current = async () => ({
-        stdout: 'recipe.cpp.o.pattern=g++ {source_file} -o {object_file}\n',
-        stderr: '',
-      })
-      await expect(compilerModule.extractToolchainProperties('unknown:vendor:board')).rejects.toThrow(
-        /incomplete recipe set.*core for this board is not installed/s,
-      )
-    })
-  })
-
-  describe('handlePrecompileUserLib (pre-compile loop)', () => {
-    const fs = jest.requireActual('node:fs') as typeof import('node:fs')
-    const noopLog = jest.fn()
-    let buildDir: string
-    let srcDir: string
-    let extractSpy: jest.SpyInstance
-
-    /**
-     * Toolchain invocations only — the compiler and archiver.
-     *
-     * The pass also asks arduino-cli for the include path it would use, which
-     * is an `arduino-cli compile --only-compilation-database` call rather than
-     * a toolchain one.  Filtering keeps these assertions about the compile.
-     */
-    const toolchainCalls = (calls: readonly string[]) =>
-      calls.filter((cmd) => !cmd.includes('--only-compilation-database'))
-
-    const cannedProps: ToolchainProperties = {
-      fqbn: 'arduino:avr:uno',
-      properties: {
-        'compiler.path': '/fake/avr/bin/',
-        'compiler.ar.cmd': 'avr-ar',
-        'compiler.ar.flags': 'rcs',
-        'build.arch': 'AVR',
-        'build.core.path': '/fake/avr/cores/arduino',
-        'build.variant.path': '/fake/avr/variants/standard',
-      },
-      recipeCpp: 'avr-g++ -c {source_file} {includes} {includes} -o {object_file}',
-      recipeC: 'avr-gcc -c {source_file} {includes} -o {object_file}',
-      recipeAr: 'avr-ar rcs {archive_file_path} {object_file}',
-    }
-
-    beforeEach(() => {
-      noopLog.mockClear()
-      buildDir = fs.mkdtempSync(join(tmpdir(), 'openplc-precompile-loop-'))
-      srcDir = join(buildDir, 'src')
-      fs.mkdirSync(srcDir, { recursive: true })
-      extractSpy = jest
-        .spyOn(compilerModule, 'extractToolchainProperties')
-        .mockResolvedValue(cannedProps as unknown as ToolchainProperties)
-    })
-
-    afterEach(() => {
-      extractSpy.mockRestore()
-      fs.rmSync(buildDir, { recursive: true, force: true })
-    })
-
-    it('throws when src/ contains no compilable TUs (only the board HAL arduino.cpp would be excluded)', async () => {
-      fs.writeFileSync(join(srcDir, 'arduino.cpp'), '// HAL\n', 'utf-8')
-      await expect(
-        compilerModule.handlePrecompileUserLib({
-          compilationPath: buildDir,
-          fqbn: 'arduino:avr:uno',
-          handleOutputData: noopLog,
-        }),
-      ).rejects.toThrow(/no \.cpp sources found under/)
-    })
-
-    /**
-     * Stand in for arduino-cli's `--only-compilation-database`: write the
-     * database it would have written, into the `--build-path` it was given.
-     */
-    const writeCompilationDatabase = (cmd: string, includeDirs: readonly string[]) => {
-      // `renderArgvAsCmd` quotes any argument holding a space, which
-      // `os.tmpdir()` does on a machine whose user name has one.
-      const match = /--build-path\s+(?:"([^"]+)"|(\S+))/.exec(cmd)
-      const buildPath = match?.[1] ?? match?.[2]
-      if (!buildPath) throw new Error('database run was given no --build-path')
-      fs.mkdirSync(buildPath, { recursive: true })
-      fs.writeFileSync(
-        join(buildPath, 'compile_commands.json'),
-        JSON.stringify([{ file: 'x.cpp', arguments: ['g++', '-c', ...includeDirs.map((dir) => `-I${dir}`), 'x.cpp'] }]),
-        'utf-8',
-      )
-    }
-
-    it('compiles with the include path arduino-cli reports, transitive libraries and all', async () => {
-      // Discovery is arduino-cli's job: it is transitive (WiFi.h pulls in
-      // Network.h from a second library) and it preprocesses, so a header
-      // behind an #ifdef for another architecture costs nothing. Rebuilding
-      // that here would approximate it and keep missing cases.
-      fs.writeFileSync(join(srcDir, 'c_blocks_code.cpp'), '#include <WiFi.h>\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        if (cmd.includes('--only-compilation-database')) {
-          writeCompilationDatabase(cmd, ['/core/libraries/WiFi/src', '/core/libraries/Network/src'])
-        }
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      const compileCmd = toolchainCalls(execCalls)[0]
-      expect(compileCmd).toContain('-I/core/libraries/WiFi/src')
-      expect(compileCmd).toContain('-I/core/libraries/Network/src')
-    })
-
-    it('asks arduino-cli before the TUs leave src/, and offers it every library', async () => {
-      // Discovery walks the library's own sources for their includes. Run it
-      // after the stash and it sees an empty src/, resolves nothing, and the
-      // compile fails on the first library header.
-      fs.writeFileSync(join(srcDir, 'c_blocks_code.cpp'), '#include <WiFi.h>\n', 'utf-8')
-      fs.mkdirSync(join(buildDir, 'libraries', 'SensorKit', 'src'), { recursive: true })
-
-      let srcHeldTheTU: boolean | undefined
-      let databaseCmd = ''
-      execImpl.current = async (cmd) => {
-        if (cmd.includes('--only-compilation-database')) {
-          srcHeldTheTU = fs.existsSync(join(srcDir, 'c_blocks_code.cpp'))
-          databaseCmd = cmd
-          writeCompilationDatabase(cmd, [])
-        }
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      expect(srcHeldTheTU).toBe(true)
-      // The build tree's own sources, and every library a `.stlib` shipped.
-      expect(databaseCmd).toContain(`--library ${srcDir}`)
-      expect(databaseCmd).toContain(`--library ${join(buildDir, 'libraries', 'SensorKit')}`)
-    })
-
-    it('compiles the resource libraries into the archive, with path-derived object names', async () => {
-      // arduino-cli will not build these: it compiles a library only when it
-      // discovers an include for it, and the one TU that includes them is
-      // moved out of its view before it runs. Putting that include back into
-      // the sketch is worse — the library's macros then rewrite unrelated
-      // code in the sketch's own translation unit. So they are built here,
-      // as the Runtime v4 Makefile builds the same tree.
-      fs.writeFileSync(join(srcDir, 'c_blocks_code.cpp'), '#include <SensorKit.h>\n', 'utf-8')
-      const sensorKit = join(buildDir, 'libraries', 'SensorKit', 'src')
-      const displayKit = join(buildDir, 'libraries', 'DisplayKit', 'src')
-      fs.mkdirSync(join(sensorKit, 'transport'), { recursive: true })
-      fs.mkdirSync(displayKit, { recursive: true })
-      fs.writeFileSync(join(sensorKit, 'SensorKit.cpp'), '// sensor\n', 'utf-8')
-      fs.writeFileSync(join(sensorKit, 'transport', 'util.cpp'), '// sensor util\n', 'utf-8')
-      // Same file name in a second library — a flat object directory would
-      // have one overwrite the other.
-      fs.writeFileSync(join(displayKit, 'util.cpp'), '// display util\n', 'utf-8')
-      fs.writeFileSync(join(sensorKit, 'SensorKit.h'), '#pragma once\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        if (cmd.includes('--only-compilation-database')) writeCompilationDatabase(cmd, [])
-        return { stdout: '', stderr: '' }
-      }
-
-      const result = await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      const compiled = toolchainCalls(execCalls).join('\n')
-      expect(compiled).toContain(join(sensorKit, 'SensorKit.cpp'))
-      expect(compiled).toContain(join(sensorKit, 'transport', 'util.cpp'))
-      expect(compiled).toContain(join(displayKit, 'util.cpp'))
-
-      // Distinct objects, and all of them in the archive.
-      const objectNames = result.objectFiles.map((file) => basename(file))
-      expect(objectNames).toContain('SensorKit__src__transport__util.cpp.o')
-      expect(objectNames).toContain('DisplayKit__src__util.cpp.o')
-      expect(new Set(objectNames).size).toBe(objectNames.length)
-    })
-
-    it('still compiles when arduino-cli cannot produce a database', async () => {
-      // Falling back to the core/variant/build-tree includes is what the pass
-      // did before: a TU needing no library still builds, and one that does
-      // fails naming the header it wanted.
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        if (cmd.includes('--only-compilation-database')) throw new Error('no core installed')
-        return { stdout: '', stderr: '' }
-      }
-
-      await expect(
-        compilerModule.handlePrecompileUserLib({
-          compilationPath: buildDir,
-          fqbn: 'arduino:avr:uno',
-          handleOutputData: noopLog,
-        }),
-      ).resolves.toBeDefined()
-
-      expect(toolchainCalls(execCalls)[0]).toContain(`-I${srcDir}`)
-    })
-
-    it('excludes arduino.cpp from the compile set so the board HAL stays with arduino-cli', async () => {
-      fs.writeFileSync(join(srcDir, 'arduino.cpp'), '// HAL\n', 'utf-8')
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-      fs.writeFileSync(join(srcDir, 'configuration.cpp'), '// config\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      // Two compile invocations + one ar invocation = 3 toolchain calls.
-      const toolchain = toolchainCalls(execCalls)
-      expect(toolchain).toHaveLength(3)
-      const compileCmds = toolchain.slice(0, 2).join('\n')
-      expect(compileCmds).toContain('pou_MAIN.cpp')
-      expect(compileCmds).toContain('configuration.cpp')
-      expect(compileCmds).not.toContain('arduino.cpp')
-    })
-
-    it('substitutes every {includes} occurrence (recipes that interpolate it twice must not leak literals)', async () => {
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      // recipeCpp had `{includes} {includes}` (double occurrence). After
-      // substitution there must be ZERO literal `{includes}` left.
-      expect(execCalls[0]).not.toContain('{includes}')
-    })
-
-    it('preserves source-file order in the ar archive members (deterministic build output)', async () => {
-      // Three sources to verify ordering; the pre-compile builds objectFiles
-      // synchronously from the source list so order is stable regardless of
-      // concurrent compile resolution timing.
-      fs.writeFileSync(join(srcDir, 'a_first.cpp'), '// a\n', 'utf-8')
-      fs.writeFileSync(join(srcDir, 'm_middle.cpp'), '// m\n', 'utf-8')
-      fs.writeFileSync(join(srcDir, 'z_last.cpp'), '// z\n', 'utf-8')
-
-      let arCmd = ''
-      execImpl.current = async (cmd) => {
-        if (cmd.includes('avr-ar')) arCmd = cmd
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      // `foo.cpp.o`, not `foo.o` — the `.cpp` is KEPT so esp8266's linker script
-      // matches `*.cpp.o` and sends the code to flash instead of the 32 KB IRAM
-      // catch-all. See the objectFiles comment in handlePrecompileUserLib.
-      const aPos = arCmd.indexOf('a_first.cpp.o')
-      const mPos = arCmd.indexOf('m_middle.cpp.o')
-      const zPos = arCmd.indexOf('z_last.cpp.o')
-      expect(aPos).toBeGreaterThan(-1)
-      expect(mPos).toBeGreaterThan(aPos)
-      expect(zPos).toBeGreaterThan(mPos)
-    })
-
-    it('throws an actionable error when compiler.path or compiler.ar.cmd is missing from --show-properties', async () => {
-      extractSpy.mockResolvedValue({
-        ...cannedProps,
-        properties: {
-          // build.core.path present so we reach the compiler/ar check
-          'build.core.path': '/fake/avr/cores/arduino',
-          /* compiler.path & compiler.ar.cmd intentionally absent */
-        },
-      } as unknown as ToolchainProperties)
-
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      execImpl.current = async () => ({ stdout: '', stderr: '' })
-
-      await expect(
-        compilerModule.handlePrecompileUserLib({
-          compilationPath: buildDir,
-          fqbn: 'arduino:avr:uno',
-          handleOutputData: noopLog,
-        }),
-      ).rejects.toThrow(/compiler\.path \+ compiler\.ar\.cmd.*core is likely not installed/s)
-    })
-
-    it('caps concurrent toolchain spawns at the host CPU count (no unbounded parallel exec)', async () => {
-      // Reproduces the unbounded-parallelism failure mode the cap was
-      // added to prevent: ~30 TUs on a 4-core box used to dispatch 30
-      // simultaneous g++ + cmd.exe pairs. Instrument the exec mock with
-      // an in-flight counter to assert the peak respects the cap.
-      const os = jest.requireActual('node:os') as typeof import('node:os')
-      const cpuCount = os.cpus().length
-      const tuCount = cpuCount + 4
-
-      for (let i = 0; i < tuCount; i++) {
-        fs.writeFileSync(join(srcDir, `tu_${String(i).padStart(2, '0')}.cpp`), '// tu\n', 'utf-8')
-      }
-
-      let inFlight = 0
-      let peakInFlight = 0
-      execImpl.current = async (cmd) => {
-        // Archive (avr-ar) is sequential by design — skip it from the count.
-        if (cmd.includes('avr-ar')) return { stdout: '', stderr: '' }
-        inFlight += 1
-        if (inFlight > peakInFlight) peakInFlight = inFlight
-        // Yield so workers actually overlap rather than each synchronously
-        // resolving and pulling the next item before we observe the peak.
-        await new Promise((r) => setTimeout(r, 10))
-        inFlight -= 1
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      expect(peakInFlight).toBeLessThanOrEqual(cpuCount)
-      // Sanity: the cap kicked in only because we actually parallelised.
-      // On a single-core host the assertion would degenerate; skip the
-      // sanity check there.
-      if (cpuCount > 1) expect(peakInFlight).toBeGreaterThan(1)
-    })
-
-    it('stashes sources before compile so a failed archive leaves a recoverable state for retry', async () => {
-      // Two strucpp-side TUs and the board HAL. After a failed first run
-      // we expect src/ to retain only arduino.cpp and the stash to hold
-      // the two pre-compile sources verbatim — a subsequent retry must
-      // pick them up from the stash and complete successfully.
-      fs.writeFileSync(join(srcDir, 'arduino.cpp'), '// HAL\n', 'utf-8')
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou body\n', 'utf-8')
-      fs.writeFileSync(join(srcDir, 'configuration.cpp'), '// config body\n', 'utf-8')
-
-      const stashDir = join(buildDir, 'precompile', 'sources')
-
-      let failNextArchive = true
-      execImpl.current = async (cmd) => {
-        if (cmd.includes('avr-ar') && failNextArchive) {
-          throw new Error('simulated archive failure')
-        }
-        return { stdout: '', stderr: '' }
-      }
-
-      await expect(
-        compilerModule.handlePrecompileUserLib({
-          compilationPath: buildDir,
-          fqbn: 'arduino:avr:uno',
-          handleOutputData: noopLog,
-        }),
-      ).rejects.toThrow(/simulated archive failure/)
-
-      // Post-failure state: stash holds the strucpp sources, src/ has only
-      // arduino.cpp — exactly the invariant arduino-cli depends on.
-      expect(fs.existsSync(join(stashDir, 'pou_MAIN.cpp'))).toBe(true)
-      expect(fs.existsSync(join(stashDir, 'configuration.cpp'))).toBe(true)
-      expect(fs.existsSync(join(srcDir, 'pou_MAIN.cpp'))).toBe(false)
-      expect(fs.existsSync(join(srcDir, 'configuration.cpp'))).toBe(false)
-      expect(fs.existsSync(join(srcDir, 'arduino.cpp'))).toBe(true)
-      // Content survived the move untouched (no truncation, no swap).
-      expect(fs.readFileSync(join(stashDir, 'pou_MAIN.cpp'), 'utf-8')).toBe('// pou body\n')
-
-      // Second run resolves the simulated failure and completes.
-      failNextArchive = false
-      const result = await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      // The TU set discovered from the stash matches the original two
-      // strucpp sources — order is deterministic (sorted basenames).
-      expect(result.objectFiles.map((p) => p.split(/[\\/]/).pop())).toEqual(['configuration.cpp.o', 'pou_MAIN.cpp.o'])
-    })
-
-    it('injects -I{build.core.path} and -I{build.variant.path} into every TU compile (so Arduino.h resolves)', async () => {
-      // Reproduces the failure mode where Renesas-style cores leave the
-      // bare core/variant -I out of recipe.cpp.o.pattern and rely on
-      // arduino-cli to inject them at compile time via the `{includes}`
-      // substitution. The precompile mirrors that injection here.
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
-      expect(compileCmd).toContain('-I/fake/avr/cores/arduino')
-      expect(compileCmd).toContain('-I/fake/avr/variants/standard')
-    })
-
-    it('omits the variant -I when build.variant.path is unset (runtime-only / minimalist cores)', async () => {
-      extractSpy.mockResolvedValue({
-        ...cannedProps,
-        properties: {
-          ...cannedProps.properties,
-          'build.variant.path': '',
-        },
-      } as unknown as ToolchainProperties)
-
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        handleOutputData: noopLog,
-      })
-
-      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
-      expect(compileCmd).toContain('-I/fake/avr/cores/arduino')
-      // No `-I` followed by empty path — the variant flag is dropped entirely.
-      expect(compileCmd).not.toMatch(/-I(\s|$)/)
-    })
-
-    it('places extraCxxFlags `-I` paths BEFORE the core/variant `-I`s (avr-libstdcpp <new> must shadow Arduino core <new>)', async () => {
-      // Load-bearing ordering: Arduino's `cores/arduino/new` declares
-      // `operator new[]` as `[[gnu::weak]]`, while modm-io/avr-libstdcpp's
-      // `<new>` declares it without the weak attribute. Whichever header
-      // the preprocessor finds first determines whether `_Znaj` references
-      // emitted from `new T[]` are strong or weak. Weak undefined refs do
-      // NOT pull the matching definition from `core.a/new.cpp.o` during
-      // link — the call resolves to address 0 (the AVR reset vector),
-      // resulting in an infinite reset the moment any precompiled TU
-      // executes a `new` expression.
-      //
-      // arduino-cli's stock recipe interpolates `{compiler.cpp.extra_flags}`
-      // (which carries the cxx_flags `-I .../avr-libstdcpp/include`)
-      // BEFORE `{includes}` (the core/variant paths), so the avr-libstdcpp
-      // `<new>` wins. The precompile must mirror that ordering — this
-      // test pins the contract.
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        extraCxxFlags: ['-std=gnu++17', '-I/fake/openplc-avr-libstdcpp/include'],
-        handleOutputData: noopLog,
-      })
-
-      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
-      const libStdCppPos = compileCmd.indexOf('-I/fake/openplc-avr-libstdcpp/include')
-      const corePos = compileCmd.indexOf('-I/fake/avr/cores/arduino')
-      const variantPos = compileCmd.indexOf('-I/fake/avr/variants/standard')
-
-      expect(libStdCppPos).toBeGreaterThan(-1)
-      expect(corePos).toBeGreaterThan(-1)
-      expect(variantPos).toBeGreaterThan(-1)
-      // avr-libstdcpp must come before BOTH core and variant -I paths.
-      expect(libStdCppPos).toBeLessThan(corePos)
-      expect(libStdCppPos).toBeLessThan(variantPos)
-    })
-
-    it('keeps non-`-I` flags from extraCxxFlags as trailing args so the last `-std=` wins over the recipe default', async () => {
-      // The precompile appends `-std=gnu++17 -fno-rtti` as trailing flags
-      // to override the AVR core's recipe-baked `-std=gnu++11`. Any
-      // additional `-std=` or `-f*` flags from VPP-package cxx_flags
-      // must end up trailing too, otherwise a `-std=` from cxx_flags
-      // gets shadowed by the recipe default and strucpp templates that
-      // require C++17 fail to compile.
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      const execCalls: string[] = []
-      execImpl.current = async (cmd) => {
-        execCalls.push(cmd)
-        return { stdout: '', stderr: '' }
-      }
-
-      await compilerModule.handlePrecompileUserLib({
-        compilationPath: buildDir,
-        fqbn: 'arduino:avr:uno',
-        extraCxxFlags: ['-std=gnu++17', '-I/fake/openplc-avr-libstdcpp/include'],
-        handleOutputData: noopLog,
-      })
-
-      const compileCmd = execCalls.find((c) => c.includes('pou_MAIN.cpp')) ?? ''
-      // -I lands before the source-file end of the recipe; -std= lands after.
-      const stdPos = compileCmd.lastIndexOf('-std=gnu++17')
-      const sourcePos = compileCmd.indexOf('pou_MAIN.cpp')
-      expect(stdPos).toBeGreaterThan(sourcePos)
-    })
-
-    it('hard-fails with an actionable error when build.core.path is missing from --show-properties', async () => {
-      extractSpy.mockResolvedValue({
-        ...cannedProps,
-        properties: {
-          'compiler.path': '/fake/avr/bin/',
-          'compiler.ar.cmd': 'avr-ar',
-          'compiler.ar.flags': 'rcs',
-          // build.core.path intentionally absent — TUs that include
-          // <Arduino.h> would silently fail to find the header.
-        },
-      } as unknown as ToolchainProperties)
-
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      execImpl.current = async () => ({ stdout: '', stderr: '' })
-
-      await expect(
-        compilerModule.handlePrecompileUserLib({
-          compilationPath: buildDir,
-          fqbn: 'arduino:avr:uno',
-          handleOutputData: noopLog,
-        }),
-      ).rejects.toThrow(/build\.core\.path.*core is likely not installed/s)
-    })
-
-    it('hard-fails with an actionable error when no arch property is exposed by --show-properties', async () => {
-      // Reproduce a custom/legacy core whose platform.txt exposes none
-      // of build.mcu / build.architecture / build.arch. The legacy
-      // fallback to a literal "unknown" subdir silently placed the
-      // archive somewhere arduino-cli would never look, producing an
-      // opaque undefined-symbols link error far downstream. The
-      // refactored path surfaces a loud, FQBN-tagged error instead.
-      extractSpy.mockResolvedValue({
-        ...cannedProps,
-        properties: {
-          'compiler.path': '/fake/avr/bin/',
-          'compiler.ar.cmd': 'avr-ar',
-          'compiler.ar.flags': 'rcs',
-          'build.core.path': '/fake/avr/cores/arduino',
-          // build.mcu / build.architecture / build.arch intentionally absent
-        },
-      } as unknown as ToolchainProperties)
-
-      fs.writeFileSync(join(srcDir, 'pou_MAIN.cpp'), '// pou\n', 'utf-8')
-
-      execImpl.current = async () => ({ stdout: '', stderr: '' })
-
-      await expect(
-        compilerModule.handlePrecompileUserLib({
-          compilationPath: buildDir,
-          fqbn: 'unknown:vendor:weird-board',
-          handleOutputData: noopLog,
-        }),
-      ).rejects.toThrow(
-        /Toolchain arch subdir resolution failed for "unknown:vendor:weird-board".*build\.mcu.*build\.architecture.*build\.arch.*file an issue/s,
-      )
-    })
-  })
-
   describe('compileLibrary — IPC payload validation', () => {
     /**
      * Collects what the module posts over the progress channel, plus whether
@@ -1144,5 +368,138 @@ describe('CompilerModule', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       expect(isClosed()).toBe(true)
     })
+  })
+})
+
+// The whole contract between us and the Arduino cores now lives in these two
+// functions: with the pre-compile gone, a core that defaults below C++14 only
+// reaches the C++14 strucpp runtime because of the flag pushed here.
+describe('standardFlagsForCore', () => {
+  it.each([
+    ['arduino:avr', ['-std=gnu++14']],
+    ['arduino:samd', ['-std=gnu++14']],
+    ['FACTS:samd', ['-std=gnu++14']],
+    ['industrialshields:esp32', ['-std=gnu++14']],
+    // From C++14 gcc emits calls to the sized `operator delete`, which this
+    // core's libstdc++ never defines — its own SPI.h is what fails to link.
+    ['arduino:megaavr', ['-std=gnu++14', '-fno-sized-deallocation']],
+  ])('pushes %s up to gnu++14', (core, expected) => {
+    expect(standardFlagsForCore(core)).toEqual(expected)
+  })
+
+  it.each([
+    ['arduino:mbed_nano'],
+    ['arduino:mbed_giga'],
+    ['arduino:mbed_opta'],
+    ['arduino:mbed_edge'],
+    ['arduino:mbed_portenta'],
+    ['esp32:esp32'],
+    ['rp2040:rp2040'],
+    ['arduino:zephyr'],
+    ['arduino:renesas_uno'],
+    ['STMicroelectronics:stm32'],
+    ['esp8266:esp8266'],
+  ])('leaves %s alone — already at gnu++14 or above', (core) => {
+    expect(standardFlagsForCore(core)).toEqual([])
+  })
+
+  // gcc 4.8.3 rejects -std=gnu++14 outright and implements neither relaxed
+  // constexpr nor generic lambdas, so no flag rescues it. DOPE-640.
+  it('leaves arduino:sam alone — no flag rescues gcc 4.8.3', () => {
+    expect(standardFlagsForCore('arduino:sam')).toEqual([])
+  })
+
+  it('returns nothing for an unknown core', () => {
+    expect(standardFlagsForCore(undefined)).toEqual([])
+    expect(standardFlagsForCore('some:future-core')).toEqual([])
+  })
+
+  it('matches on the core prefix, so a board-specific suffix still counts', () => {
+    expect(standardFlagsForCore('arduino:avr:mega')).toEqual(['-std=gnu++14'])
+  })
+})
+
+describe('mergeStandardFlags', () => {
+  it('appends the flag when the board declares none', () => {
+    expect(mergeStandardFlags(['-DFOO'], 'arduino:avr')).toEqual(['-DFOO', '-std=gnu++14'])
+  })
+
+  // The Simulator carries `-std=gnu++17` in hals.json. Appending gnu++14 after
+  // it would win on the command line and silently downgrade that board.
+  it('keeps a -std the board already declares', () => {
+    expect(mergeStandardFlags(['-std=gnu++17'], 'arduino:avr')).toEqual(['-std=gnu++17'])
+  })
+
+  it('still adds -fno-sized-deallocation on megaavr when -std is already set', () => {
+    expect(mergeStandardFlags(['-std=gnu++17'], 'arduino:megaavr')).toEqual(['-std=gnu++17', '-fno-sized-deallocation'])
+  })
+
+  it('does not mutate the array it is given', () => {
+    const original = ['-DFOO']
+    mergeStandardFlags(original, 'arduino:avr')
+    expect(original).toEqual(['-DFOO'])
+  })
+
+  it('leaves the flags untouched for a core that needs nothing', () => {
+    expect(mergeStandardFlags(['-DFOO'], 'esp32:esp32')).toEqual(['-DFOO'])
+  })
+
+  // Keeping a board-declared standard is only right while it is new enough.
+  // Below C++14 the runtime does not compile, and the failure reads as a
+  // missing `std::enable_if_t` rather than as a flag problem.
+  it.each([
+    ['-std=gnu++11', '-std=gnu++14'],
+    ['-std=c++11', '-std=gnu++14'],
+    ['-std=gnu++0x', '-std=gnu++14'],
+    ['-std=gnu++98', '-std=gnu++14'],
+    ['-std=c++03', '-std=gnu++14'],
+  ])('replaces %s, which is older than the runtime needs', (declared, expected) => {
+    expect(mergeStandardFlags([declared], 'arduino:avr')).toEqual([expected])
+  })
+
+  it.each([['-std=gnu++14'], ['-std=gnu++17'], ['-std=c++17'], ['-std=gnu++2a'], ['-std=gnu++23']])(
+    'keeps %s, which already covers the runtime',
+    (declared) => {
+      expect(mergeStandardFlags([declared], 'arduino:avr')).toEqual([declared])
+    },
+  )
+
+  // A spelling the table does not know is left to the compiler to judge.
+  it('leaves an unrecognised -std alone', () => {
+    expect(mergeStandardFlags(['-std=gnu++2c'], 'arduino:avr')).toEqual(['-std=gnu++2c'])
+  })
+
+  it('replaces the old standard in place, without disturbing the other flags', () => {
+    expect(mergeStandardFlags(['-DFOO', '-std=gnu++11', '-Wall'], 'arduino:megaavr')).toEqual([
+      '-DFOO',
+      '-std=gnu++14',
+      '-Wall',
+      '-fno-sized-deallocation',
+    ])
+  })
+})
+
+// The pre-compile is gone, and the two arguments that linked its archive went
+// with it. They were appended here, after the shared argv helper ran, so no
+// assertion on that helper can see them come back — this reads the module the
+// way `validate:arch` and `check:purity` read the tree.
+describe('the pre-compiled archive does not come back', () => {
+  const source = readFileSync(join(__dirname, 'compiler-module.ts'), 'utf8')
+
+  it.each([
+    ['compiler.libraries.ldflags', 'linked the archive arduino-cli did not build'],
+    ['OpenPLCUserLib', 'named that archive'],
+    ['precompiledLibDir', 'passed it as a --library'],
+    ['handlePrecompileUserLib', 'built it'],
+    ['installAsArduinoLibrary', 'staged it where discovery would find it'],
+  ])('no longer mentions %s, which %s', (symbol) => {
+    expect(source).not.toContain(symbol)
+  })
+
+  // `precompiledLibraryDir` is a different thing — a vendor's prebuilt
+  // arduino-hal — and still belongs here, so the assertions above must not have
+  // been written broadly enough to forbid it.
+  it('keeps the vendor prebuilt arduino-hal library', () => {
+    expect(source).toContain('precompiledLibraryDir')
   })
 })

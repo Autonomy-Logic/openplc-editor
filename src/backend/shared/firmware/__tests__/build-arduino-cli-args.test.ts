@@ -212,4 +212,36 @@ describe('buildArduinoCliCompileArgs', () => {
     const sketchIdx = args.indexOf('a.ino')
     expect(args.slice(sketchIdx + 1)).toEqual(['--config-file', '/etc/arduino-cli.yaml'])
   })
+  // The pre-compiled archive is gone: arduino-cli compiles the generated sources
+  // with the sketch. Nothing here should reach for `libOpenPLCUserLib` again —
+  // it linked an archive built outside arduino-cli, which is exactly what kept a
+  // C++ block from resolving an Arduino `#include`.
+  it.each([
+    ['without a prebuilt library', undefined],
+    ['with a vendor prebuilt library', '/work/vendor-hal'],
+  ])('never links the pre-compiled user archive, %s', (_label, prebuiltLibraryPath) => {
+    const args = buildArduinoCliCompileArgs(simulatorEntry, {
+      sketchPath: '/work/examples/Baremetal/Baremetal.ino',
+      libraryPath: '/work/src',
+      ...(prebuiltLibraryPath === undefined ? {} : { prebuiltLibraryPath }),
+    })
+
+    const argv = args.join(' ')
+    expect(argv).not.toContain('compiler.libraries.ldflags')
+    expect(argv).not.toContain('OpenPLCUserLib')
+    expect(argv).not.toContain('-lOpenPLCUserLib')
+  })
+
+  // The vendor's prebuilt arduino-hal is a different thing and still belongs on
+  // the command line, so the assertion above must not have removed it.
+  it('still passes a vendor prebuilt library as a second --library', () => {
+    const args = buildArduinoCliCompileArgs(simulatorEntry, {
+      sketchPath: '/work/examples/Baremetal/Baremetal.ino',
+      libraryPath: '/work/src',
+      prebuiltLibraryPath: '/work/vendor-hal',
+    })
+
+    expect(args.filter((arg) => arg === '--library')).toHaveLength(2)
+    expect(args).toContain('/work/vendor-hal')
+  })
 })

@@ -28,6 +28,7 @@ import type {
   CompilerPlatformPort,
   PlatformDeviceContext,
   PlatformLog,
+  RuntimeV4Bundle,
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { VersionSubstitution } from '../../../middleware/shared/ports/library-types'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
@@ -817,7 +818,7 @@ async function runCompilePipelineInner(
     const userTypeNames = projectAndLibraryTypeNames(projectData, libraryArchives)
     const ownTypeNames = (projectData.dataTypes ?? []).map((dataType) => dataType.name)
     const cBlocks = buildCBlocksFromPous(originalCppPous as never, userTypeNames, ownTypeNames)
-    const bundle = composeRuntimeV4Bundle({
+    const bundle: RuntimeV4Bundle = composeRuntimeV4Bundle({
       programSt,
       md5,
       strucppFiles: strucppFilesMap,

@@ -6,6 +6,20 @@ const persistentStorageSchema = z.object({
   flushSeconds: z.number().int().default(5),
 })
 
+/**
+ * The vendor package a VPP board was authored against.
+ *
+ * `contentHash` is what makes this a pin rather than a label: a package can be
+ * republished under the same version, and the hash is what notices. Recorded
+ * per board, mirroring `vendorScreenDataByBoard` — a pin belongs to the target
+ * it was authored for, so retargeting must not carry it across.
+ */
+const vppPackagePinSchema = z.object({
+  packageId: z.string(),
+  version: z.string(),
+  contentHash: z.string(),
+})
+
 const deviceConfigurationSchema = z.object({
   deviceBoard: z.string().default('OpenPLC Simulator'),
   communicationPort: z.string().default(''),
@@ -39,9 +53,13 @@ const deviceConfigurationSchema = z.object({
   // upload pipelines fall back to each manifest option's `default` when a key
   // is missing here.
   selectedPlatformOptions: z.record(z.string(), z.string()).default({}),
+  // Optional so every project written before pinning existed still validates;
+  // absent simply means "no pin recorded", which warns about nothing.
+  vppPackagePinsByBoard: z.record(z.string(), vppPackagePinSchema).optional(),
 })
 
 type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
+type VppPackagePin = z.infer<typeof vppPackagePinSchema>
 
-export { deviceConfigurationSchema, persistentStorageSchema }
-export type { DeviceConfiguration }
+export { deviceConfigurationSchema, persistentStorageSchema, vppPackagePinSchema }
+export type { DeviceConfiguration, VppPackagePin }
