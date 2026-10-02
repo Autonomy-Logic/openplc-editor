@@ -12,6 +12,7 @@ import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_fea
 import { OpenCloudProjectModal } from '../components/_features/[start]/open-cloud-project'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar, type ProjectOrder } from '../components/_organisms/project-filter-bar'
+import { StatusBar } from '../components/_organisms/status-bar'
 import { StartMainContent } from '../components/_templates/[start]/main-content'
 import { StartSideContent } from '../components/_templates/[start]/side-content'
 import { useOpenPLCStore } from '../store'
@@ -114,73 +115,77 @@ const StartScreen = () => {
   }
 
   return (
-    <>
-      <StartSideContent>
-        <MenuRoot>
-          <MenuSection id='1'>
-            <MenuItem onClick={() => handleCreateProject()}>
-              <PlusIcon className='stroke-white' /> New Project
-            </MenuItem>
-            <PrimitiveDropdown.Root>
-              {/* `Button` does not forward a ref, and Radix anchors the menu on the ref; the div is that anchor. */}
-              <PrimitiveDropdown.Trigger asChild>
-                <div className='w-fit'>
-                  <MenuItem ghosted>
-                    <FolderIcon /> Open
+    // A column, so the status bar (shown here only with an update ready) takes its own row below the screen.
+    <div className='flex h-full w-full flex-col'>
+      <div className='flex min-h-0 w-full flex-1'>
+        <StartSideContent>
+          <MenuRoot>
+            <MenuSection id='1'>
+              <MenuItem onClick={() => handleCreateProject()}>
+                <PlusIcon className='stroke-white' /> New Project
+              </MenuItem>
+              <PrimitiveDropdown.Root>
+                {/* `Button` does not forward a ref, and Radix anchors the menu on the ref; the div is that anchor. */}
+                <PrimitiveDropdown.Trigger asChild>
+                  <div className='w-fit'>
+                    <MenuItem ghosted>
+                      <FolderIcon /> Open
+                    </MenuItem>
+                  </div>
+                </PrimitiveDropdown.Trigger>
+                <PrimitiveDropdown.Content
+                  side='right'
+                  align='start'
+                  sideOffset={8}
+                  className='z-[10] min-w-60 rounded-md border border-neutral-100 bg-white p-1 font-caption text-base text-black shadow-lg dark:border-neutral-800 dark:bg-neutral-900 dark:text-white'
+                >
+                  <PrimitiveDropdown.Item
+                    onSelect={() => void handleOpenProject()}
+                    className='cursor-pointer select-none rounded px-3 py-2 outline-none hover:bg-neutral-50 focus:bg-neutral-100 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800'
+                  >
+                    Local project…
+                  </PrimitiveDropdown.Item>
+                  <PrimitiveDropdown.Item
+                    disabled={!canOpenFromCloud}
+                    onSelect={() => setOpenCloudOpen(true)}
+                    className='cursor-pointer select-none rounded px-3 py-2 outline-none hover:bg-neutral-50 focus:bg-neutral-100 data-[disabled]:cursor-default data-[disabled]:opacity-50 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800'
+                  >
+                    Autonomy Edge project…
+                  </PrimitiveDropdown.Item>
+                </PrimitiveDropdown.Content>
+              </PrimitiveDropdown.Root>
+              <MenuItem ghosted onClick={handleOpenDocumentation}>
+                {/* `shrink-0`: this label is the longest in the menu, and a flex row squeezed the icon to zero width. */}
+                <DocumentationIcon className='shrink-0' /> Documentation
+              </MenuItem>
+              {/* Above the divider with the actions; the account is not on the way out. */}
+              <StartAccountSection />
+            </MenuSection>
+            {capabilities.isNativeApplication && (
+              <>
+                <MenuDivider />
+                <MenuSection id='2'>
+                  <MenuItem onClick={handleExitAppRequest} ghosted>
+                    <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
                   </MenuItem>
-                </div>
-              </PrimitiveDropdown.Trigger>
-              <PrimitiveDropdown.Content
-                side='right'
-                align='start'
-                sideOffset={8}
-                className='z-[10] min-w-60 rounded-md border border-neutral-100 bg-white p-1 font-caption text-base text-black shadow-lg dark:border-neutral-800 dark:bg-neutral-900 dark:text-white'
-              >
-                <PrimitiveDropdown.Item
-                  onSelect={() => void handleOpenProject()}
-                  className='cursor-pointer select-none rounded px-3 py-2 outline-none hover:bg-neutral-50 focus:bg-neutral-100 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800'
-                >
-                  Local project…
-                </PrimitiveDropdown.Item>
-                <PrimitiveDropdown.Item
-                  disabled={!canOpenFromCloud}
-                  onSelect={() => setOpenCloudOpen(true)}
-                  className='cursor-pointer select-none rounded px-3 py-2 outline-none hover:bg-neutral-50 focus:bg-neutral-100 data-[disabled]:cursor-default data-[disabled]:opacity-50 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800'
-                >
-                  Autonomy Edge project…
-                </PrimitiveDropdown.Item>
-              </PrimitiveDropdown.Content>
-            </PrimitiveDropdown.Root>
-            <MenuItem ghosted onClick={handleOpenDocumentation}>
-              {/* `shrink-0`: this label is the longest in the menu, and a flex row squeezed the icon to zero width. */}
-              <DocumentationIcon className='shrink-0' /> Documentation
-            </MenuItem>
-            {/* Above the divider with the actions; the account is not on the way out. */}
-            <StartAccountSection />
-          </MenuSection>
-          {capabilities.isNativeApplication && (
-            <>
-              <MenuDivider />
-              <MenuSection id='2'>
-                <MenuItem onClick={handleExitAppRequest} ghosted>
-                  <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
-                </MenuItem>
-              </MenuSection>
-            </>
-          )}
-        </MenuRoot>
-      </StartSideContent>
-      <StartMainContent>
-        <ProjectFilterBar setSearchFilterValue={searchFilter} setOrderBy={setOrderBy} />
-        {/* Hidden entirely when there is nothing to show; the filter box covers both sections. */}
-        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} orderBy={orderBy} />
-        <DisplayRecentProjects
-          searchNameFilterValue={searchFilterValue}
-          onProjectUploaded={() => setCloudRevision((current) => current + 1)}
-        />
-      </StartMainContent>
+                </MenuSection>
+              </>
+            )}
+          </MenuRoot>
+        </StartSideContent>
+        <StartMainContent>
+          <ProjectFilterBar setSearchFilterValue={searchFilter} setOrderBy={setOrderBy} />
+          {/* Hidden entirely when there is nothing to show; the filter box covers both sections. */}
+          <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} orderBy={orderBy} />
+          <DisplayRecentProjects
+            searchNameFilterValue={searchFilterValue}
+            onProjectUploaded={() => setCloudRevision((current) => current + 1)}
+          />
+        </StartMainContent>
+      </div>
+      <StatusBar />
       <OpenCloudProjectModal open={openCloudOpen} onOpenChange={setOpenCloudOpen} />
-    </>
+    </div>
   )
 }
 

@@ -133,6 +133,10 @@ export function useEditSession() {
   return usePlatform().editSession
 }
 
+export function useAppUpdate() {
+  return usePlatform().appUpdate
+}
+
 export function useLibrary() {
   return usePlatform().library
 }

@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
 
 import { EDITOR_CAPABILITIES } from '../../../../middleware/shared/ports/platform-capabilities'
 import type { AcceleratorPort } from '../../../../middleware/shared/ports/accelerator-port'
-import type { WindowPort } from '../../../../middleware/shared/ports/window-port'
+import type { QuitRequest, WindowPort } from '../../../../middleware/shared/ports/window-port'
 import { PlatformProvider } from '../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../middleware/shared/providers/types'
 import { openPLCStoreBase } from '../../../store'
@@ -24,7 +24,8 @@ function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   })
 }
 
-type Listener = () => void
+// Wide enough for the quit request; the close and refresh listeners take nothing and ignore it.
+type Listener = (request: QuitRequest) => void
 
 const listeners: Record<'quitRequested' | 'closeRequested' | 'refresh', Listener | null> = {
   quitRequested: null,
@@ -87,10 +88,10 @@ function setUnsaved() {
   act(() => openPLCStoreBase.getState().workspaceActions.setEditingState('unsaved'))
 }
 
-function fire(key: keyof typeof listeners) {
+function fire(key: keyof typeof listeners, request: QuitRequest = { intent: 'quit' }) {
   const cb = listeners[key]
   if (!cb) throw new Error(`nothing subscribed to ${key}`)
-  act(() => cb())
+  act(() => cb(request))
 }
 
 /** Returns whether the handler cancelled the unload. */
@@ -128,6 +129,41 @@ describe('a quit prompt requested by main', () => {
 
     expect(modal('save-changes-project')).toEqual({ open: true, data: { validationContext: 'close-app' } })
     expect(modal('quit-application').open).toBe(false)
+  })
+
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    '%s: an update restart quits without asking "are you sure" when nothing is unsaved',
+    (OS) => {
+      setOS(OS)
+      render(<AcceleratorHandler />, { wrapper: Wrapper })
+
+      fire('quitRequested', { intent: 'install-update' })
+
+      expect(windowCalls).toEqual(['quit'])
+      expect(modal('quit-application').open).toBe(false)
+      expect(modal('save-changes-project').open).toBe(false)
+    },
+  )
+
+  it('an update restart still asks about unsaved work', () => {
+    setOS('linux')
+    render(<AcceleratorHandler />, { wrapper: Wrapper })
+    setUnsaved()
+
+    fire('quitRequested', { intent: 'install-update' })
+
+    expect(modal('save-changes-project')).toEqual({ open: true, data: { validationContext: 'close-app' } })
+    expect(windowCalls).toEqual([])
+  })
+
+  it('an ordinary quit request still asks for confirmation', () => {
+    setOS('linux')
+    render(<AcceleratorHandler />, { wrapper: Wrapper })
+
+    fire('quitRequested', { intent: 'quit' })
+
+    expect(modal('quit-application').open).toBe(true)
+    expect(windowCalls).toEqual([])
   })
 
   it('never hides, closes or quits on its own', () => {
