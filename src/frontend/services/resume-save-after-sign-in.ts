@@ -77,7 +77,10 @@ type QueuedSave = {
 /** The queued project-wide save, if one is waiting. Excludes the per-file queue. */
 let pendingProject: QueuedSave | null = null
 
-/** Queued single-file saves, by file name. Empty whenever `pendingProject` is set. */
+/**
+ * Queued single-file saves, keyed by project AND file name. Empty whenever
+ * `pendingProject` is set.
+ */
 const pendingFiles = new Map<string, QueuedSave>()
 
 /** Live only while something is actually waiting, so an idle editor holds no listener. */
@@ -86,6 +89,22 @@ let unsubscribe: (() => void) | null = null
 /** The project currently open, as the store knows it. */
 function currentProjectPath(): string {
   return openPLCStoreBase.getState().project.meta.path
+}
+
+/**
+ * The queue key for a single-file save.
+ *
+ * Scoped to the project, not just the file. Two projects can each hold a POU of
+ * the same name, and keying on the name alone let the second queue call evict the
+ * first. If the evicted entry was the one belonging to the project still open at
+ * restore, it was gone and the survivor was skipped for a path mismatch — so
+ * neither save ran, which is the exact failure a per-file queue exists to prevent.
+ *
+ * NUL joins the two parts because it cannot occur in a path or a file name, so no
+ * two different pairs can collide on one key.
+ */
+function fileKey(projectPath: string, fileName: string): string {
+  return `${projectPath}\u0000${fileName}`
 }
 
 export function resumeSaveAfterEdgeSignIn(
@@ -108,7 +127,7 @@ export function resumeSaveAfterEdgeSignIn(
       return
     }
 
-    pendingFiles.set(target.fileName, { run, projectPath })
+    pendingFiles.set(fileKey(projectPath, target.fileName), { run, projectPath })
   }
 
   // NOT guarded on `session.isExpired()`.
@@ -132,7 +151,7 @@ export function resumeSaveAfterEdgeSignIn(
     unsubscribe?.()
     unsubscribe = null
 
-    void replayQueued(queued, currentProjectPath())
+    void replayQueued(queued)
   })
 }
 
@@ -142,9 +161,14 @@ export function resumeSaveAfterEdgeSignIn(
  * Sequential rather than concurrent: these write into the same project through the
  * same store, and interleaving two of them is how a half-written project happens.
  */
-async function replayQueued(queued: QueuedSave[], openProject: string): Promise<void> {
+async function replayQueued(queued: QueuedSave[]): Promise<void> {
   for (const save of queued) {
-    if (save.projectPath !== openProject) {
+    // Re-read the open project on every iteration rather than once before the
+    // loop. Because the replays are sequential awaits, the user can open another
+    // project while an earlier one is still running; a path captured up front
+    // would still match, and `run` — which reads the store at the moment it runs,
+    // not when it was queued — would write this project's content into that one.
+    if (save.projectPath !== currentProjectPath()) {
       continue
     }
 
