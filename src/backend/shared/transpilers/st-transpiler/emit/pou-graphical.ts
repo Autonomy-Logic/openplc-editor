@@ -132,6 +132,9 @@ function collectBlockSignatures(project: TranspileProject): Map<string, BlockInf
 // GetVariableType + GetBlockType ports (PLCGenerator.py:786-817, PLCControler.py:1288-1335)
 function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeContext {
   const interfaceTypes = new Map<string, string>()
+  for (const v of project.configuration.globalVariables) {
+    interfaceTypes.set(v.name, getTypeAsText(v))
+  }
   for (const v of pou.interface?.variables ?? []) {
     interfaceTypes.set(v.name, getTypeAsText(v))
   }

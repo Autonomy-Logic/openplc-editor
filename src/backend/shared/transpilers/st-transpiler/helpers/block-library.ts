@@ -73,3 +73,90 @@ export function blockInfosFromVariant(variant: unknown): BlockInfos | null {
     usage: '',
   }
 }
+
+/**
+ * Destination types of the IEC 61131-3 polymorphic conversion family
+ * (`TO_BOOL`, `TO_INT`, `TO_UINT`, …). Kept explicit so additions to the
+ * supported compiler conversion family remain visible in code review.
+ */
+export const TO_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
+  'BCD',
+  'BOOL',
+  'BYTE',
+  'DATE',
+  'DINT',
+  'DT',
+  'DWORD',
+  'INT',
+  'LINT',
+  'LREAL',
+  'LWORD',
+  'REAL',
+  'SINT',
+  'STRING',
+  'TIME',
+  'TOD',
+  'UDINT',
+  'UINT',
+  'ULINT',
+  'USINT',
+  'WORD',
+])
+
+const TEMPORAL_TYPES: ReadonlySet<string> = new Set(['DATE', 'DT', 'TIME', 'TOD'])
+const UNSIGNED_INTEGER_TYPES: ReadonlySet<string> = new Set(['UDINT', 'UINT', 'ULINT', 'USINT'])
+const GENERAL_CONVERSION_TARGETS: ReadonlySet<string> = new Set([
+  'BYTE',
+  'DINT',
+  'DWORD',
+  'INT',
+  'LINT',
+  'LREAL',
+  'LWORD',
+  'REAL',
+  'SINT',
+  'STRING',
+  'UDINT',
+  'UINT',
+  'ULINT',
+  'USINT',
+  'WORD',
+])
+
+/**
+ * Resolve a polymorphic `TO_<TYPE>` block name (e.g. `TO_INT`) to the
+ * concrete, fully-qualified IEC 61131-3 conversion function (e.g.
+ * `REAL_TO_INT`) given the type of whatever is wired into its single
+ * input.
+ *
+ * IEC 61131-3 does not define a generic `TO_INT` — only the fully
+ * qualified `<SRC>_TO_<DST>` family exists. A block instance whose type name
+ * is still the generic shorthand at code-generation time hasn't been
+ * resolved to a concrete variant — a real ST/C compiler (matiec, STruC++)
+ * rejects the bare name as an undefined function.
+ *
+ * Returns `null` when `blockTypeName` isn't a recognised polymorphic
+ * shorthand, or when the supported compiler conversion family does not
+ * contain the source/destination pair. Callers should fall back to the
+ * original name so an unresolvable case still surfaces the same "undefined
+ * function" error it would have before, rather than silently emitting a
+ * different wrong name.
+ */
+export function resolveConversionFunctionName(blockTypeName: string, sourceType: string): string | null {
+  const match = blockTypeName.match(/^TO_([A-Z][A-Z0-9]*)$/)
+  if (match === null || !TO_CONVERSION_TARGETS.has(match[1])) return null
+  const source = sourceType.toUpperCase()
+  const destination = match[1]
+  if (!isSupportedConversionPair(source, destination)) return null
+  return `${source}_TO_${destination}`
+}
+
+function isSupportedConversionPair(source: string, destination: string): boolean {
+  if (destination === 'BCD') return UNSIGNED_INTEGER_TYPES.has(source)
+  if (source === 'BCD') return UNSIGNED_INTEGER_TYPES.has(destination)
+  if (destination === 'DATE' && source === 'DATE_AND_TIME') return true
+  if (!TO_CONVERSION_TARGETS.has(source) || source === destination) return false
+  if (GENERAL_CONVERSION_TARGETS.has(destination)) return true
+  if (destination === 'BOOL') return !TEMPORAL_TYPES.has(source)
+  return TEMPORAL_TYPES.has(destination) && !TEMPORAL_TYPES.has(source)
+}
