@@ -128,6 +128,8 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   serialPorts?: string[]
   defaultSerial?: string
   networkInterfaces?: string[]
+  /** The manifest's `defaults.pins.pull`, forwarded to `generateDefinesContent` for `PINPULL_DIN`. */
+  pinPull?: import('../../../middleware/shared/ports/types').PinPullSpec
   /** Prebuilt arduino-hal (provisioning="prebuilt"): the precompiled Arduino
    *  library dir, linked via a 2nd `--library`. Present only for arduino
    *  prebuilt boards (the `source` HAL still compiles as the integration layer).
@@ -990,6 +992,7 @@ async function runCompilePipelineInner(
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
     ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    ...(boardEntry.pinPull ? { pinPull: boardEntry.pinPull } : {}),
   })
 
   // A board reached only over Ethernet must never be handed an image with no
