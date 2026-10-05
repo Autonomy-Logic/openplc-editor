@@ -422,7 +422,7 @@ describe('rungToSpec', () => {
     if (!built.ok) return
 
     const rungWithoutEdges: RungLadderState = { ...built.rung, edges: [] }
-    expect(rungToSpec(rungWithoutEdges)).toEqual({ comment: built.rung.comment, elements: [] })
+    expect(rungToSpec(rungWithoutEdges)).toEqual({ comment: built.rung.comment, elements: [], truncated: true })
   })
 
   it('stops the walk when an edge target node is missing', () => {
@@ -473,5 +473,60 @@ describe('rungToSpec', () => {
     const spec = rungToSpec(rungWithParallel)
     expect(spec.truncated).toBe(true)
     expect(spec.elements).toEqual([])
+  })
+
+  it('marks the spec truncated when a node sits on a block-pin branch', () => {
+    const built = buildRungFromSpec({
+      rungId: 'r1',
+      spec: { elements: [{ kind: 'contact', variable: 'Start' }] },
+      variables: [makeVariable('Start'), makeVariable('Reset')],
+      resolveBlock,
+    })
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const branchNode: Node = {
+      id: 'branch-contact',
+      type: 'contact',
+      position: { x: 0, y: 0 },
+      data: { branchContext: { blockId: 'b1', handleId: 'PT', direction: 'input' } },
+    }
+
+    const spec = rungToSpec({ ...built.rung, nodes: [...built.rung.nodes, branchNode] })
+    expect(spec.truncated).toBe(true)
+    expect(spec.elements).toEqual([{ kind: 'contact', variable: 'Start', variant: 'default' }])
+  })
+
+  it('marks the spec truncated when an element is not reachable from the left rail', () => {
+    const built = buildRungFromSpec({
+      rungId: 'r1',
+      spec: { elements: [{ kind: 'contact', variable: 'Start' }] },
+      variables: [makeVariable('Start')],
+      resolveBlock,
+    })
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    const orphan: Node = { id: 'orphan-coil', type: 'coil', position: { x: 0, y: 0 }, data: {} }
+
+    expect(rungToSpec({ ...built.rung, nodes: [...built.rung.nodes, orphan] }).truncated).toBe(true)
+  })
+
+  it('does not mark a plain serial rung truncated', () => {
+    const built = buildRungFromSpec({
+      rungId: 'r1',
+      spec: {
+        elements: [
+          { kind: 'contact', variable: 'Start' },
+          { kind: 'coil', variable: 'Motor' },
+        ],
+      },
+      variables: [makeVariable('Start'), makeVariable('Motor')],
+      resolveBlock,
+    })
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+
+    expect(rungToSpec(built.rung).truncated).toBeUndefined()
   })
 })

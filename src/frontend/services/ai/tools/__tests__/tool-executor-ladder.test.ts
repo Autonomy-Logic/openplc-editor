@@ -170,6 +170,32 @@ describe('read_ladder_diagram', () => {
     const result = await executeTool(store, 'read_ladder_diagram', { pouName: 'Main' })
     expect(result.message).toMatch(/truncated/)
   })
+
+  it('flags a rung as truncated when it carries a block-pin branch', async () => {
+    createLdPou('Main')
+    createVariable('Main', 'Start')
+    createVariable('Main', 'Motor')
+    await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [
+        { kind: 'contact', variable: 'Start' },
+        { kind: 'coil', variable: 'Motor' },
+      ],
+    })
+    const [rung] = getRungs('Main')
+    const contact = rung.nodes.find((n) => n.type === 'contact')
+    if (!contact) throw new Error('expected a contact on the rung')
+    const branchNode = {
+      ...contact,
+      id: 'branch-contact',
+      data: { ...contact.data, branchContext: { blockId: 'b1', handleId: 'PT', direction: 'input' } },
+    }
+    const rungWithBranch: RungLadderState = { ...rung, nodes: [...rung.nodes, branchNode] }
+    store.getState().ladderFlowActions.setRungs({ editorName: 'Main', rungs: [rungWithBranch] })
+
+    const result = await executeTool(store, 'read_ladder_diagram', { pouName: 'Main' })
+    expect(result.message).toMatch(/truncated/)
+  })
 })
 
 describe('add_rung', () => {
@@ -339,6 +365,21 @@ describe('add_rung', () => {
 
     const result = await executeTool(store, 'add_rung', {
       pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1' }],
+    })
+
+    expect(result.success).toBe(true)
+    const variable = getVariables('Main').find((v) => v.name === 'Timer1')
+    expect(variable?.type).toEqual({ definition: 'derived', value: 'TON' })
+    expect(variable?.id).toEqual(expect.any(String))
+  })
+
+  it('leaves the project untouched when a pin binding fails', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
       elements: [
         {
           kind: 'block',
@@ -349,11 +390,25 @@ describe('add_rung', () => {
       ],
     })
 
-    expect(result.success).toBe(false) // Preset does not exist yet — pin resolution should fail cleanly
+    expect(result.success).toBe(false)
     expect(result.message).toMatch(/variable "Preset" not found for pin "PT"/)
-    // The instance variable is still created eagerly before pin resolution runs.
-    const variable = getVariables('Main').find((v) => v.name === 'Timer1')
-    expect(variable?.type).toEqual({ definition: 'derived', value: 'TON' })
+    expect(getVariables('Main').some((v) => v.name === 'Timer1')).toBe(false)
+    expect(getRungs('Main')).toHaveLength(0)
+  })
+
+  it('creates one instance variable when two blocks share an instance name', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [
+        { kind: 'block', blockType: 'TON', instanceName: 'Timer1' },
+        { kind: 'block', blockType: 'TON', instanceName: 'timer1' },
+      ],
+    })
+
+    expect(getVariables('Main').filter((v) => v.name.toLowerCase() === 'timer1')).toHaveLength(1)
   })
 
   it('reuses an existing compatible instance variable instead of creating a duplicate', async () => {

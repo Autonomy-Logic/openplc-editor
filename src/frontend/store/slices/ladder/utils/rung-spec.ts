@@ -277,6 +277,8 @@ export function buildRungFromSpec(args: {
   return { ok: true, rung }
 }
 
+const SPEC_NODE_TYPES = new Set(['contact', 'coil', 'block', 'parallel'])
+
 /**
  * Walk a rung's main serial spine (left rail to right rail, following each node's
  * `outputConnector`) and produce the logical spec `buildRungFromSpec` accepts — the
@@ -284,7 +286,8 @@ export function buildRungFromSpec(args: {
  * which groups all contacts/coils/blocks together and loses interleaving.
  *
  * A parallel branch stops the walk (`truncated: true`) rather than misreporting a partial
- * chain as the whole rung — full parallel read-back is Phase 2.
+ * chain as the whole rung — full parallel read-back is Phase 2. Handle branches and any
+ * other element left off the spine also mark the spec `truncated`.
  */
 export function rungToSpec(rung: RungLadderState): RungSpec {
   const elements: LadderElementSpec[] = []
@@ -295,6 +298,7 @@ export function rungToSpec(rung: RungLadderState): RungSpec {
   let currentId: string | undefined = leftRail.id
   let currentOutputHandle: string | undefined = (leftRail.data as BasicNodeData).outputConnector?.id
   let truncated = false
+  const visited = new Set<string>()
 
   while (currentId) {
     const edge = rung.edges.find((e) => e.source === currentId && e.sourceHandle === currentOutputHandle)
@@ -327,9 +331,15 @@ export function rungToSpec(rung: RungLadderState): RungSpec {
       })
     }
 
+    visited.add(node.id)
     currentId = node.id
     currentOutputHandle = (node.data as BasicNodeData).outputConnector?.id
   }
+
+  const offSpine = rung.nodes.some(
+    (node) => node.data.branchContext !== undefined || (SPEC_NODE_TYPES.has(node.type ?? '') && !visited.has(node.id)),
+  )
+  if (offSpine) truncated = true
 
   return { comment: rung.comment, elements, ...(truncated ? { truncated: true as const } : {}) }
 }

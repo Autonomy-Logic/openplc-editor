@@ -800,66 +800,109 @@ function validateElements(
   return errors
 }
 
-/**
- * Create the FB instance variables new `block` elements need, in the correct
- * `{ definition: 'derived', value: blockType }` shape (`create_variable` produces the wrong
- * shape — see AI_LADDER_GENERATION_PLAN.md). Assumes `validateElements` already passed, so
- * every creation here is expected to succeed; `createVariable`'s own `ok: false` is still
- * surfaced rather than assumed away.
- */
-function ensureInstanceVariables(
-  store: OpenPLCStore,
-  pouName: string,
+/** Function-block instance variables the spec names that the POU does not have yet. */
+function planInstanceVariables(
+  pou: PLCPou,
   elements: LadderElementSpec[],
   libraries: { system: SystemLibrary[]; user: UserLibrary[] },
-): { ok: true } | { ok: false; error: string } {
+  pous: PLCPou[],
+): PLCVariable[] {
+  const planned: PLCVariable[] = []
   for (const element of elements) {
     if (element.kind !== 'block' || !element.instanceName) continue
 
-    const state = store.getState()
-    const pou = state.project.data.pous.find((p) => p.name === pouName)
-    /* istanbul ignore next -- defensive: requireLadderPou already confirmed the POU exists earlier in the same call */
-    if (!pou) return { ok: false, error: `POU "${pouName}" not found.` }
-
-    const blockVariant = resolveBlockVariant(element.blockType, libraries, state.project.data.pous)
+    const blockVariant = resolveBlockVariant(element.blockType, libraries, pous)
     if (!blockVariant || blockVariant.type !== 'function-block') continue
 
-    const existing = findVariableCaseInsensitive(pou.interface?.variables ?? [], element.instanceName)
-    if (existing) continue
+    const known = [...(pou.interface?.variables ?? []), ...planned]
+    if (findVariableCaseInsensitive(known, element.instanceName)) continue
 
-    const result = state.projectActions.createVariable({
+    planned.push({
+      name: element.instanceName,
+      class: 'local',
+      type: { definition: 'derived', value: blockVariant.name },
+      location: '',
+      initialValue: null,
+      documentation: '',
+      debug: false,
+    })
+  }
+  return planned
+}
+
+function createInstanceVariables(
+  store: OpenPLCStore,
+  pouName: string,
+  planned: PLCVariable[],
+): { ok: true } | { ok: false; error: string } {
+  for (const variable of planned) {
+    const result = store.getState().projectActions.createVariable({
       scope: 'local',
       associatedPou: pouName,
-      data: {
-        id: uuidv4(),
-        name: element.instanceName,
-        class: 'local',
-        type: { definition: 'derived', value: blockVariant.name },
-        location: '',
-        initialValue: null,
-        documentation: '',
-        debug: false,
-      },
+      data: { ...variable, id: uuidv4() },
     })
     /* istanbul ignore next -- defensive: validateElements already confirmed a legal, non-colliding name */
     if (!result.ok) {
-      return { ok: false, error: result.message ?? `Failed to create instance variable "${element.instanceName}".` }
+      return { ok: false, error: result.message ?? `Failed to create instance variable "${variable.name}".` }
     }
   }
-
   return { ok: true }
+}
+
+function flowValidationError(pouName: string, rungs: RungLadderState[]): string | undefined {
+  const parsed = zodLadderFlowSchema.safeParse({ name: pouName, rungs })
+  if (parsed.success) return undefined
+  return `Resulting diagram failed validation: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`
+}
+
+/** Builds the rung against the planned instance variables first, so a rejected spec leaves the project untouched. */
+function buildAndPlaceRung(
+  store: OpenPLCStore,
+  pou: PLCPou,
+  rungId: string,
+  spec: { comment: string; elements: LadderElementSpec[] },
+  place: (rung: RungLadderState) => RungLadderState[],
+): ToolResult {
+  const state = store.getState()
+  const globals = state.project.data.configurations.resource.globalVariables
+  const planned = planInstanceVariables(pou, spec.elements, state.libraries, state.project.data.pous)
+
+  const dryRun = buildRungFromSpec({
+    rungId,
+    spec,
+    variables: [...collectPouVariables(pou, globals), ...planned],
+    resolveBlock: (blockType) => resolveBlockVariant(blockType, state.libraries, state.project.data.pous),
+  })
+  if (!dryRun.ok) return { success: false, message: dryRun.errors.join('; ') }
+  const dryRunError = flowValidationError(pou.name, place(dryRun.rung))
+  if (dryRunError) return { success: false, message: dryRunError }
+
+  const created = createInstanceVariables(store, pou.name, planned)
+  /* istanbul ignore next -- defensive: createInstanceVariables only fails on the store-level backstops above */
+  if (!created.ok) return { success: false, message: created.error }
+
+  const freshState = store.getState()
+  const freshPou = freshState.project.data.pous.find((p) => p.name === pou.name)
+  /* istanbul ignore next -- defensive: the POU was just found above; nothing in between removes it */
+  if (!freshPou) return { success: false, message: `POU "${pou.name}" not found.` }
+
+  const built = buildRungFromSpec({
+    rungId,
+    spec,
+    variables: collectPouVariables(freshPou, freshState.project.data.configurations.resource.globalVariables),
+    resolveBlock: (blockType) => resolveBlockVariant(blockType, freshState.libraries, freshState.project.data.pous),
+  })
+  /* istanbul ignore next -- defensive: the dry run above already built this spec */
+  if (!built.ok) return { success: false, message: built.errors.join('; ') }
+
+  return writeRungs(store, pou.name, place(built.rung))
 }
 
 /** Validate the candidate flow BEFORE writing it — never lets a broken diagram reach the
  *  store, unlike `runWriteBack`'s post-hoc (and silent) `safeParse` check. */
 function writeRungs(store: OpenPLCStore, pouName: string, rungs: RungLadderState[]): ToolResult {
-  const parsed = zodLadderFlowSchema.safeParse({ name: pouName, rungs })
-  if (!parsed.success) {
-    return {
-      success: false,
-      message: `Resulting diagram failed validation: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`,
-    }
-  }
+  const validationError = flowValidationError(pouName, rungs)
+  if (validationError) return { success: false, message: validationError }
 
   const state = store.getState()
   if (!state.ladderFlows.find((f) => f.name === pouName)) {
@@ -887,7 +930,9 @@ function executeReadLadderDiagram(store: OpenPLCStore, input: ReadLadderDiagramI
 
   const lines = rungs.map((rung, index) => {
     const spec = rungToSpec(rung)
-    const note = spec.truncated ? ' (truncated — contains a parallel branch these tools cannot read yet)' : ''
+    const note = spec.truncated
+      ? ' (truncated — contains a parallel or block-pin branch these tools cannot read yet)'
+      : ''
     const comment = spec.comment ? ` — ${spec.comment}` : ''
     return `Rung ${index + 1} [id=${rung.id}]${comment}${note}:\n${JSON.stringify(spec.elements)}`
   })
@@ -926,32 +971,17 @@ function executeAddRung(store: OpenPLCStore, input: AddRungInput): ToolResult {
     return { success: false, message: validationErrors.join('; ') }
   }
 
-  const created = ensureInstanceVariables(store, input.pouName, input.elements, state.libraries)
-  /* istanbul ignore next -- defensive: ensureInstanceVariables only fails on the store-level backstops above */
-  if (!created.ok) return { success: false, message: created.error }
-
-  const freshState = store.getState()
-  const freshPou = freshState.project.data.pous.find((p) => p.name === input.pouName)
-  /* istanbul ignore next -- defensive: the POU was just found above; nothing in between removes it */
-  if (!freshPou) return { success: false, message: `POU "${input.pouName}" not found.` }
-  const variables = collectPouVariables(freshPou, freshState.project.data.configurations.resource.globalVariables)
-
-  const built = buildRungFromSpec({
-    rungId: `rung_${input.pouName}_${uuidv4()}`,
-    spec: { comment: input.comment ?? '', elements: input.elements },
-    variables,
-    resolveBlock: (blockType) => resolveBlockVariant(blockType, freshState.libraries, freshState.project.data.pous),
-  })
-  if (!built.ok) {
-    return { success: false, message: built.errors.join('; ') }
-  }
-
   const insertIndex = input.afterRungId
     ? existingRungs.findIndex((r) => r.id === input.afterRungId) + 1
     : existingRungs.length
-  const newRungs = [...existingRungs.slice(0, insertIndex), built.rung, ...existingRungs.slice(insertIndex)]
 
-  return writeRungs(store, input.pouName, newRungs)
+  return buildAndPlaceRung(
+    store,
+    pou,
+    `rung_${input.pouName}_${uuidv4()}`,
+    { comment: input.comment ?? '', elements: input.elements },
+    (rung) => [...existingRungs.slice(0, insertIndex), rung, ...existingRungs.slice(insertIndex)],
+  )
 }
 
 function executeUpdateRung(store: OpenPLCStore, input: UpdateRungInput): ToolResult {
@@ -986,29 +1016,13 @@ function executeUpdateRung(store: OpenPLCStore, input: UpdateRungInput): ToolRes
     return { success: false, message: validationErrors.join('; ') }
   }
 
-  const created = ensureInstanceVariables(store, input.pouName, input.elements, state.libraries)
-  /* istanbul ignore next -- defensive: ensureInstanceVariables only fails on the store-level backstops above */
-  if (!created.ok) return { success: false, message: created.error }
-
-  const freshState = store.getState()
-  const freshPou = freshState.project.data.pous.find((p) => p.name === input.pouName)
-  /* istanbul ignore next -- defensive: the POU was just found above; nothing in between removes it */
-  if (!freshPou) return { success: false, message: `POU "${input.pouName}" not found.` }
-  const variables = collectPouVariables(freshPou, freshState.project.data.configurations.resource.globalVariables)
-
-  const built = buildRungFromSpec({
-    rungId: input.rungId,
-    spec: { comment: input.comment ?? existingRungs[targetIndex].comment, elements: input.elements },
-    variables,
-    resolveBlock: (blockType) => resolveBlockVariant(blockType, freshState.libraries, freshState.project.data.pous),
-  })
-  if (!built.ok) {
-    return { success: false, message: built.errors.join('; ') }
-  }
-
-  const newRungs = [...existingRungs.slice(0, targetIndex), built.rung, ...existingRungs.slice(targetIndex + 1)]
-
-  return writeRungs(store, input.pouName, newRungs)
+  return buildAndPlaceRung(
+    store,
+    pou,
+    input.rungId,
+    { comment: input.comment ?? existingRungs[targetIndex].comment, elements: input.elements },
+    (rung) => [...existingRungs.slice(0, targetIndex), rung, ...existingRungs.slice(targetIndex + 1)],
+  )
 }
 
 function executeDeleteRung(store: OpenPLCStore, input: DeleteRungInput): ToolResult {
