@@ -44,13 +44,12 @@ let mainIpcModule: MainProcessBridge | undefined
 // One per process, not per window: macOS re-creates the window on activate.
 const updateService = createElectronUpdateService({
   getWindow: () => mainWindow,
-  requestQuit: (intent) => quitCoordinator.requestQuit(intent),
+  requestQuit: () => quitCoordinator.requestQuit(),
 })
 const quitCoordinator = createQuitCoordinator({
   platform: process.platform,
   getWindow: () => mainWindow,
-  // "Restart now" on a downloaded update: the updater swaps the app and reopens it.
-  quitApp: (intent) => (intent === 'install-update' ? updateService.installAndRestart() : app.quit()),
+  quitApp: () => app.quit(),
   stopSimulator: () => mainIpcModule?.stopSimulator(),
   canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
 })
@@ -503,7 +502,7 @@ app
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.
     void installCliShimOnFirstRun()
-    // Checks start about a minute after launch and never block it; see modules/updater.
+    // One check about a minute after launch, never blocking it; see modules/updater.
     updateService.start()
     // Handle the app activation event;
     app.on('activate', () => {

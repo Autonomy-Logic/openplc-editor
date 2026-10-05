@@ -214,8 +214,7 @@ describe.each(['darwin', 'win32', 'linux'] as const)('%s updates', (platform) =>
       setAutoCheck: jest.fn(),
       getStatus: jest.fn(() => ({ state: 'none' as const })),
       onStatusChange: jest.fn(() => () => undefined),
-      requestInstall: jest.fn(),
-      installAndRestart: jest.fn(),
+      downloadAndOpen: jest.fn(() => Promise.resolve()),
     }
   }
 
@@ -242,7 +241,7 @@ describe.each(['darwin', 'win32', 'linux'] as const)('%s updates', (platform) =>
     await builderWith(service).buildMenu()
 
     const toggle = lastMenu().get('Check for Updates Automatically')
-    expect(toggle).toMatchObject({ type: 'checkbox', checked: false })
+    expect(toggle).toMatchObject({ type: 'checkbox', checked: false, enabled: true })
     // @ts-expect-error: only `checked` of the MenuItem is read
     toggle?.click?.({ checked: true })
     expect(service.setAutoCheck).toHaveBeenCalledWith(true)
@@ -254,24 +253,4 @@ describe.each(['darwin', 'win32', 'linux'] as const)('%s updates', (platform) =>
     expect(lastMenu().get('menu:file.submenu.updates')?.enabled).toBe(false)
     expect(lastMenu().get('Check for Updates Automatically')?.enabled).toBe(false)
   })
-})
-
-it('win32: the automatic toggle is off, since Windows does not update itself yet', async () => {
-  setPlatform('win32')
-  // @ts-expect-error: a BrowserWindow stand-in with only what MenuBuilder touches
-  const window: BrowserWindow = mainWindow
-  const service = {
-    start: jest.fn(),
-    checkNow: jest.fn(() => Promise.resolve()),
-    isAutoCheckEnabled: jest.fn(() => true),
-    setAutoCheck: jest.fn(),
-    getStatus: jest.fn(() => ({ state: 'none' as const })),
-    onStatusChange: jest.fn(() => () => undefined),
-    requestInstall: jest.fn(),
-    installAndRestart: jest.fn(),
-  }
-  await new MenuBuilder(window, service).buildMenu()
-
-  expect(lastMenu().get('Check for Updates Automatically')?.enabled).toBe(false)
-  expect(lastMenu().get('menu:file.submenu.updates')?.enabled).toBe(true)
 })

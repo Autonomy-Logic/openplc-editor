@@ -1,6 +1,6 @@
 /**
- * The status bar's "Update" button (DOPE-486): shown only once the editor has
- * an update ready, and absent on a platform without the update port (web).
+ * The status bar's "Update" button (DOPE-486): shown only once a newer version
+ * is out, and absent on a platform without the update port (web).
  */
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -48,7 +48,7 @@ function fakeUpdatePort(initial: AppUpdateStatus | Promise<AppUpdateStatus>) {
         listener = null
       }
     }),
-    installAndRestart: jest.fn(),
+    downloadAndOpen: jest.fn(),
   }
   const push = (status: AppUpdateStatus) => act(() => listener?.(status))
   return { port, push, subscribed: () => listener !== null }
@@ -78,32 +78,32 @@ describe('StatusBar', () => {
     expect(updateButton()).toBeNull()
   })
 
-  it('renders nothing with no items until an update is ready', async () => {
+  it('renders nothing with no items until a newer version is out', async () => {
     const { port } = fakeUpdatePort({ state: 'none' })
     const { container } = renderBar(port)
     await act(() => Promise.resolve())
     expect(container.innerHTML).toBe('')
   })
 
-  it('shows the Update button for an update already ready when it mounts', async () => {
-    const { port } = fakeUpdatePort({ state: 'ready', version: '4.3.3' })
+  it('shows the Update button for a version already known when it mounts', async () => {
+    const { port } = fakeUpdatePort({ state: 'available', version: '4.3.3' })
     renderBar(port)
     expect(await screen.findByRole('button', { name: 'Update to 4.3.3' })).toBeTruthy()
   })
 
   it('shows it beside the items, on the right', async () => {
-    const { port } = fakeUpdatePort({ state: 'ready', version: '4.3.3' })
+    const { port } = fakeUpdatePort({ state: 'available', version: '4.3.3' })
     renderBar(port, <span>main</span>)
     const button = await screen.findByRole('button', { name: 'Update to 4.3.3' })
     expect(screen.getByText('main').compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('shows it when an update becomes ready later, and hides it again', async () => {
+  it('shows it when a newer version is found later, and hides it again', async () => {
     const { port, push } = fakeUpdatePort({ state: 'none' })
     renderBar(port)
     await act(() => Promise.resolve())
 
-    push({ state: 'ready', version: '4.3.3' })
+    push({ state: 'available', version: '4.3.3' })
     expect(updateButton()?.textContent).toBe('Update to 4.3.3')
 
     push({ state: 'none' })
@@ -118,18 +118,37 @@ describe('StatusBar', () => {
     const { port, push } = fakeUpdatePort(read)
     renderBar(port)
 
-    push({ state: 'ready', version: '4.3.3' })
+    push({ state: 'available', version: '4.3.3' })
     resolveRead({ state: 'none' })
     await act(() => read)
 
     expect(updateButton()?.textContent).toBe('Update to 4.3.3')
   })
 
-  it('clicking it restarts into the update', async () => {
-    const { port } = fakeUpdatePort({ state: 'ready', version: '4.3.3' })
+  it('clicking it downloads and opens the installer', async () => {
+    const { port } = fakeUpdatePort({ state: 'available', version: '4.3.3' })
     renderBar(port)
     fireEvent.click(await screen.findByRole('button', { name: 'Update to 4.3.3' }))
-    expect(port.installAndRestart).toHaveBeenCalledTimes(1)
+    expect(port.downloadAndOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the progress while downloading, and cannot be clicked then', async () => {
+    const { port, push } = fakeUpdatePort({ state: 'available', version: '4.3.3' })
+    renderBar(port)
+    await screen.findByRole('button', { name: 'Update to 4.3.3' })
+
+    push({ state: 'downloading', version: '4.3.3', percent: 42 })
+    const button = screen.getByRole('button', { name: 'Downloading 4.3.3… 42%' })
+    expect(button.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(button)
+    expect(port.downloadAndOpen).not.toHaveBeenCalled()
+  })
+
+  it('once downloaded, offers to open the installer again', async () => {
+    const { port } = fakeUpdatePort({ state: 'downloaded', version: '4.3.3' })
+    renderBar(port)
+    fireEvent.click(await screen.findByRole('button', { name: 'Install 4.3.3' }))
+    expect(port.downloadAndOpen).toHaveBeenCalledTimes(1)
   })
 
   it('stops listening when it unmounts', async () => {

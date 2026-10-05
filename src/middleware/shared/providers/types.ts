@@ -43,7 +43,7 @@ export interface PlatformPorts {
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
   editSession?: EditSessionPort
-  // Desktop only: the editor's update of itself. Absent on web, which is deployed rather than installed.
+  // Desktop only: the notice that a newer editor is out. Absent on web, which is deployed rather than installed.
   appUpdate?: AppUpdatePort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort

@@ -1,18 +1,31 @@
 import { toAppUpdateStatus } from '../app-update-port'
 
 describe('toAppUpdateStatus', () => {
-  it('keeps a ready status with its version', () => {
-    expect(toAppUpdateStatus({ state: 'ready', version: '4.3.3' })).toEqual({ state: 'ready', version: '4.3.3' })
+  it.each([
+    [{ state: 'available', version: '4.3.3' }],
+    [{ state: 'downloaded', version: '4.3.3' }],
+    [{ state: 'downloading', version: '4.3.3', percent: 42 }],
+  ])('keeps %p', (status) => {
+    expect(toAppUpdateStatus(status)).toEqual(status)
+  })
+
+  it('keeps the percentage between 0 and 100', () => {
+    expect(toAppUpdateStatus({ state: 'downloading', version: '4.3.3', percent: 140.2 })).toEqual({
+      state: 'downloading',
+      version: '4.3.3',
+      percent: 100,
+    })
   })
 
   it.each([
     ['none', { state: 'none' }],
-    ['ready without a version', { state: 'ready' }],
-    ['ready with an empty version', { state: 'ready', version: '' }],
-    ['ready with a non-string version', { state: 'ready', version: 4 }],
-    ['an unknown state', { state: 'downloading', version: '4.3.3' }],
+    ['available without a version', { state: 'available' }],
+    ['an empty version', { state: 'available', version: '' }],
+    ['a non-string version', { state: 'available', version: 4 }],
+    ['downloading without a percentage', { state: 'downloading', version: '4.3.3' }],
+    ['an unknown state', { state: 'ready', version: '4.3.3' }],
     ['null', null],
-    ['a string', 'ready'],
+    ['a string', 'available'],
     ['undefined', undefined],
   ])('reads %s as nothing to show', (_, value) => {
     expect(toAppUpdateStatus(value)).toEqual({ state: 'none' })

@@ -68,7 +68,7 @@ export default class MenuBuilder {
         label: 'Check for Updates Automatically',
         type: 'checkbox',
         checked: updates?.isAutoCheckEnabled() ?? false,
-        enabled: updates !== undefined && process.platform !== 'win32',
+        enabled: updates !== undefined,
         click: (item) => updates?.setAutoCheck(item.checked),
       },
     ]

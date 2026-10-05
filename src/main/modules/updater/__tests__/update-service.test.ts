@@ -1,555 +1,419 @@
 /**
- * The self-update rules (DOPE-486), driven through a fake electron-updater.
- *
- * Each describe block is one rule from the Requirements Gathering: when checks
- * run, when a download is allowed, when the Update button shows, how an
- * install happens on each platform, and how a failed install stops repeating.
+ * The update notice (DOPE-486), driven through fakes: when the check runs, what
+ * the status bar shows, and how the installer is downloaded, verified and opened.
  */
-import { EventEmitter } from 'events'
-
-import type { QuitIntent } from '../../lifecycle/quit-coordinator'
+import type { Release, ReleaseAsset } from '../release-assets'
 import {
   createUpdateService,
   type DialogRequest,
   FIRST_CHECK_DELAY_MS,
-  MAC_INSTALL_WATCHDOG_MS,
   RELEASES_URL,
-  type UpdateInfoLike,
   type UpdateService,
   type UpdateServiceDeps,
-  type UpdateState,
-  type UpdateSupport,
+  type UpdateStatus,
 } from '../update-service'
 
-class FakeEngine extends EventEmitter {
-  autoDownload = true
-  autoInstallOnAppQuit = false
-  allowDowngrade = true
-  /** What the next checkForUpdates reports: an event to emit, or an error to throw. */
-  next: { event: 'update-available' | 'update-not-available'; version: string } | { error: Error } | null = null
-  checkForUpdates = jest.fn(() => {
-    const next = this.next
-    if (next && 'error' in next) {
-      this.emit('error', next.error)
-      return Promise.reject(next.error)
-    }
-    if (next) this.emit(next.event, { version: next.version } satisfies UpdateInfoLike)
-    return Promise.resolve(null)
-  })
-  downloadUpdate = jest.fn(() => Promise.resolve([]))
-  /** What quitAndInstall does on Linux: rename the AppImage, or fail. */
-  install: { renamedTo?: string; error?: Error } = {}
-  quitAndInstall = jest.fn(() => {
-    if (this.install.renamedTo) this.emit('appimage-filename-updated', this.install.renamedTo)
-    if (this.install.error) this.emit('error', this.install.error)
-  })
-  /** electron-updater finished downloading `version`. */
-  downloaded(version: string) {
-    this.emit('update-downloaded', { version })
-  }
+const SHA = 'a'.repeat(64)
+const BASE = 'https://github.com/Autonomy-Logic/openplc-editor/releases/download/v4.3.3/'
+
+/** `null` for an asset GitHub gave no digest. */
+function asset(name: string, digest: string | null = `sha256:${SHA}`): ReleaseAsset {
+  return { name, url: BASE + name, size: 100, digest: digest ?? undefined }
 }
 
-class FakeSquirrel extends EventEmitter {
-  ready() {
-    this.emit('update-downloaded')
-  }
+function release(version = '4.3.3', assets = defaultAssets(version)): Release {
+  return { version, assets }
+}
+
+function defaultAssets(version: string): ReleaseAsset[] {
+  return [
+    asset(`OpenPLC.Editor_${version}.exe`),
+    asset(`OpenPLC.Editor_${version}-ARM64.exe`),
+    asset(`OpenPLC_Editor_${version}.dmg`),
+    asset(`OpenPLC_Editor_${version}-ARM.dmg`),
+    asset(`OpenPLC.Editor-${version}.AppImage`),
+    asset(`OpenPLC.Editor-${version}-ARM64.AppImage`),
+  ]
 }
 
 interface Harness {
   service: UpdateService
-  engine: FakeEngine
-  squirrel: FakeSquirrel
-  deps: UpdateServiceDeps
   dialogs: DialogRequest[]
-  state: () => UpdateState
-  press: (button: number) => void
-  timers: { ms: number; callback: () => void; cancelled: boolean }[]
-  runTimers: (ms: number) => void
-  requestQuit: jest.Mock<void, [QuitIntent]>
-  relaunch: jest.Mock<void, [string]>
-  quit: jest.Mock
+  statuses: UpdateStatus[]
+  /** Buttons pressed by the next dialogs, in order; after that, the last button. */
+  press: (...buttons: number[]) => void
+  timers: { ms: number; callback: () => void }[]
+  runTimers: () => void
+  fetchLatestRelease: jest.Mock<Promise<Release | null>, [boolean]>
+  download: jest.Mock
+  openInstaller: jest.Mock
+  discard: jest.Mock
   openExternal: jest.Mock
+  requestQuit: jest.Mock
 }
 
 function setup({
   platform = 'linux',
-  support = { kind: 'supported', installDir: '/home/user/Applications' },
+  arch = 'x64',
   currentVersion = '4.3.2',
-  writable = true,
+  isPackaged = true,
   autoCheck = true,
-  state = {},
+  latest = release(),
+  sha256 = SHA,
 }: {
   platform?: NodeJS.Platform
-  support?: UpdateSupport
+  arch?: string
   currentVersion?: string
-  writable?: boolean
+  isPackaged?: boolean
   autoCheck?: boolean
-  state?: UpdateState
+  latest?: Release | null | Error
+  sha256?: string
 } = {}): Harness {
-  const engine = new FakeEngine()
-  const squirrel = new FakeSquirrel()
   const dialogs: DialogRequest[] = []
-  let nextButton = 1
-  let stored: UpdateState = { ...state }
+  const queued: number[] = []
   let autoCheckStored = autoCheck
   const timers: Harness['timers'] = []
-  const requestQuit = jest.fn<void, [QuitIntent]>()
-  const relaunch = jest.fn<void, [string]>()
-  const quit = jest.fn()
+  const fetchLatestRelease = jest.fn<Promise<Release | null>, [boolean]>(() =>
+    latest instanceof Error ? Promise.reject(latest) : Promise.resolve(latest),
+  )
+  const download = jest.fn((file: ReleaseAsset, progress: (fraction: number) => void) => {
+    progress(0.5)
+    progress(1)
+    return Promise.resolve({ path: `/home/user/Downloads/${file.name}`, sha256 })
+  })
+  const openInstaller = jest.fn(() => Promise.resolve())
+  const discard = jest.fn()
   const openExternal = jest.fn()
+  const requestQuit = jest.fn()
 
   const deps: UpdateServiceDeps = {
-    engine,
-    nativeUpdater: platform === 'darwin' ? squirrel : null,
+    isPackaged,
     platform,
+    arch,
     currentVersion,
-    support,
-    appImagePath: platform === 'linux' ? '/home/user/Applications/OpenPLC-Editor.AppImage' : undefined,
-    isWritable: () => writable,
+    fetchLatestRelease,
+    download,
+    discard,
+    openInstaller,
     readAutoCheck: () => autoCheckStored,
     writeAutoCheck: (enabled) => {
       autoCheckStored = enabled
     },
-    readState: () => stored,
-    writeState: (next) => {
-      stored = next
-    },
     showDialog: (request) => {
       dialogs.push(request)
-      return Promise.resolve(nextButton)
+      return Promise.resolve(queued.shift() ?? request.buttons.length - 1)
     },
     openExternal,
     requestQuit,
-    relaunch,
-    quit,
     after: (ms, callback) => {
-      const timer = { ms, callback, cancelled: false }
-      timers.push(timer)
-      return () => {
-        timer.cancelled = true
-      }
+      timers.push({ ms, callback })
     },
     log: jest.fn(),
   }
 
   const service = createUpdateService(deps)
+  const statuses: UpdateStatus[] = []
+  service.onStatusChange((status) => statuses.push(status))
   return {
     service,
-    engine,
-    squirrel,
-    deps,
     dialogs,
-    state: () => stored,
-    press: (button) => {
-      nextButton = button
-    },
+    statuses,
+    press: (...buttons) => queued.push(...buttons),
     timers,
-    runTimers: (ms) => {
-      for (const timer of [...timers]) if (!timer.cancelled && timer.ms === ms) timer.callback()
+    runTimers: () => {
+      for (const timer of timers.splice(0)) timer.callback()
     },
-    requestQuit,
-    relaunch,
-    quit,
+    fetchLatestRelease,
+    download,
+    openInstaller,
+    discard,
     openExternal,
+    requestQuit,
   }
 }
 
-/** Let the dialog promises and their handlers settle. */
+/** Let the check's promises settle. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-describe('support', () => {
-  it.each<UpdateSupport['kind']>(['development', 'windows', 'not-appimage', 'unstable-location'])(
-    'does nothing on its own when %s',
-    (kind) => {
-      const h = setup({ support: { kind } as UpdateSupport })
-      h.service.start()
-      expect(h.timers).toHaveLength(0)
-      expect(h.engine.listenerCount('update-available')).toBe(0)
-    },
-  )
+const messages = (h: Harness) => h.dialogs.map((dialog) => dialog.message)
 
-  it('opens the releases page on Windows instead of checking', async () => {
-    const h = setup({ platform: 'win32', support: { kind: 'windows' } })
-    await h.service.checkNow()
-    expect(h.openExternal).toHaveBeenCalledWith(RELEASES_URL)
-    expect(h.engine.checkForUpdates).not.toHaveBeenCalled()
-  })
-
-  it('asks a macOS user outside Applications to move the app', async () => {
-    const h = setup({ platform: 'darwin', support: { kind: 'unstable-location' } })
-    await h.service.checkNow()
-    expect(h.dialogs[0].message).toMatch(/Move OpenPLC Editor to Applications/)
-    expect(h.engine.checkForUpdates).not.toHaveBeenCalled()
-  })
-
-  it('never downgrades and decides downloads itself', () => {
+describe('automatic check', () => {
+  it('runs once, a minute after start, and never again on a timer', async () => {
     const h = setup()
     h.service.start()
-    expect(h.engine.allowDowngrade).toBe(false)
-    expect(h.engine.autoDownload).toBe(false)
-    expect(h.engine.autoInstallOnAppQuit).toBe(true)
-  })
-})
+    expect(h.timers.map((timer) => timer.ms)).toEqual([FIRST_CHECK_DELAY_MS])
 
-describe('automatic checks', () => {
-  it('run once per launch, a minute after start, and never again on a timer', () => {
-    const h = setup()
-    h.service.start()
-    expect(h.engine.checkForUpdates).not.toHaveBeenCalled()
-
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    expect(h.engine.checkForUpdates).toHaveBeenCalledTimes(1)
-    expect(h.timers).toHaveLength(1)
+    h.runTimers()
+    await settle()
+    expect(h.fetchLatestRelease).toHaveBeenCalledTimes(1)
+    expect(h.timers).toHaveLength(0)
   })
 
-  it('do not run when the user turned them off', () => {
+  it('does not run when the user turned it off', () => {
     const h = setup({ autoCheck: false })
     h.service.start()
     expect(h.timers).toHaveLength(0)
-    expect(h.engine.checkForUpdates).not.toHaveBeenCalled()
+  })
+
+  it('does not run in a development build', () => {
+    const h = setup({ isPackaged: false })
+    h.service.start()
+    expect(h.timers).toHaveLength(0)
+  })
+
+  it('shows the Update button for a newer version, with no dialog and no download', async () => {
+    const h = setup()
+    h.service.start()
+    h.runTimers()
+    await settle()
+    expect(h.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
+    expect(h.dialogs).toHaveLength(0)
+    expect(h.download).not.toHaveBeenCalled()
+  })
+
+  it('shows nothing when up to date', async () => {
+    const h = setup({ latest: release('4.3.2') })
+    h.service.start()
+    h.runTimers()
+    await settle()
+    expect(h.service.getStatus()).toEqual({ state: 'none' })
+    expect(h.dialogs).toHaveLength(0)
+  })
+
+  it('shows nothing for an older release', async () => {
+    const h = setup({ currentVersion: '4.4.0' })
+    h.service.start()
+    h.runTimers()
+    await settle()
+    expect(h.service.getStatus()).toEqual({ state: 'none' })
+  })
+
+  it('stays silent when offline', async () => {
+    const h = setup({ latest: new Error('net::ERR_INTERNET_DISCONNECTED') })
+    h.service.start()
+    h.runTimers()
+    await settle()
+    expect(h.dialogs).toHaveLength(0)
+    expect(h.service.getStatus()).toEqual({ state: 'none' })
+  })
+
+  it('shows nothing when the release has no installer for this computer', async () => {
+    const h = setup({ latest: release('4.3.3', [asset('OpenPLC.Editor_4.3.3.exe')]) })
+    h.service.start()
+    h.runTimers()
+    await settle()
+    expect(h.service.getStatus()).toEqual({ state: 'none' })
+  })
+
+  it('a stable build asks for stable releases only, an rc build for prereleases too', async () => {
+    const stable = setup()
+    await stable.service.checkNow()
+    expect(stable.fetchLatestRelease).toHaveBeenCalledWith(false)
+
+    const rc = setup({ currentVersion: '4.3.3-rc.1', latest: release('4.3.3-rc.2') })
+    await rc.service.checkNow()
+    expect(rc.fetchLatestRelease).toHaveBeenCalledWith(true)
   })
 
   it('the toggle is stored for the next launch', () => {
     const h = setup()
-    h.service.start()
     h.service.setAutoCheck(false)
     expect(h.service.isAutoCheckEnabled()).toBe(false)
-  })
-
-  it('a manual check still works with automatic checks off', async () => {
-    const h = setup({ autoCheck: false })
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    await h.service.checkNow()
-    expect(h.engine.downloadUpdate).toHaveBeenCalledTimes(1)
-  })
-
-  it('stay silent when offline', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { error: new Error('net::ERR_INTERNET_DISCONNECTED') }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.dialogs).toHaveLength(0)
-  })
-
-  it('stay silent when up to date', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { event: 'update-not-available', version: '4.3.2' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.dialogs).toHaveLength(0)
   })
 })
 
 describe('manual check', () => {
   it('says the editor is up to date', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { event: 'update-not-available', version: '4.3.2' }
+    const h = setup({ latest: release('4.3.2') })
     await h.service.checkNow()
-    expect(h.dialogs[0].message).toBe('OpenPLC Editor is up to date')
+    expect(messages(h)).toEqual(['OpenPLC Editor is up to date'])
   })
 
-  it('says a newer version is being rolled out when this computer is outside the stage', async () => {
-    const h = setup()
+  it('works with automatic checks off', async () => {
+    const h = setup({ autoCheck: false })
     h.service.start()
-    h.engine.next = { event: 'update-not-available', version: '4.3.3' }
     await h.service.checkNow()
-    expect(h.dialogs[0].message).toBe('OpenPLC Editor 4.3.3 is being rolled out')
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 is available'])
+  })
+
+  it('offers the download, and Later leaves the button', async () => {
+    const h = setup()
+    h.press(1)
+    await h.service.checkNow()
+    expect(h.dialogs[0].buttons).toEqual(['Download', 'Later'])
+    expect(h.download).not.toHaveBeenCalled()
+    expect(h.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
+  })
+
+  it('Download fetches and opens the installer', async () => {
+    const h = setup()
+    h.press(0, 1)
+    await h.service.checkNow()
+    expect(h.download).toHaveBeenCalledTimes(1)
+    expect(h.openInstaller).toHaveBeenCalledWith('/home/user/Downloads/OpenPLC.Editor-4.3.3.AppImage')
   })
 
   it('reports a failed check with the download page', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { error: new Error('503') }
+    const h = setup({ latest: new Error('503') })
     h.press(0)
     await h.service.checkNow()
-    await settle()
-    expect(h.dialogs[0].message).toBe('Could not check for updates')
+    expect(messages(h)).toEqual(['Could not check for updates'])
     expect(h.openExternal).toHaveBeenCalledWith(RELEASES_URL)
   })
-})
 
-describe('download', () => {
-  it('starts when an update is found and the location is writable', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.engine.downloadUpdate).toHaveBeenCalledTimes(1)
-    expect(h.dialogs).toHaveLength(0)
-  })
-
-  it('is skipped where the editor cannot write, with one notice per version', async () => {
-    const h = setup({ writable: false })
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.engine.downloadUpdate).not.toHaveBeenCalled()
-    expect(h.dialogs.map((dialog) => dialog.message)).toEqual(['OpenPLC Editor 4.3.3 is available'])
-    expect(h.state().notifiedVersion).toBe('4.3.3')
-  })
-
-  it('does not repeat the cannot-install notice on the next launch for the same version', async () => {
-    const h = setup({ writable: false, state: { notifiedVersion: '4.3.3' } })
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.dialogs).toHaveLength(0)
-  })
-
-  it('never fetches a version that already failed to install', async () => {
-    const h = setup({ state: { failedVersion: '4.3.3' } })
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.engine.downloadUpdate).not.toHaveBeenCalled()
-    expect(h.dialogs).toHaveLength(0)
-  })
-
-  it('fetches a newer version after a failed one', async () => {
-    const h = setup({ state: { failedVersion: '4.3.3' } })
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.4' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.engine.downloadUpdate).toHaveBeenCalledTimes(1)
+  it('in a development build only says updates are off', async () => {
+    const h = setup({ isPackaged: false })
+    await h.service.checkNow()
+    expect(messages(h)).toEqual(['Updates are disabled in development builds'])
+    expect(h.fetchLatestRelease).not.toHaveBeenCalled()
   })
 })
 
-describe('ready to install', () => {
-  it('on Linux, shows the Update button, not a dialog, when an automatic download finishes', async () => {
-    const h = setup()
+describe('download and open', () => {
+  async function available(options: Parameters<typeof setup>[0] = {}) {
+    const h = setup(options)
     h.service.start()
-    const seen: unknown[] = []
-    h.service.onStatusChange((status) => seen.push(status))
-    expect(h.service.getStatus()).toEqual({ state: 'none' })
-
-    h.engine.downloaded('4.3.3')
+    h.runTimers()
     await settle()
-    expect(h.service.getStatus()).toEqual({ state: 'ready', version: '4.3.3' })
-    expect(h.dialogs).toHaveLength(0)
-    expect(h.state().pendingVersion).toBe('4.3.3')
-
-    h.engine.downloaded('4.3.3')
-    expect(seen).toEqual([{ state: 'ready', version: '4.3.3' }])
-  })
-
-  it('on macOS, waits for Squirrel before showing it', async () => {
-    const h = setup({ platform: 'darwin', support: { kind: 'supported', installDir: '/Applications' } })
-    h.service.start()
-    h.engine.downloaded('4.3.3')
-    await settle()
-    expect(h.service.getStatus()).toEqual({ state: 'none' })
-
-    h.squirrel.ready()
-    expect(h.service.getStatus()).toEqual({ state: 'ready', version: '4.3.3' })
-  })
-
-  it('the Update button asks the quit coordinator, which runs the unsaved-project prompt', () => {
-    const h = setup()
-    h.service.start()
-    h.engine.downloaded('4.3.3')
-    h.service.requestInstall()
-    expect(h.requestQuit).toHaveBeenCalledWith('install-update')
-    expect(h.engine.quitAndInstall).not.toHaveBeenCalled()
-  })
-
-  it('the Update button does nothing before the update is ready', () => {
-    const h = setup({ platform: 'darwin', support: { kind: 'supported', installDir: '/Applications' } })
-    h.service.start()
-    h.engine.downloaded('4.3.3')
-    h.service.requestInstall()
-    expect(h.requestQuit).not.toHaveBeenCalled()
-  })
-
-  it('an unsubscribed listener hears nothing', () => {
-    const h = setup()
-    h.service.start()
-    const listener = jest.fn()
-    h.service.onStatusChange(listener)()
-    h.engine.downloaded('4.3.3')
-    expect(listener).not.toHaveBeenCalled()
-  })
-
-  it('a manual check that downloads asks to restart when it is done', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    await h.service.checkNow()
-    h.press(0)
-    h.engine.downloaded('4.3.3')
-    await settle()
-    expect(h.dialogs.map((dialog) => dialog.message)).toEqual([
-      'Downloading OpenPLC Editor 4.3.3',
-      'OpenPLC Editor 4.3.3 is ready to install',
-    ])
-    expect(h.requestQuit).toHaveBeenCalledWith('install-update')
-  })
-
-  it('Later from that dialog leaves the install for the next quit, and the button stays', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    await h.service.checkNow()
-    h.press(1)
-    h.engine.downloaded('4.3.3')
-    await settle()
-    expect(h.requestQuit).not.toHaveBeenCalled()
-    expect(h.engine.autoInstallOnAppQuit).toBe(true)
-    expect(h.service.getStatus()).toEqual({ state: 'ready', version: '4.3.3' })
-  })
-
-  it('a manual check once it is downloaded offers it again, without checking', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.downloaded('4.3.3')
-    await h.service.checkNow()
-    expect(h.dialogs.map((dialog) => dialog.message)).toEqual(['OpenPLC Editor 4.3.3 is ready to install'])
-    expect(h.engine.checkForUpdates).not.toHaveBeenCalled()
-  })
-
-  it('a manual check during the download asks to restart when it is done', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.downloadUpdate.mockReturnValue(new Promise(() => undefined))
-    h.engine.next = { event: 'update-available', version: '4.3.3' }
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    await h.service.checkNow()
-    h.engine.downloaded('4.3.3')
-    await settle()
-    expect(h.dialogs.map((dialog) => dialog.message)).toEqual([
-      'An update is already being downloaded',
-      'OpenPLC Editor 4.3.3 is ready to install',
-    ])
-  })
-
-  it('a manual check during the automatic check is answered by that check', async () => {
-    const h = setup()
-    h.service.start()
-    let finish: () => void = () => undefined
-    h.engine.checkForUpdates.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = () => {
-            h.engine.emit('update-not-available', { version: '4.3.2' })
-            resolve(null)
-          }
-        }),
-    )
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await h.service.checkNow()
-    finish()
-    await settle()
-    expect(h.dialogs.map((dialog) => dialog.message)).toEqual(['OpenPLC Editor is up to date'])
-    expect(h.engine.checkForUpdates).toHaveBeenCalledTimes(1)
-  })
-
-  it('a failed install takes the button away', async () => {
-    const h = setup()
-    h.service.start()
-    h.engine.install = { error: new Error('EACCES') }
-    h.engine.downloaded('4.3.3')
-    h.service.installAndRestart()
-    expect(h.service.getStatus()).toEqual({ state: 'none' })
-  })
-})
-
-describe('install and restart', () => {
-  async function downloadedOnLinux(install: FakeEngine['install'] = {}) {
-    const h = setup()
-    h.service.start()
-    h.engine.install = install
-    h.engine.downloaded('4.3.3')
-    await settle()
+    h.statuses.length = 0
     return h
   }
 
-  it('on Linux, installs without launching and relaunches the same file once', async () => {
-    const h = await downloadedOnLinux()
-    h.service.installAndRestart()
-    expect(h.engine.quitAndInstall).toHaveBeenCalledWith(true, false)
-    expect(h.relaunch).toHaveBeenCalledTimes(1)
-    expect(h.relaunch).toHaveBeenCalledWith('/home/user/Applications/OpenPLC-Editor.AppImage')
-    // The updater quits by itself after installing.
-    expect(h.quit).not.toHaveBeenCalled()
+  it.each([
+    ['win32', 'x64', 'OpenPLC.Editor_4.3.3.exe'],
+    ['win32', 'arm64', 'OpenPLC.Editor_4.3.3-ARM64.exe'],
+    ['darwin', 'x64', 'OpenPLC_Editor_4.3.3.dmg'],
+    ['darwin', 'arm64', 'OpenPLC_Editor_4.3.3-ARM.dmg'],
+    ['linux', 'x64', 'OpenPLC.Editor-4.3.3.AppImage'],
+    ['linux', 'arm64', 'OpenPLC.Editor-4.3.3-ARM64.AppImage'],
+  ] as const)('%s %s downloads %s', async (platform, arch, name) => {
+    const h = await available({ platform, arch })
+    await h.service.downloadAndOpen()
+    expect(h.download.mock.calls[0][0]).toMatchObject({ name })
+    expect(h.openInstaller).toHaveBeenCalledWith(`/home/user/Downloads/${name}`)
   })
 
-  it('on Linux, relaunches the renamed AppImage when the name changed', async () => {
-    const h = await downloadedOnLinux({ renamedTo: '/home/user/Applications/OpenPLC-Editor-4.3.3.AppImage' })
-    h.service.installAndRestart()
-    expect(h.relaunch).toHaveBeenCalledTimes(1)
-    expect(h.relaunch).toHaveBeenCalledWith('/home/user/Applications/OpenPLC-Editor-4.3.3.AppImage')
+  it('reports progress on the button, then shows it as downloaded', async () => {
+    const h = await available()
+    await h.service.downloadAndOpen()
+    expect(h.statuses).toEqual([
+      { state: 'downloading', version: '4.3.3', percent: 0 },
+      { state: 'downloading', version: '4.3.3', percent: 50 },
+      { state: 'downloading', version: '4.3.3', percent: 100 },
+      { state: 'downloaded', version: '4.3.3' },
+    ])
   })
 
-  it('on Linux, a failed install reopens the old editor and marks the version failed', async () => {
-    const h = await downloadedOnLinux({ error: new Error('EACCES') })
-    h.service.installAndRestart()
-    expect(h.relaunch).toHaveBeenCalledWith('/home/user/Applications/OpenPLC-Editor.AppImage')
-    // Deferred: the quit coordinator destroys the window first.
-    expect(h.quit).not.toHaveBeenCalled()
-    h.runTimers(0)
-    expect(h.quit).toHaveBeenCalledTimes(1)
-    expect(h.state().failedVersion).toBe('4.3.3')
+  it.each([
+    ['win32', 'The OpenPLC Editor 4.3.3 installer is open', /installer can replace/],
+    ['darwin', 'The OpenPLC Editor 4.3.3 installer is open', /drag the new version into Applications/],
+    ['linux', 'OpenPLC Editor 4.3.3 is downloaded', /saved to \/home\/user\/Downloads/],
+  ] as const)('%s: tells the user what is left to do', async (platform, message, detail) => {
+    const h = await available({ platform, arch: 'x64' })
+    await h.service.downloadAndOpen()
+    expect(messages(h)).toEqual([message])
+    expect(h.dialogs[0].detail).toMatch(detail)
+    expect(h.dialogs[0].buttons).toEqual(['Quit Now', 'Later'])
   })
 
-  it('on macOS, hands over to Squirrel and quits if it does not within the watchdog', async () => {
-    const h = setup({ platform: 'darwin', support: { kind: 'supported', installDir: '/Applications' } })
-    h.service.start()
-    h.engine.downloaded('4.3.3')
-    h.squirrel.ready()
-    await settle()
-
-    h.service.installAndRestart()
-    expect(h.engine.quitAndInstall).toHaveBeenCalledWith()
-    expect(h.quit).not.toHaveBeenCalled()
-    h.runTimers(MAC_INSTALL_WATCHDOG_MS)
-    expect(h.quit).toHaveBeenCalledTimes(1)
+  it('Quit Now goes through the ordinary quit, with its unsaved-project prompt', async () => {
+    const h = await available()
+    h.press(0)
+    await h.service.downloadAndOpen()
+    expect(h.requestQuit).toHaveBeenCalledTimes(1)
   })
 
-  it('just quits when nothing is ready', () => {
+  it('Later leaves the editor running', async () => {
+    const h = await available()
+    await h.service.downloadAndOpen()
+    expect(h.requestQuit).not.toHaveBeenCalled()
+  })
+
+  it('a second click opens the same file again without downloading', async () => {
+    const h = await available()
+    await h.service.downloadAndOpen()
+    await h.service.downloadAndOpen()
+    expect(h.download).toHaveBeenCalledTimes(1)
+    expect(h.openInstaller).toHaveBeenCalledTimes(2)
+  })
+
+  it('a file whose sha256 does not match is deleted and never opened', async () => {
+    const h = await available({ sha256: 'b'.repeat(64) })
+    await h.service.downloadAndOpen()
+    expect(h.discard).toHaveBeenCalledWith('/home/user/Downloads/OpenPLC.Editor-4.3.3.AppImage')
+    expect(h.openInstaller).not.toHaveBeenCalled()
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 could not be verified'])
+    expect(h.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
+  })
+
+  it('an installer without a digest is not downloaded', async () => {
+    const h = await available({ latest: release('4.3.3', [asset('OpenPLC.Editor-4.3.3.AppImage', null)]) })
+    await h.service.downloadAndOpen()
+    expect(h.download).not.toHaveBeenCalled()
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 could not be verified'])
+  })
+
+  it('an installer hosted outside the project releases is never offered', async () => {
+    const outside = {
+      ...asset('OpenPLC.Editor-4.3.3.AppImage'),
+      url: 'https://example.com/OpenPLC.Editor-4.3.3.AppImage',
+    }
+    const h = await available({ latest: release('4.3.3', [outside]) })
+    expect(h.service.getStatus()).toEqual({ state: 'none' })
+  })
+
+  it('a failed download puts the button back and offers the download page', async () => {
+    const h = await available()
+    h.download.mockRejectedValueOnce(new Error('ECONNRESET'))
+    h.press(0)
+    await h.service.downloadAndOpen()
+    expect(h.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 could not be downloaded'])
+    expect(h.openExternal).toHaveBeenCalledWith(RELEASES_URL)
+  })
+
+  it('a failure to open the installer still tells the user where the file is', async () => {
+    const h = await available()
+    h.openInstaller.mockRejectedValueOnce(new Error('no handler'))
+    await h.service.downloadAndOpen()
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 is downloaded'])
+  })
+
+  it('ignores a click while the download runs', async () => {
+    const h = await available()
+    let finish: () => void = () => undefined
+    h.download.mockImplementationOnce(
+      (file: ReleaseAsset) =>
+        new Promise((resolve) => {
+          finish = () => resolve({ path: `/home/user/Downloads/${file.name}`, sha256: SHA })
+        }),
+    )
+    const first = h.service.downloadAndOpen()
+    await h.service.downloadAndOpen()
+    finish()
+    await first
+    expect(h.download).toHaveBeenCalledTimes(1)
+  })
+
+  it('a manual check during the download says it is under way', async () => {
+    const h = await available()
+    h.download.mockImplementationOnce(() => new Promise(() => undefined))
+    void h.service.downloadAndOpen()
+    await h.service.checkNow()
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 is being downloaded'])
+  })
+
+  it('does nothing before a newer version is known', async () => {
     const h = setup()
-    h.service.start()
-    h.service.installAndRestart()
-    expect(h.engine.quitAndInstall).not.toHaveBeenCalled()
-    h.runTimers(0)
-    expect(h.quit).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('failed install detection', () => {
-  it('clears the pending version once the new one is running', () => {
-    const h = setup({ currentVersion: '4.3.3', state: { pendingVersion: '4.3.3', installAttempts: 1 } })
-    h.service.start()
-    expect(h.state()).toEqual({})
+    await h.service.downloadAndOpen()
+    expect(h.download).not.toHaveBeenCalled()
   })
 
-  it('does not blame the first start on the old version: it may follow a crash', () => {
-    const h = setup({ state: { pendingVersion: '4.3.3', installAttempts: 0 } })
-    h.service.start()
-    expect(h.state()).toEqual({ pendingVersion: '4.3.3', installAttempts: 1 })
-  })
-
-  it('marks the version failed on the second start, and says so once', async () => {
-    const h = setup({ state: { pendingVersion: '4.3.3', installAttempts: 1 } })
-    h.service.start()
-    expect(h.state()).toEqual({ failedVersion: '4.3.3' })
-
-    h.runTimers(FIRST_CHECK_DELAY_MS)
-    await settle()
-    expect(h.dialogs.map((dialog) => dialog.message)).toEqual(['OpenPLC Editor 4.3.3 could not be installed'])
-  })
-
-  it('orders release candidates, so rc.1 running with rc.2 pending is not installed yet', () => {
-    const h = setup({ currentVersion: '4.3.3-rc.1', state: { pendingVersion: '4.3.3-rc.2', installAttempts: 0 } })
-    h.service.start()
-    expect(h.state().installAttempts).toBe(1)
+  it('an unsubscribed listener hears nothing', async () => {
+    const h = await available()
+    const listener = jest.fn()
+    h.service.onStatusChange(listener)()
+    await h.service.downloadAndOpen()
+    expect(listener).not.toHaveBeenCalled()
   })
 })

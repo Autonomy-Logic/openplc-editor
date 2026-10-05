@@ -25,8 +25,6 @@
 
 import type { Unsubscribe } from './types'
 
-export type QuitRequest = { intent: 'quit' | 'install-update' }
-
 export interface WindowPort {
   /** Minimize the application window. No-op on web. */
   minimize(): void
@@ -46,11 +44,8 @@ export interface WindowPort {
   /** Request a quit confirmation. No-op on web. */
   requestQuit(): void
 
-  /**
-   * Subscribe to application quit confirmation requests. No-op on web.
-   * `install-update` is a restart the user asked for to install an update.
-   */
-  onQuitRequested?(callback: (request: QuitRequest) => void): Unsubscribe
+  /** Subscribe to application quit confirmation requests. No-op on web. */
+  onQuitRequested?(callback: () => void): Unsubscribe
 
   /** Quit the application entirely after confirmation. No-op on web. */
   quit(): void

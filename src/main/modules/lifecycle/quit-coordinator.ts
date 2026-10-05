@@ -8,23 +8,15 @@ export interface QuitWindow {
   focus(): void
   hide(): void
   destroy(): void
-  webContents: { send(channel: string, ...args: unknown[]): void }
+  webContents: { send(channel: string): void }
 }
 
 type QuitEvent = { preventDefault(): void }
 
-/**
- * What a confirmed quit does next. `install-update` swaps the app for a
- * downloaded update and reopens it, which only the updater can do, so the
- * coordinator hands the intent to `quitApp` instead of calling `app.quit()`.
- */
-export type QuitIntent = 'quit' | 'install-update'
-
 export interface QuitCoordinator {
   handleBeforeQuit(event: QuitEvent): void
   handleWindowClose(event: QuitEvent): void
-  /** Ask the renderer to confirm a quit. The intent belongs to this request only. */
-  requestQuit(intent?: QuitIntent): void
+  requestQuit(): void
   confirmQuit(): void
 }
 
@@ -37,36 +29,30 @@ export function createQuitCoordinator({
 }: {
   platform: NodeJS.Platform
   getWindow: () => QuitWindow | null
-  quitApp: (intent: QuitIntent) => void
+  quitApp: () => void
   stopSimulator: () => void
   canPrompt: (window: QuitWindow) => boolean
 }): QuitCoordinator {
   // Only confirmation commits to shutdown. A dismissed prompt leaves no intent behind.
   let confirmed = false
-  // Every request states its own intent, because the renderer never reports a
-  // dismissed prompt: a "Restart now" the user cancelled must not turn the next
-  // ordinary Cmd+Q into an install and relaunch.
-  let intent: QuitIntent = 'quit'
 
   const liveWindow = () => {
     const window = getWindow()
     return window && !window.isDestroyed() ? window : null
   }
 
-  const requestQuit = (next: QuitIntent = 'quit') => {
+  const requestQuit = () => {
     if (confirmed) return
-    intent = next
     const window = liveWindow()
     if (!window) {
       stopSimulator()
-      quitApp(intent)
+      quitApp()
       return
     }
     if (window.isMinimized()) window.restore()
     if (!window.isVisible()) window.show()
     window.focus()
-    // The renderer skips its "quit?" confirmation for an install the user just asked for.
-    window.webContents.send('app:quit-requested', { intent })
+    window.webContents.send('app:quit-requested')
   }
 
   return {
@@ -94,18 +80,9 @@ export function createQuitCoordinator({
       if (confirmed) return
       confirmed = true
       stopSimulator()
-      if (intent === 'install-update') {
-        // The install runs before the window goes. On Linux and Windows the last
-        // window closing quits the app on the spot, and electron-updater's own
-        // quit hook would then install silently without reopening the editor.
-        // The updater defers its app.quit(), so the window is gone by then.
-        quitApp(intent)
-        liveWindow()?.destroy()
-        return
-      }
       // Bypass beforeunload now that saving/discarding has been confirmed.
       liveWindow()?.destroy()
-      quitApp(intent)
+      quitApp()
     },
   }
 }

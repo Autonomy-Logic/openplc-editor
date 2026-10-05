@@ -427,14 +427,8 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
 
-    const unsub = windowPort.onQuitRequested?.((request) => {
-      const isUnsaved = openPLCStoreBase.getState().workspace.editingState === 'unsaved'
-      // "Update" or "Restart Now" already said yes to quitting; only unsaved work is still worth asking about.
-      if (request.intent === 'install-update' && !isUnsaved) {
-        windowPort.quit()
-        return
-      }
-      quitAppRequest(isUnsaved, openModal)
+    const unsub = windowPort.onQuitRequested?.(() => {
+      quitAppRequest(openPLCStoreBase.getState().workspace.editingState === 'unsaved', openModal)
     })
     return unsub
   }, [capabilities.isNativeApplication, windowPort, openModal])

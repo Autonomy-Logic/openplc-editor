@@ -64,15 +64,6 @@ export const store = new Store<TStoreType>({
     auto_update_check: {
       type: 'boolean',
     },
-    update_state: {
-      type: 'object',
-      properties: {
-        notifiedVersion: { type: 'string' },
-        pendingVersion: { type: 'string' },
-        installAttempts: { type: 'number' },
-        failedVersion: { type: 'string' },
-      },
-    },
   },
   defaults: {
     last_projects: [],
@@ -86,6 +77,5 @@ export const store = new Store<TStoreType>({
       },
     },
     auto_update_check: true,
-    update_state: {},
   },
 })

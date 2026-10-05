@@ -5,7 +5,7 @@ import { useAppUpdate } from '../../middleware/shared/providers'
 
 const NONE: AppUpdateStatus = { state: 'none' }
 
-/** The editor's own update, for the status bar. Always `none` on a platform without the port (web). */
+/** The editor's update notice, for the status bar. Always `none` on a platform without the port (web). */
 export function useAppUpdateStatus(): AppUpdateStatus {
   const appUpdate = useAppUpdate()
   const [status, setStatus] = useState<AppUpdateStatus>(NONE)

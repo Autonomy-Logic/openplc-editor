@@ -16,20 +16,13 @@
  *   - window:project-open         (send)
  *   - app:quit                    (send)
  *   - app:request-quit            (send) — request confirmation
- *   - app:quit-requested          (on)   — show confirmation; carries the quit intent
+ *   - app:quit-requested          (on)   — show confirmation
  *   - window-controls:is-closing  (on)   — window close notification
  *   - window-controls:toggle-maximized (on) — maximize state change
  */
 
 import type { Unsubscribe } from '../../shared/ports/types'
-import type { QuitRequest, WindowPort } from '../../shared/ports/window-port'
-
-/** Main sends `{ intent }`; anything else is an ordinary quit. */
-function toQuitRequest(payload: unknown): QuitRequest {
-  const install =
-    typeof payload === 'object' && payload !== null && 'intent' in payload && payload.intent === 'install-update'
-  return { intent: install ? 'install-update' : 'quit' }
-}
+import type { WindowPort } from '../../shared/ports/window-port'
 
 export function createEditorWindowAdapter(): WindowPort {
   return {
@@ -57,8 +50,8 @@ export function createEditorWindowAdapter(): WindowPort {
       window.bridge.requestQuitApp()
     },
 
-    onQuitRequested(callback: (request: QuitRequest) => void): Unsubscribe {
-      return window.bridge.quitRequested((_event, payload) => callback(toQuitRequest(payload)))
+    onQuitRequested(callback: () => void): Unsubscribe {
+      return window.bridge.quitRequested(() => callback())
     },
 
     quit(): void {

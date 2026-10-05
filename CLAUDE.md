@@ -436,34 +436,14 @@ the editor's `main` to trigger the "Build and Release" workflow. Web auto-deploy
 on its `main` push. (Ideally `package.json.version` should be derived from
 `APP_VERSION` in the release workflow so a single bump can never drift.)
 
-### A release reaches every installed editor (auto-update):
-Every editor from 4.1.0 on embeds `app-update.yml` and runs electron-updater, so
-a release carrying `latest-mac.yml` / `latest-linux*.yml` is downloaded and
-installed by the whole macOS and Linux fleet. Nothing can be pulled back after
-that — electron-updater never downgrades — so the only rollback is a new, fixed
-release. The workflow is built around that (DOPE-486, `docs/auto-update.md`):
-
-- **Tag `vX.Y.Z-rc.N` first**, test it, and keep it. `release-gate` fails a stable
-  `vX.Y.Z` tag when no published rc of that version exists. Stable clients ignore
-  prereleases, so an rc reaches only people already running an rc.
-- **`create-release` waits for approval** in the `release` environment, then
-  `scripts/verify-release-assets.js` checks the exact files about to be uploaded:
-  every `url`/`sha512`/`size` in the metadata, no Windows `latest.yml` or
-  `*.exe.blockmap` (old Windows clients install whatever it points to, unsigned),
-  no metadata without its artifact, one website download per OS. Anything else
-  fails the release before anything is uploaded.
-- **Stable releases publish at `stagingPercentage: 1`.** Widen with the "Raise
-  Release Stage" workflow (10 → 50 → 100) once the canary machines updated.
-- **Update artifacts carry no spaces** (`OpenPLC-Editor-<v>-<arch>.zip`,
-  `OpenPLC-Editor.AppImage`, `OpenPLC-Editor-ARM64.AppImage`): GitHub turns a
-  space into a dot on upload while electron-updater asks for a dash, so a spaced
-  name is a 404 for every client. They are named at build time and never renamed
-  afterwards, because the metadata records the name electron-builder wrote. The
-  AppImage has no version in its name so each update replaces it in place.
-- **Windows is not updated** until its installers are code-signed; the editor's
-  updater is off on win32 and "Check for Updates" opens the releases page.
-- **Editors check once per launch** (about a minute after start), never on a
-  timer, and every update is optional: there is no required-update mechanism.
+### Update notice (never publish `latest*.yml`):
+The editor checks the GitHub releases API once per launch and, when a newer
+version is out, shows "Update to X" in the status bar; clicking it downloads
+that OS's installer, checks its sha256 against the release and opens it. The
+user installs (DOPE-486, `docs/update-notice.md`). The release pipeline needs
+nothing for it. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
+to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
+`app-update.yml` and would install it without asking, unsigned on Windows.
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`

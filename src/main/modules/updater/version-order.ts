@@ -1,10 +1,10 @@
 /**
- * Strict semver ordering for the updater's own bookkeeping.
+ * Strict semver ordering for the update check.
  *
  * Not `frontend/utils/semver`: that comparer treats `4.3.3-rc.1` as equal to
  * `4.3.3` on purpose (a runtime rc ships the line's features), and here the
- * difference is the whole point — an editor running rc.1 with rc.2 downloaded
- * has not installed it yet.
+ * difference is the whole point — an editor running rc.1 must be told about
+ * rc.2.
  */
 
 interface Version {
