@@ -45,8 +45,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
       return window.bridge.handleOpenProjectRequest(() => callback())
     },
 
-    onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe {
-      return window.bridge.openRecentAccelerator((_event: unknown, response: unknown) => callback(response))
+    onOpenRecent(callback: (projectPath: string) => void): Unsubscribe {
+      return window.bridge.openRecentAccelerator((_event: unknown, projectPath: unknown) => {
+        if (typeof projectPath === 'string') callback(projectPath)
+      })
     },
 
     onSaveProject(callback: () => void): Unsubscribe {

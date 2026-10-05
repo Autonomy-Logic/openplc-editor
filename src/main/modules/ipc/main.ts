@@ -1170,6 +1170,9 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
+    } finally {
+      // The native Recent submenu is built from the history this open just changed.
+      this.handleWindowRebuildMenu()
     }
   }
 
@@ -2272,6 +2275,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
     if (typeof open !== 'boolean') return
+    if (!open) this.currentProjectPath = null
     void this.menuBuilder.setProjectOpen(open).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })

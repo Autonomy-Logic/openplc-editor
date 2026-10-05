@@ -55,7 +55,7 @@ const AcceleratorHandler = () => {
   } = useOpenPLCStore()
   const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
-  const pendingRecentProjectRef = useRef<unknown>(null)
+  const pendingRecentProjectRef = useRef<string | null>(null)
 
   const executeSave = useCallback(
     () => executeSaveProject(store, projectPort, capabilities),
@@ -153,29 +153,42 @@ const AcceleratorHandler = () => {
   }, [editingState, accelerator, openModal, projectPort, handleOpenProjectResponse])
 
   /**
-   * Open recent project (editor-specific — data passed via IPC accelerator)
+   * Open recent project (editor-specific — the native Recent menu sends the project path)
    */
+  const openRecentProject = useCallback(
+    async (projectPath: string) => {
+      const result = await projectPort.openProjectByPath(projectPath).catch(() => null)
+      if (result?.success && result.data) {
+        handleOpenProjectResponse(result.data)
+        return
+      }
+      toast({
+        title: 'Cannot open the project.',
+        description: result?.error?.description ?? `The path ${projectPath} does not exist on this computer.`,
+        variant: 'fail',
+      })
+    },
+    [projectPort, handleOpenProjectResponse],
+  )
+
   useEffect(() => {
-    const unsub = accelerator.onOpenRecent((projectData?: unknown) => {
+    const unsub = accelerator.onOpenRecent((projectPath: string) => {
       switch (editingState) {
         case 'saved':
         case 'initial-state':
-          // Process immediately — data comes from the main process IPC event
-          if (projectData) {
-            handleOpenProjectResponse(projectData as Parameters<typeof handleOpenProjectResponse>[0])
-          }
+          void openRecentProject(projectPath)
           break
         case 'unsaved':
-          // Store pending data and show save modal with callback
-          pendingRecentProjectRef.current = projectData ?? null
+          pendingRecentProjectRef.current = projectPath
           openModal('save-changes-project', {
             validationContext: 'open-recent-project',
             onAfterAction: () => {
-              const data = pendingRecentProjectRef.current
+              const pendingPath = pendingRecentProjectRef.current
               pendingRecentProjectRef.current = null
-              if (data) {
-                handleOpenProjectResponse(data as Parameters<typeof handleOpenProjectResponse>[0])
-              }
+              if (pendingPath) void openRecentProject(pendingPath)
+            },
+            onActionAborted: () => {
+              pendingRecentProjectRef.current = null
             },
           })
           break
@@ -191,7 +204,7 @@ const AcceleratorHandler = () => {
       }
     })
     return unsub
-  }, [editingState, accelerator, openModal, handleOpenProjectResponse])
+  }, [editingState, accelerator, openModal, openRecentProject])
 
   /**
    * Close project
