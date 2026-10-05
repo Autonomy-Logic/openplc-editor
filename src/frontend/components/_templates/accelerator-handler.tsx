@@ -254,6 +254,13 @@ const AcceleratorHandler = () => {
     return unsub
   }, [accelerator, openModal])
 
+  useEffect(() => {
+    const unsub = accelerator.onImportPlcopen(() => {
+      openModal('confirm-plcopen-import', null)
+    })
+    return unsub
+  }, [accelerator, openModal])
+
   /**
    * Delete file
    */

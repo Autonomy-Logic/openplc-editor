@@ -1,5 +1,6 @@
 import type { EdgeAccountPort, EdgeUserRead } from '../../../shared/ports/edge-account-port'
 import type { ProjectPort } from '../../../shared/ports/project-port'
+import { createTestStore } from '../../../../frontend/store/testing'
 import {
   createEditorProjectAdapter,
   isCloudProjectId,
@@ -196,7 +197,7 @@ describe('createEditorProjectAdapter', () => {
   let adapter: ProjectPort
 
   beforeEach(() => {
-    adapter = createEditorProjectAdapter()
+    adapter = createEditorProjectAdapter(createTestStore())
   })
 
   describe('createProject', () => {
@@ -960,7 +961,7 @@ describe('cloud projects', () => {
   let cloudAdapter: ProjectPort
 
   beforeEach(() => {
-    cloudAdapter = createEditorProjectAdapter()
+    cloudAdapter = createEditorProjectAdapter(createTestStore())
   })
 
   // A cloud list nobody asked for must never cost someone their local work.
@@ -1202,7 +1203,7 @@ describe('cloud projects', () => {
     const failed = { success: false, error: 'Not signed in to Autonomy Edge.' }
 
     it('is signed-out when the account has no session, for a project and a file alike', async () => {
-      const signedOut = createEditorProjectAdapter(accountAnswering({ status: 'no-session' }))
+      const signedOut = createEditorProjectAdapter(createTestStore(), accountAnswering({ status: 'no-session' }))
       ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValueOnce(failed)
       ;(window.bridge.edgeProjectsSaveFile as jest.Mock).mockResolvedValueOnce(failed)
 
@@ -1214,8 +1215,9 @@ describe('cloud projects', () => {
     })
 
     it('is unreachable when the session could not be checked or is fine', async () => {
-      const offline = createEditorProjectAdapter(accountAnswering({ status: 'unknown' }))
+      const offline = createEditorProjectAdapter(createTestStore(), accountAnswering({ status: 'unknown' }))
       const signedIn = createEditorProjectAdapter(
+        createTestStore(),
         accountAnswering({
           status: 'signed-in',
           user: { id: 'u1', name: 'Ada', email: 'ada@example.com', username: 'ada' },
@@ -1234,7 +1236,9 @@ describe('cloud projects', () => {
       const account = accountAnswering({ status: 'no-session' })
       const fetchUser = jest.spyOn(account, 'fetchUser')
 
-      await expect(createEditorProjectAdapter(account).saveProject(files)).resolves.toEqual({ success: true })
+      await expect(createEditorProjectAdapter(createTestStore(), account).saveProject(files)).resolves.toEqual({
+        success: true,
+      })
       expect(fetchUser).not.toHaveBeenCalled()
     })
 
@@ -1242,7 +1246,7 @@ describe('cloud projects', () => {
       ;(window.bridge.edgeProjectsSaveProject as jest.Mock).mockResolvedValueOnce(null)
 
       await expect(
-        createEditorProjectAdapter(accountAnswering({ status: 'unknown' })).saveProject(files),
+        createEditorProjectAdapter(createTestStore(), accountAnswering({ status: 'unknown' })).saveProject(files),
       ).resolves.toEqual({
         success: false,
         error: 'Autonomy Edge answered in a way this build cannot read.',

@@ -15,6 +15,7 @@ import { z } from 'zod'
 
 import { renderProjectToPdf } from '../../../backend/shared/print'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import type { OpenPLCStore } from '../../../frontend/store'
 import { buildProjectResponseFromPlcopenParse } from '../../../frontend/utils/PLC/build-plcopen-project-response'
 import { parsePlcopenXml } from '../../../frontend/utils/PLC/xml-parser'
 import type { EdgeAccountPort } from '../../shared/ports/edge-account-port'
@@ -293,7 +294,10 @@ const cloudWriteFailure = (error: unknown): SaveResult => ({
 })
 
 /** A failed cloud write asks `account` whether a session still exists. */
-export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdgeAccountPort): ProjectPort {
+export function createEditorProjectAdapter(
+  store: OpenPLCStore,
+  account: EdgeAccountPort = editorEdgeAccountPort,
+): ProjectPort {
   return {
     async createProject(params: CreateProjectParams): Promise<ProjectResponse> {
       const response = (await window.bridge.createProject({
@@ -348,7 +352,10 @@ export function createEditorProjectAdapter(account: EdgeAccountPort = editorEdge
         return {
           success: true,
           data: {
-            ...buildProjectResponseFromPlcopenParse(parsePlcopenXml(pending), raw.data.projectPath),
+            ...buildProjectResponseFromPlcopenParse(
+              parsePlcopenXml(pending, { systemLibraries: store.getState().libraries.system }),
+              raw.data.projectPath,
+            ),
             wasPendingPlcopenImport: true,
             canEdit: raw.data.canEdit,
           },
