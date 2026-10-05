@@ -11,7 +11,7 @@ import type { ComputeIoImageInput, IoImageOrigin } from '../../../backend/shared
 import {
   computeIoImage,
   describeDuplicateOutput,
-  describeUnbackedLocation,
+  describeUnbackedLocations,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,
@@ -220,7 +220,7 @@ export function buildIoDiagnostics(input: IoDiagnosticsInput): IoDiagnostics {
     servers: describeServers(projectData.servers, serverCapabilities),
     located: describeLocated(projectData, image),
     issues: {
-      unbacked: image.unbacked.map(describeUnbackedLocation),
+      unbacked: describeUnbackedLocations(image.unbacked),
       unsupported: image.unsupported.map((issue) => describeUnsupportedArea(issue, input.board)),
       duplicateOutputs: image.duplicateOutputs.map(describeDuplicateOutput),
     },

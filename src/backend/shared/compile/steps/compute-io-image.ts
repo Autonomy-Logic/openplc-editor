@@ -28,22 +28,15 @@
  *      covers the addresses that were actually allocated and no others.
  *   B. **Server exposure.** What a Modbus server was explicitly configured to
  *      publish. See `serverExposure` for why "explicitly" is doing work.
- *   C. **The program's own located declarations** — for memory only.
+ * The program's own located declarations are NOT a third contributor. Every
+ * area, memory included, is VALIDATED against what A and B claim and never
+ * grows the image on its own (FR02): an address a declaration cannot reach is
+ * a configuration the user has to complete, not a buffer the compiler invents.
  *
- * The asymmetry between areas is the whole point of BR14, and it is not
- * arbitrary. It follows from whether an address means anything without a
- * counterpart:
- *
- *   - `%I` is read by the program. With nothing feeding it, it reads zero
- *     forever, so the producer must be external.
- *   - `%Q` is written by the program. With nothing draining it, the value
- *     goes nowhere, so the producer must be external.
- *   - `%M` is written AND read by the program. Being self-contained is what
- *     memory is FOR, so **the declaration itself is the producer**. Memory is
- *     sized by its own declarations and can never be unbacked (FR24).
- *
- * Hence input and output declarations are VALIDATED against the image rather
- * than growing it (FR02), while memory declarations size it (BR15).
+ * `%M` used to be the exception — being written AND read
+ * by the program, its declaration used to size its own area. It no longer
+ * does: the size of memory is now stated where the other areas state theirs,
+ * so a project cannot silently grow the image by declaring into it.
  *
  * Pure function: no fs I/O, no store, no platform coupling.
  */
@@ -106,14 +99,11 @@ export type IoImageSizes = Readonly<Record<string, number>>
  * log gives none of them. Guessing is the failure mode this removes: the log
  * says where each number came from, so the user changes the right thing.
  *
- * `'declarations'` is a MEMORY-ONLY origin, and the asymmetry is the rule
- * itself. Memory is its own producer (BR14/FR24), so `AT %MW0 : ARRAY [0..9]`
- * sizes `%MW` — without that, a program using scratch memory and no server
- * would be handed zero memory words (BR15). An input or output declaration is
- * checked AGAINST the image and never grows it (FR02), so it can never be the
- * origin of a size.
+ * A located declaration is never an origin, in any area: it is checked
+ * AGAINST the image and never grows it, so every number here comes from a
+ * producer or a server.
  */
-export type IoImageOrigin = 'producers' | 'modbus-server' | 's7comm-server' | 'declarations'
+export type IoImageOrigin = 'producers' | 'modbus-server' | 's7comm-server'
 
 /** What each sized area's number came from. A prefix absent from `sizes` is
  *  absent here too — zero has no origin to name. */
@@ -277,7 +267,7 @@ interface SizeTally {
  *
  * STRICTLY greater, so a TIE leaves the earlier claimant named. That is a
  * choice and not an accident: contributors are applied in a fixed order
- * (producers, then Modbus, then S7comm, then memory declarations), so equal
+ * (producers, then Modbus, then S7comm), so equal
  * claims always resolve the same way and the log is as deterministic as the
  * sizes are (FR07). Naming one
  * of several equal claimants is honest -- it says which one the number is at
@@ -676,8 +666,8 @@ function declaredSlotCount(variableType: PLCVariable['type'] | undefined): numbe
 export function computeIoImage(input: ComputeIoImageInput): IoImage {
   const backed = new Map<string, Set<number>>()
   // ORDER IS THE TIE-BREAK, and it is fixed here rather than anywhere else:
-  // producers, then the servers, then the memory declarations further down.
-  // `claim` only overwrites on a strictly larger number, so equal claims leave
+  // producers, then the servers. `claim` only overwrites on a strictly larger
+  // number, so equal claims leave
   // the earlier contributor named and the log never changes between two runs
   // of the same project (FR07).
   const tally: SizeTally = { sizes: {}, origins: {} }
@@ -729,11 +719,9 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
     const prefix = prefixOf(parsed.cls)
 
     // The area does not exist on this target, so no address in it could work.
-    // Reported ahead of everything else, including for memory: FR24 protects a
-    // memory declaration from failing for want of a PRODUCER, and this is a
-    // different failure. It is also the one case where memory can fail, which
-    // is why `%MX` on bare metal deserves its own message rather than being
-    // dropped in silence as it is today (DOPE-605).
+    // Reported ahead of the producer check because the two are different
+    // failures: this one says the area is absent, that one says the area is
+    // there and nothing drives the address.
     if (!input.areas.has(prefix)) {
       unsupported.push({ scope, variableName: name, location, prefix })
       continue
@@ -763,22 +751,7 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
       declaredOutputs.set(prefix, declared)
     }
 
-    if (directionOf(prefix) === 'M') {
-      // Memory is its own producer (BR14), so the declaration SIZES the area
-      // and is never reported unbacked (FR24). Without this a program using
-      // scratch memory and no Modbus server would be handed zero memory words
-      // (BR15).
-      // No `markBacked` here, deliberately. `backed` is read only on the
-      // input/output path below, so marking memory slots was dead — and it was
-      // dead at a cost: the loop ran once per declared element, so
-      // `AT %MW0 : ARRAY [0..10000000] OF WORD` inserted ten million Set
-      // entries in the main process before the platform compiler ever got to
-      // refuse the size.
-      claim(tally, prefix, parsed.linear + slotCount, 'declarations')
-      continue
-    }
-
-    // Input and output: validated against the image, never growing it (FR02).
+    // Every area, memory included: validated against the image, never growing it.
     // The check is per SLOT and not against the size, because the image is a
     // contiguous buffer while the producers inside it need not be: an address
     // in a gap between two producers is within the image and still has nothing
@@ -805,28 +778,81 @@ export function computeIoImage(input: ComputeIoImageInput): IoImage {
   return { sizes, origins: tally.origins, unbacked, unsupported, duplicateOutputs }
 }
 
+/** How many offenders are named before the list is cut short. A project that
+ *  moves a whole memory area out from under its producer reports every variable
+ *  in it, and past a handful the names stop helping: the fix is one change to
+ *  one producer either way. */
+const UNBACKED_NAMES_SHOWN = 5
+
+/** Where a producer is added, in the words the explorer puts on screen.
+ *
+ *  Named after the TREE BRANCHES rather than the protocols, because the
+ *  protocols are the part that keeps changing: a Modbus point, an EtherCAT
+ *  channel, a VPP module slot and a pin are four answers to the same question,
+ *  and all four live under one of these three. `Device` covers Pin Mapping and
+ *  whatever the package calls its own I/O screen -- `Backplane Configuration`
+ *  on a P1AM, `I/O Configuration` on an ESP32 PLC -- so the sentence does not
+ *  have to branch per board. */
+const PRODUCER_HOMES = 'the Device, Remote Devices or Servers branches'
+
 /**
- * One-line, actionable rendering of a BR14 violation.
+ * The BR14 violations, grouped by the area that has no producer.
  *
- * Says which slot has nothing behind it rather than only echoing the address,
- * because for an array the declared address is usually fine and the LENGTH is
- * what runs past the producers — pointing at an address that looks perfectly
- * legal explains nothing.
+ * ONE PARAGRAPH PER AREA, not per variable. Every variable in an area shares
+ * the same cause and the same remedy, so repeating the remedy once per name
+ * buries the one line that says what to do under twenty that do not. Grouping
+ * also surfaces what a per-variable list hides: how many areas are affected,
+ * which is what decides whether this is one fix or three.
  *
- * "Producer" is spelled out in terms the user configured rather than as
- * jargon: what they are being asked for is an I/O module, a Modbus point, an
- * EtherCAT channel, a pin, or an entry in the Modbus server's exposure.
+ * The slot is named only for an ARRAY. For a scalar `slot` restates the address
+ * that is already in the sentence; for an array the declared address is usually
+ * fine and the LENGTH is what runs past the producers, which no other field
+ * says.
  */
-export function describeUnbackedLocation(issue: UnbackedLocation): string {
-  const reach =
-    issue.slotCount > 1
-      ? `whose ${issue.slotCount} elements reach past slot ${issue.slot} of ${issue.prefix}`
-      : `which is slot ${issue.slot} of ${issue.prefix}`
-  return (
-    `${issue.scope}: variable "${issue.variableName}" is located at ${issue.location}, ${reach}, ` +
-    'and nothing produces that address — add the I/O module, Modbus point, EtherCAT channel or pin ' +
-    'that drives it, expose it on the Modbus server, or move the variable to a memory address (%M).'
+export function describeUnbackedLocations(issues: readonly UnbackedLocation[]): string[] {
+  if (issues.length === 0) return []
+
+  // Insertion order, so the paragraphs follow the order the areas were first
+  // offended in -- which is declaration order, and therefore the order the user
+  // reads their own program in.
+  const byPrefix = new Map<string, UnbackedLocation[]>()
+  for (const issue of issues) {
+    const group = byPrefix.get(issue.prefix) ?? []
+    group.push(issue)
+    byPrefix.set(issue.prefix, group)
+  }
+
+  const lines: string[] = []
+  for (const [prefix, group] of byPrefix) {
+    // The scope is carried only when it CHANGES. A group is usually one POU, and
+    // repeating its name on every entry is the same noise the grouping removed
+    // one level up.
+    let lastScope = ''
+    const shown = group.slice(0, UNBACKED_NAMES_SHOWN).map((issue) => {
+      const scope = issue.scope === lastScope ? '' : `${issue.scope}: `
+      lastScope = issue.scope
+      const where = `${scope}${issue.variableName} at ${issue.location}`
+      return issue.slotCount > 1 ? `${where}, whose ${issue.slotCount} elements reach past slot ${issue.slot}` : where
+    })
+    const rest = group.length - shown.length
+    if (rest > 0) shown.push(`and ${rest} more`)
+    const count = group.length === 1 ? '1 located variable sits' : `${group.length} located variables sit`
+    lines.push(`Nothing produces ${prefix} on this target, and ${count} on it:\n  ${shown.join(' \u00b7 ')}`)
+  }
+
+  lines.push(
+    'An address needs something behind it before a variable can use it. Add a producer under ' +
+      `${PRODUCER_HOMES}, whichever fits where the value comes from.`,
   )
+  return lines
+}
+
+/** How the compile signs off when BR14 refused it: the size of the problem,
+ *  once, rather than the rule restated. */
+export function describeUnbackedBail(issues: readonly UnbackedLocation[]): string {
+  return issues.length === 1
+    ? 'Compilation aborted: 1 located variable has no producer.'
+    : `Compilation aborted: ${issues.length} located variables have no producer.`
 }
 
 /**
@@ -870,7 +896,7 @@ export function describeDuplicateOutput(issue: DuplicateOutput): string {
 /**
  * One-line rendering of a declaration in an area the target does not have.
  *
- * Kept separate from `describeUnbackedLocation` because the remedy is
+ * Kept separate from `describeUnbackedLocations` because the remedy is
  * different: no address in this area will ever work on this target, so the
  * answer is a different area or a different target, never another producer.
  */
@@ -889,7 +915,6 @@ const ORIGIN_LABELS: Record<IoImageOrigin, string> = {
   producers: 'address producers',
   'modbus-server': 'Modbus server exposure',
   's7comm-server': 'S7comm server exposure',
-  declarations: 'memory declarations in the program',
 }
 
 /**

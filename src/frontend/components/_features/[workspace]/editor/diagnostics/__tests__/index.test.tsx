@@ -39,6 +39,15 @@ const seedProgram = (variables: PLCVariable[]) => {
   getState().projectActions.setPouVariables({ pouName: 'Main', variables })
 }
 
+/** A Modbus server exposing `mwCount` memory words. Memory needs a producer
+ *  like every other area, so a `%MW` case needs one of these to be backed. */
+const seedMemoryServer = (mwCount: number) => {
+  if ((getState().project.data.servers ?? []).length === 0) {
+    getState().projectActions.createServer({ data: { name: 'mb', protocol: 'modbus-tcp' } })
+  }
+  getState().projectActions.updateServerConfig('mb', { bufferMapping: { holdingRegisters: { mwCount } } })
+}
+
 describe('DiagnosticsEditor', () => {
   beforeEach(() => {
     mockIsDevMode = true
@@ -62,26 +71,31 @@ describe('DiagnosticsEditor', () => {
     expect(screen.getAllByRole('row')).not.toHaveLength(0)
   })
 
-  it('sizes a memory area from a declaration and names what sized it', () => {
+  it('sizes a memory area from the server exposure and names what sized it', () => {
+    seedMemoryServer(5)
     seedProgram([located('scratch', '%MW4')])
     render(<DiagnosticsEditor />)
 
     const row = areaRow('int_memory')
     expect(row).not.toBeNull()
-    // `%MW4` is slot 4, so the area needs five words.
     expect(within(row as HTMLElement).getByText('5')).toBeTruthy()
-    expect(within(row as HTMLElement).getByText('declarations')).toBeTruthy()
+    expect(within(row as HTMLElement).getByText('modbus-server')).toBeTruthy()
   })
 
-  it('recomputes when a declaration changes, without a remount', () => {
+  it('reports a memory declaration with no producer, like any other area', () => {
+    seedProgram([located('scratch', '%MW4')])
+    render(<DiagnosticsEditor />)
+
+    expect(screen.getByText('nothing produces this address')).toBeTruthy()
+  })
+
+  it('recomputes when the exposure changes, without a remount', () => {
+    seedMemoryServer(5)
     seedProgram([located('scratch', '%MW4')])
     render(<DiagnosticsEditor />)
 
     act(() => {
-      getState().projectActions.setPouVariables({
-        pouName: 'Main',
-        variables: [located('scratch', '%MW40')],
-      })
+      seedMemoryServer(41)
     })
 
     expect(within(areaRow('int_memory') as HTMLElement).getByText('41')).toBeTruthy()
@@ -95,6 +109,7 @@ describe('DiagnosticsEditor', () => {
   })
 
   it('lists the located declarations with the slots each one claims', () => {
+    seedMemoryServer(1)
     seedProgram([located('scratch', '%MW0'), located('sensor', '%IW0')])
     render(<DiagnosticsEditor />)
 
@@ -103,6 +118,7 @@ describe('DiagnosticsEditor', () => {
   })
 
   it('renders the image.conf the build would write', () => {
+    seedMemoryServer(2)
     seedProgram([located('scratch', '%MW1')])
     render(<DiagnosticsEditor />)
 

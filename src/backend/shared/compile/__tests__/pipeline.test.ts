@@ -678,12 +678,14 @@ describe('runCompilePipeline — I/O image gate', () => {
     await runCompilePipeline(arduinoArgs({ projectData }), port, emit)
 
     // One fix per compile attempt would turn this into two round trips. The
+    // unbacked report is one line per area plus one remedy line, and the
     // trailing entry is `bailError`'s own summary line.
     const errors = events.filter((e) => e.stage === 'validate' && e.level === 'error')
-    expect(errors).toHaveLength(3)
+    expect(errors).toHaveLength(4)
     expect(errors[0].message).toContain('no %MX area at all')
-    expect(errors[1].message).toContain('nothing produces that address')
-    expect(errors[2].message).toContain('Compilation aborted')
+    expect(errors[1].message).toContain('Nothing produces %QW on this target')
+    expect(errors[2].message).toContain('the Device, Remote Devices or Servers branches')
+    expect(errors[3].message).toContain('Compilation aborted')
   })
 })
 

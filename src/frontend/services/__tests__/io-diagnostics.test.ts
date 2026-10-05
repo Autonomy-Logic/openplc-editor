@@ -138,6 +138,19 @@ describe('areas', () => {
   it('carries the sizer sizes and origins verbatim', () => {
     const projectData = makeProject({
       pous: [{ name: 'main', variables: [variable('counter', '%MW4', { definition: 'base-type', value: 'INT' })] }],
+      // Memory needs a producer like every other area, so the declaration
+      // alone would leave %MW unsized and this case asserting on nothing.
+      servers: [
+        {
+          name: 'mb',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { mwCount: 5 } },
+          },
+        },
+      ],
     })
     const result = snapshot({ projectData })
     const image = computeIoImage({
@@ -152,7 +165,7 @@ describe('areas', () => {
       expect(area.size).toBe(image.sizes[area.prefix] ?? 0)
       expect(area.origin).toBe(image.origins[area.prefix] ?? null)
     }
-    expect(areaFor(result, '%MW')).toMatchObject({ size: 5, origin: 'declarations' })
+    expect(areaFor(result, '%MW')).toMatchObject({ size: 5, origin: 'modbus-server' })
   })
 
   it('names the bare-metal macro for the areas that have one', () => {

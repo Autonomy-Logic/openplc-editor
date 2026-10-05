@@ -61,7 +61,8 @@ import {
   computeIoImage,
   describeDuplicateOutput,
   describeIoImageSizes,
-  describeUnbackedLocation,
+  describeUnbackedBail,
+  describeUnbackedLocations,
   describeUnsupportedArea,
   IMAGE_AREAS_BAREMETAL,
   IMAGE_AREAS_RUNTIME_V4,
@@ -496,10 +497,10 @@ async function runCompilePipelineInner(
     for (const issue of ioImage.unsupported) {
       emit({ stage: 'validate', message: describeUnsupportedArea(issue, boardTarget), level: 'error' })
     }
-    for (const issue of ioImage.unbacked) {
-      emit({ stage: 'validate', message: describeUnbackedLocation(issue), level: 'error' })
+    for (const message of describeUnbackedLocations(ioImage.unbacked)) {
+      emit({ stage: 'validate', message, level: 'error' })
     }
-    return bailError(emit, 'validate', 'Compilation aborted: every located variable needs an address that exists.')
+    return bailError(emit, 'validate', describeUnbackedBail(ioImage.unbacked))
   }
 
   // TWO WRITERS ON ONE OUTPUT IS A WARNING, NOT A REFUSAL.
