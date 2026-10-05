@@ -1,11 +1,12 @@
 /**
  * @jest-environment jsdom
  */
-import { afterEach, describe, expect, it } from '@jest/globals'
+import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { ConfiguredEtherCATDevice } from '../../../middleware/shared/ports/esi-types'
 import type { PLCProjectData, PLCVariable } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
+import { createTestStore } from '../../store/testing'
 import { getScopeCompletions } from '../graphical-scope'
 import { collectDeclaredRoots, rootIdentifierOf } from '../project-scope-roots'
 import { registerScopedQueryApi, type ScopedCompletionItem } from '../st-lsp/scoped-query'
@@ -75,8 +76,14 @@ function projectData(variables: PLCVariable[], extra: Partial<PLCProjectData> = 
 
 function setProject(variables: PLCVariable[], extra: Partial<PLCProjectData> = {}) {
   const data = projectData(variables, extra)
-  openPLCStoreBase.setState((s) => ({ ...s, project: { ...s.project, data: { ...s.project.data, ...data } } }))
+  store.setState((s) => ({ ...s, project: { ...s.project, data: { ...s.project.data, ...data } } }))
 }
+
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
 
 afterEach(() => registerScopedQueryApi(null))
 
@@ -151,7 +158,7 @@ describe('getScopeCompletions', () => {
       ],
     })
 
-    const items = await getScopeCompletions('main', '', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', '', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['b1', 'b2'])
   })
@@ -163,7 +170,7 @@ describe('getScopeCompletions', () => {
       'TON0.': [{ label: 'Q', insertText: 'Q', type: 'BOOL', kind: VARIABLE }],
     })
 
-    const items = await getScopeCompletions('main', '', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', '', 'BOOL')
 
     expect(items).toEqual([])
     expect(asked).toEqual([''])
@@ -181,7 +188,7 @@ describe('getScopeCompletions', () => {
       ],
     })
 
-    const items = await getScopeCompletions('main', 'GVL.', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', 'GVL.', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['GVL.TON0.Q'])
   })
@@ -196,7 +203,7 @@ describe('getScopeCompletions', () => {
       ],
     })
 
-    const items = await getScopeCompletions('main', 'TO', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', 'TO', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['TON0.Q'])
   })
@@ -210,7 +217,7 @@ describe('getScopeCompletions', () => {
       ],
     })
 
-    const items = await getScopeCompletions('main', '', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', '', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['b1'])
   })
@@ -222,7 +229,7 @@ describe('getScopeCompletions', () => {
       'SETUP.': [{ label: 'EXTENDED_ASCII', insertText: 'EXTENDED_ASCII', type: 'BOOL', kind: FIELD }],
     })
 
-    const items = await getScopeCompletions('main', 'SET', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', 'SET', 'BOOL')
 
     expect(items).toEqual([])
     expect(asked).toEqual([''])
@@ -234,7 +241,7 @@ describe('getScopeCompletions', () => {
       'SETUP.': [{ label: 'EXTENDED_ASCII', insertText: 'EXTENDED_ASCII', type: 'BOOL', kind: FIELD }],
     })
 
-    const items = await getScopeCompletions('main', 'SETUP.EXT', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', 'SETUP.EXT', 'BOOL')
 
     expect(items).toEqual([])
     expect(asked).toEqual([])
@@ -249,7 +256,7 @@ describe('getScopeCompletions', () => {
       ],
     })
 
-    const items = await getScopeCompletions('main', 's.', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', 's.', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['s.a'])
   })
@@ -263,7 +270,7 @@ describe('getScopeCompletions', () => {
       ],
     })
 
-    const items = await getScopeCompletions('main', '', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', '', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['arr[0]', 'arr[1]'])
   })
@@ -276,7 +283,7 @@ describe('getScopeCompletions', () => {
       'GVL.': [{ label: 'Output1', insertText: 'Output1', type: 'BOOL', kind: FIELD }],
     })
 
-    const items = await getScopeCompletions('main', 'GVL.', 'BOOL')
+    const items = await getScopeCompletions(store, 'main', 'GVL.', 'BOOL')
 
     expect(items.map((i) => i.insertText)).toEqual(['GVL.Output1'])
   })

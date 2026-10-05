@@ -7,7 +7,7 @@ import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../../../utils/graphical/sync-nodes-with-variables'
@@ -52,6 +52,7 @@ const SelectableTypeCell = ({
   table,
   selected = false,
 }: ISelectableCellProps) => {
+  const store = useOpenPLCStoreApi()
   const {
     editor,
     project: {
@@ -163,7 +164,7 @@ const SelectableTypeCell = ({
       },
       ladderFlows: freshLadderFlows,
       fbdFlows: freshFBDFlows,
-    } = useOpenPLCStore.getState()
+    } = store.getState()
 
     const pou = freshPous.find((p) => p.name === editor.meta.name)
 
@@ -191,7 +192,7 @@ const SelectableTypeCell = ({
     }
 
     if (language === 'fbd' || language === 'ld') {
-      const { ladderFlows: freshLadderFlows, fbdFlows: freshFBDFlows } = useOpenPLCStore.getState()
+      const { ladderFlows: freshLadderFlows, fbdFlows: freshFBDFlows } = store.getState()
 
       const newType = createVariableType(definition, value)
 

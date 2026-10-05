@@ -37,7 +37,7 @@ import {
   type MessageConnection,
 } from 'vscode-languageserver-protocol'
 
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { dataTypeLineSpans, serializeDataTypeToText } from '../../utils/PLC/data-type-serializer'
 import { serializePouScopeForQuery } from '../../utils/PLC/pou-signature-serializer'
 import {
@@ -98,8 +98,8 @@ import { resolveStLspContext } from './resolve-context'
  * onto text they don't describe — wrong colours, and columns past the
  * end of shorter lines.
  */
-function dtViewMatchesStore(dtName: string, monacoApi: typeof monaco): boolean {
-  const dataType = openPLCStoreBase.getState().project.data.dataTypes.find((d) => d.name === dtName)
+function dtViewMatchesStore(store: OpenPLCStore, dtName: string, monacoApi: typeof monaco): boolean {
+  const dataType = store.getState().project.data.dataTypes.find((d) => d.name === dtName)
   if (!dataType) return false
   const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === dtViewUri(dtName))
   if (!model) return false
@@ -109,8 +109,13 @@ function dtViewMatchesStore(dtName: string, monacoApi: typeof monaco): boolean {
 let lastDataTypeDiagnostics: Diagnostic[] = []
 
 /** Fan the aggregate doc's diagnostics out to every mounted `.dt` model. */
-function applyDataTypeDiagnostics(monacoApi: typeof monaco, markerOwner: string, defaultSource: string): void {
-  for (const [name, span] of dataTypeLineSpans(openPLCStoreBase.getState().project.data.dataTypes)) {
+function applyDataTypeDiagnostics(
+  store: OpenPLCStore,
+  monacoApi: typeof monaco,
+  markerOwner: string,
+  defaultSource: string,
+): void {
+  for (const [name, span] of dataTypeLineSpans(store.getState().project.data.dataTypes)) {
     const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === dtViewUri(name))
     if (!model) continue
     monacoApi.editor.setModelMarkers(
@@ -132,6 +137,7 @@ const lastPouDiagnostics = new Map<string, Diagnostic[]>()
  * document, so the slice is re-emitted shifted to the view's frame.
  */
 function applyPouVarsDiagnostics(
+  store: OpenPLCStore,
   monacoApi: typeof monaco,
   pouName: string,
   markerOwner: string,
@@ -139,7 +145,7 @@ function applyPouVarsDiagnostics(
 ): void {
   const model = monacoApi.editor.getModels().find((m) => m.uri.toString() === pouVarsUri(pouName))
   if (!model) return
-  const { lspUri } = resolveStLspContext(pouVarsUri(pouName))
+  const { lspUri } = resolveStLspContext(store, pouVarsUri(pouName))
   const diagnostics = diagnosticsInVarBlocks(lastPouDiagnostics.get(lspUri) ?? [], getBodyLineOffset(lspUri))
   monacoApi.editor.setModelMarkers(
     model,
@@ -149,7 +155,7 @@ function applyPouVarsDiagnostics(
 }
 
 export function startStLsp(opts: StLspStartOptions): StLspService {
-  const { stlibSource, monaco: monacoApi, workerUrlOverride, onCrash } = opts
+  const { store, stlibSource, monaco: monacoApi, workerUrlOverride, onCrash } = opts
 
   // Resolve the worker URL.  The require lives inside the function
   // so the bundler probe never runs under test (jsdom test envs
@@ -168,7 +174,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
 
   // Graphical stubs open their editor; everything else goes through the store.
   const navigateToStore: NavigateToTarget = (target) =>
-    redirectToGraphicalPou(target.uri) || redirectNavTargetToStore(target)
+    redirectToGraphicalPou(store, target.uri) || redirectNavTargetToStore(store, target)
 
   const sharedService: LanguageService = startLanguageService({
     languageId: ST_LANGUAGE_ID,
@@ -179,7 +185,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // Provider configuration
     completionTriggerCharacters: ['.', ':'],
     signatureHelpTriggerCharacters: ['(', ','],
-    resolveLspContext: resolveStLspContext,
+    resolveLspContext: (modelUri) => resolveStLspContext(store, modelUri),
     getLspDocumentText: getSyncedDocumentText,
     mapDefinitionLocation: mapStDefinitionLocation,
     navigateOutline: navigateToStore,
@@ -194,10 +200,10 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     resolveSemanticTokensViewport: (lspUri, modelUri, lineOffset) => {
       const dtName = parseDtViewUri(modelUri)
       if (dtName !== null) {
-        const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
+        const span = dtViewSpan(store.getState().project.data.dataTypes, dtName)
         // Empty window while the buffer is uncommitted: no colours beats
         // colours describing the previous text.
-        if (!span || !monacoApi || !dtViewMatchesStore(dtName, monacoApi)) {
+        if (!span || !monacoApi || !dtViewMatchesStore(store, dtName, monacoApi)) {
           return { startLine: 0, endLineExclusive: 0 }
         }
         return { ...dtViewWindow(span), outputStartLine: DT_VIEW_FRAME_LINE_COUNT }
@@ -220,7 +226,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         // event-driven, so a model created after the last publish would
         // otherwise show no markers at all.
         lastDataTypeDiagnostics = params.diagnostics
-        applyDataTypeDiagnostics(ctx.monacoApi, ctx.markerOwner, ctx.defaultSource)
+        applyDataTypeDiagnostics(store, ctx.monacoApi, ctx.markerOwner, ctx.defaultSource)
         return
       }
       // Mirror VAR-block diagnostics onto the variables-text editor for
@@ -229,7 +235,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
       const parsed = parsePouUri(params.uri)
       if (!parsed) return
       lastPouDiagnostics.set(params.uri, params.diagnostics)
-      applyPouVarsDiagnostics(ctx.monacoApi, parsed.name, ctx.markerOwner, ctx.defaultSource)
+      applyPouVarsDiagnostics(store, ctx.monacoApi, parsed.name, ctx.markerOwner, ctx.defaultSource)
     },
 
     // Lifecycle hooks
@@ -255,17 +261,17 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         .map((m) => parsePouVarsUri(m.uri.toString()))
         .filter((name): name is string => name !== null)
     viewSyncDisposables.push(
-      openPLCStoreBase.subscribe(
+      store.subscribe(
         (state) => state.project.data.dataTypes,
         () => {
           // `refresh()` re-tokenises every ST model in the language, so it
           // must not fire for a datatype edit made with no `.dt` view open.
           if (!hasDtViewModel()) return
           sharedService.refreshSemanticTokens()
-          applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+          applyDataTypeDiagnostics(store, api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
         },
       ),
-      openPLCStoreBase.subscribe(
+      store.subscribe(
         (state) => state.project.data.pous,
         (pous, previous) => {
           // Every body keystroke lands here too; only a VAR-block change on
@@ -283,9 +289,9 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     )
     const onModelAdded = api.editor.onDidCreateModel((model) => {
       const uri = model.uri.toString()
-      if (parseDtViewUri(uri) !== null) applyDataTypeDiagnostics(api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+      if (parseDtViewUri(uri) !== null) applyDataTypeDiagnostics(store, api, MARKER_OWNER, DIAGNOSTIC_SOURCE)
       const varsPou = parsePouVarsUri(uri)
-      if (varsPou !== null) applyPouVarsDiagnostics(api, varsPou, MARKER_OWNER, DIAGNOSTIC_SOURCE)
+      if (varsPou !== null) applyPouVarsDiagnostics(store, api, varsPou, MARKER_OWNER, DIAGNOSTIC_SOURCE)
     })
     viewSyncDisposables.push(() => onModelAdded.dispose())
     const opener = registerDefinitionOpener(api, navigateToStore)
@@ -395,7 +401,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     await scopeWarmReady
     const connection = serviceConnection
     if (!connection) return []
-    const { project, projectActions } = openPLCStoreBase.getState()
+    const { project, projectActions } = store.getState()
     const pou = project.data.pous.find((p) => p.name === pouName)
     if (!pou) return []
     // Alias-bound locations must be resolved to literal `%…` addresses or the
@@ -448,7 +454,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     }
     await new Promise((r) => setTimeout(r, SCOPE_WARMUP_INITIAL_DELAY_MS))
     for (let poll = 0; poll < SCOPE_WARMUP_MAX_POLLS; poll += 1) {
-      const { project, projectActions } = openPLCStoreBase.getState()
+      const { project, projectActions } = store.getState()
       const pou = project.data.pous[0]
       if (pou) {
         const id = (scopeQuerySeq += 1)
@@ -497,7 +503,7 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     // in `bundledLibraryNames` and are intentionally absent from
     // `enabledLibraries`, so filtering on the latter alone would
     // starve the LSP of every standard symbol.
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     const allowed = new Set([...state.enabledLibraries, ...state.bundledLibraryNames])
     for (const source of sources) {
       if (!allowed.has(source.name)) continue

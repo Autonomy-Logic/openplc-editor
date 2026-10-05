@@ -3,7 +3,7 @@ import { ComponentPropsWithoutRef } from 'react'
 import { useCapabilities, useNavigation, useProject, useWindow } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
 import { executeSaveProject } from '../../../services/save-actions'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import type { SaveChangesAbortReason, ValidationContext } from './save-changes-modal-data'
 
@@ -38,6 +38,7 @@ const SaveChangesModal = ({
   onActionAborted,
   ...rest
 }: SaveChangeModalProps) => {
+  const store = useOpenPLCStoreApi()
   const {
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
@@ -61,7 +62,7 @@ const SaveChangesModal = ({
     closeModal()
 
     if (operation === 'save') {
-      const result = await executeSaveProject(projectPort, capabilities)
+      const result = await executeSaveProject(store, projectPort, capabilities)
       if (!result.success) {
         // The save already said why. This says what it cost: whatever was
         // waiting on it is not going to happen, and the caller is the only one

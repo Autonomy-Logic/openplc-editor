@@ -1,9 +1,9 @@
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { PackagePort } from '@root/middleware/shared/ports/package-port'
 import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
-import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
@@ -39,12 +39,14 @@ const REFUSAL =
 
 const VPP_BOARD_NAME = 'Acme SLM-RP4'
 
+let store: OpenPLCStore
+
 function renderBoard(
   selectedDevice: SelectedDevice | null,
   capabilities: PlatformPorts['capabilities'] = WEB_CAPABILITIES,
   packages?: PackagePort,
 ) {
-  const { deviceActions } = openPLCStoreBase.getState()
+  const { deviceActions } = store.getState()
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
       ['OpenPLC Runtime', PLAIN_BOARD],
@@ -71,11 +73,7 @@ function renderBoard(
     packages,
     capabilities,
   }
-  render(
-    <PlatformProvider ports={ports}>
-      <Board />
-    </PlatformProvider>,
-  )
+  render(<Board />, { wrapper: createStoreWrapper(store, ports) })
   // Radix Select opens on Enter — a keydown keeps the test deterministic across
   // both repos' runners, whose jsdom PointerEvent support differs.
   fireEvent.keyDown(screen.getByRole('combobox', { name: 'Device selection' }), { key: 'Enter' })
@@ -96,12 +94,11 @@ const holder: SelectedDevice = {
 
 describe('Board device list', () => {
   beforeEach(() => {
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
+    store = createTestStore()
   })
 
   afterEach(() => {
     cleanup()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
   })
 
   it('offers a VPP board on the vPLC that holds the backplane', () => {
@@ -156,7 +153,7 @@ describe('Board device list', () => {
   // A board the project names but the vPLC does not have must stay visible:
   // dropping it silently from the picker reads as lost work.
   it('keeps a board the vPLC does not have visible, marked unavailable', () => {
-    const { deviceActions } = openPLCStoreBase.getState()
+    const { deviceActions } = store.getState()
     deviceActions.setDeviceBoard('Vanished SLM-RP4')
     renderBoard({ ...holder, vpp: { packageId: 'com.acme.backplane', version: '1.0.0', contentHash: 'sha256:x' } })
 
@@ -187,7 +184,7 @@ describe('Board device list', () => {
     })
 
     it('says nothing about a board the project names that is not installed', () => {
-      openPLCStoreBase.getState().deviceActions.setDeviceBoard('Vanished SLM-RP4')
+      store.getState().deviceActions.setDeviceBoard('Vanished SLM-RP4')
       renderBoard(null, EDITOR_CAPABILITIES)
       expect(screen.queryByText(/Not available on the selected vPLC/)).toBeNull()
     })
@@ -195,7 +192,7 @@ describe('Board device list', () => {
 
   describe('VPP pin drift', () => {
     it('treats an authoritative vpp:null as "no package", not a reason to fall back to the local pin', async () => {
-      const { deviceActions } = openPLCStoreBase.getState()
+      const { deviceActions } = store.getState()
       deviceActions.setDeviceBoard(VPP_BOARD_NAME)
       deviceActions.setVppPackagePin(VPP_BOARD_NAME, {
         packageId: 'com.acme.backplane',

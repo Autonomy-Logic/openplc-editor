@@ -14,6 +14,7 @@
  */
 
 import type { StlibSourcePort } from '../../../middleware/shared/ports/stlib-source-port'
+import type { OpenPLCStore } from '../../store'
 
 /** URI scheme for live ST POU sources (real bodies). */
 export const POU_URI_SCHEME = 'inmemory'
@@ -111,6 +112,8 @@ export interface StLspService {
 }
 
 export interface StLspStartOptions {
+  /** The project store the language server mirrors and navigates into. */
+  store: OpenPLCStore
   /** Source of .stlib archive payloads.  Worker fetches via RPC. */
   stlibSource: StlibSourcePort
   /**

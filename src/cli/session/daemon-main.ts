@@ -10,6 +10,7 @@
  * id that turns out to be dead on the first read.
  */
 
+import { createOpenPLCStore } from '@root/frontend/store'
 import { app } from 'electron'
 
 import { openDebugSession } from '../debug/open-session'
@@ -54,6 +55,7 @@ async function announceAndExit(payload: Record<string, unknown>, code: number): 
 }
 
 export async function runDaemon(config: DaemonConfig): Promise<void> {
+  const store = createOpenPLCStore()
   const sessionId = mintSessionId()
   const socketPath = socketPathFor(config.registryDir, sessionId, process.platform)
   const registry = new SessionRegistry(config.registryDir)
@@ -82,17 +84,17 @@ export async function runDaemon(config: DaemonConfig): Promise<void> {
   // Hydrate the editor state this process will resolve against: the debug-spec
   // resolver reads the device configuration and available boards off the store,
   // the same way it does behind the GUI's Debug button.
-  const loaded = await loadProject(config.projectPath)
+  const loaded = await loadProject(store, config.projectPath)
   if (!loaded.success) {
     await announceAndExit({ event: 'failed', code: 'not-compiled', error: loaded.error }, 1)
     return
   }
-  applyConnectionOverrides({ port: config.port, host: config.host })
+  applyConnectionOverrides(store, { port: config.port, host: config.host })
 
   // Uploading from inside the daemon would need the whole compile pipeline here;
   // `debug open --upload-if-needed` runs it in the PARENT before spawning, so by
   // this point an MD5 mismatch is genuinely a mismatch.
-  const opened = await openDebugSession({
+  const opened = await openDebugSession(store, {
     sessionId,
     projectPath: config.projectPath,
     target: config.target,

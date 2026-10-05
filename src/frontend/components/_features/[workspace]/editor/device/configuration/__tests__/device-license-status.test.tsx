@@ -144,15 +144,21 @@ describe('DeviceLicenseStatus', () => {
   describe('details panel', () => {
     it('exposes the device id and copies it on request', () => {
       const writeText = jest.fn().mockResolvedValue(undefined)
+      const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
 
-      setup({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } })
-      expand()
+      try {
+        setup({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } })
+        expand()
 
-      // The id is what a support ticket needs and what the /buy page accepts pasted.
-      expect(screen.getByText(DEVICE_ID)).toBeTruthy()
-      fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
-      expect(writeText).toHaveBeenCalledWith(DEVICE_ID)
+        // The id is what a support ticket needs and what the /buy page accepts pasted.
+        expect(screen.getByText(DEVICE_ID)).toBeTruthy()
+        fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+        expect(writeText).toHaveBeenCalledWith(DEVICE_ID)
+      } finally {
+        if (original) Object.defineProperty(navigator, 'clipboard', original)
+        else Reflect.deleteProperty(navigator, 'clipboard')
+      }
     })
 
     it('omits the device id when there was no anchor to derive one from', () => {

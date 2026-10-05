@@ -1,5 +1,5 @@
 import { type AIPort, AIRequestError } from '../../../middleware/shared/ports/ai-port'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import type { ProjectStTranspiler } from './graphical-context'
 import { executeTool, type ToolResult } from './tools'
 import type { BillingErrorPayload } from './types'
@@ -30,20 +30,21 @@ export type AgenticLoopOptions = {
 
 /** Runs the agentic chat loop; must consume `ai.streamChatEvents`, not `streamChat`, which drops tool_use frames. */
 export async function* runAgenticLoop(
+  store: OpenPLCStore,
   ai: AIPort,
   request: AIChatRequest,
   tools: AIToolDefinition[],
   options: AgenticLoopOptions = {},
 ): AsyncGenerator<AgenticEvent, void, unknown> {
   const { signal, transpileProject, runTool } = options
-  const callTool = runTool ?? ((name: string, input: unknown) => executeTool(name, input, { transpileProject }))
+  const callTool = runTool ?? ((name: string, input: unknown) => executeTool(store, name, input, { transpileProject }))
   let currentMessages: AIChatMessage[] = [...request.messages]
 
   while (true) {
     if (signal?.aborted) return
 
     // Re-read on every iteration, or a later round trip spawns a new conversation instead of continuing this one.
-    const currentConversationId = openPLCStoreBase.getState().ai.conversationId
+    const currentConversationId = store.getState().ai.conversationId
     const fullRequest: AIChatRequest = {
       ...request,
       messages: currentMessages,
