@@ -3,7 +3,7 @@ import type { AIToolDefinition } from '../types'
 export const createPouTool: AIToolDefinition = {
   name: 'create_pou',
   description:
-    'Create a new POU (Program Organization Unit) in the project. Only textual languages are supported (ST, IL, Python, C++). For graphical languages (LD, FBD), explain to the user that they must be created manually. IMPORTANT: The "body" field must contain ONLY executable code — do NOT include VAR declarations, PROGRAM/FUNCTION/FUNCTION_BLOCK headers, or END keywords. Variables must be created separately using the create_variable tool.',
+    'Create a new POU (Program Organization Unit) in the project. Supports textual languages (ST, IL, Python, C++) and Ladder Diagram (LD). FBD is not supported yet — explain to the user that it must be created manually. IMPORTANT: The "body" field must contain ONLY executable code — do NOT include VAR declarations, PROGRAM/FUNCTION/FUNCTION_BLOCK headers, or END keywords. Variables must be created separately using the create_variable tool. For language "ld", omit "body" — build the diagram afterward with add_rung.',
   input_schema: {
     type: 'object',
     properties: {
@@ -18,12 +18,13 @@ export const createPouTool: AIToolDefinition = {
       },
       language: {
         type: 'string',
-        enum: ['st', 'il', 'python', 'cpp'],
+        enum: ['st', 'il', 'python', 'cpp', 'ld'],
         description: 'Programming language. Use "st" (Structured Text) as default.',
       },
       body: {
         type: 'string',
-        description: 'Optional initial executable code body. Must NOT include VAR blocks or POU wrappers.',
+        description:
+          'Optional initial executable code body. Must NOT include VAR blocks or POU wrappers. Ignored for language "ld" — use add_rung instead.',
       },
     },
     required: ['name', 'type', 'language'],
@@ -251,6 +252,146 @@ export const deleteDatatypeTool: AIToolDefinition = {
   },
 }
 
+// --- Ladder Diagram tools ---
+
+/**
+ * Shared `elements[]` vocabulary for add_rung/update_rung — a discriminated union on `kind`.
+ * No pixels, no handle ids: contacts/coils reference an existing BOOL variable by name, blocks
+ * reference a block type by name plus an optional instance name and pin bindings. Parallel
+ * branches are not supported yet (see AI_LADDER_GENERATION_PLAN.md).
+ */
+const ladderElementsSchema = {
+  type: 'array',
+  items: {
+    oneOf: [
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['contact'] },
+          variable: {
+            type: 'string',
+            description: 'Name of an existing BOOL variable in the POU interface or globals.',
+          },
+          variant: {
+            type: 'string',
+            enum: ['default', 'negated', 'risingEdge', 'fallingEdge'],
+            description:
+              'Contact variant. "default" is normally-open (NO), "negated" is normally-closed (NC). Defaults to "default".',
+          },
+        },
+        required: ['kind', 'variable'],
+      },
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['coil'] },
+          variable: {
+            type: 'string',
+            description: 'Name of an existing BOOL variable in the POU interface or globals.',
+          },
+          variant: {
+            type: 'string',
+            enum: ['default', 'negated', 'risingEdge', 'fallingEdge', 'set', 'reset'],
+            description: 'Coil variant. Defaults to "default".',
+          },
+        },
+        required: ['kind', 'variable'],
+      },
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['block'] },
+          blockType: {
+            type: 'string',
+            description: 'Name of a function or function block (system library, user library, or project POU).',
+          },
+          instanceName: {
+            type: 'string',
+            description:
+              'Required when blockType is a function block: the instance variable name. Created automatically (with the correct type) if it does not already exist — do not create it with create_variable.',
+          },
+          pins: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                pin: {
+                  type: 'string',
+                  description:
+                    'Pin name (e.g. "PT", "ET"). Cannot be the block\'s first input or first output — those are wired to the rail automatically.',
+                },
+                variable: { type: 'string', description: 'Name of an existing variable of a compatible type.' },
+              },
+              required: ['pin', 'variable'],
+            },
+            description: "Optional pin-to-variable bindings for the block's secondary pins.",
+          },
+        },
+        required: ['kind', 'blockType'],
+      },
+    ],
+  },
+  description: 'Ordered list of rung elements, left to right.',
+}
+
+export const readLadderDiagramTool: AIToolDefinition = {
+  name: 'read_ladder_diagram',
+  description:
+    "Read a Ladder Diagram POU as a logical spec: every rung's id, comment, and ordered elements (contacts, coils, blocks). Call this before add_rung/update_rung to see existing rung ids and current wiring.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      pouName: { type: 'string', description: 'Name of the Ladder Diagram POU to read.' },
+    },
+    required: ['pouName'],
+  },
+}
+
+export const addRungTool: AIToolDefinition = {
+  name: 'add_rung',
+  description:
+    'Add a new rung to a Ladder Diagram POU. Variables referenced by contacts/coils must already exist (create them with create_variable first) and must be BOOL.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      pouName: { type: 'string', description: 'Name of the Ladder Diagram POU.' },
+      comment: { type: 'string', description: 'Optional rung comment.' },
+      elements: ladderElementsSchema,
+      afterRungId: { type: 'string', description: 'Insert after this rung id. Omit to append at the end.' },
+    },
+    required: ['pouName', 'elements'],
+  },
+}
+
+export const updateRungTool: AIToolDefinition = {
+  name: 'update_rung',
+  description:
+    'Replace the elements of an existing rung, identified by rung id (see read_ladder_diagram). Replaces the whole element list — this is not a patch.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      pouName: { type: 'string', description: 'Name of the Ladder Diagram POU.' },
+      rungId: { type: 'string', description: 'Id of the rung to replace (from read_ladder_diagram).' },
+      comment: { type: 'string', description: 'Optional new comment. Omit to keep the existing one.' },
+      elements: ladderElementsSchema,
+    },
+    required: ['pouName', 'rungId', 'elements'],
+  },
+}
+
+export const deleteRungTool: AIToolDefinition = {
+  name: 'delete_rung',
+  description: 'Delete a rung from a Ladder Diagram POU, identified by rung id (see read_ladder_diagram).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      pouName: { type: 'string', description: 'Name of the Ladder Diagram POU.' },
+      rungId: { type: 'string', description: 'Id of the rung to delete.' },
+    },
+    required: ['pouName', 'rungId'],
+  },
+}
+
 export const readProjectStateTool: AIToolDefinition = {
   name: 'read_project_state',
   description: 'Read the current project state including all POUs, variables, data types, and globals.',
@@ -288,6 +429,10 @@ export const AI_TOOLS: AIToolDefinition[] = [
   deleteDatatypeTool,
   readProjectStateTool,
   readPouBodyTool,
+  readLadderDiagramTool,
+  addRungTool,
+  updateRungTool,
+  deleteRungTool,
 ]
 
 /** Gates the diff-review UI and the per-turn status list. */
@@ -301,6 +446,9 @@ export const MUTATING_TOOL_NAMES = new Set<string>([
   'create_datatype',
   'update_datatype',
   'delete_datatype',
+  'add_rung',
+  'update_rung',
+  'delete_rung',
 ])
 
 export function isMutatingTool(toolName: string): boolean {

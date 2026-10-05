@@ -17,6 +17,10 @@ type GroupKey =
   | 'update_datatype'
   | 'delete_datatype'
   | 'read_project_state'
+  | 'read_ladder_diagram'
+  | 'add_rung'
+  | 'update_rung'
+  | 'delete_rung'
 
 const SUCCESS_GROUP_TITLE: Record<GroupKey, { singular: string; plural: string }> = {
   create_pou: { singular: 'POU created', plural: 'POUs created' },
@@ -29,6 +33,10 @@ const SUCCESS_GROUP_TITLE: Record<GroupKey, { singular: string; plural: string }
   update_datatype: { singular: 'Data type updated', plural: 'Data types updated' },
   delete_datatype: { singular: 'Data type deleted', plural: 'Data types deleted' },
   read_project_state: { singular: 'Project inspection', plural: 'Project inspections' },
+  read_ladder_diagram: { singular: 'Ladder diagram read', plural: 'Ladder diagrams read' },
+  add_rung: { singular: 'Rung added', plural: 'Rungs added' },
+  update_rung: { singular: 'Rung updated', plural: 'Rungs updated' },
+  delete_rung: { singular: 'Rung deleted', plural: 'Rungs deleted' },
 }
 
 const GROUP_ORDER: GroupKey[] = [
@@ -41,7 +49,11 @@ const GROUP_ORDER: GroupKey[] = [
   'create_datatype',
   'update_datatype',
   'delete_datatype',
+  'add_rung',
+  'update_rung',
+  'delete_rung',
   'read_project_state',
+  'read_ladder_diagram',
 ]
 
 function describeToolCall(name: string, input: unknown): { target: string; detail: string | null } {
@@ -67,6 +79,14 @@ function describeToolCall(name: string, input: unknown): { target: string; detai
       return { target: s(i.name) ?? '?', detail: null }
     case 'read_project_state':
       return { target: 'project state', detail: null }
+    case 'read_ladder_diagram':
+      return { target: s(i.pouName) ?? '?', detail: null }
+    case 'add_rung':
+      return { target: s(i.pouName) ?? '?', detail: s(i.comment) ?? null }
+    case 'update_rung':
+      return { target: s(i.pouName) ?? '?', detail: s(i.rungId) ?? null }
+    case 'delete_rung':
+      return { target: s(i.pouName) ?? '?', detail: s(i.rungId) ?? null }
     default:
       return { target: name, detail: null }
   }
