@@ -1,8 +1,10 @@
+import type { SystemLibrary } from '../../../../middleware/shared/ports/library-types'
 import type { PLCDataType, PLCInstance, PLCPou, PLCTask, PLCVariable } from '../../../../middleware/shared/ports/types'
+import { createBlockSignatureResolver } from './block-signatures'
 import { parseDataTypesXml } from './data-type-xml'
 import { parseConfigurationXml } from './instances-xml'
 import { parseXmlDocument } from './parse-xml-document'
-import { parsePousXml } from './pou-xml'
+import { parsePouHeadersXml, parsePousXml } from './pou-xml'
 import { asRecord, asString } from './xml-node'
 
 // Structurally matches `ParsedProjectData['projectData']`
@@ -39,12 +41,23 @@ export interface PlcopenParseResult {
 // (xml-generator/old-editor/*.ts). Only the `old-editor` dialect shape is
 // handled today: SFC bodies and anything the codesys dialect emits surface
 // as non-fatal warnings rather than being parsed.
-export function parsePlcopenXml(xml: string): PlcopenParseResult {
+export interface PlcopenParseOptions {
+  // Ladder blocks are drawn from their signature, which a foreign XML does not carry for library blocks.
+  systemLibraries?: SystemLibrary[]
+}
+
+export function parsePlcopenXml(xml: string, options: PlcopenParseOptions = {}): PlcopenParseResult {
   const project = parseXmlDocument(xml)
   const types = asRecord(project.types)
 
   const dataTypes = parseDataTypesXml(asRecord(types.dataTypes).dataType)
-  const { pous, warnings } = parsePousXml(asRecord(types.pous).pou)
+  const pouXml = asRecord(types.pous).pou
+  const resolveBlock = createBlockSignatureResolver(
+    parsePouHeadersXml(pouXml),
+    options.systemLibraries ?? [],
+    project.addData,
+  )
+  const { pous, warnings } = parsePousXml(pouXml, { resolveBlock })
   const configurations = parseConfigurationXml(project.instances)
   const projectName = asString(asRecord(project.contentHeader)['@name'])
 

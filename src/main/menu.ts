@@ -112,6 +112,11 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
   }
 
+  // The renderer owns the overwrite confirmation, so this only forwards the request.
+  handleImportPlcopenRequest() {
+    this.mainWindow.webContents.send('project:import-plcopen-accelerator')
+  }
+
   async handleGetRecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getHistoryProjectsFilePath())
     return response
@@ -292,6 +297,11 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.exportToCodesysXml'),
           click: () => this.handleExportProjectRequest('codesys'),
+          enabled: this.projectOpen,
+        },
+        {
+          label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+          click: () => this.handleImportPlcopenRequest(),
           enabled: this.projectOpen,
         },
         { type: 'separator' },
@@ -530,7 +540,7 @@ export default class MenuBuilder {
         // Linux. Deliberate for now, and tracked rather than fixed here:
         //   - native only: New Project, Open Project, Export to CODESYS XML,
         //     Board Package Manager
-        //   - React only: README, Import PLCopen XML (both capability-gated)
+        //   - React only: README (capability-gated)
         // Everything either menu offers now WORKS on its platform, which is the
         // part that mattered: Save As was disabled here, so on Linux a
         // retrieved project could not be saved at all. Full parity is a bigger
@@ -608,6 +618,11 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.exportToCodesysXml'),
             click: () => this.handleExportProjectRequest('codesys'),
+            enabled: this.projectOpen,
+          },
+          {
+            label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+            click: () => this.handleImportPlcopenRequest(),
             enabled: this.projectOpen,
           },
           {

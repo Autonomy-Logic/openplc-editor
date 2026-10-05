@@ -84,7 +84,9 @@ describe('executeImportPlcopen', () => {
     const result = await executeImportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: true })
-    expect(mockParsePlcopenXml).toHaveBeenCalledWith('<project/>')
+    expect(mockParsePlcopenXml).toHaveBeenCalledWith('<project/>', {
+      systemLibraries: store.getState().libraries.system,
+    })
     expect(handleOpenProjectResponse).toHaveBeenCalledWith({
       meta: { name: 'Imported', type: 'plc-project', path: 'proj-1' },
       projectData: {
