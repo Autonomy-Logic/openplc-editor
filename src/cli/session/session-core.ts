@@ -648,8 +648,58 @@ function writeHasSettled(value: VariableValue, requested: string): boolean {
     const parsed = Number(wanted.replace(/^16#/, '0x'))
     return Number.isNaN(parsed) ? true : Math.abs(value.value - parsed) < 1e-6
   }
-  if (typeof value.value === 'string') return value.value.toUpperCase() === wanted
+  if (typeof value.value === 'string') {
+    // A duration is requested as an IEC literal (`T#1s`) and reads back
+    // formatted (`1s`), so the two never agree as text even when the write
+    // landed — `T#1500ms` comes back as `1s500ms`. Compare what they MEAN:
+    // accepting any read-back would report a force that landed on the wrong
+    // value as settled.
+    const wantedNs = durationNanoseconds(wanted)
+    if (wantedNs !== null) {
+      const actualNs = durationNanoseconds(value.value)
+      // A read-back that will not parse is the "cannot be compared" case the
+      // doc above describes — give up rather than spin to the timeout.
+      return actualNs === null ? true : actualNs === wantedNs
+    }
+    return value.value.toUpperCase() === wanted
+  }
   return true
+}
+
+/**
+ * An IEC duration in nanoseconds, or null when the text is not one.
+ *
+ * Accepts the literal a caller writes (`T#1s`, `TIME#1h30m`, `LT#…`) and the
+ * form the runtime reads back (`1s500ms`). `ms`, `us` and `ns` are matched
+ * before `m` and `s` so `500ms` is not read as 500 minutes.
+ */
+function durationNanoseconds(text: string): number | null {
+  const body = text
+    .trim()
+    .toUpperCase()
+    .replace(/^L?(TIME)?#/, '')
+    .replace(/^L?T#/, '')
+  if (body.length === 0) return null
+
+  const unit: Record<string, number> = {
+    D: 86_400e9,
+    H: 3_600e9,
+    M: 60e9,
+    S: 1e9,
+    MS: 1e6,
+    US: 1e3,
+    NS: 1,
+  }
+
+  let total = 0
+  let matched = 0
+  for (const part of body.matchAll(/(\d+(?:\.\d+)?)(MS|US|NS|D|H|M|S)/g)) {
+    total += Number(part[1]) * unit[part[2]]
+    matched += part[0].length
+  }
+  // Every character has to belong to a value/unit pair, or this is not a
+  // duration and comparing it as one would be worse than not comparing.
+  return matched === body.replace(/[\s_]/g, '').length && matched > 0 ? total : null
 }
 
 function delay(ms: number): Promise<void> {

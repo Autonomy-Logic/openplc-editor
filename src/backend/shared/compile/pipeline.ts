@@ -685,7 +685,7 @@ async function runCompilePipelineInner(
         opcUa: confs.opcUa,
         // `generateRuntimeConfs` validated EtherCAT before returning;
         // null here means "no EtherCAT devices" → composer skips.
-        ethercat: confs.ethercat ?? '',
+        ethercat: confs.ethercat,
       },
     })
     emit({

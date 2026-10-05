@@ -4,7 +4,11 @@
   "asar": true,
   "asarUnpack": "**\\*.{node,dll}",
   "generateUpdatesFilesForAllChannels": true,
-  "files": ["dist", "node_modules", "package.json"],
+  "files": [
+    "dist",
+    "node_modules",
+    "package.json"
+  ],
   "afterSign": "scripts/notarize.js",
   "directories": {
     "app": "release/app",
@@ -20,6 +24,10 @@
     {
       "from": "./node_modules/strucpp/libs",
       "to": "./strucpp/libs"
+    },
+    {
+      "from": "./resources/skills",
+      "to": "./skills"
     }
   ],
   "mac": {
@@ -35,7 +43,10 @@
     ],
     "target": {
       "target": "default",
-      "arch": ["arm64", "x64"]
+      "arch": [
+        "arm64",
+        "x64"
+      ]
     },
     "extendInfo": {
       "CFBundleDisplayName": "OpenPLC Editor",
@@ -79,7 +90,9 @@
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "artifactName": "${productName}_${version}.${ext}"
@@ -98,7 +111,9 @@
     "target": [
       {
         "target": "AppImage",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "category": "Development",

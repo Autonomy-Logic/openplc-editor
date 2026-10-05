@@ -147,3 +147,86 @@ describe('force read-back', () => {
     expect(response.error.code).toBe(ErrorCode.NotConnected)
   })
 })
+
+/**
+ * A duration reads back as a formatted literal, never as the literal that was
+ * written: `T#1s` comes back `1s`, and `T#1500ms` comes back `1s500ms`. Compared
+ * as text those never agree, so a write that HAD landed was polled to the
+ * timeout and reported as a target error — and the variable was left changed but
+ * not marked forced.
+ */
+describe('force read-back of a duration', () => {
+  const oneSecondNs = (() => {
+    const bytes = new Uint8Array(8)
+    new DataView(bytes.buffer).setBigInt64(0, 1_000_000_000n, true)
+    return bytes
+  })()
+
+  const timeVariable: ResolvedVariable = { name: 'main:preset', index: 0, arr: 0, elem: 0, type: 'TIME', size: 8 }
+
+  function makeTimeCore() {
+    const channel = {
+      connect: () => Promise.resolve(),
+      disconnect: () => undefined,
+      getVariablesList: () => Promise.resolve({ success: true as const, tick: 1, lastIndex: 0, data: oneSecondNs }),
+      setVariable: () => Promise.resolve({ success: true as const }),
+      getMd5Hash: () => Promise.resolve({ success: true as const, md5: 'abc', targetEndian: 'le' as const }),
+    }
+    const index: DebugVariableIndex = {
+      md5: 'abc',
+      warnings: [],
+      all: [timeVariable],
+      byName: new Map([['MAIN:PRESET', timeVariable]]),
+      byIndex: new Map([[0, timeVariable]]),
+    }
+    let reads = 0
+    return new SessionCore({
+      sessionId: 'test',
+      projectPath: '/tmp/project',
+      target: 'Test Board',
+      transport: 'rtu',
+      descriptor: '/dev/null',
+      channel,
+      index,
+      plc,
+      programMd5: 'abc',
+      endian: 'le',
+      batchSize: 8,
+      now: () => (reads += 400),
+    })
+  }
+
+  it.each(['T#1s', 't#1000ms', 'TIME#1s'])('accepts %s rather than timing out', async (requested) => {
+    const response = await makeTimeCore().handle({ id: 1, kind: 'force', name: 'main:preset', value: requested })
+
+    expect(response.ok).toBe(true)
+  })
+
+  it('marks the variable forced', async () => {
+    const response = await makeTimeCore().handle({ id: 1, kind: 'force', name: 'main:preset', value: 'T#1s' })
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) throw new Error('expected success')
+    expect(response).toMatchObject({ data: { value: { name: 'main:preset', value: '1s', forced: true } } })
+  })
+
+  it.each(['T#1s500ms', 'T#1500ms', 'TIME#1500MS'])('does not settle %s against a 1s read-back', async (requested) => {
+    // All three spell 1.5s — mixed units, a single unit, and a different case.
+    // Each parses to the same value, and none of them is the 1s this channel
+    // reads back, so none may settle.
+    const response = await makeTimeCore().handle({ id: 1, kind: 'force', name: 'main:preset', value: requested })
+
+    expect(response.ok).toBe(false)
+  })
+
+  it('refuses a duration that read back as a DIFFERENT value', async () => {
+    // The point of parsing rather than accepting any string: `T#2s` against a
+    // channel stuck at 1s is a force that did not land, and reporting it as
+    // settled hides exactly the failure this file exists to catch.
+    const response = await makeTimeCore().handle({ id: 1, kind: 'force', name: 'main:preset', value: 'T#2s' })
+
+    expect(response.ok).toBe(false)
+    if (response.ok) throw new Error('expected a failure')
+    expect(response.error.code).toBe(ErrorCode.TargetError)
+  })
+})

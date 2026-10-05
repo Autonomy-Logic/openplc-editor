@@ -21,7 +21,7 @@
 
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 /** What a one-shot client needs in order to reach a session. */
 export interface SessionRecord {
@@ -170,7 +170,10 @@ export class SessionRegistry {
    * looks like a bare timeout while a perfectly good session sits idle.
    */
   findReusable(projectPath: string, target: string): SessionRecord | undefined {
-    return this.list().find((record) => record.projectPath === projectPath && record.target === target)
+    // Resolved, not compared raw: `./proj` and `/abs/proj` name one project, and
+    // a raw compare opened a second session against a device that answers one.
+    const wanted = resolve(projectPath)
+    return this.list().find((record) => resolve(record.projectPath) === wanted && record.target === target)
   }
 
   private readRecord(path: string): SessionRecord | undefined {

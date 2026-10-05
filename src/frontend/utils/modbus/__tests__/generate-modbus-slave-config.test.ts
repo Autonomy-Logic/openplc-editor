@@ -31,6 +31,73 @@ describe('generateModbusSlaveConfig', () => {
     expect(generateModbusSlaveConfig(servers)).toBeNull()
   })
 
+  /**
+   * Enable state is the presence of `conf/modbus_slave.json` — the runtime
+   * has no `enabled` key to read.  A disabled server that still emits a
+   * config opens port 502 on a device meant to have it closed.
+   */
+  describe('the enabled switch', () => {
+    it('returns null when the only modbus-tcp server is disabled', () => {
+      const disabled = makeModbusServer({
+        modbusSlaveConfig: { enabled: false, networkInterface: '0.0.0.0', port: 502 },
+      })
+      expect(generateModbusSlaveConfig([disabled])).toBeNull()
+    })
+
+    it('takes the enabled server when a disabled one comes first', () => {
+      const disabled = makeModbusServer({
+        name: 'Off',
+        modbusSlaveConfig: { enabled: false, networkInterface: '10.0.0.1', port: 1502 },
+      })
+      const result = generateModbusSlaveConfig([disabled, makeModbusServer({ name: 'On' })])
+
+      expect(result).not.toBeNull()
+      expect(JSON.parse(result!).network_configuration.port).toBe(5020)
+    })
+
+    it('reports the servers it ignores when two are enabled', () => {
+      const messages: string[] = []
+      const result = generateModbusSlaveConfig(
+        [makeModbusServer({ name: 'First' }), makeModbusServer({ name: 'Second' })],
+        (message) => messages.push(message),
+      )
+
+      expect(result).not.toBeNull()
+      expect(messages).toHaveLength(1)
+      expect(messages[0]).toContain('Using "First"')
+      expect(messages[0]).toContain('ignoring Second')
+    })
+
+    it('does not log when only one server is enabled', () => {
+      const messages: string[] = []
+      generateModbusSlaveConfig([makeModbusServer()], (message) => messages.push(message))
+      expect(messages).toEqual([])
+    })
+  })
+
+  /**
+   * A partial mapping must survive the round trip: `ModbusBufferMapping`
+   * makes every group and count optional, so each missing value falls back
+   * to the runtime default rather than reaching the conf as undefined.
+   */
+  it('defaults every count a partial bufferMapping omits', () => {
+    const partial = makeModbusServer({
+      modbusSlaveConfig: {
+        enabled: true,
+        networkInterface: '0.0.0.0',
+        port: 502,
+        bufferMapping: { coils: { qxBits: 16 } },
+      },
+    })
+    const parsed = JSON.parse(generateModbusSlaveConfig([partial])!)
+
+    expect(parsed.buffer_mapping.coils.qx_bits).toBe(16)
+    expect(parsed.buffer_mapping.coils.mx_bits).toBe(DEFAULT_BUFFER_MAPPING.coils.mxBits)
+    expect(parsed.buffer_mapping.holding_registers.qw_count).toBe(DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount)
+    expect(parsed.buffer_mapping.discrete_inputs.ix_bits).toBe(DEFAULT_BUFFER_MAPPING.discreteInputs.ixBits)
+    expect(parsed.buffer_mapping.input_registers.iw_count).toBe(DEFAULT_BUFFER_MAPPING.inputRegisters.iwCount)
+  })
+
   it('generates config with correct network configuration', () => {
     const result = generateModbusSlaveConfig([makeModbusServer()])
 
