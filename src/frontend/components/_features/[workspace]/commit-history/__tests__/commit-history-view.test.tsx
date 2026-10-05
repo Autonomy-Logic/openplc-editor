@@ -6,7 +6,6 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 
 import { EDITOR_CAPABILITIES } from '../../../../../../middleware/shared/ports/platform-capabilities'
 import type { ThemePort } from '../../../../../../middleware/shared/ports/theme-port'
@@ -17,8 +16,8 @@ import type {
   GraphicalDiffResult,
   VersionControlPort,
 } from '../../../../../../middleware/shared/ports/version-control-port'
-import { PlatformProvider } from '../../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
+import { createStoreWrapper, createTestStore } from '../../../../../store/testing'
 import { CommitHistoryView } from '..'
 
 /** A port whose every method answers `undefined`, except the ones handed in. */
@@ -86,10 +85,6 @@ const onBack = jest.fn<void, []>()
 const onRestored = jest.fn<void, []>()
 
 function renderView(initialFile?: string) {
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <PlatformProvider ports={ports}>{children}</PlatformProvider>
-  )
-
   return render(
     <CommitHistoryView
       projectId='p1'
@@ -98,7 +93,7 @@ function renderView(initialFile?: string) {
       onBack={onBack}
       onRestored={onRestored}
     />,
-    { wrapper },
+    { wrapper: createStoreWrapper(createTestStore(), ports) },
   )
 }
 

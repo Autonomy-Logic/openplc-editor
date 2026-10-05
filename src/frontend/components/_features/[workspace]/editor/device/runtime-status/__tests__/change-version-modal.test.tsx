@@ -9,23 +9,52 @@
  * side-loaded image installable.
  */
 
-import { render, screen, waitFor } from '@testing-library/react'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { BootloaderPort, RuntimePort } from '@root/middleware/shared/ports/runtime-port'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
+import { render as rtlRender, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactElement } from 'react'
+
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
 
 const startUpdate = vi.fn()
 const getUpdateProgress = vi.fn()
 
-const setRuntimeUpdateInProgress = vi.fn()
-vi.mock('@root/frontend/store', () => ({
-  useOpenPLCStore: (selector: (state: unknown) => unknown) =>
-    selector({ deviceActions: { setRuntimeUpdateInProgress } }),
-}))
-
-vi.mock('@root/middleware/shared/providers/platform-context', () => ({
-  useRuntime: () => ({
-    bootloader: { startUpdate, getUpdateProgress, clearSession: vi.fn() },
+const ports: PlatformPorts = {
+  compiler: stubPort(),
+  runtime: stubPort<RuntimePort>({
+    bootloader: stubPort<BootloaderPort>({ startUpdate, getUpdateProgress, clearSession: vi.fn() }),
   }),
-}))
+  debugger: stubPort(),
+  simulator: stubPort(),
+  project: stubPort(),
+  device: stubPort(),
+  orchestrator: stubPort(),
+  system: stubPort(),
+  window: stubPort(),
+  accelerator: stubPort(),
+  theme: stubPort(),
+  versionControl: stubPort(),
+  navigation: stubPort(),
+  library: stubPort(),
+  capabilities: WEB_CAPABILITIES,
+}
+
+let store: OpenPLCStore
+
+const updateInProgress = () => store.getState().runtimeConnection.runtimeUpdateInProgress
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: createStoreWrapper(store, ports) })
 
 const listRuntimeVersions = vi.fn()
 vi.mock('@root/middleware/shared/utils/runtime-versions', () => ({
@@ -43,6 +72,7 @@ const TAGS = [
 
 beforeEach(() => {
   vi.clearAllMocks()
+  store = createTestStore()
   getUpdateProgress.mockResolvedValue({ success: false, error: 'idle' })
   listRuntimeVersions.mockResolvedValue({ ok: true, versions: TAGS })
 })
@@ -158,16 +188,18 @@ describe('Following an update', () => {
     await userEvent.click(await screen.findByText('v4.1.10'))
     await userEvent.click(screen.getByRole('button', { name: /install/i }))
 
-    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
+    await waitFor(() => expect(updateInProgress()).toBe(true))
   })
 
   it('does not declare an update finished just because the dialog closed', async () => {
     // Unmounting is not evidence about the device. The flag is lowered in
     // exactly two places, both of which have seen a terminal state: poll()
     // while this dialog is open, and use-runtime-polling once it is not.
+    // Raised beforehand, so a lowering on unmount would be visible.
+    store.getState().deviceActions.setRuntimeUpdateInProgress(true)
     const { unmount } = render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
     unmount()
-    expect(setRuntimeUpdateInProgress).not.toHaveBeenCalledWith(false)
+    expect(updateInProgress()).toBe(true)
   })
 
   it('releases the poller when the update reaches a terminal state', async () => {
@@ -182,13 +214,13 @@ describe('Following an update', () => {
     render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
 
     // Adopted: the loop is running and the poller has been stood down.
-    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
+    await waitFor(() => expect(updateInProgress()).toBe(true))
 
     // Now the device finishes.
     getUpdateProgress.mockResolvedValue({ success: true, data: { state: 'success', to: 'v4.1.10' } })
 
     // One tick later the update reports success, which releases the poller.
-    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(false), {
+    await waitFor(() => expect(updateInProgress()).toBe(false), {
       timeout: 5000,
     })
   })
@@ -203,11 +235,10 @@ describe('Following an update', () => {
 
     const { unmount } = render(<ChangeVersionModal open currentVersion='v4.2.1' onOpenChange={vi.fn()} />)
     // Wait for the adopt path to see the in-flight state.
-    await waitFor(() => expect(setRuntimeUpdateInProgress).toHaveBeenCalledWith(true))
-    setRuntimeUpdateInProgress.mockClear()
+    await waitFor(() => expect(updateInProgress()).toBe(true))
 
     unmount()
 
-    expect(setRuntimeUpdateInProgress).not.toHaveBeenCalledWith(false)
+    expect(updateInProgress()).toBe(true)
   })
 })

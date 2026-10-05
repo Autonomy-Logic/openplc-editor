@@ -10,31 +10,28 @@
 
 import { render } from '@testing-library/react'
 
-type EditorLike = { type: string; meta: Record<string, unknown> }
-
-let editor: EditorLike
-
-// Mocked through the @root alias rather than a relative path: Jest resolves a
-// mock path relative to its setup file, so a relative one works under Vitest and
-// fails here. The alias resolves to the same module in both runners.
-vi.mock('@root/frontend/store', () => {
-  const state = () => ({
-    editor,
-    project: { meta: { name: 'Irrigation Controller' }, data: { dataTypes: [], globalVariableLists: [] } },
-    workspace: { isDebuggerVisible: false, fbDebugInstances: new Map(), fbSelectedInstance: new Map() },
-    workspaceActions: { setFbSelectedInstance: () => {} },
-  })
-  const useOpenPLCStore = (selector?: (s: unknown) => unknown) => (selector ? selector(state()) : state())
-  useOpenPLCStore.getState = state
-  return { useOpenPLCStore }
-})
+import type { OpenPLCStore } from '@root/frontend/store'
+import type { EditorModel } from '@root/frontend/store/slices/editor/types'
+import { CreatePLCTextualObject, CreateResourceEditor } from '@root/frontend/store/slices/tabs/utils'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 
 import { Breadcrumbs } from '../index'
 
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+  store.getState().projectActions.updateMetaName('Irrigation Controller')
+})
+
+const renderBreadcrumbs = (model: EditorModel) => {
+  store.setState({ editor: model })
+  return render(<Breadcrumbs />, { wrapper: createStoreWrapper(store) })
+}
+
 /** The trail as text, in order. */
-function trail(model: EditorLike): string[] {
-  editor = model
-  const { container, unmount } = render(<Breadcrumbs />)
+function trail(model: EditorModel): string[] {
+  const { container, unmount } = renderBreadcrumbs(model)
   const crumbs = Array.from(container.querySelectorAll('span')).map((span) => span.textContent ?? '')
   unmount()
   return crumbs
@@ -48,14 +45,14 @@ describe('the Device tree branch', () => {
     ['pin-mapping', 'Pin Mapping'],
     ['orchestrators', 'Edge Devices'],
     ['runtime-status', 'Runtime Status'],
-  ])('trails %s as Project > Device > screen', (derivation, name) => {
+  ] as const)('trails %s as Project > Device > screen', (derivation, name) => {
     expect(trail({ type: 'plc-device', meta: { name, derivation } })).toEqual(['Irrigation Controller', 'Device', name])
   })
 
   it.each([
     ['plc-persistent-storage', 'Persistent Storage'],
     ['plc-user-management', 'User Management'],
-  ])('trails %s under Device too', (type, name) => {
+  ] as const)('trails %s under Device too', (type, name) => {
     expect(trail({ type, meta: { name } })).toEqual(['Irrigation Controller', 'Device', name])
   })
 })
@@ -64,12 +61,12 @@ describe('screens that sit under no branch', () => {
   // Two segments rather than a made-up parent: a vendor screen sits at the
   // project root beside the Device branch, and the managers are opened from the
   // workspace rather than the tree.
-  it.each([
-    ['plc-vendor-screen', 'Modbus Setup'],
-    ['plc-package-manager', 'Package Manager'],
-    ['plc-library-manager', 'Library Manager'],
-  ])('trails %s as Project > screen', (type, name) => {
-    expect(trail({ type, meta: { name, screenName: name } })).toEqual(['Irrigation Controller', name])
+  it.each<[string, EditorModel]>([
+    ['plc-vendor-screen', { type: 'plc-vendor-screen', meta: { name: 'Modbus Setup', screenName: 'Modbus Setup' } }],
+    ['plc-package-manager', { type: 'plc-package-manager', meta: { name: 'Package Manager' } }],
+    ['plc-library-manager', { type: 'plc-library-manager', meta: { name: 'Library Manager' } }],
+  ])('trails %s as Project > screen', (_type, model) => {
+    expect(trail(model)).toEqual(['Irrigation Controller', model.meta.name])
   })
 
   it('trails the library manifest as Project > Manifest', () => {
@@ -115,22 +112,17 @@ describe('the rest of the union', () => {
   })
 
   it('trails a POU by its type', () => {
-    expect(trail({ type: 'plc-textual', meta: { name: 'Main', pouType: 'program', language: 'st' } })).toEqual([
-      'Irrigation Controller',
-      'Program',
-      'Main',
-    ])
+    expect(trail(CreatePLCTextualObject('Main', 'st', 'program'))).toEqual(['Irrigation Controller', 'Program', 'Main'])
   })
 
   it('still says Resource for the Resource screen — the one place it is right', () => {
-    expect(trail({ type: 'plc-resource', meta: { name: 'Resource' } })).toEqual(['Irrigation Controller', 'Resource'])
+    expect(trail(CreateResourceEditor())).toEqual(['Irrigation Controller', 'Resource'])
   })
 
   it('renders nothing when no tab is really open', () => {
     // Previously this rendered a "Resource" trail for a document that does not
     // exist.
-    editor = { type: 'available', meta: { name: 'available' } }
-    const { container } = render(<Breadcrumbs />)
+    const { container } = renderBreadcrumbs({ type: 'available', meta: { name: 'available' } })
     expect(container.firstChild).toBeNull()
   })
 })

@@ -23,7 +23,7 @@ import { toDebugCandidate } from '@root/backend/editor/hardware/debug-channel-fa
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import type { DeviceDebugChannel } from '@root/backend/shared/debug/types'
 import { resolveRuntimeDebugChannel } from '@root/frontend/services/device-link-resolution'
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import { DEBUG_MEDIUM_PROFILE } from '@root/frontend/utils/debug-medium-profile'
 import type { TargetEndian } from '@root/frontend/utils/endian'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
@@ -49,10 +49,10 @@ export type OpenSessionResult =
   | { success: true; core: SessionCore; programMd5: string | null }
   | { success: false; code: SpawnFailureCode; error: string }
 
-export async function openDebugSession(options: OpenSessionOptions): Promise<OpenSessionResult> {
+export async function openDebugSession(store: OpenPLCStore, options: OpenSessionOptions): Promise<OpenSessionResult> {
   const progress = options.onProgress ?? (() => undefined)
 
-  const indexResult = await loadDebugIndex(options.projectPath, options.target)
+  const indexResult = await loadDebugIndex(store, options.projectPath, options.target)
   if (!indexResult.success) return { success: false, code: 'not-compiled', error: indexResult.error }
   const index = indexResult.index
   // The tree walk reports variables it could not resolve (unknown datatypes,
@@ -60,7 +60,7 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
   // that simply does not exist.
   for (const warning of index.warnings) progress(`warning: ${warning}`)
 
-  const boards = openPLCStoreBase.getState().deviceAvailableOptions.availableBoards
+  const boards = store.getState().deviceAvailableOptions.availableBoards
   const boardInfo: BoardInfo | undefined = boards.get(options.target)
   if (!boardInfo) {
     return {
@@ -95,14 +95,14 @@ export async function openDebugSession(options: OpenSessionOptions): Promise<Ope
     }
     // The same store updates the login modal makes, because the resolver reads
     // the connection state from the store rather than being told.
-    const deviceActions = openPLCStoreBase.getState().deviceActions
+    const deviceActions = store.getState().deviceActions
     deviceActions.setRuntimeJwtToken(login.accessToken ?? '')
     deviceActions.setRuntimeConnectionStatus('connected')
     deviceActions.setStoredCredentials({ username: options.username, password: options.password })
   }
 
   progress('Resolving the debug channel from the target’s spec…')
-  const config = resolveRuntimeDebugChannel(options.target, boardInfo)
+  const config = resolveRuntimeDebugChannel(store, options.target, boardInfo)
   if (!config) {
     return {
       success: false,

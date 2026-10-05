@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { PLCGlobalVariable } from '../../../../middleware/shared/ports/types'
 import { pinSelectors, remoteDeviceSelectors, vendorIoSelectors } from '../../../hooks/use-store-selectors'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { ProjectResponse } from '../../../store/slices/project'
 import { elementNameCollision } from '../../../store/slices/shared/name-collision'
 import { cn } from '../../../utils/cn'
@@ -56,6 +56,7 @@ const EditableNameCell = ({
   skipReferenceImpact = false,
   isResourceGlobal = true,
 }: IEditableCellProps) => {
+  const store = useOpenPLCStoreApi()
   const initialValue = getValue<string>()
   const { toast } = useToast()
 
@@ -100,7 +101,7 @@ const EditableNameCell = ({
     }
 
     if (isResourceGlobal) {
-      const collision = elementNameCollision(useOpenPLCStore.getState(), newName, 'resource-global', oldName)
+      const collision = elementNameCollision(store.getState(), newName, 'resource-global', oldName)
       if (collision) {
         toast({ title: 'Variable already exists', description: collision, variant: 'fail' })
         setCellValue(oldName)

@@ -26,7 +26,7 @@ import {
 } from '../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../hooks/use-stable-callback'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -203,6 +203,7 @@ const fbdEdgeStatesEqual = (previous: Map<string, boolean> | null, next: Map<str
   previous !== null && next !== null && mapsEqual(previous, next)
 
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
+  const store = useOpenPLCStoreApi()
   // Bound POU + editor model — every multi-mounted FBDBody reads
   // its OWN POU from the `GraphicalEditorActiveProvider` so cross-
   // tab store mutations don't fire effects against the wrong flow.
@@ -425,7 +426,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   ) => {
     captureAndPush(pouName)
 
-    const { libraries } = useOpenPLCStore.getState()
+    const { libraries } = store.getState()
     let pouLibrary = undefined
     if (library) {
       const [blockLibraryType, blockLibrary, pouName] = library.split('/')

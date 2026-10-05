@@ -1,87 +1,15 @@
+import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { BootloaderPort, RuntimePort } from '@root/middleware/shared/ports/runtime-port'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { act, renderHook } from '@testing-library/react'
+
+import type { OpenPLCStore } from '../../store'
+import { createStoreWrapper, createTestStore } from '../../store/testing'
+import { useRuntimePolling } from '../use-runtime-polling'
 
 // Mirrors the hook's own constant; the test has to cross it to reach the
 // connection-lost path at all.
 const MAX_CONSECUTIVE_FAILURES = 5
-
-// The `mock*` prefix lets ts-jest hoist these references into the
-// `jest.mock` factories below — Jest reuses the same babel-plugin-jest
-// rule Vitest's `vi.hoisted` was originally written against. Spelled out
-// long-hand (no Vitest API) so the suite runs under plain Jest.
-const mockSetPlcRuntimeStatus = jest.fn()
-const mockSetPlcSwitchPosition = jest.fn()
-const mockSetTimingStats = jest.fn()
-const mockSetEthercatStatus = jest.fn()
-const mockSetRuntimeJwtToken = jest.fn()
-const mockSetRuntimeConnectionStatus = jest.fn()
-const mockOpenModal = jest.fn()
-const mockSetPlcLogsVisible = jest.fn()
-const mockSetPlcLogs = jest.fn()
-const mockAppendPlcLogs = jest.fn()
-const mockSetPlcLogsLastId = jest.fn()
-const mockClearPlcLogs = jest.fn()
-// The poller lowers this once the device reports a terminal update state.
-const mockSetRuntimeUpdateInProgress = jest.fn()
-
-/**
- * The slice of the store this hook reads.
- *
- * Typed so the per-test setup can assign fields directly. It used to be
- * `Record<string, unknown>` and every setup cast it with `as object`, which
- * meant a typo in a field name -- or a field the hook stopped reading --
- * produced no error at all.
- */
-type MockRuntimeConnection = {
-  connectionStatus: string
-  jwtToken: string | null
-  includeTimingStatsInPolling: boolean
-  includeEthercatStatsInPolling: boolean
-  plcStatus: unknown
-  ethercatStatus: unknown
-  runtimeUpdateInProgress?: boolean
-  selectedDevice?: { deviceName?: string } | null
-  ipAddress?: string | null
-}
-
-const mockState: {
-  runtimeConnection: MockRuntimeConnection
-  workspace: Record<string, unknown>
-  deviceActions: Record<string, jest.Mock>
-  modalActions: Record<string, jest.Mock>
-  workspaceActions: Record<string, jest.Mock>
-} = {
-  runtimeConnection: {
-    connectionStatus: 'connected',
-    jwtToken: 'tok',
-    includeTimingStatsInPolling: false,
-    includeEthercatStatsInPolling: false,
-    plcStatus: null,
-    ethercatStatus: null,
-  },
-  workspace: { plcLogs: '', plcLogsLastId: null },
-  deviceActions: {
-    setPlcRuntimeStatus: mockSetPlcRuntimeStatus,
-    setPlcSwitchPosition: mockSetPlcSwitchPosition,
-    setTimingStats: mockSetTimingStats,
-    setEthercatStatus: mockSetEthercatStatus,
-    setRuntimeJwtToken: mockSetRuntimeJwtToken,
-    setRuntimeConnectionStatus: mockSetRuntimeConnectionStatus,
-    setRuntimeUpdateInProgress: mockSetRuntimeUpdateInProgress,
-  },
-  modalActions: { openModal: mockOpenModal },
-  workspaceActions: {
-    setPlcLogsVisible: mockSetPlcLogsVisible,
-    setPlcLogs: mockSetPlcLogs,
-    appendPlcLogs: mockAppendPlcLogs,
-    setPlcLogsLastId: mockSetPlcLogsLastId,
-    clearPlcLogs: mockClearPlcLogs,
-  },
-}
-
-type Selector<T> = (s: typeof mockState) => T
-const mockUseOpenPLCStore = ((selector?: Selector<unknown>) =>
-  selector ? selector(mockState) : mockState) as unknown as jest.Mock & { getState: () => typeof mockState }
-mockUseOpenPLCStore.getState = () => mockState
 
 const mockRuntime: {
   getStatus: jest.Mock
@@ -97,15 +25,79 @@ const mockRuntime: {
   getEthercatRuntimeStatus: undefined,
 }
 
-jest.mock('../../store', () => ({
-  useOpenPLCStore: mockUseOpenPLCStore,
-}))
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
 
-jest.mock('../../../middleware/shared/providers', () => ({
-  useRuntime: () => mockRuntime,
-}))
+function buildPorts(): PlatformPorts {
+  return {
+    compiler: stubPort(),
+    runtime: stubPort<RuntimePort>({
+      getStatus: (includeTimingStats) => mockRuntime.getStatus(includeTimingStats),
+      getLogs: (minId) => mockRuntime.getLogs(minId),
+      get getEthercatRuntimeStatus() {
+        return mockRuntime.getEthercatRuntimeStatus
+      },
+      bootloader: stubPort<BootloaderPort>({ getUpdateProgress: () => mockRuntime.bootloader.getUpdateProgress() }),
+    }),
+    debugger: stubPort(),
+    simulator: stubPort(),
+    project: stubPort(),
+    device: stubPort(),
+    orchestrator: stubPort(),
+    system: stubPort(),
+    window: stubPort(),
+    accelerator: stubPort(),
+    theme: stubPort(),
+    versionControl: stubPort(),
+    navigation: stubPort(),
+    library: stubPort(),
+    capabilities: WEB_CAPABILITIES,
+  }
+}
 
-import { useRuntimePolling } from '../use-runtime-polling'
+let store: OpenPLCStore
+
+/** Immer freezes the action namespaces, so spies go in as a swapped, write-through copy. */
+function installActionSpies() {
+  const { modalActions, deviceActions } = store.getState()
+  const spies = {
+    openModal: jest.fn(modalActions.openModal),
+    setPlcRuntimeStatus: jest.fn(deviceActions.setPlcRuntimeStatus),
+    setEthercatStatus: jest.fn(deviceActions.setEthercatStatus),
+  }
+  store.setState({
+    modalActions: { ...modalActions, openModal: spies.openModal },
+    deviceActions: {
+      ...deviceActions,
+      setPlcRuntimeStatus: spies.setPlcRuntimeStatus,
+      setEthercatStatus: spies.setEthercatStatus,
+    },
+  })
+  return spies
+}
+
+let spies: ReturnType<typeof installActionSpies>
+
+/** A connected runtime with a token: the only state in which the hook polls. */
+function connectRuntime(opts: { includeEthercat?: boolean } = {}) {
+  store = createTestStore()
+  const { deviceActions } = store.getState()
+  deviceActions.setRuntimeJwtToken('tok')
+  deviceActions.setRuntimeConnectionStatus('connected')
+  deviceActions.setIncludeTimingStatsInPolling(false)
+  deviceActions.setIncludeEthercatStatsInPolling(opts.includeEthercat ?? false)
+  spies = installActionSpies()
+}
+
+function renderPolling() {
+  return renderHook(() => useRuntimePolling(), { wrapper: createStoreWrapper(store, buildPorts()) })
+}
 
 const flushAll = async () => {
   // Two ticks: poll schedules a Promise.all; status/logs/ethercat resolve, then
@@ -122,65 +114,60 @@ describe('useRuntimePolling — EtherCAT branches', () => {
     mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
     mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
     mockRuntime.getEthercatRuntimeStatus = undefined
-    Object.assign(mockState.runtimeConnection, {
-      connectionStatus: 'connected',
-      jwtToken: 'tok',
-      includeTimingStatsInPolling: false,
-      includeEthercatStatsInPolling: false,
-    })
+    connectRuntime()
   })
 
   it('clears stored ethercat status when the polling flag is off', async () => {
-    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: false })
+    store.getState().deviceActions.setIncludeEthercatStatsInPolling(false)
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: { masters: [] } })
 
-    renderHook(() => useRuntimePolling())
+    renderPolling()
     await flushAll()
 
     // setEthercatStatus(null) is the soft-clear when the flag is off.
-    expect(mockSetEthercatStatus).toHaveBeenCalledWith(null)
+    expect(spies.setEthercatStatus).toHaveBeenCalledWith(null)
     // The optional method is gated by the flag too — it shouldn't even be invoked.
     expect(mockRuntime.getEthercatRuntimeStatus).not.toHaveBeenCalled()
   })
 
   it('skips cleanly when the optional getEthercatRuntimeStatus method is not on the runtime', async () => {
-    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
+    store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
     mockRuntime.getEthercatRuntimeStatus = undefined
 
-    renderHook(() => useRuntimePolling())
+    renderPolling()
     await flushAll()
 
     // No data write — the soft-fail branch keeps whatever was in the store.
-    expect(mockSetEthercatStatus).not.toHaveBeenCalled()
+    expect(spies.setEthercatStatus).not.toHaveBeenCalled()
     // status path still ran successfully so the rest of the cycle isn't disturbed.
-    expect(mockSetPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
+    expect(spies.setPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
   })
 
   it('writes the runtime payload into the store on a successful ethercat poll', async () => {
-    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
+    store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
     const payload = { masters: [{ name: 'BusA', plugin_state: 'OPERATIONAL' }] }
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockResolvedValue({ success: true, data: payload })
 
-    renderHook(() => useRuntimePolling())
+    renderPolling()
     await flushAll()
 
     expect(mockRuntime.getEthercatRuntimeStatus).toHaveBeenCalledTimes(1)
-    expect(mockSetEthercatStatus).toHaveBeenCalledWith(payload)
+    expect(spies.setEthercatStatus).toHaveBeenCalledWith(payload)
   })
 
   it('does not tear down the connection on a transient ethercat rejection', async () => {
-    Object.assign(mockState.runtimeConnection, { includeEthercatStatsInPolling: true })
+    store.getState().deviceActions.setIncludeEthercatStatsInPolling(true)
     mockRuntime.getEthercatRuntimeStatus = jest.fn().mockRejectedValue(new Error('boom'))
 
-    renderHook(() => useRuntimePolling())
+    renderPolling()
     await flushAll()
 
     // status path still wrote — meaning Promise.all didn't reject.
-    expect(mockSetPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
+    expect(spies.setPlcRuntimeStatus).toHaveBeenCalledWith('RUNNING')
     // Soft-fail keeps prior data; setEthercatStatus is not called with anything.
-    expect(mockSetEthercatStatus).not.toHaveBeenCalled()
+    expect(spies.setEthercatStatus).not.toHaveBeenCalled()
     // No connection-lost modal opened.
-    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(spies.openModal).not.toHaveBeenCalled()
   })
 })
 
@@ -191,15 +178,16 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     mockRuntime.getLogs.mockResolvedValue({ success: true, logs: [] })
     mockRuntime.getEthercatRuntimeStatus = undefined
     mockRuntime.bootloader.getUpdateProgress.mockResolvedValue({ success: false, error: 'idle' })
-    Object.assign(mockState.runtimeConnection, {
-      connectionStatus: 'connected',
-      jwtToken: 'tok',
-      includeTimingStatsInPolling: false,
-      includeEthercatStatsInPolling: false,
-      runtimeUpdateInProgress: false,
-      selectedDevice: { deviceName: '192.168.2.4' },
-      ipAddress: '192.168.1.112',
+    connectRuntime()
+    const { deviceActions } = store.getState()
+    deviceActions.setRuntimeUpdateInProgress(false)
+    deviceActions.setSelectedDevice({
+      orchestratorId: 'orch-1',
+      orchestratorAgentId: 'agent-1',
+      deviceId: 'dev-1',
+      deviceName: '192.168.2.4',
     })
+    deviceActions.setRuntimeIpAddress('192.168.1.112')
   })
 
   it('stands down while a version change is in flight', async () => {
@@ -207,13 +195,13 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     // its silence is the expected state, not a fault. Polling through it
     // counted the gap as failures and announced a lost connection in the
     // middle of an update that was working.
-    Object.assign(mockState.runtimeConnection, { runtimeUpdateInProgress: true })
+    store.getState().deviceActions.setRuntimeUpdateInProgress(true)
 
-    renderHook(() => useRuntimePolling())
+    renderPolling()
     await flushAll()
 
     expect(mockRuntime.getStatus).not.toHaveBeenCalled()
-    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(spies.openModal).not.toHaveBeenCalled()
   })
 
   it('names the device when the connection really is lost', async () => {
@@ -229,7 +217,7 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     // assertions below were reachable only behind an `if`.
     jest.useFakeTimers()
     try {
-      renderHook(() => useRuntimePolling())
+      renderPolling()
       for (let attempt = 0; attempt < MAX_CONSECUTIVE_FAILURES + 1; attempt += 1) {
         await act(async () => {
           jest.advanceTimersByTime(2000)
@@ -244,10 +232,10 @@ describe('useRuntimePolling — while the runtime is being replaced', () => {
     // when the five failing polls never reached handleConnectionLost the test
     // asserted nothing and passed -- it could not regress, and did not prove
     // the label fix it was named for.
-    expect(mockOpenModal).toHaveBeenCalled()
-    const [id, data] = mockOpenModal.mock.calls[mockOpenModal.mock.calls.length - 1]
+    expect(spies.openModal).toHaveBeenCalled()
+    const [id, data] = spies.openModal.mock.calls[spies.openModal.mock.calls.length - 1]
     expect(id).toBe('runtime-connection-lost')
     expect(data).not.toBeNull()
-    expect(data.label).toBe('192.168.2.4')
+    expect(data).toHaveProperty('label', '192.168.2.4')
   })
 })

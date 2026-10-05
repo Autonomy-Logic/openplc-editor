@@ -9,6 +9,7 @@
  * directly, without jsdom's anti-navigation hardening.
  */
 
+import { createTestStore } from '../../../../frontend/store/testing'
 import type { NavigationPort } from '../../../shared/ports/navigation-port'
 import { createEditorNavigationAdapter } from '../navigation-adapter'
 
@@ -16,12 +17,6 @@ const openHistoryView = jest.fn()
 const closeHistoryView = jest.fn()
 
 const openMergeView = jest.fn()
-
-jest.mock('../../../../frontend/store', () => ({
-  useOpenPLCStore: {
-    getState: () => ({ versionControlActions: { openHistoryView, closeHistoryView, openMergeView } }),
-  },
-}))
 
 interface WindowStub {
   location: { href: string }
@@ -36,7 +31,11 @@ beforeEach(() => {
   jest.clearAllMocks()
   stubWindow = { location: { href: 'about:blank' }, open: jest.fn() }
   ;(globalThis as unknown as { window: WindowStub }).window = stubWindow
-  adapter = createEditorNavigationAdapter()
+  const store = createTestStore()
+  store.setState((state) => ({
+    versionControlActions: { ...state.versionControlActions, openHistoryView, closeHistoryView, openMergeView },
+  }))
+  adapter = createEditorNavigationAdapter(store)
 })
 
 afterEach(() => {

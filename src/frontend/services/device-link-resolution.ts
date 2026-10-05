@@ -26,7 +26,7 @@ import {
 import type { BoardInfo, DebugConnectionConfig } from '../../middleware/shared/ports/types'
 import { describeDebugEndpoint } from '../../middleware/shared/utils/debug-endpoint'
 import { resolveTargetCapabilities } from '../../middleware/shared/utils/target-capabilities'
-import { useOpenPLCStore } from '../store'
+import type { OpenPLCStore } from '../store'
 
 /**
  * Answers the user has already given, keyed by board then by the spec's
@@ -48,6 +48,7 @@ export function forgetPromptAnswers(boardTarget: string): void {
  * is how two callers end up with subtly different buttons.
  */
 export const showDeviceDialog = (
+  store: OpenPLCStore,
   type: 'info' | 'warning' | 'error' | 'question',
   title: string,
   message: string,
@@ -56,7 +57,7 @@ export const showDeviceDialog = (
   options?: { primaryButtonIndex?: number; dismissButtonIndex?: number },
 ): Promise<number> =>
   new Promise((resolve) => {
-    useOpenPLCStore.getState().modalActions.openModal('debugger-message', {
+    store.getState().modalActions.openModal('debugger-message', {
       type,
       title,
       message,
@@ -66,9 +67,14 @@ export const showDeviceDialog = (
     })
   })
 
-export const showDeviceInput = (title: string, message: string, defaultValue: string): Promise<string | null> =>
+export const showDeviceInput = (
+  store: OpenPLCStore,
+  title: string,
+  message: string,
+  defaultValue: string,
+): Promise<string | null> =>
   new Promise((resolve) => {
-    useOpenPLCStore.getState().modalActions.openModal('debugger-ip-input', {
+    store.getState().modalActions.openModal('debugger-ip-input', {
       title,
       message,
       defaultValue,
@@ -87,12 +93,13 @@ export const showDeviceInput = (title: string, message: string, defaultValue: st
  * baremetal flows.
  */
 export function buildDeviceResolverContext(
+  store: OpenPLCStore,
   boardTarget: string,
   options: { runtimeReadyForDebug?: boolean } = {},
 ): DebugResolverContext {
-  const store = useOpenPLCStore.getState()
-  const cfg = store.deviceDefinitions.configuration
-  const runtimeConnection = store.runtimeConnection
+  const state = store.getState()
+  const cfg = state.deviceDefinitions.configuration
+  const runtimeConnection = state.runtimeConnection
   // `vendorScreenData` is already keyed by section id (`modbus_rtu`), which is
   // the resolver's `screens` shape 1:1.
   const screens = (cfg.vendorScreenData ?? {}) as Record<string, Record<string, unknown>>
@@ -142,15 +149,20 @@ type NextStep =
  * A cancelled prompt or picker stops the flow — the user said no, so no dialog is
  * repeated and nothing is guessed on their behalf.
  */
-async function handleInteractiveOutcome(outcome: InteractiveOutcome, boardTarget: string): Promise<NextStep> {
+async function handleInteractiveOutcome(
+  store: OpenPLCStore,
+  outcome: InteractiveOutcome,
+  boardTarget: string,
+): Promise<NextStep> {
   if (outcome.kind === 'error') {
-    await showDeviceDialog('warning', outcome.title, outcome.body, ['OK'])
+    await showDeviceDialog(store, 'warning', outcome.title, outcome.body, ['OK'])
     return { retry: false }
   }
   if (outcome.kind === 'unsupported') return { retry: false }
 
   if (outcome.kind === 'pick') {
     const choice = await showDeviceDialog(
+      store,
       'question',
       outcome.title,
       outcome.body,
@@ -164,7 +176,7 @@ async function handleInteractiveOutcome(outcome: InteractiveOutcome, boardTarget
   const bucket = (promptCache[boardTarget] ??= {})
   for (const field of outcome.fields) {
     const previous = field.cacheKey ? bucket[field.cacheKey] : undefined
-    const answer = await showDeviceInput(field.title, field.message, previous ?? field.defaultValue ?? '')
+    const answer = await showDeviceInput(store, field.title, field.message, previous ?? field.defaultValue ?? '')
     if (answer === null) return { retry: false }
     const trimmed = answer.trim()
     if (!trimmed) return { retry: false }
@@ -178,8 +190,8 @@ async function handleInteractiveOutcome(outcome: InteractiveOutcome, boardTarget
  * from the project's screen data — so when a transport is not attempted at all,
  * this is the only place that can say why.
  */
-function trace(message: string): void {
-  useOpenPLCStore.getState().consoleActions.addLog({
+function trace(store: OpenPLCStore, message: string): void {
+  store.getState().consoleActions.addLog({
     level: 'info',
     message: `[connection] ${message}`,
   })
@@ -214,6 +226,7 @@ export interface ResolvedDeviceLink {
  * (the dialog explaining why has already been shown).
  */
 export async function resolveDeviceLinkWithUx(
+  store: OpenPLCStore,
   boardTarget: string,
   boardInfo: BoardInfo | undefined,
   options: { runtimeReadyForDebug?: boolean; onlyChannels?: number[]; deferPrompts?: boolean } = {},
@@ -222,6 +235,7 @@ export async function resolveDeviceLinkWithUx(
   const transports = resolveTargetCapabilities(boardInfo).debuggerTransports
   if (!spec) {
     await showDeviceDialog(
+      store,
       'warning',
       'Cannot Connect',
       'This board has not declared a debug spec, so the editor has no way to reach it. The VPP package must provide a `debug` block.',
@@ -237,10 +251,11 @@ export async function resolveDeviceLinkWithUx(
   }
 
   for (let round = 0; round < MAX_RESOLVE_ROUNDS; round += 1) {
-    const context = buildDeviceResolverContext(boardTarget, options)
+    const context = buildDeviceResolverContext(store, boardTarget, options)
     const outcome = resolveDeviceLinkCandidates(spec, context, resolverOptions)
     if (outcome.kind === 'candidates') {
       trace(
+        store,
         `resolved ${outcome.candidates.length} candidate(s) for ${boardTarget}: ${
           outcome.candidates
             .map((candidate) => `${candidate.config.connectionType} ${describeDebugEndpoint(candidate.config)}`)
@@ -252,6 +267,7 @@ export async function resolveDeviceLinkWithUx(
     // Say what the spec concluded and what it was reading, so a transport that is
     // never attempted can be traced to the screen value that ruled it out.
     trace(
+      store,
       `resolution returned "${outcome.kind}"${outcome.kind === 'error' ? `: ${outcome.body}` : ''} — modbus_tcp=${JSON.stringify(
         context.state.screens.modbus_tcp ?? null,
       )} modbus_rtu=${JSON.stringify(context.state.screens.modbus_rtu ?? null)} port=${String(
@@ -259,7 +275,7 @@ export async function resolveDeviceLinkWithUx(
       )}`,
     )
 
-    const next = await handleInteractiveOutcome(outcome, boardTarget)
+    const next = await handleInteractiveOutcome(store, outcome, boardTarget)
     if (!next.retry) return null
   }
   return null
@@ -283,12 +299,13 @@ export async function resolveDeviceLinkWithUx(
  * hid this until it reached hardware.
  */
 export function resolveRuntimeDebugChannel(
+  store: OpenPLCStore,
   boardTarget: string,
   boardInfo: BoardInfo | undefined,
 ): DebugConnectionConfig | null {
   const spec = boardInfo?.debug
   if (!spec) {
-    trace(`${boardTarget}: no debug spec, so no debug channel can be described`)
+    trace(store, `${boardTarget}: no debug spec, so no debug channel can be described`)
     return null
   }
 
@@ -298,18 +315,19 @@ export function resolveRuntimeDebugChannel(
   // hardcoded assumption here about what a runtime debugs over.
   const outcome = resolveDeviceLinkCandidates(
     spec,
-    buildDeviceResolverContext(boardTarget, { runtimeReadyForDebug: true }),
+    buildDeviceResolverContext(store, boardTarget, { runtimeReadyForDebug: true }),
     { transports: resolveTargetCapabilities(boardInfo).debuggerTransports, deferPrompts: true },
   )
   if (outcome.kind === 'candidates' && outcome.candidates.length > 0) {
     const [channel] = outcome.candidates
-    trace(`${boardTarget}: debug channel is ${channel.config.connectionType} (${channel.channelLabel})`)
+    trace(store, `${boardTarget}: debug channel is ${channel.config.connectionType} (${channel.channelLabel})`)
     return channel.config
   }
 
   // Never silently: a session that cannot be described leaves every later command
   // answering "not connected" on a target the user believes they are connected to.
   trace(
+    store,
     `${boardTarget}: could NOT describe a debug channel — resolver returned "${outcome.kind}"${
       outcome.kind === 'error' ? `: ${outcome.body}` : ''
     }`,

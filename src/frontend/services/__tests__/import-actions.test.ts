@@ -3,8 +3,9 @@
  *
  * `executeImportPlcopen` picks a file via the platform port, parses it with
  * `parsePlcopenXml`, and hands the result to the store's
- * `handleOpenProjectResponse` action. All collaborators are mocked so the
- * test exercises only the orchestration logic in this file.
+ * `handleOpenProjectResponse` action. The parser and toast are mocked and the
+ * store is a real one with that action stubbed, so the test exercises only the
+ * orchestration logic in this file.
  */
 
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
@@ -14,18 +15,13 @@ vi.mock('../../utils/PLC/xml-parser', () => ({
   parsePlcopenXml: (...args: unknown[]) => mockParsePlcopenXml(...args),
 }))
 
-const mockGetState = vi.fn()
-vi.mock('../../store', () => ({
-  openPLCStoreBase: {
-    getState: () => mockGetState(),
-  },
-}))
-
 const mockToast = vi.fn()
 vi.mock('../../utils/toast', () => ({
   toast: (...args: unknown[]) => mockToast(...args),
 }))
 
+import type { OpenPLCStore } from '../../store'
+import { createTestStore } from '../../store/testing'
 import { executeImportPlcopen } from '../import-actions'
 
 function makeProjectPort(overrides?: Partial<ProjectPort>): ProjectPort {
@@ -36,13 +32,16 @@ function makeProjectPort(overrides?: Partial<ProjectPort>): ProjectPort {
   } as unknown as ProjectPort
 }
 
+let store: OpenPLCStore
 const handleOpenProjectResponse = vi.fn()
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockGetState.mockReturnValue({
-    project: { meta: { name: 'Old', type: 'plc-project', path: 'proj-1' } },
-    sharedWorkspaceActions: { handleOpenProjectResponse },
+  store = createTestStore()
+  const { project, sharedWorkspaceActions } = store.getState()
+  store.setState({
+    project: { ...project, meta: { name: 'Old', type: 'plc-project', path: 'proj-1' } },
+    sharedWorkspaceActions: { ...sharedWorkspaceActions, handleOpenProjectResponse },
   })
   mockParsePlcopenXml.mockReturnValue({
     projectData: {
@@ -61,7 +60,7 @@ describe('executeImportPlcopen', () => {
       pickPlcopenImportFile: vi.fn().mockResolvedValue({ success: false }),
     })
 
-    const result = await executeImportPlcopen(projectPort)
+    const result = await executeImportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: false })
     expect(handleOpenProjectResponse).not.toHaveBeenCalled()
@@ -73,7 +72,7 @@ describe('executeImportPlcopen', () => {
       pickPlcopenImportFile: vi.fn().mockResolvedValue({ success: true }),
     })
 
-    const result = await executeImportPlcopen(projectPort)
+    const result = await executeImportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: false })
     expect(mockToast).not.toHaveBeenCalled()
@@ -82,7 +81,7 @@ describe('executeImportPlcopen', () => {
   it('parses the picked content and overwrites the open project in-place, preserving path', async () => {
     const projectPort = makeProjectPort()
 
-    const result = await executeImportPlcopen(projectPort)
+    const result = await executeImportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: true })
     expect(mockParsePlcopenXml).toHaveBeenCalledWith('<project/>')
@@ -110,7 +109,7 @@ describe('executeImportPlcopen', () => {
     })
     const projectPort = makeProjectPort()
 
-    await executeImportPlcopen(projectPort)
+    await executeImportPlcopen(store, projectPort)
 
     expect(handleOpenProjectResponse).toHaveBeenCalledWith(
       expect.objectContaining({ meta: expect.objectContaining({ name: 'Imported Project' }) }),
@@ -130,7 +129,7 @@ describe('executeImportPlcopen', () => {
     })
     const projectPort = makeProjectPort()
 
-    const result = await executeImportPlcopen(projectPort)
+    const result = await executeImportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: true })
     expect(consoleWarnSpy).toHaveBeenCalledTimes(2)
@@ -148,10 +147,11 @@ describe('executeImportPlcopen', () => {
     })
     const projectPort = makeProjectPort()
 
-    const result = await executeImportPlcopen(projectPort)
+    const result = await executeImportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: false })
     expect(handleOpenProjectResponse).not.toHaveBeenCalled()
+    expect(store.getState().project.meta.name).toBe('Old')
     expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'fail', description: 'Invalid PLCopen XML: missing <project> root element' }),
     )
