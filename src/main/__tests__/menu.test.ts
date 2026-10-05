@@ -202,3 +202,55 @@ describe('setProjectOpen', () => {
     expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1)
   })
 })
+
+describe.each(['darwin', 'win32', 'linux'] as const)('%s updates', (platform) => {
+  beforeEach(() => setPlatform(platform))
+
+  function updates(autoCheck = true) {
+    return {
+      start: jest.fn(),
+      checkNow: jest.fn(() => Promise.resolve()),
+      isAutoCheckEnabled: jest.fn(() => autoCheck),
+      setAutoCheck: jest.fn(),
+      getStatus: jest.fn(() => ({ state: 'none' as const })),
+      onStatusChange: jest.fn(() => () => undefined),
+      downloadAndOpen: jest.fn(() => Promise.resolve()),
+    }
+  }
+
+  function builderWith(service: ReturnType<typeof updates>): MenuBuilder {
+    // @ts-expect-error: a BrowserWindow stand-in with only what MenuBuilder touches
+    const window: BrowserWindow = mainWindow
+    return new MenuBuilder(window, service)
+  }
+
+  it('Check for Updates runs a manual check and has no accelerator (Ctrl+U is Monaco cursor undo)', async () => {
+    const service = updates()
+    await builderWith(service).buildMenu()
+
+    const item = lastMenu().get('menu:file.submenu.updates')
+    expect(item?.enabled).toBe(true)
+    expect(item?.accelerator).toBeUndefined()
+    // @ts-expect-error: the click handler ignores its Electron arguments
+    item?.click?.()
+    expect(service.checkNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('the automatic toggle shows and stores the preference', async () => {
+    const service = updates(false)
+    await builderWith(service).buildMenu()
+
+    const toggle = lastMenu().get('Check for Updates Automatically')
+    expect(toggle).toMatchObject({ type: 'checkbox', checked: false, enabled: true })
+    // @ts-expect-error: only `checked` of the MenuItem is read
+    toggle?.click?.({ checked: true })
+    expect(service.setAutoCheck).toHaveBeenCalledWith(true)
+  })
+
+  it('both items are off when there is no updater', async () => {
+    await newBuilder().buildMenu()
+
+    expect(lastMenu().get('menu:file.submenu.updates')?.enabled).toBe(false)
+    expect(lastMenu().get('Check for Updates Automatically')?.enabled).toBe(false)
+  })
+})

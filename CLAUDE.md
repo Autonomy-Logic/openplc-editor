@@ -436,6 +436,15 @@ the editor's `main` to trigger the "Build and Release" workflow. Web auto-deploy
 on its `main` push. (Ideally `package.json.version` should be derived from
 `APP_VERSION` in the release workflow so a single bump can never drift.)
 
+### Update notice (never publish `latest*.yml`):
+The editor checks the GitHub releases API once per launch and, when a newer
+version is out, shows "Update to X" in the status bar; clicking it downloads
+that OS's installer, checks its sha256 against the release and opens it. The
+user installs (DOPE-486, `docs/update-notice.md`). The release pipeline needs
+nothing for it. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
+to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
+`app-update.yml` and would install it without asking, unsigned on Windows.
+
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
 2. Add it to `PlatformPorts` in `src/middleware/shared/providers/types.ts`
