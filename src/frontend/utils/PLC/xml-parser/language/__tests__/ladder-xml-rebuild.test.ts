@@ -1,3 +1,4 @@
+import { emitLdBody } from '@root/backend/shared/transpilers/st-transpiler/walker/ld'
 import type {
   BlockNode,
   BlockVariant,
@@ -5,6 +6,7 @@ import type {
   VariableNode,
 } from '@root/frontend/components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '@root/frontend/store/slices'
+import { createTestStore } from '@root/frontend/store/testing'
 import type { Node } from '@xyflow/react'
 
 import { createBlockSignatureResolver } from '../../block-signatures'
@@ -263,6 +265,17 @@ describe('parseLadderXml falls back to the XML layout for what the editor cannot
     expect(body.rungs[0].nodes.some(isParallel)).toBe(true)
   })
 
+  it('still gives the blocks of a kept rung their signature, so their inputs are not lost', () => {
+    const ld = EXPORTED_LD.replace(
+      '<connection refLocalId="1041858"/>',
+      '<connection refLocalId="8475642" formalParameter="output"/>',
+    )
+    const block = blockIn(parseProgram(ld).body.rungs[1])
+    expect(block.position).toEqual({ x: 257, y: 188 })
+    expect(block.data.variant.variables.map((v) => v.name)).toEqual(['CU', 'R', 'PV', 'Q', 'CV'])
+    expect(block.data.inputHandles.map((h) => h.id)).toEqual(['CU', 'R', 'PV'])
+  })
+
   it('draws an unknown block from the pins the XML names, and says so', () => {
     const { body, warnings } = parseProgram(EXPORTED_LD, { withLibraryBlocks: false })
     expect(warnings).toEqual([
@@ -379,7 +392,18 @@ describe('parseLadderXml rebuilds the shapes the exporter flattens', () => {
     [
       'a variable box feeds the pin the rung runs through',
       rail('left', '1') + inVariable('9', 'TRUE') + ctu('1.left-rail,9') + rail('right', '3', '20.Q'),
-      'block "CTU" has a variable box on a pin that cannot take one',
+      'block "CTU" has a variable box on the pin the rung runs through',
+    ],
+    [
+      'a variable box feeds a pin the block does not have',
+      rail('left', '1') +
+        inVariable('9', 'TRUE') +
+        ctu(
+          '1.left-rail',
+          '<variable formalParameter="XYZ"><connectionPointIn><relPosition x="0" y="76"/><connection refLocalId="9"/></connectionPointIn></variable>',
+        ) +
+        rail('right', '3', '20.Q'),
+      'block "CTU" has no pin "XYZ"',
     ],
     [
       'a coil hangs off a secondary output',
@@ -420,4 +444,79 @@ it('draws blocks from the XML pins when no signatures are supplied at all', () =
   expect(warnings).toEqual([
     'POU "main": block type "CTU" is not defined in the project or its libraries, its pins were taken from the XML',
   ])
+})
+
+describe('parseLadderXml grows extensible library blocks to the inputs the XML names', () => {
+  const systemLibraries = createTestStore().getState().libraries.system
+
+  const extensibleBlock = (typeName: string, inputs: string[], feeds: string[]) => {
+    const pins = inputs
+      .map(
+        (pin, i) =>
+          `<variable formalParameter="${pin}"><connectionPointIn><relPosition x="0" y="${76 + 40 * i}"/>${connections(
+            feeds[i],
+          )}</connectionPointIn></variable>`,
+      )
+      .join('')
+    return `<block localId="7" typeName="${typeName}" width="66" height="200" executionOrderId="0"><position x="100" y="0"/><inputVariables><variable formalParameter="EN"><connectionPointIn><relPosition x="0" y="36"/><connection refLocalId="1" formalParameter="left-rail"/></connectionPointIn></variable>${pins}</inputVariables><inOutVariables/><outputVariables><variable formalParameter="ENO"><connectionPointOut><relPosition x="66" y="36"/></connectionPointOut></variable><variable formalParameter=""><connectionPointOut><relPosition x="66" y="76"/></connectionPointOut></variable></outputVariables></block>`
+  }
+
+  const extensibleRung = (typeName: string, inputs: string[]) =>
+    rail('left', '1') +
+    inputs.map((_, i) => inVariable(String(30 + i), String(i + 1))).join('') +
+    extensibleBlock(
+      typeName,
+      inputs,
+      inputs.map((_, i) => String(30 + i)),
+    ) +
+    rail('right', '2', '7.ENO')
+
+  const parseWithLibraries = (ld: string) => {
+    const project = parseXmlDocument(
+      `<project><types><pous><pou name="main" pouType="program"><body><LD>${ld}</LD></body></pou></pous></types></project>`,
+    )
+    const pou = asRecord(asRecord(project.types).pous).pou
+    const main = Array.isArray(pou) ? asRecord(pou[0]) : {}
+    const resolveBlock = createBlockSignatureResolver([], systemLibraries, undefined)
+    return parseLadderXml('main', asRecord(main.body).LD, { resolveBlock })
+  }
+
+  it.each([
+    ['ADD', ['IN1', 'IN2', 'IN3']],
+    ['AND', ['IN1', 'IN2', 'IN3', 'IN4']],
+    ['MUX', ['K', 'IN0', 'IN1', 'IN2']],
+  ])('rebuilds %s wired on %j with every pin bound', (typeName, inputs) => {
+    const { body, warnings } = parseWithLibraries(extensibleRung(typeName, inputs))
+    expect(warnings).toEqual([])
+    const block = blockIn(body.rungs[0])
+    expect(block.data.variant.extensible).toBe(true)
+    expect(block.data.inputHandles.map((h) => h.id)).toEqual(['EN', ...inputs])
+    expect(block.data.connectedVariables.map((v) => v.handleId)).toEqual(inputs)
+  })
+
+  it('keeps the default inputs when the XML names fewer', () => {
+    const { body } = parseWithLibraries(extensibleRung('ADD', ['IN1']))
+    expect(blockIn(body.rungs[0]).data.inputHandles.map((h) => h.id)).toEqual(['EN', 'IN1', 'IN2'])
+  })
+
+  it('keeps every input of a block on a rung it cannot rebuild', () => {
+    const { body, warnings } = parseWithLibraries(
+      rail('left', '1') +
+        element('contact', '5', 'X', '1.left-rail', 100) +
+        inVariable('30', 'A') +
+        inVariable('31', 'B') +
+        extensibleBlock('ADD', ['IN1', 'IN2', 'IN3'], ['30', '31', '5.output']) +
+        rail('right', '2', '7.ENO'),
+    )
+    expect(warnings).toEqual([
+      'POU "main": rung 1 kept the layout from the XML, because elements are wired to the secondary input "IN3" of block "ADD"',
+    ])
+    const rungs = body.rungs.map((rung) => ({
+      ...rung,
+      nodes: rung.nodes.map((node) => ({ ...node, type: node.type ?? '' })),
+    }))
+    expect(emitLdBody({ rungs }).bodySt).toContain(
+      'ADD(EN := TRUE, IN1 := A, IN2 := B, IN3 := X, ENO => _TMP_ADD7_ENO)',
+    )
+  })
 })

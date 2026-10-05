@@ -1,4 +1,4 @@
-import { reduceSeriesParallel, SeriesParallel, SINK, SOURCE } from '../series-parallel'
+import { MAX_REDUCIBLE_ELEMENTS, reduceSeriesParallel, SeriesParallel, SINK, SOURCE } from '../series-parallel'
 
 const elements = (...ids: string[]) => ids.map((id) => ({ id, value: id }))
 const rankByName = (id: string) => id.charCodeAt(0)
@@ -156,5 +156,16 @@ describe('reduceSeriesParallel', () => {
         ],
       ),
     ).toBe('the rung is not a series-parallel network from the left rail to the right rail')
+  })
+
+  it('refuses a rung too large to reduce instead of freezing on it', () => {
+    const ids = Array.from({ length: MAX_REDUCIBLE_ELEMENTS + 1 }, (_, i) => `E${i}`)
+    const chain: Array<[string | typeof SOURCE, string | typeof SINK]> = ids.map((id, i) => [
+      i === 0 ? SOURCE : ids[i - 1],
+      id,
+    ])
+    expect(reduce(ids, [...chain, [ids[ids.length - 1], SINK]])).toBe(
+      `the rung has more than ${MAX_REDUCIBLE_ELEMENTS} elements`,
+    )
   })
 })

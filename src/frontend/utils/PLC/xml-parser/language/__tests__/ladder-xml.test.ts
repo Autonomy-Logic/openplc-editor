@@ -219,6 +219,7 @@ describe('parseLadderXml', () => {
     })
     expect(warnings).toEqual([
       'POU "p": rung 1 kept the layout from the XML, because it does not have exactly one left and one right power rail',
+      'POU "p": block type "CTU" is not defined in the project or its libraries, its pins were taken from the XML',
     ])
     const blockNode = body.rungs[0].nodes.find((n) => n.id === 'BLOCK-2') as BlockNode<BlockVariant> | undefined
     expect(blockNode?.data.inputHandles[0].id).toBe('PV')
@@ -270,6 +271,7 @@ describe('parseLadderXml', () => {
     expect(warnings).toEqual([
       'POU "p": 1 unconnected LD variable box(es) skipped',
       'POU "p": rung 1 kept the layout from the XML, because it does not have exactly one left and one right power rail',
+      'POU "p": block type "ADD" is not defined in the project or its libraries, its pins were taken from the XML',
     ])
     const allNodes = body.rungs.flatMap((r) => r.nodes)
     const outVarNode = allNodes.find((n) => n.id === 'OUTPUT-VARIABLE-3')

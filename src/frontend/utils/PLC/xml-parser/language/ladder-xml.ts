@@ -16,6 +16,10 @@ import { buildEdge } from '@root/frontend/components/_molecules/graphical-editor
 import { updateDiagramElementsPosition } from '@root/frontend/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { LadderFlowType, RungLadderState } from '@root/frontend/store/slices'
 import { newUuid } from '@root/frontend/utils/new-uuid'
+import {
+  classifyBlockVariables,
+  rebuildVariablesForInputCount,
+} from '@root/frontend/utils/PLC/extensible-block-variables'
 import { Edge, Position } from '@xyflow/react'
 
 import type { BlockSignature, BlockSignatureResolver } from '../block-signatures'
@@ -518,6 +522,20 @@ function signatureFromXmlPins(block: BlockNode<BlockVariant>): BlockSignature {
   }
 }
 
+// A library signature only declares the default inputs of an extensible block (IN1, IN2 for ADD).
+function fitExtensibleInputs(signature: BlockSignature, imported: BlockNode<BlockVariant>): BlockSignature {
+  if (!signature.extensible) return signature
+  const xmlInputs = imported.data.inputHandles.map((handle) => ({
+    name: (handle.id ?? '').toUpperCase(),
+    class: 'input',
+    type: { definition: 'generic-type', value: 'ANY' },
+  }))
+  const xmlCount = classifyBlockVariables(xmlInputs).extensibleInputs.length
+  const { fixedInputs, extensibleInputs } = classifyBlockVariables(signature.variables)
+  if (xmlCount <= extensibleInputs.length) return signature
+  return { ...signature, variables: rebuildVariablesForInputCount(signature.variables, fixedInputs.length + xmlCount) }
+}
+
 function buildNativeBlock(
   pouName: string,
   imported: BlockNode<BlockVariant>,
@@ -531,6 +549,7 @@ function buildNativeBlock(
     )
     signature = signatureFromXmlPins(imported)
   }
+  signature = fitExtensibleInputs(signature, imported)
   const block: BlockNode<BlockVariant> = nodesBuilder.block({
     id: imported.id,
     posX: 0,
@@ -727,10 +746,14 @@ function rebuildRung(
       const handles = direction === 'input' ? block.data.inputHandles : block.data.outputHandles
       const mainPin = direction === 'input' ? block.data.inputConnector?.id : block.data.outputConnector?.id
       const pin = findPin(handles, direction === 'input' ? edge.targetHandle : edge.sourceHandle)
-      if (!pin || pin === mainPin) {
+      if (!pin) {
+        const xmlPin = (direction === 'input' ? edge.targetHandle : edge.sourceHandle) ?? ''
+        return { ok: false, reason: `block "${block.data.variant.name}" has no pin "${xmlPin}"` }
+      }
+      if (pin === mainPin) {
         return {
           ok: false,
-          reason: `block "${block.data.variant.name}" has a variable box on a pin that cannot take one`,
+          reason: `block "${block.data.variant.name}" has a variable box on the pin the rung runs through`,
         }
       }
       const { name } = variableNode.data.variable
@@ -825,6 +848,17 @@ function rebuildRung(
   const laidOut = updateDiagramElementsPosition(rung, NEW_RUNG_BOUNDS)
   warnings.push(...blockWarnings)
   return { ok: true, rung: { ...rung, nodes: laidOut.nodes, edges: laidOut.edges } }
+}
+
+function withResolvedSignature(
+  pouName: string,
+  node: LadderParsedNode,
+  context: LadderParseContext,
+  warnings: string[],
+): LadderParsedNode {
+  if (!isBlock(node)) return node
+  const { variant, executionControl, lockExecutionControl } = buildNativeBlock(pouName, node, context, warnings).data
+  return { ...node, data: { ...node.data, variant, executionControl, lockExecutionControl } }
 }
 
 export function parseLadderXml(
@@ -944,6 +978,9 @@ export function parseLadderXml(
     if (rebuilt.ok) return rebuilt.rung
     warnings.push(`POU "${pouName}": rung ${index + 1} kept the layout from the XML, because ${rebuilt.reason}`)
 
+    // Without the resolved signature its blocks would transpile with no inputs.
+    const fallbackNodes = rungNodes.map((node) => withResolvedSignature(pouName, node, context, warnings))
+
     // Kept as absolute XML coordinates: the rung is internally consistent, it just starts further down the canvas.
     const minX = Math.min(...rungNodes.map((n) => n.position.x))
     const minY = Math.min(...rungNodes.map((n) => n.position.y))
@@ -956,7 +993,7 @@ export function parseLadderXml(
       defaultBounds: [minX, minY, maxX, maxY],
       reactFlowViewport: [maxX - minX, maxY - minY],
       selectedNodes: [],
-      nodes: rungNodes,
+      nodes: fallbackNodes,
       edges: rungEdges,
     }
   })

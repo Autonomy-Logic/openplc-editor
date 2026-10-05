@@ -24,6 +24,9 @@ interface GraphEdge<T> {
   expr: SeriesParallel<T>
 }
 
+// The reduction is roughly cubic in the rung size; past this a rung keeps its XML layout instead.
+export const MAX_REDUCIBLE_ELEMENTS = 200
+
 const SOURCE_VERTEX = '\u0000source'
 const SINK_VERTEX = '\u0000sink'
 
@@ -77,6 +80,9 @@ export function reduceSeriesParallel<T>(
   wires: SeriesParallelWire[],
   rank: (value: T) => number,
 ): SeriesParallelResult<T> {
+  if (elements.length > MAX_REDUCIBLE_ELEMENTS) {
+    return { ok: false, reason: `the rung has more than ${MAX_REDUCIBLE_ELEMENTS} elements` }
+  }
   const inVertex = (id: string) => `in:${id}`
   const outVertex = (id: string) => `out:${id}`
 
