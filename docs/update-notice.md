@@ -36,7 +36,10 @@ and `app-update:download`; the web has no adapter, so it never shows the button.
   and take the newest, so an rc hears of the next rc as well as of the stable.
 - The installer is picked with the website's rules (`mapAssetToOS` in
   autonomy-website): `-arm64.exe` / `.exe`, `-arm.dmg` / `.dmg`,
-  `-arm64.AppImage` / `.AppImage`. Only files under
+  `-arm64.AppImage` / `.AppImage`. A Mac running the Intel build under Rosetta
+  (`app.runningUnderARM64Translation`) is offered the Apple silicon `.dmg`, and
+  the Intel one only when the release has none; Windows on ARM running the x64
+  build stays on x64 until installing ARM64 over it is tested. Only files under
   `https://github.com/Autonomy-Logic/openplc-editor/releases/download/` are
   ever downloaded.
 - Integrity: GitHub stores a `sha256:` digest for every uploaded asset and the

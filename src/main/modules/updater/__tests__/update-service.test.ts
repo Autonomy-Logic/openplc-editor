@@ -54,7 +54,7 @@ interface Harness {
 
 function setup({
   platform = 'linux',
-  arch = 'x64',
+  archs = ['x64'],
   currentVersion = '4.3.2',
   isPackaged = true,
   autoCheck = true,
@@ -62,7 +62,7 @@ function setup({
   sha256 = SHA,
 }: {
   platform?: NodeJS.Platform
-  arch?: string
+  archs?: string[]
   currentVersion?: string
   isPackaged?: boolean
   autoCheck?: boolean
@@ -89,7 +89,7 @@ function setup({
   const deps: UpdateServiceDeps = {
     isPackaged,
     platform,
-    arch,
+    archs,
     currentVersion,
     fetchLatestRelease,
     download,
@@ -287,10 +287,26 @@ describe('download and open', () => {
     ['linux', 'x64', 'OpenPLC.Editor-4.3.3.AppImage'],
     ['linux', 'arm64', 'OpenPLC.Editor-4.3.3-ARM64.AppImage'],
   ] as const)('%s %s downloads %s', async (platform, arch, name) => {
-    const h = await available({ platform, arch })
+    const h = await available({ platform, archs: [arch] })
     await h.service.downloadAndOpen()
     expect(h.download.mock.calls[0][0]).toMatchObject({ name })
     expect(h.openInstaller).toHaveBeenCalledWith(`/home/user/Downloads/${name}`)
+  })
+
+  it('a Mac under Rosetta gets the Apple silicon installer', async () => {
+    const h = await available({ platform: 'darwin', archs: ['arm64', 'x64'] })
+    await h.service.downloadAndOpen()
+    expect(h.download.mock.calls[0][0]).toMatchObject({ name: 'OpenPLC_Editor_4.3.3-ARM.dmg' })
+  })
+
+  it('falls back to the next architecture when the release has no installer for the first', async () => {
+    const h = await available({
+      platform: 'darwin',
+      archs: ['arm64', 'x64'],
+      latest: release('4.3.3', [asset('OpenPLC_Editor_4.3.3.dmg')]),
+    })
+    await h.service.downloadAndOpen()
+    expect(h.download.mock.calls[0][0]).toMatchObject({ name: 'OpenPLC_Editor_4.3.3.dmg' })
   })
 
   it('reports progress on the button, then shows it as downloaded', async () => {
@@ -309,7 +325,7 @@ describe('download and open', () => {
     ['darwin', 'The OpenPLC Editor 4.3.3 installer is open', /drag the new version into Applications/],
     ['linux', 'OpenPLC Editor 4.3.3 is downloaded', /saved to \/home\/user\/Downloads/],
   ] as const)('%s: tells the user what is left to do', async (platform, message, detail) => {
-    const h = await available({ platform, arch: 'x64' })
+    const h = await available({ platform, archs: ['x64'] })
     await h.service.downloadAndOpen()
     expect(messages(h)).toEqual([message])
     expect(h.dialogs[0].detail).toMatch(detail)

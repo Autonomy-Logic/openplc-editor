@@ -6,7 +6,7 @@ import { basename, join } from 'path'
 import { z } from 'zod'
 
 import { store } from '../store'
-import type { Release, ReleaseAsset } from './release-assets'
+import { installerArchs, type Release, type ReleaseAsset } from './release-assets'
 import { createUpdateService, type DownloadedFile, type UpdateService } from './update-service'
 import { compareVersions } from './version-order'
 
@@ -139,7 +139,7 @@ export function createElectronUpdateService({
   const service = createUpdateService({
     isPackaged: app.isPackaged,
     platform: process.platform,
-    arch: process.arch,
+    archs: installerArchs(process.platform, process.arch, app.runningUnderARM64Translation),
     currentVersion: app.getVersion(),
     fetchLatestRelease,
     download,

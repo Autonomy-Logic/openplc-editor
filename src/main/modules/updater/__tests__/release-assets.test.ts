@@ -1,4 +1,4 @@
-import { pickInstaller, RELEASE_DOWNLOAD_PREFIX, type ReleaseAsset, sha256Of } from '../release-assets'
+import { installerArchs, pickInstaller, RELEASE_DOWNLOAD_PREFIX, type ReleaseAsset, sha256Of } from '../release-assets'
 
 /** The asset names of the real v4.3.2 release (GitHub turned the spaces into dots). */
 const ASSETS: ReleaseAsset[] = [
@@ -39,5 +39,21 @@ describe('sha256Of', () => {
 
   it.each([undefined, '', 'sha512:abc', `sha256:${'a'.repeat(63)}`])('refuses %p', (digest) => {
     expect(sha256Of(digest)).toBeNull()
+  })
+})
+
+describe('installerArchs', () => {
+  it('a Mac running the Intel build under Rosetta prefers Apple silicon, then Intel', () => {
+    expect(installerArchs('darwin', 'x64', true)).toEqual(['arm64', 'x64'])
+  })
+
+  it.each([
+    ['darwin', 'x64', false, ['x64']],
+    ['darwin', 'arm64', false, ['arm64']],
+    ['win32', 'x64', true, ['x64']],
+    ['win32', 'arm64', false, ['arm64']],
+    ['linux', 'x64', false, ['x64']],
+  ] as const)('%s %s (translated: %s) keeps %p', (platform, arch, translated, expected) => {
+    expect(installerArchs(platform, arch, translated)).toEqual(expected)
   })
 })

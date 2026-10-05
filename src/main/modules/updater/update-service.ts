@@ -32,7 +32,8 @@ export interface DownloadedFile {
 export interface UpdateServiceDeps {
   isPackaged: boolean
   platform: NodeJS.Platform
-  arch: string
+  /** Architectures whose installer to offer, best first (see `installerArchs`). */
+  archs: string[]
   currentVersion: string
   /** The newest release this build should hear about; null when there is none. */
   fetchLatestRelease(includePrereleases: boolean): Promise<Release | null>
@@ -95,6 +96,14 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   }
 
   const isPrerelease = () => deps.currentVersion.includes('-')
+
+  const pickFirst = (assets: ReleaseAsset[]) => {
+    for (const arch of deps.archs) {
+      const installer = pickInstaller(assets, deps.platform, arch)
+      if (installer) return installer
+    }
+    return null
+  }
 
   const showDownloadPage = async (message: string, detail: string) => {
     const pressed = await deps.showDialog({
@@ -161,10 +170,10 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       checking = false
     }
 
-    const installer = release ? pickInstaller(release.assets, deps.platform, deps.arch) : null
+    const installer = release ? pickFirst(release.assets) : null
     if (!release || !isNewer(release.version, deps.currentVersion) || !installer) {
       if (release && installer === null && isNewer(release.version, deps.currentVersion)) {
-        deps.log('warn', `[updater] ${release.version} has no installer for ${deps.platform} ${deps.arch}`)
+        deps.log('warn', `[updater] ${release.version} has no installer for ${deps.platform} ${deps.archs.join('/')}`)
       }
       if (manual) {
         await deps.showDialog({

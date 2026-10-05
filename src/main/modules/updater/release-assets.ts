@@ -56,6 +56,17 @@ export function pickInstaller(assets: ReleaseAsset[], platform: NodeJS.Platform,
   )
 }
 
+/**
+ * The architectures whose installer to offer, best first. A Mac running the
+ * Intel build under Rosetta is an Apple silicon Mac: it gets the Apple silicon
+ * installer, and the Intel one only when a release has none. Windows on ARM
+ * running the x64 build is left on x64 until installing ARM64 over it is tested.
+ */
+export function installerArchs(platform: NodeJS.Platform, arch: string, translated: boolean): string[] {
+  if (platform === 'darwin' && translated && arch !== 'arm64') return ['arm64', arch]
+  return [arch]
+}
+
 /** The hex digest of a GitHub `sha256:` digest, or null when it is missing or not one. */
 export function sha256Of(digest: string | undefined): string | null {
   const match = /^sha256:([0-9a-f]{64})$/i.exec(digest ?? '')
