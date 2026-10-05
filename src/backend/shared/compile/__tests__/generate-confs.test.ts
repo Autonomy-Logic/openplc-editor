@@ -26,6 +26,7 @@ jest.mock('../../utils/modbus/generate-modbus-master-config', () => ({
 }))
 jest.mock('../../ethercat/generate-ethercat-config', () => ({
   generateEthercatConfig: jest.fn(),
+  generateEtherdogConfigs: jest.fn(),
 }))
 jest.mock('../../ethercat/validate-ethercat-config', () => ({
   validateEthercatConfig: jest.fn(),
@@ -60,7 +61,7 @@ jest.mock('../../../../frontend/utils/get-error-message', () => ({
 }))
 
 import { generateModbusMasterConfig } from '../../utils/modbus/generate-modbus-master-config'
-import { generateEthercatConfig } from '../../ethercat/generate-ethercat-config'
+import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
 import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
@@ -72,6 +73,7 @@ const mockedModbusMaster = generateModbusMasterConfig as jest.MockedFunction<typ
 const mockedS7Comm = generateS7CommConfig as jest.MockedFunction<typeof generateS7CommConfig>
 const mockedOpcUa = generateOpcUaConfig as jest.MockedFunction<typeof generateOpcUaConfig>
 const mockedEthercatGen = generateEthercatConfig as jest.MockedFunction<typeof generateEthercatConfig>
+const mockedEtherdogGen = generateEtherdogConfigs as jest.MockedFunction<typeof generateEtherdogConfigs>
 const mockedEthercatValidate = validateEthercatConfig as jest.MockedFunction<typeof validateEthercatConfig>
 
 function makeInput(overrides?: Partial<GenerateConfsInput>): GenerateConfsInput {
@@ -81,6 +83,7 @@ function makeInput(overrides?: Partial<GenerateConfsInput>): GenerateConfsInput 
     instances: [],
     debugMapContent: '{}',
     log: jest.fn(),
+    runtimeVersion: null,
     ...overrides,
   }
 }
@@ -94,6 +97,7 @@ beforeEach(() => {
   mockedS7Comm.mockReturnValue(null)
   mockedOpcUa.mockReturnValue(null)
   mockedEthercatGen.mockReturnValue(null)
+  mockedEtherdogGen.mockReturnValue(null)
   mockedEthercatValidate.mockReturnValue([])
 })
 
@@ -112,6 +116,8 @@ describe('generateRuntimeConfs — happy path', () => {
       s7Comm: '{"s7":{}}',
       opcUa: '{"opcua":{}}',
       ethercat: '{"ethercat":{}}',
+      ethercatBusconfig: null,
+      ethercatIomapping: null,
     })
   })
 
@@ -151,14 +157,16 @@ describe('generateRuntimeConfs — happy path', () => {
   })
 
   it('returns null for confs whose generator returned null', () => {
-    // Default-mock behavior (all null).
+    // Default-mock behavior (all null).  Legacy EtherCAT keeps its empty file.
     const result = generateRuntimeConfs(makeInput())
     expect(result).toEqual({
       modbusSlave: null,
       modbusMaster: null,
       s7Comm: null,
       opcUa: null,
-      ethercat: null,
+      ethercat: '',
+      ethercatBusconfig: null,
+      ethercatIomapping: null,
     })
   })
 })
@@ -231,11 +239,12 @@ describe('generateRuntimeConfs — EtherCAT validation gate', () => {
     expect(result.ethercat).toBe('{"ethercat":"ok"}')
   })
 
-  it('returns ethercat: null when no remote devices configured (generator returns null)', () => {
+  it("returns ethercat: '' when no remote devices configured (legacy file is always written)", () => {
     mockedEthercatGen.mockReturnValue(null)
     mockedEthercatValidate.mockReturnValue([])
     const result = generateRuntimeConfs(makeInput())
-    expect(result.ethercat).toBeNull()
+    expect(result.ethercat).toBe('')
+    expect(mockedEthercatValidate).toHaveBeenCalledWith(null)
   })
 
   it('does not log anything for EtherCAT validation failures (caller surfaces the message)', () => {
@@ -247,6 +256,59 @@ describe('generateRuntimeConfs — EtherCAT validation gate', () => {
       // expected
     }
     expect(log).not.toHaveBeenCalled()
+  })
+})
+
+describe('generateRuntimeConfs — EtherCAT format by runtime version', () => {
+  const split = { busconfig: '[{"bus":1}]', iomapping: '{"version":1,"masters":[]}' }
+
+  it('emits the legacy single file below MIN_ETHERDOG_RUNTIME_VERSION', () => {
+    mockedEthercatGen.mockReturnValue('{"ethercat":"legacy"}')
+    mockedEtherdogGen.mockReturnValue(split)
+    const result = generateRuntimeConfs(makeInput({ runtimeVersion: 'v4.2.4' }))
+    expect(result.ethercat).toBe('{"ethercat":"legacy"}')
+    expect(result.ethercatBusconfig).toBeNull()
+    expect(result.ethercatIomapping).toBeNull()
+    expect(mockedEtherdogGen).not.toHaveBeenCalled()
+  })
+
+  it('emits the busconfig + iomapping pair at MIN_ETHERDOG_RUNTIME_VERSION and above', () => {
+    mockedEthercatGen.mockReturnValue('{"ethercat":"legacy"}')
+    mockedEtherdogGen.mockReturnValue(split)
+    for (const runtimeVersion of ['v4.3.0', '4.3.0-rc.1', 'v5.0.0']) {
+      const result = generateRuntimeConfs(makeInput({ runtimeVersion }))
+      expect(result.ethercat).toBeNull()
+      expect(result.ethercatBusconfig).toBe(split.busconfig)
+      expect(result.ethercatIomapping).toBe(split.iomapping)
+    }
+    expect(mockedEthercatGen).not.toHaveBeenCalled()
+    expect(mockedEthercatValidate).toHaveBeenCalledWith(split.busconfig, split.iomapping)
+  })
+
+  it('emits no EtherCAT file at all for an EtherDOG runtime when the project has no EtherCAT', () => {
+    const result = generateRuntimeConfs(makeInput({ runtimeVersion: 'v4.3.0' }))
+    expect(result.ethercat).toBeNull()
+    expect(result.ethercatBusconfig).toBeNull()
+    expect(result.ethercatIomapping).toBeNull()
+  })
+
+  it('falls back to the legacy single file when the runtime version is unknown', () => {
+    mockedEthercatGen.mockReturnValue('{"ethercat":"legacy"}')
+    mockedEtherdogGen.mockReturnValue(split)
+    for (const runtimeVersion of [null, '', 'dev']) {
+      const result = generateRuntimeConfs(makeInput({ runtimeVersion }))
+      expect(result.ethercat).toBe('{"ethercat":"legacy"}')
+      expect(result.ethercatBusconfig).toBeNull()
+    }
+    expect(mockedEtherdogGen).not.toHaveBeenCalled()
+  })
+
+  it('throws when the EtherDOG pair fails validation', () => {
+    mockedEtherdogGen.mockReturnValue(split)
+    mockedEthercatValidate.mockReturnValue(['entry %IX0.0 matches 0 channel(s)'])
+    expect(() => generateRuntimeConfs(makeInput({ runtimeVersion: 'v4.3.0' }))).toThrow(
+      'EtherCAT configuration is invalid: entry %IX0.0 matches 0 channel(s)',
+    )
   })
 })
 

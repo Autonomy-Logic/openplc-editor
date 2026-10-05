@@ -24,7 +24,9 @@ function baseInput(overrides: Partial<ComposeRuntimeV4BundleInput> = {}): Compos
       modbusMaster: null,
       s7Comm: null,
       opcUa: null,
-      ethercat: '{"masters":[]}',
+      ethercat: null,
+      ethercatBusconfig: null,
+      ethercatIomapping: null,
     },
     ...overrides,
   }
@@ -83,8 +85,9 @@ describe('composeRuntimeV4Bundle', () => {
     expect('conf/modbus_master.json' in files).toBe(false)
     expect('conf/s7comm.json' in files).toBe(false)
     expect('conf/opcua.json' in files).toBe(false)
-    // ethercat is always emitted (always non-null on input).
-    expect(files['conf/ethercat.json']).toBe('{"masters":[]}')
+    expect('conf/ethercat.json' in files).toBe(false)
+    expect('conf/ethercat_busconfig.json' in files).toBe(false)
+    expect('conf/ethercat_iomapping.json' in files).toBe(false)
   })
 
   it('writes each conf/*.json that is provided', () => {
@@ -95,7 +98,9 @@ describe('composeRuntimeV4Bundle', () => {
           modbusMaster: '{"masters":[]}',
           s7Comm: '{"servers":[]}',
           opcUa: '{"endpoints":[]}',
-          ethercat: '{"masters":[]}',
+          ethercat: null,
+          ethercatBusconfig: '[{"name":"bus"}]',
+          ethercatIomapping: '{"version":1,"masters":[]}',
         },
       }),
     )
@@ -103,7 +108,20 @@ describe('composeRuntimeV4Bundle', () => {
     expect(files['conf/modbus_master.json']).toBe('{"masters":[]}')
     expect(files['conf/s7comm.json']).toBe('{"servers":[]}')
     expect(files['conf/opcua.json']).toBe('{"endpoints":[]}')
-    expect(files['conf/ethercat.json']).toBe('{"masters":[]}')
+    expect(files['conf/ethercat_busconfig.json']).toBe('[{"name":"bus"}]')
+    expect(files['conf/ethercat_iomapping.json']).toBe('{"version":1,"masters":[]}')
+    expect('conf/ethercat.json' in files).toBe(false)
+  })
+
+  it('writes the legacy conf/ethercat.json when given, even empty, and no split files', () => {
+    const confs = { ...baseInput().confs }
+    expect(composeRuntimeV4Bundle(baseInput({ confs: { ...confs, ethercat: '[{"name":"bus"}]' } }))).toMatchObject({
+      'conf/ethercat.json': '[{"name":"bus"}]',
+    })
+    const files = composeRuntimeV4Bundle(baseInput({ confs: { ...confs, ethercat: '' } }))
+    expect(files['conf/ethercat.json']).toBe('')
+    expect('conf/ethercat_busconfig.json' in files).toBe(false)
+    expect('conf/ethercat_iomapping.json' in files).toBe(false)
   })
 
   it('produces the file set runtime compile.sh check_required_files asserts', () => {
