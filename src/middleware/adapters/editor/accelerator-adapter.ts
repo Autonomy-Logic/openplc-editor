@@ -19,6 +19,7 @@
  *   project:save-accelerator
  *   project:save-file-accelerator
  *   project:retrieve-accelerator
+ *   project:import-plcopen-accelerator
  *   workspace:close-project-accelerator
  *   compiler:export-project-request
  *   workspace:close-tab-accelerator
@@ -63,6 +64,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
 
     onRetrieveProject(callback: () => void): Unsubscribe {
       return window.bridge.retrieveProjectAccelerator(() => callback())
+    },
+
+    onImportPlcopen(callback: () => void): Unsubscribe {
+      return window.bridge.importPlcopenAccelerator(() => callback())
     },
 
     onCloseProject(callback: () => void): Unsubscribe {
