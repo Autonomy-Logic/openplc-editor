@@ -58,7 +58,7 @@ export const packageUpdateNotifier = createPackageUpdateNotifier(editorPackages,
  * Editor platform ports — all port interfaces wired to Electron IPC bridge.
  */
 export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
-  const editorProject = createEditorProjectAdapter()
+  const editorProject = createEditorProjectAdapter(store)
   const editorRuntime = createEditorRuntimeAdapter(store, () => _runtimeIpAddress)
   // Composed here because it needs both the project and runtime ports in scope; see `open-fetched-project.ts`.
   editorRuntime.openFetchedProject = (project) => openFetchedProject(store, project, editorProject)

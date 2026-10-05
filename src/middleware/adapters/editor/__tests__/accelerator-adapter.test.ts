@@ -47,6 +47,7 @@ beforeEach(() => {
     saveProjectAccelerator: register('saveProject'),
     saveProjectAsAccelerator: register('saveProjectAs'),
     retrieveProjectAccelerator: register('retrieveProject'),
+    importPlcopenAccelerator: register('importPlcopen'),
     saveFileAccelerator: register('saveFile'),
     closeProjectAccelerator: register('closeProject'),
     exportProjectRequest: register('exportProject'),
@@ -107,6 +108,7 @@ testAccelerator('onOpenProject', 'openProject', 'handleOpenProjectRequest')
 testAccelerator('onSaveProject', 'saveProject', 'saveProjectAccelerator')
 testAccelerator('onSaveProjectAs', 'saveProjectAs', 'saveProjectAsAccelerator')
 testAccelerator('onRetrieveProject', 'retrieveProject', 'retrieveProjectAccelerator')
+testAccelerator('onImportPlcopen', 'importPlcopen', 'importPlcopenAccelerator')
 testAccelerator('onSaveFile', 'saveFile', 'saveFileAccelerator')
 testAccelerator('onCloseProject', 'closeProject', 'closeProjectAccelerator')
 testAccelerator('onExportProject', 'exportProject', 'exportProjectRequest')
