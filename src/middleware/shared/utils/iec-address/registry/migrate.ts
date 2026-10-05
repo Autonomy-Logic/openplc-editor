@@ -17,6 +17,7 @@
  *      compact and alias-bound variables follow their moved addresses.
  */
 
+import type { AddressProducerCapabilities } from '../../target-capabilities/types'
 import type { PoolInputs } from '../address-pool'
 import { parseAddress } from './address-space'
 import { recalculate } from './registry'
@@ -30,6 +31,32 @@ import type {
 } from './types'
 
 const PIN_MAPPING_KIND = 'pin-mapping'
+
+/**
+ * The consumer kinds a target's capabilities keep active in allocation.
+ *
+ * One place, because two callers apply the rule and they must not drift: the
+ * store's project-wide recalculation, which decides where producers land, and
+ * the compile-time I/O image sizer, which decides how big the runtime's image
+ * has to be. A kind active in one and not the other would size an image that
+ * does not cover the addresses actually allocated.
+ *
+ * A target that omits a kind frees its space, and the still-active producers
+ * compact into it on the next recalculation — that is the deliberate
+ * target-switch behaviour, not an oversight. Note that an EMPTY result is a
+ * meaningful answer ("this target supports no producers") and is NOT the same
+ * as passing no `activeKinds` at all, which means "every kind"; an unresolved
+ * board must therefore be answered with `ALL_ADDRESS_PRODUCERS_ACTIVE` rather
+ * than with `EMPTY_CAPABILITIES` (DOPE-440).
+ */
+export function activeKindsFor(caps: AddressProducerCapabilities): Set<string> {
+  const kinds = new Set<string>()
+  if (caps.pinMapping) kinds.add(PIN_MAPPING_KIND)
+  if (caps.vppIo) kinds.add('vpp-io')
+  if (caps.modbusTcpRemote) kinds.add('modbus-tcp-remote')
+  if (caps.ethercat) kinds.add('ethercat')
+  return kinds
+}
 
 /* Consumer-id builders. Exported so the store's address write-back keys the
  * registry the exact same way the migration created it (no drift). */

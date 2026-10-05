@@ -7,6 +7,11 @@
  *   2. Allocate the rest, lowest-free-index first, per independent prefix
  *      space.
  *
+ * Besides the assignments, the result carries `slotCounts`: how many slots
+ * each prefix space ended up needing. It is the same reservation data the
+ * two passes already build, so exposing it costs nothing, and it is what
+ * sizes the runtime's I/O image (DOPE-615).
+ *
  * Order is stable (consumer `order` then `id`, channels in declaration
  * order) so the output is reproducible across sessions — re-opening a
  * project never gratuitously renumbers. Non-pinned channels never collide
@@ -112,5 +117,23 @@ export function allocateAddresses(
     }
   }
 
-  return { assignments, conflicts }
+  // Per-prefix high-water mark, from the reservation sets already built
+  // above. `usedByPrefix` never holds an empty set (every `used()` call is
+  // followed by an `add`, or by a conflict on an already-populated set), but
+  // the guard keeps an absent prefix indistinguishable from a zero one.
+  // Iterated rather than `Math.max(...set)`: a space may legitimately hold
+  // tens of thousands of slots, and spreading that many arguments is an
+  // engine limit away from throwing.
+  const slotCounts: Record<string, number> = {}
+  for (const [prefix, set] of usedByPrefix) {
+    /* istanbul ignore next -- unreachable: see the invariant above */
+    if (set.size === 0) continue
+    let highest = 0
+    for (const linear of set) {
+      if (linear > highest) highest = linear
+    }
+    slotCounts[prefix] = highest + 1
+  }
+
+  return { assignments, conflicts, slotCounts }
 }

@@ -1,4 +1,4 @@
-import { resolveModuleChannels, type ResolverModuleDef } from '../resolve-module-channels'
+import { isValidManifestPrefix, resolveModuleChannels, type ResolverModuleDef } from '../resolve-module-channels'
 
 const rawChannels = [{ name: 'AI1', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' }]
 const euChannels = [{ name: 'AI1', type: 'analogInput', dataType: 'REAL', addressPrefix: '%ID' }]
@@ -163,5 +163,59 @@ describe('resolveModuleChannels', () => {
       },
     }
     expect(resolveModuleChannels(md, { data_format: 'engineering', i1_mode: 'bool' })).toEqual(euChannels)
+  })
+})
+
+describe('manifest address prefixes (DOPE-615, B7)', () => {
+  const withChannels = (channels: unknown[]) =>
+    resolveModuleChannels({ addressMapping: { channels } } as never, undefined)
+
+  it('accepts the eight the package schema allows', () => {
+    for (const prefix of ['%IX', '%QX', '%IW', '%QW', '%ID', '%QD', '%IL', '%QL']) {
+      expect(isValidManifestPrefix(prefix)).toBe(true)
+    }
+  })
+
+  it('refuses a memory prefix', () => {
+    // The one that matters. Memory has no external producer, so a channel
+    // claiming %MW would have memory allocated for a module that is not
+    // driving it -- the address space sized for a producer that is not there.
+    expect(isValidManifestPrefix('%MW')).toBe(false)
+    expect(isValidManifestPrefix('%MX')).toBe(false)
+  })
+
+  it('refuses a byte prefix, which the schema does not admit either', () => {
+    expect(isValidManifestPrefix('%IB')).toBe(false)
+    expect(isValidManifestPrefix('%QB')).toBe(false)
+  })
+
+  it('refuses anything that is not a prefix at all', () => {
+    expect(isValidManifestPrefix('')).toBe(false)
+    expect(isValidManifestPrefix('QW')).toBe(false)
+    expect(isValidManifestPrefix('%ZZ')).toBe(false)
+  })
+
+  it('warns once per channel, not once per render', () => {
+    // A pure resolver called per slot and per render: an unbounded stream of
+    // identical lines makes the log less useful rather than more.
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const channels = [{ name: 'repeat', type: 'analogInput', dataType: 'UINT', addressPrefix: '%MW' }]
+    withChannels(channels)
+    withChannels(channels)
+    withChannels(channels)
+    expect(warn).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
+  it('drops the offending channel and keeps the rest', () => {
+    // One bad channel must not take down the whole device screen.
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const out = withChannels([
+      { name: 'good', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' },
+      { name: 'bad', type: 'analogInput', dataType: 'UINT', addressPrefix: '%MW' },
+    ])
+    expect(out.map((channel) => channel.name)).toEqual(['good'])
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('bad'))
+    warn.mockRestore()
   })
 })

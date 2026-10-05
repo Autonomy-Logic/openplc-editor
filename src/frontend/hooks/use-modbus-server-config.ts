@@ -23,6 +23,7 @@ import { useCallback, useMemo } from 'react'
 
 import type { ModbusBufferMapping } from '../../middleware/shared/ports/types'
 import type {
+  ModbusSegment,
   ModbusSegmentCounts,
   ModbusServerProfile,
   ModbusServerTransport,
@@ -60,6 +61,18 @@ export interface ModbusServerView {
   /** Buffer counts in IEC values. Derived and read-only when the target's
    *  firmware fixes them. */
   buffers: ModbusSegmentCounts
+  /** Which segments carry a count the USER pinned, as opposed to one this view
+   *  filled in for display.
+   *
+   * The distinction is the whole point and it was invisible before: the screen
+   * showed DEFAULT_BUFFER_MAPPING's 1024 for a server that had persisted
+   * nothing, so a number the project did not contain looked exactly like one
+   * the user had typed. `compute-io-image` treats an absent count as "expose
+   * whatever the image turns out to be" and only an explicitly persisted one
+   * as a request, so the screen was promising an exposure the build would not
+   * make. Segments missing from this set render their number as a placeholder
+   * -- visibly not a value -- rather than as content. */
+  pinnedSegments: ReadonlySet<ModbusSegment>
   /** The address-map component and the save path both speak the persisted
    *  shape. */
   bufferMapping: ModbusBufferMapping
@@ -83,6 +96,25 @@ export interface ModbusServerActions {
   setPort: (port: number) => void
   setBindAddress: (address: string) => void
   setBufferCount: (group: keyof ModbusBufferMapping, field: string, value: number) => void
+}
+
+/** The segments whose count the project actually stores.
+ *
+ * Read off the persisted mapping and nothing else: a segment is pinned when
+ * its field is present, absent when it is not. `undefined` everywhere is the
+ * shape a server has before anyone touches the panel. */
+function pinnedFrom(mapping: ModbusBufferMapping | undefined): ReadonlySet<ModbusSegment> {
+  const pinned = new Set<ModbusSegment>()
+  if (!mapping) return pinned
+  if (mapping.holdingRegisters?.qwCount !== undefined) pinned.add('QW')
+  if (mapping.holdingRegisters?.mwCount !== undefined) pinned.add('MW')
+  if (mapping.holdingRegisters?.mdCount !== undefined) pinned.add('MD')
+  if (mapping.holdingRegisters?.mlCount !== undefined) pinned.add('ML')
+  if (mapping.coils?.qxBits !== undefined) pinned.add('QX')
+  if (mapping.coils?.mxBits !== undefined) pinned.add('MX')
+  if (mapping.discreteInputs?.ixBits !== undefined) pinned.add('IX')
+  if (mapping.inputRegisters?.iwCount !== undefined) pinned.add('IW')
+  return pinned
 }
 
 function countsFromMapping(mapping: ModbusBufferMapping): ModbusSegmentCounts {
@@ -166,6 +198,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       port: profile.configurablePort ? (config?.port ?? profile.fixedPort) : profile.fixedPort,
       bindAddress: config?.networkInterface || '0.0.0.0',
       buffers: counts,
+      pinnedSegments: pinnedFrom(config?.bufferMapping),
       bufferMapping: profile.configurableBuffers
         ? (config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING)
         : mappingFromCounts(counts),

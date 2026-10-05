@@ -27,6 +27,7 @@
  *   edit:undo-request
  *   edit:redo-request
  *   workspace:switch-perspective-accelerator
+ *   workspace:open-diagnostics-accelerator
  *   about:open-accelerator
  *   project:print-accelerator
  *   project:page-setup-accelerator
@@ -107,6 +108,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
 
     onAbout(callback: () => void): Unsubscribe {
       return window.bridge.aboutModalAccelerator(() => callback())
+    },
+
+    onOpenDiagnostics(callback: () => void): Unsubscribe {
+      return window.bridge.openDiagnosticsAccelerator(() => callback())
     },
 
     onQuitApp(callback: () => void): Unsubscribe {
