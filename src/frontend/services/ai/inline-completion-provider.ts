@@ -176,6 +176,7 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     private readonly language: AICompletionLanguage,
     private readonly aiPort: AIPort,
     private readonly session?: EdgeSessionState,
+    private readonly modelUri?: string,
   ) {
     // A sign-in ends the hold at once rather than at the end of the backoff.
     this.unsubscribeFromSession =
@@ -221,6 +222,9 @@ export class AIInlineCompletionProvider implements monaco.languages.InlineComple
     token: monaco.CancellationToken,
   ): Promise<monaco.languages.InlineCompletions> {
     const emptyResult = { items: [] }
+
+    // The selector matches on fsPath, which drops the URI authority (`pou` vs `pouvars`).
+    if (this.modelUri !== undefined && model.uri.toString() !== this.modelUri) return emptyResult
 
     const aiState = openPLCStoreBase.getState().ai
     if (!aiState.isEnabled) return emptyResult
