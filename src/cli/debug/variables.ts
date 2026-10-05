@@ -18,7 +18,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import {
   buildLeafInfoMap,
   type DebugLeafInfo,
@@ -73,7 +73,11 @@ export type LoadDebugIndexResult = { success: true; index: DebugVariableIndex } 
  * case, and it is reported as such rather than as a parse failure — the two
  * have completely different fixes.
  */
-export async function loadDebugIndex(projectPath: string, boardTarget: string): Promise<LoadDebugIndexResult> {
+export async function loadDebugIndex(
+  store: OpenPLCStore,
+  projectPath: string,
+  boardTarget: string,
+): Promise<LoadDebugIndexResult> {
   const path = debugMapPath(projectPath, boardTarget)
   let raw: string
   try {
@@ -86,7 +90,7 @@ export async function loadDebugIndex(projectPath: string, boardTarget: string): 
   }
   const map = parseDebugMap(raw)
   if (!map) return { success: false, error: `Malformed or unsupported debug map at ${path}` }
-  return { success: true, index: indexDebugMap(map) }
+  return { success: true, index: indexDebugMap(store, map) }
 }
 
 /**
@@ -106,7 +110,7 @@ export async function loadDebugIndex(projectPath: string, boardTarget: string): 
  * compiler, never from the stored project model, which can drift from the
  * compiled layout.
  */
-export function indexDebugMap(map: DebugMap): DebugVariableIndex {
+export function indexDebugMap(store: OpenPLCStore, map: DebugMap): DebugVariableIndex {
   const leafInfo = buildLeafInfoMap(map)
   const byPackedIndex = new Map<number, DebugLeafInfo>()
   for (const leaf of map.leaves) {
@@ -126,7 +130,7 @@ export function indexDebugMap(map: DebugMap): DebugVariableIndex {
 
   // The editor's own tree walk, off the hydrated store — same POUs, instances,
   // datatypes and system libraries the GUI passes.
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const { treeMap, warnings } = buildDebugVariableTreeMap(
     state.project.data.pous,
     state.project.data.configurations.resource.instances,

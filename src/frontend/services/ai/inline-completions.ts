@@ -2,19 +2,21 @@ import type * as monaco from 'monaco-editor'
 
 import type { AICompletionLanguage, AIPort } from '../../../middleware/shared/ports/ai-port'
 import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
+import type { OpenPLCStore } from '../../store'
 import { setImeComposing } from './ime-state'
 import { AIInlineCompletionProvider } from './inline-completion-provider'
 
 let didWarmCache = false
+let didWireImeListeners = false
 
 /** Test seam: resets the once-per-session latches. */
 export function __resetInlineCompletionsForTests(): void {
   didWarmCache = false
+  didWireImeListeners = false
 }
-let didWireImeListeners = false
 
 /** Existing and future Monaco editors both, once per session. */
-function wireImeCompositionListeners(m: typeof monaco): void {
+function wireImeCompositionListeners(m: InlineCompletionsMonaco): void {
   if (didWireImeListeners) return
   didWireImeListeners = true
 
@@ -27,11 +29,20 @@ function wireImeCompositionListeners(m: typeof monaco): void {
   m.editor.onDidCreateEditor(attach)
 }
 
+export type InlineCompletionsMonaco = {
+  languages: Pick<typeof monaco.languages, 'registerInlineCompletionsProvider'>
+  editor: Pick<typeof monaco.editor, 'getEditors' | 'onDidCreateEditor'>
+}
+
+export type InlineCompletionsModelUri = Pick<monaco.Uri, 'scheme' | 'fsPath' | 'toString'>
+
 /** Dispose when the POU or the language changes. */
 export function registerAIInlineCompletions(
+  store: OpenPLCStore,
   ai: AIPort,
   params: {
-    monacoInstance: typeof monaco
+    monacoInstance: InlineCompletionsMonaco
+    modelUri: InlineCompletionsModelUri
     pouName: string
     language: AICompletionLanguage
     session?: EdgeSessionState
@@ -45,8 +56,21 @@ export function registerAIInlineCompletions(
 
   wireImeCompositionListeners(params.monacoInstance)
 
-  const provider = new AIInlineCompletionProvider(params.pouName, params.language, ai, params.session)
-  const disposable = params.monacoInstance.languages.registerInlineCompletionsProvider(params.language, provider)
+  const provider = new AIInlineCompletionProvider(
+    store,
+    params.pouName,
+    params.language,
+    ai,
+    params.session,
+    params.modelUri.toString(),
+  )
+  // Scoped to this editor's model: a language-only selector would answer for every open POU of that language.
+  const selector: monaco.languages.LanguageFilter = {
+    language: params.language,
+    scheme: params.modelUri.scheme,
+    pattern: params.modelUri.fsPath,
+  }
+  const disposable = params.monacoInstance.languages.registerInlineCompletionsProvider(selector, provider)
 
   return {
     dispose() {

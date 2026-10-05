@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { attachMonacoModelSync } from '../monaco-model-sync'
 
 function makeStPou(name: string, body: string = 'x := 1;'): PLCPou {
@@ -26,7 +27,7 @@ function makeFbdPou(name: string): PLCPou {
 }
 
 function setProjectPous(pous: PLCPou[]) {
-  openPLCStoreBase.setState((s) => ({
+  store.setState((s) => ({
     ...s,
     project: {
       ...s.project,
@@ -90,7 +91,10 @@ function makeMonacoStub() {
   }
 }
 
+let store: OpenPLCStore
+
 beforeEach(() => {
+  store = createTestStore()
   setProjectPous([])
 })
 
@@ -99,7 +103,7 @@ describe('attachMonacoModelSync', () => {
     setProjectPous([makeStPou('Main', 'a := 1;'), makeStPou('Other', 'b := 2;')])
     const stub = makeMonacoStub()
 
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
 
     expect(stub.__models.has('inmemory://pou/Main.st')).toBe(true)
     expect(stub.__models.get('inmemory://pou/Main.st')!.value).toBe('a := 1;')
@@ -110,7 +114,7 @@ describe('attachMonacoModelSync', () => {
   it('creates a stub:// model with the opaque placeholder for non-ST POUs', () => {
     setProjectPous([makeFbdPou('TankFB')])
     const stub = makeMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
 
     const tank = stub.__models.get('inmemory://stub/TankFB.st')
     expect(tank).toBeDefined()
@@ -121,7 +125,7 @@ describe('attachMonacoModelSync', () => {
   it('updates an existing model when the POU body changes', () => {
     setProjectPous([makeStPou('P', 'a := 1;')])
     const stub = makeMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
 
     expect(stub.__models.get('inmemory://pou/P.st')!.value).toBe('a := 1;')
 
@@ -136,7 +140,7 @@ describe('attachMonacoModelSync', () => {
     // non-empty and the disappeared-POU sweep runs.
     setProjectPous([makeStPou('Doomed'), makeStPou('Keeper')])
     const stub = makeMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
     expect(stub.__models.has('inmemory://pou/Doomed.st')).toBe(true)
 
     setProjectPous([makeStPou('Keeper')])
@@ -152,7 +156,7 @@ describe('attachMonacoModelSync', () => {
     // model — otherwise @monaco-editor/react crashes on a null getModel().
     setProjectPous([makeStPou('Main', 'a := 1;')])
     const stub = makeMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
     expect(stub.__models.has('inmemory://pou/Main.st')).toBe(true)
 
     // Transient clear — model must NOT be disposed.
@@ -168,7 +172,7 @@ describe('attachMonacoModelSync', () => {
   it('disposes every model it created on handle.dispose()', () => {
     setProjectPous([makeStPou('A'), makeStPou('B')])
     const stub = makeMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
 
     expect(stub.__models.size).toBe(2)
     handle.dispose()
@@ -178,7 +182,7 @@ describe('attachMonacoModelSync', () => {
   it('is safe to dispose twice', () => {
     setProjectPous([makeStPou('A')])
     const stub = makeMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
     handle.dispose()
     expect(() => handle.dispose()).not.toThrow()
   })
@@ -245,15 +249,15 @@ describe('store write reaches the shared ST model synchronously', () => {
   }
 
   it('updatePou drives setValue on pou://, and an unguarded onChange would flag the file unsaved', () => {
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     state.fileActions.clearFiles()
     setProjectPous([makeStPou('Main', 'a := 1;')])
     state.fileActions.addFile({ name: 'Main', type: 'program', filePath: 'pous/programs/Main.st' })
     state.fileActions.updateFile({ name: 'Main', saved: true })
-    expect(openPLCStoreBase.getState().fileActions.getSavedState({ name: 'Main' })).toBe(true)
+    expect(store.getState().fileActions.getSavedState({ name: 'Main' })).toBe(true)
 
     const stub = makeListeningMonacoStub()
-    const handle = attachMonacoModelSync(stub as unknown as typeof import('monaco-editor'))
+    const handle = attachMonacoModelSync(store, stub as unknown as typeof import('monaco-editor'))
 
     const model = stub.__wrappers.get('inmemory://pou/Main.st') as {
       getValue: () => string
@@ -266,18 +270,18 @@ describe('store write reaches the shared ST model synchronously', () => {
     let onChangeCalls = 0
     model.onDidChangeModelContent(() => {
       onChangeCalls += 1
-      openPLCStoreBase.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('Main')
+      store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState('Main')
     })
 
     // What `reloadFromDisk` does once it has parsed the file from disk.
-    openPLCStoreBase.getState().projectActions.updatePou({
+    store.getState().projectActions.updatePou({
       name: 'Main',
       content: { language: 'st', value: 'a := 42;' },
     })
 
     expect(onChangeCalls).toBe(1)
     expect(model.getValue()).toBe('a := 42;')
-    expect(openPLCStoreBase.getState().fileActions.getSavedState({ name: 'Main' })).toBe(false)
+    expect(store.getState().fileActions.getSavedState({ name: 'Main' })).toBe(false)
 
     handle.dispose()
   })

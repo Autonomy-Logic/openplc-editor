@@ -9,9 +9,16 @@
  * unlocated at compile time, which is a silent wrong answer.
  */
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
-import { useOpenPLCStore } from '../index'
+import type { OpenPLCStore } from '../index'
+import { createTestStore } from '../testing'
 
-const getState = () => useOpenPLCStore.getState()
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
+
+const getState = () => store.getState()
 
 const seedPins = (pins: Array<{ address: string; alias?: string }>) => {
   getState().deviceActions.setDeviceDefinitions({

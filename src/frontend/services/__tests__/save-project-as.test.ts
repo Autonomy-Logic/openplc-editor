@@ -10,7 +10,8 @@
 
 import type { PlatformCapabilities } from '../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
+import { createTestStore } from '../../store/testing'
 import { executeSaveProjectAs } from '../save-project-as'
 
 const capabilities = { isNativeApplication: true } as PlatformCapabilities
@@ -23,16 +24,15 @@ function makePort(overrides: Partial<ProjectPort> = {}): ProjectPort {
   } as unknown as ProjectPort
 }
 
-const workspace = () => openPLCStoreBase.getState().workspace
-const projectPath = () => openPLCStoreBase.getState().project.meta.path
+let store: OpenPLCStore
+
+const workspace = () => store.getState().workspace
+const projectPath = () => store.getState().project.meta.path
 
 beforeEach(() => {
-  openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
-  openPLCStoreBase.getState().projectActions.updateMetaPath('/scratch/original')
-})
-
-afterEach(() => {
-  openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(false)
+  store = createTestStore()
+  store.getState().workspaceActions.setIsEphemeralProject(true)
+  store.getState().projectActions.updateMetaPath('/scratch/original')
 })
 
 it('writes the project to the chosen folder and adopts it', async () => {
@@ -44,7 +44,7 @@ it('writes the project to the chosen folder and adopts it', async () => {
     },
   })
 
-  const result = await executeSaveProjectAs(port, capabilities)
+  const result = await executeSaveProjectAs(store, port, capabilities)
 
   expect(result.success).toBe(true)
   expect(written?.projectPath).toBe('/chosen/place')
@@ -53,7 +53,7 @@ it('writes the project to the chosen folder and adopts it', async () => {
 
 it('clears the ephemeral marker so an ordinary save works from then on', async () => {
   // The whole reason Save As exists for a retrieved project.
-  await executeSaveProjectAs(makePort(), capabilities)
+  await executeSaveProjectAs(store, makePort(), capabilities)
   expect(workspace().isEphemeralProject).toBe(false)
 })
 
@@ -64,7 +64,7 @@ it('leaves everything untouched when the write fails', async () => {
     saveProject: () => Promise.resolve({ success: false, error: 'disk full' }),
   })
 
-  const result = await executeSaveProjectAs(port, capabilities)
+  const result = await executeSaveProjectAs(store, port, capabilities)
 
   expect(result.success).toBe(false)
   expect(projectPath()).toBe('/scratch/original')
@@ -74,7 +74,7 @@ it('leaves everything untouched when the write fails', async () => {
 it('treats cancelling as an ordinary outcome, not a failure', async () => {
   const port = makePort({ pickPath: () => Promise.resolve({ success: false }) })
 
-  const result = await executeSaveProjectAs(port, capabilities)
+  const result = await executeSaveProjectAs(store, port, capabilities)
 
   expect(result.cancelled).toBe(true)
   expect(projectPath()).toBe('/scratch/original')
@@ -92,14 +92,14 @@ it('never carries deletions to the new location', async () => {
     },
   })
 
-  await executeSaveProjectAs(port, capabilities)
+  await executeSaveProjectAs(store, port, capabilities)
 
   expect(written?.deletions).toEqual([])
 })
 
 it('reports platforms that cannot choose a folder rather than failing silently', async () => {
   const port = makePort({ pickPath: undefined })
-  const result = await executeSaveProjectAs(port, capabilities)
+  const result = await executeSaveProjectAs(store, port, capabilities)
   expect(result.success).toBe(false)
   expect(workspace().isEphemeralProject).toBe(true)
 })

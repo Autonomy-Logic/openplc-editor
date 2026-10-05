@@ -938,6 +938,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().versionControlActions.setHeadContent(null)
       // `canEdit === false` gates only backend writes (save/commit/branch); in-memory editing, simulation, and compilation stay on.
       getState().workspaceActions.setCanEdit(data.canEdit !== false)
+      // Only a partner session that asked for it off sends `false`; absent keeps the pre-build save on.
+      getState().workspaceActions.setAutoSaveOnBuild(data.autoSaveOnBuild !== false)
 
       // An unrecoverable POU opens the workspace EMPTY and read-only, so a save can never overwrite the on-disk
       // file with a blank diagram. Recoverable failures stay in `warnings` instead.

@@ -15,6 +15,8 @@
 
 import { spawn } from 'node:child_process'
 
+import type { OpenPLCStore } from '@root/frontend/store'
+
 import {
   SPAWN_FAILURE_CODES,
   type SpawnFailureCode,
@@ -25,6 +27,8 @@ import { loadDebugIndex } from './debug/variables'
 import { splitLines } from './session/protocol'
 
 export interface SpawnDependencies {
+  /** The store this process hydrates; the MD5 probe resolves the debug map against it. */
+  store: OpenPLCStore
   registryDir: string
   /** argv[0] and the fixed leading args needed to re-enter this program. */
   execPath: string
@@ -182,7 +186,7 @@ async function ensureProgramMatches(
   deps: SpawnDependencies,
   options: SpawnSessionOptions,
 ): Promise<{ success: true } | SpawnSessionResult> {
-  const index = await loadDebugIndex(options.projectPath, options.target)
+  const index = await loadDebugIndex(deps.store, options.projectPath, options.target)
   if (!index.success) return { success: false, code: 'not-compiled', error: index.error }
 
   // The shortcut probe is a RUNTIME REST call, so it only applies to a target

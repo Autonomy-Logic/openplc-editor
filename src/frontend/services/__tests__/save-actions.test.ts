@@ -1,10 +1,11 @@
-/** Drives the real store singleton; a flow that fails schema validation keeps a stale `pou.body.value`. */
+/** Drives a real store; a flow that fails schema validation keeps a stale `pou.body.value`. */
 
 import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import type { PlatformCapabilities } from '../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import type { LadderFlowType } from '../../store/slices/ladder'
+import { createTestStore } from '../../store/testing'
 import { getMemoryState } from '../../utils/toast'
 import { hasSaveWaitingForSignIn, resetResumeSaveForTests } from '../resume-save-after-sign-in'
 import {
@@ -19,6 +20,12 @@ import {
 const capabilities = { isNativeApplication: true, hasEdgeAccount: true } as PlatformCapabilities
 
 const lastToast = () => getMemoryState().toasts[0]
+
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
 
 function makeProjectPort(): ProjectPort {
   return {
@@ -42,7 +49,7 @@ function liveSession(): EdgeSessionState {
 }
 
 function createLadderPou(name: string) {
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   state.pouActions.create({ type: 'program', name, language: 'ld' })
   state.ladderFlowActions.startLadderRung({
     editorName: name,
@@ -55,24 +62,23 @@ function createLadderPou(name: string) {
 
 /** Drop `defaultBounds` / `reactFlowViewport` so the flow fails the zod guard. */
 function corruptFlow(name: string) {
-  const flow = openPLCStoreBase.getState().ladderFlows.find((f) => f.name === name)
-  openPLCStoreBase.getState().ladderFlowActions.addLadderFlow({
+  const flow = store.getState().ladderFlows.find((f) => f.name === name)
+  store.getState().ladderFlowActions.addLadderFlow({
     name,
     updated: true,
     rungs: (flow?.rungs ?? []).map((rung) => ({ id: rung.id, comment: '', nodes: [], edges: [] })),
   } as unknown as LadderFlowType)
-  openPLCStoreBase.getState().ladderFlowActions.setFlowUpdated({ editorName: name, updated: true })
+  store.getState().ladderFlowActions.setFlowUpdated({ editorName: name, updated: true })
 }
 
-const flowUpdated = (name: string) => openPLCStoreBase.getState().ladderFlows.find((f) => f.name === name)?.updated
-const fileSaved = (name: string) => openPLCStoreBase.getState().files[name]?.saved
+const flowUpdated = (name: string) => store.getState().ladderFlows.find((f) => f.name === name)?.updated
+const fileSaved = (name: string) => store.getState().files[name]?.saved
 
 describe('save-actions', () => {
   let warn: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    openPLCStoreBase.getState().ladderFlowActions.clearLadderFlows()
   })
 
   afterEach(() => {
@@ -87,21 +93,11 @@ describe('save-actions', () => {
    * `File "available" not found` on a screen with no project at all.
    */
   describe('executeSaveActiveFile', () => {
-    let path: string
-
-    beforeEach(() => {
-      path = openPLCStoreBase.getState().project.meta.path
-    })
-
-    afterEach(() => {
-      openPLCStoreBase.getState().projectActions.updateMetaPath(path)
-    })
-
     it('says nothing at all on the start screen, where there is no project', async () => {
-      openPLCStoreBase.getState().projectActions.updateMetaPath('')
+      store.getState().projectActions.updateMetaPath('')
       const before = getMemoryState().toasts.length
 
-      const result = await executeSaveActiveFile(makeProjectPort(), capabilities)
+      const result = await executeSaveActiveFile(store, makeProjectPort(), capabilities)
 
       expect(result.success).toBe(false)
       // A stray keystroke is not a failed save: no toast, and nothing attempted.
@@ -109,10 +105,10 @@ describe('save-actions', () => {
     })
 
     it('does not mistake the placeholder editor for an open file', async () => {
-      openPLCStoreBase.getState().projectActions.updateMetaPath('/some/project')
+      store.getState().projectActions.updateMetaPath('/some/project')
       const projectPort = makeProjectPort()
 
-      const result = await executeSaveActiveFile(projectPort, capabilities)
+      const result = await executeSaveActiveFile(store, projectPort, capabilities)
 
       expect(result.success).toBe(false)
       expect(lastToast()).toMatchObject({ title: 'No file open' })
@@ -122,17 +118,13 @@ describe('save-actions', () => {
   })
 
   describe('executeSaveProject', () => {
+    // A retrieved project's scratch location isn't real; reporting success there would be a lie.
     describe('a project retrieved from a device', () => {
-      // A retrieved project's scratch location isn't real; reporting success there would be a lie.
-      afterEach(() => {
-        openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(false)
-      })
-
       it('refuses a user save and says what to do instead', async () => {
-        openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
+        store.getState().workspaceActions.setIsEphemeralProject(true)
         const projectPort = makeProjectPort()
 
-        const result = await executeSaveProject(projectPort, capabilities)
+        const result = await executeSaveProject(store, projectPort, capabilities)
 
         expect(result.success).toBe(false)
         expect(projectPort.saveProject).not.toHaveBeenCalled()
@@ -141,10 +133,10 @@ describe('save-actions', () => {
 
       it('still lets the build flush the project to disk', async () => {
         // The compiler reads its source from disk, so refusing this would stop it compiling.
-        openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
+        store.getState().workspaceActions.setIsEphemeralProject(true)
         const projectPort = makeProjectPort()
 
-        const result = await executeSaveProject(projectPort, capabilities, 'pre-build')
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
 
         expect(result.success).toBe(true)
         expect(projectPort.saveProject).toHaveBeenCalled()
@@ -152,7 +144,60 @@ describe('save-actions', () => {
 
       it('leaves an ordinary project untouched', async () => {
         const projectPort = makeProjectPort()
-        const result = await executeSaveProject(projectPort, capabilities)
+        const result = await executeSaveProject(store, projectPort, capabilities)
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+    })
+
+    // A partner session that turned the pre-build save off: every write reaches the partner's save callback (DOPE-675).
+    describe('a session with autoSaveOnBuild off', () => {
+      beforeEach(() => {
+        store.getState().workspaceActions.setAutoSaveOnBuild(false)
+      })
+
+      it('flushes pending edits for the build but writes nothing and marks nothing saved', async () => {
+        createLadderPou('AutoSaveOff')
+        store.getState().fileActions.updateFile({ name: 'AutoSaveOff', saved: false })
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
+
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).not.toHaveBeenCalled()
+        // The compile reads the store, so the flow must have reached the POU body.
+        const pou = store.getState().project.data.pous.find((p) => p.name === 'AutoSaveOff')
+        expect(pou?.body).toMatchObject({ language: 'ld', value: { rungs: [{ id: 'rung_AutoSaveOff_1' }] } })
+        expect(fileSaved('AutoSaveOff')).toBe(false)
+      })
+
+      it('refuses the build when a flow is invalid, as the save would', async () => {
+        createLadderPou('AutoSaveOffBroken')
+        corruptFlow('AutoSaveOffBroken')
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
+
+        expect(result.success).toBe(false)
+        expect(projectPort.saveProject).not.toHaveBeenCalled()
+        expect(lastToast()).toMatchObject({ title: 'Some changes are invalid' })
+      })
+
+      it('still writes a save the user asked for', async () => {
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities)
+
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+
+      it('writes before a build once the flag is back on', async () => {
+        store.getState().workspaceActions.setAutoSaveOnBuild(true)
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
+
         expect(result.success).toBe(true)
         expect(projectPort.saveProject).toHaveBeenCalled()
       })
@@ -160,23 +205,19 @@ describe('save-actions', () => {
 
     // The write's own response says why it failed; the queue doesn't depend on renewal-layer expiry state.
     describe('a cloud write that did not land', () => {
-      let previousPath: string
-
       beforeEach(() => {
         resetResumeSaveForTests(liveSession())
-        previousPath = openPLCStoreBase.getState().project.meta.path
       })
 
       afterEach(() => {
         resetResumeSaveForTests()
-        openPLCStoreBase.getState().projectActions.updateMetaPath(previousPath)
       })
 
       it('queues the save for sign-in when the write says the session is gone', async () => {
         const projectPort = makeProjectPort()
         vi.mocked(projectPort.saveProject).mockResolvedValue({ success: false, reason: 'signed-out' })
 
-        const result = await executeSaveProject(projectPort, capabilities)
+        const result = await executeSaveProject(store, projectPort, capabilities)
 
         expect(result.success).toBe(false)
         expect(hasSaveWaitingForSignIn()).toBe(true)
@@ -190,13 +231,13 @@ describe('save-actions', () => {
           .mockResolvedValueOnce({ success: false, reason: 'unreachable' })
           .mockResolvedValue({ success: true })
 
-        const result = await executeSaveProject(projectPort, { ...capabilities, hasLocalFilesystem: true })
+        const result = await executeSaveProject(store, projectPort, { ...capabilities, hasLocalFilesystem: true })
 
         expect(result.success).toBe(true)
         expect(projectPort.pickPath).toHaveBeenCalled()
         // The second write is the local copy, and the project now lives there.
         expect(vi.mocked(projectPort.saveProject).mock.calls[1][0].projectPath).toBe('/local/copy')
-        expect(openPLCStoreBase.getState().project.meta.path).toBe('/local/copy')
+        expect(store.getState().project.meta.path).toBe('/local/copy')
         expect(hasSaveWaitingForSignIn()).toBe(false)
       })
 
@@ -208,7 +249,7 @@ describe('save-actions', () => {
           error: 'offline',
         })
 
-        const result = await executeSaveProject(projectPort, { ...capabilities, hasLocalFilesystem: false })
+        const result = await executeSaveProject(store, projectPort, { ...capabilities, hasLocalFilesystem: false })
 
         expect(result.success).toBe(false)
         expect(projectPort.pickPath).not.toHaveBeenCalled()
@@ -220,17 +261,17 @@ describe('save-actions', () => {
         vi.mocked(projectPort.saveProject).mockResolvedValue({ success: false, reason: 'unreachable' })
         vi.mocked(projectPort.pickPath).mockResolvedValue({ success: false })
 
-        const result = await executeSaveProject(projectPort, { ...capabilities, hasLocalFilesystem: true })
+        const result = await executeSaveProject(store, projectPort, { ...capabilities, hasLocalFilesystem: true })
 
         expect(result.success).toBe(false)
-        expect(openPLCStoreBase.getState().workspace.editingState).toBe('unsaved')
+        expect(store.getState().workspace.editingState).toBe('unsaved')
       })
     })
 
     it('reports success and clears the updated flag for a valid flow', async () => {
       createLadderPou('ValidPou')
 
-      const result = await executeSaveProject(makeProjectPort(), capabilities)
+      const result = await executeSaveProject(store, makeProjectPort(), capabilities)
 
       expect(result.success).toBe(true)
       expect(flowUpdated('ValidPou')).toBe(false)
@@ -240,7 +281,7 @@ describe('save-actions', () => {
       createLadderPou('BrokenPou')
       corruptFlow('BrokenPou')
 
-      const result = await executeSaveProject(makeProjectPort(), capabilities)
+      const result = await executeSaveProject(store, makeProjectPort(), capabilities)
 
       expect(result.success).toBe(false)
       // Keeping `updated` set is what lets a later edit retry the write-back.
@@ -255,7 +296,7 @@ describe('save-actions', () => {
       corruptFlow('BadPou')
 
       const projectPort = makeProjectPort()
-      const result = await executeSaveProject(projectPort, capabilities)
+      const result = await executeSaveProject(store, projectPort, capabilities)
 
       expect(result.success).toBe(false)
       expect(projectPort.saveProject).toHaveBeenCalled()
@@ -268,12 +309,12 @@ describe('save-actions', () => {
       corruptFlow('Doomed')
       createLadderPou('Healthy')
 
-      expect((await executeSaveProject(makeProjectPort(), capabilities)).success).toBe(false)
+      expect((await executeSaveProject(store, makeProjectPort(), capabilities)).success).toBe(false)
 
       // Deleting the POU leaves the flow behind — the save must stop reporting it.
-      openPLCStoreBase.getState().pouActions.delete('Doomed')
+      store.getState().pouActions.delete('Doomed')
 
-      const result = await executeSaveProject(makeProjectPort(), capabilities)
+      const result = await executeSaveProject(store, makeProjectPort(), capabilities)
 
       expect(result.success).toBe(true)
       expect(fileSaved('Healthy')).toBe(true)
@@ -283,11 +324,11 @@ describe('save-actions', () => {
       const savedFiles = (port: ProjectPort) => vi.mocked(port.saveProject).mock.calls[0][0]
 
       it('writes every data type to its own .dt file and never queues it for deletion', async () => {
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Colors', derivation: 'enumerated' })
 
         const projectPort = makeProjectPort()
-        await executeSaveProject(projectPort, capabilities)
+        await executeSaveProject(store, projectPort, capabilities)
 
         expect(savedFiles(projectPort).deletions).not.toContain('datatypes/Motor.dt')
         expect(savedFiles(projectPort).dataTypeFiles).toEqual(
@@ -299,12 +340,12 @@ describe('save-actions', () => {
       })
 
       it('echoes an unparseable .dt file back instead of dropping it', async () => {
-        openPLCStoreBase
+        store
           .getState()
           .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Broken.dt', content: 'TYPE not valid' }])
 
         const projectPort = makeProjectPort()
-        await executeSaveProject(projectPort, capabilities)
+        await executeSaveProject(store, projectPort, capabilities)
 
         expect(savedFiles(projectPort).deletions).not.toContain('datatypes/Broken.dt')
         expect(savedFiles(projectPort).dataTypeFiles).toEqual(
@@ -315,23 +356,23 @@ describe('save-actions', () => {
       })
 
       it('leaves project.json carrying no data types', async () => {
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
 
         const projectPort = makeProjectPort()
-        await executeSaveProject(projectPort, capabilities)
+        await executeSaveProject(store, projectPort, capabilities)
 
         expect(JSON.parse(savedFiles(projectPort).projectJson).data.dataTypes).toEqual([])
       })
 
       // The filter is generalised beyond data types; this pins the longest-exposed case, a recreated POU file.
       it('does not delete a POU file this same save is writing', async () => {
-        const { pouActions } = openPLCStoreBase.getState()
+        const { pouActions } = store.getState()
         pouActions.create({ type: 'program', name: 'Recreated', language: 'st' })
-        openPLCStoreBase.getState().pouActions.delete('Recreated')
-        openPLCStoreBase.getState().pouActions.create({ type: 'program', name: 'Recreated', language: 'st' })
+        store.getState().pouActions.delete('Recreated')
+        store.getState().pouActions.create({ type: 'program', name: 'Recreated', language: 'st' })
 
         const projectPort = makeProjectPort()
-        await executeSaveProject(projectPort, capabilities)
+        await executeSaveProject(store, projectPort, capabilities)
 
         const written: string[] = savedFiles(projectPort).pouFiles.map((f: { relativePath: string }) => f.relativePath)
         const deletions: string[] = savedFiles(projectPort).deletions
@@ -341,12 +382,12 @@ describe('save-actions', () => {
 
       // macOS/Windows treat these paths as one file; an exact-string filter would unlink the new write under the old name.
       it('does not delete a path that differs from a written one only by case', async () => {
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'Recased', derivation: 'structure' })
-        openPLCStoreBase.getState().datatypeActions.delete('Recased')
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'recased', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Recased', derivation: 'structure' })
+        store.getState().datatypeActions.delete('Recased')
+        store.getState().datatypeActions.create({ name: 'recased', derivation: 'structure' })
 
         const projectPort = makeProjectPort()
-        await executeSaveProject(projectPort, capabilities)
+        await executeSaveProject(store, projectPort, capabilities)
 
         expect(savedFiles(projectPort).deletions).not.toContain('datatypes/Recased.dt')
         expect(savedFiles(projectPort).dataTypeFiles).toEqual(
@@ -356,12 +397,12 @@ describe('save-actions', () => {
 
       it('does not delete a .dt file this same save is writing', async () => {
         // Deletions apply after writes on both platforms, so without the payload filter this would unlink the type it just wrote.
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
-        openPLCStoreBase.getState().datatypeActions.delete('Motor')
-        openPLCStoreBase.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
+        store.getState().datatypeActions.delete('Motor')
+        store.getState().datatypeActions.create({ name: 'Motor', derivation: 'structure' })
 
         const projectPort = makeProjectPort()
-        await executeSaveProject(projectPort, capabilities)
+        await executeSaveProject(store, projectPort, capabilities)
 
         expect(savedFiles(projectPort).deletions).not.toContain('datatypes/Motor.dt')
         expect(savedFiles(projectPort).dataTypeFiles).toEqual(
@@ -377,7 +418,7 @@ describe('save-actions', () => {
       const savedPaths = (port: ProjectPort) => vi.mocked(port.saveFile).mock.calls.map((c) => c[0])
 
       beforeEach(() => {
-        const state = openPLCStoreBase.getState()
+        const state = store.getState()
         state.datatypeActions.create({ name: 'MigEdited', derivation: 'structure' })
         state.datatypeActions.create({ name: 'MigUntouched', derivation: 'enumerated' })
         // The single-file save resolves its target through the file registry the project tree populates.
@@ -385,10 +426,10 @@ describe('save-actions', () => {
       })
 
       it('writes every .dt and rewrites project.json when the project still owes a migration', async () => {
-        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
+        store.getState().projectActions.setDataTypesNeedMigration(true)
 
         const projectPort = makeProjectPort()
-        const result = await executeSaveFile('MigEdited', projectPort, capabilities)
+        const result = await executeSaveFile(store, 'MigEdited', projectPort, capabilities)
 
         expect(result.success).toBe(true)
         const paths: string[] = savedPaths(projectPort)
@@ -400,26 +441,26 @@ describe('save-actions', () => {
         const lastCall = vi.mocked(projectPort.saveFile).mock.calls.at(-1)
         const projectJson: string = typeof lastCall?.[1] === 'string' ? lastCall[1] : '{}'
         expect(JSON.parse(projectJson)).toMatchObject({ data: { dataTypes: [] } })
-        expect(openPLCStoreBase.getState().dataTypesNeedMigration).toBe(false)
+        expect(store.getState().dataTypesNeedMigration).toBe(false)
       })
 
       // `recordSavedFiles` must track every migrated file, or the untouched ones stay marked dirty forever.
       it('records every migrated file with version control, not just the edited one', async () => {
-        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
+        store.getState().projectActions.setDataTypesNeedMigration(true)
 
-        await executeSaveFile('MigEdited', makeProjectPort(), capabilities)
+        await executeSaveFile(store, 'MigEdited', makeProjectPort(), capabilities)
 
-        const recorded = Object.keys(openPLCStoreBase.getState().versionControl.rawLoadedContent)
+        const recorded = Object.keys(store.getState().versionControl.rawLoadedContent)
         expect(recorded).toEqual(
           expect.arrayContaining(['datatypes/MigEdited.dt', 'datatypes/MigUntouched.dt', 'project.json']),
         )
       })
 
       it('writes only the edited .dt once the project has already migrated', async () => {
-        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(false)
+        store.getState().projectActions.setDataTypesNeedMigration(false)
 
         const projectPort = makeProjectPort()
-        await executeSaveFile('MigEdited', projectPort, capabilities)
+        await executeSaveFile(store, 'MigEdited', projectPort, capabilities)
 
         const paths: string[] = savedPaths(projectPort)
         expect(paths).toHaveLength(1)
@@ -427,26 +468,26 @@ describe('save-actions', () => {
       })
 
       it('leaves the migration owed when a .dt write fails', async () => {
-        openPLCStoreBase.getState().projectActions.setDataTypesNeedMigration(true)
+        store.getState().projectActions.setDataTypesNeedMigration(true)
 
         const projectPort = makeProjectPort()
         vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, error: 'disk full' })
-        const result = await executeSaveFile('MigEdited', projectPort, capabilities)
+        const result = await executeSaveFile(store, 'MigEdited', projectPort, capabilities)
 
         expect(result.success).toBe(false)
-        expect(openPLCStoreBase.getState().dataTypesNeedMigration).toBe(true)
+        expect(store.getState().dataTypesNeedMigration).toBe(true)
       })
     })
 
     // An unreadable .dt still gets a tab and a code view, so Ctrl+S on it is a realistic action.
     it('names the real problem when an unparseable .dt cannot be saved', async () => {
-      openPLCStoreBase
+      store
         .getState()
         .projectActions.setUnparsedDataTypeFiles([{ relativePath: 'datatypes/Broken.dt', content: 'TYPE bad' }])
-      openPLCStoreBase.getState().fileActions.addFile({ name: 'Broken', type: 'data-type', filePath: 'Broken' })
+      store.getState().fileActions.addFile({ name: 'Broken', type: 'data-type', filePath: 'Broken' })
 
       const projectPort = makeProjectPort()
-      const result = await executeSaveFile('Broken', projectPort, capabilities)
+      const result = await executeSaveFile(store, 'Broken', projectPort, capabilities)
 
       expect(result.success).toBe(false)
       expect(projectPort.saveFile).not.toHaveBeenCalled()
@@ -459,7 +500,7 @@ describe('save-actions', () => {
       corruptFlow('BrokenFile')
 
       const projectPort = makeProjectPort()
-      const result = await executeSaveFile('BrokenFile', projectPort, capabilities)
+      const result = await executeSaveFile(store, 'BrokenFile', projectPort, capabilities)
 
       expect(result.success).toBe(false)
       expect(projectPort.saveFile).not.toHaveBeenCalled()
@@ -467,16 +508,12 @@ describe('save-actions', () => {
     })
 
     describe('a cloud write that did not land', () => {
-      let previousPath: string
-
       beforeEach(() => {
         resetResumeSaveForTests(liveSession())
-        previousPath = openPLCStoreBase.getState().project.meta.path
       })
 
       afterEach(() => {
         resetResumeSaveForTests()
-        openPLCStoreBase.getState().projectActions.updateMetaPath(previousPath)
       })
 
       it('queues the file for sign-in when the write says the session is gone', async () => {
@@ -484,7 +521,7 @@ describe('save-actions', () => {
         const projectPort = makeProjectPort()
         vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, reason: 'signed-out' })
 
-        const result = await executeSaveFile('CloudFile', projectPort, capabilities)
+        const result = await executeSaveFile(store, 'CloudFile', projectPort, capabilities)
 
         expect(result.success).toBe(false)
         expect(hasSaveWaitingForSignIn()).toBe(true)
@@ -496,7 +533,10 @@ describe('save-actions', () => {
         const projectPort = makeProjectPort()
         vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, reason: 'unreachable' })
 
-        const result = await executeSaveFile('OfflineFile', projectPort, { ...capabilities, hasLocalFilesystem: true })
+        const result = await executeSaveFile(store, 'OfflineFile', projectPort, {
+          ...capabilities,
+          hasLocalFilesystem: true,
+        })
 
         expect(result.success).toBe(true)
         expect(projectPort.pickPath).toHaveBeenCalled()
@@ -509,7 +549,10 @@ describe('save-actions', () => {
         const projectPort = makeProjectPort()
         vi.mocked(projectPort.saveFile).mockResolvedValue({ success: false, error: 'disk full' })
 
-        const result = await executeSaveFile('BrokenDisk', projectPort, { ...capabilities, hasLocalFilesystem: true })
+        const result = await executeSaveFile(store, 'BrokenDisk', projectPort, {
+          ...capabilities,
+          hasLocalFilesystem: true,
+        })
 
         expect(result.success).toBe(false)
         expect(projectPort.pickPath).not.toHaveBeenCalled()
@@ -521,7 +564,7 @@ describe('save-actions', () => {
       createLadderPou('ValidFile')
 
       const projectPort = makeProjectPort()
-      const result = await executeSaveFile('ValidFile', projectPort, capabilities)
+      const result = await executeSaveFile(store, 'ValidFile', projectPort, capabilities)
 
       expect(result.success).toBe(true)
       expect(projectPort.saveFile).toHaveBeenCalled()
@@ -534,7 +577,7 @@ describe('save-actions', () => {
       corruptFlow('Unrelated')
 
       const projectPort = makeProjectPort()
-      const result = await executeSaveFile('TargetFile', projectPort, capabilities)
+      const result = await executeSaveFile(store, 'TargetFile', projectPort, capabilities)
 
       expect(result.success).toBe(true)
       expect(projectPort.saveFile).toHaveBeenCalled()
@@ -548,7 +591,7 @@ describe('save-actions', () => {
 // project.json is built field-by-field; an omitted field silently drops that list (it has no file of its own).
 describe('project.json carries global variable lists', () => {
   const createList = (name: string, members: string[]) => {
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     state.projectActions.createGlobalVariableList(name)
     state.projectActions.updateGlobalVariableList(
       name,
@@ -566,7 +609,7 @@ describe('project.json carries global variable lists', () => {
   it('serializes a list and its members into project.json', () => {
     createList('SaveProbe', ['ProbeMember'])
 
-    const payload = buildAllProjectFileContentsPure()['project.json']
+    const payload = buildAllProjectFileContentsPure(store)['project.json']
 
     expect(payload).toContain('SaveProbe')
     expect(payload).toContain('ProbeMember')
@@ -575,7 +618,7 @@ describe('project.json carries global variable lists', () => {
 
   it('writes an empty array rather than omitting the field', () => {
     // A reader can't tell "no lists" from "an older build that didn't know about them" if the key is simply absent.
-    const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
+    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
       data: { globalVariableLists?: unknown }
     }
 
@@ -584,13 +627,13 @@ describe('project.json carries global variable lists', () => {
 
   it('folds a pending code-view buffer in before serializing', () => {
     // Ctrl+S with the caret still in Monaco fires no blur, so the list would otherwise serialize stale.
-    openPLCStoreBase.getState().globalVariableListActions.create('DraftProbe')
-    openPLCStoreBase.getState().editorActions.updateModelStructureForName('DraftProbe', {
+    store.getState().globalVariableListActions.create('DraftProbe')
+    store.getState().editorActions.updateModelStructureForName('DraftProbe', {
       display: 'code',
       code: 'VAR_GLOBAL\n  TypedMember : INT;\nEND_VAR\n',
     })
 
-    const payload = buildAllProjectFileContentsPure()['project.json']
+    const payload = buildAllProjectFileContentsPure(store)['project.json']
 
     expect(payload).toContain('TypedMember')
   })
@@ -600,31 +643,24 @@ describe('project.json carries global variable lists', () => {
 describe('an unparseable list declaration is saved as text', () => {
   const brokenDeclaration = 'VAR_GLOBAL\n  A : BOOL\nEND_VAR\n'
 
-  // The store is a singleton; a stale corrupted flow left by an earlier suite would fail this save for unrelated reasons.
-  beforeEach(() => {
-    openPLCStoreBase.getState().ladderFlowActions.clearLadderFlows()
-  })
-
   const openWithBrokenText = (name: string) => {
-    openPLCStoreBase.getState().globalVariableListActions.create(name)
-    openPLCStoreBase
-      .getState()
-      .editorActions.updateModelStructureForName(name, { display: 'code', code: brokenDeclaration })
+    store.getState().globalVariableListActions.create(name)
+    store.getState().editorActions.updateModelStructureForName(name, { display: 'code', code: brokenDeclaration })
   }
 
   it('still reports the save as successful', async () => {
     openWithBrokenText('BrokenSave')
 
-    const result = await executeSaveProject(makeProjectPort(), capabilities)
+    const result = await executeSaveProject(store, makeProjectPort(), capabilities)
 
     expect(result.success).toBe(true)
   })
 
   it('writes the raw declaration into project.json', async () => {
     openWithBrokenText('BrokenPersist')
-    await executeSaveProject(makeProjectPort(), capabilities)
+    await executeSaveProject(store, makeProjectPort(), capabilities)
 
-    const payload = buildAllProjectFileContentsPure()['project.json']
+    const payload = buildAllProjectFileContentsPure(store)['project.json']
     const saved = (
       JSON.parse(payload) as { data: { globalVariableLists: { name: string; text?: string }[] } }
     ).data.globalVariableLists.find((l) => l.name === 'BrokenPersist')
@@ -634,15 +670,15 @@ describe('an unparseable list declaration is saved as text', () => {
 
   it('drops the preserved text once the declaration parses again', async () => {
     openWithBrokenText('BrokenThenFixed')
-    await executeSaveProject(makeProjectPort(), capabilities)
+    await executeSaveProject(store, makeProjectPort(), capabilities)
 
-    openPLCStoreBase.getState().editorActions.updateModelStructureForName('BrokenThenFixed', {
+    store.getState().editorActions.updateModelStructureForName('BrokenThenFixed', {
       display: 'code',
       code: 'VAR_GLOBAL\n  A : BOOL;\nEND_VAR\n',
     })
-    await executeSaveProject(makeProjectPort(), capabilities)
+    await executeSaveProject(store, makeProjectPort(), capabilities)
 
-    const list = openPLCStoreBase.getState().project.data.globalVariableLists?.find((l) => l.name === 'BrokenThenFixed')
+    const list = store.getState().project.data.globalVariableLists?.find((l) => l.name === 'BrokenThenFixed')
     expect(list?.text).toBeUndefined()
     expect(list?.variables.map((v) => v.name)).toEqual(['A'])
   })
@@ -651,17 +687,13 @@ describe('an unparseable list declaration is saved as text', () => {
 // A retrieved project sits in a scratch directory the app prunes; both save entry points must refuse and say so.
 describe('a project with no location the user chose', () => {
   beforeEach(() => {
-    openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(true)
-  })
-
-  afterEach(() => {
-    openPLCStoreBase.getState().workspaceActions.setIsEphemeralProject(false)
+    store.getState().workspaceActions.setIsEphemeralProject(true)
   })
 
   it('refuses Save Project and points at Save As', async () => {
     const port = makeProjectPort()
 
-    const result = await executeSaveProject(port, capabilities)
+    const result = await executeSaveProject(store, port, capabilities)
 
     expect(result).toEqual({ success: false })
     expect(port.saveProject).not.toHaveBeenCalled()
@@ -672,7 +704,7 @@ describe('a project with no location the user chose', () => {
     createLadderPou('ScratchPou')
     const port = makeProjectPort()
 
-    const result = await executeSaveFile('ScratchPou', port, capabilities)
+    const result = await executeSaveFile(store, 'ScratchPou', port, capabilities)
 
     expect(result).toEqual({ success: false })
     expect(port.saveFile).not.toHaveBeenCalled()
@@ -682,7 +714,7 @@ describe('a project with no location the user chose', () => {
   it('still lets the build flush the tree it has to compile from', async () => {
     const port = makeProjectPort()
 
-    const result = await executeSaveProject(port, capabilities, 'pre-build')
+    const result = await executeSaveProject(store, port, capabilities, 'pre-build')
 
     expect(result.success).toBe(true)
     expect(port.saveProject).toHaveBeenCalled()
@@ -699,7 +731,7 @@ describe('project.json libraries', () => {
   const POU = 'LibUsageProbe'
 
   beforeEach(() => {
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     state.libraryActions.setSystemLibraries([
       { name: 'demo-utils', author: 'qa', version: '2.1.0', stPath: '', cPath: '', pous: [{ name: 'ANALOGSCALE' }] },
     ] as unknown as Parameters<typeof state.libraryActions.setSystemLibraries>[0])
@@ -721,13 +753,8 @@ describe('project.json libraries', () => {
     })
   })
 
-  afterEach(() => {
-    openPLCStoreBase.getState().pouActions.delete(POU)
-    openPLCStoreBase.getState().libraryActions.setProjectLibraries([])
-  })
-
   it('writes the library an FB instance comes from, even when nothing declared it', () => {
-    const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
+    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
       data: { libraries: { name: string; version: string }[] }
     }
 
@@ -735,9 +762,9 @@ describe('project.json libraries', () => {
   })
 
   it('keeps a declared entry as declared, without duplicating it', () => {
-    openPLCStoreBase.getState().libraryActions.setProjectLibraries([{ name: 'demo-utils', version: '1.0.0' }])
+    store.getState().libraryActions.setProjectLibraries([{ name: 'demo-utils', version: '1.0.0' }])
 
-    const parsed = JSON.parse(buildAllProjectFileContentsPure()['project.json']) as {
+    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
       data: { libraries: { name: string; version: string }[] }
     }
 
@@ -762,7 +789,7 @@ describe('reloadPouFromDisk', () => {
     }) as unknown as ProjectPort
 
   const seedTextualPou = (name: string, text: string) => {
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     expect(state.pouActions.create({ type: 'program', name, language: 'st' }).ok).toBe(true)
     state.projectActions.setPouVariablesText(name, text)
     state.projectActions.setPouVariables({
@@ -780,11 +807,10 @@ describe('reloadPouFromDisk', () => {
     })
   }
 
-  const textOf = (name: string) =>
-    openPLCStoreBase.getState().project.data.pous.find((pou) => pou.name === name)?.variablesText
+  const textOf = (name: string) => store.getState().project.data.pous.find((pou) => pou.name === name)?.variablesText
 
   const openEditor = (name: string) =>
-    openPLCStoreBase.getState().editorActions.addModel({
+    store.getState().editorActions.addModel({
       type: 'plc-textual',
       meta: { name, path: `/pous/${name}`, language: 'st', pouType: 'program' },
       variable: { display: 'table', description: '', classFilter: 'All', selectedRow: '-1' },
@@ -795,11 +821,11 @@ describe('reloadPouFromDisk', () => {
     const onDisk =
       'PROGRAM Reloaded\nVAR\n  (* renamed on disk *)\n  a : INT;\n  b : BOOL;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM'
 
-    await reloadPouFromDisk('Reloaded', portReturning(onDisk))
+    await reloadPouFromDisk(store, 'Reloaded', portReturning(onDisk))
 
     expect(textOf('Reloaded')).toBe('VAR\n  (* renamed on disk *)\n  a : INT;\n  b : BOOL;\nEND_VAR')
     expect(
-      openPLCStoreBase
+      store
         .getState()
         .project.data.pous.find((pou) => pou.name === 'Reloaded')
         ?.interface?.variables.map((variable) => variable.name),
@@ -815,15 +841,15 @@ describe('reloadPouFromDisk', () => {
   it('replaces an open code-view buffer with the text from disk', async () => {
     seedTextualPou('ReloadOpen', 'VAR\n  a : INT;\nEND_VAR')
     openEditor('ReloadOpen')
-    openPLCStoreBase.getState().editorActions.updateModelVariablesForName('ReloadOpen', {
+    store.getState().editorActions.updateModelVariablesForName('ReloadOpen', {
       display: 'code',
       code: 'VAR\n  a : INT;\nEND_VAR',
     })
     const onDisk = 'PROGRAM ReloadOpen\nVAR\n  (* from disk *)\n  a : DINT;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM'
 
-    await reloadPouFromDisk('ReloadOpen', portReturning(onDisk))
+    await reloadPouFromDisk(store, 'ReloadOpen', portReturning(onDisk))
 
-    const model = openPLCStoreBase.getState().editorActions.getEditorFromEditors('ReloadOpen')
+    const model = store.getState().editorActions.getEditorFromEditors('ReloadOpen')
     const variable = model && 'variable' in model ? model.variable : undefined
     expect(variable && 'code' in variable ? variable.code : undefined).toBe(
       'VAR\n  (* from disk *)\n  a : DINT;\nEND_VAR',
@@ -836,9 +862,9 @@ describe('reloadPouFromDisk', () => {
     openEditor('ReloadTable')
     const onDisk = 'PROGRAM ReloadTable\nVAR\n  a : DINT;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM'
 
-    await reloadPouFromDisk('ReloadTable', portReturning(onDisk))
+    await reloadPouFromDisk(store, 'ReloadTable', portReturning(onDisk))
 
-    const model = openPLCStoreBase.getState().editorActions.getEditorFromEditors('ReloadTable')
+    const model = store.getState().editorActions.getEditorFromEditors('ReloadTable')
     const variable = model && 'variable' in model ? model.variable : undefined
     expect(variable?.display).toBe('table')
     expect(textOf('ReloadTable')).toBe('VAR\n  a : DINT;\nEND_VAR')
@@ -848,9 +874,9 @@ describe('reloadPouFromDisk', () => {
     seedTextualPou('ReloadInvalid', 'VAR\n  a : INT;\nEND_VAR')
     const onDisk = 'PROGRAM ReloadInvalid\nVAR\n  a : INT;\n  a : DINT;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM'
 
-    await reloadPouFromDisk('ReloadInvalid', portReturning(onDisk))
+    await reloadPouFromDisk(store, 'ReloadInvalid', portReturning(onDisk))
 
-    const pou = openPLCStoreBase.getState().project.data.pous.find((candidate) => candidate.name === 'ReloadInvalid')
+    const pou = store.getState().project.data.pous.find((candidate) => candidate.name === 'ReloadInvalid')
     expect(pou?.variablesTextUnparsed).toBe(true)
     expect(pou?.variablesText).toBe('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
   })

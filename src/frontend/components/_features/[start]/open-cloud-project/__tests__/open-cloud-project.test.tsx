@@ -7,7 +7,6 @@
 
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 
 import type { EdgeAccountPort } from '../../../../../../middleware/shared/ports/edge-account-port'
 import { EDITOR_CAPABILITIES } from '../../../../../../middleware/shared/ports/platform-capabilities'
@@ -17,8 +16,8 @@ import type {
   ProjectPort,
   ProjectResponse,
 } from '../../../../../../middleware/shared/ports/project-port'
-import { PlatformProvider } from '../../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
+import { createStoreWrapper, createTestStore } from '../../../../../store/testing'
 import { getMemoryState } from '../../../../../utils/toast'
 import { OpenCloudProjectModal } from '..'
 
@@ -107,10 +106,6 @@ function makePorts(): PlatformPorts {
   }
 }
 
-function Wrapper({ children }: { children: ReactNode }) {
-  return <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
-}
-
 const lastToast = () => getMemoryState().toasts[0]
 
 /** How many times the dialog asked to close itself. */
@@ -118,7 +113,7 @@ let closeRequests = 0
 
 function renderDialog() {
   return render(<OpenCloudProjectModal open onOpenChange={(open) => void (open || (closeRequests += 1))} />, {
-    wrapper: Wrapper,
+    wrapper: createStoreWrapper(createTestStore(), makePorts()),
   })
 }
 

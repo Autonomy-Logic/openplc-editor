@@ -7,11 +7,12 @@ import { i18n } from '../../../../locales/i18n'
 import { executeExportPlcopen } from '../../../../services/export-actions'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
 import { executeSaveProjectAs } from '../../../../services/save-project-as'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { canExportPdf } from '../../../../utils/print-availability'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
+  const store = useOpenPLCStoreApi()
   const projectPort = useProject()
   const capabilities = useCapabilities()
   const {
@@ -40,19 +41,19 @@ export const FileMenu = () => {
 
   const handleSave = () => {
     if (activeEditor.meta.name && !isSaving) {
-      void executeSaveActiveFile(projectPort, capabilities)
+      void executeSaveActiveFile(store, projectPort, capabilities)
     }
   }
 
   const handleSaveProject = () => {
     if (!isSaving) {
-      void executeSaveProject(projectPort, capabilities)
+      void executeSaveProject(store, projectPort, capabilities)
     }
   }
 
   const handleSaveProjectAs = () => {
     if (!isSaving) {
-      void executeSaveProjectAs(projectPort, capabilities)
+      void executeSaveProjectAs(store, projectPort, capabilities)
     }
   }
 
@@ -115,7 +116,7 @@ export const FileMenu = () => {
             <>
               <MenuPrimitive.Separator className={SEPARATOR} />
               {capabilities.hasProjectExport && (
-                <MenuPrimitive.Item className={ITEM} onClick={() => void executeExportPlcopen(projectPort)}>
+                <MenuPrimitive.Item className={ITEM} onClick={() => void executeExportPlcopen(store, projectPort)}>
                   <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
                 </MenuPrimitive.Item>
               )}

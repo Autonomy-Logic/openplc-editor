@@ -50,7 +50,7 @@ type AssistantBubbleProps = {
 }
 
 const AssistantBubble = ({ turn, language, onInsertAtCursor, onRegenerate }: AssistantBubbleProps) => {
-  const { rateMessage } = useOpenPLCStore.useAiActions()
+  const { rateMessage } = useOpenPLCStore((s) => s.aiActions)
   const ai = useAI()
   const [copied, setCopied] = useState(false)
 

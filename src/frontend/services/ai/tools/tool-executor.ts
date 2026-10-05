@@ -1,6 +1,6 @@
 import type { PLCBody } from '../../../../middleware/shared/ports/open-plc-types'
 import type { PLCDataType, PLCStructureVariable } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
 import { computeHunks } from '../../../utils/ai-diff-review'
 import { isGraphicalLanguage } from '../context-collector'
 import { extractPouST, invalidateSTCache, type ProjectStTranspiler, transpileProjectToST } from '../graphical-context'
@@ -64,13 +64,14 @@ const PROJECT_MUTATING_TOOLS = new Set([
  * Async because a datatype rename can await the reference-impact modal.
  */
 export async function executeTool(
+  store: OpenPLCStore,
   toolName: string,
   toolInput: unknown,
   options: ToolExecutionOptions = {},
 ): Promise<ToolResult> {
   try {
     // `await` keeps a rejection inside this try/catch (never-throws contract).
-    const result = await dispatchTool(toolName, toolInput, options)
+    const result = await dispatchTool(store, toolName, toolInput, options)
     if (result.success && PROJECT_MUTATING_TOOLS.has(toolName)) invalidateSTCache()
     return result
   } catch (error) {
@@ -82,39 +83,40 @@ export async function executeTool(
 }
 
 function dispatchTool(
+  store: OpenPLCStore,
   toolName: string,
   toolInput: unknown,
   options: ToolExecutionOptions,
 ): ToolResult | Promise<ToolResult> {
   switch (toolName) {
     case 'create_pou':
-      return executeCreatePou(toolInput as CreatePouInput)
+      return executeCreatePou(store, toolInput as CreatePouInput)
     case 'update_pou_body':
-      return executeUpdatePouBody(toolInput as UpdatePouBodyInput)
+      return executeUpdatePouBody(store, toolInput as UpdatePouBodyInput)
     case 'create_variable':
-      return executeCreateVariable(toolInput as CreateVariableInput)
+      return executeCreateVariable(store, toolInput as CreateVariableInput)
     case 'delete_pou':
-      return executeDeletePou(toolInput as DeletePouInput)
+      return executeDeletePou(store, toolInput as DeletePouInput)
     case 'update_variable':
-      return executeUpdateVariable(toolInput as UpdateVariableInput)
+      return executeUpdateVariable(store, toolInput as UpdateVariableInput)
     case 'delete_variable':
-      return executeDeleteVariable(toolInput as DeleteVariableInput)
+      return executeDeleteVariable(store, toolInput as DeleteVariableInput)
     case 'create_datatype':
-      return executeCreateDatatype(toolInput as CreateDatatypeInput)
+      return executeCreateDatatype(store, toolInput as CreateDatatypeInput)
     case 'update_datatype':
-      return executeUpdateDatatype(toolInput as UpdateDatatypeInput)
+      return executeUpdateDatatype(store, toolInput as UpdateDatatypeInput)
     case 'delete_datatype':
-      return executeDeleteDatatype(toolInput as DeleteDatatypeInput)
+      return executeDeleteDatatype(store, toolInput as DeleteDatatypeInput)
     case 'read_project_state':
-      return executeReadProjectState()
+      return executeReadProjectState(store)
     case 'read_pou_body':
-      return executeReadPouBody(toolInput as ReadPouBodyInput, options)
+      return executeReadPouBody(store, toolInput as ReadPouBodyInput, options)
     default:
       return { success: false, message: `Unknown tool: ${toolName}` }
   }
 }
 
-function executeCreatePou(input: CreatePouInput): ToolResult {
+function executeCreatePou(store: OpenPLCStore, input: CreatePouInput): ToolResult {
   if (!input.name || !input.type || !input.language) {
     return { success: false, message: 'Missing required fields: name, type, language' }
   }
@@ -135,14 +137,14 @@ function executeCreatePou(input: CreatePouInput): ToolResult {
   const { createProps, body: rawBody } = adaptCreatePou(input)
   const body = rawBody ? sanitizePouBody(rawBody) : undefined
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
 
   // A "main" POU is auto-created in every project, so a (re)create carrying a body redirects to update_pou_body.
   if (createProps.name.toLowerCase() === 'main') {
     const existingMain = state.project.data.pous.find((p) => p.name.toLowerCase() === 'main')
     if (existingMain) {
       if (rawBody) {
-        const redirected = executeUpdatePouBody({ pouName: existingMain.name, code: rawBody })
+        const redirected = executeUpdatePouBody(store, { pouName: existingMain.name, code: rawBody })
         if (!redirected.success) return redirected
         return {
           success: true,
@@ -172,7 +174,7 @@ function executeCreatePou(input: CreatePouInput): ToolResult {
   }
 
   if (body) {
-    const freshState = openPLCStoreBase.getState()
+    const freshState = store.getState()
     const pou = freshState.project.data.pous.find((p) => p.name === createProps.name)
     if (pou) {
       freshState.projectActions.updatePou({
@@ -203,19 +205,19 @@ function executeCreatePou(input: CreatePouInput): ToolResult {
   }
 }
 
-function executeUpdatePouBody(input: UpdatePouBodyInput): ToolResult {
+function executeUpdatePouBody(store: OpenPLCStore, input: UpdatePouBodyInput): ToolResult {
   if (!input.pouName || input.code === undefined) {
     return { success: false, message: 'Missing required fields: pouName, code' }
   }
 
   input = { ...input, code: sanitizePouBody(input.code) }
 
-  const adapted = adaptUpdatePouBody(input)
+  const adapted = adaptUpdatePouBody(store, input)
   if (!adapted) {
     return { success: false, message: `POU "${input.pouName}" not found.` }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === input.pouName)
   if (!pou) {
     return { success: false, message: `POU "${input.pouName}" not found.` }
@@ -252,13 +254,13 @@ function executeUpdatePouBody(input: UpdatePouBodyInput): ToolResult {
   return { success: true, message: `Updated body of "${input.pouName}"` }
 }
 
-function executeCreateVariable(input: CreateVariableInput): ToolResult {
+function executeCreateVariable(store: OpenPLCStore, input: CreateVariableInput): ToolResult {
   if (!input.name || !input.type) {
     return { success: false, message: 'Missing required fields: name, type' }
   }
 
   if (input.pouName) {
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     const pou = state.project.data.pous.find((p) => p.name === input.pouName)
     if (!pou) {
       return { success: false, message: `POU "${input.pouName}" not found.` }
@@ -267,7 +269,7 @@ function executeCreateVariable(input: CreateVariableInput): ToolResult {
 
   const adapted = adaptCreateVariable(input)
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const result = state.projectActions.createVariable(adapted)
 
   if (!result.ok) {
@@ -282,12 +284,12 @@ function executeCreateVariable(input: CreateVariableInput): ToolResult {
   return { success: true, message: `Created variable "${input.name}" (${input.type}) ${scope}` }
 }
 
-function executeDeletePou(input: DeletePouInput): ToolResult {
+function executeDeletePou(store: OpenPLCStore, input: DeletePouInput): ToolResult {
   if (!input.pouName) {
     return { success: false, message: 'Missing required field: pouName' }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === input.pouName)
   if (!pou) {
     return { success: false, message: `POU "${input.pouName}" not found.` }
@@ -303,12 +305,12 @@ function executeDeletePou(input: DeletePouInput): ToolResult {
   return { success: true, message: `Deleted POU "${input.pouName}"` }
 }
 
-function executeUpdateVariable(input: UpdateVariableInput): ToolResult {
+function executeUpdateVariable(store: OpenPLCStore, input: UpdateVariableInput): ToolResult {
   if (!input.currentName) {
     return { success: false, message: 'Missing required field: currentName' }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const isGlobal = !input.pouName
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -364,12 +366,12 @@ function executeUpdateVariable(input: UpdateVariableInput): ToolResult {
   return { success: true, message: `Updated variable "${input.currentName}": ${changes.join(', ')}` }
 }
 
-function executeDeleteVariable(input: DeleteVariableInput): ToolResult {
+function executeDeleteVariable(store: OpenPLCStore, input: DeleteVariableInput): ToolResult {
   if (!input.variableName) {
     return { success: false, message: 'Missing required field: variableName' }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const isGlobal = !input.pouName
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -408,7 +410,7 @@ function executeDeleteVariable(input: DeleteVariableInput): ToolResult {
   return { success: true, message: `Deleted variable "${input.variableName}" ${scope}` }
 }
 
-function executeCreateDatatype(input: CreateDatatypeInput): ToolResult {
+function executeCreateDatatype(store: OpenPLCStore, input: CreateDatatypeInput): ToolResult {
   if (!input.name || !input.derivation) {
     return { success: false, message: 'Missing required fields: name, derivation' }
   }
@@ -421,7 +423,7 @@ function executeCreateDatatype(input: CreateDatatypeInput): ToolResult {
     }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   if (state.project.data.dataTypes.find((d) => d.name === input.name)) {
     return { success: false, message: `A data type named "${input.name}" already exists.` }
   }
@@ -453,7 +455,7 @@ function executeCreateDatatype(input: CreateDatatypeInput): ToolResult {
   }
 
   // The skeleton builder doesn't populate fields/values/dimensions.
-  openPLCStoreBase.getState().projectActions.updateDatatype(input.name, fullData)
+  store.getState().projectActions.updateDatatype(input.name, fullData)
 
   let detail = ''
   if (input.derivation === 'structure') detail = ` with ${input.fields?.length ?? 0} field(s)`
@@ -463,12 +465,12 @@ function executeCreateDatatype(input: CreateDatatypeInput): ToolResult {
   return { success: true, message: `Created ${input.derivation} "${input.name}"${detail}` }
 }
 
-async function executeUpdateDatatype(input: UpdateDatatypeInput): Promise<ToolResult> {
+async function executeUpdateDatatype(store: OpenPLCStore, input: UpdateDatatypeInput): Promise<ToolResult> {
   if (!input.name) {
     return { success: false, message: 'Missing required field: name' }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const existing = state.project.data.dataTypes.find((d) => d.name === input.name)
   if (!existing) {
     return { success: false, message: `Data type "${input.name}" not found.` }
@@ -530,8 +532,8 @@ async function executeUpdateDatatype(input: UpdateDatatypeInput): Promise<ToolRe
     }
   }
 
-  openPLCStoreBase.getState().projectActions.updateDatatype(targetName, newData)
-  openPLCStoreBase.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(targetName)
+  store.getState().projectActions.updateDatatype(targetName, newData)
+  store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(targetName)
 
   const changes: string[] = []
   if (input.newName && input.newName !== input.name) changes.push(`renamed to "${input.newName}"`)
@@ -547,12 +549,12 @@ async function executeUpdateDatatype(input: UpdateDatatypeInput): Promise<ToolRe
   }
 }
 
-function executeDeleteDatatype(input: DeleteDatatypeInput): ToolResult {
+function executeDeleteDatatype(store: OpenPLCStore, input: DeleteDatatypeInput): ToolResult {
   if (!input.name) {
     return { success: false, message: 'Missing required field: name' }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const existing = state.project.data.dataTypes.find((d) => d.name === input.name)
   if (!existing) {
     return { success: false, message: `Data type "${input.name}" not found.` }
@@ -564,8 +566,8 @@ function executeDeleteDatatype(input: DeleteDatatypeInput): ToolResult {
   return { success: true, message: `Deleted data type "${input.name}"` }
 }
 
-function executeReadProjectState(): ToolResult {
-  const state = openPLCStoreBase.getState()
+function executeReadProjectState(store: OpenPLCStore): ToolResult {
+  const state = store.getState()
   const project = state.project.data
 
   const lines: string[] = []
@@ -616,13 +618,17 @@ function executeReadProjectState(): ToolResult {
 export type ReadPouBodyInput = { name?: string }
 
 /** A graphical POU's body is node coordinates, so it comes back as the transpiled ST equivalent. */
-async function executeReadPouBody(input: ReadPouBodyInput, options: ToolExecutionOptions): Promise<ToolResult> {
+async function executeReadPouBody(
+  store: OpenPLCStore,
+  input: ReadPouBodyInput,
+  options: ToolExecutionOptions,
+): Promise<ToolResult> {
   const requested = input?.name
   if (typeof requested !== 'string' || requested.trim() === '') {
     return { success: false, message: 'Missing required field: name' }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const pous = state.project.data.pous
   const pou = pous.find((p) => p.name.toLowerCase() === requested.trim().toLowerCase())
   if (!pou) {

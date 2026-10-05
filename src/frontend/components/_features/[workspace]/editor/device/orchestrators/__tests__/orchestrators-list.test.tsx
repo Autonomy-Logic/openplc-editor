@@ -15,53 +15,21 @@
  * `orchestrators.length` and from the catch around `listOrchestrators()`; the
  * child strings come from `orchestrator.devices` and from the row click.
  *
- * Rendered against a mocked port and store: the real screen needs an Edge
+ * Rendered against stub ports and a fresh store: the real screen needs an Edge
  * account, a registered Device and an agent, none of which make a useful
  * regression test for a set of strings.
  */
 
-import { render, screen, waitFor } from '@testing-library/react'
+import type { OpenPLCStore } from '@root/frontend/store'
+import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import type { OrchestratorPort } from '@root/middleware/shared/ports/orchestrator-port'
+import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
+import { render as rtlRender, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-
-const listOrchestrators = vi.fn()
-
-/** Typed so the store's action spies can be read back without a cast. */
-type MockStore = {
-  runtimeConnection: Record<string, unknown>
-  deviceActions: Record<string, ReturnType<typeof vi.fn>>
-  modalActions: Record<string, ReturnType<typeof vi.fn>>
-  deviceDefinitions: Record<string, unknown>
-  deviceAvailableOptions: Record<string, unknown>
-}
-
-let storeState: MockStore
-
-vi.mock('@root/middleware/shared/providers', () => ({
-  useOrchestrator: () => ({ listOrchestrators }),
-  useRuntime: () => ({
-    getUsersInfo: vi.fn().mockResolvedValue({ error: 'not connected' }),
-    setDeviceContext: vi.fn(),
-    clearCredentials: vi.fn(),
-  }),
-  // The screen reads the package port to offer a vendor package's boards. No
-  // port here: these are string tests, and the board rules stay inert without
-  // one, which is the same answer the desktop gives.
-  usePlatform: () => ({ packages: undefined }),
-}))
-
-// Mocked through the @root alias rather than a relative path: Jest resolves a
-// mock path relative to its setup file, not the test, so a relative one fails
-// there while working under Vitest. The alias resolves to the same module in
-// both, which keeps this file identical across the two apps.
-vi.mock('@root/frontend/store', () => {
-  // The screen reads the store both ways: destructured for the actions, and
-  // with a selector for the simulator check.
-  const useOpenPLCStore = (selector?: (state: unknown) => unknown) => (selector ? selector(storeState) : storeState)
-  useOpenPLCStore.getState = () => storeState
-  // The refresh path reads the store outside React, to reconcile the selected
-  // device against a listing that may have changed under it.
-  return { useOpenPLCStore, openPLCStoreBase: { getState: () => storeState } }
-})
+import type { ReactElement } from 'react'
 
 // Whether the board is the in-process simulator is decided by board metadata
 // this screen only passes through, and it has its own tests.
@@ -70,6 +38,45 @@ vi.mock('@root/middleware/shared/utils/target-capabilities', () => ({
 }))
 
 import { OrchestratorsList } from '../orchestrators-list'
+
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
+
+const listOrchestrators = vi.fn()
+
+// No package port: these are string tests, and the board rules stay inert
+// without one, which is the same answer the desktop gives.
+const ports: PlatformPorts = {
+  compiler: stubPort(),
+  runtime: stubPort<RuntimePort>({
+    getUsersInfo: () => Promise.resolve({ hasUsers: false, error: 'not connected' }),
+    setDeviceContext: () => undefined,
+    clearCredentials: () => Promise.resolve({ success: true }),
+  }),
+  debugger: stubPort(),
+  simulator: stubPort(),
+  project: stubPort(),
+  device: stubPort(),
+  orchestrator: stubPort<OrchestratorPort>({ listOrchestrators }),
+  system: stubPort(),
+  window: stubPort(),
+  accelerator: stubPort(),
+  theme: stubPort(),
+  versionControl: stubPort(),
+  navigation: stubPort(),
+  library: stubPort(),
+  capabilities: WEB_CAPABILITIES,
+}
+
+let store: OpenPLCStore
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: createStoreWrapper(store, ports) })
 
 /** One Edge Device carrying two vPLCs. */
 const edgeDevice = {
@@ -83,29 +90,10 @@ const edgeDevice = {
   ],
 }
 
-const freshStore = (runtimeConnection: Record<string, unknown> = {}): MockStore => ({
-  runtimeConnection: {
-    connectionStatus: 'disconnected',
-    selectedDevice: null,
-    jwtToken: null,
-    plcStatus: null,
-    ...runtimeConnection,
-  },
-  deviceActions: {
-    setDeviceBoard: vi.fn(),
-    setSelectedDevice: vi.fn(),
-    setRuntimeConnectionStatus: vi.fn(),
-    setRuntimeVersion: vi.fn(),
-    clearRuntimeConnection: vi.fn(),
-  },
-  modalActions: { openModal: vi.fn() },
-  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Simulator' } },
-  deviceAvailableOptions: { availableBoards: new Map() },
-})
-
 beforeEach(() => {
   vi.clearAllMocks()
-  storeState = freshStore()
+  store = createTestStore()
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Simulator')
   listOrchestrators.mockResolvedValue([])
 })
 
@@ -174,16 +162,16 @@ describe('the strings that name the child entity', () => {
   it('names the vPLC in the switch confirmation, which is reached from a child row', async () => {
     // Connected to one vPLC, then a different one is clicked: the only path to
     // this modal, and the reason its wording is vPLC and not Device.
-    storeState = freshStore({
-      connectionStatus: 'connected',
-      jwtToken: 'jwt',
-      selectedDevice: {
-        orchestratorId: 'edge-1',
-        orchestratorAgentId: 'agent-1',
-        deviceId: 'vplc-1',
-        deviceName: 'mixer',
-      },
-    })
+    const connected: SelectedDevice = {
+      orchestratorId: 'edge-1',
+      orchestratorAgentId: 'agent-1',
+      deviceId: 'vplc-1',
+      deviceName: 'mixer',
+    }
+    const { deviceActions } = store.getState()
+    deviceActions.setSelectedDevice(connected)
+    deviceActions.setRuntimeJwtToken('jwt')
+    deviceActions.setRuntimeConnectionStatus('connected')
     listOrchestrators.mockResolvedValue([edgeDevice])
     render(<OrchestratorsList />)
 

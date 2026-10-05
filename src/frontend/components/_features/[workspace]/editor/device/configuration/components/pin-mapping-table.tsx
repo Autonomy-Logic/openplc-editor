@@ -1,6 +1,6 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { boardSelectors, pinSelectors } from '@root/frontend/hooks/use-store-selectors'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStoreApi } from '@root/frontend/store'
 import type { DevicePin, PinPullSpec } from '@root/middleware/shared/ports/types'
 import {
   buildAddressPool,
@@ -52,6 +52,7 @@ type PinMappingTableProps = {
 }
 
 const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTableProps) => {
+  const store = useOpenPLCStoreApi()
   const updatePin = pinSelectors.useUpdatePin()
   const deviceBoard = boardSelectors.useDeviceBoard()
   const availableBoards = boardSelectors.useAvailableBoards()
@@ -67,7 +68,7 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
     // producer case where a pin alias collides with a VPP channel
     // alias, a Modbus point alias, or an EtherCAT channel alias.
     if (columnId === 'alias' && typeof value === 'string') {
-      const state = useOpenPLCStore.getState()
+      const state = store.getState()
       const board = state.deviceDefinitions.configuration.deviceBoard
       const currentPins = state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
       const currentPin = currentPins[state.deviceDefinitions.pinMapping.currentSelectedPinTableRow]
@@ -101,7 +102,7 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
       // orphaning.
       const oldAlias = currentPin?.alias ?? ''
       if (oldAlias) {
-        useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, value)
+        store.getState().projectActions.renameAlias(oldAlias, value)
       }
     }
 
