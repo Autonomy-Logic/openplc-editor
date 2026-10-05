@@ -323,12 +323,16 @@ exactly one slave, so `selectModbusServer` refuses a build with more than one
 enabled server. `DEBUG_BAUD` comes from `screens.serial.baud_rate` and
 `DEBUG_SLAVE` is the constant 1.
 
-On the default UART the firmware answers two ids, routed by function code
-(`handle_serial_port` in `resources/sources/Baremetal/modbus_serial.cpp`): the editor's id
+With one UART for both (no `MBSERIAL_ON_SECONDARY`), the firmware answers two ids on it, routed by
+function code (`handle_serial_port` in `resources/sources/Baremetal/modbus_serial.cpp`): the editor's id
 (`MB_EDITOR_SLAVE`, equal to `DEBUG_SLAVE`) carries only the editor function codes 0x41-0x4D
 (`mb_pdu_is_editor_fc` in `modbus_pdu.cpp`) and silently drops anything else; the server's id
-(`modbus.slaveid`, from `MBSERIAL_SLAVE`) carries everything else and answers an editor function code
-with an illegal-function exception. When the two ids are equal, that id serves both.
+(`modbus.slaveid`, from `MBSERIAL_SLAVE`) carries the standard frames the framer recognizes and answers
+an editor function code with an illegal-function exception. A function code the framer does not
+recognize is dropped during serial framing, not answered. When the two ids are equal, that id serves
+both, and a build without the debugger (`MB_EDITOR_SLAVE` undefined) uses the server's id for both.
+With `MBSERIAL_ON_SECONDARY`, the default UART answers only `DEBUG_SLAVE` and the secondary UART only
+`MBSERIAL_SLAVE`.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
