@@ -102,6 +102,14 @@ export const buildGenericNode = <T>({
         handleY,
         variant: 'default',
       })
+    case 'execute':
+      return nodesBuilder.execute({
+        id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+      })
     case 'parallel':
       return nodesBuilder.parallel({
         id,

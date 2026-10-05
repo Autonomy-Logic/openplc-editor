@@ -1,5 +1,5 @@
 import type { RungLadderState } from '../../../../../../store/slices/ladder'
-import { computeRungDebugStates, type LadderDebugContext } from '../rung-debug-states'
+import { computeRungDebugStates, type LadderDebugContext } from '../ladder-utils/debug-power-flow'
 
 const node = (id: string, type: string, data: Record<string, unknown>) => ({ id, type, position: { x: 0, y: 0 }, data })
 

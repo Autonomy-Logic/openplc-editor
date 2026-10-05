@@ -46,7 +46,11 @@ export function parseInterfaceXml(interfaceXml: unknown): { variables: PLCVariab
 // full; SFC and codesys-dialect bodies are surfaced as a non-fatal warning
 // and the POU is skipped — this importer's scope is the old-editor dialect
 // only (see xml-parser/index.ts).
-export function parsePousXml(pouXml: unknown): { pous: PLCPou[]; warnings: string[] } {
+export function parsePousXml(
+  pouXml: unknown,
+  /** Untrimmed Execute snippets by localId — see `parseLadderXml` / `parseFbdXml`. */
+  executeStCode: ReadonlyMap<string, string> = new Map(),
+): { pous: PLCPou[]; warnings: string[] } {
   const pous: PLCPou[] = []
   const warnings: string[] = []
 
@@ -86,7 +90,7 @@ export function parsePousXml(pouXml: unknown): { pous: PLCPou[]; warnings: strin
       continue
     }
     if (body.LD !== undefined) {
-      const { body: ldBody, warnings: ldWarnings } = parseLadderXml(name, body.LD)
+      const { body: ldBody, warnings: ldWarnings } = parseLadderXml(name, body.LD, executeStCode)
       warnings.push(...ldWarnings)
       pous.push({
         name,
@@ -98,7 +102,7 @@ export function parsePousXml(pouXml: unknown): { pous: PLCPou[]; warnings: strin
       continue
     }
     if (body.FBD !== undefined) {
-      const { body: fbdBody, warnings: fbdWarnings } = parseFbdXml(name, body.FBD)
+      const { body: fbdBody, warnings: fbdWarnings } = parseFbdXml(name, body.FBD, executeStCode)
       warnings.push(...fbdWarnings)
       pous.push({
         name,

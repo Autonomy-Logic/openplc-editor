@@ -29,6 +29,13 @@ export interface HandleGeometry {
   position: Position
   glbPosition: XyPosition
   relPosition: XyPosition
+  /**
+   * CSS offset for the handle's DOM element. React Flow draws edges to where
+   * the handle actually renders, so an element whose connectors sit somewhere
+   * other than its vertical centre must supply this — `relPosition` alone only
+   * describes the model, not the layout.
+   */
+  style?: { top: number; left?: number; right?: number }
 }
 
 // glbPosition (absolute canvas coordinates) never appears in PLCopen XML —
@@ -41,6 +48,7 @@ export function makeHandle(
   side: Position,
   nodePosition: XyPosition,
   relPositionXml: unknown,
+  style?: HandleGeometry['style'],
 ): HandleGeometry {
   const relPosition = parsePositionXml(relPositionXml)
   return {
@@ -49,5 +57,6 @@ export function makeHandle(
     position: side,
     relPosition,
     glbPosition: { x: nodePosition.x + relPosition.x, y: nodePosition.y + relPosition.y },
+    ...(style ? { style } : {}),
   }
 }

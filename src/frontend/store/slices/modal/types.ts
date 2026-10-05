@@ -9,6 +9,13 @@ export type ModalTypes =
   | 'block-ladder-element'
   | 'coil-ladder-element'
   | 'contact-ladder-element'
+  /** Expanded ST editor for an Execute ("ST Block") element. Data
+   *  shape: the React Flow node. Opens on double-click or the node's
+   *  expand button, and — unlike the other graphical element modals —
+   *  also opens during a debug session, read-only, so the user can
+   *  read the running snippet with live value badges. */
+  | 'execute-ladder-element'
+  | 'execute-fbd-element'
   | 'block-fbd-element'
   | 'create-project'
   | 'save-changes-project'

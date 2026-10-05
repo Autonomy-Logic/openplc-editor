@@ -50,7 +50,20 @@ export interface AcceleratorPort {
    *  adapter returns a no-op unsubscribe like the other accelerators. */
   onRetrieveProject(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe
-  onExportProject(callback: () => void): Unsubscribe
+  /**
+   * File → "Export to PLCOpen XML" / "Export to CODESYS XML".
+   *
+   * The two menu items drive two different generators, so the chosen dialect
+   * has to reach the renderer. Optional, so a platform with a single export
+   * path can still implement a no-arg callback.
+   */
+  onExportProject(callback: (format?: 'old-editor' | 'codesys') => void): Unsubscribe
+  /**
+   * File → "Import PLCopen XML". The handler opens the confirm-overwrite modal
+   * rather than importing straight away, since an import replaces the open
+   * project's contents.
+   */
+  onImportProject(callback: () => void): Unsubscribe
   /** File > Print / Ctrl+P (Cmd+P). Preview is an alias into the same
    *  export-PDF wizard, not a separate accelerator. */
   onPrint(callback: () => void): Unsubscribe

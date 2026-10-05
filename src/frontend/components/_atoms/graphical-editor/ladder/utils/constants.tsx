@@ -186,6 +186,31 @@ export const GAP = 0
 
 export const DEFAULT_PARALLEL_CONNECTOR_Y = DEFAULT_PARALLEL_HEIGHT / 2
 
+// execute ("ST Block")
+
+// Geometry is deliberately the SAME as a block's: `EN` / `ENO` sit on the
+// first pin row, so the layout aligns this element exactly as it aligns a
+// block and the rung wire runs straight into it instead of jogging.
+export const DEFAULT_EXECUTE_WIDTH = 240
+export const DEFAULT_EXECUTE_CONNECTOR_Y = DEFAULT_BLOCK_CONNECTOR_Y
+export const DEFAULT_EXECUTE_CONNECTOR_X = DEFAULT_EXECUTE_WIDTH
+
+/** Top of the code area — clears the title row and the EN/ENO pin row. */
+export const DEFAULT_EXECUTE_BODY_TOP = DEFAULT_EXECUTE_CONNECTOR_Y + 16
+export const DEFAULT_EXECUTE_LINE_HEIGHT = 18
+export const DEFAULT_EXECUTE_BODY_PADDING = 10
+/** An empty box still shows the "Enter ST code here" placeholder line. */
+export const DEFAULT_EXECUTE_MIN_LINES = 1
+/** Past this the code area scrolls instead of growing the rung. */
+export const DEFAULT_EXECUTE_MAX_LINES = 12
+
+export const executeHeight = (lineCount: number): number =>
+  DEFAULT_EXECUTE_BODY_TOP +
+  Math.min(Math.max(lineCount, DEFAULT_EXECUTE_MIN_LINES), DEFAULT_EXECUTE_MAX_LINES) * DEFAULT_EXECUTE_LINE_HEIGHT +
+  DEFAULT_EXECUTE_BODY_PADDING
+
+export const DEFAULT_EXECUTE_HEIGHT = executeHeight(DEFAULT_EXECUTE_MIN_LINES)
+
 // placeholder
 
 export const DEFAULT_PLACEHOLDER_WIDTH = 10

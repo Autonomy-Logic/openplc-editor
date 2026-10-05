@@ -21,6 +21,8 @@ import {
 } from '@root/middleware/shared/ports/xml-types/old-editor/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
+import { buildExecuteAddData, EXECUTE_TYPE_NAME } from '../../../execute-plcopen'
+
 /**
  * Find the connections of a node in a rung.
  */
@@ -511,6 +513,73 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
   }
 }
 
+/**
+ * Serialize an Execute ("ST Block") element.
+ *
+ * PLCopen TC6 has no element for inline ST, so this follows what
+ * CODESYS itself writes (verified against a V3.5 SP22 export): an
+ * ordinary `<block>` with `typeName="EXECUTE"`, real `EN`/`ENO` formal
+ * parameters, and the snippet hung off an `<addData>` — the standard's
+ * own extension mechanism, since TC6 has no inline-ST element.
+ *
+ * This is the NEUTRAL PLCOpen export, which reproduces Beremiz / the
+ * legacy OpenPLC Editor byte-for-byte and carries no vendor references,
+ * so it uses an openplc.org URI. The CODESYS export uses 3S's — see
+ * `execute-plcopen.ts`.
+ *
+ * `xmlbuilder2` escapes the text node, so `<`, `>` and `&` — which ST
+ * uses constantly — come out as entities exactly as CODESYS writes
+ * them. Never hand-concatenate this payload.
+ */
+const executeToXml = (node: Node<BasicNodeData & { code: string }>, rung: RungLadderState, offsetY: number = 0) => {
+  const enHandle = node.data.inputConnector
+  const enoHandle = node.data.outputConnector
+  const connections = enHandle ? findConnections(node, rung, offsetY, enHandle.id) : []
+
+  return {
+    '@localId': node.data.numericId,
+    '@typeName': EXECUTE_TYPE_NAME,
+    '@width': node.width as number,
+    '@height': node.height as number,
+    // CODESYS omits this entirely; emit it only when the user has set an
+    // explicit order, so a default export stays byte-comparable with theirs.
+    ...(node.data.executionOrder ? { '@executionOrderId': node.data.executionOrder } : {}),
+    position: {
+      '@x': node.position.x,
+      '@y': (node.position.y ?? 0) + offsetY,
+    },
+    inputVariables: {
+      variable: [
+        {
+          '@formalParameter': 'EN',
+          connectionPointIn: {
+            relPosition: {
+              '@x': enHandle?.relPosition.x || 0,
+              '@y': enHandle?.relPosition.y || 0,
+            },
+            connection: connections,
+          },
+        },
+      ],
+    },
+    inOutVariables: '',
+    outputVariables: {
+      variable: [
+        {
+          '@formalParameter': 'ENO',
+          connectionPointOut: {
+            relPosition: {
+              '@x': enoHandle?.relPosition.x || 0,
+              '@y': enoHandle?.relPosition.y || 0,
+            },
+          },
+        },
+      ],
+    },
+    addData: buildExecuteAddData(node.data.code, 'openplc', 'ld'),
+  }
+}
+
 const inVariableToXML = (variable: VariableNode, offsetY: number = 0): InVariableLadderXML => {
   return {
     '@localId': variable.data.numericId,
@@ -611,6 +680,13 @@ const ladderToXml = (rungs: RungLadderState[]) => {
           break
         case 'block':
           ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY))
+          break
+        case 'execute':
+          // An Execute box serialises as a <block typeName="EXECUTE">, so it
+          // joins the same collection — see executeToXml.
+          ladderXML.body.LD.block.push(
+            executeToXml(node as Node<BasicNodeData & { code: string }>, rung, offsetY) as BlockLadderXML,
+          )
           break
         case 'variable':
           // Always emit — even with an empty name. A <connection> elsewhere

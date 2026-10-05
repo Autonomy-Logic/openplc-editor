@@ -1,5 +1,16 @@
-import type { RungLadderState } from '../../../../../store/slices/ladder'
-import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from '../../../../../utils/PLC/edge-trigger-instance'
+/**
+ * Debug power-flow evaluation for one ladder rung.
+ *
+ * During a debug session the editor colours energized wires green. That means
+ * answering, per edge, "is power reaching here?" — which is a pure walk over
+ * the rung's nodes and edges plus the live boolean values.
+ *
+ * Extracted from `body.tsx` so it can be tested without dragging the whole
+ * component tree (and its ESM-only LSP dependency) into the test runner.
+ */
+
+import type { RungLadderState } from '../../../../../../store/slices/ladder'
+import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from '../../../../../../utils/PLC/edge-trigger-instance'
 
 export type LadderDebugContext = {
   isFunctionBlockPou: boolean
@@ -67,6 +78,14 @@ export const computeRungDebugStates = (
       return isInputGreen
     }
 
+    // Execute ("ST Block") conducts rung power straight through: its ENO is
+    // its EN, same as a coil. Without this the power-flow highlight stops
+    // dead at the box during debug even though the rung really does energize
+    // whatever follows it.
+    if (node.type === 'execute') {
+      return isInputGreen
+    }
+
     if (node.type === 'block') {
       const blockData = node.data as {
         variable?: { name: string }
@@ -107,30 +126,40 @@ export const computeRungDebugStates = (
   }
 
   const edgeStates = new Map<string, boolean>()
+  // Ids on the current recursion stack. A rung the editor builds is acyclic,
+  // but an imported or hand-edited file can close a loop, and re-entering one
+  // recurses until the stack gives out. A cycle reaches no rail, so the
+  // re-entry is dead.
+  const edgesInProgress = new Set<string>()
 
   const determineEdgeState = (edgeId: string): boolean => {
-    if (edgeStates.has(edgeId)) {
-      return edgeStates.get(edgeId)!
-    }
+    const cached = edgeStates.get(edgeId)
+    if (cached !== undefined) return cached
+    if (edgesInProgress.has(edgeId)) return false
 
     const edge = edgeById.get(edgeId)
     if (!edge) return false
 
-    const incomingEdges = edgesByTarget.get(edge.source) ?? []
+    edgesInProgress.add(edgeId)
+    try {
+      const incomingEdges = edgesByTarget.get(edge.source) ?? []
 
-    let isInputGreen = false
-    if (incomingEdges.length === 0) {
-      const sourceNode = nodeById.get(edge.source)
-      isInputGreen = sourceNode?.type === 'powerRail' && (sourceNode.data as { variant: string }).variant === 'left'
-    } else {
-      isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id))
+      let isInputGreen = false
+      if (incomingEdges.length === 0) {
+        const sourceNode = nodeById.get(edge.source)
+        isInputGreen = sourceNode?.type === 'powerRail' && (sourceNode.data as { variant: string }).variant === 'left'
+      } else {
+        isInputGreen = incomingEdges.some((incomingEdge) => determineEdgeState(incomingEdge.id))
+      }
+
+      const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle, isInputGreen)
+
+      const isGreen = sourceOutputState === true
+      edgeStates.set(edgeId, isGreen)
+      return isGreen
+    } finally {
+      edgesInProgress.delete(edgeId)
     }
-
-    const sourceOutputState = getNodeOutputState(edge.source, edge.sourceHandle, isInputGreen)
-
-    const isGreen = sourceOutputState === true
-    edgeStates.set(edgeId, isGreen)
-    return isGreen
   }
 
   edges.forEach((edge) => {
@@ -138,11 +167,12 @@ export const computeRungDebugStates = (
   })
 
   const nodeInputStates = new Map<string, boolean>()
+  const nodesInProgress = new Set<string>()
 
   const determineNodeInputState = (nodeId: string): boolean => {
-    if (nodeInputStates.has(nodeId)) {
-      return nodeInputStates.get(nodeId)!
-    }
+    const cached = nodeInputStates.get(nodeId)
+    if (cached !== undefined) return cached
+    if (nodesInProgress.has(nodeId)) return false
 
     const node = nodeById.get(nodeId)
     if (!node) return false
@@ -159,14 +189,19 @@ export const computeRungDebugStates = (
       return false
     }
 
-    const hasGreenInput = incomingEdges.some((incomingEdge) => {
-      const sourceInputGreen = determineNodeInputState(incomingEdge.source)
-      const sourceOutputGreen = getNodeOutputState(incomingEdge.source, incomingEdge.sourceHandle, sourceInputGreen)
-      return sourceOutputGreen === true
-    })
+    nodesInProgress.add(nodeId)
+    try {
+      const hasGreenInput = incomingEdges.some((incomingEdge) => {
+        const sourceInputGreen = determineNodeInputState(incomingEdge.source)
+        const sourceOutputGreen = getNodeOutputState(incomingEdge.source, incomingEdge.sourceHandle, sourceInputGreen)
+        return sourceOutputGreen === true
+      })
 
-    nodeInputStates.set(nodeId, hasGreenInput)
-    return hasGreenInput
+      nodeInputStates.set(nodeId, hasGreenInput)
+      return hasGreenInput
+    } finally {
+      nodesInProgress.delete(nodeId)
+    }
   }
 
   nodes.forEach((node) => {
