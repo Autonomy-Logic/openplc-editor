@@ -37,6 +37,8 @@ type DiagnosticsTabProps = {
   onSelectScannedDevice: (position: number, selected: boolean) => void
   onSelectAllScanned: (selected: boolean) => void
   onAddSelectedFromScan: () => void
+  isAdding: boolean
+  addProgress: { current: number; total: number } | null
 }
 
 const DiagnosticsTab = ({
@@ -62,6 +64,8 @@ const DiagnosticsTab = ({
   onSelectScannedDevice,
   onSelectAllScanned,
   onAddSelectedFromScan,
+  isAdding,
+  addProgress,
 }: DiagnosticsTabProps) => {
   return (
     <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
@@ -114,7 +118,7 @@ const DiagnosticsTab = ({
 
             <button
               onClick={onScan}
-              disabled={isScanning || !selectedInterface}
+              disabled={isScanning || isAdding || !selectedInterface}
               className={cn(
                 'flex h-[30px] items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors',
                 'bg-brand text-white hover:bg-brand-medium-dark',
@@ -159,9 +163,20 @@ const DiagnosticsTab = ({
               {selectedScannedDevices.size > 0 && (
                 <button
                   onClick={onAddSelectedFromScan}
-                  className='rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark'
+                  disabled={isAdding}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-medium-dark',
+                    'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand',
+                  )}
                 >
-                  Add Selected ({selectedScannedDevices.size})
+                  {isAdding ? (
+                    <>
+                      <ArrowIcon size='sm' className='animate-spin stroke-white' />
+                      {addProgress ? `Adding ${addProgress.current}/${addProgress.total}…` : 'Adding…'}
+                    </>
+                  ) : (
+                    `Add Selected (${selectedScannedDevices.size})`
+                  )}
                 </button>
               )}
             </div>
