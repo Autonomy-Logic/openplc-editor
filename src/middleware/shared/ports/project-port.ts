@@ -30,6 +30,8 @@ export interface ProjectResponse {
     rawLoadedFiles?: Record<string, string>
     /** Gates backend writes only, not local editing/simulation. Absent means `true`. */
     canEdit?: boolean
+    /** Save before a build. Only a partner session that asked for it off sends `false`; absent means `true`. */
+    autoSaveOnBuild?: boolean
     /** `null` means none exists; absent means this adapter doesn't expose READMEs. */
     readme?: string | null
     /** Converted from a pending PLCopen import; the caller must save immediately to clear the marker. */
@@ -140,6 +142,8 @@ export interface RawProjectFiles {
     dataTypeFiles: RawProjectFile[]
     /** See {@link ProjectResponse.data.canEdit}. */
     canEdit?: boolean
+    /** See {@link ProjectResponse.data.autoSaveOnBuild}. */
+    autoSaveOnBuild?: boolean
     /** See {@link ProjectResponse.data.readme}. */
     readme?: string | null
     /** Set only when the directory is a bare pending-import marker instead of a normal project. */

@@ -150,6 +150,59 @@ describe('save-actions', () => {
       })
     })
 
+    // A partner session that turned the pre-build save off: every write reaches the partner's save callback (DOPE-675).
+    describe('a session with autoSaveOnBuild off', () => {
+      beforeEach(() => {
+        store.getState().workspaceActions.setAutoSaveOnBuild(false)
+      })
+
+      it('flushes pending edits for the build but writes nothing and marks nothing saved', async () => {
+        createLadderPou('AutoSaveOff')
+        store.getState().fileActions.updateFile({ name: 'AutoSaveOff', saved: false })
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
+
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).not.toHaveBeenCalled()
+        // The compile reads the store, so the flow must have reached the POU body.
+        const pou = store.getState().project.data.pous.find((p) => p.name === 'AutoSaveOff')
+        expect(pou?.body).toMatchObject({ language: 'ld', value: { rungs: [{ id: 'rung_AutoSaveOff_1' }] } })
+        expect(fileSaved('AutoSaveOff')).toBe(false)
+      })
+
+      it('refuses the build when a flow is invalid, as the save would', async () => {
+        createLadderPou('AutoSaveOffBroken')
+        corruptFlow('AutoSaveOffBroken')
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
+
+        expect(result.success).toBe(false)
+        expect(projectPort.saveProject).not.toHaveBeenCalled()
+        expect(lastToast()).toMatchObject({ title: 'Some changes are invalid' })
+      })
+
+      it('still writes a save the user asked for', async () => {
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities)
+
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+
+      it('writes before a build once the flag is back on', async () => {
+        store.getState().workspaceActions.setAutoSaveOnBuild(true)
+        const projectPort = makeProjectPort()
+
+        const result = await executeSaveProject(store, projectPort, capabilities, 'pre-build')
+
+        expect(result.success).toBe(true)
+        expect(projectPort.saveProject).toHaveBeenCalled()
+      })
+    })
+
     // The write's own response says why it failed; the queue doesn't depend on renewal-layer expiry state.
     describe('a cloud write that did not land', () => {
       beforeEach(() => {
