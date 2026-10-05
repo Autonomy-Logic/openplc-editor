@@ -12,15 +12,15 @@ All of it lives in `src/main/modules/updater/`: `update-service.ts` holds the
 rules and is tested without Electron, `release-assets.ts` picks the installer,
 and `index.ts` wires Electron and the GitHub API in.
 
-| Situation | What happens |
-| --- | --- |
-| Start-up | One check about 60 s after launch, none after that while the editor stays open. None when "Check for Updates Automatically" (File menu) is off. Never in a development build. |
-| Newer version found | A blue **Update to X** button appears at the right of the status bar, on the start screen and in the workspace. No dialog. |
-| Button clicked | The installer for this OS and architecture is downloaded to the Downloads folder, its sha256 is checked against the release, and it is opened. The button shows the progress, then **Install X** to open it again. |
-| After opening | Windows: the installer runs; macOS: the disk image opens; Linux: the new AppImage is shown in its folder (running it now would only meet this editor's single-instance lock). A dialog says what is left to do, with **Quit Now** (the ordinary quit, unsaved-project prompt included) and **Later**. |
-| Manual "Check for Updates" | Always answers with a dialog: up to date, a newer version with **Download / Later**, or an error with the download page. |
-| Offline, proxy, GitHub down | Nothing is shown; the error goes to the log. |
-| sha256 mismatch, or no digest | The file is deleted (or not downloaded) and the user is sent to the releases page. |
+| Situation                     | What happens                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Start-up                      | One check about 60 s after launch, none after that while the editor stays open. None when "Check for Updates Automatically" (File menu) is off. Never in a development build.                                                                                                                         |
+| Newer version found           | A blue **Update to X** button appears at the right of the status bar, on the start screen and in the workspace. No dialog.                                                                                                                                                                            |
+| Button clicked                | The installer for this OS and architecture is downloaded to the Downloads folder, its sha256 is checked against the release, and it is opened. The button shows the progress, then **Install X** to open it again.                                                                                    |
+| After opening                 | Windows: the installer runs; macOS: the disk image opens; Linux: the new AppImage is shown in its folder (running it now would only meet this editor's single-instance lock). A dialog says what is left to do, with **Quit Now** (the ordinary quit, unsaved-project prompt included) and **Later**. |
+| Manual "Check for Updates"    | Always answers with a dialog: up to date, a newer version with **Download / Later**, or an error with the download page.                                                                                                                                                                              |
+| Offline, proxy, GitHub down   | Nothing is shown; the error goes to the log.                                                                                                                                                                                                                                                          |
+| sha256 mismatch, or no digest | The file is deleted (or not downloaded) and the user is sent to the releases page.                                                                                                                                                                                                                    |
 
 The status bar lives in the shared renderer
 (`frontend/components/_organisms/status-bar`, byte-identical on openplc-web) and
