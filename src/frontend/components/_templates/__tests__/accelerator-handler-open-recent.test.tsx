@@ -176,3 +176,51 @@ it('forgets the path when the save prompt is cancelled', async () => {
   expect(openProjectByPath).not.toHaveBeenCalled()
   expect(handleOpenProjectResponse).not.toHaveBeenCalled()
 })
+
+describe('an edit made while the read is pending', () => {
+  function modalCallbacks() {
+    const data: unknown = store.getState().modals['save-changes-project']?.data
+    const callbacks = typeof data === 'object' && data !== null ? data : {}
+    const onAfterAction: unknown = 'onAfterAction' in callbacks ? callbacks.onAfterAction : undefined
+    const onActionAborted: unknown = 'onActionAborted' in callbacks ? callbacks.onActionAborted : undefined
+    if (typeof onAfterAction !== 'function' || typeof onActionAborted !== 'function') {
+      throw new Error('save modal is missing its callbacks')
+    }
+    return { onAfterAction, onActionAborted }
+  }
+
+  beforeEach(() => {
+    act(() => store.getState().projectActions.updateMetaPath('/projects/current'))
+    openProjectByPath.mockImplementation((path) => {
+      if (path === '/projects/demo') store.getState().workspaceActions.setEditingState('unsaved')
+      return Promise.resolve({ success: true, data: parsed })
+    })
+  })
+
+  it('asks to save before replacing the project, then loads what was read', async () => {
+    renderHandler()
+
+    await openRecent('/projects/demo')
+
+    expect(store.getState().modals['save-changes-project']?.open).toBe(true)
+    expect(handleOpenProjectResponse).not.toHaveBeenCalled()
+
+    act(() => modalCallbacks().onAfterAction())
+
+    expect(handleOpenProjectResponse).toHaveBeenCalledWith(parsed)
+    expect(openProjectByPath).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-reads the open project when the prompt is cancelled, so the file-access root follows it back', async () => {
+    renderHandler()
+
+    await openRecent('/projects/demo')
+    await act(async () => {
+      modalCallbacks().onActionAborted('cancelled')
+      await Promise.resolve()
+    })
+
+    expect(openProjectByPath).toHaveBeenLastCalledWith('/projects/current')
+    expect(handleOpenProjectResponse).not.toHaveBeenCalled()
+  })
+})

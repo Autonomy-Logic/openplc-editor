@@ -174,6 +174,17 @@ describe('file-access root', () => {
     expect(menuBuilder.buildMenu).toHaveBeenCalled()
   })
 
+  it('stops a watcher started in the previous project after the root moves', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectA)
+    const watched = join(projectA, 'main.st')
+    expect((await bridge.handleFileWatchStart({} as never, watched)).success).toBe(true)
+
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    expect(bridge.handleFileWatchStop({} as never, watched).success).toBe(true)
+    expect(bridge.handleFileWatchStop({} as never, watched).success).toBe(false)
+  })
+
   it('keeps the root when the project stays open', async () => {
     await bridge.handleReadProjectFiles({} as never, projectB)
 

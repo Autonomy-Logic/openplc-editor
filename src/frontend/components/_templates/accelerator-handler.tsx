@@ -156,10 +156,22 @@ const AcceleratorHandler = () => {
    * Open recent project (editor-specific — the native Recent menu sends the project path)
    */
   const openRecentProject = useCallback(
-    async (projectPath: string) => {
+    async (projectPath: string, changesConfirmed: boolean) => {
       const result = await projectPort.openProjectByPath(projectPath).catch(() => null)
       if (result?.success && result.data) {
-        handleOpenProjectResponse(result.data)
+        const data = result.data
+        // An edit made while the read was pending has not been through the save prompt yet.
+        if (!changesConfirmed && store.getState().workspace.editingState === 'unsaved') {
+          const openPath = store.getState().project.meta.path
+          openModal('save-changes-project', {
+            validationContext: 'open-recent-project',
+            onAfterAction: () => handleOpenProjectResponse(data),
+            // The read already moved the main process's file-access root; point it back at the project still open.
+            onActionAborted: () => void projectPort.openProjectByPath(openPath).catch(() => null),
+          })
+          return
+        }
+        handleOpenProjectResponse(data)
         return
       }
       toast({
@@ -168,7 +180,7 @@ const AcceleratorHandler = () => {
         variant: 'fail',
       })
     },
-    [projectPort, handleOpenProjectResponse],
+    [store, projectPort, openModal, handleOpenProjectResponse],
   )
 
   useEffect(() => {
@@ -176,7 +188,7 @@ const AcceleratorHandler = () => {
       switch (editingState) {
         case 'saved':
         case 'initial-state':
-          void openRecentProject(projectPath)
+          void openRecentProject(projectPath, false)
           break
         case 'unsaved':
           pendingRecentProjectRef.current = projectPath
@@ -185,7 +197,7 @@ const AcceleratorHandler = () => {
             onAfterAction: () => {
               const pendingPath = pendingRecentProjectRef.current
               pendingRecentProjectRef.current = null
-              if (pendingPath) void openRecentProject(pendingPath)
+              if (pendingPath) void openRecentProject(pendingPath, true)
             },
             onActionAborted: () => {
               pendingRecentProjectRef.current = null

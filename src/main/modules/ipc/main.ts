@@ -3470,7 +3470,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean; error?: string } => {
-    if (!this.validateFilePath(filePath)) {
+    // A registered watcher passed validation when it started; the root may have moved to another project since.
+    if (!this.fileWatchers.has(filePath) && !this.validateFilePath(filePath)) {
       return { success: false, error: 'Path is outside the project directory' }
     }
     if (this.fileWatchers.has(filePath)) {
