@@ -1,4 +1,8 @@
-import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
+import {
+  enrichDeviceData,
+  lacksPdoAssignment,
+  recordPdoAssignment,
+} from '@root/backend/shared/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
 import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
@@ -90,6 +94,8 @@ export function useDeviceConfiguration({
           if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
             const { sdoConfigurations, ...rest } = enrichDeviceData(result.device, externalAddresses)
             onEnrichDeviceRef.current(device.sdoConfigurations !== undefined ? rest : { ...rest, sdoConfigurations })
+          } else if (lacksPdoAssignment(device)) {
+            onEnrichDeviceRef.current(recordPdoAssignment(device, result.device))
           } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {
             onEnrichDeviceRef.current({
               channelInfo: device.channelInfo,

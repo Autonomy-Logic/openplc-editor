@@ -13,7 +13,7 @@ type EthercatRootEntry = {
     slaves?: {
       position: number
       name?: string
-      channels?: { pdo_entry_index: string; pdo_entry_subindex: number }[]
+      channels?: { pdo_index?: string; pdo_entry_index: string; pdo_entry_subindex: number }[]
       rx_pdos?: { index: string; entries?: unknown[] }[]
       tx_pdos?: { index: string; entries?: unknown[] }[]
       sdo_configurations?: unknown[]
@@ -167,25 +167,32 @@ const validateIoMapping = (entries: EthercatRootEntry[], iomappingJson: string):
       errors.push(`EtherCAT I/O mapping master #${i} is '${master.name}' but the bus configuration has '${entry.name}'`)
       return
     }
-    // An entry may sit in several alternative PDOs of the ESI; only the assigned one reaches the
-    // runtime's layout, so a key found in more than one channel is fine.
-    const channelKeys = new Set(
-      (entry.config?.slaves ?? []).flatMap((slave) =>
-        (slave.channels ?? []).map((ch) => `${slave.position}:${ch.pdo_entry_index}:${ch.pdo_entry_subindex}`),
-      ),
-    )
+    // Key to the PDOs declaring it: several only in projects saved before the assignment was recorded.
+    const channelPdos = new Map<string, Set<string>>()
+    for (const slave of entry.config?.slaves ?? []) {
+      for (const ch of slave.channels ?? []) {
+        const key = `${slave.position}:${ch.pdo_entry_index}:${ch.pdo_entry_subindex}`
+        channelPdos.set(key, (channelPdos.get(key) ?? new Set()).add(ch.pdo_index ?? ''))
+      }
+    }
     const mappedTo = new Map<string, string>()
     for (const ioEntry of master.entries ?? []) {
       const key = `${ioEntry.slave}:${ioEntry.index}:${ioEntry.subindex}`
       const where = `(master '${master.name}', slave ${ioEntry.slave}, ${ioEntry.index}:${ioEntry.subindex})`
-      if (!channelKeys.has(key)) {
+      if (!channelPdos.has(key)) {
         errors.push(
           `EtherCAT I/O mapping entry ${ioEntry.iec_location} ${where} has no matching channel in the bus configuration`,
         )
       }
       const previous = mappedTo.get(key)
       if (previous !== undefined) {
-        errors.push(`EtherCAT process data entry ${where} is mapped twice: ${previous} and ${ioEntry.iec_location}`)
+        const alternatives = (channelPdos.get(key)?.size ?? 0) > 1
+        const hint = alternatives
+          ? '; the slave declares it in several alternative PDOs, so open the slave in the EtherCAT editor to record which one is assigned'
+          : ''
+        errors.push(
+          `EtherCAT process data entry ${where} is mapped twice: ${previous} and ${ioEntry.iec_location}${hint}`,
+        )
       } else {
         mappedTo.set(key, ioEntry.iec_location)
       }

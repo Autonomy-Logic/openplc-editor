@@ -203,40 +203,46 @@ function deriveChannelType(direction: 'input' | 'output', bitLen: number): strin
  * Entries with index "0x0000" are treated as padding.
  */
 function convertPdos(pdos: PersistedPdo[]): RuntimePdo[] {
-  return pdos.map((pdo) => ({
-    index: pdo.index,
-    name: pdo.name,
-    entries: pdo.entries.map(
-      (entry): RuntimePdoEntry => ({
-        index: entry.index,
-        subindex: hexToInt(entry.subIndex),
-        bit_length: entry.bitLen,
-        name: entry.name,
-        data_type: entry.index === '0x0000' ? 'PAD' : entry.dataType,
-      }),
-    ),
-  }))
+  return pdos
+    .filter((pdo) => pdo.assigned !== false)
+    .map((pdo) => ({
+      index: pdo.index,
+      name: pdo.name,
+      entries: pdo.entries.map(
+        (entry): RuntimePdoEntry => ({
+          index: entry.index,
+          subindex: hexToInt(entry.subIndex),
+          bit_length: entry.bitLen,
+          name: entry.name,
+          data_type: entry.index === '0x0000' ? 'PAD' : entry.dataType,
+        }),
+      ),
+    }))
 }
 
 /**
- * Builds runtime channels by joining channelInfo with channelMappings.
+ * Builds runtime channels by joining channelInfo with channelMappings, leaving out the channels
+ * of PDOs recorded as unassigned.
  */
 function buildChannels(
   channelInfo: PersistedChannelInfo[],
   channelMappings: { channelId: string; iecLocation: string }[],
+  unassignedPdos: ReadonlySet<string>,
 ): RuntimeChannel[] {
   const mappingMap = new Map(channelMappings.map((m) => [m.channelId, m.iecLocation]))
 
-  return channelInfo.map((ch, index) => ({
-    index,
-    name: ch.name,
-    type: deriveChannelType(ch.direction, ch.bitLen),
-    bit_length: ch.bitLen,
-    iec_location: mappingMap.get(ch.channelId) ?? '',
-    pdo_index: ch.pdoIndex,
-    pdo_entry_index: ch.entryIndex,
-    pdo_entry_subindex: hexToInt(ch.entrySubIndex),
-  }))
+  return channelInfo
+    .filter((ch) => !unassignedPdos.has(ch.pdoIndex.toLowerCase()))
+    .map((ch, index) => ({
+      index,
+      name: ch.name,
+      type: deriveChannelType(ch.direction, ch.bitLen),
+      bit_length: ch.bitLen,
+      iec_location: mappingMap.get(ch.channelId) ?? '',
+      pdo_index: ch.pdoIndex,
+      pdo_entry_index: ch.entryIndex,
+      pdo_entry_subindex: hexToInt(ch.entrySubIndex),
+    }))
 }
 
 /**
@@ -270,7 +276,12 @@ function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): R
  */
 function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSlave {
   const position = device.position ?? index + 1
-  const channels = device.channelInfo ? buildChannels(device.channelInfo, device.channelMappings) : []
+  const unassignedPdos = new Set(
+    [...(device.rxPdos ?? []), ...(device.txPdos ?? [])]
+      .filter((pdo) => pdo.assigned === false)
+      .map((pdo) => pdo.index.toLowerCase()),
+  )
+  const channels = device.channelInfo ? buildChannels(device.channelInfo, device.channelMappings, unassignedPdos) : []
   const rxPdos = device.rxPdos ? convertPdos(device.rxPdos) : []
   const txPdos = device.txPdos ? convertPdos(device.txPdos) : []
 
