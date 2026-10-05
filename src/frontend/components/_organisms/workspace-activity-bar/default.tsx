@@ -1023,6 +1023,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               isSimulator: false,
               runtimeIpAddress,
               runtimeJwtToken,
+              // The same board settings the Build button compiles with, so this
+              // upload flashes the same firmware (RTOS mode, package screen data).
+              communicationPort: deviceDefinitions.configuration.communicationPort || undefined,
+              vendorScreenData: deviceDefinitions.configuration.vendorScreenData,
             },
             (event) => logCompilerEvent(event, consoleActions.addLog),
           )

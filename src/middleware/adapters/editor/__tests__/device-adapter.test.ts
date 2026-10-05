@@ -40,6 +40,7 @@ beforeEach(() => {
       deviceId: '659a3520540f803625ddc34081e893d3',
       outcome: { state: 'unlicensed', entitlementChecked: true },
     }),
+    deviceReadTaskStats: jest.fn().mockResolvedValue({ success: false, unsupported: true }),
     onDeviceLinkLog: jest.fn().mockReturnValue(() => undefined),
     onDevicePlcState: jest.fn().mockReturnValue(() => undefined),
   } as unknown as typeof window.bridge
@@ -181,5 +182,12 @@ describe('createEditorDeviceAdapter', () => {
     })
     expect(window.bridge.deviceRefreshLicense).toHaveBeenCalledWith(request)
     expect(window.bridge.deviceReadLicense).not.toHaveBeenCalled()
+  })
+
+  it('reads task statistics over the held link, starting a new window only when asked', async () => {
+    await expect(adapter.readTaskStats?.()).resolves.toEqual({ success: false, unsupported: true })
+    expect(window.bridge.deviceReadTaskStats).toHaveBeenLastCalledWith(false)
+    await adapter.readTaskStats?.(true)
+    expect(window.bridge.deviceReadTaskStats).toHaveBeenLastCalledWith(true)
   })
 })

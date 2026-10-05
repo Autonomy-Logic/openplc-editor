@@ -28,7 +28,11 @@
 
 #include "openplc.h"
 #include "defines.h"
+#include "rtos_config.h"     // OPENPLC_RTOS: tasks instead of the loop below
 #include "arduino_runtime_glue.h"
+#if OPENPLC_RTOS
+#include "plc_rtos.h"
+#endif
 #include "license_gate.h"
 #include "license_store.h"   // license_store_read + LIC_BLOB_SIZE (via license_blob.h)
 
@@ -126,6 +130,162 @@ void setupCycleDelay(unsigned long long cycle_time)
     last_run = micros();
 }
 
+#if OPENPLC_RTOS
+// =============================================================================
+// RTOS MODE: the serial ports are started by the task that uses them
+//
+// A port's interrupt is allocated on the core that calls begin(), and some
+// serial drivers are only safe used from that core. So setup() only records
+// which ports to start, and service A starts them before it serves a request.
+// =============================================================================
+static void (*s_rtos_serial_begins[2])(void);
+static uint8_t s_rtos_serial_begin_count = 0;
+
+// The parameter type is spelled out, not a typedef: arduino-cli writes a
+// prototype for every function in this file above the file's own declarations.
+static void rtos_defer_serial_begin(void (*begin)(void))
+{
+    if (s_rtos_serial_begin_count < 2) s_rtos_serial_begins[s_rtos_serial_begin_count++] = begin;
+}
+
+#define OPLC_SERIAL_BEGIN(iface, baud) rtos_defer_serial_begin([]() { (iface).begin(baud); })
+#else
+#define OPLC_SERIAL_BEGIN(iface, baud) (iface).begin(baud)
+#endif
+
+#if defined(OPLC_NET_ENABLED)
+// =============================================================================
+// NETWORK START-UP
+//
+// Two steps, because in RTOS mode two tasks own them (a peripheral is started
+// by the task that uses it): the interface and the Modbus TCP listener belong
+// to service A, OPC-UA and S7 to service B. The single loop runs both from
+// setup(), in this order, forced inline into it.
+// =============================================================================
+
+// The interface, and the TCP listener on it. Gated on the NETWORK being
+// enabled, not on Modbus being served: the link also carries the debugger, the
+// ethernet upload, discovery, OPC-UA and S7Comm, and a board reached only over
+// Ethernet must bring it up without a Modbus server.
+static inline __attribute__((always_inline)) void oplc_net_begin(void)
+{
+    {
+        uint8_t mac[] = { MBTCP_MAC };
+        uint8_t ip[] = { MBTCP_IP };
+        uint8_t dns[] = { MBTCP_DNS };
+        uint8_t gateway[] = { MBTCP_GATEWAY };
+        uint8_t subnet[] = { MBTCP_SUBNET };
+
+        // Five byte arrays, `sizeof(arr) < 4` as a compile-time DHCP-vs-static
+        // selector: an unset value is emitted as a single `0` byte.
+        if (sizeof(ip)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
+        else if (sizeof(dns)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
+        else if (sizeof(gateway)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
+        else if (sizeof(subnet)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
+        else
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
+    }
+
+    // The TCP listener: Modbus TCP when the project serves it, and the
+    // debugger's transport regardless, on a board reached only this way.
+    #ifdef MB_TCP_ACTIVE
+        mbtcp_server_begin();
+    #endif
+}
+
+// OPC-UA and S7Comm listen on the interface oplc_net_begin() brought up, and
+// must not re-init the link themselves (see baremetal_net.h). No-ops when
+// disabled.
+static inline __attribute__((always_inline)) void oplc_protocols_begin(void)
+{
+    #if OPCUA_ENABLED
+        opcua_log_begin();
+        opcua_init();
+    #endif
+    #if S7COMM_ENABLED
+        s7comm_init();
+    #endif
+}
+#endif // OPLC_NET_ENABLED
+
+#if OPENPLC_RTOS
+// =============================================================================
+// RTOS MODE: the service tasks' passes (plc_rtos.h)
+//
+// Defined here, not in plc_rtos.cpp, because the discovery responder's state
+// lives in this translation unit (udp_scan.h). Modbus is mbtask()'s two
+// transports, taken apart below; the register mirror runs inside each request,
+// under the process-image lock (plc_rtos_run_pdu).
+// =============================================================================
+// Service A starts what it serves on before its first pass: the serial ports,
+// the network interface and the Modbus TCP listener, and discovery; the network
+// under the services' network lock (plc_rtos.h).
+static void rtos_service_modbus_begin(void)
+{
+    for (uint8_t i = 0; i < s_rtos_serial_begin_count; i++) s_rtos_serial_begins[i]();
+    #if defined(OPLC_NET_ENABLED) || defined(SUPPORTS_UDP_SCAN)
+        plc_rtos_service_net_lock();
+        #if defined(OPLC_NET_ENABLED)
+            oplc_net_begin();
+        #endif
+        #if defined(SUPPORTS_UDP_SCAN)
+            udp_scan_begin();
+        #endif
+        plc_rtos_service_net_unlock();
+    #endif
+}
+
+// mbtask()'s two halves apart. The network half only when the network lock is
+// free this moment: while a PLC task holds it (a block waiting on a connection)
+// the pass skips it rather than hold up the serial port. handle_tcp() lets the
+// lock go while it processes a request, and waits for it again to reply.
+static void rtos_service_modbus(void)
+{
+    #if defined(SUPPORTS_UDP_SCAN) || defined(MB_TCP_ACTIVE)
+        if (plc_rtos_service_net_try_lock())
+        {
+            #if defined(SUPPORTS_UDP_SCAN)
+                udp_scan_poll();
+            #endif
+            #if defined(MB_TCP_ACTIVE)
+                handle_tcp();
+            #endif
+            plc_rtos_service_net_unlock();
+        }
+    #endif
+    #if defined(MB_SERIAL_ACTIVE)
+        handle_serial();
+    #endif
+}
+
+#if OPCUA_ENABLED || S7COMM_ENABLED
+// Service B starts OPC-UA and S7 itself, once service A has the network up.
+static void rtos_service_protocols_begin(void)
+{
+    #if defined(OPLC_NET_ENABLED)
+        oplc_protocols_begin();
+    #endif
+}
+
+// A task of their own, so a slow OPC-UA pass never delays the debugger. No scan
+// shares this task, so each gets unlimited slack and its own due-time logic
+// decides. Their sockets take the network lock per call (baremetal_net.cpp).
+static void rtos_service_protocols(void)
+{
+    #if OPCUA_ENABLED
+        opcuatask(UINT32_MAX);
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(UINT32_MAX);
+    #endif
+}
+#endif
+#endif // OPENPLC_RTOS
+
 // =============================================================================
 // SETUP
 // =============================================================================
@@ -205,7 +365,7 @@ void setup()
             #ifdef MBSERIAL_ON_SECONDARY
                 // Dual-serial: Modbus RTU runs on a secondary UART (below) while
                 // the always-on debugger keeps the default serial — bring it up.
-                DEBUG_IFACE.begin(DEBUG_BAUD);
+                OPLC_SERIAL_BEGIN(DEBUG_IFACE, DEBUG_BAUD);
             #endif
             #ifdef MBSERIAL_TXPIN
                 // Disable TX pin from OpenPLC hardware layer
@@ -225,10 +385,10 @@ void setup()
                 {
                     if (pinMask_AOUT[i] == MBSERIAL_TXPIN) pinMask_AOUT[i] = 255;
                 }
-                MBSERIAL_IFACE.begin(MBSERIAL_BAUD);
+                OPLC_SERIAL_BEGIN(MBSERIAL_IFACE, MBSERIAL_BAUD);
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, MBSERIAL_TXPIN);
             #else
-                MBSERIAL_IFACE.begin(MBSERIAL_BAUD);
+                OPLC_SERIAL_BEGIN(MBSERIAL_IFACE, MBSERIAL_BAUD);
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
@@ -247,7 +407,7 @@ void setup()
         #elif defined(DEBUGGER_ENABLED)
             // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
             // still needs the default serial up on mb_serialport to respond.
-            DEBUG_IFACE.begin(DEBUG_BAUD);
+            OPLC_SERIAL_BEGIN(DEBUG_IFACE, DEBUG_BAUD);
             mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
             modbus.slaveid = DEBUG_SLAVE;
         #endif
@@ -260,60 +420,22 @@ void setup()
         // variables directly through the strucpp debug table (openplc_debug_*),
         // so it needs NO operation buffers — init_mbregs()/mapEmptyBuffers() are
         // deliberately not called here, saving SRAM on small boards.
-        DEBUG_IFACE.begin(DEBUG_BAUD);
+        OPLC_SERIAL_BEGIN(DEBUG_IFACE, DEBUG_BAUD);
         mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
         modbus.slaveid = DEBUG_SLAVE;
     #endif
 
     // ---- The network, on its own switch ----------------------------------
     //
-    // Everything below is gated on the NETWORK being enabled, not on Modbus
-    // being served. The link carries the debugger, the ethernet upload,
-    // discovery, OPC-UA and S7Comm; Modbus TCP is one tenant among several and
-    // was never the right thing to hang the interface off. A project with no
-    // Modbus server used to compile a firmware that never called
-    // mbconfig_*_iface(), which on a board reached only over Ethernet is a
-    // device that boots and can never be reached again.
-#if defined(OPLC_NET_ENABLED)
-    {
-        uint8_t mac[] = { MBTCP_MAC };
-        uint8_t ip[] = { MBTCP_IP };
-        uint8_t dns[] = { MBTCP_DNS };
-        uint8_t gateway[] = { MBTCP_GATEWAY };
-        uint8_t subnet[] = { MBTCP_SUBNET };
+    // Gated on the NETWORK being enabled, not on Modbus being served; see
+    // oplc_net_begin(). In RTOS mode the service tasks start all of this
+    // themselves, each the part it uses (plc_rtos.h).
+#if defined(OPLC_NET_ENABLED) && !OPENPLC_RTOS
+    oplc_net_begin();
+    oplc_protocols_begin();
+#endif
 
-        // Five byte arrays, `sizeof(arr) < 4` as a compile-time DHCP-vs-static
-        // selector: an unset value is emitted as a single `0` byte.
-        if (sizeof(ip)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
-        else if (sizeof(dns)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
-        else if (sizeof(gateway)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
-        else if (sizeof(subnet)/sizeof(uint8_t) < 4)
-            mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
-        else
-            mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
-    }
-
-    // The TCP listener: Modbus TCP when the project serves it, and the
-    // debugger's transport regardless, on a board reached only this way.
-    #ifdef MB_TCP_ACTIVE
-        mbtcp_server_begin();
-    #endif
-
-    // OPC-UA and S7Comm listen on the interface brought up above, and must not
-    // re-init the link themselves (see baremetal_net.h). No-ops when disabled.
-    #if OPCUA_ENABLED
-        opcua_log_begin();
-        opcua_init();
-    #endif
-    #if S7COMM_ENABLED
-        s7comm_init();
-    #endif
-#endif  // OPLC_NET_ENABLED
-
-#if defined(SUPPORTS_UDP_SCAN)
+#if defined(SUPPORTS_UDP_SCAN) && !OPENPLC_RTOS
     // Network is up now; start answering editor discovery probes.
     udp_scan_begin();
 #endif
@@ -330,9 +452,29 @@ void setup()
 
     setupCycleDelay(base_tick_ns);
 
+#if OPENPLC_RTOS
+    // Everything is up: start the IEC work, the services and the dispatcher
+    // (plc_rtos_start). The sketch's setup runs in its IEC task, once the
+    // network is up (plc_rtos_config_t).
+    {
+        plc_rtos_config_t rtos = {};
+        rtos.service_a_begin = rtos_service_modbus_begin;
+        rtos.service_a       = rtos_service_modbus;
+        #if OPCUA_ENABLED || S7COMM_ENABLED
+            rtos.service_b_begin = rtos_service_protocols_begin;
+            rtos.service_b       = rtos_service_protocols;
+        #endif
+        #ifdef USE_ARDUINO_SKETCH
+            rtos.sketch_setup = sketch_setup;
+            rtos.after_scan   = sketch_loop;
+        #endif
+        plc_rtos_start(&rtos);
+    }
+#else
     #ifdef USE_ARDUINO_SKETCH
         sketch_setup();
     #endif
+#endif
 }
 
 // =============================================================================
@@ -565,6 +707,12 @@ void scheduler()
 // =============================================================================
 void loop()
 {
+#if OPENPLC_RTOS
+    // The dispatcher, which never returns, so the core's loop wrapper never
+    // pauses it between calls. Nothing where the dispatcher is a task of its own
+    // (see plc_rtos_loop).
+    plc_rtos_loop();
+#else
 #if defined(SUPPORTS_UDP_SCAN)
     // Answer editor discovery probes every iteration, independent of the scan
     // cycle, so Search stays responsive even with a long task interval.
@@ -578,14 +726,16 @@ void loop()
     }
 
     #if defined(MODBUS_ENABLED)
-    // Only run Modbus task again if we have at least 10ms gap until the next cycle
-    if ((micros() - last_run) >= 10000)
+    // Only run Modbus task again if we have at least 10ms gap until the next
+    // cycle: what is LEFT of the cycle, not the time since `last_run`, which is
+    // what is already spent.
+    if (cycle_slack_us() >= 10000)
     {
         modbusTask();
     }
     #elif defined(DEBUGGER_ENABLED)
     // Debug-only: give the debugger extra serial-poll time between cycles too.
-    if ((micros() - last_run) >= 10000)
+    if (cycle_slack_us() >= 10000)
     {
         mbtask();
     }
@@ -606,4 +756,5 @@ void loop()
     #ifdef SIMULATOR_MODE
     __asm volatile("sleep");
     #endif
+#endif // OPENPLC_RTOS
 }

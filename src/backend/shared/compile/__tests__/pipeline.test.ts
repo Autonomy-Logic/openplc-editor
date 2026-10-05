@@ -67,6 +67,7 @@ jest.mock('../steps/generate-confs', () => ({
   })),
 }))
 
+import { buildArduinoCliCompileArgs } from '../../firmware/build-arduino-cli-args'
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'
 import { isStrucppCompatibleRuntime } from '../../firmware/runtime-version-gate'
 import { generateRuntimeConfs } from '../steps/generate-confs'
@@ -1464,5 +1465,755 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
     const { emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs({ projectData: withServers() }), makePort(), emit)
     expect(result.success).toBe(true)
+  })
+})
+
+describe('runCompilePipeline — RTOS mode', () => {
+  // Every ESP32 has FreeRTOS, so RTOS support comes from the core; whether a
+  // build uses it is the board's switch in vendorScreenData.
+  const esp32Entry = { platform: 'esp32:esp32:esp32s3', core: 'esp32:esp32', compiler: 'arduino-cli' }
+  const rtosOn = { rtos: { enabled: true } }
+
+  function projectWithTasks(tasks: PLCProjectData['configuration']['resource']['tasks']): PLCProjectData {
+    const { configuration } = projectDataFixture
+    return {
+      ...projectDataFixture,
+      configuration: { ...configuration, resource: { ...configuration.resource, tasks } },
+    }
+  }
+
+  async function compileFiles(overrides: Partial<RunCompilePipelineArgs>) {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', compileOnly: true, ...overrides }),
+      port,
+      emit,
+    )
+    const files = port.compileArduino.mock.calls[0]?.[0].files
+    return { result, events, files }
+  }
+
+  it('emits rtos_config.h for an ESP32 board with the switch on', async () => {
+    const { result, files } = await compileFiles({ boardEntry: esp32Entry, vendorScreenData: rtosOn })
+    expect(result.success).toBe(true)
+    expect(files?.['src/rtos_config.h']).toContain('#define OPENPLC_RTOS 1')
+    expect(files?.['src/rtos_config.h']).toContain('#define OPENPLC_RTOS_FREERTOS_ESP32 1')
+  })
+
+  it('builds in RTOS mode by default, with the switch untouched', async () => {
+    const { result, files } = await compileFiles({ boardEntry: esp32Entry, vendorScreenData: {} })
+    expect(result.success).toBe(true)
+    expect(files?.['src/rtos_config.h']).toContain('#define OPENPLC_RTOS 1')
+  })
+
+  it('builds the single loop, and says why, when only the default asked for RTOS mode', async () => {
+    // On the default, an interval off the tick falls back to the single loop
+    // instead of failing the build.
+    const { result, events, files } = await compileFiles({
+      boardEntry: esp32Entry,
+      vendorScreenData: {},
+      projectData: projectWithTasks([{ name: 'fast', triggering: 'Cyclic', interval: 'T#500us', priority: 0 }]),
+    })
+    expect(result.success).toBe(true)
+    expect(files).not.toHaveProperty(['src/rtos_config.h'])
+    expect(
+      events.some(
+        (event) =>
+          event.level === 'warning' && /fast \(T#500us\)/.test(event.message) && /single scan loop/.test(event.message),
+      ),
+    ).toBe(true)
+  })
+
+  it('leaves the skeleton stub when the switch is off', async () => {
+    const { files } = await compileFiles({ boardEntry: esp32Entry, vendorScreenData: { rtos: { enabled: false } } })
+    expect(files).not.toHaveProperty(['src/rtos_config.h'])
+  })
+
+  it('never emits it for a core the firmware has no RTOS backend for', async () => {
+    const avrEntry = { platform: 'arduino:avr:mega', core: 'arduino:avr', compiler: 'arduino-cli' }
+    const { files } = await compileFiles({ boardEntry: avrEntry, vendorScreenData: rtosOn })
+    expect(files).not.toHaveProperty(['src/rtos_config.h'])
+  })
+
+  it('never emits it for the in-process simulator', async () => {
+    const { files } = await compileFiles({
+      isSimulator: true,
+      boardRuntime: 'simulator',
+      boardEntry: { ...esp32Entry, compiler: 'simulator' },
+      vendorScreenData: rtosOn,
+    })
+    expect(files).not.toHaveProperty(['src/rtos_config.h'])
+  })
+
+  it('refuses a task period the RTOS tick cannot divide, naming the task', async () => {
+    const { result, events, files } = await compileFiles({
+      boardEntry: esp32Entry,
+      vendorScreenData: rtosOn,
+      projectData: projectWithTasks([
+        { name: 'main', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 },
+        { name: 'fast', triggering: 'Cyclic', interval: 'T#500us', priority: 1 },
+      ]),
+    })
+    expect(result.success).toBe(false)
+    expect(files).toBeUndefined()
+    expect(events.some((event) => event.level === 'error' && /fast \(T#500us\)/.test(event.message))).toBe(true)
+  })
+})
+
+describe('runCompilePipeline — RTOS mode, several tasks', () => {
+  const esp32Entry = { platform: 'esp32:esp32:esp32s3', core: 'esp32:esp32', compiler: 'arduino-cli' }
+
+  function projectWith(
+    tasks: PLCProjectData['configuration']['resource']['tasks'],
+    instances: PLCProjectData['configuration']['resource']['instances'],
+  ): PLCProjectData {
+    const { configuration } = projectDataFixture
+    return {
+      ...projectDataFixture,
+      configuration: { ...configuration, resource: { ...configuration.resource, tasks, instances } },
+    }
+  }
+
+  async function compile(projectData: PLCProjectData) {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: esp32Entry,
+        vendorScreenData: { rtos: { enabled: true } },
+        projectData,
+        // The bundled STruC++ runtime, which a threaded build has to patch.
+        firmwareSkeleton: {
+          'examples/Baremetal/Baremetal.ino': '// sketch',
+          'src/iec_global.hpp': '// global\n',
+          'src/iec_std_lib.hpp': '// std\n',
+        },
+      }),
+      port,
+      emit,
+    )
+    return { result, events, files: port.compileArduino.mock.calls[0]?.[0].files }
+  }
+
+  it('builds the single loop instead when only the default asked for RTOS mode', async () => {
+    const tasks = Array.from({ length: 9 }, (_, i) => ({
+      name: `T${i}`,
+      triggering: 'Cyclic' as const,
+      interval: 'T#10ms',
+      priority: 0,
+    }))
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: esp32Entry,
+        vendorScreenData: {},
+        projectData: projectWith(tasks, []),
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(true)
+    expect(port.compileArduino.mock.calls[0]?.[0].files).not.toHaveProperty(['src/rtos_config.h'])
+    expect(events.some((event) => event.level === 'warning' && /room for 8/.test(event.message))).toBe(true)
+  })
+
+  // A bundled STruC++ runtime that takes its locks and IEC time from the RTOS.
+  const PLATFORM_THREADS_SKELETON = {
+    'examples/Baremetal/Baremetal.ino': '// sketch',
+    'src/iec_global.hpp': 'extern "C" void *strucpp_platform_mutex_create(void);\n',
+    'src/iec_std_lib.hpp': 'extern "C" int64_t *strucpp_platform_current_time_slot(void);\n',
+  }
+
+  async function compileStm32(firmwareSkeleton?: Record<string, string>) {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: {
+          platform: 'STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE',
+          core: 'STMicroelectronics:stm32',
+          compiler: 'arduino-cli',
+        },
+        vendorScreenData: {},
+        projectData: projectWith(
+          [
+            { name: 'MainTask', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 },
+            { name: 'NET_TASK', triggering: 'Cyclic', interval: 'T#1ms', priority: 1 },
+          ],
+          [],
+        ),
+        ...(firmwareSkeleton ? { firmwareSkeleton } : {}),
+      }),
+      port,
+      emit,
+    )
+    return { result, events, port, files: port.compileArduino.mock.calls[0]?.[0].files }
+  }
+
+  it('gives each task a thread on an STM32 through the RTOS, and installs its FreeRTOS', async () => {
+    const { result, port, files } = await compileStm32(PLATFORM_THREADS_SKELETON)
+    expect(result.success).toBe(true)
+    const header = files?.['src/rtos_config.h']
+    expect(header).toContain('#define OPENPLC_RTOS_FREERTOS_STM32 1')
+    expect(header).toContain('#define STRUCPP_THREADED 1')
+    expect(header).toContain('#define STRUCPP_PLATFORM_THREADS 1')
+    expect(
+      port.installArduinoLib.mock.calls.some((call) => (call[0].extraLibraries ?? []).includes('STM32duino FreeRTOS')),
+    ).toBe(true)
+  })
+
+  it('selects FreeRTOS on a Pico for the compile, its pre-compile and the upload', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: false,
+        communicationPort: '/dev/ttyACM0',
+        boardEntry: { platform: 'rp2040:rp2040:rpipico', core: 'rp2040:rp2040', compiler: 'arduino-cli' },
+        vendorScreenData: {},
+        projectData: projectWith([{ name: 'MainTask', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 }], []),
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(true)
+    const compileArgs = port.compileArduino.mock.calls[0]?.[0]
+    expect(compileArgs?.boardOptions).toEqual({ os: 'freertos' })
+    // The argv (what web's compile service runs) names the board with it too.
+    expect(jest.mocked(buildArduinoCliCompileArgs).mock.calls.at(-1)?.[0].platform).toBe(
+      'rp2040:rp2040:rpipico:os=freertos',
+    )
+    expect(compileArgs?.files['src/rtos_config.h']).toContain('#define OPENPLC_RTOS_FREERTOS_RP2040 1')
+    expect(port.uploadArduinoBoard.mock.calls[0]?.[0].fqbn).toBe('rp2040:rp2040:rpipico:os=freertos')
+  })
+
+  it('builds the Uno R4 with the FreeRTOS settings RTOS mode needs, in every file', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: {
+          platform: 'arduino:renesas_uno:unor4wifi',
+          core: 'arduino:renesas_uno',
+          compiler: 'arduino-cli',
+          cxx_flags: ['-fno-rtti'],
+        },
+        vendorScreenData: {},
+        projectData: projectWith([{ name: 'MainTask', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 }], []),
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(true)
+    expect(port.compileArduino.mock.calls[0]?.[0].extraFlags).toContain('-DconfigUSE_MUTEXES=1')
+    const entry = jest.mocked(buildArduinoCliCompileArgs).mock.calls.at(-1)?.[0]
+    expect(entry?.c_flags).toContain('-DconfigUSE_MUTEXES=1')
+    expect(entry?.cxx_flags).toEqual(expect.arrayContaining(['-fno-rtti', '-DconfigUSE_MUTEXES=1']))
+  })
+
+  describe('a firmware too big for the board in RTOS mode', () => {
+    const board = {
+      platform: 'STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F401CC',
+      core: 'STMicroelectronics:stm32',
+      compiler: 'arduino-cli',
+    }
+    const oneTask = [{ name: 'MainTask', triggering: 'Cyclic' as const, interval: 'T#10ms', priority: 0 }]
+
+    function overflowingPort() {
+      const port = makePort()
+      port.compileArduino
+        .mockResolvedValueOnce({
+          ok: false,
+          errors: [{ message: "region `FLASH' overflowed by 2380 bytes", line: 0, column: 0, severity: 'error' }],
+        })
+        .mockResolvedValueOnce({ ok: true, binary: new Uint8Array([1]) })
+      return port
+    }
+
+    it('builds the single loop instead when RTOS mode was only the default', async () => {
+      const port = overflowingPort()
+      const { events, emit } = captureEvents()
+      const result = await runCompilePipeline(
+        makeArgs({
+          isSimulator: false,
+          boardRuntime: 'arduino-cli',
+          compileOnly: true,
+          boardEntry: board,
+          vendorScreenData: {},
+          projectData: projectWith(oneTask, []),
+        }),
+        port,
+        emit,
+      )
+      expect(result.success).toBe(true)
+      expect(port.compileArduino).toHaveBeenCalledTimes(2)
+      expect(port.compileArduino.mock.calls[0]?.[0].files).toHaveProperty(['src/rtos_config.h'])
+      expect(port.compileArduino.mock.calls[1]?.[0].files).not.toHaveProperty(['src/rtos_config.h'])
+      expect(events.some((event) => event.level === 'warning' && /does not fit/.test(event.message))).toBe(true)
+    })
+
+    it('fails when RTOS mode was chosen', async () => {
+      const port = overflowingPort()
+      const { emit } = captureEvents()
+      const result = await runCompilePipeline(
+        makeArgs({
+          isSimulator: false,
+          boardRuntime: 'arduino-cli',
+          compileOnly: true,
+          boardEntry: board,
+          vendorScreenData: { rtos: { enabled: true } },
+          projectData: projectWith(oneTask, []),
+        }),
+        port,
+        emit,
+      )
+      expect(result.success).toBe(false)
+      expect(port.compileArduino).toHaveBeenCalledTimes(1)
+    })
+
+    const buildOnDefault = (port: jest.Mocked<CompilerPlatformPort>, emit: (e: PipelineProgressEvent) => void) =>
+      runCompilePipeline(
+        makeArgs({
+          isSimulator: false,
+          boardRuntime: 'arduino-cli',
+          compileOnly: true,
+          boardEntry: board,
+          vendorScreenData: {},
+          projectData: projectWith(oneTask, []),
+        }),
+        port,
+        emit,
+      )
+
+    it('does not retry a failure in the project’s own C/C++ code', async () => {
+      const port = makePort()
+      port.compileArduino.mockResolvedValueOnce({
+        ok: false,
+        errors: [
+          {
+            message:
+              "Compilation failed with code 1\n/tmp/p/build/src/c_blocks_code.cpp:12:5: error: 'foo' was not declared in this scope",
+            line: 0,
+            column: 0,
+            severity: 'error',
+          },
+        ],
+      })
+      const { emit } = captureEvents()
+      const result = await buildOnDefault(port, emit)
+      expect(result.success).toBe(false)
+      expect(port.compileArduino).toHaveBeenCalledTimes(1)
+    })
+
+    it('builds the single loop when the RTOS build fails outside the project’s code, errors as warnings', async () => {
+      const port = makePort()
+      port.compileArduino
+        .mockImplementationOnce(async (_args, log) => {
+          log('Arduino compile failed: plc_os.cpp:40:1: error: expected declaration', 'error')
+          return {
+            ok: false,
+            errors: [
+              {
+                message: '/tmp/p/build/examples/Baremetal/plc_os.cpp:40:1: error: expected declaration',
+                line: 0,
+                column: 0,
+                severity: 'error',
+              },
+            ],
+          }
+        })
+        .mockResolvedValueOnce({ ok: true, binary: new Uint8Array([1]) })
+      const { events, emit } = captureEvents()
+      const result = await buildOnDefault(port, emit)
+      expect(result.success).toBe(true)
+      expect(port.compileArduino).toHaveBeenCalledTimes(2)
+      expect(events.some((event) => /failed outside this project's own code/.test(event.message))).toBe(true)
+      // The attempt's error, shown, but not as a failure.
+      expect(events.find((event) => /expected declaration/.test(event.message))?.level).toBe('warning')
+      expect(events.some((event) => event.level === 'error')).toBe(false)
+    })
+
+    it('shows the attempt’s errors as errors when it is not retried', async () => {
+      const port = makePort()
+      port.compileArduino.mockImplementationOnce(async (_args, log) => {
+        log("c_blocks_code.cpp:3:1: error: 'x' does not name a type", 'error')
+        return {
+          ok: false,
+          errors: [
+            {
+              message: "c_blocks_code.cpp:3:1: error: 'x' does not name a type",
+              line: 0,
+              column: 0,
+              severity: 'error',
+            },
+          ],
+        }
+      })
+      const { events, emit } = captureEvents()
+      await buildOnDefault(port, emit)
+      expect(events.some((event) => event.level === 'error' && /does not name a type/.test(event.message))).toBe(true)
+    })
+
+    it('sees the linker’s verdict as the output streams, not a source line quoting it', async () => {
+      const port = makePort()
+      port.compileArduino
+        .mockImplementationOnce(async (_args, log) => {
+          log("arm-none-eabi/bin/ld: region `RAM' overflowed by 312 bytes", 'info')
+          return {
+            ok: false,
+            errors: [{ message: 'collect2: error: ld returned 1 exit status', line: 0, column: 0, severity: 'error' }],
+          }
+        })
+        .mockResolvedValueOnce({ ok: true, binary: new Uint8Array([1]) })
+      const { events, emit } = captureEvents()
+      await buildOnDefault(port, emit)
+      expect(events.some((event) => /does not fit in this board's memory/.test(event.message))).toBe(true)
+    })
+  })
+
+  describe('RTOS mode’s tasks and the RAM a build leaves free', () => {
+    const f401 = {
+      platform: 'STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F401CC',
+      core: 'STMicroelectronics:stm32',
+      compiler: 'arduino-cli',
+    }
+    const twoTasks = [
+      { name: 'FAST', triggering: 'Cyclic' as const, interval: 'T#10ms', priority: 0 },
+      { name: 'SLOW', triggering: 'Cyclic' as const, interval: 'T#100ms', priority: 1 },
+    ]
+    const leaving = (bytes: number) => async (_args: unknown, log: (m: string, l: 'info') => void) => {
+      log(
+        `Global variables use 14000 bytes (21%) of dynamic memory, leaving ${bytes} bytes for local variables.`,
+        'info',
+      )
+      return { ok: true as const, binary: new Uint8Array([1]) }
+    }
+    const build = (port: jest.Mocked<CompilerPlatformPort>, emit: (e: PipelineProgressEvent) => void, rtos = {}) =>
+      runCompilePipeline(
+        makeArgs({
+          isSimulator: false,
+          boardRuntime: 'arduino-cli',
+          compileOnly: true,
+          boardEntry: f401,
+          vendorScreenData: rtos,
+          projectData: projectWith(twoTasks, []),
+          firmwareSkeleton: PLATFORM_THREADS_SKELETON,
+        }),
+        port,
+        emit,
+      )
+
+    it('builds the single loop on the default when the task stacks will not fit', async () => {
+      const port = makePort()
+      port.compileArduino.mockImplementationOnce(leaving(40_000)).mockResolvedValueOnce({ ok: true })
+      const { events, emit } = captureEvents()
+      const result = await build(port, emit)
+      expect(result.success).toBe(true)
+      expect(port.compileArduino).toHaveBeenCalledTimes(2)
+      expect(port.compileArduino.mock.calls[1]?.[0].files).not.toHaveProperty(['src/rtos_config.h'])
+      expect(events.some((event) => /need about \d+ KB of RAM/.test(event.message))).toBe(true)
+    })
+
+    it('keeps RTOS mode, and warns, when it was chosen', async () => {
+      const port = makePort()
+      port.compileArduino.mockImplementationOnce(leaving(40_000))
+      const { events, emit } = captureEvents()
+      const result = await build(port, emit, { rtos: { enabled: true } })
+      expect(result.success).toBe(true)
+      expect(port.compileArduino).toHaveBeenCalledTimes(1)
+      expect(
+        events.some((event) => event.level === 'warning' && /may stop at start-up in ERROR/.test(event.message)),
+      ).toBe(true)
+    })
+
+    it('keeps RTOS mode when they fit', async () => {
+      const port = makePort()
+      port.compileArduino.mockImplementationOnce(leaving(100_000))
+      const { emit } = captureEvents()
+      await build(port, emit)
+      expect(port.compileArduino).toHaveBeenCalledTimes(1)
+      expect(port.compileArduino.mock.calls[0]?.[0].files).toHaveProperty(['src/rtos_config.h'])
+    })
+  })
+
+  describe('an RTOS library that could not be installed', () => {
+    const f411 = {
+      platform: 'STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE',
+      core: 'STMicroelectronics:stm32',
+      compiler: 'arduino-cli',
+    }
+    const oneTask = [{ name: 'MainTask', triggering: 'Cyclic' as const, interval: 'T#10ms', priority: 0 }]
+    const offline = () =>
+      makePort({
+        installArduinoLib: jest.fn(async (args) =>
+          (args.extraLibraries ?? []).includes('STM32duino FreeRTOS') ? { ok: false } : { ok: true },
+        ),
+      })
+    const build = (port: jest.Mocked<CompilerPlatformPort>, emit: (e: PipelineProgressEvent) => void, rtos = {}) =>
+      runCompilePipeline(
+        makeArgs({
+          isSimulator: false,
+          boardRuntime: 'arduino-cli',
+          compileOnly: true,
+          boardEntry: f411,
+          vendorScreenData: rtos,
+          projectData: projectWith(oneTask, []),
+        }),
+        port,
+        emit,
+      )
+
+    it('builds the single loop on the default, saying why', async () => {
+      const port = offline()
+      const { events, emit } = captureEvents()
+      const result = await build(port, emit)
+      expect(result.success).toBe(true)
+      expect(port.compileArduino).toHaveBeenCalledTimes(1)
+      expect(port.compileArduino.mock.calls[0]?.[0].files).not.toHaveProperty(['src/rtos_config.h'])
+      expect(events.some((event) => /could not be installed/.test(event.message))).toBe(true)
+    })
+
+    it('fails when RTOS mode was chosen', async () => {
+      const port = offline()
+      const { emit } = captureEvents()
+      const result = await build(port, emit, { rtos: { enabled: true } })
+      expect(result.success).toBe(false)
+      expect(port.compileArduino).not.toHaveBeenCalled()
+    })
+  })
+
+  it('tells the firmware which task owns each run of the debug table, leaving the globals out', async () => {
+    mockedStrucpp.mockReturnValue({
+      success: true,
+      files: [
+        {
+          name: 'debug-map.json',
+          content: JSON.stringify({
+            leaves: [
+              { arrayIdx: 0, elemIdx: 0, path: 'FAST_INST.COUNT' },
+              { arrayIdx: 0, elemIdx: 1, path: 'FAST_INST.LIMIT' },
+              { arrayIdx: 0, elemIdx: 2, path: 'SLOW_INST.TOTAL' },
+              { arrayIdx: 0, elemIdx: 3, path: 'MOTOR_ON' },
+              { arrayIdx: 0, elemIdx: 4, path: 'LINE.SPEED' },
+            ],
+          }),
+        },
+      ],
+      errors: [],
+      warnings: [],
+      md5Hash: 'a'.repeat(32),
+      splitterFallbackMessage: null,
+      debugMapSummary: null,
+      retainBlobSize: null,
+    })
+    const port = makePort()
+    const { emit } = captureEvents()
+    const projectData = projectWith(
+      [
+        { name: 'FAST', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 },
+        { name: 'SLOW', triggering: 'Cyclic', interval: 'T#100ms', priority: 1 },
+      ],
+      [
+        { name: 'FAST_INST', task: 'FAST', program: 'Fast' },
+        { name: 'SLOW_INST', task: 'SLOW', program: 'Slow' },
+        // An instance named like a global structure must not claim its fields.
+        { name: 'LINE', task: 'SLOW', program: 'Slow' },
+      ] as never,
+    )
+    const global = (name: string) => ({
+      name,
+      type: { definition: 'base-type' as const, value: 'bool' as const },
+      location: '',
+      documentation: '',
+    })
+    projectData.configuration.resource.globalVariables = [global('MOTOR_ON'), global('LINE')]
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: esp32Entry,
+        vendorScreenData: {},
+        projectData,
+        firmwareSkeleton: {
+          'examples/Baremetal/Baremetal.ino': '// sketch',
+          'src/iec_global.hpp': '// global\n',
+          'src/iec_std_lib.hpp': '// std\n',
+        },
+      }),
+      port,
+      emit,
+    )
+    const header = String(port.compileArduino.mock.calls[0]?.[0].files['src/rtos_config.h'])
+    expect(header).toContain('{ 0, 0, 1, "FAST" }')
+    expect(header).toContain('{ 0, 2, 2, "SLOW" }')
+    expect(header).not.toContain('{ 0, 3,')
+    expect(header).not.toContain('{ 0, 4,')
+  })
+
+  it('builds the single loop on a Blue Pill, too small for RTOS mode, without a word about it', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: {
+          platform: 'STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8',
+          core: 'STMicroelectronics:stm32',
+          compiler: 'arduino-cli',
+        },
+        vendorScreenData: {},
+        projectData: projectWith(
+          ['A', 'B'].map((name) => ({ name, triggering: 'Cyclic' as const, interval: 'T#10ms', priority: 0 })),
+          [],
+        ),
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(true)
+    expect(port.compileArduino).toHaveBeenCalledTimes(1)
+    expect(port.compileArduino.mock.calls[0]?.[0].files).not.toHaveProperty(['src/rtos_config.h'])
+    expect(events.some((event) => /RTOS mode/.test(event.message))).toBe(false)
+  })
+
+  it('leaves the board name alone when the build is not in RTOS mode', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({
+        isSimulator: false,
+        boardRuntime: 'arduino-cli',
+        compileOnly: true,
+        boardEntry: { platform: 'rp2040:rp2040:rpipico', core: 'rp2040:rp2040', compiler: 'arduino-cli' },
+        vendorScreenData: { rtos: { enabled: false } },
+        projectData: projectWith([{ name: 'MainTask', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 }], []),
+      }),
+      port,
+      emit,
+    )
+    const compileArgs = port.compileArduino.mock.calls[0]?.[0]
+    expect(compileArgs?.boardOptions).toBeUndefined()
+    expect(jest.mocked(buildArduinoCliCompileArgs).mock.calls.at(-1)?.[0].platform).toBe('rp2040:rp2040:rpipico')
+  })
+
+  it('runs the tasks on one PLC thread on an STM32 with a STruC++ runtime that predates the hook', async () => {
+    const { result, events, files } = await compileStm32()
+    expect(result.success).toBe(true)
+    const header = files?.['src/rtos_config.h']
+    expect(header).toContain('#define OPENPLC_RTOS_FREERTOS_STM32 1')
+    expect(header).not.toContain('STRUCPP_THREADED')
+    expect(events.some((event) => /the 2 tasks on one PLC thread/.test(event.message))).toBe(true)
+  })
+
+  it('builds a two-task project threaded', async () => {
+    const { result, files } = await compile(
+      projectWith(
+        [
+          { name: 'MainTask', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 },
+          { name: 'NET_TASK', triggering: 'Cyclic', interval: 'T#1ms', priority: 1 },
+        ],
+        [
+          { name: 'MainInst', task: 'MainTask', program: 'main' },
+          { name: 'NetInst', task: 'NET_TASK', program: 'net' },
+        ],
+      ),
+    )
+    expect(result.success).toBe(true)
+    expect(files?.['src/rtos_config.h']).toContain('#define STRUCPP_THREADED 1')
+    // Both runtime headers that read STRUCPP_THREADED see it first.
+    for (const header of ['src/iec_global.hpp', 'src/iec_std_lib.hpp']) {
+      const content = files?.[header]
+      expect(typeof content === 'string' && content.startsWith('#include "rtos_config.h"')).toBe(true)
+    }
+  })
+
+  const withLocatedArray = (): PLCProjectData => {
+    const twoTasks = projectWith(
+      [
+        { name: 'MainTask', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 },
+        { name: 'NET_TASK', triggering: 'Cyclic', interval: 'T#1ms', priority: 1 },
+      ],
+      [
+        { name: 'MainInst', task: 'MainTask', program: 'main' },
+        { name: 'NetInst', task: 'NET_TASK', program: 'net' },
+      ],
+    )
+    const outputs: PLCProjectData['configuration']['resource']['globalVariables'][number] = {
+      name: 'outputs',
+      type: {
+        definition: 'array',
+        value: 'ARRAY[0..7] OF BOOL',
+        data: { baseType: { definition: 'base-type', value: 'bool' }, dimensions: [{ dimension: '0..7' }] },
+      },
+      location: '%QX0.0',
+      documentation: '',
+    }
+    const { configuration } = twoTasks
+    return {
+      ...twoTasks,
+      configuration: { ...configuration, resource: { ...configuration.resource, globalVariables: [outputs] } },
+    }
+  }
+
+  it('runs the tasks on one PLC thread when a located global is an ARRAY and STruC++ has no global locks', async () => {
+    const { result, events, files } = await compile(withLocatedArray())
+    expect(result.success).toBe(true)
+    expect(files?.['src/rtos_config.h']).not.toContain('STRUCPP_THREADED')
+    expect(
+      events.some((event) => /the 2 tasks on one PLC thread \(a located global of an ARRAY/.test(event.message)),
+    ).toBe(true)
+  })
+
+  it('gives each task its thread with a located ARRAY global when STruC++ generates the global locks', async () => {
+    mockedStrucpp.mockReturnValue({
+      success: true,
+      files: [
+        { name: 'debug-map.json', content: '{}' },
+        { name: 'generated.cpp', content: 'extern "C" int32_t strucpp_located_global_index(uint32_t k) { return 0; }' },
+      ],
+      errors: [],
+      warnings: [],
+      md5Hash: 'a'.repeat(32),
+      splitterFallbackMessage: null,
+      debugMapSummary: null,
+      retainBlobSize: null,
+    })
+    const { result, events, files } = await compile(withLocatedArray())
+    expect(result.success).toBe(true)
+    expect(files?.['src/rtos_config.h']).toContain('#define STRUCPP_THREADED 1')
+    expect(events.some((event) => /a thread for each of the 2 tasks/.test(event.message))).toBe(true)
+  })
+
+  it('refuses more tasks than the board has room for, when RTOS mode was chosen', async () => {
+    const tasks = Array.from({ length: 9 }, (_, i) => ({
+      name: `T${i}`,
+      triggering: 'Cyclic' as const,
+      interval: 'T#10ms',
+      priority: i,
+    }))
+    const { result, events } = await compile(projectWith(tasks, []))
+    expect(result.success).toBe(false)
+    expect(events.some((event) => event.level === 'error' && /room for 8; the project has 9/.test(event.message))).toBe(
+      true,
+    )
   })
 })

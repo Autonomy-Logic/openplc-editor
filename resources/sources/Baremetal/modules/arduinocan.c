@@ -7,6 +7,7 @@ extern "C" uint64_t read_arduinocan();
 
 void *init_arduinocan(uint8_t pin_en, int baudrate)
 {   
+    OPLC_MODULE_HOLD(can);
 #ifdef PIN_CAN0_STBY
     if(PIN_CAN0_STBY > -1) {
         pinMode(PIN_CAN0_STBY, OUTPUT);
@@ -33,6 +34,7 @@ bool write_arduinocan(uint32_t id ,uint8_t d0, uint8_t d1 ,uint8_t d2, uint8_t d
     uint8_t const msg_data[] = {d0, d1, d2, d3, d4, d5, d6, d7};
     //memcpy((void *)(msg_data + 4), &data, sizeof(data));
     CanMsg msg(id, sizeof(msg_data), msg_data);
+    OPLC_MODULE_HOLD(can);
 
     /* Transmit the CAN message, capture and display an
     * error core in case of failure.
@@ -50,6 +52,7 @@ bool write_arduinocan_word(uint32_t id , uint64_t data)
     uint32_t const msg_data[2] = {0,0};
     memcpy((void *)(msg_data), &data, sizeof(data));
     CanMsg msg(id, sizeof(msg_data), (uint8_t *)&msg_data);
+    OPLC_MODULE_HOLD(can);
 
     if (int const rc = CAN.write(msg); rc < 0)
     {
@@ -61,6 +64,7 @@ bool write_arduinocan_word(uint32_t id , uint64_t data)
 uint64_t read_arduinocan()
 {
     uint64_t data = 0;
+    OPLC_MODULE_HOLD(can);
     if (CAN.available())
     {
         CanMsg const msg = CAN.read();

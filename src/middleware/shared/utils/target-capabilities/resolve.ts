@@ -17,6 +17,8 @@
  * defensive purposes against user-supplied JSON).
  */
 
+import { coreFromFqbn, resolveRtosProfile } from '../rtos/support'
+import type { DeclaredRtos } from '../rtos/types'
 import {
   ARDUINO_CLI_CAPABILITIES,
   DEFAULT_OPCUA_PROFILE,
@@ -35,13 +37,19 @@ import type { OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './
  * demands a complete `opcua` / `s7` profile, while the contract for both is
  * "declare only what you raise". The nested blocks have to be partial too.
  */
-export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7'> & {
+export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7' | 'rtos'> & {
   opcua?: Partial<OpcUaTargetProfile>
   s7?: Partial<S7TargetProfile>
+  rtos?: DeclaredRtos
 }
 
 export type BoardInfoLike = {
   compiler?: string
+  /** The Arduino core (`esp32:esp32`). RTOS support reads it only when
+   *  `platform` names no core. */
+  core?: string
+  /** Fully-qualified board name (`esp32:esp32:esp32s3:...`). */
+  platform?: string
   capabilities?: DeclaredCapabilities
   /** How the board is flashed. Declared here so readers (e.g.
    *  `isEthernetUploadTarget`) test it without casting BoardInfo to an
@@ -171,6 +179,23 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
 
   if (merged.s7Server) {
     merged.s7 = resolveS7Profile(declared?.s7)
+  }
+
+  // RTOS mode is for firmware arduino-cli builds for a real board: the in-process
+  // simulator runs user logic only, and a Runtime target threads its own tasks.
+  // The core is the FQBN's, which is what the board compiles with; a manifest's
+  // `core` may name another. An empty `core` is no core.
+  const core =
+    coreFromFqbn(boardInfo.platform) ??
+    (boardInfo.core !== undefined && boardInfo.core !== '' ? boardInfo.core : undefined)
+  const rtos =
+    boardInfo.compiler === 'arduino-cli' && !merged.isInProcessSimulator
+      ? resolveRtosProfile(core, declared?.rtos, boardInfo.platform)
+      : undefined
+  if (rtos) {
+    merged.rtos = rtos
+  } else {
+    delete merged.rtos
   }
 
   return merged

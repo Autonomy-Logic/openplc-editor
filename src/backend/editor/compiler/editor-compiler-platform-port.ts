@@ -24,6 +24,7 @@
  * `middleware/adapters/web/`.
  */
 
+import { RTOS_SKETCH_SOURCES } from '@root/backend/shared/compile/steps/generate-rtos-config'
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
@@ -265,7 +266,7 @@ export function createEditorCompilerPlatformPort(
      */
     async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation(
+        const result = await handlers.handleLibraryInstallation(
           args.extraLibraries ?? [],
           (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
@@ -273,17 +274,15 @@ export function createEditorCompilerPlatformPort(
           },
           args.thirdPartyLibraries ?? [],
         )
-        return { ok: true }
+        // Whether the libraries the caller named are there now; a global
+        // library that failed only warns.
+        return { ok: result?.success !== false }
       } catch (error) {
         // Reached only when the install machinery itself can't run
-        // (arduino-cli binary missing, spawn failure, etc.).  Non-
-        // zero `arduino-cli lib install` exits are warnings inside
-        // `handleLibraryInstallation` and don't throw.  Either way
-        // the build continues — arduino-cli compile is the source of
-        // truth for whether a required header can be found.
+        // (arduino-cli binary missing, spawn failure, etc.).
         const message = error instanceof Error ? error.message : String(error)
         log(`Warning: library install machinery failed: ${message}. Continuing build.`, 'warning')
-        return { ok: true }
+        return { ok: false }
       }
     },
 
@@ -318,6 +317,13 @@ export function createEditorCompilerPlatformPort(
             await fs.writeFile(absPath, content, 'utf-8')
           }),
         )
+        // An earlier RTOS-mode build's own sources are still on disk: a build
+        // that is not in RTOS mode must not compile them in, even to nothing.
+        await Promise.all(
+          RTOS_SKETCH_SOURCES.filter((relPath) => !(relPath in args.files)).map((relPath) =>
+            fs.rm(join(context.compilationPath, relPath), { force: true }),
+          ),
+        )
 
         // Invoke the existing handler — it spawns arduino-cli compile
         // with the per-board hals entry's flags.  The canonical
@@ -330,6 +336,8 @@ export function createEditorCompilerPlatformPort(
           boardHalsContent: context.boardHalsContent as never,
           compilationPath: context.compilationPath,
           cleanBuild: context.cleanBuild,
+          ...(args.boardOptions ? { boardOptions: args.boardOptions } : {}),
+          ...(args.extraFlags ? { extraFlags: args.extraFlags } : {}),
           handleOutputData: (chunk, level) => {
             const message = typeof chunk === 'string' ? chunk : chunk.toString()
             log(message, level ?? 'info')

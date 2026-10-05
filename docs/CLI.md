@@ -310,6 +310,20 @@ openplc-cli debug close --all
 
 With one session open, `--session` is optional. With several, it is required.
 
+A board in RTOS mode also reports each task's timing — its period, releases,
+overruns, scan, cycle and latency times, stack left, and whether it is stuck in a
+scan right now — which is how to check a task keeps its interval while another
+waits on the network:
+
+```sh
+openplc-cli debug stats --reset                 # start a new measuring window
+openplc-cli debug stats                         # everything since then
+```
+
+In `debug exec` and `debug repl` it is `stats` or `stats reset`. A board built
+as a single scan loop does not know the request: the command fails with
+`not_supported` (exit 7), where a link failure is `timeout` or `target_error`.
+
 ### A session closes itself after 30 minutes idle
 
 This is the one fact a long-running harness has to know, because closing
@@ -398,6 +412,7 @@ a line it received.
 | `watch`             | `names[]`, `intervalMs?`                                               | `watch` — what is recording     |
 | `poll`              | `since?` (sequence number)                                             | `poll` — `samples[]`, `dropped` |
 | `unwatch`           | `names?` (all when omitted)                                            | `unwatch`                       |
+| `stats`             | `reset?` — start a new window after this read                          | `stats` — each task's timing    |
 | `close`             | `releaseForces?` (default true)                                        | `close` — `released[]`          |
 
 **Responses** echo the `id` and discriminate on `ok`:

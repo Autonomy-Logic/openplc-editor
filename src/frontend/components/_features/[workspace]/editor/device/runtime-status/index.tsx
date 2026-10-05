@@ -17,11 +17,15 @@ import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useState } from 'react'
 
+import { useCanReadBoardTaskStats } from '../../../../../../hooks/use-board-task-stats'
+import { useTargetCapabilities } from '../../../../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../../../../store'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
+import { BoardTaskStatus } from './board-task-status'
 import { ChangeVersionModal } from './change-version-modal'
+import { InfoField } from './info-field'
 
 /** What the bootloader reports about the machine; every field may be absent. */
 type DeviceInfo = {
@@ -48,7 +52,7 @@ type BootloaderInfo = {
   reason?: string
 }
 
-const RuntimeStatusEditor = () => {
+const RuntimeStatusView = () => {
   const runtime = useRuntime()
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -325,13 +329,6 @@ const RuntimeStatusEditor = () => {
   )
 }
 
-const InfoField = ({ label, value }: { label: string; value?: string | null }) => (
-  <div className='flex flex-col'>
-    <dt className='text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>{label}</dt>
-    <dd className='text-sm text-neutral-900 dark:text-neutral-100'>{value || '—'}</dd>
-  </div>
-)
-
 /**
  * Name the device this screen is actually showing.
  *
@@ -367,6 +364,23 @@ const describeMemory = (bytes: number | undefined): string | undefined => {
   if (bytes === undefined || bytes <= 0) return undefined
   const gib = bytes / 1024 ** 3
   return gib >= 1 ? `${gib.toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`
+}
+
+/**
+ * A runtime's status, or, for a connected baremetal board whose core can run
+ * RTOS mode, its tasks' timing, read over the device link. Whether it is in
+ * RTOS mode is the board's answer, not the project's switch.
+ */
+const RuntimeStatusEditor = () => {
+  const runtimeConnected = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus === 'connected')
+  const boardConnected = useOpenPLCStore((state) => state.deviceConnection.status === 'connected')
+  const rtosCapable = useTargetCapabilities().rtos !== undefined
+  const canReadBoard = useCanReadBoardTaskStats()
+  return !runtimeConnected && boardConnected && rtosCapable && canReadBoard ? (
+    <BoardTaskStatus />
+  ) : (
+    <RuntimeStatusView />
+  )
 }
 
 export { RuntimeStatusEditor }

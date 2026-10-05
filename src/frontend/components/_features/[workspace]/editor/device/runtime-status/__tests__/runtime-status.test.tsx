@@ -22,16 +22,26 @@ const getStatus = vi.fn()
 type MockStore = {
   runtimeConnection: Record<string, unknown>
   deviceActions: Record<string, ReturnType<typeof vi.fn>>
+  deviceConnection: { status: string; port: string | null }
+  deviceDefinitions: { configuration: { deviceBoard: string; vendorScreenData: Record<string, unknown> } }
+  deviceAvailableOptions: { availableBoards: Map<string, unknown> }
+  project: { data: { configurations: { resource: { tasks: unknown[] } } } }
 }
 
 let storeState: MockStore
 
 const getOrchestratorHostInfo = vi.fn()
+const readTaskStats = vi.fn()
+// One object, as the platform's device port is: the screen's polling restarts
+// whenever the device it reads from changes.
+const mockBoardDevice = { readTaskStats }
 
 vi.mock('@root/middleware/shared/providers/platform-context', () => ({
   // The production source of these facts for an orchestrator-managed device,
   // which has no bootloader container to ask.
   useOrchestrator: () => ({ getOrchestratorHostInfo }),
+  // A baremetal board reports its tasks over the device link instead.
+  useDevice: () => mockBoardDevice,
   useRuntime: () => ({
     bootloader: {
       getCapabilities,
@@ -86,6 +96,16 @@ const connectedState = (overrides: Record<string, unknown> = {}) => ({
     timingStats: null,
     storedCredentials: { username: 'op', password: 'op' },
     ...overrides,
+  },
+  deviceConnection: { status: 'disconnected', port: null },
+  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Runtime v4', vendorScreenData: {} } },
+  deviceAvailableOptions: { availableBoards: new Map() },
+  project: {
+    data: {
+      configurations: {
+        resource: { tasks: [{ name: 'main', triggering: 'Cyclic', interval: 'T#10ms', priority: 0 }] },
+      },
+    },
   },
   deviceActions: {
     setIncludeTimingStatsInPolling: vi.fn(),
@@ -348,5 +368,107 @@ describe('A device with no bootloader', () => {
 
     await waitFor(() => expect(getOrchestratorHostInfo).toHaveBeenCalled())
     expect(screen.getByText('Runtime Status')).toBeTruthy()
+  })
+})
+
+describe('A baremetal board that can run RTOS mode', () => {
+  /** An ESP32 connected over its device link, with no runtime session. */
+  const boardState = (vendorScreenData: Record<string, unknown> = {}) => ({
+    ...connectedState({ connectionStatus: 'disconnected' }),
+    deviceConnection: { status: 'connected', port: '/dev/ttyACM0' },
+    deviceDefinitions: { configuration: { deviceBoard: 'ESP32-S3', vendorScreenData } },
+    deviceAvailableOptions: {
+      availableBoards: new Map([
+        ['ESP32-S3', { compiler: 'arduino-cli', core: 'esp32:esp32', preview: '', specs: {} }],
+      ]),
+    },
+  })
+
+  const stats = (tasks: unknown[] = []) => ({
+    success: true,
+    stats: {
+      tasks,
+      services: [{ iterationMaxUs: 3650, busyReplies: 1, stackFreeBytes: 7000 }],
+      dispatcherStackFreeBytes: 6000,
+      heapFreeBytes: 251_904,
+      heapMinFreeBytes: 250_880,
+      baseTickUs: 10_000,
+      retainLateMaxUs: 0,
+    },
+  })
+
+  // The first reply only opens the window, so figures appear with the second,
+  // a poll later.
+  const SECOND_READ = { timeout: 3000 }
+
+  it('shows what the board reports about its tasks, not a runtime prompt', async () => {
+    storeState = boardState()
+    readTaskStats.mockResolvedValue(stats())
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(screen.getByText('10 ms')).toBeTruthy(), SECOND_READ)
+    expect(screen.getByText('RTOS')).toBeTruthy()
+    expect(screen.getByText('246 KB (lowest 245 KB)')).toBeTruthy()
+    expect(screen.queryByText(/connect to a runtime/i)).toBeNull()
+    expect(getCapabilities).not.toHaveBeenCalled()
+  })
+
+  it('names a task stuck in one scan, which finished none to show in the table', async () => {
+    storeState = boardState()
+    readTaskStats.mockResolvedValue(
+      stats([
+        {
+          name: 'NET_TASK',
+          releases: 0,
+          overruns: 150,
+          scanMinUs: 0,
+          scanAvgUs: 0,
+          scanMaxUs: 0,
+          latencyAvgUs: 0,
+          latencyMaxUs: 0,
+          cycleMinUs: 0,
+          cycleMaxUs: 0,
+          stackFreeBytes: 9000,
+          busyUs: 3_200_000,
+          periodUs: 20_000,
+        },
+      ]),
+    )
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(screen.getByText(/stuck in one scan for 3.2 s/)).toBeTruthy(), SECOND_READ)
+    expect(screen.getByText(/150 releases skipped/)).toBeTruthy()
+    expect(screen.queryByText(/the PLC is stopped/)).toBeNull()
+  })
+
+  it('asks the board even with the switch off, since its firmware may be another build', async () => {
+    storeState = boardState({ rtos: { enabled: false } })
+    readTaskStats.mockResolvedValue(stats())
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(readTaskStats).toHaveBeenCalled())
+  })
+
+  it('shows no mode until the board has answered', () => {
+    storeState = boardState()
+    readTaskStats.mockReturnValue(new Promise(() => {}))
+
+    render(<RuntimeStatusEditor />)
+
+    expect(screen.queryByText('RTOS')).toBeNull()
+    expect(screen.getByText('Reading the task statistics…')).toBeTruthy()
+  })
+
+  it('says so when the board runs the single loop', async () => {
+    storeState = boardState()
+    readTaskStats.mockResolvedValue({ success: false, unsupported: true })
+
+    render(<RuntimeStatusEditor />)
+
+    await waitFor(() => expect(screen.getByText(/reports no task statistics/i)).toBeTruthy())
+    expect(screen.getByText('Single loop')).toBeTruthy()
   })
 })

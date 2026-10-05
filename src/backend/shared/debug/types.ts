@@ -1,3 +1,4 @@
+import type { RtosStatsResult } from '../../../middleware/shared/ports/types'
 import type { PlcRuntimeState } from '../simulator/types'
 
 /**
@@ -57,6 +58,9 @@ export interface DebugVersionResult {
   version?: string
   error?: string
 }
+
+/** FC 0x4e, a board in RTOS mode: see `RtosStatsResult`. */
+export type DebugTaskStatsResult = RtosStatsResult
 
 /**
  * WHY THERE ARE TWO OF THESE AND NOT ONE (DOPE-589). FC 0x48 answers a
@@ -224,6 +228,9 @@ export interface DeviceChannelTransport {
   /** Run/stop command (FC 0x4b). Reads go through `getStatus()`. Optional for
    *  the same reason as `getStatus`. */
   setPlcState?(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
+  /** Per-task timing of a board in RTOS mode (FC 0x4e); `resetWindow` starts a
+   *  new window after this read. Baremetal only, as run/stop is. */
+  getTaskStats?(resetWindow?: boolean): Promise<DebugTaskStatsResult>
   /** Read the stored VPP license blob (FC 0x4A). Optional here because not every
    *  medium carries it — but unlike run/stop, every medium that CAN is expected
    *  to: licensing is a property of the device, not of the target family, so the

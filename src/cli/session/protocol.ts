@@ -50,6 +50,7 @@ export const RequestKindSchema = z.enum([
   'watch',
   'poll',
   'unwatch',
+  'stats',
   'close',
 ])
 export type RequestKind = z.infer<typeof RequestKindSchema>
@@ -107,6 +108,8 @@ export const RequestSchema = z.discriminatedUnion('kind', [
   z.object({ id: idField, kind: z.literal('poll'), since: z.number().finite().optional() }),
   /** Omit `names` to stop watching everything. */
   z.object({ id: idField, kind: z.literal('unwatch'), names: z.array(z.string()).optional() }),
+  /** Each task's timing, from a board in RTOS mode. `reset` starts a new window after this read. */
+  z.object({ id: idField, kind: z.literal('stats'), reset: z.boolean().optional() }),
   /**
    * Tear the session down.
    *
@@ -177,6 +180,33 @@ export const WatchSampleSchema = z.object({
 })
 export type WatchSample = z.infer<typeof WatchSampleSchema>
 
+/** A board's RTOS task statistics (FC 0x4e), as `RtosStats` in the ports. */
+const RtosStatsSchema = z.object({
+  tasks: z.array(
+    z.object({
+      name: z.string(),
+      releases: z.number(),
+      overruns: z.number(),
+      scanMinUs: z.number(),
+      scanAvgUs: z.number(),
+      scanMaxUs: z.number(),
+      latencyAvgUs: z.number(),
+      latencyMaxUs: z.number(),
+      cycleMinUs: z.number(),
+      cycleMaxUs: z.number(),
+      stackFreeBytes: z.number(),
+      busyUs: z.number(),
+      periodUs: z.number(),
+    }),
+  ),
+  services: z.array(z.object({ iterationMaxUs: z.number(), busyReplies: z.number(), stackFreeBytes: z.number() })),
+  dispatcherStackFreeBytes: z.number(),
+  heapFreeBytes: z.number(),
+  heapMinFreeBytes: z.number(),
+  baseTickUs: z.number(),
+  retainLateMaxUs: z.number(),
+})
+
 const ResponseDataSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('status'), status: SessionStatusSchema }),
   z.object({
@@ -190,6 +220,7 @@ const ResponseDataSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('watch'), watching: z.array(z.string()), intervalMs: z.number() }),
   z.object({ kind: z.literal('poll'), samples: z.array(WatchSampleSchema), dropped: z.number() }),
   z.object({ kind: z.literal('unwatch'), watching: z.array(z.string()) }),
+  z.object({ kind: z.literal('stats'), stats: RtosStatsSchema }),
   z.object({ kind: z.literal('close'), released: z.array(z.string()) }),
 ])
 

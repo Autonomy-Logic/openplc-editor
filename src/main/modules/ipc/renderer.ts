@@ -55,7 +55,7 @@ import type {
   UpdateUserParams,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
-import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
+import type { DebugConnectionConfig, RtosStatsResult } from '@root/middleware/shared/ports/types'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import type {
   Branch,
@@ -689,6 +689,9 @@ const rendererProcessBridge = {
 
   deviceRefreshLicense: (request: DeviceLicenseRequest): Promise<DeviceLicenseReport> =>
     ipcRenderer.invoke('device:refresh-license', request),
+
+  deviceReadTaskStats: (resetWindow: boolean): Promise<RtosStatsResult> =>
+    ipcRenderer.invoke('device:read-task-stats', resetWindow),
 
   // Diagnostic trace of the device connection (candidate attempts, poll verdicts,
   // which connection served each command), mirrored into the editor console so it

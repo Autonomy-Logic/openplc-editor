@@ -11,6 +11,11 @@ void *init_ds18b20(uint8_t pin)
     //disabled_pins[disabled_pins[0]] = pin;
     //if (disabled_pins[0] < 10) disabled_pins[0]++;
     
+    // RTOS mode: the HAL reads these masks on the dispatcher, under the image
+    // lock; once this returns, it has stopped driving the pin.
+#if OPENPLC_RTOS
+    runtime_rtos_image_lock();
+#endif
     for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
     {
         if (pinMask_DIN[i] == pin)
@@ -31,6 +36,9 @@ void *init_ds18b20(uint8_t pin)
         if (pinMask_AOUT[i] == pin)
             pinMask_AOUT[i] = 255;
     }
+#if OPENPLC_RTOS
+    runtime_rtos_image_unlock();
+#endif
     
     OneWire *oneWire;
     DallasTemperature *sensors;

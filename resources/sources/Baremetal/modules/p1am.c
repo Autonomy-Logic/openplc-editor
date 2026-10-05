@@ -8,6 +8,7 @@ uint8_t modules_initialized = 0;
 
 uint8_t p1am_init()
 {
+    OPLC_MODULE_HOLD(spi);
     if (modules_initialized == 0)
     {
         modules_initialized = P1.init();
@@ -18,15 +19,18 @@ uint8_t p1am_init()
 
 void p1am_writeDiscrete(uint32_t data, uint8_t slot, uint8_t channel)
 {
+    OPLC_MODULE_HOLD(spi);
     P1.writeDiscrete(data, slot, channel);
 }
 
 uint32_t p1am_readDiscrete(uint8_t slot, uint8_t channel)
 {
+    OPLC_MODULE_HOLD(spi);
     return P1.readDiscrete(slot, channel);
 }
 
 uint16_t p1am_readAnalog(uint8_t slot, uint8_t channel)
 {
+    OPLC_MODULE_HOLD(spi);
     return (uint16_t)P1.readAnalog(slot, channel);
 }

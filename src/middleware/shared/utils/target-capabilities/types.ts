@@ -17,6 +17,8 @@
  * its capabilities are read.
  */
 
+import type { DeclaredRtos, RtosTargetProfile } from '../rtos/types'
+
 /**
  * Wire protocols a target can speak to the debugger.
  *
@@ -201,6 +203,13 @@ export interface TargetCapabilities {
    *  from `DEFAULT_S7_PROFILE`. */
   s7?: S7TargetProfile
 
+  /** RTOS mode: the baremetal runtime can run each IEC task on a thread of its
+   *  own. Present only where the board's Arduino core has an RTOS the firmware
+   *  has a backend for; `resolveTargetCapabilities` derives it from the core,
+   *  and a package can refuse it. Whether a build uses it is the user's
+   *  per-board choice, `readRtosSettings`. */
+  rtos?: RtosTargetProfile
+
   /* ---------------------------------------------------------------
    * Build / runtime behavior
    * --------------------------------------------------------------- */
@@ -299,3 +308,10 @@ export type AddressProducerCapabilities = Pick<
   TargetCapabilities,
   'pinMapping' | 'vppIo' | 'modbusTcpRemote' | 'ethercat'
 >
+
+/**
+ * A package manifest's `capabilities` block as written, before
+ * `resolveTargetCapabilities`: every flag optional, and `rtos` in the form a
+ * package declares it (`false`, or a backend), not the profile it resolves to.
+ */
+export type ManifestCapabilities = Omit<Partial<TargetCapabilities>, 'rtos'> & { rtos?: DeclaredRtos }

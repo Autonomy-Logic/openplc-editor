@@ -6,18 +6,23 @@ import {
   buildPlcSetStateRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
+  DEBUG_BUSY_ERROR,
+  isBusyException,
   isGetListOverflowException,
   parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
+  readTaskStats,
+  taskStatsPduLength,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
+  DebugTaskStatsResult,
   DeviceModbusTransport,
   Md5ProbeResult,
   PlcControlResult,
@@ -60,7 +65,22 @@ interface SendRequestOptions {
    * off. Callers that omit it fall back to the unchanged idle-timeout framing.
    */
   expectedTotalLength?: (raw: Buffer) => number | null
+  /** The wait for this request's reply, in place of the client's own timeout
+   *  (a long reply needs its clock-out time on top). */
+  timeoutMs?: number
 }
+
+/** A timeout in which not one byte came back. The message stays the one every
+ *  timeout has; the type is what tells silence from a reply cut short. */
+class NoReplyError extends Error {
+  constructor() {
+    super('Request timeout')
+    this.name = 'NoReplyError'
+  }
+}
+
+/** The largest reply page: a full frame. */
+const TASK_STATS_MAX_REPLY_BYTES = 272
 
 const ARDUINO_BOOTLOADER_DELAY_MS = 2500
 const MD5_REQUEST_MAX_RETRIES = 3
@@ -269,8 +289,8 @@ export class ModbusRtuClient implements DeviceModbusTransport {
 
       const timeoutHandle = setTimeout(() => {
         cleanup()
-        reject(new Error('Request timeout'))
-      }, this.timeout)
+        reject(responseBuffer.length === 0 ? new NoReplyError() : new Error('Request timeout'))
+      }, opts?.timeoutMs ?? this.timeout)
 
       // Strip the 2-byte CRC trailer, prepend the 6-byte TCP-compat padding the
       // rest of the client expects, and resolve. Shared by both the size-aware
@@ -559,6 +579,10 @@ export class ModbusRtuClient implements DeviceModbusTransport {
       const functionCodeResponse = response.readUInt8(7)
       const statusCode = response.readUInt8(8)
 
+      if (isBusyException(functionCodeResponse, statusCode)) {
+        return { success: false, error: DEBUG_BUSY_ERROR }
+      }
+
       if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_SET as number)) {
         return { success: false, error: 'Function code mismatch' }
       }
@@ -705,6 +729,60 @@ export class ModbusRtuClient implements DeviceModbusTransport {
       }
       return parseGetStatusResponse(Uint8Array.prototype.slice.call(response, 7))
     } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /** Set once the board has answered a task-statistics request: from then on a
+   *  silence is a failure to retry, not a board that does not know the code. */
+  private taskStatsAnswered = false
+
+  /**
+   * FC 0x4e -- per-task timing of a board in RTOS mode, a page of tasks per
+   * request (readTaskStats). Size-aware framing, as for the license: a page runs
+   * to a few hundred bytes, and its length follows from the task names.
+   *
+   * Single-loop firmware cannot frame this code over serial and never answers,
+   * but a busy board in RTOS mode can answer late too. So silence from a board
+   * that has never answered means "not in RTOS mode" only if its status answers
+   * straight after; otherwise it is a timeout, to retry.
+   */
+  async getTaskStats(resetWindow = false): Promise<DebugTaskStatsResult> {
+    const clockOutMs = Math.ceil((TASK_STATS_MAX_REPLY_BYTES * 10 * 1000) / this.baudRate)
+    try {
+      return await readTaskStats(async (pdu) => {
+        const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_TASK_STATS, Buffer.from(pdu.subarray(1)))
+        const response = await this.sendRequest(request, {
+          timeoutMs: this.timeout + clockOutMs,
+          // Raw RTU frame: [id][PDU][crc:2]. Until the task names have all
+          // arrived the total cannot be told, only that it is longer than this:
+          // "one more byte" keeps the idle timeout from cutting the reply there.
+          expectedTotalLength: (raw) => {
+            const length = taskStatsPduLength(Uint8Array.prototype.slice.call(raw, 1))
+            return length === null ? raw.length + 1 : 1 + length + 2
+          },
+        })
+        this.taskStatsAnswered = true
+        if (response.length < 9) throw new Error(`Invalid response: too short (${response.length} bytes)`)
+        return Uint8Array.prototype.slice.call(response, 7)
+      }, resetWindow)
+    } catch (error) {
+      if (error instanceof NoReplyError && !this.taskStatsAnswered) {
+        // A late statistics reply landing in this wait fails the status check
+        // too, which is right: the board knows the code.
+        const status = await this.getStatus()
+        if (status.success) {
+          return {
+            success: false,
+            unsupported: true,
+            error: 'The board does not answer for task statistics: it is not running in RTOS mode',
+          }
+        }
+        return {
+          success: false,
+          error: 'Request timeout: the board did not answer for task statistics. It may be busy; try again',
+        }
+      }
       return { success: false, error: getErrorMessage(error) }
     }
   }

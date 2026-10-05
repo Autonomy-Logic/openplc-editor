@@ -181,8 +181,24 @@ static void slot_write(void* p, uint8_t width, uint64_t value)
 }
 
 /** S7 read: `len` bytes from byte offset `start` within the area. */
+#if OPENPLC_RTOS
+// RTOS mode: the slots address the process image, which the scan copies in and
+// out from another task, so the whole access is one hold of the image lock.
+static bool s7_read_body(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t start, uint16_t len, uint8_t* dest);
+
+bool s7_read(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t start, uint16_t len, uint8_t* dest)
+{
+    runtime_rtos_image_lock();
+    const bool ok = s7_read_body(ctx, areaCode, dbNumber, start, len, dest);
+    runtime_rtos_image_unlock();
+    return ok;
+}
+
+static bool s7_read_body(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t start, uint16_t len, uint8_t* dest)
+#else
 bool s7_read(void* ctx, uint8_t areaCode, uint16_t dbNumber,
              uint32_t start, uint16_t len, uint8_t* dest)
+#endif
 {
     (void)ctx;
     const s7comm_area_t* a = find_area(areaCode, dbNumber);
@@ -228,8 +244,24 @@ bool s7_read(void* ctx, uint8_t areaCode, uint16_t dbNumber,
 }
 
 /** S7 write: `len` bytes at byte offset `start` within the area. */
+#if OPENPLC_RTOS
+// RTOS mode: the slots address the process image, which the scan copies in and
+// out from another task, so the whole access is one hold of the image lock.
+static bool s7_write_body(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t start, uint16_t len, const uint8_t* src);
+
+bool s7_write(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t start, uint16_t len, const uint8_t* src)
+{
+    runtime_rtos_image_lock();
+    const bool ok = s7_write_body(ctx, areaCode, dbNumber, start, len, src);
+    runtime_rtos_image_unlock();
+    return ok;
+}
+
+static bool s7_write_body(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t start, uint16_t len, const uint8_t* src)
+#else
 bool s7_write(void* ctx, uint8_t areaCode, uint16_t dbNumber,
               uint32_t start, uint16_t len, const uint8_t* src)
+#endif
 {
     (void)ctx;
     const s7comm_area_t* a = find_area(areaCode, dbNumber);
@@ -328,8 +360,24 @@ void refresh_cpu_status(void)
 
 /** S7 single-bit write, so a bit write never re-asserts its seven neighbours --
  *  on the output area those are seven other physical outputs. */
+#if OPENPLC_RTOS
+// RTOS mode: the slots address the process image, which the scan copies in and
+// out from another task, so the whole access is one hold of the image lock.
+static bool s7_write_bit_body(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t byteIndex, uint8_t bitIndex, bool value);
+
+bool s7_write_bit(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t byteIndex, uint8_t bitIndex, bool value)
+{
+    runtime_rtos_image_lock();
+    const bool ok = s7_write_bit_body(ctx, areaCode, dbNumber, byteIndex, bitIndex, value);
+    runtime_rtos_image_unlock();
+    return ok;
+}
+
+static bool s7_write_bit_body(void* ctx, uint8_t areaCode, uint16_t dbNumber, uint32_t byteIndex, uint8_t bitIndex, bool value)
+#else
 bool s7_write_bit(void* ctx, uint8_t areaCode, uint16_t dbNumber,
                   uint32_t byteIndex, uint8_t bitIndex, bool value)
+#endif
 {
     (void)ctx;
     const s7comm_area_t* a = find_area(areaCode, dbNumber);

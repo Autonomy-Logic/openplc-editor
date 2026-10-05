@@ -39,4 +39,10 @@ void rebootToBootloader(const uint8_t *magic);
 // so the editor can poll it while waiting for the user to unlock.
 void getLockState(void);
 
+#if OPENPLC_RTOS
+// PDU request:  [FC 0x4E][flags:u8][first_task:u8]   flags bit 0 = reset the window
+// PDU response: [FC][status][plc_rtos_encode_stats() v2 blob, one page of tasks]
+void debugGetTaskStats(uint8_t flags, uint8_t first_task);
+#endif
+
 #endif

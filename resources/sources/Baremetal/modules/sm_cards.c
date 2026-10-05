@@ -14,6 +14,7 @@ int i2cMemRead(uint8_t hwAddr, uint8_t memAddr, uint8_t* buff, uint8_t size)
 	{
 		return ERROR;
 	}
+	OPLC_MODULE_HOLD(i2c);
 	Wire.begin();
 	Wire.beginTransmission(hwAddr);
 	Wire.write(memAddr);
@@ -40,6 +41,7 @@ int i2cMemWrite(uint8_t hwAddr, uint8_t memAddr, uint8_t* buff, uint8_t size)
 	{
 		return ERROR;
 	}
+	OPLC_MODULE_HOLD(i2c);
 	Wire.begin();
 	Wire.beginTransmission(hwAddr);
 	Wire.write(memAddr);

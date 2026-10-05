@@ -219,4 +219,10 @@ describe('generateVppConfigContent', () => {
     expect(out).toContain('#define VPP_MODBUS_RTU_ENABLED 1')
     expect(out).toContain('#define VPP_MODBUS_RTU_BAUD_RATE 115200')
   })
+
+  it('leaves out the editor’s RTOS switch, which reaches the firmware as rtos_config.h', () => {
+    const out = generateVppConfigContent({ vendorScreenData: { rtos: { enabled: true }, net: { port: 502 } } })
+    expect(out).not.toContain('VPP_RTOS')
+    expect(out).toContain('VPP_NET_PORT')
+  })
 })

@@ -25,7 +25,7 @@
 
 import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type { InstalledPackage, PackageManifest, PlatformOption } from '../../../middleware/shared/ports/types'
-import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
+import type { ManifestCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 import { findVppDeviceByBoardName } from './find-vpp-device'
 
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ export interface HalsBoardEntry {
   /** Per-board capability overrides — same merge semantics as the
    *  VPP-side `device.capabilities` field.  Resolved by
    *  `resolveTargetCapabilities` on top of the compiler preset. */
-  capabilities?: Partial<TargetCapabilities>
+  capabilities?: ManifestCapabilities
   /** Declarative debug-channel resolver spec.  See `debug-spec.ts`
    *  for the schema.  Boards without a spec fall back to the
    *  "Debugging Not Available" outcome on the renderer side. */
@@ -188,7 +188,7 @@ export interface BoardBuildInfo {
    *  Sourced from `hals.json` `capabilities` (static boards) or VPP
    *  manifest `device.capabilities` (VPP boards) — both paths feed
    *  the same shape so the pipeline reads a single field. */
-  capabilities?: Partial<TargetCapabilities>
+  capabilities?: ManifestCapabilities
   /** Override for arduino-cli's `upload.maximum_data_size` check. */
   maxDataSize?: number
   /**
