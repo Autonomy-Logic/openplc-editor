@@ -9,7 +9,8 @@ import type {
   PLCStructureVariable,
   PLCVariable,
 } from '../../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createTestStore } from '../../../../store/testing'
 import { type ProjectStTranspiler, transpileProjectToST } from '../../graphical-context'
 import { executeTool } from '../tool-executor'
 
@@ -68,8 +69,10 @@ type Seed = {
   globalVariables?: PLCVariable[]
 }
 
+let store: OpenPLCStore
+
 function seedProject(seed: Seed = {}): void {
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   state.projectActions.setProject({
     meta: { name: 'AI Tool Fixture', type: 'plc-project', path: '/tmp/ai-tool-fixture' },
     data: {
@@ -85,7 +88,7 @@ function seedProject(seed: Seed = {}): void {
   })
 }
 
-const project = () => openPLCStoreBase.getState().project.data
+const project = () => store.getState().project.data
 const pouNamed = (name: string) => project().pous.find((p) => p.name === name)
 const varsOf = (pouName: string) => pouNamed(pouName)?.interface?.variables ?? []
 const globals = () => project().configurations.resource.globalVariables
@@ -114,23 +117,20 @@ function enumValues(name: string): Array<{ description: string }> | undefined {
 }
 
 beforeEach(() => {
-  const state = openPLCStoreBase.getState()
-  // Store is a module singleton: clear it so a previous case's names can't collide with this one's.
-  state.libraryActions.clearUserLibraries()
-  state.aiActions.clearAllPendingDiffs()
+  store = createTestStore()
   seedProject()
 })
 
 describe('executeTool dispatch', () => {
   it('names the tool it does not know instead of failing silently', async () => {
-    const result = await executeTool('rewrite_firmware', {})
+    const result = await executeTool(store, 'rewrite_firmware', {})
 
     expect(result).toEqual({ success: false, message: 'Unknown tool: rewrite_firmware' })
   })
 
   it('turns a throwing tool into a failed result, upholding the never-throws contract', async () => {
     // `null` input dereferences inside the create path.
-    const result = await executeTool('create_pou', null)
+    const result = await executeTool(store, 'create_pou', null)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Tool execution error')
@@ -139,7 +139,7 @@ describe('executeTool dispatch', () => {
 
 describe('create_pou', () => {
   it('adds the POU to the project with the requested type, language and body', async () => {
-    const result = await executeTool('create_pou', {
+    const result = await executeTool(store, 'create_pou', {
       name: 'Conveyor',
       type: 'program',
       language: 'st',
@@ -155,31 +155,31 @@ describe('create_pou', () => {
 
   it('registers a new function block as a library element so it can be placed in a diagram', async () => {
     // A POU without a library entry is invisible in the LD/FBD pickers.
-    await executeTool('create_pou', { name: 'Debounce', type: 'function-block', language: 'st' })
+    await executeTool(store, 'create_pou', { name: 'Debounce', type: 'function-block', language: 'st' })
 
-    expect(openPLCStoreBase.getState().libraries.user.some((l) => l.name === 'Debounce')).toBe(true)
+    expect(store.getState().libraries.user.some((l) => l.name === 'Debounce')).toBe(true)
   })
 
   it('records a pending diff for the generated body so the user can review it hunk by hunk', async () => {
-    await executeTool('create_pou', { name: 'Reviewed', type: 'program', language: 'st', body: 'a := 1;' })
+    await executeTool(store, 'create_pou', { name: 'Reviewed', type: 'program', language: 'st', body: 'a := 1;' })
 
-    const diff = openPLCStoreBase.getState().ai.pendingDiffs.Reviewed
+    const diff = store.getState().ai.pendingDiffs.Reviewed
     expect(diff?.oldBody).toBe('')
     expect(diff?.newBody).toBe('a := 1;')
     expect(diff?.acceptedHunks.length).toBe(diff?.hunks.length)
   })
 
   it('creates the POU with no pending diff when no body was supplied', async () => {
-    const result = await executeTool('create_pou', { name: 'Empty', type: 'program', language: 'st' })
+    const result = await executeTool(store, 'create_pou', { name: 'Empty', type: 'program', language: 'st' })
 
     expect(result.message).not.toContain('with initial code')
     expect(pouNamed('Empty')).toBeDefined()
-    expect(openPLCStoreBase.getState().ai.pendingDiffs.Empty).toBeUndefined()
+    expect(store.getState().ai.pendingDiffs.Empty).toBeUndefined()
   })
 
   it('strips the POU wrapper and VAR block the model adds despite instructions not to', async () => {
     // The model routinely returns a whole compilable POU, which the ST transpiler rejects verbatim.
-    await executeTool('create_pou', {
+    await executeTool(store, 'create_pou', {
       name: 'Wrapped',
       type: 'program',
       language: 'st',
@@ -194,7 +194,7 @@ describe('create_pou', () => {
     ['no type', { name: 'X', language: 'st' }],
     ['no language', { name: 'X', type: 'program' }],
   ])('refuses malformed input with %s and writes nothing', async (_label, input) => {
-    const result = await executeTool('create_pou', input)
+    const result = await executeTool(store, 'create_pou', input)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required fields')
@@ -203,7 +203,7 @@ describe('create_pou', () => {
 
   it('refuses a graphical language and explains which ones are supported', async () => {
     // LD/FBD bodies are flow graphs the model cannot author; the tool must refuse rather than create an empty diagram.
-    const result = await executeTool('create_pou', { name: 'Rungs', type: 'program', language: 'ld' })
+    const result = await executeTool(store, 'create_pou', { name: 'Rungs', type: 'program', language: 'ld' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('is not supported')
@@ -211,7 +211,7 @@ describe('create_pou', () => {
   })
 
   it('refuses an invalid POU type', async () => {
-    const result = await executeTool('create_pou', { name: 'X', type: 'subroutine', language: 'st' })
+    const result = await executeTool(store, 'create_pou', { name: 'X', type: 'subroutine', language: 'st' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Invalid POU type')
@@ -221,7 +221,12 @@ describe('create_pou', () => {
   it('refuses a name already taken by another POU rather than overwriting it', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'original;')] })
 
-    const result = await executeTool('create_pou', { name: 'Conveyor', type: 'program', language: 'st', body: 'new;' })
+    const result = await executeTool(store, 'create_pou', {
+      name: 'Conveyor',
+      type: 'program',
+      language: 'st',
+      body: 'new;',
+    })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('already exists')
@@ -231,7 +236,7 @@ describe('create_pou', () => {
   it('refuses a name already taken by a data type — they share one identifier namespace', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE'])] })
 
-    const result = await executeTool('create_pou', { name: 'Mode', type: 'program', language: 'st' })
+    const result = await executeTool(store, 'create_pou', { name: 'Mode', type: 'program', language: 'st' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('data type named "Mode" already exists')
@@ -242,7 +247,12 @@ describe('create_pou', () => {
     // Every project is born with a main POU; creating one with a body redirects to update_pou_body.
     seedProject({ pous: [makePou('Main', 'st', 'old;')] })
 
-    const result = await executeTool('create_pou', { name: 'main', type: 'program', language: 'st', body: 'fresh;' })
+    const result = await executeTool(store, 'create_pou', {
+      name: 'main',
+      type: 'program',
+      language: 'st',
+      body: 'fresh;',
+    })
 
     expect(result.success).toBe(true)
     expect(result.message).toContain('updated its body instead')
@@ -253,7 +263,7 @@ describe('create_pou', () => {
   it('refuses a bodyless "main" re-creation and points at update_pou_body', async () => {
     seedProject({ pous: [makePou('Main', 'st', 'old;')] })
 
-    const result = await executeTool('create_pou', { name: 'Main', type: 'program', language: 'st' })
+    const result = await executeTool(store, 'create_pou', { name: 'Main', type: 'program', language: 'st' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('update_pou_body')
@@ -264,14 +274,19 @@ describe('create_pou', () => {
     // A graphical main cannot take a text body; the redirect must propagate that refusal.
     seedProject({ pous: [{ ...makePou('Main', 'ld', { rungs: [] }) }] })
 
-    const result = await executeTool('create_pou', { name: 'main', type: 'program', language: 'st', body: 'x := 1;' })
+    const result = await executeTool(store, 'create_pou', {
+      name: 'main',
+      type: 'program',
+      language: 'st',
+      body: 'x := 1;',
+    })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('graphical POU')
   })
 
   it('creates a main POU normally when the project has none', async () => {
-    const result = await executeTool('create_pou', { name: 'main', type: 'program', language: 'st' })
+    const result = await executeTool(store, 'create_pou', { name: 'main', type: 'program', language: 'st' })
 
     expect(result.success).toBe(true)
     expect(pouNamed('main')).toBeDefined()
@@ -282,7 +297,7 @@ describe('update_pou_body', () => {
   it('replaces the stored body', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'old := 1;')] })
 
-    const result = await executeTool('update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
+    const result = await executeTool(store, 'update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
 
     expect(result.success).toBe(true)
     expect(bodyOf('Conveyor')).toBe('new := 2;')
@@ -291,9 +306,9 @@ describe('update_pou_body', () => {
   it('records the before/after pair so the change stays reviewable with no editor mounted', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'old := 1;')] })
 
-    await executeTool('update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
+    await executeTool(store, 'update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
 
-    const diff = openPLCStoreBase.getState().ai.pendingDiffs.Conveyor
+    const diff = store.getState().ai.pendingDiffs.Conveyor
     expect(diff?.oldBody).toBe('old := 1;')
     expect(diff?.newBody).toBe('new := 2;')
   })
@@ -307,7 +322,7 @@ describe('update_pou_body', () => {
     }
     window.addEventListener('ai-pou-updated', listener)
 
-    await executeTool('update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
+    await executeTool(store, 'update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
     window.removeEventListener('ai-pou-updated', listener)
 
     expect(seen).toEqual([{ pouName: 'Conveyor', body: 'new := 2;', oldBody: 'old := 1;' }])
@@ -316,16 +331,16 @@ describe('update_pou_body', () => {
   it('leaves no pending diff when the new body is identical to the old one', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'same;')] })
 
-    const result = await executeTool('update_pou_body', { pouName: 'Conveyor', code: 'same;' })
+    const result = await executeTool(store, 'update_pou_body', { pouName: 'Conveyor', code: 'same;' })
 
     expect(result.success).toBe(true)
-    expect(openPLCStoreBase.getState().ai.pendingDiffs.Conveyor).toBeUndefined()
+    expect(store.getState().ai.pendingDiffs.Conveyor).toBeUndefined()
   })
 
   it('strips a wrapper the model re-added around an existing POU', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'old;')] })
 
-    await executeTool('update_pou_body', {
+    await executeTool(store, 'update_pou_body', {
       pouName: 'Conveyor',
       code: 'PROGRAM Conveyor\nVAR_INPUT\n  start : BOOL;\nEND_VAR\nmotor := start;\nEND_PROGRAM',
     })
@@ -339,7 +354,7 @@ describe('update_pou_body', () => {
   ])('refuses malformed input with %s', async (_label, input) => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'old;')] })
 
-    const result = await executeTool('update_pou_body', input)
+    const result = await executeTool(store, 'update_pou_body', input)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required fields')
@@ -347,7 +362,7 @@ describe('update_pou_body', () => {
   })
 
   it('refuses an unknown POU instead of creating one', async () => {
-    const result = await executeTool('update_pou_body', { pouName: 'Ghost', code: 'x := 1;' })
+    const result = await executeTool(store, 'update_pou_body', { pouName: 'Ghost', code: 'x := 1;' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found')
@@ -361,7 +376,7 @@ describe('update_pou_body', () => {
     const graph = { rungs: [] }
     seedProject({ pous: [makePou('Diagram', language, graph)] })
 
-    const result = await executeTool('update_pou_body', { pouName: 'Diagram', code: 'x := 1;' })
+    const result = await executeTool(store, 'update_pou_body', { pouName: 'Diagram', code: 'x := 1;' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Cannot update body of graphical POU')
@@ -373,7 +388,7 @@ describe('create_variable', () => {
   it('adds a local variable to the POU with the base type resolved', async () => {
     seedProject({ pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('create_variable', {
+    const result = await executeTool(store, 'create_variable', {
       pouName: 'Conveyor',
       name: 'motor',
       type: 'BOOL',
@@ -395,7 +410,7 @@ describe('create_variable', () => {
   it('defaults an unspecified class to local', async () => {
     seedProject({ pous: [makePou('Conveyor')] })
 
-    await executeTool('create_variable', { pouName: 'Conveyor', name: 'counter', type: 'INT' })
+    await executeTool(store, 'create_variable', { pouName: 'Conveyor', name: 'counter', type: 'INT' })
 
     expect(varsOf('Conveyor')[0].class).toBe('local')
   })
@@ -404,13 +419,13 @@ describe('create_variable', () => {
     // Getting this wrong emits `motor : Motor;` as a base type instead of a user-data-type reference.
     seedProject({ pous: [makePou('Conveyor')], dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
 
-    await executeTool('create_variable', { pouName: 'Conveyor', name: 'm', type: 'MotorState' })
+    await executeTool(store, 'create_variable', { pouName: 'Conveyor', name: 'm', type: 'MotorState' })
 
     expect(varsOf('Conveyor')[0].type).toEqual({ definition: 'user-data-type', value: 'MotorState' })
   })
 
   it('adds a global variable with the global class when no POU is named', async () => {
-    const result = await executeTool('create_variable', { name: 'sharedFlag', type: 'BOOL' })
+    const result = await executeTool(store, 'create_variable', { name: 'sharedFlag', type: 'BOOL' })
 
     expect(result.message).toContain('as global')
     expect(globals()).toEqual([expect.objectContaining({ name: 'sharedFlag', class: 'global' })])
@@ -420,7 +435,7 @@ describe('create_variable', () => {
     // The slice never silently replaces a declaration; the tool still reports the requested name, not the actual one.
     seedProject({ pous: [makePou('Conveyor', 'st', '', [makeVariable('motor', 'BOOL')])] })
 
-    const result = await executeTool('create_variable', { pouName: 'Conveyor', name: 'motor', type: 'BOOL' })
+    const result = await executeTool(store, 'create_variable', { pouName: 'Conveyor', name: 'motor', type: 'BOOL' })
 
     expect(result.success).toBe(true)
     expect(varsOf('Conveyor').map((v) => v.name)).toEqual(['motor', 'motor0'])
@@ -432,7 +447,7 @@ describe('create_variable', () => {
   ])('refuses malformed input with %s', async (_label, input) => {
     seedProject({ pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('create_variable', input)
+    const result = await executeTool(store, 'create_variable', input)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required fields')
@@ -440,7 +455,7 @@ describe('create_variable', () => {
   })
 
   it('refuses an unknown POU', async () => {
-    const result = await executeTool('create_variable', { pouName: 'Ghost', name: 'x', type: 'INT' })
+    const result = await executeTool(store, 'create_variable', { pouName: 'Ghost', name: 'x', type: 'INT' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('POU "Ghost" not found')
@@ -450,7 +465,11 @@ describe('create_variable', () => {
     // An illegal name reaches the on-disk declaration text and breaks the reopen parse.
     seedProject({ pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('create_variable', { pouName: 'Conveyor', name: 'motor speed', type: 'INT' })
+    const result = await executeTool(store, 'create_variable', {
+      pouName: 'Conveyor',
+      name: 'motor speed',
+      type: 'INT',
+    })
 
     expect(result.success).toBe(false)
     expect(varsOf('Conveyor')).toHaveLength(0)
@@ -461,30 +480,30 @@ describe('delete_pou', () => {
   it('removes the POU from the project', async () => {
     seedProject({ pous: [makePou('Conveyor'), makePou('Keeper')] })
 
-    const result = await executeTool('delete_pou', { pouName: 'Conveyor' })
+    const result = await executeTool(store, 'delete_pou', { pouName: 'Conveyor' })
 
     expect(result.success).toBe(true)
     expect(project().pous.map((p) => p.name)).toEqual(['Keeper'])
   })
 
   it('also removes the library entry so a deleted block cannot still be placed', async () => {
-    await executeTool('create_pou', { name: 'Debounce', type: 'function-block', language: 'st' })
+    await executeTool(store, 'create_pou', { name: 'Debounce', type: 'function-block', language: 'st' })
 
-    await executeTool('delete_pou', { pouName: 'Debounce' })
+    await executeTool(store, 'delete_pou', { pouName: 'Debounce' })
 
-    expect(openPLCStoreBase.getState().libraries.user.some((l) => l.name === 'Debounce')).toBe(false)
+    expect(store.getState().libraries.user.some((l) => l.name === 'Debounce')).toBe(false)
   })
 
   it('closes the editor model so no tab survives pointing at a deleted POU', async () => {
-    await executeTool('create_pou', { name: 'Doomed', type: 'program', language: 'st' })
+    await executeTool(store, 'create_pou', { name: 'Doomed', type: 'program', language: 'st' })
 
-    await executeTool('delete_pou', { pouName: 'Doomed' })
+    await executeTool(store, 'delete_pou', { pouName: 'Doomed' })
 
-    expect(openPLCStoreBase.getState().editors.some((e) => e.meta.name === 'Doomed')).toBe(false)
+    expect(store.getState().editors.some((e) => e.meta.name === 'Doomed')).toBe(false)
   })
 
   it('refuses a missing pouName', async () => {
-    const result = await executeTool('delete_pou', {})
+    const result = await executeTool(store, 'delete_pou', {})
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: pouName')
@@ -493,7 +512,7 @@ describe('delete_pou', () => {
   it('refuses an unknown POU rather than reporting a delete that removed nothing', async () => {
     seedProject({ pous: [makePou('Keeper')] })
 
-    const result = await executeTool('delete_pou', { pouName: 'Ghost' })
+    const result = await executeTool(store, 'delete_pou', { pouName: 'Ghost' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found')
@@ -505,7 +524,7 @@ describe('update_variable', () => {
   it('renames, retypes and reclasses a POU variable in one call', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', '', [makeVariable('old', 'INT')])] })
 
-    const result = await executeTool('update_variable', {
+    const result = await executeTool(store, 'update_variable', {
       pouName: 'Conveyor',
       currentName: 'old',
       newName: 'fresh',
@@ -531,7 +550,7 @@ describe('update_variable', () => {
       dataTypes: [makeStruct('MotorState', [['speed', 'INT']])],
     })
 
-    await executeTool('update_variable', { pouName: 'Conveyor', currentName: 'm', type: 'MotorState' })
+    await executeTool(store, 'update_variable', { pouName: 'Conveyor', currentName: 'm', type: 'MotorState' })
 
     expect(varsOf('Conveyor')[0].type).toEqual({ definition: 'user-data-type', value: 'MotorState' })
   })
@@ -539,21 +558,21 @@ describe('update_variable', () => {
   it('updates a global variable when no POU is named', async () => {
     seedProject({ globalVariables: [makeVariable('flag', 'BOOL', 'global')] })
 
-    const result = await executeTool('update_variable', { currentName: 'flag', newName: 'systemFlag' })
+    const result = await executeTool(store, 'update_variable', { currentName: 'flag', newName: 'systemFlag' })
 
     expect(result.success).toBe(true)
     expect(globals()[0].name).toBe('systemFlag')
   })
 
   it('refuses a missing currentName', async () => {
-    const result = await executeTool('update_variable', { pouName: 'Conveyor' })
+    const result = await executeTool(store, 'update_variable', { pouName: 'Conveyor' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: currentName')
   })
 
   it('refuses an unknown POU', async () => {
-    const result = await executeTool('update_variable', { pouName: 'Ghost', currentName: 'x' })
+    const result = await executeTool(store, 'update_variable', { pouName: 'Ghost', currentName: 'x' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('POU "Ghost" not found')
@@ -562,14 +581,14 @@ describe('update_variable', () => {
   it('names the POU scope when the variable is not there', async () => {
     seedProject({ pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('update_variable', { pouName: 'Conveyor', currentName: 'ghost' })
+    const result = await executeTool(store, 'update_variable', { pouName: 'Conveyor', currentName: 'ghost' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found in POU "Conveyor"')
   })
 
   it('names the global scope when the variable is not there', async () => {
-    const result = await executeTool('update_variable', { currentName: 'ghost' })
+    const result = await executeTool(store, 'update_variable', { currentName: 'ghost' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found in global scope')
@@ -580,7 +599,7 @@ describe('update_variable', () => {
       pous: [makePou('Conveyor', 'st', '', [makeVariable('a'), makeVariable('b')])],
     })
 
-    const result = await executeTool('update_variable', { pouName: 'Conveyor', currentName: 'a', newName: 'b' })
+    const result = await executeTool(store, 'update_variable', { pouName: 'Conveyor', currentName: 'a', newName: 'b' })
 
     expect(result.success).toBe(false)
     expect(varsOf('Conveyor').map((v) => v.name)).toEqual(['a', 'b'])
@@ -591,7 +610,7 @@ describe('delete_variable', () => {
   it('removes the named variable and leaves its siblings alone', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', '', [makeVariable('a'), makeVariable('b')])] })
 
-    const result = await executeTool('delete_variable', { pouName: 'Conveyor', variableName: 'a' })
+    const result = await executeTool(store, 'delete_variable', { pouName: 'Conveyor', variableName: 'a' })
 
     expect(result.success).toBe(true)
     expect(varsOf('Conveyor').map((v) => v.name)).toEqual(['b'])
@@ -600,21 +619,21 @@ describe('delete_variable', () => {
   it('removes a global variable when no POU is named', async () => {
     seedProject({ globalVariables: [makeVariable('flag', 'BOOL', 'global')] })
 
-    const result = await executeTool('delete_variable', { variableName: 'flag' })
+    const result = await executeTool(store, 'delete_variable', { variableName: 'flag' })
 
     expect(result.success).toBe(true)
     expect(globals()).toHaveLength(0)
   })
 
   it('refuses a missing variableName', async () => {
-    const result = await executeTool('delete_variable', { pouName: 'Conveyor' })
+    const result = await executeTool(store, 'delete_variable', { pouName: 'Conveyor' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: variableName')
   })
 
   it('refuses an unknown POU', async () => {
-    const result = await executeTool('delete_variable', { pouName: 'Ghost', variableName: 'x' })
+    const result = await executeTool(store, 'delete_variable', { pouName: 'Ghost', variableName: 'x' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('POU "Ghost" not found')
@@ -623,7 +642,7 @@ describe('delete_variable', () => {
   it('refuses an unknown variable rather than reporting a delete that removed nothing', async () => {
     seedProject({ pous: [makePou('Conveyor', 'st', '', [makeVariable('a')])] })
 
-    const result = await executeTool('delete_variable', { pouName: 'Conveyor', variableName: 'ghost' })
+    const result = await executeTool(store, 'delete_variable', { pouName: 'Conveyor', variableName: 'ghost' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found in POU "Conveyor"')
@@ -631,7 +650,7 @@ describe('delete_variable', () => {
   })
 
   it('names the global scope when the global is not there', async () => {
-    const result = await executeTool('delete_variable', { variableName: 'ghost' })
+    const result = await executeTool(store, 'delete_variable', { variableName: 'ghost' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found in global scope')
@@ -644,7 +663,7 @@ describe('delete_variable', () => {
       pous: [makePou('Conveyor', 'st', '', [makeVariable('shared', 'BOOL', 'external')])],
     })
 
-    const result = await executeTool('delete_variable', { variableName: 'shared' })
+    const result = await executeTool(store, 'delete_variable', { variableName: 'shared' })
 
     expect(result.success).toBe(false)
     expect(globals()).toHaveLength(1)
@@ -654,7 +673,7 @@ describe('delete_variable', () => {
 describe('create_datatype', () => {
   it('creates a structure carrying every field, not just the skeleton', async () => {
     // Skeleton and content are two store calls; if only the first ran, the struct would be empty.
-    const result = await executeTool('create_datatype', {
+    const result = await executeTool(store, 'create_datatype', {
       name: 'MotorState',
       derivation: 'structure',
       fields: [
@@ -673,7 +692,7 @@ describe('create_datatype', () => {
   })
 
   it('creates an enumeration carrying every value', async () => {
-    const result = await executeTool('create_datatype', {
+    const result = await executeTool(store, 'create_datatype', {
       name: 'Mode',
       derivation: 'enumerated',
       values: ['IDLE', 'RUNNING'],
@@ -689,7 +708,7 @@ describe('create_datatype', () => {
   })
 
   it('creates an array carrying its base type and dimensions', async () => {
-    const result = await executeTool('create_datatype', {
+    const result = await executeTool(store, 'create_datatype', {
       name: 'Readings',
       derivation: 'array',
       baseType: 'REAL',
@@ -708,7 +727,7 @@ describe('create_datatype', () => {
     ['no name', { derivation: 'structure' }],
     ['no derivation', { name: 'X' }],
   ])('refuses malformed input with %s', async (_label, input) => {
-    const result = await executeTool('create_datatype', input)
+    const result = await executeTool(store, 'create_datatype', input)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required fields')
@@ -716,7 +735,7 @@ describe('create_datatype', () => {
   })
 
   it('refuses a derivation the editor has no representation for', async () => {
-    const result = await executeTool('create_datatype', { name: 'X', derivation: 'union' })
+    const result = await executeTool(store, 'create_datatype', { name: 'X', derivation: 'union' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Invalid derivation')
@@ -726,7 +745,11 @@ describe('create_datatype', () => {
   it('refuses a name already taken by a data type', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE'])] })
 
-    const result = await executeTool('create_datatype', { name: 'Mode', derivation: 'enumerated', values: ['ON'] })
+    const result = await executeTool(store, 'create_datatype', {
+      name: 'Mode',
+      derivation: 'enumerated',
+      values: ['ON'],
+    })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('already exists')
@@ -736,7 +759,7 @@ describe('create_datatype', () => {
   it('refuses a name already taken by a POU', async () => {
     seedProject({ pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('create_datatype', {
+    const result = await executeTool(store, 'create_datatype', {
       name: 'Conveyor',
       derivation: 'structure',
       fields: [{ name: 'x', type: 'INT' }],
@@ -748,7 +771,7 @@ describe('create_datatype', () => {
   })
 
   it('refuses a structure with two fields of the same name', async () => {
-    const result = await executeTool('create_datatype', {
+    const result = await executeTool(store, 'create_datatype', {
       name: 'Bad',
       derivation: 'structure',
       fields: [
@@ -768,7 +791,7 @@ describe('create_datatype', () => {
     ['an array with no baseType', { name: 'A', derivation: 'array', dimensions: ['0..9'] }, 'baseType'],
     ['an array with no dimensions', { name: 'A', derivation: 'array', baseType: 'INT' }, 'dimensions'],
   ])('refuses %s', async (_label, input, expected) => {
-    const result = await executeTool('create_datatype', input)
+    const result = await executeTool(store, 'create_datatype', input)
 
     expect(result.success).toBe(false)
     expect(result.message).toContain(expected)
@@ -780,7 +803,7 @@ describe('update_datatype', () => {
   it('replaces a structure’s field list', async () => {
     seedProject({ dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
 
-    const result = await executeTool('update_datatype', {
+    const result = await executeTool(store, 'update_datatype', {
       name: 'MotorState',
       fields: [{ name: 'rpm', type: 'DINT' }],
     })
@@ -793,7 +816,7 @@ describe('update_datatype', () => {
     // Partial updates must never be read as "replace with nothing".
     seedProject({ dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
 
-    const result = await executeTool('update_datatype', { name: 'MotorState', newName: 'DriveState' })
+    const result = await executeTool(store, 'update_datatype', { name: 'MotorState', newName: 'DriveState' })
 
     expect(result.success).toBe(true)
     expect(datatypeNamed('MotorState')).toBeUndefined()
@@ -803,7 +826,7 @@ describe('update_datatype', () => {
   it('replaces an enumeration’s values and initial value', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE'])] })
 
-    await executeTool('update_datatype', { name: 'Mode', values: ['ON', 'OFF'], initialValue: 'ON' })
+    await executeTool(store, 'update_datatype', { name: 'Mode', values: ['ON', 'OFF'], initialValue: 'ON' })
 
     expect(datatypeNamed('Mode')).toMatchObject({
       values: [{ description: 'ON' }, { description: 'OFF' }],
@@ -814,7 +837,7 @@ describe('update_datatype', () => {
   it('keeps an enumeration’s values when only the initial value is sent', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE', 'RUNNING'])] })
 
-    await executeTool('update_datatype', { name: 'Mode', initialValue: 'RUNNING' })
+    await executeTool(store, 'update_datatype', { name: 'Mode', initialValue: 'RUNNING' })
 
     expect(enumValues('Mode')).toEqual([{ description: 'IDLE' }, { description: 'RUNNING' }])
   })
@@ -822,7 +845,7 @@ describe('update_datatype', () => {
   it('replaces an array’s base type and dimensions', async () => {
     seedProject({ dataTypes: [makeArray('Readings', 'INT', ['0..9'])] })
 
-    await executeTool('update_datatype', { name: 'Readings', baseType: 'REAL', dimensions: ['0..99', '0..1'] })
+    await executeTool(store, 'update_datatype', { name: 'Readings', baseType: 'REAL', dimensions: ['0..99', '0..1'] })
 
     expect(datatypeNamed('Readings')).toMatchObject({
       baseType: { definition: 'base-type', value: 'real' },
@@ -833,7 +856,7 @@ describe('update_datatype', () => {
   it('keeps an array’s shape when nothing about it was sent', async () => {
     seedProject({ dataTypes: [makeArray('Readings', 'INT', ['0..9'])] })
 
-    const result = await executeTool('update_datatype', { name: 'Readings' })
+    const result = await executeTool(store, 'update_datatype', { name: 'Readings' })
 
     expect(result.success).toBe(true)
     expect(datatypeNamed('Readings')).toMatchObject({
@@ -843,14 +866,14 @@ describe('update_datatype', () => {
   })
 
   it('refuses a missing name', async () => {
-    const result = await executeTool('update_datatype', {})
+    const result = await executeTool(store, 'update_datatype', {})
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: name')
   })
 
   it('refuses an unknown data type instead of creating one', async () => {
-    const result = await executeTool('update_datatype', { name: 'Ghost', values: ['A'] })
+    const result = await executeTool(store, 'update_datatype', { name: 'Ghost', values: ['A'] })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found')
@@ -860,7 +883,7 @@ describe('update_datatype', () => {
   it('refuses duplicate field names before touching the stored type', async () => {
     seedProject({ dataTypes: [makeStruct('MotorState', [['speed', 'INT']])] })
 
-    const result = await executeTool('update_datatype', {
+    const result = await executeTool(store, 'update_datatype', {
       name: 'MotorState',
       fields: [
         { name: 'a', type: 'INT' },
@@ -876,7 +899,7 @@ describe('update_datatype', () => {
   it('refuses a rename onto an existing data type', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE']), makeEnum('Other', ['X'])] })
 
-    const result = await executeTool('update_datatype', { name: 'Mode', newName: 'Other' })
+    const result = await executeTool(store, 'update_datatype', { name: 'Mode', newName: 'Other' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('data type named "Other" already exists')
@@ -886,7 +909,7 @@ describe('update_datatype', () => {
   it('refuses a rename onto an existing POU', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE'])], pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('update_datatype', { name: 'Mode', newName: 'Conveyor' })
+    const result = await executeTool(store, 'update_datatype', { name: 'Mode', newName: 'Conveyor' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('POU named "Conveyor" already exists')
@@ -905,8 +928,8 @@ describe('update_datatype', () => {
     })
 
     // The rename parks on the modal promise synchronously, before this call returns its own promise.
-    const pending = executeTool('update_datatype', { name: 'MotorState', newName: 'DriveState' })
-    openPLCStoreBase.getState().datatypeActions.respondToPendingRename(false)
+    const pending = executeTool(store, 'update_datatype', { name: 'MotorState', newName: 'DriveState' })
+    store.getState().datatypeActions.respondToPendingRename(false)
     const result = await pending
 
     expect(result.success).toBe(false)
@@ -925,8 +948,8 @@ describe('update_datatype', () => {
       ],
     })
 
-    const pending = executeTool('update_datatype', { name: 'MotorState', newName: 'DriveState' })
-    openPLCStoreBase.getState().datatypeActions.respondToPendingRename(true)
+    const pending = executeTool(store, 'update_datatype', { name: 'MotorState', newName: 'DriveState' })
+    store.getState().datatypeActions.respondToPendingRename(true)
     const result = await pending
 
     expect(result.success).toBe(true)
@@ -937,7 +960,7 @@ describe('update_datatype', () => {
   it('treats a newName equal to the current name as no rename at all', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE'])] })
 
-    const result = await executeTool('update_datatype', { name: 'Mode', newName: 'Mode', values: ['ON'] })
+    const result = await executeTool(store, 'update_datatype', { name: 'Mode', newName: 'Mode', values: ['ON'] })
 
     expect(result.success).toBe(true)
     expect(result.message).not.toContain('renamed')
@@ -949,22 +972,22 @@ describe('delete_datatype', () => {
   it('removes the data type from the project', async () => {
     seedProject({ dataTypes: [makeEnum('Mode', ['IDLE']), makeEnum('Keeper', ['X'])] })
 
-    const result = await executeTool('delete_datatype', { name: 'Mode' })
+    const result = await executeTool(store, 'delete_datatype', { name: 'Mode' })
 
     expect(result.success).toBe(true)
     expect(project().dataTypes.map((d) => d.name)).toEqual(['Keeper'])
   })
 
   it('closes the editor model so no tab survives pointing at a deleted type', async () => {
-    await executeTool('create_datatype', { name: 'Mode', derivation: 'enumerated', values: ['IDLE'] })
+    await executeTool(store, 'create_datatype', { name: 'Mode', derivation: 'enumerated', values: ['IDLE'] })
 
-    await executeTool('delete_datatype', { name: 'Mode' })
+    await executeTool(store, 'delete_datatype', { name: 'Mode' })
 
-    expect(openPLCStoreBase.getState().editors.some((e) => e.meta.name === 'Mode')).toBe(false)
+    expect(store.getState().editors.some((e) => e.meta.name === 'Mode')).toBe(false)
   })
 
   it('refuses a missing name', async () => {
-    const result = await executeTool('delete_datatype', {})
+    const result = await executeTool(store, 'delete_datatype', {})
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Missing required field: name')
@@ -973,7 +996,7 @@ describe('delete_datatype', () => {
   it('refuses an unknown data type rather than reporting a delete that removed nothing', async () => {
     seedProject({ dataTypes: [makeEnum('Keeper', ['X'])] })
 
-    const result = await executeTool('delete_datatype', { name: 'Ghost' })
+    const result = await executeTool(store, 'delete_datatype', { name: 'Ghost' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('not found')
@@ -987,7 +1010,7 @@ describe('read_project_state', () => {
       pous: [makePou('Conveyor', 'st', 'x := 1;', [makeVariable('speed', 'INT')])],
     })
 
-    const result = await executeTool('read_project_state', {})
+    const result = await executeTool(store, 'read_project_state', {})
 
     expect(result.success).toBe(true)
     expect(result.message).toContain('POUs (1):')
@@ -998,7 +1021,7 @@ describe('read_project_state', () => {
   it('reports a graphical body as zero characters rather than serialising the graph', async () => {
     seedProject({ pous: [makePou('Rungs', 'ld', { rungs: [{ id: 'r1' }] })] })
 
-    const result = await executeTool('read_project_state', {})
+    const result = await executeTool(store, 'read_project_state', {})
 
     expect(result.message).toContain('(0 vars, 0 chars)')
     expect(result.message).not.toContain('r1')
@@ -1009,7 +1032,7 @@ describe('read_project_state', () => {
       pous: [makePou('Conveyor', 'st', '', [{ ...makeVariable('speed'), initialValue: '5' }])],
     })
 
-    const result = await executeTool('read_project_state', {})
+    const result = await executeTool(store, 'read_project_state', {})
 
     expect(result.message).toContain('speed : INT := 5')
   })
@@ -1024,7 +1047,7 @@ describe('read_project_state', () => {
       ],
     })
 
-    const result = await executeTool('read_project_state', {})
+    const result = await executeTool(store, 'read_project_state', {})
 
     expect(result.message).toContain('Global Variables (1):')
     expect(result.message).toContain('- flag : BOOL := TRUE')
@@ -1036,7 +1059,7 @@ describe('read_project_state', () => {
   it('omits the globals and data types sections when there are none', async () => {
     seedProject({ pous: [makePou('Conveyor')] })
 
-    const result = await executeTool('read_project_state', {})
+    const result = await executeTool(store, 'read_project_state', {})
 
     expect(result.message).not.toContain('Global Variables')
     expect(result.message).not.toContain('Data Types')
@@ -1051,10 +1074,10 @@ describe('project ST cache after a mutating tool', () => {
     seedProject({ pous: [makePou('Conveyor', 'st', 'old;'), makePou('Diagram', 'ld', { rungs: [] })] })
     const { transpile, callCount } = countingTranspiler(diagramSt)
     const options = { transpileProject: transpile }
-    await executeTool('read_pou_body', { name: 'Diagram' }, options)
+    await executeTool(store, 'read_pou_body', { name: 'Diagram' }, options)
 
-    await executeTool('update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
-    const result = await executeTool('read_pou_body', { name: 'Diagram' }, options)
+    await executeTool(store, 'update_pou_body', { pouName: 'Conveyor', code: 'new := 2;' })
+    const result = await executeTool(store, 'read_pou_body', { name: 'Diagram' }, options)
 
     expect(result.success).toBe(true)
     expect(callCount()).toBe(2)
@@ -1067,7 +1090,7 @@ describe('project ST cache after a mutating tool', () => {
     const { transpile, callCount } = countingTranspiler(diagramSt)
     await transpileProjectToST(snapshot, transpile)
 
-    await executeTool('create_pou', { name: 'Added', type: 'program', language: 'st' })
+    await executeTool(store, 'create_pou', { name: 'Added', type: 'program', language: 'st' })
     await transpileProjectToST(snapshot, transpile)
 
     expect(callCount()).toBe(2)
@@ -1079,7 +1102,7 @@ describe('project ST cache after a mutating tool', () => {
     const { transpile, callCount } = countingTranspiler(diagramSt)
     await transpileProjectToST(snapshot, transpile)
 
-    await executeTool('update_pou_body', { pouName: 'Ghost', code: 'x := 1;' })
+    await executeTool(store, 'update_pou_body', { pouName: 'Ghost', code: 'x := 1;' })
     await transpileProjectToST(snapshot, transpile)
 
     expect(callCount()).toBe(1)

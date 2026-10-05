@@ -24,7 +24,7 @@ import type {
   PouLanguage,
   RungLadderState,
 } from '../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore } from '../store'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { OPENPLC_LIGHT_EDITOR_FOREGROUND, resolveOpenPlcTokenColor } from '../utils/monaco/openplc-theme-data'
 import { toast } from '../utils/toast'
@@ -165,9 +165,9 @@ async function buildPrintPou(pou: PLCPou): Promise<PrintPou | null> {
 }
 
 /** Builds one `PrintPou` per selected POU, in `project.data.pous` order. Exported for tests. */
-export async function collectSelectedPous(selectedNames: string[]): Promise<PrintPou[]> {
+export async function collectSelectedPous(store: OpenPLCStore, selectedNames: string[]): Promise<PrintPou[]> {
   const selected = new Set(selectedNames)
-  const { project } = openPLCStoreBase.getState()
+  const { project } = store.getState()
   const pous: PrintPou[] = []
   for (const pou of project.data.pous) {
     if (!selected.has(pou.name)) continue
@@ -184,9 +184,10 @@ export async function collectSelectedPous(selectedNames: string[]): Promise<Prin
  * has for serialization).
  */
 export async function renderPrintPdf(
+  store: OpenPLCStore,
   projectPort: ProjectPort,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; error: string }> {
-  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
+  const staleFlows = flushFlowWriteBacks(store.getState)
   if (staleFlows.length > 0) {
     return {
       ok: false,
@@ -195,8 +196,8 @@ export async function renderPrintPdf(
   }
 
   try {
-    const { project, print } = openPLCStoreBase.getState()
-    const pous = await collectSelectedPous(print.selectedPouNames)
+    const { project, print } = store.getState()
+    const pous = await collectSelectedPous(store, print.selectedPouNames)
     if (pous.length === 0) {
       return { ok: false, error: 'No printable POUs are selected.' }
     }
@@ -225,8 +226,12 @@ export async function renderPrintPdf(
 }
 
 /** Persist already-rendered PDF bytes (the export wizard's final step — reuses the exact preview bytes). */
-export async function executeExportPdf(projectPort: ProjectPort, bytes: Uint8Array): Promise<{ success: boolean }> {
-  const { project } = openPLCStoreBase.getState()
+export async function executeExportPdf(
+  store: OpenPLCStore,
+  projectPort: ProjectPort,
+  bytes: Uint8Array,
+): Promise<{ success: boolean }> {
+  const { project } = store.getState()
 
   try {
     const fileName = `${project.meta.name}.pdf`

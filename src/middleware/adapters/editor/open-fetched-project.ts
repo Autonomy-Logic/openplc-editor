@@ -19,11 +19,12 @@
  * other direction.
  */
 
-import { openPLCStoreBase } from '../../../frontend/store'
+import type { OpenPLCStore } from '../../../frontend/store'
 import type { ProjectPort } from '../../shared/ports/project-port'
 import type { FetchedProject } from '../../shared/ports/runtime-port'
 
 export async function openFetchedProject(
+  store: OpenPLCStore,
   project: FetchedProject,
   // Only the one method, so a test needs no stand-in for the rest of the port
   // and no assertion to pretend it has one.
@@ -45,6 +46,6 @@ export async function openFetchedProject(
   if (!opened.success || !opened.data) {
     return { success: false, error: opened.error?.description ?? 'The retrieved project could not be opened.' }
   }
-  openPLCStoreBase.getState().sharedWorkspaceActions.openRetrievedProject(opened.data)
+  store.getState().sharedWorkspaceActions.openRetrievedProject(opened.data)
   return { success: true }
 }

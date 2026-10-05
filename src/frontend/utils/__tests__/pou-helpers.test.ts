@@ -1,5 +1,5 @@
 import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import { createTestStore } from '../../store/testing'
 import {
   findFunctionBlockExternalVariables,
   findFunctionBlockVariables,
@@ -18,7 +18,7 @@ import {
  *  runtime loads.  Helpers used to read this directly from the store;
  *  the refactor passes it through as an explicit param so utils don't
  *  cross the store boundary (arch validator forbids utils → store). */
-const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
+const SYSTEM_LIBS = createTestStore().getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // normalizeTypeString

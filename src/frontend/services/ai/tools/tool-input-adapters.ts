@@ -7,7 +7,7 @@ import type {
   PLCVariable,
   PLCVariableType,
 } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
 
 type TextualLanguage = 'st' | 'il' | 'python' | 'cpp'
 
@@ -64,8 +64,11 @@ export type UpdatePouBodyInput = {
   code: string
 }
 
-export function adaptUpdatePouBody(input: UpdatePouBodyInput): { name: string; content: PLCBody } | null {
-  const state = openPLCStoreBase.getState()
+export function adaptUpdatePouBody(
+  store: OpenPLCStore,
+  input: UpdatePouBodyInput,
+): { name: string; content: PLCBody } | null {
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === input.pouName)
   if (!pou) return null
   return {

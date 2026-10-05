@@ -22,7 +22,7 @@ import { useEffect } from 'react'
 
 import { useDevice } from '../../middleware/shared/providers'
 import { resolveRuntimeDebugChannel } from '../services/device-link-resolution'
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 
 /**
  * Keep the main process's session in step with a Runtime v3/v4 login.
@@ -38,6 +38,7 @@ import { useOpenPLCStore } from '../store'
  * time. No command ever resolves anything.
  */
 const useRuntimeSession = (): void => {
+  const store = useOpenPLCStoreApi()
   const device = useDevice()
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
 
@@ -49,24 +50,24 @@ const useRuntimeSession = (): void => {
       return
     }
 
-    const store = useOpenPLCStore.getState()
-    const boardTarget = store.deviceDefinitions.configuration.deviceBoard
-    const boardInfo = store.deviceAvailableOptions.availableBoards.get(boardTarget)
-    const address = store.runtimeConnection.ipAddress
+    const state = store.getState()
+    const boardTarget = state.deviceDefinitions.configuration.deviceBoard
+    const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardTarget)
+    const address = state.runtimeConnection.ipAddress
 
     // Every early return says why. Returning quietly is what let a runtime target
     // end up with no session at all while the UI showed it connected, so that every
     // command answered "not connected" on a target the user had just uploaded to.
     if (!address) {
-      store.consoleActions.addLog({
+      state.consoleActions.addLog({
         level: 'warning',
         message: '[connection] runtime is connected but has no address recorded; no session opened',
       })
       return
     }
-    const debugChannel = resolveRuntimeDebugChannel(boardTarget, boardInfo)
+    const debugChannel = resolveRuntimeDebugChannel(store, boardTarget, boardInfo)
     if (!debugChannel) {
-      store.consoleActions.addLog({
+      state.consoleActions.addLog({
         level: 'warning',
         message: `[connection] no debug channel could be described for ${boardTarget}; debugging will not be available`,
       })
@@ -75,7 +76,7 @@ const useRuntimeSession = (): void => {
 
     void device.openRuntimeSession({ address, debug: debugChannel }).then((result) => {
       if (!result.success) {
-        store.consoleActions.addLog({
+        state.consoleActions.addLog({
           level: 'error',
           message: `[connection] could not open the runtime session: ${result.error ?? 'unknown error'}`,
         })
@@ -86,7 +87,7 @@ const useRuntimeSession = (): void => {
     // every refresh, and it is redundant now: the main-side candidate reads the
     // token manager at create() time and pushes renewals to a held channel via
     // reauth (review 2026-08-20, R1/E2).
-  }, [device, connectionStatus])
+  }, [store, device, connectionStatus])
 }
 
 export const useDeviceConnectionMonitor = (): void => {

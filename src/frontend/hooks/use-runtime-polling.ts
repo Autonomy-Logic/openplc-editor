@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import type { PlcStatus } from '../../middleware/shared/ports/types'
 import { useRuntime } from '../../middleware/shared/providers'
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 
 // Unified polling interval for both status and logs (in milliseconds).
 const POLL_INTERVAL_MS = 2000
@@ -22,6 +22,7 @@ const UPDATE_IN_FLIGHT = new Set(['pulling', 'swapping', 'verifying'])
  * Should be called once at the workspace level to ensure global polling.
  */
 export const useRuntimePolling = () => {
+  const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const jwtToken = useOpenPLCStore((state) => state.runtimeConnection.jwtToken)
@@ -36,7 +37,7 @@ export const useRuntimePolling = () => {
   const isPollingRef = useRef(false)
 
   const clearConnectionState = useCallback(() => {
-    const { deviceActions } = useOpenPLCStore.getState()
+    const { deviceActions } = store.getState()
     consecutiveFailuresRef.current = 0
     deviceActions.setRuntimeJwtToken(null)
     deviceActions.setRuntimeConnectionStatus('disconnected')
@@ -44,7 +45,7 @@ export const useRuntimePolling = () => {
     deviceActions.setPlcSwitchPosition(null)
     deviceActions.setTimingStats(null)
     deviceActions.setEthercatStatus(null)
-  }, [])
+  }, [store])
 
   const handleConnectionLost = useCallback(() => {
     if (pollIntervalRef.current) {
@@ -52,24 +53,24 @@ export const useRuntimePolling = () => {
       pollIntervalRef.current = null
     }
     clearConnectionState()
-    const { workspaceActions } = useOpenPLCStore.getState()
+    const { workspaceActions } = store.getState()
     workspaceActions.setPlcLogsVisible(false)
     workspaceActions.clearPlcLogs()
     // Name the device. Passing null here fell through to the literal
     // "Unknown", so every message from this path read "The connection to
     // Unknown has been lost".
-    const { runtimeConnection } = useOpenPLCStore.getState()
+    const { runtimeConnection } = store.getState()
     const endpoint = runtimeConnection.selectedDevice?.deviceName ?? runtimeConnection.ipAddress ?? 'the runtime'
     openModal('runtime-connection-lost', {
       label: endpoint,
       body: `The connection to ${endpoint} was lost after several failed attempts. Check that the runtime is running and reachable, then connect again.`,
     })
-  }, [clearConnectionState, openModal])
+  }, [store, clearConnectionState, openModal])
 
   const poll = useCallback(async () => {
     if (isPollingRef.current) return
 
-    const currentState = useOpenPLCStore.getState()
+    const currentState = store.getState()
     const {
       runtimeConnection: {
         connectionStatus: curStatus,
@@ -100,7 +101,7 @@ export const useRuntimePolling = () => {
       // device is connected, whatever screen is open.
       const update = await runtime.bootloader?.getUpdateProgress?.()
       if (update?.success === true && !UPDATE_IN_FLIGHT.has(update.data.state)) {
-        useOpenPLCStore.getState().deviceActions.setRuntimeUpdateInProgress(false)
+        store.getState().deviceActions.setRuntimeUpdateInProgress(false)
       }
       return
     }
@@ -208,7 +209,15 @@ export const useRuntimePolling = () => {
     } finally {
       isPollingRef.current = false
     }
-  }, [runtime, handleConnectionLost, setPlcRuntimeStatus, setPlcSwitchPosition, setTimingStats, setEthercatStatus])
+  }, [
+    store,
+    runtime,
+    handleConnectionLost,
+    setPlcRuntimeStatus,
+    setPlcSwitchPosition,
+    setTimingStats,
+    setEthercatStatus,
+  ])
 
   // Keep the store's connection token in lock-step with the platform's token
   // authority. When the authority transparently refreshes an expired token
@@ -219,13 +228,13 @@ export const useRuntimePolling = () => {
   // after the token aged out would use a stale token and 401.
   useEffect(() => {
     const unsubscribe = runtime.onTokenRefreshed?.((newToken) => {
-      useOpenPLCStore.getState().deviceActions.setRuntimeJwtToken(newToken)
+      store.getState().deviceActions.setRuntimeJwtToken(newToken)
     })
     return unsubscribe
-  }, [runtime])
+  }, [store, runtime])
 
   useEffect(() => {
-    const { workspaceActions } = useOpenPLCStore.getState()
+    const { workspaceActions } = store.getState()
 
     if (connectionStatus === 'connected' && jwtToken) {
       consecutiveFailuresRef.current = 0
@@ -251,7 +260,7 @@ export const useRuntimePolling = () => {
         pollIntervalRef.current = null
       }
     }
-  }, [connectionStatus, jwtToken, poll])
+  }, [store, connectionStatus, jwtToken, poll])
 
   return {
     isConnected: connectionStatus === 'connected',

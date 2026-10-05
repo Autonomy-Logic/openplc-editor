@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -17,6 +17,7 @@ import { BasicNodeData, ConnectionProps } from './utils/types'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const ConnectionElement = (block: ConnectionProps) => {
+  const store = useOpenPLCStoreApi()
   const { id, data, selected, type } = block
   const pouName = useBoundPou()
   const updateModelFBD = useOpenPLCStore((state) => state.editorActions.updateModelFBD)
@@ -61,7 +62,7 @@ const ConnectionElement = (block: ConnectionProps) => {
    * Update inputError state when the variable is updated
    */
   useEffect(() => {
-    const { fbdFlows } = useOpenPLCStore.getState()
+    const { fbdFlows } = store.getState()
     const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: id,
     })
@@ -91,7 +92,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   const handleSubmitConnectionValueOnTextareaBlur = (connectionName?: string) => {
     const connectionNameToSubmit = connectionName || connectionValue
 
-    const { fbdFlows } = useOpenPLCStore.getState()
+    const { fbdFlows } = store.getState()
     const {
       pou,
       rung,

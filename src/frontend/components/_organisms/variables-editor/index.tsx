@@ -6,7 +6,7 @@ import { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
 import { selectEditorForPou } from '../../../store/slices/editor/utils'
 import type { FBDFlowActions, FBDFlowState } from '../../../store/slices/fbd'
@@ -77,6 +77,7 @@ interface VariablesEditorProps {
 }
 
 const VariablesEditor = ({ name: propName, isActive: _isActive = true }: VariablesEditorProps = {}) => {
+  const store = useOpenPLCStoreApi()
   const ROWS_NOT_SELECTED = -1
   // Multi-mount support: every open POU's VariablesEditor reads ITS
   // OWN model via the shared `selectEditorForPou` helper.  This is
@@ -955,7 +956,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
         },
         ladderFlows: freshLadderFlows,
         fbdFlows: freshFBDFlows,
-      } = useOpenPLCStore.getState()
+      } = store.getState()
 
       const freshPou = freshPous.find((p) => p.name === editor.meta.name)
       const freshVariables = freshPou?.interface?.variables ?? []
