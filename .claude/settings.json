@@ -1,5 +1,8 @@
 {
   "permissions": {
+    "ask": [
+      "Bash(git worktree remove:*)"
+    ],
     "allow": [
       "Bash(npm run:*)",
       "Bash(npm test:*)",
