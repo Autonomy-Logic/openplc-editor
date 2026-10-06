@@ -9,14 +9,14 @@
  * URI — a synthetic signature stub Monaco has no model for.
  * Navigating to it would dead-end at "model not found".
  *
- * `redirectToGraphicalPou(name)` checks the Zustand store for a
+ * `redirectToGraphicalPou(store, name)` checks the Zustand store for a
  * POU with that name and an LD/FBD/SFC body, opens the matching
  * graphical editor tab, and returns true.  Returns false when the
  * POU doesn't exist or isn't graphical — caller falls back to
  * Monaco's default behaviour in that case.
  */
 
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { createEditorObjectForPou } from '../../store/slices/shared/utils'
 import { parsePouUri } from './types'
 
@@ -28,11 +28,11 @@ const GRAPHICAL_LANGUAGES = new Set(['ld', 'fbd', 'sfc'])
  * caller must always treat false as "no redirect happened" and
  * fall back to whatever the default navigation flow would be.
  */
-export function redirectToGraphicalPou(uri: string): boolean {
+export function redirectToGraphicalPou(store: OpenPLCStore, uri: string): boolean {
   const parsed = parsePouUri(uri)
   if (!parsed || parsed.kind !== 'stub') return false
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === parsed.name)
   if (!pou) return false
   if (!GRAPHICAL_LANGUAGES.has(pou.body.language)) return false

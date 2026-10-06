@@ -1,7 +1,7 @@
 import type { PLCPou, PLCVariable, PouType, VariableClass } from '../../../../middleware/shared/ports/types'
 import { lookupBaseTypeByXmlElement } from '../../iec-types-registry'
 import { parseFbdXml } from './language/fbd-xml'
-import { parseLadderXml } from './language/ladder-xml'
+import { LadderParseContext, parseLadderXml } from './language/ladder-xml'
 import { extractXhtmlText, parseDocumentationXml, parseVariableXml } from './variable-xml'
 import { asArray, asRecord, asString } from './xml-node'
 
@@ -42,11 +42,34 @@ export function parseInterfaceXml(interfaceXml: unknown): { variables: PLCVariab
   return { variables, returnType: tag !== undefined ? (lookupBaseTypeByXmlElement(tag)?.name ?? tag) : undefined }
 }
 
+export type PouHeader = Pick<PLCPou, 'name' | 'pouType' | 'interface' | 'documentation'>
+
+// Every POU's interface, read ahead of the bodies so a ladder block can be resolved against a POU declared after it.
+export function parsePouHeadersXml(pouXml: unknown): PouHeader[] {
+  return asArray(pouXml).flatMap((entryRaw) => {
+    const entry = asRecord(entryRaw)
+    const pouType = POU_TYPE_FROM_XML[asString(entry['@pouType'])]
+    if (!pouType) return []
+    const { variables, returnType } = parseInterfaceXml(entry.interface)
+    return [
+      {
+        name: asString(entry['@name']),
+        pouType,
+        interface: { variables, ...(returnType !== undefined ? { returnType } : {}) },
+        documentation: parseDocumentationXml(entry.documentation),
+      },
+    ]
+  })
+}
+
 // Reverse of `oldEditorParsePousToXML`. ST/IL/LD/FBD bodies all parse in
 // full; SFC and codesys-dialect bodies are surfaced as a non-fatal warning
 // and the POU is skipped — this importer's scope is the old-editor dialect
 // only (see xml-parser/index.ts).
-export function parsePousXml(pouXml: unknown): { pous: PLCPou[]; warnings: string[] } {
+export function parsePousXml(
+  pouXml: unknown,
+  ladderContext?: LadderParseContext,
+): { pous: PLCPou[]; warnings: string[] } {
   const pous: PLCPou[] = []
   const warnings: string[] = []
 
@@ -86,7 +109,7 @@ export function parsePousXml(pouXml: unknown): { pous: PLCPou[]; warnings: strin
       continue
     }
     if (body.LD !== undefined) {
-      const { body: ldBody, warnings: ldWarnings } = parseLadderXml(name, body.LD)
+      const { body: ldBody, warnings: ldWarnings } = parseLadderXml(name, body.LD, ladderContext)
       warnings.push(...ldWarnings)
       pous.push({
         name,

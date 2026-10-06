@@ -11,7 +11,8 @@
 
 import type { ProjectPort } from '../../../shared/ports/project-port'
 import type { FetchedProject } from '../../../shared/ports/runtime-port'
-import { openPLCStoreBase } from '../../../../frontend/store'
+import type { OpenPLCStore } from '../../../../frontend/store'
+import { createTestStore } from '../../../../frontend/store/testing'
 import { openFetchedProject } from '../open-fetched-project'
 
 const fetched: FetchedProject = { projectName: 'Irrigation Controller', payload: '/tmp/retrieved/irrigation' }
@@ -30,16 +31,21 @@ const portReturning = (response: unknown): Pick<ProjectPort, 'openProjectByPath'
 })
 
 describe('openFetchedProject', () => {
+  let store: OpenPLCStore
+  beforeEach(() => {
+    store = createTestStore()
+  })
+
   it('leaves the retrieved project open, not merely parsed', async () => {
     const port = portReturning({ success: true, data: parsedProject })
 
-    const result = await openFetchedProject(fetched, port)
+    const result = await openFetchedProject(store, fetched, port)
 
     expect(result).toEqual({ success: true })
     // The point of the whole module: the store now holds what was retrieved.
     // Reporting success without this is what dropped the user on the start
     // screen after a retrieve that had actually worked.
-    expect(openPLCStoreBase.getState().project.meta.name).toBe('Irrigation Controller')
+    expect(store.getState().project.meta.name).toBe('Irrigation Controller')
   })
 
   it('marks it as having no location the user chose', async () => {
@@ -51,15 +57,15 @@ describe('openFetchedProject', () => {
     // second, and the silent save came back.
     const port = portReturning({ success: true, data: parsedProject })
 
-    await openFetchedProject(fetched, port)
+    await openFetchedProject(store, fetched, port)
 
-    expect(openPLCStoreBase.getState().workspace.isEphemeralProject).toBe(true)
+    expect(store.getState().workspace.isEphemeralProject).toBe(true)
   })
 
   it('unpacks the payload as the path to open', async () => {
     const port = portReturning({ success: true, data: parsedProject })
 
-    await openFetchedProject(fetched, port)
+    await openFetchedProject(store, fetched, port)
 
     expect(port.openProjectByPath).toHaveBeenCalledWith('/tmp/retrieved/irrigation')
   })
@@ -67,7 +73,7 @@ describe('openFetchedProject', () => {
   it('reports the port error rather than a bare failure', async () => {
     const port = portReturning({ success: false, error: { description: 'The project directory is unreadable' } })
 
-    const result = await openFetchedProject(fetched, port)
+    const result = await openFetchedProject(store, fetched, port)
 
     expect(result).toEqual({ success: false, error: 'The project directory is unreadable' })
   })
@@ -77,7 +83,7 @@ describe('openFetchedProject', () => {
     // stringifying it would hand '[object Object]' to the open as a directory.
     const port = portReturning({ success: true, data: parsedProject })
 
-    const result = await openFetchedProject({ projectName: 'X', payload: { not: 'a path' } }, port)
+    const result = await openFetchedProject(store, { projectName: 'X', payload: { not: 'a path' } }, port)
 
     expect(result.success).toBe(false)
     expect(port.openProjectByPath).not.toHaveBeenCalled()
@@ -88,7 +94,7 @@ describe('openFetchedProject', () => {
     // reported as an open project that is not there.
     const port = portReturning({ success: true })
 
-    const result = await openFetchedProject(fetched, port)
+    const result = await openFetchedProject(store, fetched, port)
 
     expect(result.success).toBe(false)
     expect(result.error).toBe('The retrieved project could not be opened.')

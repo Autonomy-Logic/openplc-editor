@@ -7,7 +7,7 @@
  */
 
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore } from '../store'
 import type { OpenProjectResponseData } from '../store/slices/shared/types'
 import { buildProjectResponseFromPlcopenParse } from '../utils/PLC/build-plcopen-project-response'
 import { parsePlcopenXml } from '../utils/PLC/xml-parser'
@@ -18,7 +18,10 @@ import { toast } from '../utils/toast'
  * the currently open project with the result. Equivalent to File →
  * "Import PLCopen XML" (routed through the confirm-overwrite modal).
  */
-export async function executeImportPlcopen(projectPort: ProjectPort): Promise<{ success: boolean }> {
+export async function executeImportPlcopen(
+  store: OpenPLCStore,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
   const picked = await projectPort.pickPlcopenImportFile()
   if (!picked.success || !picked.content) {
     // User cancelled the picker (or the platform failed silently) — no
@@ -26,10 +29,10 @@ export async function executeImportPlcopen(projectPort: ProjectPort): Promise<{ 
     return { success: false }
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
 
   try {
-    const parseResult = parsePlcopenXml(picked.content)
+    const parseResult = parsePlcopenXml(picked.content, { systemLibraries: state.libraries.system })
     const { warnings } = parseResult
 
     const data: OpenProjectResponseData = buildProjectResponseFromPlcopenParse(parseResult, state.project.meta.path)

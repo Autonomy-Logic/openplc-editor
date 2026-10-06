@@ -1,8 +1,12 @@
-import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-data'
+import {
+  enrichDeviceData,
+  lacksPdoAssignment,
+  recordPdoAssignment,
+} from '@root/backend/shared/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
 import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStoreApi } from '@root/frontend/store'
 import type {
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
@@ -49,6 +53,7 @@ export function useDeviceConfiguration({
   onEnrichDevice,
   enabled = true,
 }: UseDeviceConfigurationParams): UseDeviceConfigurationResult {
+  const store = useOpenPLCStoreApi()
   const esiPort = useEsi()
   const [channels, setChannels] = useState<ESIChannel[]>([])
   const [coeObjects, setCoeObjects] = useState<ESICoEObject[] | undefined>(undefined)
@@ -90,6 +95,8 @@ export function useDeviceConfiguration({
           if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
             const { sdoConfigurations, ...rest } = enrichDeviceData(result.device, externalAddresses)
             onEnrichDeviceRef.current(device.sdoConfigurations !== undefined ? rest : { ...rest, sdoConfigurations })
+          } else if (lacksPdoAssignment(device)) {
+            onEnrichDeviceRef.current(recordPdoAssignment(device, result.device))
           } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {
             onEnrichDeviceRef.current({
               channelInfo: device.channelInfo,
@@ -122,7 +129,7 @@ export function useDeviceConfiguration({
       // `address-pool.ts:243`).  Without this, `validateAliasEdit`'s
       // "ignoring" comparison wouldn't recognise a no-op self-rename
       // and would spuriously reject it.
-      const state = useOpenPLCStore.getState()
+      const state = store.getState()
       const owningBus = state.project.data.remoteDevices?.find((d) =>
         d.ethercatConfig?.devices?.some((s) => s.name === device.name),
       )
@@ -164,13 +171,13 @@ export function useDeviceConfiguration({
       // than orphaning them.
       const oldAlias = device.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
       if (oldAlias) {
-        useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+        store.getState().projectActions.renameAlias(oldAlias, alias)
       }
 
       const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappingsRef.current(updated)
     },
-    [device?.channelMappings, device?.name],
+    [store, device?.channelMappings, device?.name],
   )
 
   const updateConfig = useCallback(

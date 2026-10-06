@@ -1,5 +1,5 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
@@ -49,6 +49,7 @@ function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: s
 }
 
 function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
+  const store = useOpenPLCStoreApi()
   // See `getSectionPersistenceKey` in ../index.tsx — the single
   // source of truth for the per-section storage key.  Falls back to
   // section.id when no explicit `persistence` is declared, matching
@@ -57,7 +58,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
   const availableModules = moduleSystem?.modules ?? []
 
   const getStoreState = useCallback(() => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const moduleConfig = vsd?.['module-configuration'] as
       | { slots?: (string | null)[]; slotsConfig?: Record<string, Record<string, string | number | boolean>> }
@@ -74,7 +75,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
         state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? [],
       capabilities: resolveTargetCapabilities(boardInfo),
     }
-  }, [persistenceKey])
+  }, [store, persistenceKey])
 
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
 
@@ -175,7 +176,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     // aliases restored from the session memory) and pull its result back
     // into local state so the table renders the compacted addresses.
     setVendorScreenData(persistenceKey, { entries: newEntries })
-    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
+    store.getState().projectActions.recalculateIecAddresses()
     setEntries(getStoreState().storedMapping?.entries ?? newEntries)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
@@ -189,7 +190,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     // `module-slots-layout.tsx::handleAliasChange` for the full
     // rationale; same pattern, scoped to this layout's `entries`
     // array as the VPP-IO source.
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(
       state.deviceDefinitions.configuration.deviceBoard ?? '',
     )
@@ -216,7 +217,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     // stays located (resolved at compile time) rather than orphaning.
     const oldAlias = target.alias ?? ''
     if (oldAlias) {
-      useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+      store.getState().projectActions.renameAlias(oldAlias, alias)
     }
 
     const updated = [...entries]
@@ -225,7 +226,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
     setVendorScreenData(persistenceKey, { entries: updated })
     // Record in the session alias-memory so the alias returns if this module
     // is removed and re-added on the same slot within the session.
-    useOpenPLCStore
+    store
       .getState()
       .projectActions.rememberChannelAlias(vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName), alias)
     // Variables bound to this channel hold its alias NAME (resolved at

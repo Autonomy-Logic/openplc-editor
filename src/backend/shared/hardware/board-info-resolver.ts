@@ -24,7 +24,12 @@
  */
 
 import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
-import type { InstalledPackage, PackageManifest, PlatformOption } from '../../../middleware/shared/ports/types'
+import type {
+  InstalledPackage,
+  PackageManifest,
+  PinPullSpec,
+  PlatformOption,
+} from '../../../middleware/shared/ports/types'
 import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 import { findVppDeviceByBoardName } from './find-vpp-device'
 
@@ -227,6 +232,8 @@ export interface BoardBuildInfo {
   defaultSerial?: string
   /** TCP carriers the board can bring up, from `networkInterfaces`. */
   networkInterfaces?: string[]
+  /** Per-pin pull-up/pull-down rules, from `defaults.pins.pull`. */
+  pinPull?: PinPullSpec
 
   // Debug-channel resolver spec --------------------------------------------
   /** Declarative debug spec consumed by `resolveDebugConnection`.
@@ -327,6 +334,7 @@ export class BoardInfoResolver {
     if (device.serialPorts) info.serialPorts = device.serialPorts
     if (device.defaultSerial) info.defaultSerial = device.defaultSerial
     if (device.networkInterfaces) info.networkInterfaces = device.networkInterfaces
+    if (device.defaults?.pins?.pull) info.pinPull = device.defaults.pins.pull
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)

@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
@@ -263,6 +263,7 @@ const ModuleSlotPicker = ({
 }
 
 function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
+  const store = useOpenPLCStoreApi()
   const maxSlots = section.maxSlots || moduleSystem?.maxSlots || 8
   // Memoize so hooks depending on this don't fire every render.
   const availableModules = useMemo(() => moduleSystem?.modules ?? [], [moduleSystem])
@@ -446,7 +447,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     if (allocKey === lastAllocKey.current) return
     lastAllocKey.current = allocKey
 
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const storedMapping = vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined
     const remoteDevices = state.project.data.remoteDevices ?? []
@@ -506,7 +507,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // from the session memory) and reconcile variables. This layout renders
     // from the store, so the registry's write-back propagates automatically.
     setVendorScreenData('io-mapping', { entries: newEntries })
-    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
+    store.getState().projectActions.recalculateIecAddresses()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -597,7 +598,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     }
     writeModuleConfig({ ...moduleConfig, slots: nextSlots, slotsConfig: nextSlotsConfig })
 
-    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
     const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
     const shifted = entries.map((e) => ({ ...e, slot: remap(e.slot) }))
     setVendorScreenData('io-mapping', { entries: shifted })
@@ -647,7 +648,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
     // Rewrite io-mapping so the alias preservation effect finds the
     // shifted entries at their new slot numbers.
-    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
     const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
     const shifted = entries
       .filter((e) => e.slot !== index + 1)
@@ -672,7 +673,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   }
 
   const handleAliasChange = (slot: number, channelName: string, alias: string) => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const sourceRef = { kind: 'vpp-io' as const, ref: `slot-${slot}:${channelName}` }
 
@@ -713,14 +714,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const targetEntry = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)
     const oldAlias = targetEntry?.alias ?? ''
     if (oldAlias) {
-      useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+      store.getState().projectActions.renameAlias(oldAlias, alias)
     }
 
     const entries = currentEntries.map((e) => (e.slot === slot && e.channelName === channelName ? { ...e, alias } : e))
     setVendorScreenData('io-mapping', { entries })
     // Record in the session alias-memory so the alias returns if this module
     // is removed and re-added on the same slot within the session.
-    useOpenPLCStore
+    store
       .getState()
       .projectActions.rememberChannelAlias(vppMemoryKey(targetEntry?.moduleId ?? '', slot, channelName), alias)
     // Variables bound to this channel hold its alias NAME (resolved at
@@ -742,7 +743,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
    * slotsConfig key convention).
    */
   const handleModeChange = (slot: number, modeFieldId: string, newValue: string) => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const moduleConfig = (vsd?.['module-configuration'] ?? {}) as ModuleConfigState
     const prevSlotsConfig = moduleConfig.slotsConfig ?? {}

@@ -17,7 +17,7 @@
 import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback } from 'react'
 
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { validateRuntimeVersion } from '../utils/device'
 
 export interface UseRuntimeConnectResult {
@@ -28,6 +28,7 @@ export interface UseRuntimeConnectResult {
 }
 
 export function useRuntimeConnect(): UseRuntimeConnectResult {
+  const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
   const device = useDevice()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
@@ -59,7 +60,7 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
     // `runtimeIpAddress`; the runtime port already holds the device context the
     // orchestrator screen set, so an empty address is only a stop condition on
     // the desktop path that supplies one.
-    if (!runtimeIpAddress && !useOpenPLCStore.getState().runtimeConnection.selectedDevice) {
+    if (!runtimeIpAddress && !store.getState().runtimeConnection.selectedDevice) {
       return
     }
 
@@ -74,7 +75,7 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
       //
       // Desktop carries no selected device and talks to `runtimeIpAddress`
       // directly, so this is a no-op there.
-      const selected = useOpenPLCStore.getState().runtimeConnection.selectedDevice
+      const selected = store.getState().runtimeConnection.selectedDevice
       if (selected) {
         runtime.setDeviceContext?.({
           agentId: selected.orchestratorAgentId,
@@ -148,6 +149,7 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
       setRuntimeConnectionStatus('error')
     }
   }, [
+    store,
     runtime,
     device,
     runtimeIpAddress,

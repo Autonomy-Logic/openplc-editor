@@ -19,6 +19,8 @@ import type { SystemPort } from '../../../middleware/shared/ports/system-port'
 import type { WindowPort } from '../../../middleware/shared/ports/window-port'
 import { PlatformProvider } from '../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../middleware/shared/providers/types'
+import { type OpenPLCStore, OpenPLCStoreProvider } from '../../store'
+import { createTestStore } from '../../store/testing'
 import { StartScreen } from '../start-screen'
 
 /** A port whose every method answers `undefined`, except the ones handed in. */
@@ -82,11 +84,18 @@ function makePorts(): PlatformPorts {
   }
 }
 
+let store: OpenPLCStore
+
 function Wrapper({ children }: { children: ReactNode }) {
-  return <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
+  return (
+    <OpenPLCStoreProvider store={store}>
+      <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
+    </OpenPLCStoreProvider>
+  )
 }
 
 beforeEach(() => {
+  store = createTestStore()
   openedLinks.length = 0
   windowCalls.length = 0
   localOpens = 0

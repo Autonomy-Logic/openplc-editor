@@ -14,7 +14,7 @@ import { useCallback, useRef } from 'react'
 
 import type { DebugTreeNode, FbInstanceInfo } from '../../middleware/shared/ports/types'
 import { useDebugger } from '../../middleware/shared/providers'
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { parseDebugMap } from '../utils/debug-parser'
 import {
   buildDebugVariableTreeMap,
@@ -48,6 +48,7 @@ export interface UseDebugSessionReturn {
 }
 
 export function useDebugSession(): UseDebugSessionReturn {
+  const store = useOpenPLCStoreApi()
   const debuggerPort = useDebugger()
 
   const {
@@ -60,7 +61,7 @@ export function useDebugSession(): UseDebugSessionReturn {
   const debugTreesRef = useRef<Record<string, DebugTreeNode[]>>({})
 
   const connectAndStart = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    const { project, workspaceActions: wsActions, consoleActions: logActions } = useOpenPLCStore.getState()
+    const { project, workspaceActions: wsActions, consoleActions: logActions } = store.getState()
     const boardTarget = deviceDefinitions.configuration.deviceBoard
     const projectPath = project.meta.path
 
@@ -82,7 +83,7 @@ export function useDebugSession(): UseDebugSessionReturn {
       // from come from the session overlay, not from `project.data`.  An
       // ordinary PLC project has no overlay and reads the project itself.
       // See `composeLibraryDebugHarness`.
-      const harness = useOpenPLCStore.getState().workspace.debugHarness
+      const harness = store.getState().workspace.debugHarness
       const debugPous = harness ? [...project.data.pous, harness.programPou] : project.data.pous
       const instances = harness?.instances ?? project.data.configurations.resource.instances
 
@@ -111,7 +112,7 @@ export function useDebugSession(): UseDebugSessionReturn {
           instances,
           entriesForTree,
           { ...project.data, pous: debugPous },
-          useOpenPLCStore.getState().libraries.system,
+          store.getState().libraries.system,
         )
         treeMap = treeResult.treeMap
 
@@ -177,7 +178,7 @@ export function useDebugSession(): UseDebugSessionReturn {
       // Set target IP for non-simulator connections
       // The target's address, for the debugger's own display. Comes from the
       // session the manager holds, not from a config the caller chose.
-      const sessionEndpoint = useOpenPLCStore.getState().deviceConnection.port
+      const sessionEndpoint = store.getState().deviceConnection.port
       if (sessionEndpoint) wsActions.setDebuggerTargetIp(sessionEndpoint)
 
       // Nothing to record about the transport: `useDebugPolling` reads the medium
@@ -197,7 +198,7 @@ export function useDebugSession(): UseDebugSessionReturn {
       logActions.addLog({ level: 'error', message: error })
       return { success: false, error }
     }
-  }, [debuggerPort, deviceDefinitions, projectData, projectMeta])
+  }, [store, debuggerPort, deviceDefinitions, projectData, projectMeta])
 
   /**
    * End the debug session — and ONLY the debug session.

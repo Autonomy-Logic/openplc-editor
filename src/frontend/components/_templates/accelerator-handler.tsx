@@ -11,7 +11,7 @@ import {
 import { requestAppRefresh } from '../../services/refresh-app'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
-import { openPLCStoreBase, useOpenPLCStore } from '../../store'
+import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
 import { canExportPdf } from '../../utils/print-availability'
 import { toast } from '../_features/[app]/toast/use-toast'
@@ -27,7 +27,7 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
 }
 
 // The native menu disables project-only items on the start screen; this covers a keypress that beats the rebuild.
-const hasOpenProject = () => openPLCStoreBase.getState().project.meta.path !== ''
+const hasOpenProject = (store: OpenPLCStore) => store.getState().project.meta.path !== ''
 
 const AcceleratorHandler = () => {
   const accelerator = useAccelerator()
@@ -36,6 +36,7 @@ const AcceleratorHandler = () => {
   const windowPort = useWindow()
   const themePort = useTheme()
   const capabilities = useCapabilities()
+  const store = useOpenPLCStoreApi()
 
   const [requestFlag, setRequestFlag] = useState(false)
   const [parseTo, setParseTo] = useState<'old-editor' | 'codesys' | null>(null)
@@ -56,7 +57,10 @@ const AcceleratorHandler = () => {
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
   const pendingRecentProjectRef = useRef<unknown>(null)
 
-  const executeSave = useCallback(() => executeSaveProject(projectPort, capabilities), [projectPort, capabilities])
+  const executeSave = useCallback(
+    () => executeSaveProject(store, projectPort, capabilities),
+    [store, projectPort, capabilities],
+  )
 
   /**
    * Export project accelerator
@@ -65,7 +69,7 @@ const AcceleratorHandler = () => {
     if (!capabilities.hasProjectExport) return
 
     const unsub = accelerator.onExportProject(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       setRequestFlag(true)
       setParseTo('old-editor')
     })
@@ -88,7 +92,7 @@ const AcceleratorHandler = () => {
     }
 
     return unsub
-  }, [requestFlag, parseTo, accelerator, compilerPort, capabilities.hasProjectExport, project])
+  }, [store, requestFlag, parseTo, accelerator, compilerPort, capabilities.hasProjectExport, project])
 
   /**
    * Create project
@@ -194,33 +198,33 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onCloseProject(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       closeProject()
     })
     return unsub
-  }, [editingState, accelerator, closeProject])
+  }, [store, editingState, accelerator, closeProject])
 
   /**
    * Save project (Cmd+Shift+S)
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProject(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       void executeSave()
     })
     return unsub
-  }, [accelerator, executeSave])
+  }, [store, accelerator, executeSave])
 
   /**
    * Save As (Cmd+Shift+A)
    */
   useEffect(() => {
     const unsub = accelerator.onSaveProjectAs(() => {
-      if (!hasOpenProject()) return
-      void executeSaveProjectAs(projectPort, capabilities)
+      if (!hasOpenProject(store)) return
+      void executeSaveProjectAs(store, projectPort, capabilities)
     })
     return unsub
-  }, [accelerator, capabilities, projectPort])
+  }, [accelerator, capabilities, projectPort, store])
 
   /**
    * Retrieve Project from PLC
@@ -233,6 +237,13 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     const unsub = accelerator.onRetrieveProject(() => {
       openModal('retrieve-project', null)
+    })
+    return unsub
+  }, [accelerator, openModal])
+
+  useEffect(() => {
+    const unsub = accelerator.onImportPlcopen(() => {
+      openModal('confirm-plcopen-import', null)
     })
     return unsub
   }, [accelerator, openModal])
@@ -270,77 +281,77 @@ const AcceleratorHandler = () => {
     }
 
     const unsub = accelerator.onDeleteFile(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       handleDelete()
     })
     return unsub
-  }, [selectedProjectTreeLeaf, accelerator, deletePouRequest, deleteDatatypeRequest])
+  }, [store, selectedProjectTreeLeaf, accelerator, deletePouRequest, deleteDatatypeRequest])
 
   /**
    * Close tab
    */
   useEffect(() => {
     const unsub = accelerator.onCloseTab(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       removeTab(selectedProjectTreeLeaf.label)
     })
     return unsub
-  }, [selectedProjectTreeLeaf, accelerator, removeTab])
+  }, [store, selectedProjectTreeLeaf, accelerator, removeTab])
 
   /**
    * Save file (Cmd+S) — saves only the active file
    */
   useEffect(() => {
     const unsub = accelerator.onSaveFile(() => {
-      void executeSaveActiveFile(projectPort, capabilities)
+      void executeSaveActiveFile(store, projectPort, capabilities)
     })
     return unsub
-  }, [accelerator, projectPort, capabilities])
+  }, [accelerator, projectPort, capabilities, store])
 
   /**
    * Print (Ctrl+P) / Preview (Ctrl+Shift+P) — both open the export-to-PDF wizard.
    */
   useEffect(() => {
     const unsub = accelerator.onPrint(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       if (!canExportPdf(project.data.pous)) return
       openModal('export-pdf', null)
     })
     return unsub
-  }, [accelerator, project.data.pous, openModal])
+  }, [store, accelerator, project.data.pous, openModal])
 
   /**
    * Page Setup (Ctrl+Alt+P)
    */
   useEffect(() => {
     const unsub = accelerator.onPageSetup(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       openModal('page-setup', null)
     })
     return unsub
-  }, [accelerator, openModal])
+  }, [store, accelerator, openModal])
 
   /**
    * Find in project (Cmd+Shift+F)
    */
   useEffect(() => {
     const unsub = accelerator.onFindInProject(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       setModalOpen('findInProject', true)
     })
     return unsub
-  }, [accelerator, setModalOpen])
+  }, [store, accelerator, setModalOpen])
 
   /**
    * Switch perspective (F12)
    */
   useEffect(() => {
     const unsub = accelerator.onSwitchPerspective(() => {
-      if (!hasOpenProject()) return
+      if (!hasOpenProject(store)) return
       toggleCollapse()
     })
     return unsub
-  }, [accelerator, toggleCollapse])
+  }, [store, accelerator, toggleCollapse])
 
   /**
    * Undo / Redo
@@ -357,19 +368,19 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onUndo(() => {
-      if (!hasOpenProject() || !meta?.name) return
+      if (!hasOpenProject(store) || !meta?.name) return
       if (!undo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
-  }, [meta.name, isMonacoFocused, accelerator, undo, notifyStaleBody])
+  }, [store, meta.name, isMonacoFocused, accelerator, undo, notifyStaleBody])
 
   useEffect(() => {
     const unsub = accelerator.onRedo(() => {
-      if (!hasOpenProject() || !meta?.name) return
+      if (!hasOpenProject(store) || !meta?.name) return
       if (!redo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
-  }, [meta.name, isMonacoFocused, accelerator, redo, notifyStaleBody])
+  }, [store, meta.name, isMonacoFocused, accelerator, redo, notifyStaleBody])
 
   /**
    * Quit app (Ctrl+Q on Windows/Linux)
@@ -386,10 +397,10 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const unsub = accelerator.onRefresh(() => {
-      requestAppRefresh(openPLCStoreBase.getState().workspace.editingState, openModal, windowPort)
+      requestAppRefresh(store.getState().workspace.editingState, openModal, windowPort)
     })
     return unsub
-  }, [accelerator, openModal, windowPort])
+  }, [accelerator, openModal, windowPort, store])
 
   /**
    * Theme changes (user toggle, OS preference, or cross-app cookie sync).
@@ -428,10 +439,10 @@ const AcceleratorHandler = () => {
     if (!capabilities.isNativeApplication) return
 
     const unsub = windowPort.onQuitRequested?.(() => {
-      quitAppRequest(openPLCStoreBase.getState().workspace.editingState === 'unsaved', openModal)
+      quitAppRequest(store.getState().workspace.editingState === 'unsaved', openModal)
     })
     return unsub
-  }, [capabilities.isNativeApplication, windowPort, openModal])
+  }, [capabilities.isNativeApplication, windowPort, openModal, store])
 
   useEffect(() => {
     if (!capabilities.isNativeApplication) return
@@ -493,7 +504,7 @@ const AcceleratorHandler = () => {
       // exit (save-changes modal → clearAndClose sets editingState) updates the
       // Zustand store synchronously right before navigating, so reading it here
       // avoids double-prompting (custom dialog + generic prompt) on that path.
-      if (openPLCStoreBase.getState().workspace.editingState !== 'unsaved') return
+      if (store.getState().workspace.editingState !== 'unsaved') return
       // Setting returnValue (and calling preventDefault) is what triggers the
       // browser's generic unsaved-changes prompt; the string is ignored by
       // modern browsers.
@@ -503,7 +514,7 @@ const AcceleratorHandler = () => {
 
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [capabilities.isNativeApplication])
+  }, [capabilities.isNativeApplication, store])
 
   return <></>
 }

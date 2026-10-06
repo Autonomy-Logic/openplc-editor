@@ -1,29 +1,52 @@
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import type { EsiPort } from '@root/middleware/shared/ports/esi-port'
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { fireEvent, render, waitFor } from '@testing-library/react'
 
-// Mocked EsiPort surface — the two methods the upload flow touches.
-//
-// Cross-runner compatibility relies on two independent mechanisms:
-//   - Under Vitest, `vi.mock` is hoisted above imports, so the factory runs
-//     before `import { ESIUpload }`. A hoisted factory may only reference names
-//     that survive hoisting — hence the `mock`-prefixed `mockEsi`, read lazily
-//     when `useEsi()` is called at render time (not at factory-eval time).
-//   - Under the editor's Jest+vi shim, `vi.mock` is NOT hoisted (ts-jest's
-//     transformer only hoists `jest.mock`). It works because the
-//     `import { ESIUpload }` below is deliberately placed AFTER this `vi.mock`
-//     call. That import position is load-bearing: do NOT move it into the top
-//     import block, or ESIUpload binds to the real platform-context module
-//     before the mock is registered.
+import { ESIUpload } from '../esi-upload'
+
+/** A port whose every method answers `undefined`, except the ones handed in. */
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
+
+// The two EsiPort methods the upload flow touches.
 const mockEsi = {
   parseAndSaveFile: vi.fn(),
   loadRepositoryLight: vi.fn(),
 }
 
-vi.mock('@root/middleware/shared/providers/platform-context', () => ({
-  useEsi: () => mockEsi,
-}))
+const ports: PlatformPorts = {
+  compiler: stubPort(),
+  runtime: stubPort(),
+  debugger: stubPort(),
+  simulator: stubPort(),
+  project: stubPort(),
+  device: stubPort(),
+  orchestrator: stubPort(),
+  system: stubPort(),
+  window: stubPort(),
+  accelerator: stubPort(),
+  theme: stubPort(),
+  versionControl: stubPort(),
+  navigation: stubPort(),
+  library: stubPort(),
+  esi: stubPort<EsiPort>(mockEsi),
+  capabilities: WEB_CAPABILITIES,
+}
 
-import { ESIUpload } from '../esi-upload'
+function renderUpload(onFilesLoaded: () => void, repository: ESIRepositoryItemLight[]) {
+  return render(<ESIUpload onFilesLoaded={onFilesLoaded} repository={repository} />, {
+    wrapper: createStoreWrapper(createTestStore(), ports),
+  })
+}
 
 const SAMPLE_ITEM: ESIRepositoryItemLight = {
   id: 'item-1',
@@ -43,7 +66,7 @@ function xmlFile(name = 'Beckhoff.xml', content = '<xml />'): File {
 /** Render the component and drive a single-file upload through the input. */
 function uploadFile(repository: ESIRepositoryItemLight[] = []) {
   const onFilesLoaded = vi.fn()
-  const { container } = render(<ESIUpload onFilesLoaded={onFilesLoaded} repository={repository} />)
+  const { container } = renderUpload(onFilesLoaded, repository)
   const input = container.querySelector('input[type="file"]') as HTMLInputElement
   fireEvent.change(input, { target: { files: [xmlFile()] } })
   return { onFilesLoaded }
@@ -83,7 +106,7 @@ describe('ESIUpload — dedupAfterRetry handling', () => {
     mockEsi.loadRepositoryLight.mockResolvedValueOnce({ success: false, error: 'list failed' })
 
     const onFilesLoaded = vi.fn()
-    const { container } = render(<ESIUpload onFilesLoaded={onFilesLoaded} repository={existing} />)
+    const { container } = renderUpload(onFilesLoaded, existing)
     const input = container.querySelector('input[type="file"]') as HTMLInputElement
     fireEvent.change(input, { target: { files: [xmlFile()] } })
 

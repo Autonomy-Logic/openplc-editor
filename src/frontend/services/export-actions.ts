@@ -18,7 +18,7 @@ import { XmlGenerator } from '../../backend/shared/utils/PLC/xml-generator'
 import type { PLCProjectData as SchemaPLCProjectData } from '../../middleware/shared/ports/open-plc-types'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import type { PLCProjectData, PouLanguage } from '../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore } from '../store'
 import { toast } from '../utils/toast'
 
 /**
@@ -96,8 +96,11 @@ function portToSchemaProjectData(input: PLCProjectData): SchemaPLCProjectData {
  * Export the currently open project as a PLCopen XML file.
  * Equivalent to File → "Export to PLCOpen XML".
  */
-export async function executeExportPlcopen(projectPort: ProjectPort): Promise<{ success: boolean }> {
-  const state = openPLCStoreBase.getState()
+export async function executeExportPlcopen(
+  store: OpenPLCStore,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = store.getState()
 
   try {
     const schemaData = portToSchemaProjectData(state.project.data)

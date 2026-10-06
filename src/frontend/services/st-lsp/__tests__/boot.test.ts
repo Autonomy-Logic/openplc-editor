@@ -2,6 +2,8 @@
  * @jest-environment jsdom
  */
 import type { PlatformPorts } from '../../../../middleware/shared/providers/types'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 
 // Mock the orchestrator + sync layers BEFORE importing boot so the
 // boot module pulls in the mocked versions.  We're testing wiring,
@@ -39,7 +41,10 @@ function makePorts(overrides: Partial<PlatformPorts> = {}): PlatformPorts {
 
 const monacoStub = {} as typeof import('monaco-editor')
 
+let store: OpenPLCStore
+
 beforeEach(() => {
+  store = createTestStore()
   startStLsp.mockReset()
   attachProjectSync.mockReset()
   attachLibrarySync.mockReset()
@@ -67,6 +72,7 @@ beforeEach(() => {
 describe('bootStLsp', () => {
   it('returns null when hasStLSP is false', () => {
     const handle = bootStLsp(
+      store,
       makePorts({
         capabilities: { hasStLSP: false } as PlatformPorts['capabilities'],
       }),
@@ -77,23 +83,25 @@ describe('bootStLsp', () => {
   })
 
   it('returns null when stlibSource port is missing', () => {
-    const handle = bootStLsp(makePorts({ stlibSource: undefined }), monacoStub)
+    const handle = bootStLsp(store, makePorts({ stlibSource: undefined }), monacoStub)
     expect(handle).toBeNull()
     expect(startStLsp).not.toHaveBeenCalled()
   })
 
   it('starts the service and attaches every sync layer when enabled', () => {
-    const handle = bootStLsp(makePorts(), monacoStub)
+    const handle = bootStLsp(store, makePorts(), monacoStub)
     expect(handle).not.toBeNull()
     expect(startStLsp).toHaveBeenCalledTimes(1)
     expect(attachProjectSync).toHaveBeenCalledTimes(1)
+    expect(attachProjectSync).toHaveBeenCalledWith(store, handle?.service)
+    expect(startStLsp).toHaveBeenCalledWith(expect.objectContaining({ store }))
     expect(attachLibrarySync).toHaveBeenCalledTimes(1)
     expect(attachEnabledLibrariesSync).toHaveBeenCalledTimes(1)
     expect(attachBundledLibrariesSync).toHaveBeenCalledTimes(1)
   })
 
   it('dispose() tears down every subscription and the service', () => {
-    const handle = bootStLsp(makePorts(), monacoStub)
+    const handle = bootStLsp(store, makePorts(), monacoStub)
     expect(handle).not.toBeNull()
     handle!.dispose()
     expect(handle!.service.dispose).toHaveBeenCalledTimes(1)
@@ -104,13 +112,13 @@ describe('bootStLsp', () => {
   })
 
   it('passes an onAfterRefresh callback to every library subscription that calls forceResync', () => {
-    bootStLsp(makePorts(), monacoStub)
+    bootStLsp(store, makePorts(), monacoStub)
     const projectSyncHandle = attachProjectSync.mock.results[0].value as {
       forceResync: jest.Mock
     }
-    const librarySyncCallback = attachLibrarySync.mock.calls[0][1] as () => void
-    const enabledSyncCallback = attachEnabledLibrariesSync.mock.calls[0][1] as () => void
-    const bundledSyncCallback = attachBundledLibrariesSync.mock.calls[0][1] as () => void
+    const librarySyncCallback = attachLibrarySync.mock.calls[0][2] as () => void
+    const enabledSyncCallback = attachEnabledLibrariesSync.mock.calls[0][2] as () => void
+    const bundledSyncCallback = attachBundledLibrariesSync.mock.calls[0][2] as () => void
 
     expect(typeof librarySyncCallback).toBe('function')
     expect(typeof enabledSyncCallback).toBe('function')

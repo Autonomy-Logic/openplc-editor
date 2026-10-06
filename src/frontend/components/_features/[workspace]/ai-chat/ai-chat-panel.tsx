@@ -23,7 +23,7 @@ import { trackChatMessage, trackConversationCreated, trackConversationLoaded } f
 import { AI_TOOLS, isMutatingTool, isNonDiffMutatingTool } from '../../../../services/ai/tools'
 import type { AIChatMessage, AIChatRequest } from '../../../../services/ai/types'
 import { executeSaveProject } from '../../../../services/save-actions'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { EditorSlice } from '../../../../store/slices/editor'
 import type { FBDFlowSlice } from '../../../../store/slices/fbd'
 import type { FileSlice } from '../../../../store/slices/file'
@@ -53,8 +53,9 @@ export type AIChatPanelProps = {
 }
 
 export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
-  const aiState = useOpenPLCStore.useAi()
-  const editor = useOpenPLCStore.useEditor()
+  const store = useOpenPLCStoreApi()
+  const aiState = useOpenPLCStore((s) => s.ai)
+  const editor = useOpenPLCStore((s) => s.editor)
   const {
     setChatOpen,
     setActiveEditorPou,
@@ -71,7 +72,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     setConversationId,
     replaceMessages,
     setLoadingConversation,
-  } = useOpenPLCStore.useAiActions()
+  } = useOpenPLCStore((s) => s.aiActions)
 
   const projectPort = useProject()
   const capabilities = useCapabilities()
@@ -210,8 +211,8 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     }
     // The event only reaches the active editor; other POUs may hold pending diffs too.
     clearAllPendingDiffs()
-    void executeSaveProject(projectPort, capabilities)
-  }, [pouName, projectPort, capabilities, clearAllPendingDiffs])
+    void executeSaveProject(store, projectPort, capabilities)
+  }, [store, pouName, projectPort, capabilities, clearAllPendingDiffs])
 
   const handleUndoAIChanges = useCallback(() => {
     const cp = projectCheckpointRef.current
@@ -220,7 +221,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       window.dispatchEvent(new CustomEvent('ai-reject-all-hunks', { detail: { pouName } }))
     }
 
-    openPLCStoreBase.setState((state) => ({
+    store.setState((state) => ({
       ...state,
       project: { ...state.project, data: structuredClone(cp.projectData) },
       tabs: structuredClone(cp.tabs),
@@ -264,7 +265,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       updateMessageContent(lastMsg.id, `${existingText}\n\n_Changes reverted._`)
     }
     setToolStatuses([])
-  }, [pouName, aiState.messages, updateMessageContent, setAgenticLoopRunning, clearAllPendingDiffs])
+  }, [store, pouName, aiState.messages, updateMessageContent, setAgenticLoopRunning, clearAllPendingDiffs])
 
   const handleSend = useCallback(
     async (userMessage: string) => {
@@ -279,7 +280,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       // Sending re-engages auto-follow wherever the user had scrolled to.
       followTail()
 
-      const snapshotState = openPLCStoreBase.getState()
+      const snapshotState = store.getState()
       projectCheckpointRef.current = {
         projectData: structuredClone(snapshotState.project.data),
         tabs: structuredClone(snapshotState.tabs),
@@ -314,7 +315,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       setToolStatuses([])
 
       // Skip empty mid-stream assistant placeholders; the model must not see them.
-      const storeState = openPLCStoreBase.getState()
+      const storeState = store.getState()
       const hasContent = (content: ChatMessage['content']) =>
         typeof content === 'string' ? content.length > 0 : content.length > 0
       // A transcript ending in an unmatched tool_use makes the API 400 on every resume.
@@ -383,7 +384,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       // The post-loop refresh must not clear a billing error this very turn raised.
       let loopHadBillingError = false
       try {
-        const activeConversationId = openPLCStoreBase.getState().ai.conversationId
+        const activeConversationId = store.getState().ai.conversationId
         const fullRequest: AIChatRequest = {
           messages: apiMessages,
           pouContext,
@@ -394,7 +395,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
           ...(projectId ? { projectId } : {}),
         }
 
-        for await (const event of runAgenticLoop(ai, fullRequest, AI_TOOLS, {
+        for await (const event of runAgenticLoop(store, ai, fullRequest, AI_TOOLS, {
           signal: controller.signal,
           transpileProject,
         })) {
@@ -517,7 +518,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
         }
       }
 
-      const finalState = openPLCStoreBase.getState().ai
+      const finalState = store.getState().ai
       const stillEmptyPlaceholder = finalState.messages.find(
         (m) => m.id === assistantMsgId && (m.content === '' || (Array.isArray(m.content) && m.content.length === 0)),
       )
@@ -533,6 +534,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       }
     },
     [
+      store,
       ai,
       needsSignIn,
       noteRefusal,
@@ -589,7 +591,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       setHadDiffsThisTurn(false)
       projectCheckpointRef.current = null
       setToolStatuses([])
-      void executeSaveProject(projectPort, capabilities)
+      void executeSaveProject(store, projectPort, capabilities)
     }
   }, [
     aiState.isAgenticLoopRunning,
@@ -597,6 +599,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     pendingDiffCount,
     hasNonDiffMutation,
     toolStatuses,
+    store,
     projectPort,
     capabilities,
   ])

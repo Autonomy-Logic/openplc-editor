@@ -188,11 +188,17 @@ function MyComponent() {
 }
 ```
 
-**Wiring** happens at the app root (`src/App.tsx`):
+**Wiring** happens at the composition root (`src/composition-root.ts`), the only
+place the store and the ports are instantiated; `src/App.tsx` provides them:
 ```typescript
-import { editorPorts } from './middleware/editor-platform'
-<PlatformProvider ports={editorPorts}>...</PlatformProvider>
+export const appStore = createOpenPLCStore()
+export const editorPorts = createEditorPorts(appStore)
+
+<OpenPLCStoreProvider store={appStore}>
+  <PlatformProvider ports={editorPorts}>...</PlatformProvider>
+</OpenPLCStoreProvider>
 ```
+The CLI creates its own store per process and passes it down (`src/cli/main.ts`, `src/cli/session/daemon-main.ts`).
 
 **Editor adapters** (`src/middleware/adapters/editor/`) implement ports by calling `window.bridge.*` (Electron IPC). The web repo has its own adapters using HTTP/WebRTC instead.
 
@@ -261,7 +267,9 @@ const createPou = useOpenPLCStore((s) => s.projectActions.createPou)
 - Actions are grouped under a `*Actions` namespace (e.g., `projectActions`, `deviceActions`)
 - Complex actions return `{ ok: boolean; message?: string }` response objects
 - State is never mutated directly — always use `produce()` from Immer
-- Direct state access outside React: `openPLCStoreBase.getState()`
+- There is no store singleton. Components and hooks read state with `useOpenPLCStore(selector)` and get the
+  instance with `useOpenPLCStoreApi()` (both from `OpenPLCStoreProvider`'s context); services and adapters
+  take `store: OpenPLCStore` as their first argument and never import an instance
 
 ### Component Organization (Atomic Design)
 
@@ -354,6 +362,10 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
 ## Testing
 
 - **Unit:** Jest + jsdom, `npm run test` (CI: `npx jest --config jest.config.json --collectCoverage --ci`). Test files are `*.test.ts(x)`, `*.spec.ts(x)` or `__tests__/` directories. Mocks: `configs/mocks/` for file stubs, `identity-obj-proxy` for CSS modules.
+- **Store and ports in tests:** a fresh store from `createTestStore()`, rendered through
+  `createStoreWrapper(store, ports?)` (`src/frontend/store/testing.tsx`). Never module-mock the store or
+  the platform providers — `validate:arch` rejects it (openplc-web runs these shared tests without
+  per-file isolation, where such a mock would leak).
 - **Coverage:** per-directory floors are in `jest.config.json` (`coverageThreshold`).
 - **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. No CI workflow runs them.
 - **Manual:** the developer's manual test is required for every demand.

@@ -21,53 +21,10 @@ import { act, render, waitFor } from '@testing-library/react'
 // behaviours this contract depends on.
 // ---------------------------------------------------------------------------
 
-const mockDeviceConnect = jest.fn(async () => undefined)
-const mockDeviceDisconnect = jest.fn(async () => undefined)
+const mockDeviceConnect = jest.fn(async (): Promise<DeviceConnectResult> => ({ status: 'connected-with-firmware' }))
+const mockDeviceDisconnect = jest.fn(async () => ({ success: true }))
 const mockReleaseSerialPort = jest.fn(async () => false)
 const mockCompileProgram = jest.fn()
-const mockSetRuntimeIpAddress = jest.fn()
-
-/** 'connected' before the build, so the handler tears the link down. */
-let deviceStatus = 'connected'
-
-const storeState = () => ({
-  project: { data: { pous: [] }, meta: { path: '/tmp/p', name: 'p', type: 'plc-project' } },
-  projectActions: { getCompileReadyProjectData: () => ({ pous: [] }) },
-  deviceDefinitions: {
-    configuration: {
-      deviceBoard: 'Siemens LOGO! 8.2',
-      communicationPort: null,
-      runtimeIpAddress: '192.168.2.5',
-      vendorScreenData: {},
-    },
-  },
-  deviceAvailableOptions: { availableBoards: new Map([['Siemens LOGO! 8.2', { uploadMethod: 'ethernet' }]]) },
-  deviceConnection: { status: deviceStatus },
-  deviceActions: { setRuntimeIpAddress: mockSetRuntimeIpAddress, setPlcRuntimeStatus: jest.fn() },
-  runtimeConnection: { connectionStatus: 'disconnected', plcStatus: 'STOPPED' },
-  consoleActions: { addLog: jest.fn(), requestConsoleFollow: jest.fn() },
-  workspace: { canEdit: false },
-})
-
-jest.mock('../../../../store', () => {
-  const useOpenPLCStore = (selector?: (s: unknown) => unknown) => (selector ? selector(storeState()) : storeState())
-  useOpenPLCStore.getState = () => storeState()
-  return { useOpenPLCStore }
-})
-
-jest.mock('../../../../../middleware/shared/providers', () => ({
-  useCompiler: () => ({ compileProgram: mockCompileProgram }),
-  useRuntime: () => ({}),
-  useSimulator: () => ({}),
-  useDebugger: () => ({ setPlcState: jest.fn(async () => ({ success: true })) }),
-  useDevice: () => ({
-    connect: mockDeviceConnect,
-    disconnect: mockDeviceDisconnect,
-    releaseSerialPort: mockReleaseSerialPort,
-  }),
-  useProject: () => ({}),
-  useCapabilities: () => ({}),
-}))
 
 jest.mock('@root/middleware/shared/utils/target-capabilities', () => ({
   resolveTargetCapabilities: () => ({
@@ -119,20 +76,82 @@ jest.mock('../../../_molecules/workspace-activity-bar/tooltip-button', () => ({
   TooltipSidebarWrapperButton: ({ children }: { children?: unknown }) => children ?? null,
 }))
 
+import type { CompilerPort, DebuggerPort, DevicePort } from '../../../../../middleware/shared/ports'
+import type { DeviceConnectResult } from '../../../../../middleware/shared/ports/device-port'
+import { EDITOR_CAPABILITIES } from '../../../../../middleware/shared/ports/platform-capabilities'
+import type { PlatformPorts } from '../../../../../middleware/shared/providers/types'
+import type { OpenPLCStore } from '../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { requestDeviceFlash } from '../../../../utils/device-connect-events'
 import { DefaultWorkspaceActivityBar } from '../default'
+
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
+
+const ports: PlatformPorts = {
+  compiler: stubPort<CompilerPort>({ compileProgram: mockCompileProgram }),
+  runtime: stubPort(),
+  debugger: stubPort<DebuggerPort>({ setPlcState: jest.fn(async () => ({ success: true })) }),
+  simulator: stubPort(),
+  project: stubPort(),
+  device: stubPort<DevicePort>({
+    connect: mockDeviceConnect,
+    disconnect: mockDeviceDisconnect,
+    releaseSerialPort: mockReleaseSerialPort,
+  }),
+  orchestrator: stubPort(),
+  system: stubPort(),
+  window: stubPort(),
+  accelerator: stubPort(),
+  theme: stubPort(),
+  versionControl: stubPort(),
+  navigation: stubPort(),
+  library: stubPort(),
+  capabilities: EDITOR_CAPABILITIES,
+}
+
+const LOGO_BOARD = 'Siemens LOGO! 8.2'
+
+let store: OpenPLCStore
+
+const renderBar = () =>
+  render(<DefaultWorkspaceActivityBar zoom={{ onClick: () => undefined }} />, {
+    wrapper: createStoreWrapper(store, ports),
+  })
 
 describe('workspace activity bar — Ethernet link restore after a build', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    deviceStatus = 'connected'
+    store = createTestStore()
+    const { projectActions, deviceActions, workspaceActions } = store.getState()
+    projectActions.updateMetaName('p')
+    projectActions.updateMetaPath('/tmp/p')
+    deviceActions.setAvailableOptions({
+      availableBoards: new Map([
+        [
+          LOGO_BOARD,
+          { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {}, uploadMethod: 'ethernet' },
+        ],
+      ]),
+    })
+    deviceActions.setDeviceBoard(LOGO_BOARD)
+    deviceActions.setRuntimeIpAddress('192.168.2.5')
+    // 'connected' before the build, so the handler tears the link down.
+    deviceActions.setDeviceConnectionStatus('connected')
+    workspaceActions.setCanEdit(false)
   })
 
   it('reconnects after a build that THROWS, not just one that fails cleanly', async () => {
     // The regression: an adapter/IPC throw skipped the restore entirely.
     mockCompileProgram.mockRejectedValue(new Error('IPC channel closed'))
 
-    render(<DefaultWorkspaceActivityBar zoom={{ onClick: () => undefined }} />)
+    renderBar()
     const startedAt = Date.now()
     act(() => requestDeviceFlash())
 
@@ -148,7 +167,7 @@ describe('workspace activity bar — Ethernet link restore after a build', () =>
   it('reconnects after a build that returns success: false', async () => {
     mockCompileProgram.mockResolvedValue({ success: false, error: 'compile failed' })
 
-    render(<DefaultWorkspaceActivityBar zoom={{ onClick: () => undefined }} />)
+    renderBar()
     act(() => requestDeviceFlash())
 
     await waitFor(() => expect(mockDeviceConnect).toHaveBeenCalledTimes(1))
@@ -160,7 +179,7 @@ describe('workspace activity bar — Ethernet link restore after a build', () =>
     // on the success path inside the `try`; only the restore moved to `finally`.
     mockCompileProgram.mockResolvedValue({ success: true })
 
-    render(<DefaultWorkspaceActivityBar zoom={{ onClick: () => undefined }} />)
+    renderBar()
     const startedAt = Date.now()
     act(() => requestDeviceFlash())
 
@@ -171,10 +190,10 @@ describe('workspace activity bar — Ethernet link restore after a build', () =>
   it('does not reconnect a link it never dropped', async () => {
     // Nothing was connected before the build, so there is nothing to restore --
     // the restore is guarded on its own flag rather than on "is ethernet".
-    deviceStatus = 'disconnected'
+    store.getState().deviceActions.setDeviceConnectionStatus('disconnected')
     mockCompileProgram.mockRejectedValue(new Error('IPC channel closed'))
 
-    render(<DefaultWorkspaceActivityBar zoom={{ onClick: () => undefined }} />)
+    renderBar()
     act(() => requestDeviceFlash())
 
     await waitFor(() => expect(mockCompileProgram).toHaveBeenCalled())

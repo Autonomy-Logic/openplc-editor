@@ -5,7 +5,8 @@ import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-da
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
 import { cn } from '@root/frontend/utils/cn'
 import { getShortDeviceName } from '@root/frontend/utils/short-device-name'
@@ -42,8 +43,8 @@ type EditorTab = 'scan-bus' | 'repository' | 'advanced'
  * is naturally store-driven and the two callers here both live in
  * this file; lifting to a util buys nothing.
  */
-function buildClaimedAddressSet(): Set<string> {
-  const state = useOpenPLCStore.getState()
+function buildClaimedAddressSet(store: OpenPLCStore): Set<string> {
+  const state = store.getState()
   const remoteDevices = state.project.data.remoteDevices
   const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData
   const boardInfo = state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard)
@@ -105,6 +106,7 @@ const TabItem = ({
  * EtherCATDeviceEditor, opened from the project tree.
  */
 const EtherCATEditor = () => {
+  const store = useOpenPLCStoreApi()
   const {
     editor,
     runtimeConnection,
@@ -155,8 +157,8 @@ const EtherCATEditor = () => {
 
   // Read at write time: an add awaits ESI loads, so the render-time config can be stale by then.
   const readEthercatConfig = useCallback(
-    () => useOpenPLCStore.getState().project.data.remoteDevices?.find((d) => d.name === deviceName)?.ethercatConfig,
-    [deviceName],
+    () => store.getState().project.data.remoteDevices?.find((d) => d.name === deviceName)?.ethercatConfig,
+    [store, deviceName],
   )
   const readConfiguredDevices = useCallback(
     (): ConfiguredEtherCATDevice[] => readEthercatConfig()?.devices ?? [],
@@ -442,11 +444,11 @@ const EtherCATEditor = () => {
       const newDevices: ConfiguredEtherCATDevice[] = []
       const unmatched: ScannedDeviceMatch['device'][] = []
       const existingPositions = new Set(readConfiguredDevices().map((d) => d.position))
-      const usedAddresses = buildClaimedAddressSet()
+      const usedAddresses = buildClaimedAddressSet(store)
       // Every element name in the project, plus the batch so it cannot collide with itself.
       const batch = new Set<string>()
       const nameTaken = (name: string) =>
-        batch.has(name) || elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null
+        batch.has(name) || elementNameCollision(store.getState(), name, 'ethercat-slave') !== null
 
       const toLoad: { match: ScannedDeviceMatch; bestMatch: DeviceMatch; repoItem: ESIRepositoryItemLight }[] = []
       for (const position of selectedScannedDevices) {
@@ -534,7 +536,7 @@ const EtherCATEditor = () => {
       isAddingRef.current = false
       setAddProgress(null)
     }
-  }, [selectedScannedDevices, deviceMatches, repository, readConfiguredDevices, syncDevicesToStore, esi])
+  }, [store, selectedScannedDevices, deviceMatches, repository, readConfiguredDevices, syncDevicesToStore, esi])
 
   const handleRetryRepository = useCallback(() => {
     setRepositoryError(null)
@@ -552,7 +554,7 @@ const EtherCATEditor = () => {
         let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
         const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
         if (result.success && result.device) {
-          enriched = enrichDeviceData(result.device, buildClaimedAddressSet())
+          enriched = enrichDeviceData(result.device, buildClaimedAddressSet(store))
         }
 
         const currentDevices = readConfiguredDevices()
@@ -564,7 +566,7 @@ const EtherCATEditor = () => {
         const baseName = enriched.cia402?.enabled ? sanitizeAxisName(rawName) : rawName
         const uniqueName = generateUniqueSlaveName(
           baseName,
-          (name) => elementNameCollision(useOpenPLCStore.getState(), name, 'ethercat-slave') !== null,
+          (name) => elementNameCollision(store.getState(), name, 'ethercat-slave') !== null,
         )
 
         const newDevice: ConfiguredEtherCATDevice = {
@@ -584,7 +586,7 @@ const EtherCATEditor = () => {
         syncDevicesToStore([...currentDevices, newDevice])
 
         // Register file entry for the new slave so Ctrl+S and dirty tracking work
-        const { fileActions } = useOpenPLCStore.getState()
+        const { fileActions } = store.getState()
         fileActions.addFile({ name: newDevice.name, type: 'ethercat-device', filePath: deviceName })
       } catch (error) {
         toast({ title: 'Failed to add EtherCAT device', description: String(error), variant: 'fail' })
@@ -593,7 +595,7 @@ const EtherCATEditor = () => {
         setAddProgress(null)
       }
     },
-    [readConfiguredDevices, syncDevicesToStore, deviceName, esi],
+    [store, readConfiguredDevices, syncDevicesToStore, deviceName, esi],
   )
 
   const handleRemoveDevice = useCallback(
@@ -603,7 +605,7 @@ const EtherCATEditor = () => {
         // Remove cached editor model to avoid stale deviceId on re-add
         editorActions.removeModel(device.name)
         // Close the device tab only if it's open (without switching away from current tab)
-        const { tabs, tabsActions } = useOpenPLCStore.getState()
+        const { tabs, tabsActions } = store.getState()
         const hasTab = tabs.some((t) => t.name === device.name)
         if (hasTab) {
           tabsActions.removeTab(device.name)
@@ -611,7 +613,7 @@ const EtherCATEditor = () => {
       }
       syncDevicesToStore(configuredDevices.filter((d) => d.id !== deviceId))
     },
-    [configuredDevices, syncDevicesToStore, sharedWorkspaceActions, editorActions],
+    [store, configuredDevices, syncDevicesToStore, sharedWorkspaceActions, editorActions],
   )
 
   return (

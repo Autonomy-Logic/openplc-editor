@@ -9,7 +9,7 @@ import {
   type ScopeCompletion,
   scopeCompletionToVariable,
 } from '../../../../../services/graphical-scope'
-import { useOpenPLCStore } from '../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import type { CreateGraphicalVariableModalData } from '../../../../../store/slices/modal/types'
 import { cn } from '../../../../../utils/cn'
 import { getLiteralType, isLegalIdentifier } from '../../../../../utils/keywords'
@@ -82,6 +82,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
     ref,
   ) => {
+    const store = useOpenPLCStoreApi()
     const pouName = useBoundPou()
     const pous = useOpenPLCStore((state) => state.project.data.pous)
     const createVariable = useOpenPLCStore((state) => state.projectActions.createVariable)
@@ -100,16 +101,16 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         return
       }
       let cancelled = false
-      void getScopeCompletions(pouName, valueToSearch, expectedType).then((items) => {
+      void getScopeCompletions(store, pouName, valueToSearch, expectedType).then((items) => {
         if (!cancelled) setCandidates(items)
       })
       return () => {
         cancelled = true
       }
-    }, [pouName, valueToSearch, expectedType, blockType, pous])
+    }, [store, pouName, valueToSearch, expectedType, blockType, pous])
 
     const submitVariableToBlock = (variable: PLCVariable) => {
-      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { project, ladderFlows } = store.getState()
       const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(
         pouName,
         project.data.pous,
@@ -174,7 +175,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
-      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { project, ladderFlows } = store.getState()
       if (!variableName.trim()) {
         // For variable nodes on block handles, clearing the name resets the variable
         // so that a branch (contacts/coils) can be placed on the handle instead.
@@ -261,7 +262,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
      * dangling name behind.
      */
     const clearBoundVariable = () => {
-      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { project, ladderFlows } = store.getState()
       const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
@@ -289,7 +290,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       class: PLCVariable['class']
       type: { definition: PLCVariable['type']['definition']; value: string }
     }) => {
-      const { project, ladderFlows } = useOpenPLCStore.getState()
+      const { project, ladderFlows } = store.getState()
       const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })

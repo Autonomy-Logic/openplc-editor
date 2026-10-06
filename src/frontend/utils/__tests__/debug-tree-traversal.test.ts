@@ -1,11 +1,11 @@
 import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import { createTestStore } from '../../store/testing'
 import type { DebugVariableEntry } from '../debug-parser'
 import type { DebugNodeVisitor, TraversalContext } from '../debug-tree-traversal'
 import { lookupEnumValues, resolveLeafType, traverseNestedType, traverseVariable } from '../debug-tree-traversal'
 
 /** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
-const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
+const SYSTEM_LIBS = createTestStore().getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // Simple visitor that collects node info into a plain object

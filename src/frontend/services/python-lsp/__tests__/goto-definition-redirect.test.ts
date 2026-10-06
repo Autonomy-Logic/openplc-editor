@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { __clearBodyLineOffsetsForTests, setBodyLineOffset } from '../../lsp-shared/body-offsets'
 import { redirectPythonDefinitionToStore } from '../goto-definition-redirect'
 
@@ -17,7 +18,7 @@ function makePythonPou(name: string): PLCPou {
 }
 
 function setProjectPous(pous: PLCPou[]) {
-  openPLCStoreBase.setState((s) => ({
+  store.setState((s) => ({
     ...s,
     project: { ...s.project, data: { ...s.project.data, pous, dataTypes: [] } },
     editor: { type: 'available', meta: { name: 'available' } },
@@ -47,7 +48,7 @@ const POU_NAME = 'MyPou'
  *     line 5:     DidPrint : BOOL;     ← col 5
  *     line 6: END_VAR
  */
-function makeCtx(overrides: Partial<Parameters<typeof redirectPythonDefinitionToStore>[1]> = {}) {
+function makeCtx(overrides: Partial<Parameters<typeof redirectPythonDefinitionToStore>[2]> = {}) {
   return {
     sourceUri: SOURCE_URI,
     sourcePouName: POU_NAME,
@@ -63,6 +64,12 @@ function makeCtx(overrides: Partial<Parameters<typeof redirectPythonDefinitionTo
   }
 }
 
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
+
 describe('redirectPythonDefinitionToStore', () => {
   beforeEach(() => {
     setProjectPous([makePythonPou(POU_NAME)])
@@ -73,6 +80,7 @@ describe('redirectPythonDefinitionToStore', () => {
 
   it('returns false for a target URI different from the source', () => {
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: 'file:///typeshed/stdlib/builtins.pyi',
         range: { start: { line: 100, character: 0 }, end: { line: 100, character: 5 } },
@@ -88,6 +96,7 @@ describe('redirectPythonDefinitionToStore', () => {
     setBodyLineOffset(SOURCE_URI, 8)
 
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
@@ -96,7 +105,7 @@ describe('redirectPythonDefinitionToStore', () => {
     )
     expect(handled).toBe(true)
 
-    const editor = openPLCStoreBase.getState().editor
+    const editor = store.getState().editor
     expect(editor.type).toBe('plc-textual')
     if (editor.type === 'plc-textual') {
       expect(editor.variable.display).toBe('code')
@@ -114,6 +123,7 @@ describe('redirectPythonDefinitionToStore', () => {
 
     // DidPrint sits at preamble line 6, IEC line 5.
     redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 6, character: 0 }, end: { line: 6, character: 8 } },
@@ -121,7 +131,7 @@ describe('redirectPythonDefinitionToStore', () => {
       makeCtx(),
     )
 
-    const editor = openPLCStoreBase.getState().editor
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.cursorPosition?.lineNumber).toBe(5)
     }
@@ -134,6 +144,7 @@ describe('redirectPythonDefinitionToStore', () => {
     // cleanly.
     setBodyLineOffset(SOURCE_URI, 8)
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 2, character: 0 }, end: { line: 2, character: 5 } },
@@ -150,6 +161,7 @@ describe('redirectPythonDefinitionToStore', () => {
     // redirect should bail rather than guess.
     setBodyLineOffset(SOURCE_URI, 8)
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
@@ -164,6 +176,7 @@ describe('redirectPythonDefinitionToStore', () => {
   it('routes a body target with the body offset subtracted', () => {
     setBodyLineOffset(SOURCE_URI, 8)
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 15, character: 4 }, end: { line: 15, character: 14 } },
@@ -172,7 +185,7 @@ describe('redirectPythonDefinitionToStore', () => {
     )
     expect(handled).toBe(true)
 
-    const editor = openPLCStoreBase.getState().editor
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.variable.display).toBe('table') // body targets don't switch the panel
       expect(editor.cursorPosition).toEqual({
@@ -186,6 +199,7 @@ describe('redirectPythonDefinitionToStore', () => {
 
   it('treats line 0 (no body offset registered) as a body target', () => {
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
@@ -193,7 +207,7 @@ describe('redirectPythonDefinitionToStore', () => {
       makeCtx(),
     )
     expect(handled).toBe(true)
-    const editor = openPLCStoreBase.getState().editor
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.cursorPosition?.target).toBe('body')
     }
@@ -203,6 +217,7 @@ describe('redirectPythonDefinitionToStore', () => {
     setProjectPous([])
     setBodyLineOffset(SOURCE_URI, 8)
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         uri: SOURCE_URI,
         range: { start: { line: 5, character: 0 }, end: { line: 5, character: 10 } },
@@ -215,6 +230,7 @@ describe('redirectPythonDefinitionToStore', () => {
   it('honours LocationLink shapes (selectionRange preferred)', () => {
     setBodyLineOffset(SOURCE_URI, 8)
     const handled = redirectPythonDefinitionToStore(
+      store,
       {
         targetUri: SOURCE_URI,
         targetRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
@@ -223,7 +239,7 @@ describe('redirectPythonDefinitionToStore', () => {
       makeCtx(),
     )
     expect(handled).toBe(true)
-    const editor = openPLCStoreBase.getState().editor
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.cursorPosition?.lineNumber).toBe(2) // ValveState's IEC line
     }
