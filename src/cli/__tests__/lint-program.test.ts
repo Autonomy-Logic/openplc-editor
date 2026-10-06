@@ -68,6 +68,17 @@ END_PROGRAM`),
     ).toEqual([])
   })
 
+  it('says nothing when the input is assigned through the instance before the call', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff.IN := Run;
+  holdOff(PT := HoldTime);
+  Settled := holdOff.Q;
+END_PROGRAM`),
+    ).toEqual([])
+  })
+
   it('reports a block whose outputs nothing reads', () => {
     expect(
       rules(`PROGRAM Main
@@ -110,6 +121,104 @@ END_PROGRAM`)
   END_IF;
 END_PROGRAM`),
     ).toEqual([])
+  })
+
+  it('does NOT report the branches of one IF / ELSIF / ELSE written over several lines', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  IF holdOff.Q THEN
+    Speed := 1;
+  ELSIF Run THEN
+    Speed := 2;
+  ELSIF Ready THEN
+    Speed := 3;
+  ELSE
+    Speed := 4;
+  END_IF;
+END_PROGRAM`),
+    ).toEqual([])
+  })
+
+  it('does NOT report a branch chain written in lower case', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  if holdOff.Q then
+    Speed := 1;
+  elsif Run then
+    Speed := 2;
+  else
+    Speed := 3;
+  end_if;
+END_PROGRAM`),
+    ).toEqual([])
+  })
+
+  it('does NOT count an assignment that ends its IF on the same line', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  Settled := holdOff.Q;
+  IF Run THEN
+    Settled := FALSE; END_IF;
+END_PROGRAM`),
+    ).toEqual([])
+  })
+
+  it('does NOT report a second assignment that reads the first', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  Level := holdOff.Q;
+  Level := LIMIT(0, Level, 3);
+  Count := Count + 1;
+  Count := Count - 1;
+END_PROGRAM`),
+    ).toEqual([])
+  })
+
+  it('does NOT report a variable read between two assignments', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  Temp := holdOff.Q;
+  First := Temp;
+  Temp := Ready;
+  Second := Temp;
+END_PROGRAM`),
+    ).toEqual([])
+  })
+
+  it('still reports a value overwritten before anything reads it', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  Level := holdOff.Q;
+  First := Level;
+  Level := 1;
+  Level := 2;
+  Second := Level;
+END_PROGRAM`),
+    ).toContain('variable-driven-twice')
+  })
+
+  it('still reports a double drive that follows a one-line IF', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(IN := Run, PT := HoldTime);
+  IF Run THEN Alarm := TRUE; END_IF;
+  Settled := Ready;
+  Settled := holdOff.Q;
+END_PROGRAM`),
+    ).toContain('variable-driven-twice')
   })
 
   it('does NOT count writes to two members of the same structure', () => {

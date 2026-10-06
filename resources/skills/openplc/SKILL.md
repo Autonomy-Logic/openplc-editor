@@ -165,13 +165,14 @@ thing for a setpoint. Two rules:
 Without that the upload carries no `retain.conf` and the runtime's store stays
 off, so a variable flagged `retain` retains nothing.
 
-**Do not try to throttle the writes yourself.** The runtime already buffers: it
-is handed the retained blob every scan and commits it on `flushSeconds`
-(default 5, range 1-3600). That buffering is what keeps it from writing at scan
-rate and wearing the flash out. Tune the period instead — lower loses less state
-to a power cut and works the storage harder; higher is gentler. Adding your own
-"only write when changed" guard in ladder or ST does not reduce flash writes,
-because the commit is on a timer, not on your assignment.
+**Do not try to throttle the writes yourself.** The store already does: it is
+handed the retained blob every scan, writes nothing while nothing changes, saves
+a change straight away, and then saves at most once per `flushSeconds` while
+values keep changing (range 1-3600; default 10 on runtime v4, 60 on ESP32, 600
+on the other Arduino boards, whose EEPROM or flash wears per write). Retain
+values that change rarely, such as setpoints; a value that changes all the time
+is saved once per period. Adding your own "only write when changed" guard in
+ladder or ST changes nothing.
 
 `flag: "constant"` is the other qualifier; the two are mutually exclusive.
 

@@ -140,14 +140,26 @@ function pinsOf(
 }
 
 /**
- * Names assigned by an UNCONDITIONAL statement, and how often.
+ * Names assigned by an UNCONDITIONAL statement whose value was overwritten
+ * unread, and how many such writes there were in a row.
  *
  * Depth matters: a SET and a RESET coil on one variable are two assignments and
  * entirely correct, and they transpile to `IF <edge> THEN x := …; END_IF;`. Only
  * assignments at the top level are the double-drive this rule is about.
+ *
+ * A write that something reads before the next write is not lost: neither
+ * `x := 4; x := LIMIT(0, x, 3);` nor `t := a; y := t; t := b;` is a double
+ * drive, so a read of the name between two writes (or on the second write's
+ * right-hand side) starts the count again.
  */
 function unconditionalAssignments(statements: string): Map<string, number> {
   const counts = new Map<string, number>()
+  const readSinceWrite = new Set<string>()
+  const noteReads = (text: string): void => {
+    for (const name of counts.keys()) {
+      if (mentions(text, name)) readSinceWrite.add(name)
+    }
+  }
   let depth = 0
   // A call's named arguments are written one per line often enough that this
   // is not an edge case — the editor's own SoftMotion bridge does it — and
@@ -159,25 +171,32 @@ function unconditionalAssignments(statements: string): Map<string, number> {
     const lineStartedInsideCall = parenDepth > 0
     parenDepth += (line.match(/\(/g) ?? []).length - (line.match(/\)/g) ?? []).length
     if (parenDepth < 0) parenDepth = 0
-    if (line.length === 0 || lineStartedInsideCall) continue
-
-    const closes = (line.match(/\bEND_(IF|CASE|WHILE|FOR|REPEAT)\b/g) ?? []).length
-    depth -= closes
-    if (depth < 0) depth = 0
-
-    if (depth === 0) {
-      const assignment = /^(\w+(?:\.\w+)*)\s*:=/.exec(line)
-      // `inst(…)` is a call, not an assignment, and `a.b := …` writes a member
-      // rather than the variable — neither is a double drive.
-      if (assignment && !assignment[1].includes('.')) {
-        const name = assignment[1].toUpperCase()
-        counts.set(name, (counts.get(name) ?? 0) + 1)
-      }
+    if (line.length === 0) continue
+    if (lineStartedInsideCall) {
+      noteReads(line)
+      continue
     }
 
-    const opens = (line.match(/\b(IF|CASE|WHILE|FOR|REPEAT)\b/g) ?? []).length
-    const elses = (line.match(/\bELSIF\b/g) ?? []).length
-    depth += opens - elses
+    // A line is classified by the depth it starts at: `x := 1; END_IF;` is
+    // still inside the IF. Only END_xxx closes a block — ELSIF and ELSE are
+    // branches of the one already open. Keywords are case-insensitive (IEC).
+    const lineDepth = depth
+    const opens = (line.match(/\b(IF|CASE|WHILE|FOR|REPEAT)\b/gi) ?? []).length
+    const closes = (line.match(/\bEND_(IF|CASE|WHILE|FOR|REPEAT)\b/gi) ?? []).length
+    depth = Math.max(0, depth + opens - closes)
+
+    const assignment = lineDepth === 0 ? /^(\w+(?:\.\w+)*)\s*:=/.exec(line) : null
+    // `inst(…)` is a call, not an assignment, and `a.b := …` writes a member
+    // rather than the variable — neither is a double drive.
+    if (assignment && !assignment[1].includes('.')) {
+      const name = assignment[1].toUpperCase()
+      noteReads(line.slice(assignment[0].length))
+      const prior = counts.get(name) ?? 0
+      counts.set(name, prior === 0 || readSinceWrite.has(name) ? 1 : prior + 1)
+      readSinceWrite.delete(name)
+    } else {
+      noteReads(line)
+    }
   }
   return counts
 }
@@ -238,8 +257,14 @@ export function lintProgram(input: LintInput): LintFinding[] {
       // The block's FIRST declared input is the one that drives it — `IN` on a
       // timer, `EXECUTE` on a motion block. Leaving it open while calling the
       // block is the EN/ENO trap: the rung gates the call and nothing drives it.
+      // `inst.IN := x;` before the call assigns it just as `inst(IN := x)` does.
       const primary = inputs[0]
-      if (primary && !assigned.has(primary.toUpperCase())) {
+      const memberAssigned =
+        primary !== undefined &&
+        new RegExp(`\\b${escapeForRegex(instance.name)}\\s*\\.\\s*${escapeForRegex(primary)}\\s*:=`, 'i').test(
+          body.statements,
+        )
+      if (primary && !assigned.has(primary.toUpperCase()) && !memberAssigned) {
         const gated = assigned.has('EN') ? ' The rung is wired to EN/ENO, which only gates the call.' : ''
         findings.push({
           severity: 'error',

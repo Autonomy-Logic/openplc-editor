@@ -141,3 +141,29 @@ describe('a variable that is a function-block instance', () => {
     expect(result.errors.filter((error) => error.includes('t0'))).toEqual([])
   })
 })
+
+describe('--prune with a name a dropped element still holds', () => {
+  // The spec renames an enumeration and gives its old name to a new block.
+  // Prune used to run after the adds, so the block met the stale type, failed
+  // on the clash, and only then was the type removed.
+  it('removes the old element first, so the new one takes the name', async () => {
+    await apply({
+      dataTypes: [{ derivation: 'enumerated', name: 'ROTATION', values: ['FIXED', 'HOURS'] }],
+      pous: [],
+    } as Partial<ApplySpec>)
+
+    const result = await apply(
+      {
+        dataTypes: [{ derivation: 'enumerated', name: 'ROTATE_MODE', values: ['FIXED', 'HOURS'] }],
+        pous: [{ name: 'ROTATION', kind: 'function-block', language: 'st', variables: [], body: { text: '' } }],
+      } as Partial<ApplySpec>,
+      true,
+    )
+
+    expect(result.errors).toEqual([])
+    const data = openPLCStoreBase.getState().project.data
+    expect(data.pous.some((pou) => pou.name === 'ROTATION')).toBe(true)
+    expect(data.dataTypes.some((type) => type.name === 'ROTATION')).toBe(false)
+    expect(data.dataTypes.some((type) => type.name === 'ROTATE_MODE')).toBe(true)
+  })
+})

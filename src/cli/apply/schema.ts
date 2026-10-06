@@ -290,12 +290,13 @@ const deviceSchema = z
         /** Absolute path ON THE DEVICE. Empty means the runtime's own default. */
         path: z.string().optional(),
         /**
-         * Commit period in seconds, 1 to 3600.
+         * Commit period in seconds, 1 to 3600. Omitted: the target's default
+         * (10 runtime v4, 60 ESP32, 600 other Arduino boards).
          *
-         * The runtime hands the store its blob every scan; this is what stops it
-         * writing through at scan rate and wearing the flash out. Lower costs
-         * less state on a power cut and works the storage harder. The runtime
-         * refuses a value outside the range at install time.
+         * A change is saved at once; further changes within the period are held
+         * and saved when it ends, so nothing is written at scan rate. Lower
+         * costs less of a constantly changing value on a power cut and works the
+         * storage harder. The runtime refuses a value outside the range.
          */
         flushSeconds: z.number().int().min(1).max(3600).optional(),
       })

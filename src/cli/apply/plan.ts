@@ -68,6 +68,11 @@ export async function applySpec(
   const changes: PlannedChange[] = []
   const errors: string[] = []
 
+  // Remove what the spec no longer has BEFORE adding: a POU may take a name a
+  // data type the spec dropped still holds (a renamed type), and adding it
+  // first fails on the name clash.
+  if (options.prune) prune(spec, changes)
+
   applyDevice(spec, changes)
   applyLibraries(spec, changes, errors)
   applyDataTypes(spec, changes, errors)
@@ -85,7 +90,8 @@ export async function applySpec(
   applyServers(spec, changes, errors)
   await applyRemoteDevices(spec, options.projectPath, changes, errors)
   if (options.prune) {
-    prune(spec, changes, errors)
+    // Variables are compared with the POUs just applied, so they go last.
+    pruneVariables(spec, changes, errors)
     pruneProtocols(spec, changes)
   }
 
@@ -482,6 +488,21 @@ function toVariableType(type: SpecVariable['type']): PLCVariable['type'] {
   } as PLCVariable['type']
 }
 
+/**
+ * The update form of a spec variable. The store merges an update into the
+ * existing variable, so a key the spec leaves out keeps its old value: a
+ * variable whose `retain` flag (or initial value) the spec dropped stayed
+ * RETAIN. A spec is a declaration, so an absent flag or initial value means
+ * none, and the update says so explicitly.
+ */
+function toVariableUpdate(spec: SpecVariable, fallbackClass: 'local' | 'global'): PLCVariable {
+  return {
+    ...toVariable(spec, fallbackClass),
+    flag: spec.flag,
+    initialValue: spec.initialValue,
+  } as unknown as PLCVariable
+}
+
 function toVariable(spec: SpecVariable, fallbackClass: 'local' | 'global'): PLCVariable {
   return {
     name: spec.name,
@@ -574,7 +595,7 @@ function applyVariables(spec: ApplySpec, changes: PlannedChange[], errors: strin
           scope: 'local',
           associatedPou: pou.name,
           rowId: existing,
-          data: toVariable(wanted, 'local'),
+          data: toVariableUpdate(wanted, 'local'),
         })
         changes.push({ kind: 'variable', action: 'update', name: `${pou.name}.${wanted.name}` })
         continue
@@ -601,7 +622,7 @@ function applyGlobalVariables(spec: ApplySpec, changes: PlannedChange[], errors:
     const existing = globals.findIndex((entry) => entry.name === wanted.name)
 
     if (existing >= 0) {
-      state.projectActions.updateVariable({ scope: 'global', rowId: existing, data: toVariable(wanted, 'global') })
+      state.projectActions.updateVariable({ scope: 'global', rowId: existing, data: toVariableUpdate(wanted, 'global') })
       changes.push({ kind: 'variable', action: 'update', name: wanted.name })
       continue
     }
@@ -724,7 +745,7 @@ function applyInstances(spec: ApplySpec, changes: PlannedChange[], errors: strin
  * `pouActions.delete`, never `deleteRequest` — the latter opens a modal and
  * would hang here forever.
  */
-function prune(spec: ApplySpec, changes: PlannedChange[], errors: string[]): void {
+function prune(spec: ApplySpec, changes: PlannedChange[]): void {
   if (spec.pous) {
     const wanted = new Set(spec.pous.map((pou) => pou.name))
     for (const pou of [...openPLCStoreBase.getState().project.data.pous]) {
@@ -766,8 +787,6 @@ function prune(spec: ApplySpec, changes: PlannedChange[], errors: string[]): voi
       changes.push({ kind: 'task', action: 'delete', name: task.name })
     }
   }
-
-  pruneVariables(spec, changes, errors)
 }
 
 /**

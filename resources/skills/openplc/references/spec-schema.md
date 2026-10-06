@@ -40,7 +40,7 @@ flagged `retain` retains nothing until this is switched on.
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enabled`      | Required.                                                                                                                                                                                    |
 | `path`         | Absolute path ON THE DEVICE. Empty or absent means the runtime's own default.                                                                                                                |
-| `flushSeconds` | Commit period, 1-3600, default 5. The runtime is handed the blob every scan; this is what stops it writing at scan rate. Lower loses less state on a power cut and works the storage harder. |
+| `flushSeconds` | 1-3600. A change is saved at once; further changes within this period are saved when it ends. Default: 10 on runtime v4, 60 on ESP32, 600 on other Arduino boards. Lower loses less of a constantly changing value on a power cut and works the storage harder. |
 
 ## libraries
 
