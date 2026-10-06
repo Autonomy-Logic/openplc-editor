@@ -5,6 +5,7 @@
   "asarUnpack": "**\\*.{node,dll}",
   "generateUpdatesFilesForAllChannels": true,
   "files": ["dist", "node_modules", "package.json"],
+  "afterPack": "scripts/mac-inject-local-network-usage.js",
   "afterSign": "scripts/notarize.js",
   "directories": {
     "app": "release/app",
