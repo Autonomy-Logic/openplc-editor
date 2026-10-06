@@ -10,8 +10,15 @@
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git worktree:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git hash-object:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh run view:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)"
     ]

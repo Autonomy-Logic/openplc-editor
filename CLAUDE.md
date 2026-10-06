@@ -72,8 +72,9 @@ npm run validate:arch    # Architecture layer dependency validation
 
 ## Verify before pushing (CI parity)
 
-CI runs these commands directly, not `npm run format`, which rewrites files and
-so passes locally while CI's `--check` still fails. Tests run under
+CI runs these commands directly, not `npm run lint` or `npm run format`. The `lint`
+script passes its glob unquoted, so the shell expands it and only part of `src/` is
+linted; `format` rewrites files and so passes locally while CI's `--check` still fails. Tests run under
 **Jest** (not Vitest), and both `tsc` and `jest` import the `strucpp` package,
 so it must be installed first or they fail with `TS2307: Cannot find module
 'strucpp'`. Run each exact command (from `.github/workflows/`) green before you push:
