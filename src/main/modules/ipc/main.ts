@@ -1158,11 +1158,12 @@ class MainProcessBridge implements MainIpcModule {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
-        this.currentProjectPath = projectPath
         // A retrieval lives in scratch and is pruned behind the user, so it must not appear under Recent as if it were a real project.
         if (!isRetrievedProjectPath(projectPath)) {
           await this.projectService.updateProjectHistory(projectPath)
         }
+        // Set last, so a failed open leaves the root on the project still open.
+        this.currentProjectPath = projectPath
       }
       return result
     } catch (_error) {

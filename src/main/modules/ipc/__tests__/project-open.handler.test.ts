@@ -185,6 +185,16 @@ describe('file-access root', () => {
     expect(bridge.handleFileWatchStop({} as never, watched).success).toBe(false)
   })
 
+  it('leaves the root on the open project when the history update fails', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectA)
+    projectService.updateProjectHistory.mockRejectedValueOnce(new Error('disk full'))
+
+    expect((await bridge.handleReadProjectFiles({} as never, projectB)).success).toBe(false)
+
+    expect((await readFile(projectA)).success).toBe(true)
+    expect((await readFile(projectB)).success).toBe(false)
+  })
+
   it('keeps the root when the project stays open', async () => {
     await bridge.handleReadProjectFiles({} as never, projectB)
 

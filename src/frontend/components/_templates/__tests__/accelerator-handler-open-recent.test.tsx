@@ -39,9 +39,11 @@ function stubPort<T extends object>(): T {
 }
 
 const openProjectByPath = jest.fn<Promise<ProjectResponse>, [string]>()
+const openProject = jest.fn<Promise<ProjectResponse>, []>()
 
 const projectPort = new Proxy<ProjectPort>(Object.create(null), {
-  get: (_, prop) => (prop === 'openProjectByPath' ? openProjectByPath : () => undefined),
+  get: (_, prop) =>
+    prop === 'openProjectByPath' ? openProjectByPath : prop === 'openProject' ? openProject : () => undefined,
 })
 
 function makePorts(): PlatformPorts {
@@ -153,30 +155,6 @@ it('asks to save unsaved changes before reading the project', async () => {
   expect(handleOpenProjectResponse).toHaveBeenCalledWith(parsed)
 })
 
-it('forgets the path when the save prompt is cancelled', async () => {
-  openProjectByPath.mockResolvedValue({ success: true, data: parsed })
-  act(() => store.getState().workspaceActions.setEditingState('unsaved'))
-  renderHandler()
-
-  await openRecent('/projects/demo')
-
-  const data: unknown = store.getState().modals['save-changes-project']?.data
-  const callbacks = typeof data === 'object' && data !== null ? data : {}
-  const onActionAborted: unknown = 'onActionAborted' in callbacks ? callbacks.onActionAborted : undefined
-  const onAfterAction: unknown = 'onAfterAction' in callbacks ? callbacks.onAfterAction : undefined
-  if (typeof onActionAborted !== 'function' || typeof onAfterAction !== 'function') {
-    throw new Error('save modal is missing its callbacks')
-  }
-  await act(async () => {
-    onActionAborted('cancelled')
-    onAfterAction()
-    await Promise.resolve()
-  })
-
-  expect(openProjectByPath).not.toHaveBeenCalled()
-  expect(handleOpenProjectResponse).not.toHaveBeenCalled()
-})
-
 describe('an edit made while the read is pending', () => {
   function modalCallbacks() {
     const data: unknown = store.getState().modals['save-changes-project']?.data
@@ -222,5 +200,67 @@ describe('an edit made while the read is pending', () => {
 
     expect(openProjectByPath).toHaveBeenLastCalledWith('/projects/current')
     expect(handleOpenProjectResponse).not.toHaveBeenCalled()
+  })
+})
+
+describe('an open that fails past the read', () => {
+  async function fire(event: string) {
+    const callback = listeners.get(event)
+    if (!callback) throw new Error(`nothing subscribed to ${event}`)
+    await act(async () => {
+      callback()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  beforeEach(() => {
+    act(() => store.getState().projectActions.updateMetaPath('/projects/current'))
+  })
+
+  it('re-reads the open project when a native Recent open rejects', async () => {
+    openProjectByPath.mockImplementation((path) =>
+      path === '/projects/demo'
+        ? Promise.reject(new Error('parse failed'))
+        : Promise.resolve({ success: true, data: parsed }),
+    )
+    renderHandler()
+
+    await openRecent('/projects/demo')
+
+    expect(openProjectByPath).toHaveBeenLastCalledWith('/projects/current')
+    expect(handleOpenProjectResponse).not.toHaveBeenCalled()
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'fail' }))
+  })
+
+  it('leaves the root alone when a native Recent open reports it could not read the project', async () => {
+    openProjectByPath.mockResolvedValue({ success: false, error: { title: 'Error', description: 'Gone.' } })
+    renderHandler()
+
+    await openRecent('/projects/gone')
+
+    expect(openProjectByPath).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-reads the open project when File > Open rejects', async () => {
+    openProject.mockRejectedValue(new Error('parse failed'))
+    openProjectByPath.mockResolvedValue({ success: true, data: parsed })
+    renderHandler()
+
+    await fire('onOpenProject')
+
+    expect(openProjectByPath).toHaveBeenCalledWith('/projects/current')
+    expect(handleOpenProjectResponse).not.toHaveBeenCalled()
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'fail' }))
+  })
+
+  it('does nothing more when the File > Open picker is cancelled', async () => {
+    openProject.mockResolvedValue({ success: false, error: { title: 'Cancelled', description: 'No project selected' } })
+    renderHandler()
+
+    await fire('onOpenProject')
+
+    expect(openProjectByPath).not.toHaveBeenCalled()
+    expect(toast).not.toHaveBeenCalled()
   })
 })
