@@ -39,7 +39,8 @@
     },
     "extendInfo": {
       "CFBundleDisplayName": "OpenPLC Editor",
-      "CFBundleName": "OpenPLC Editor"
+      "CFBundleName": "OpenPLC Editor",
+      "NSLocalNetworkUsageDescription": "OpenPLC Editor needs local network access to discover and connect to PLCs on your network."
     },
     "type": "distribution",
     "hardenedRuntime": true,
