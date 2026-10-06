@@ -1011,6 +1011,8 @@ async function runCompilePipelineInner(
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
     ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    ...(persistentStorage !== undefined ? { persistentStorage } : {}),
+    targetHidesPersistentStorage: targetHidesPersistentStorage ?? false,
   })
 
   // A board reached only over Ethernet must never be handed an image with no

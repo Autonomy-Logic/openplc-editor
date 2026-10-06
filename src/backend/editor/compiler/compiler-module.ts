@@ -2924,13 +2924,13 @@ class CompilerModule {
     // because they live in the same place for the same reason: the project owns
     // them and they must be available with no device attached.
     //
-    // Only runtime-v4 targets have a built-in file store to configure. On
-    // baremetal the store is whatever the board's driver provides, and nothing
-    // in the project can configure it — so a retain.conf there would be a file
-    // no one reads.
+    // Targets with a built-in store the project configures: runtime v4 (its
+    // file store, through retain.conf) and Arduino firmware (the core's NVS or
+    // EEPROM, through defines.h). The simulator and runtime v3 have none.
     let persistentStorage: PersistentStorageSettings | undefined
     let targetHidesPersistentStorage = false
-    if (isRuntimeV4) {
+    const isArduinoFirmware = !isSimulator && !isRuntimeV3 && !isRuntimeV4
+    if (isRuntimeV4 || isArduinoFirmware) {
       const devicesConfigurationFilePath = join(normalizedProjectPath, 'devices', 'configuration.json')
       // Tracked out here, not acted on inside the `try`, so the catch below
       // cannot swallow the refusal along with the missing-file case it is for.

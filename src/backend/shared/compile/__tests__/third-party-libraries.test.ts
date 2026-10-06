@@ -21,6 +21,8 @@ const caps = (over: Partial<TargetCapabilities> = {}): TargetCapabilities =>
     hasRuntimeStats: false,
     isInProcessSimulator: false,
     nativeRetainStore: false,
+    retainStoreHasPath: false,
+    retainDefaultFlushSeconds: 10,
     plcStateControl: false,
     directUsbUpload: false,
     isLicensable: false,

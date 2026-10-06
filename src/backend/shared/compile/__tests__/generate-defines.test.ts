@@ -450,6 +450,50 @@ describe('generateDefinesContent — retain blob size', () => {
     expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
     expect(generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 0 })).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
+
+  const storage = { enabled: true, path: '', flushSeconds: 5 }
+
+  it("switches the firmware's store on at the project's period when Persistent Storage is on", () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 148, persistentStorage: storage })
+    expect(out).toContain('#define OPLC_RETAIN_STORE_ENABLED 1\n')
+    expect(out).toContain('#define OPLC_RETAIN_FLUSH_MS 5000UL\n')
+  })
+
+  it('leaves the store off when Persistent Storage is off or never set', () => {
+    for (const persistentStorage of [undefined, { ...storage, enabled: false }]) {
+      const out = generateDefinesContent({
+        ...EMPTY_INPUTS,
+        retainBlobSize: 148,
+        ...(persistentStorage ? { persistentStorage } : {}),
+      })
+      expect(out).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+      expect(out).not.toContain('OPLC_RETAIN_STORE_ENABLED')
+    }
+  })
+
+  it("leaves the store off when the target's VPP owns retention", () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      retainBlobSize: 148,
+      persistentStorage: storage,
+      targetHidesPersistentStorage: true,
+    })
+    expect(out).not.toContain('OPLC_RETAIN_STORE_ENABLED')
+  })
+
+  it('clamps the period the same way retain.conf does', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      retainBlobSize: 148,
+      persistentStorage: { ...storage, flushSeconds: 99999 },
+    })
+    expect(out).toContain('#define OPLC_RETAIN_FLUSH_MS 3600000UL\n')
+  })
+
+  it('emits no store settings for a program that retains nothing', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, persistentStorage: storage })
+    expect(out).not.toContain('OPLC_RETAIN')
+  })
 })
 
 describe('generateDefinesContent — full output snapshot', () => {

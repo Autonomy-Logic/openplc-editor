@@ -305,14 +305,24 @@ void setup()
     runtime_discover_tasks();
 
     // Retained variables. init() decides what this runtime can do about them;
-    // load() asks the driver for what it is holding for THIS program, which is
-    // also where a driver discards the previous program's values. Both must
+    // load() asks the driver for what it is holding, and the layout check
+    // refuses values that no longer fit the declarations. Both must
     // follow runtime_bind_located_vars(), because a retained variable may also
     // be located and its storage has to be bound before anything writes to it.
     //
-    // PROGRAM_MD5 is passed from here because the sketch is on defines.h's one
-    // legitimate include path and the glue is not.
-    runtime_retain_init(PROGRAM_MD5);
+    // PROGRAM_MD5 and the buffer size are passed from here because the sketch
+    // is on defines.h's one legitimate include path and the glue is not. The
+    // buffer is exactly this program's retain blob (OPLC_RETAIN_BLOB_SIZE), so
+    // there is no fixed cap: a program retains as much as its storage holds,
+    // and the store answers TOO_LARGE if the board's storage is smaller.
+#ifdef OPLC_RETAIN_BLOB_SIZE
+    static_assert(OPLC_RETAIN_BLOB_SIZE <= 65535,
+                  "The retain interface carries 16-bit lengths: retain fewer than 64 KB.");
+    static uint8_t retain_storage[OPLC_RETAIN_BLOB_SIZE];
+    runtime_retain_init(PROGRAM_MD5, retain_storage, (uint16_t)sizeof(retain_storage));
+#else
+    runtime_retain_init(PROGRAM_MD5, nullptr, 0);
+#endif
     runtime_retain_load();
 
     // Initialize hardware (HAL -- unchanged)

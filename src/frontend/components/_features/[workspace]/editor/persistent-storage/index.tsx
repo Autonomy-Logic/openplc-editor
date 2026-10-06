@@ -1,10 +1,7 @@
+import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
-import {
-  DEFAULT_RETAIN_FLUSH_SECONDS,
-  RETAIN_MAX_FLUSH_SECONDS,
-  RETAIN_MIN_FLUSH_SECONDS,
-} from '@root/middleware/shared/ports/types'
+import { RETAIN_MAX_FLUSH_SECONDS, RETAIN_MIN_FLUSH_SECONDS } from '@root/middleware/shared/ports/types'
 
 /**
  * Persistent Storage — where the device keeps this project's RETAIN variables.
@@ -19,7 +16,9 @@ import {
  * and the setting is reviewable in the project rather than being invisible
  * state on one particular box.
  *
- * The screen appears for targets that use the runtime's built-in file store. A
+ * The screen appears for targets with a built-in store: runtime v4's file store
+ * (settings travel as `retain.conf`) and Arduino firmware's per-core store
+ * (settings travel as `defines.h`; it has no file, so no location field). A
  * VPP whose own driver handles retention declares
  * `hidesNativeScreens: ['persistent-storage']`, and the editor then removes
  * this screen AND emits no `retain.conf` — which is what makes the runtime
@@ -30,13 +29,14 @@ import {
 const PersistentStorageEditor = () => {
   const settings = useOpenPLCStore((s) => s.deviceDefinitions.configuration.persistentStorage)
   const setPersistentStorage = useOpenPLCStore((s) => s.deviceActions.setPersistentStorage)
+  const { retainStoreHasPath, retainDefaultFlushSeconds } = useTargetCapabilities()
 
   // Absent means "this project does not use persistent storage", which is the
   // same thing the form shows for off — so read through defaults rather than
   // making the caller materialise a record just to render.
   const enabled = settings?.enabled ?? false
   const path = settings?.path ?? ''
-  const flushSeconds = settings?.flushSeconds ?? DEFAULT_RETAIN_FLUSH_SECONDS
+  const flushSeconds = settings?.flushSeconds ?? retainDefaultFlushSeconds
 
   // Whole seconds only. The emitter rounds (`Math.round`), so accepting 1.5 here
   // meant showing the user a value the device would never use — the field said
@@ -69,24 +69,26 @@ const PersistentStorageEditor = () => {
           </span>
         </label>
 
-        <div className='flex flex-col gap-1.5'>
-          <label htmlFor='retain-path' className='text-sm font-medium text-neutral-1000 dark:text-white'>
-            File location
-          </label>
-          <input
-            id='retain-path'
-            type='text'
-            value={path}
-            disabled={!enabled}
-            spellCheck={false}
-            placeholder='Leave empty to use the runtime default'
-            onChange={(e) => setPersistentStorage({ path: e.target.value })}
-            className='h-9 rounded-md border border-neutral-300 px-3 font-mono text-sm disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
-          />
-          <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-            An absolute path on the device. Leave it empty and the runtime uses its own default location.
-          </p>
-        </div>
+        {retainStoreHasPath && (
+          <div className='flex flex-col gap-1.5'>
+            <label htmlFor='retain-path' className='text-sm font-medium text-neutral-1000 dark:text-white'>
+              File location
+            </label>
+            <input
+              id='retain-path'
+              type='text'
+              value={path}
+              disabled={!enabled}
+              spellCheck={false}
+              placeholder='Leave empty to use the runtime default'
+              onChange={(e) => setPersistentStorage({ path: e.target.value })}
+              className='h-9 rounded-md border border-neutral-300 px-3 font-mono text-sm disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-white'
+            />
+            <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+              An absolute path on the device. Leave it empty and the runtime uses its own default location.
+            </p>
+          </div>
+        )}
 
         <div className='flex flex-col gap-1.5'>
           <label htmlFor='retain-flush' className='text-sm font-medium text-neutral-1000 dark:text-white'>
@@ -117,7 +119,9 @@ const PersistentStorageEditor = () => {
             </p>
           )}
           <p id='retain-flush-help' className='text-xs text-neutral-500 dark:text-neutral-400'>
-            Saving more often keeps less at risk, but on an SD card or flash will shorten its life.
+            A change is saved straight away. While values keep changing, they are saved at most once in
+            this period, which keeps wear on flash and EEPROM low: a value that changes inside the period
+            is saved when it ends. Retain values that change rarely, such as setpoints.
           </p>
         </div>
       </div>

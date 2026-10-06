@@ -487,38 +487,19 @@ static void runtime_reinit_program()
 // allocates nothing after setup.
 // ---------------------------------------------------------------------------
 
-// Cap on the retain blob this firmware will handle. Sized for the boards the
-// editor targets, and deliberately a fixed allocation: this buffer is filled
-// from inside the scan cycle, so it cannot come from the heap.
-#define RETAIN_BUFFER_MAX 512
-
-// A program that outgrows the buffer FAILS THE BUILD.
-//
-// The editor emits OPLC_RETAIN_BLOB_SIZE into defines.h whenever a program
-// retains anything, and the check has to happen here because there is nowhere
-// else for it to happen: a microcontroller has no console to report on, so the
-// alternative is firmware that links, runs, quietly decides the blob will not
-// fit and behaves as NON_RETAIN — on a machine somebody has already installed,
-// with the fault only visible after a power cycle.
-//
-// Retained state adds up faster than it looks. A retained TON is 36 bytes
-// (four interface leaves plus the four internal ones that make it a timer),
-// so this cap is reached at around fourteen of them.
-#ifdef OPLC_RETAIN_BLOB_SIZE
-static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
-              "This program's retained variables need more storage than this "
-              "board's retain buffer holds (RETAIN_BUFFER_MAX). Retain fewer "
-              "variables, or mark some of them NON_RETAIN. Remember that a "
-              "retained function block instance retains all of its internal "
-              "state, not only its inputs and outputs.");
-#endif
-
-static uint8_t  retain_buffer[RETAIN_BUFFER_MAX];
+// The retain buffer belongs to the sketch, which sizes it from the program
+// (OPLC_RETAIN_BLOB_SIZE in defines.h) and hands it to runtime_retain_init().
+// So it is exactly as large as this program's blob — no fixed cap to outgrow —
+// and a program that retains nothing allocates nothing. It is static storage,
+// not heap: the scan cycle packs into it.
+static uint8_t *retain_buffer     = nullptr;
+static uint16_t retain_capacity   = 0;
 static uint16_t retain_blob_len   = 0;   // 0 = nothing retained, or unusable
 static bool     retain_available  = false;
 
-// This program's identity, handed to the driver on every read so it can tell
-// whether what it is holding belongs to the program now running. Supplied by
+// This program's identity, handed to the driver on every read for a driver
+// that records it (the layout check decides whether stored values fit; see
+// openplc_retain.h). Supplied by
 // the sketch from PROGRAM_MD5 rather than read from defines.h here: defines.h
 // has no include guard and must reach a translation unit through exactly one
 // path (modbus_config.h), which this file is deliberately not on.
@@ -565,18 +546,20 @@ static uint16_t retain_size_leaf(uint8_t arr, uint16_t elem) {
 // the board's storage — whether the platform can actually keep the bytes is the
 // driver's answer, and it gives it by returning UNSUPPORTED from read().
 // ---------------------------------------------------------------------------
-void runtime_retain_init(const char *program_md5)
+void runtime_retain_init(const char *program_md5, uint8_t *buffer, uint16_t capacity)
 {
     retain_available    = false;
     retain_blob_len     = 0;
     retain_program_md5  = program_md5;
+    retain_buffer       = buffer;
+    retain_capacity     = buffer ? capacity : 0;
 
     const size_t needed = strucpp::retain::blob_size(retain_size_leaf);
     if (needed == 0) return;           // the program retains nothing
-    // Unreachable when the editor supplied OPLC_RETAIN_BLOB_SIZE — the
-    // static_assert above already refused the build. Kept for firmware built
-    // by other means, where silently degrading still beats overrunning.
-    if (needed > RETAIN_BUFFER_MAX) return;
+    // The sketch sized the buffer from this same program, so this only fails
+    // for firmware built without the editor's defines.h — where degrading to
+    // NON_RETAIN still beats overrunning.
+    if (needed > retain_capacity) return;
 
     retain_blob_len  = (uint16_t)needed;
     retain_available = true;
@@ -588,11 +571,9 @@ void runtime_retain_init(const char *program_md5)
 // re-runs every declared initialiser and would otherwise make a STOP behave as
 // a cold start. Idempotent by design, so calling it at all three is fine.
 //
-// The driver is handed this program's identity and decides for itself whether
-// what it holds still belongs here; a store it has just discarded answers
-// NO_DATA, exactly like a store that never held anything. Anything the runtime
-// cannot trust on top of that (bad magic, wrong format, failed crc, a layout
-// from a different program) leaves every variable at its initial value. That is
+// The driver offers what it holds; an empty store answers NO_DATA. Anything
+// the runtime cannot trust (bad magic, wrong format, failed crc, a layout from
+// a different declaration) leaves every variable at its initial value. That is
 // the correct outcome: a machine starting from its declared defaults is
 // recoverable, one starting from plausible-looking garbage is not.
 //
@@ -640,7 +621,7 @@ void runtime_retain_save()
     if (!retain_available) return;
 
     const size_t n = strucpp::retain::pack(
-        retain_buffer, sizeof(retain_buffer), retain_read_leaf, retain_size_leaf);
+        retain_buffer, retain_capacity, retain_read_leaf, retain_size_leaf);
     if (n == 0) return;
 
     openplc_retain_write(retain_buffer, (uint16_t)n);
@@ -708,9 +689,8 @@ void runtime_plc_cycle()
 
     // Entering RUN restores the retained values, matching where the Linux
     // daemon reloads them (it does it as part of loading the program). Nothing
-    // normally changes them while stopped, so this is usually a no-op — except
-    // in the one case that matters: a driver that discarded the store because
-    // the program changed. Idempotent, so calling it on every RUN edge is safe.
+    // normally changes them while stopped, so this is usually a no-op.
+    // Idempotent, so calling it on every RUN edge is safe.
     if (new_state == PLC_STATE_RUNNING && plc_state != PLC_STATE_RUNNING) {
         runtime_retain_load();
     }

@@ -17,7 +17,9 @@
  * into the in-memory file map sent to `/compile-arduino`).
  */
 
+import type { PersistentStorageSettings } from '../../../../middleware/shared/ports/types'
 import type { DevicePin } from '../../types/PLC/devices'
+import { activeRetainStore } from './generate-retain-conf'
 import {
   DEBUG_SLAVE,
   generateModbusDefines,
@@ -105,6 +107,12 @@ export interface GenerateDefinesInput {
    *  console on a microcontroller to report it, so the check has to happen at
    *  build time or not at all. */
   retainBlobSize?: number
+  /** The project's Persistent Storage settings (`DeviceConfiguration.persistentStorage`).
+   *  With storage on, the firmware's built-in store is enabled and commits at
+   *  this period; see `activeRetainStore`. */
+  persistentStorage?: PersistentStorageSettings
+  /** The target's VPP handles retention itself, so the built-in store stays off. */
+  targetHidesPersistentStorage?: boolean
 }
 
 /**
@@ -138,6 +146,8 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     defaultSerial,
     networkInterfaces,
     retainBlobSize,
+    persistentStorage,
+    targetHidesPersistentStorage,
   } = input
 
   let DEFINES_CONTENT = ''
@@ -316,14 +326,24 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
   }
 
-  // 6. Retain blob size.  Emitted only when the program retains something,
-  //    so boards that never touch retain see no change at all.  The firmware
-  //    static_asserts this against RETAIN_BUFFER_MAX: a program that outgrows
-  //    the buffer must fail the build rather than silently start behaving as
-  //    NON_RETAIN on a machine somebody has already installed.
+  // 6. Retain.  Emitted only when the program retains something, so boards
+  //    that never touch retain see no change at all.  The sketch sizes its
+  //    retain buffer from OPLC_RETAIN_BLOB_SIZE, so the buffer is exactly what
+  //    this program needs.  With Persistent Storage on (and the target's VPP
+  //    not owning retention) the firmware's built-in store is switched on and
+  //    commits at the project's period — the same settings retain.conf carries
+  //    to runtime v4.
   if (retainBlobSize !== undefined && retainBlobSize > 0) {
     DEFINES_CONTENT += '\n//Retain\n'
     DEFINES_CONTENT += `#define OPLC_RETAIN_BLOB_SIZE ${retainBlobSize}\n`
+    const store = activeRetainStore({
+      settings: persistentStorage,
+      targetHidesPersistentStorage: targetHidesPersistentStorage ?? false,
+    })
+    if (store) {
+      DEFINES_CONTENT += '#define OPLC_RETAIN_STORE_ENABLED 1\n'
+      DEFINES_CONTENT += `#define OPLC_RETAIN_FLUSH_MS ${store.flushSeconds * 1000}UL\n`
+    }
   }
 
   return DEFINES_CONTENT

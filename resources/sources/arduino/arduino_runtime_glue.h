@@ -124,8 +124,13 @@ void runtime_plc_cycle();
 // ---------------------------------------------------------------------------
 
 // Decide once what this runtime can do about retention: does the program retain
-// anything, and does its blob fit the buffer this firmware allocated. Call from
-// setup() BEFORE runtime_retain_load().
+// anything, and does its blob fit `buffer`. Call from setup() BEFORE
+// runtime_retain_load().
+//
+// `buffer` / `capacity` are the sketch's static retain buffer, sized from
+// OPLC_RETAIN_BLOB_SIZE (defines.h), or nullptr / 0 when the program retains
+// nothing. The runtime packs into it every scan and keeps it for the life of
+// the program.
 //
 // `program_md5` is PROGRAM_MD5 from the generated defines.h — 32 hex characters
 // identifying the program. It is passed in rather than read here because
@@ -133,7 +138,7 @@ void runtime_plc_cycle();
 // exactly one path (modbus_config.h), which the glue is not on. The driver uses
 // it to tell whether the values it holds belong to the program now running; see
 // Baremetal/openplc_retain.h.
-void runtime_retain_init(const char *program_md5);
+void runtime_retain_init(const char *program_md5, uint8_t *buffer, uint16_t capacity);
 
 // Restore the stored values. Call from setup() after runtime_retain_init().
 // Also called internally on the transition into RUN and after a program

@@ -61,9 +61,9 @@ extern "C" {
 typedef enum {
     // Operation completed. For a read: a blob was returned in `out`.
     OPLC_RETAIN_OK          = 0,
-    // Nothing stored — virgin storage, or discarded because the program
-    // changed. A first boot looks like this, and it is not an error: every
-    // retained variable simply keeps its declared initial value.
+    // Nothing stored — virgin storage. A first boot looks like this, and it
+    // is not an error: every retained variable simply keeps its declared
+    // initial value.
     OPLC_RETAIN_NO_DATA     = 1,
     // No backend on this platform. THE DEFAULT. Retain degrades to
     // NON_RETAIN, which is what the board did before it had this interface.
@@ -91,22 +91,14 @@ typedef enum {
  * `program_md5` is this program's identity, OPLC_RETAIN_PROGRAM_ID_LEN
  * characters, possibly not NUL-terminated (see the macro above).
  *
- * THE DRIVER DECIDES WHETHER THE STORED BYTES STILL BELONG TO THIS PROGRAM.
- * That decision lives here, and not in the runtime, because it is inseparable
- * from how the driver stores things:
- *
- *   - identity matches, or nothing has been stored yet → behave as a plain
- *     read: OK with the blob, or NO_DATA when the store is empty;
- *   - identity differs from what is stored → THE STORED VALUES BELONG TO A
- *     PROGRAM THAT IS NO LONGER RUNNING. Discard them, log one line saying
- *     storage was cleared, and answer NO_DATA. Every retained variable then
- *     starts at its declared initial value, which is what a new program means.
- *
- * DO NOT PERSIST THE NEW IDENTITY HERE. Keep it and commit it alongside the
- * blob on the next openplc_retain_write(), so a read never mutates storage and
- * the identity is only ever written together with the bytes it describes. If
- * the PLC never reaches RUN, nothing is stored and the next boot simply reaches
- * the same conclusion again — idempotent, with nothing lost.
+ * OFFER THE STORED BYTES WHATEVER PROGRAM WROTE THEM. The runtime validates the
+ * blob's layout hash (plus magic, format and crc32) and refuses one that does
+ * not fit, so a body edit keeps every retained value and a changed declaration
+ * starts them at their initial values. That is IEC 61131-3 §6.5.6.1: a warm
+ * restart keeps retained values; a download is not a cold start. Comparing the
+ * identity here would reset a commissioned plant's retained values on every
+ * upload. A driver may keep the identity alongside the blob (commit it on the
+ * next openplc_retain_write(), never from a read) if it wants to report it.
  *
  * Return OPLC_RETAIN_NO_DATA or OPLC_RETAIN_UNSUPPORTED to leave every
  * retained variable at its initial value. The runtime validates what it does
@@ -122,6 +114,11 @@ openplc_retain_status_t openplc_retain_read(const char *program_md5, uint16_t md
 
 /* Store `len` bytes.
  *
+ * `bytes` is the runtime's own retain buffer and stays valid, holding the last
+ * packed blob, until the next openplc_retain_write() or openplc_retain_read() —
+ * so a driver that defers its commit may commit from it in flush() without
+ * keeping a copy.
+ *
  * CALLED ONCE PER SCAN CYCLE, unconditionally, while the PLC is RUNNING. The
  * runtime does not diff, does not rate-limit and does not decide when a value
  * is worth keeping: it delivers the current bytes every cycle and the decision
@@ -135,9 +132,9 @@ openplc_retain_status_t openplc_retain_read(const char *program_md5, uint16_t md
  * the commit when nothing moved, belongs here too: the runtime cannot know what
  * a write costs on your board, so it does not try to guess.
  *
- * ALSO COMMITS THE PROGRAM IDENTITY held from the last openplc_retain_read(),
- * so the stored blob and the identity of the program that produced it are
- * written as one unit.
+ * A driver that records the program identity commits the one held from the
+ * last openplc_retain_read() here, so the stored blob and the identity of the
+ * program that produced it are written as one unit.
  *
  * MUST RETURN PROMPTLY AND MUST NOT BLOCK. This runs inside the scan cycle, so
  * time spent here is time the PLC is not scanning; a slow implementation shows

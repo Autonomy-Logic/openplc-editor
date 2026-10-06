@@ -471,6 +471,24 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceDefinitions.configuration.persistentStorage).toBeUndefined()
     })
 
+    it("switching storage on takes the selected board's default commit period", () => {
+      const store = makeStore()
+      const boards = new Map<string, BoardInfo>([
+        ['ESP32-S3', { compiler: 'arduino-cli', core: 'esp32:esp32', preview: '', specs: {} }],
+        ['Arduino Mega', { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {} }],
+        ['Runtime', { compiler: 'openplc-compiler', core: '', preview: '', specs: {} }],
+      ])
+      store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
+      const periodOn = (board: string) => {
+        store.getState().deviceActions.setDeviceBoard(board)
+        store.getState().deviceActions.setPersistentStorage({ enabled: true })
+        return store.getState().deviceDefinitions.configuration.persistentStorage?.flushSeconds
+      }
+      expect(periodOn('ESP32-S3')).toBe(60)
+      expect(periodOn('Arduino Mega')).toBe(600)
+      expect(periodOn('Runtime')).toBe(10)
+    })
+
     it("keeps each board's settings in its own archive bucket", () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')

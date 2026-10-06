@@ -3,6 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { DEFAULT_RETAIN_FLUSH_SECONDS } from '../../../../middleware/shared/ports/types'
+import { resolveTargetCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceLicenseInfo, DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import { PURCHASE_WATCH_WINDOW_MS } from './types'
@@ -700,16 +701,20 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     setPersistentStorage: (patch): void => {
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated, deviceAvailableOptions }: DeviceSlice) => {
           deviceUpdated.updated = true
           const cfg = deviceDefinitions.configuration
           // Absent means "this project does not use persistent storage", so the
-          // first edit materialises the object from the same defaults the schema
-          // declares rather than half of one.
+          // first edit materialises the object from the defaults — the period
+          // being the selected target's, which bounds wear on its medium.
+          const boardInfo = deviceAvailableOptions.availableBoards.get(cfg.deviceBoard)
+          const defaultFlushSeconds = boardInfo
+            ? resolveTargetCapabilities(boardInfo).retainDefaultFlushSeconds
+            : DEFAULT_RETAIN_FLUSH_SECONDS
           cfg.persistentStorage = {
             enabled: false,
             path: '',
-            flushSeconds: DEFAULT_RETAIN_FLUSH_SECONDS,
+            flushSeconds: defaultFlushSeconds,
             ...cfg.persistentStorage,
             ...patch,
           }

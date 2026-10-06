@@ -878,7 +878,7 @@ export interface DevicePin {
 /** Mirrors the runtime's own bounds (`webserver/retain_config.py`). */
 export const RETAIN_MIN_FLUSH_SECONDS = 1
 export const RETAIN_MAX_FLUSH_SECONDS = 3600
-export const DEFAULT_RETAIN_FLUSH_SECONDS = 5
+export const DEFAULT_RETAIN_FLUSH_SECONDS = 10
 
 /** Delivered as `retain.conf` inside the program upload. */
 export interface PersistentStorageSettings {

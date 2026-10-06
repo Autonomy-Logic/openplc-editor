@@ -81,6 +81,8 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: false,
   isInProcessSimulator: false,
   nativeRetainStore: false,
+  retainStoreHasPath: false,
+  retainDefaultFlushSeconds: 10,
   plcStateControl: false,
   directUsbUpload: false,
   isLicensable: false,
@@ -196,6 +198,12 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
     merged.rtos = rtos
   } else {
     delete merged.rtos
+  }
+
+  // ESP32 keeps retained values in NVS, which spreads writes across its pages,
+  // so it can save more often than the EEPROM / flash stores of the other cores.
+  if (boardInfo.compiler === 'arduino-cli' && !merged.isInProcessSimulator && core?.startsWith('esp32:')) {
+    merged.retainDefaultFlushSeconds = 60
   }
 
   return merged

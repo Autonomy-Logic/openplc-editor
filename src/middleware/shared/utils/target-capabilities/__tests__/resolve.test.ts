@@ -303,3 +303,22 @@ describe('the RTOS profile', () => {
     expect(resolveTargetCapabilities(blackpill).rtos?.backend).toBe('freertos-stm32')
   })
 })
+
+describe('the default retain commit period', () => {
+  it('is 10 s on runtime v4, whose store is a file', () => {
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' }).retainDefaultFlushSeconds).toBe(10)
+  })
+
+  it('is 60 s on ESP32, whose NVS spreads writes across its pages', () => {
+    expect(resolveTargetCapabilities({ compiler: 'arduino-cli', core: 'esp32:esp32' }).retainDefaultFlushSeconds).toBe(60)
+    expect(
+      resolveTargetCapabilities({ compiler: 'arduino-cli', platform: 'esp32:esp32:esp32s3' }).retainDefaultFlushSeconds,
+    ).toBe(60)
+  })
+
+  it('is 600 s on the other Arduino cores, whose EEPROM or flash wears per write', () => {
+    for (const core of ['arduino:avr', 'rp2040:rp2040', 'STMicroelectronics:stm32', 'esp8266:esp8266']) {
+      expect(resolveTargetCapabilities({ compiler: 'arduino-cli', core }).retainDefaultFlushSeconds).toBe(600)
+    }
+  })
+})

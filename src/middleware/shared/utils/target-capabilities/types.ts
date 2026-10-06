@@ -250,18 +250,30 @@ export interface TargetCapabilities {
    *  Stop a silent no-op on a target where it had always worked. */
   plcStateControl: boolean
 
-  /** The target's runtime ships a BUILT-IN retain store the project can
-   *  configure — the file-backed one in runtime v4. True only there: on
-   *  baremetal the store is whatever the board's driver provides and nothing in
-   *  the project can point it anywhere, so a Persistent Storage screen would
-   *  offer settings no one reads.
+  /** The target ships a BUILT-IN retain store the project can configure: the
+   *  file-backed one in runtime v4, and on Arduino firmware the store each core
+   *  provides (NVS on ESP32, EEPROM elsewhere), which the project switches on
+   *  and sets the commit period of through `defines.h`.
    *
    *  This gates the SCREEN, offline and with no device attached. It is not the
    *  same question as whether retention works at all — a VPP shipping its own
    *  store gives a target retention while declaring
    *  `hidesNativeScreens: ['persistent-storage']`, which removes the screen and
-   *  suppresses `retain.conf` so the vendor's driver is the only store. */
+   *  keeps the built-in store off so the vendor's driver is the only store. */
   nativeRetainStore: boolean
+
+  /** The built-in retain store is a FILE whose location the project may set
+   *  (runtime v4). Arduino stores live in the core's NVS or EEPROM and have no
+   *  path, so the screen leaves that field out. */
+  retainStoreHasPath: boolean
+
+  /** The commit period, in seconds, a project gets when it switches Persistent
+   *  Storage on. A store saves a change straight away, then at most once per
+   *  period while values keep changing, so the period bounds wear on the
+   *  medium: 10 s for runtime v4 (a file), 60 s for ESP32 (wear-levelled NVS),
+   *  600 s for the other Arduino cores (EEPROM / flash rated 10k–100k cycles).
+   *  The user can still set their own on the Persistent Storage screen. */
+  retainDefaultFlushSeconds: number
 
   /** Upload happens over a local connection (USB / loopback) and
    *  doesn't require a separate "Connect" step. Arduino-CLI + the

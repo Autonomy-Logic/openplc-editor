@@ -104,6 +104,8 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: false,
   isInProcessSimulator: true,
   nativeRetainStore: false,
+  retainStoreHasPath: false,
+  retainDefaultFlushSeconds: 10,
   plcStateControl: false,
   directUsbUpload: true,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -133,6 +135,8 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   // command over REST for both, so the only thing that ever stopped v3
   // was this flag.
   nativeRetainStore: false,
+  retainStoreHasPath: false,
+  retainDefaultFlushSeconds: 10,
   plcStateControl: true,
   directUsbUpload: false,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -161,6 +165,8 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   hasRuntimeStats: true,
   isInProcessSimulator: false,
   nativeRetainStore: true,
+  retainStoreHasPath: true,
+  retainDefaultFlushSeconds: 10,
   plcStateControl: true,
   directUsbUpload: false,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is
@@ -195,7 +201,9 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   arduinoApiCompletions: true,
   hasRuntimeStats: false,
   isInProcessSimulator: false,
-  nativeRetainStore: false,
+  nativeRetainStore: true,
+  retainStoreHasPath: false,
+  retainDefaultFlushSeconds: 600,
   plcStateControl: true,
   directUsbUpload: true,
   // Licensing is never a property of a TARGET FAMILY: a VPP is what is

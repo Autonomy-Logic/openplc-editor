@@ -61,6 +61,21 @@ function clampFlushSeconds(seconds: number): number {
 }
 
 /**
+ * The project's store settings when the built-in store runs for this program,
+ * or `null` when it must not: the target handles retention itself, the project
+ * has no settings, or storage is off. Shared by `retain.conf` (runtime v4) and
+ * `defines.h` (Arduino firmware), so both targets read the project the same way.
+ */
+export function activeRetainStore({
+  settings,
+  targetHidesPersistentStorage = false,
+}: GenerateRetainConfInput): { path: string; flushSeconds: number } | null {
+  if (targetHidesPersistentStorage) return null
+  if (!settings || !settings.enabled) return null
+  return { path: settings.path.trim(), flushSeconds: clampFlushSeconds(settings.flushSeconds) }
+}
+
+/**
  * The `retain.conf` body for this project, or `null` to emit no file at all.
  *
  * `null` when the target handles retention itself, when the project has no
@@ -73,11 +88,9 @@ export function generateRetainConf({
   settings,
   targetHidesPersistentStorage = false,
 }: GenerateRetainConfInput): string | null {
-  if (targetHidesPersistentStorage) return null
-  if (!settings || !settings.enabled) return null
-
-  const path = settings.path.trim()
-  const flushSeconds = clampFlushSeconds(settings.flushSeconds)
+  const active = activeRetainStore({ settings, targetHidesPersistentStorage })
+  if (!active) return null
+  const { path, flushSeconds } = active
 
   // An empty `path` is emitted as an empty value on purpose: the runtime reads
   // it as "use your default" and fills in its own location. The editor does not
