@@ -3,7 +3,7 @@
  *
  * Converts the store's flat port-shape `PLCProjectData`
  * (`middleware/shared/ports/types.ts`) into the discriminated-union schema
- * shape `XmlGenerator` consumes (`middleware/shared/ports/open-plc-types.ts`
+ * shape `PlcopenXmlGenerator` consumes (`middleware/shared/ports/open-plc-types.ts`
  * — nested `{type,data:{...}}` POUs, singular `configuration`), generates the
  * XML, and hands it to the platform port for persistence (native save dialog
  * on desktop, browser download on web).
@@ -14,7 +14,7 @@
  * sidecars) since this is a plain export, not a compile.
  */
 
-import { XmlGenerator } from '../../backend/shared/utils/PLC/xml-generator'
+import { PlcopenXmlGenerator } from '../../backend/shared/utils/PLC/plcopen-xml-generator'
 import type { PLCProjectData as SchemaPLCProjectData } from '../../middleware/shared/ports/open-plc-types'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
 import type { PLCProjectData, PouLanguage } from '../../middleware/shared/ports/types'
@@ -23,7 +23,7 @@ import { toast } from '../utils/toast'
 
 /**
  * Convert the store's flat port-shape project data into the nested
- * schema shape `XmlGenerator` expects. See file header for context.
+ * schema shape `PlcopenXmlGenerator` expects. See file header for context.
  *
  * The port-shape `PLCBody.language` field carries a broader union
  * (upper- and lower-case variants, see `types.ts`) than the schema
@@ -77,7 +77,7 @@ function portToSchemaProjectData(input: PLCProjectData): SchemaPLCProjectData {
     pous,
     dataTypes: input.dataTypes,
     // `globalVariableLists` is deliberately absent, not forgotten: PLCopen XML has
-    // no element for a GVL, and this projection feeds `XmlGenerator` only. A list
+    // no element for a GVL, and this projection feeds `PlcopenXmlGenerator` only. A list
     // survives a project through `project.json`; it is the CODESYS converter, not
     // this exporter, that writes one back out.
     configuration: {
@@ -104,7 +104,7 @@ export async function executeExportPlcopen(
 
   try {
     const schemaData = portToSchemaProjectData(state.project.data)
-    const xmlResult = XmlGenerator(schemaData, 'old-editor')
+    const xmlResult = PlcopenXmlGenerator(schemaData)
 
     if (!xmlResult.ok || !xmlResult.data) {
       toast({

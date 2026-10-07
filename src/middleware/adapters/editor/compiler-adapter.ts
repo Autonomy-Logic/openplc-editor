@@ -22,7 +22,6 @@ import type {
   CompileProgramArgs,
   CompilerPort,
   DebugCompileArgs,
-  ExportXmlArgs,
 } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type {
@@ -32,7 +31,6 @@ import type {
   DebugCompileResult,
   PLCPou,
   PLCProjectData,
-  Result,
 } from '../../shared/ports/types'
 import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import { compileProgramFlow } from './compile-program-flow'
@@ -270,16 +268,6 @@ export function createEditorCompilerAdapter(deps: EditorCompilerAdapterDeps = {}
           },
         )
       })
-    },
-
-    async exportProjectXml(args: ExportXmlArgs): Promise<Result<{ message: string }>> {
-      const ipcData = toIpcProjectData(args.projectData)
-      const result = await window.bridge.exportProjectXml(args.projectPath, ipcData as never, args.format)
-
-      if (result.success) {
-        return { success: true, message: result.message }
-      }
-      return { success: false, error: result.message }
     },
 
     async compileLibrary(

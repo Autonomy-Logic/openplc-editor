@@ -108,8 +108,8 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-file-accelerator')
   }
 
-  handleExportProjectRequest(xmlFormatTarget: 'old-editor' | 'codesys') {
-    this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
+  handleExportProjectRequest() {
+    this.mainWindow.webContents.send('compiler:export-project-request')
   }
 
   // The renderer owns the overwrite confirmation, so this only forwards the request.
@@ -291,12 +291,7 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-          click: () => this.handleExportProjectRequest('old-editor'),
-          enabled: this.projectOpen,
-        },
-        {
-          label: i18n.t('menu:file.submenu.exportToCodesysXml'),
-          click: () => this.handleExportProjectRequest('codesys'),
+          click: () => this.handleExportProjectRequest(),
           enabled: this.projectOpen,
         },
         {
@@ -538,8 +533,7 @@ export default class MenuBuilder {
         // KNOWN DIVERGENCE from the in-app React File menu (`menus/file.tsx`),
         // which is the only File menu on Windows while this is the only one on
         // Linux. Deliberate for now, and tracked rather than fixed here:
-        //   - native only: New Project, Open Project, Export to CODESYS XML,
-        //     Board Package Manager
+        //   - native only: New Project, Open Project, Board Package Manager
         //   - React only: README (capability-gated)
         // Everything either menu offers now WORKS on its platform, which is the
         // part that mattered: Save As was disabled here, so on Linux a
@@ -612,12 +606,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-            click: () => this.handleExportProjectRequest('old-editor'),
-            enabled: this.projectOpen,
-          },
-          {
-            label: i18n.t('menu:file.submenu.exportToCodesysXml'),
-            click: () => this.handleExportProjectRequest('codesys'),
+            click: () => this.handleExportProjectRequest(),
             enabled: this.projectOpen,
           },
           {
