@@ -53,6 +53,20 @@ describe('librariesOwningTypes', () => {
 })
 
 describe('derivedTypesInUse', () => {
+  it("skips a type that names one of the project's own POUs, even if a library has it too", () => {
+    // A library project with its own build installed: its blocks take each
+    // other on in-out pins, and must not make the library depend on itself.
+    const node = { name: 'BEEBUS_NODE', pouType: 'function-block', interface: { variables: [] } } as unknown as PLCPou
+    const topic = {
+      name: 'BEEBUS_TP_TOPIC',
+      pouType: 'function-block',
+      interface: { variables: [{ name: 'NODE', type: { definition: 'derived', value: 'BEEBUS_NODE' } }] },
+    } as unknown as PLCPou
+    const system = [...SYSTEM, lib('modbee-beebus', ['BEEBUS_NODE', 'BEEBUS_TP_TOPIC'])]
+    expect(derivedTypesInUse([node, topic])).toEqual([])
+    expect(librariesUsedByProject([node, topic], system, BUNDLED)).toEqual([])
+  })
+
   it('collects derived variable types across POUs and skips base types', () => {
     const pous = [
       pouWith([

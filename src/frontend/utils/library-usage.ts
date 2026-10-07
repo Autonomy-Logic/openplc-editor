@@ -67,15 +67,24 @@ export function librariesOwningTypes(
   return out
 }
 
-/** Every derived type the project's variables instantiate, deduplicated. */
+/**
+ * Every derived type the project's variables instantiate, deduplicated.
+ *
+ * A type that names one of the project's own POUs is that POU, not a library's
+ * block, even when an installed library has a block of the same name. That is
+ * always the case in a library project whose own build is installed: its blocks
+ * take each other on in-out pins (`NODE : BEEBUS_NODE`), and counting those
+ * made the library list itself as its own dependency.
+ */
 export function derivedTypesInUse(pous: readonly PLCPou[]): string[] {
   const seen = new Set<string>()
+  const local = new Set(pous.map((pou) => pou.name.toLowerCase()))
 
   for (const pou of pous) {
     for (const variable of pou.interface?.variables ?? []) {
       // Both spellings name an FB or struct instance; the transpiler treats them alike.
       const { definition, value } = variable.type
-      if ((definition === 'derived' || definition === 'user-data-type') && value) {
+      if ((definition === 'derived' || definition === 'user-data-type') && value && !local.has(value.toLowerCase())) {
         seen.add(value)
       }
     }
