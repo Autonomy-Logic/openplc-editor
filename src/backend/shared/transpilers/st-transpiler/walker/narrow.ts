@@ -158,14 +158,23 @@ export function asVariableData(data: Record<string, unknown>): VariableData | nu
   return out
 }
 
+/** Connector / continuation label.  The editor stores it in
+ *  `data.variable.name` (`buildConnectionNode`); a top-level
+ *  `data.name` is accepted as a fallback for non-editor bodies.
+ *  An empty label pairs with nothing, so it reads as no name. */
+function readConnectionName(data: Record<string, unknown>): string | null {
+  const name = readVariableName(data['variable']) || asString(data['name'])
+  return name ? name : null
+}
+
 export function asConnectorData(data: Record<string, unknown>): ConnectorData | null {
-  const name = asString(data['name'])
+  const name = readConnectionName(data)
   if (name === null) return null
   return { name }
 }
 
 export function asContinuationData(data: Record<string, unknown>): ContinuationData | null {
-  const name = asString(data['name'])
+  const name = readConnectionName(data)
   if (name === null) return null
   return { name }
 }
